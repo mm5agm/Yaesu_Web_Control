@@ -129,6 +129,29 @@
         // "6"=12kHz and "7"=3kHz are always fitted. "8"=1.2kHz, "9"=600Hz, "A"=300Hz are optional.
         // FTdx10 has fixed roofing filters and ignores this setting.
         public List<string> InstalledRoofingFilters { get; set; } = new() { "6", "7", "8", "9", "A" };
+
+        // ── Alexa voice control ─────────────────────────────────────────────
+        // The /api/alexa endpoint is the webhook Amazon Alexa POSTs voice-intent
+        // requests to. It's disabled by default for two reasons:
+        // 1. Most users will never set up the Cloudflare Tunnel + Amazon Developer
+        //    Skill configuration that voice control requires — keeping the
+        //    endpoint dormant means they're not accidentally exposing a
+        //    voice-controlled rig surface.
+        // 2. Until the Amazon-signature-verification work is finished, leaving
+        //    this enabled with a public tunnel URL would mean anyone who learned
+        //    the URL could send arbitrary intent requests.
+        //
+        // Set AlexaEnabled=true only after VOICE_CONTROL.md Phase 3 (Skill setup)
+        // is done and you have signature verification configured.
+        // See VOICE_CONTROL.md for the full setup.
+        public bool AlexaEnabled { get; set; } = false;
+
+        // DEVELOPMENT ONLY. When true, the /api/alexa endpoint accepts requests
+        // without verifying the Amazon SHA-256 signature. Useful for local
+        // testing via curl/Postman while building intent handlers. Production
+        // installs MUST leave this false — otherwise anyone who finds the
+        // public tunnel URL can drive the radio by sending fake JSON requests.
+        public bool AlexaSkipSignatureVerification { get; set; } = false;
     }
 
     public class RadioState
