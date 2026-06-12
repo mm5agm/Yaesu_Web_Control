@@ -174,9 +174,228 @@ If the response is what you expect, **Phase 0 is complete.**
 
 ## Phase 1 — Cloudflare Tunnel install
 
-**[Documentation to follow as this phase is implemented on the feature branch.]**
+This is the part that puts your YWC instance behind a public HTTPS URL (`alexa.yourdomain.com`) without opening any ports on your router or buying a TLS certificate. The Cloudflare Tunnel daemon (`cloudflared`) makes an outbound connection from your PC to Cloudflare's edge; Cloudflare receives requests from Amazon's Alexa service, passes them through that outbound tunnel, and forwards them to `http://localhost:8080` on your PC. No inbound port. No certificate management. Free.
 
-In summary: install `cloudflared` as a Windows service, authenticate it with your Cloudflare account, create a named tunnel, route `alexa.yourdomain.com` to it, configure it to forward traffic to `http://localhost:8080` (where YWC runs).
+The procedure below was walked end-to-end on a Windows 11 PC running cloudflared 2026.6.0. Two small Windows-specific gotchas required workarounds; both are explained in-line.
+
+### Step 1 — Download `cloudflared`
+
+Go to the [cloudflared releases page](https://github.com/cloudflare/cloudflared/releases/latest) and download the file named **`cloudflared-windows-amd64.msi`** (the Windows 64-bit MSI installer — easier than the standalone `.exe` because it adds `cloudflared` to your PATH automatically). About 25 MB.
+
+Run the `.msi`. The installer is silent — no UI to click through, just a brief UAC prompt. Takes 5–10 seconds.
+
+**Verify by opening a fresh PowerShell window** (existing windows won't have the updated PATH):
+
+```powershell
+cloudflared --version
+```
+
+You should see something like `cloudflared version 2026.6.0 (built 2026-06-08T11:16 UTC)`. The exact version doesn't matter — any recent release will work.
+
+### Step 2 — Authenticate with Cloudflare
+
+This downloads a permanent credentials file that lets `cloudflared` create and manage tunnels under your Cloudflare account. One-time operation per machine.
+
+```powershell
+cloudflared tunnel login
+```
+
+What happens:
+
+1. PowerShell prints a URL (`https://dash.cloudflare.com/argotunnel?callback=...`) and tries to open it in your default browser. If it doesn't open automatically, copy the URL and paste it into a browser manually.
+2. The Cloudflare page is titled **"Authorize Cloudflare Tunnel"** and lists every domain on your account. Click your domain (e.g. `yourdomain.com`) to select it.
+3. Click the **Authorize** button.
+4. The browser shows a success page — you can close the tab.
+5. Back in PowerShell, you'll see something like:
+
+   ```
+   You have successfully logged in.
+   If you wish to copy your credentials to a server, they have been saved to:
+   C:\Users\<you>\.cloudflared\cert.pem
+   ```
+
+The `cert.pem` file is now in your `.cloudflared` folder. **Don't share it** — it's full account-level access.
+
+### Step 3 — Create the tunnel
+
+```powershell
+cloudflared tunnel create ywc-alexa
+```
+
+The name `ywc-alexa` is a label — purely cosmetic. Use whatever you find readable; the rest of this guide assumes `ywc-alexa`.
+
+Output looks like:
+
+```
+Tunnel credentials written to C:\Users\<you>\.cloudflared\<UUID>.json.
+Created tunnel ywc-alexa with id <UUID>
+```
+
+**Note the UUID down** — it's a long hex string like `e4880ccd-1578-4616-97bd-46be6fcc219f`. You'll need it in the next step.
+
+A second file now exists in `.cloudflared\` named `<UUID>.json` — that's the tunnel's per-tunnel credentials (separate from `cert.pem`).
+
+### Step 4 — Create the config file
+
+Create the file `C:\Users\<you>\.cloudflared\config.yml` (any text editor — Notepad is fine). Contents:
+
+```yaml
+tunnel: <your-UUID-from-step-3>
+credentials-file: C:/Users/<you>/.cloudflared/<your-UUID-from-step-3>.json
+
+ingress:
+  # All requests to alexa.yourdomain.com get forwarded to YWC on localhost:8080.
+  - hostname: alexa.yourdomain.com
+    service: http://localhost:8080
+
+  # Catch-all required by cloudflared: any request not matching a hostname
+  # above returns 404 instead of being silently routed somewhere unexpected.
+  - service: http_status:404
+```
+
+Replace `<your-UUID-from-step-3>` with the UUID you noted, `<you>` with your Windows username, and `alexa.yourdomain.com` with the public hostname you want. Use forward slashes in the credentials-file path even on Windows — YAML treats backslashes as escape characters in unquoted strings.
+
+### Step 5 — Route DNS to the tunnel
+
+```powershell
+cloudflared tunnel route dns ywc-alexa alexa.yourdomain.com
+```
+
+This creates a CNAME record in Cloudflare's DNS that points your public hostname at the tunnel. Output:
+
+```
+INF Added CNAME alexa.yourdomain.com which will route to this tunnel tunnelID=<your-UUID>
+```
+
+Behind the scenes, Cloudflare's DNS adds a CNAME proxied through the orange-cloud — `alexa.yourdomain.com` → `<UUID>.cfargotunnel.com`. SSL is terminated at the Cloudflare edge; you don't manage any certificates.
+
+### Step 6 — Test the tunnel in foreground mode
+
+Before installing as a Windows service (where errors get hidden), test the tunnel manually so you can see any problems live.
+
+**Two PowerShell windows needed.**
+
+**Window 1**: start YWC normally (`Start Menu → Yaesu Web Control` if you installed the MSI). Confirm `http://localhost:8080` works in a browser as it always does.
+
+**Window 2**: a fresh PowerShell window (separate from Window 1):
+
+```powershell
+cloudflared tunnel run ywc-alexa
+```
+
+PowerShell starts printing log lines. Watch for:
+
+1. `INF Starting tunnel tunnelID=<UUID>`
+2. `INF Registered tunnel connection ... locationName=<some-airport-code>` — typically four of these, one per Cloudflare edge data centre your PC's closest to (in the UK you might see `lhr15` / `man01`)
+3. A `CONNECTIVITY PRE-CHECKS` table showing DNS, UDP, TCP, and Cloudflare API as `PASS`
+4. `SUMMARY: Environment is healthy. cloudflared will use 'quic' as primary protocol.`
+
+The output keeps scrolling slowly with periodic heartbeats. **Don't close Window 2** — that would stop the tunnel.
+
+### Step 7 — Phone test
+
+This verifies the whole chain — your phone → mobile network → Cloudflare edge → tunnel → your PC → YWC.
+
+**Critical: use your phone's mobile data, not your home wifi.** Wifi might route through your local network and short-circuit the public-internet path you're trying to validate. Open Settings on your phone → turn wifi OFF → confirm you're on 4G/5G with a real signal.
+
+In your phone's browser, go to `https://alexa.yourdomain.com`.
+
+Expected: YWC's main page loads. You can interact with it from the phone — click the spectrum to retune, change bands, etc. The HTTPS lock icon shows as secure (Cloudflare provides the TLS cert automatically).
+
+**Don't be alarmed if Window 2 (the cloudflared terminal) doesn't show new log lines per request** — cloudflared doesn't log every successful HTTP at default verbosity. The phone working IS the verification.
+
+If the phone test passes: Phase 1 is fundamentally working. Press **Ctrl+C** in Window 2 to stop the foreground tunnel and proceed to Step 8.
+
+### Step 8 — Install as Windows service
+
+The foreground tunnel stops when you close the PowerShell window or reboot Windows. For permanent operation, install cloudflared as a Windows service.
+
+**This requires an Administrator PowerShell** — close any existing PowerShell windows first, then Start menu → type "PowerShell" → right-click "Windows PowerShell" → **Run as administrator** → approve the UAC prompt.
+
+```powershell
+cloudflared service install
+```
+
+Output:
+
+```
+INF Installing cloudflared Windows service
+INF cloudflared agent service is installed windowsServiceName=Cloudflared
+INF Agent service for cloudflared installed successfully windowsServiceName=Cloudflared
+```
+
+Verify:
+
+```powershell
+Get-Service cloudflared
+```
+
+Status: Running, StartType: Automatic. Service name is `Cloudflared` (display name `Cloudflared agent`).
+
+### Step 9 — Two Windows-specific gotchas to fix
+
+This is where Windows differs from Linux/macOS guides you might find online. **Skip these and the service will run but the tunnel won't actually work.**
+
+#### Gotcha 1: LocalSystem has no `.cloudflared\` folder
+
+The Windows service runs under the **LocalSystem** account, which has its own user profile separate from yours. Your `C:\Users\<you>\.cloudflared\` folder is **invisible to LocalSystem**, so the service starts up with no config, no credentials, and no idea what tunnel to run.
+
+Symptom: phone test returns `Error 1033: Cloudflare Tunnel error` from your public URL, and the Cloudflare dashboard shows the tunnel as offline even though `Get-Service` reports it Running.
+
+Fix — copy the config and credentials into LocalSystem's profile. In the Administrator PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Path "C:\Windows\System32\config\systemprofile\.cloudflared" -Force
+Copy-Item "C:\Users\<you>\.cloudflared\*" -Destination "C:\Windows\System32\config\systemprofile\.cloudflared\" -Force
+Get-ChildItem "C:\Windows\System32\config\systemprofile\.cloudflared\"
+```
+
+The `Get-ChildItem` should now show three files: `cert.pem`, `config.yml`, and `<UUID>.json`.
+
+#### Gotcha 2: Service binary path has no `tunnel run` arguments
+
+`cloudflared service install` registers the service with **just the executable path and no arguments**, so when the service starts, cloudflared runs with no instructions and exits immediately. Windows treats the exit as a crash and retries; the cycle continues until Windows gives up.
+
+Symptom: in the Windows Event Log (filter: Source = `cloudflared*`), you see repeated `Cloudflared service starting` / `Cloudflared service arguments: [...cloudflared.exe]` lines with no `tunnel run` in the arguments. The service spends most of its time stopped.
+
+Fix — modify the service binary path to include the `tunnel run ywc-alexa` arguments. PowerShell's `--%` stop-parsing operator is essential here; without it, PowerShell mangles the quoting and `sc.exe` rejects the command:
+
+```powershell
+Stop-Service cloudflared -Force -ErrorAction SilentlyContinue
+Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+
+sc.exe --% config Cloudflared binPath= "\"C:\Program Files (x86)\cloudflared\cloudflared.exe\" tunnel run ywc-alexa"
+
+# Verify the new path
+(Get-CimInstance Win32_Service -Filter "Name='Cloudflared'").PathName
+```
+
+The verify line should now show:
+
+```
+"C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel run ywc-alexa
+```
+
+(Note the `tunnel run ywc-alexa` suffix — that's the fix.)
+
+Start the service and confirm it stays running:
+
+```powershell
+Start-Service cloudflared
+Start-Sleep -Seconds 5
+Get-Service cloudflared
+```
+
+Status should now be **Running** and stay running.
+
+### Step 10 — Final verification
+
+Retest the phone on mobile data: `https://alexa.yourdomain.com`. YWC's main page should load same as in Step 7. You're now done — the tunnel survives reboots automatically, runs on Windows startup, and routes the public URL to your local YWC.
+
+**Phase 1 complete.** Your YWC is now reachable from anywhere on the internet at the URL you chose, via a tunnel that needs no router configuration, no port forwarding, no certificate management, and no monthly fees.
+
+The Alexa Skill setup in Phase 2 will use this URL as its webhook endpoint.
 
 ---
 
