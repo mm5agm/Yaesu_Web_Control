@@ -1072,12 +1072,20 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    btn.innerHTML = '<i class="bi bi-check-circle"></i> Connected!';
+                    // Show 'Connected!' briefly, then revert the button so the
+                    // user can stay on Settings and continue tweaking. (The
+                    // earlier UX redirected to home after success, which made
+                    // sense when this button was 'Reinitialize' but is jarring
+                    // now that it's a confirmation-only Test Connection.)
+                    btn.innerHTML = '<i class="bi bi-check-circle"></i> ' + (data.message || 'Connected!');
                     btn.classList.remove('btn-success');
-                    btn.classList.add('btn-success');
+                    btn.classList.add('btn-info');
                     setTimeout(() => {
-                        window.location.href = '/';
-                    }, 1000);
+                        btn.innerHTML = originalHTML;
+                        btn.classList.remove('btn-info');
+                        btn.classList.add('btn-success');
+                        btn.disabled = false;
+                    }, 3000);
                 } else {
                     btn.innerHTML = '<i class="bi bi-x-circle"></i> Failed';
                     btn.classList.remove('btn-success');

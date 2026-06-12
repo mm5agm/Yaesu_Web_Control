@@ -1,7 +1,7 @@
 
 # Yaesu Web Control
 
-![Latest release](https://img.shields.io/badge/Latest%20release-v2.2.2-blue?style=flat-square)
+![Latest release](https://img.shields.io/badge/Latest%20release-v2.3.6-blue?style=flat-square)
 ![Downloads](https://img.shields.io/github/downloads/mm5agm/Yaesu_Web_Control/latest/Yaesu_Web_Control_Setup.exe?label=Downloads&style=flat-square)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue?style=flat-square)
 
@@ -135,16 +135,210 @@ This is normal and expected. The first time you see it you'll probably blink; fr
 
 ---
 
+## Project direction
+
+Active development is currently focused on bug fixes and polish for the supported radios. The next significant new direction is **voice control via Amazon Alexa**, primarily as an accessibility tool for partially sighted and blind operators — hands-free band changes, frequency entry, and mode switching without needing to see the screen. That work lives on the `feature/alexa-voice-control` branch and won't disturb the main release line until it's ready to ship. See [VOICE_CONTROL.md](VOICE_CONTROL.md) for setup details and an honest assessment of what it takes to run.
+
+### Which radios get tested?
+
+YWC supports the FTdx101MP, FTdx101D, FTdx10, FT-710, and FTDX3000. The developer owns and tests on the FTdx101MP; support for the other four models is implemented against the published CAT documentation and refined when users on those models report. **If you use one of the other four models, please consider dropping a one-liner on the [Discussions tab](https://github.com/mm5agm/Yaesu_Web_Control/discussions)** — even just "works fine on my FT-710" is useful. It tells the developer which models have actual users behind them and where to focus calibration improvements.
+
+---
+
 ## Release Notes
 
-## v2.3.0 — Dual-SDR (in development on `develop` branch)
+## 2026-06-12 - v2.3.6
 
-The first big-ticket v2.x feature: **one SDR per VFO** on dual-receiver radios.
-On the FTdx101MP and FTdx101D, both receivers have their own IF output socket;
-YWC can now drive an independent SDR on each, with two synchronised spectrum
-panels on the main page.
+Two reporter-driven bug fixes plus a significant calibration improvement.
+Recommended update for everyone running v2.3.5.
 
-### New features
+### Bug fixes
+
+- **YWC no longer changes the radio's frequency on startup or tab
+  navigation.** Reported by Jacek SP3L (#33), reproduced on Colin's
+  FTdx101MP. On every Index-page load, YWC was auto-tuning the radio
+  to the last-clicked band segment for each VFO (e.g. snapping to the
+  saved FT8 frequency on 20m even if you'd just manually tuned the rig
+  somewhere else). The auto-tune call has been removed; the segment
+  dropdown still restores its visual value, but YWC no longer pushes a
+  frequency back to the radio. The rig's current frequency is the
+  source of truth.
+
+- **S-meter calibration now correctly drives the gauge needle.**
+  Reported by Jacek SP3L (#29), reproduced and traced on Colin's
+  FTdx101MP. The v2.3.3 fix wired the SignalR refresh and the
+  numeric-table loader, but two further bugs prevented the needle from
+  moving correctly:
+
+  1. **Label-to-number translation was missing.** S-meter calibration
+     files store labels as strings ("S0", "S1", "+10", "+60"). The
+     loader was falling back to identity (raw ADC value) for those,
+     so the gauge needle ended up on a raw 0-255 scale instead of
+     the calibrated S-unit 0-60 scale.
+  2. **Static gauge tick positions didn't match the visual labels.**
+     The gauge labels are drawn at *evenly-spaced* angles on the
+     dial, but our needle-position mapping assumed they sat at the
+     numeric `majorTicks` values. Calibrating raw→S5 put the needle
+     at a position that visually corresponded to S3 — exactly Jacek's
+     "2 S-units low" complaint.
+
+  Both fixed. Calibration changes now reach the gauge needle live via
+  SignalR push, and the needle points at the correct S-unit label.
+
+### Other fixes
+
+- **`0+60` typo** in the last S-Meter entry of all 6 shipped
+  calibration default files corrected to `+60`. Colin noticed this
+  while bench-testing #29.
+
+- **Dev-mode no longer corrupts the shipped calibration files.**
+  When running from source (`dotnet run`), the calibration Save
+  endpoint was writing to `wwwroot/calibration.default.<model>.json`
+  instead of the user's APPDATA file. That meant a developer doing
+  routine calibration testing would silently overwrite the shipped
+  defaults committed to the repo. Now both dev and release builds
+  always write to the user's APPDATA file.
+
+### Documentation
+
+- **USER_MANUAL §10 expanded** with a proper step-by-step calibration
+  procedure:
+  - §10.1 S-Meter calibration walkthrough — emphasises the
+    [RF/SQL] knob must be in "RF" mode (not SQL), uses the **lower**
+    of the two FTdx101MP front-panel knobs (MAIN AF / RF-SQL), and
+    describes the dummy-load + RF-gain-walk technique that needs no
+    extra test equipment.
+  - §10.2 Power meter calibration via known TX power levels.
+  - §10.3 Brief notes for ALC / SWR / Compression / IDD / VPA / TPA.
+
+  The S-Meter writeup was prompted by Colin discovering the on-rig
+  meter behaviour during calibration: the S-meter is displayed
+  automatically during receive on the FTdx101MP/D, and is NOT
+  selectable from the touchscreen meter chooser (which is for
+  TX-time meters only).
+
+---
+
+## 2026-06-11 - v2.3.5
+
+Fixes Test Connection properly. **If you have v2.3.4 installed, please
+update — v2.3.4 made the button safe (no longer crashes) but it still
+reported a false-negative "Radio did not respond" on every click because
+the probe-validation logic was wrong.**
+
+### Bug fixes (all in the Test Connection flow)
+
+- **Probe-validation no longer demands a trailing semicolon.** The CAT
+  multiplexer strips the `;` terminator as part of response parsing, so
+  the validation check `probe.Contains(';')` always failed against the
+  parsed reply (e.g. `ID0682` rather than `ID0682;`). Validation now
+  requires the reply to start with `ID` and be at least 6 characters
+  long — enough to be sure we got back a real radio identifier.
+- **Stay on Settings after success.** Previously a successful Test
+  Connection click redirected the browser to the home page after 1
+  second — leftover behaviour from when this button was "Reinitialize"
+  and made sense as "init then start using the radio". For a
+  confirmation-only Test Connection, the redirect was jarring. Now the
+  button just shows "Connection succeeded — radio ID 0682" for 3
+  seconds and reverts.
+- **Friendlier success message.** Was "Radio responded (ID0682)" —
+  reads like internal debug language. Now reads
+  "Connection succeeded — radio ID 0682".
+
+---
+
+## 2026-06-11 - v2.3.4
+
+Critical hotfix on v2.3.3. **If you have v2.3.3 installed, please update.**
+
+### Bug fix
+
+- **Settings page "Test Connection" button no longer crashes YWC.**
+  v2.3.3 wired Test Connection to run the same heavyweight startup
+  initialization sequence the app uses on launch (multiplexer connect
+  + ~30 CAT read queries + state restoration). That's safe at startup
+  when nothing else is running yet — but on a running system it races
+  with the 10 Hz meter poller, the SDR workers, and any in-flight
+  WebUI commands, and on Colin's bench it consistently crashed the
+  YWC process on the first or second click.
+
+  Replacement: Test Connection now sends just the `ID;` probe through
+  the existing CAT client (which the multiplexer queues correctly
+  alongside the running meter polls). The deep init only runs if the
+  multiplexer is genuinely disconnected — i.e. the original
+  "configure Settings, then verify connection" use case.
+
+Other improvements:
+- Probe timeout raised from 1 s to 2 s so a Test Connection click
+  during a busy multiplexer queue has time to surface the response.
+- Error wording slightly tightened (the message used to talk about
+  "COM port opened but the radio did not respond" — which assumed
+  re-init had run; with the new logic it just talks about CAT).
+
+---
+
+## 2026-06-11 - v2.3.2
+
+Small hotfix on top of v2.3.1 — suppresses a startling Windows dialog
+that could pop up on the Settings page for users who have certain other
+SDR software installed.
+
+### Bug fix
+
+- **Windows "Entry Point Not Found" dialog suppressed.** The Settings
+  page's auto-scan (new in v2.3.0) enumerates SoapySDR plugins
+  (HackRF, RTL-SDR, Airspy etc.). If the user has a `hackrf.dll` or
+  similar in `C:\Windows\System32` from another SDR application (SDR#,
+  HRD, SDR Console, etc.), Windows may load that DLL ahead of YWC's
+  bundled one — and if it has different libusb dependencies, the OS
+  pops up a modal "Entry Point Not Found" error dialog. YWC was already
+  handling the underlying plugin-load failure gracefully (the unloadable
+  plugin just doesn't appear in the device list), but the dialog itself
+  is startling. Now suppressed via `SetErrorMode` at process startup;
+  the plugin load still fails silently for users with the conflict, but
+  no dialog interrupts the session.
+
+There are no other changes in v2.3.2 — see v2.3.0 / v2.3.1 below for
+the actual feature set of this release line.
+
+---
+
+## 2026-06-11 - v2.3.1
+
+Hotfix on v2.3.0. **No user-facing changes — v2.3.0 itself shipped with a
+broken installer build** and v2.3.1 is the same code with the build
+pipeline fixed. If you've never installed v2.3.0 (no installer was
+produced), just install v2.3.1 and read the v2.3.0 release notes below
+for what's new.
+
+### Build pipeline fix
+
+- **Worker exe was missing from the published installer.** The new
+  `Yaesu_Sdr_Worker.exe` (for the dual-SDR architecture) is built by a
+  separate `.csproj` and copied into YWC's output via `<None Include>` items
+  in the main `.csproj`. The path patterns assumed no `RuntimeIdentifier`
+  was set — true for `dotnet build` / `dotnet run` but false for the CI's
+  `dotnet publish -r win-x64`, where outputs go into a `win-x64`
+  subfolder. CI publish failed with `MSB3030: Could not copy the file
+  Yaesu_Sdr_Worker.exe because it was not found`.
+
+  Fixed with a second `<ItemGroup Condition="'$(RuntimeIdentifier)' != ''"...>`
+  block that uses the RID-suffixed path during publish. Both paths now
+  resolve correctly: local dev `dotnet run` AND CI's
+  `dotnet publish -r win-x64`.
+
+---
+
+## 2026-06-11 - v2.3.0
+
+The first big-ticket v2.x feature: **one SDR per VFO** on dual-receiver
+radios, plus a handful of bug fixes from real reporter feedback on v2.2.2.
+
+### Headline feature — Dual-SDR
+
+On the FTdx101MP and FTdx101D, both receivers have their own IF output
+socket; YWC can now drive an independent SDR on each, with two synchronised
+spectrum panels on the main page.
 
 - **Per-VFO SDR assignment.** The Settings page SDR section gained two
   dropdowns — **VFO A SDR** and **VFO B SDR** — so you can tell YWC which
@@ -153,21 +347,91 @@ panels on the main page.
 - **Two spectrum panels on the main page** when both VFOs are configured,
   each tracking its own VFO's frequency. Click on panel A tunes VFO A;
   click on panel B tunes VFO B.
-- **Independent span per VFO.** Each spectrum panel has its own 250k /
-  500k / 1M / 2M span buttons — set VFO A to 2 MHz for a wide overview
-  of the calling band while VFO B sits at 250 kHz zoomed on the QSO.
-  The Settings page still has a single Sample Rate dropdown but it now
-  acts as a "reset both VFOs to this default" control; runtime per-VFO
-  divergence is set with the buttons above each spectrum.
+- **Independent span per VFO.** Each spectrum panel has its own 62.5k /
+  125k / 250k / 500k / 1M / 2M span buttons — set VFO A to 2 MHz for a
+  wide overview of the calling band while VFO B sits at 62.5 kHz zoomed on
+  the QSO. **62.5k and 125k spans are new in this release** (narrowest
+  span the SDRplay API can deliver via decimation, useful on the narrow
+  amateur bands).
 - **Layout toggles above the spectrum panels** (only visible when both VFOs
   have an SDR):
   - **VFO A / VFO B / Both** — show just one panel or both side by side.
   - **Stacked / Side by side** — stack the two panels vertically (more
     detail per panel) or place them horizontally (both at half-width).
   Both choices are remembered across page reloads.
+- **Hold and persistent-cursor scope features.** Each panel has a Hold
+  button that freezes its display at the current frame (yellow Hold badge
+  + "HOLD" canvas banner). Shift-click anywhere on a spectrum to drop a
+  cyan persistent-cursor "bookmark" at that frequency — useful for
+  marking a station to come back to while tuning around.
+- **Per-region band-edge guard rails.** Red dashed lines marking the edges
+  of each amateur band now reflect the region selected in Settings — UK
+  operators see 3.500–3.800 MHz for 80m, not the US 3.500–4.000 limits.
 - **Settings page Scan** now surfaces SDRs that are currently held by a
   running worker, labelled "(in use)", so you can see your active device
   even though the SDRplay API hides it from a fresh enumeration call.
+
+### Other new features
+
+- **Per-model meter calibration.** YWC now ships separate default S-meter
+  / power / SWR / ALC calibration tables for each supported radio
+  (FTdx101MP, FTdx101D, FTdx10, FTDX3000, FT-710). The FTdx101MP tables
+  are measured; the others are placeholders pending real user
+  measurements — please share yours via
+  [Discussion #30](https://github.com/mm5agm/Yaesu_Web_Control/discussions/30)
+  so other users of your radio benefit.
+- **"Reset to Defaults" button** on the Meter Calibration page. Use it
+  after changing radio model in Settings to pick up the new model's
+  shipped defaults instead of editing files manually.
+- **Test Connection now actually probes CAT.** The Settings page Test
+  Connection button used to report success the moment the COM port
+  opened, with no actual radio communication. It now sends a CAT `ID;`
+  query and requires a parseable reply before declaring success — and
+  the failure message names the most common cause (a virtual port
+  sharer like VSPE / OmniRig sitting between YWC and the radio).
+- **Band plans are now externalised** to `wwwroot/bandplan.default.json`.
+  Future regulator updates (RSGB, FCC, JARL) can ship as a one-file drop
+  into the install folder, no full app reinstall required.
+- **Filter scope panel now shows the active roofing filter** in the
+  top-right corner. Previously, choosing 12k vs 3k roofing produced the
+  same trapezium when the DSP filter was the limiting factor (which is
+  most of the time) — there was no visible way to tell which roofing was
+  selected. Now a small "Roof 12k" / "Roof 3k" label removes the
+  ambiguity.
+
+### Bug fixes
+
+- **WSJT-X frequency-bounce on the FTdx10 (Issue #22, Bill W1WRH).**
+  YWC's rigctld bridge used to send a fresh CAT query on every
+  `get_freq` from a Hamlib client, which raced against YWC's own CAT
+  poller. WSJT-X's display briefly bounced back to the old frequency
+  for a second or two after every set. Now reads from the cached
+  RadioStateService state (which `set_freq` updates immediately), so
+  WSJT-X tracks instantly.
+- **Calibration saves were being silently ignored at the gauge (Issue #29,
+  Jacek SP3L-Jacek).** Two layered bugs: the frontend's in-memory
+  calibration tables weren't refreshed after a save, and the numeric
+  S-meter table was never loaded from the backend at all (only the
+  snap-to-nearest label table was). Both fixed; calibration changes now
+  propagate to all open browser tabs live via SignalR.
+- **Dead DX cluster examples in Settings (Issue #27, djrino).** All four
+  example clusters listed on the Settings page were dead; replaced with
+  five verified-alive servers led by dxspider.co.uk:7300.
+- **WSJT-X rig control on FTdx10 (Issue #22, Bill W1WRH).** YWC's
+  rigctld bridge rejected `PKTUSB` / `PKTLSB` / `PKTFM` mode commands
+  with "E_MODE: Unsupported mode for this rig" — WSJT-X's standard FT8
+  mode-set call. Added Hamlib → Yaesu mode translation so the FTdx10's
+  WSJT-X CAT path no longer drops control every 20 seconds.
+
+### Settings file migrations (silent, no user action)
+
+- Legacy single `SdrDeviceKey` → split into `SdrDeviceKeyA` and
+  `SdrDeviceKeyB`. Old value auto-promoted to A on first read; legacy
+  field cleared on next save.
+- Legacy single `SdrSampleRateHz` → split into `SdrSampleRateHzA` and
+  `SdrSampleRateHzB`. Same pattern.
+- `sdrplay:<serial>` → `sdrplay:hw<N>-<serial>` (hwVer prefix). Auto-applied
+  the first time the SDR scan runs.
 
 ### Architecture (under the hood)
 
@@ -182,12 +446,15 @@ one or two extra entries in Task Manager when YWC is streaming.
 Full architectural reasoning is in `docs/decisions/0001-dual-sdr-architecture.md`
 in the repo.
 
-### Settings file migration
+### Reporters credited
 
-The legacy single `SdrDeviceKey` field has been split into `SdrDeviceKeyA` and
-`SdrDeviceKeyB`. On the first read of an existing `appsettings.user.json`,
-the old value is promoted automatically into `SdrDeviceKeyA` and the legacy
-field cleared. No user action needed; the upgrade is silent.
+Special thanks to **Bill W1WRH** (PKTUSB CAT translation + frequency-bounce
+race), **Jacek SP3L** (S-meter calibration discovery + the per-model
+calibration system that grew from it), **djrino** (DX cluster examples
+replaced + the Test Cluster Connection button), **Juergen WB4EM** (Test
+Connection real-probe fix + the FAQ entry about Silabs USB driver conflicts
+from other ham software), and **Antonino Rinaldi** (DX cluster country
+flags + QRZ click-through on the roadmap).
 
 ---
 

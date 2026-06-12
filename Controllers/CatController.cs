@@ -1706,59 +1706,95 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("reinitialize")]
         public async Task<IActionResult> Reinitialize()
         {
+            // Test Connection ("Reinitialize") used to call the full
+            // RadioInitializationService.InitializeRadioAsync() — the same
+            // heavyweight startup sequence the app runs at launch (multiplexer
+            // connect + ~30 read queries + state restoration, takes 5+ seconds).
+            // That worked the first time the user clicked it (cold install) but
+            // CRASHED YWC entirely when clicked while everything was running:
+            // the deep init races with MeterPollingService at 10 Hz, the SDR
+            // workers, in-flight WebUI commands, etc. Reported by Colin on
+            // v2.3.3 — first click reported a false "radio not responding"
+            // (from the race), second click hard-crashed the process so the
+            // browser saw "Failed to fetch".
+            //
+            // Replacement logic: if the multiplexer is already connected (the
+            // overwhelmingly common case — Test Connection is normally pressed
+            // to verify a working setup), just send the ID; probe through the
+            // existing CAT client. The multiplexer handles command queuing
+            // correctly, so the probe coexists peacefully with meter polling.
+            //
+            // Only run the heavyweight init if the multiplexer is genuinely
+            // disconnected (user changed Settings, plugged in the radio, and
+            // wants Test Connection to attempt a fresh connection) — that's
+            // the original recover-from-broken-state use case.
             try
             {
-                _logger.LogInformation("Manual re-initialization requested from Settings page");
-                await _radioInitService.InitializeRadioAsync();
+                _logger.LogInformation("Test Connection requested from Settings page (IsConnected={IsConnected})", _catClient.IsConnected);
 
-                // Verify the radio is actually responding — not just that the COM
-                // port opened. Send the standard Yaesu identification probe ID;
-                // and require a parseable reply that starts with 'ID' and includes
-                // a semicolon (e.g. 'ID0570;' from an FTdx101MP).
+                if (!_catClient.IsConnected)
+                {
+                    _logger.LogInformation("Test Connection: not currently connected — running full radio initialization");
+                    await _radioInitService.InitializeRadioAsync();
+                }
+
+                // Verify the radio is actually responding. Standard Yaesu
+                // identification probe ID; — require a parseable reply that
+                // starts with 'ID' and includes a semicolon (e.g. 'ID0570;'
+                // from an FTdx101MP). 2s timeout gives the multiplexer's
+                // command queue plenty of room behind a busy meter poll.
                 //
-                // Without this check the Test Connection button reported success
-                // whenever SerialPort.Open() succeeded, even when the radio was
-                // not actually responding to CAT (Juergen / WB4EM, Disc #14:
-                // a virtual-port-sharer in the chain swallowed the chatter but
+                // Without this check the button reported success whenever
+                // SerialPort.Open() succeeded, even when the radio was not
+                // actually responding to CAT (Juergen WB4EM, Disc #14: a
+                // virtual-port-sharer in the chain swallowed the chatter but
                 // Open() still succeeded, so the user was falsely reassured).
                 string? probe = null;
                 try
                 {
-                    probe = await _catClient.SendCommandAsync("ID;", "TestConnection", CancellationToken.None, timeoutMs: 1000);
+                    probe = await _catClient.SendCommandAsync("ID;", "TestConnection", CancellationToken.None, timeoutMs: 2000);
                 }
                 catch (Exception probeEx)
                 {
                     _logger.LogWarning(probeEx, "Test Connection: ID; probe threw");
                 }
 
+                // Probe must start with 'ID' and include at least the 4-character
+                // radio-identifier code (e.g. 'ID0682' for FTdx101MP, 'ID0570'
+                // for FTdx101D, etc). We do NOT require a trailing semicolon —
+                // the multiplexer strips the CAT terminator as part of response
+                // parsing, so what we see here is e.g. 'ID0682' even though the
+                // wire response was 'ID0682;'. v2.3.3/v2.3.4 had a Contains(';')
+                // check that always failed against the multiplexer's parsed
+                // output — producing the false-negative "Radio did not respond"
+                // even when CAT was working perfectly. Reported by Colin via
+                // the log at 18:16, after the v2.3.4 crash fix landed but the
+                // probe still reported failure.
                 bool probeOk = !string.IsNullOrEmpty(probe)
                     && probe.StartsWith("ID", StringComparison.Ordinal)
-                    && probe.Contains(';');
+                    && probe.Length >= 6;
                 if (!probeOk)
                 {
-                    AppStatus.InitializationStatus = "error";
                     _logger.LogWarning(
-                        "Test Connection: port opened but radio did not respond to ID; probe. " +
-                        "Reply='{Probe}' (null/empty/garbled means CAT is not actually reaching the radio).",
+                        "Test Connection: ID; probe failed. Reply='{Probe}' (null/empty/garbled means CAT is not actually reaching the radio).",
                         probe ?? "(null)");
                     return Ok(new
                     {
                         success = false,
-                        message = "COM port opened but the radio did not respond to a CAT probe. " +
+                        message = "Radio did not respond to a CAT probe. " +
                                   "Check the radio is powered on, CAT is enabled in the radio's menu, " +
                                   "and the COM port is connected directly to the radio (not via a " +
                                   "virtual-port sharer like VSPE, OmniRig or com0com).",
                     });
                 }
 
-                AppStatus.InitializationStatus = "complete";
+                var idCode = probe!.StartsWith("ID", StringComparison.Ordinal) ? probe.Substring(2).TrimEnd(';') : probe;
                 _logger.LogInformation("Test Connection: probe OK — radio replied '{Probe}'", probe);
-                return Ok(new { success = true, message = $"Radio responded ({probe!.TrimEnd(';')})" });
+                return Ok(new { success = true, message = $"Connection succeeded — radio ID {idCode}" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Manual re-initialization failed");
-                AppStatus.InitializationStatus = "error";
+                _logger.LogError(ex, "Test Connection failed");
                 return Ok(new { success = false, message = ex.Message });
             }
         }

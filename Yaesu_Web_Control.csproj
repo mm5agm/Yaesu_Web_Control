@@ -93,8 +93,18 @@
        for `dotnet run`; CopyToPublishDirectory lands it in publish/
        for `dotnet publish` (used by installer.nsi). The worker's
        ProjectReference above guarantees these files exist by the
-       time YWC's copy runs. -->
-  <ItemGroup>
+       time YWC's copy runs.
+
+       Two ItemGroups because the worker's output folder differs
+       depending on whether a RuntimeIdentifier is set:
+         - `dotnet build`  /  `dotnet run`  → no RID → output at
+           bin/<config>/<tfm>/
+         - `dotnet publish -r win-x64`     → RID set → output at
+           bin/<config>/<tfm>/<rid>/
+       The CI workflow uses the latter (RID=win-x64) for the
+       installer; local dev typically uses the former. v2.3.0 shipped
+       with only the no-RID form and the CI publish failed. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == ''">
     <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.exe" Visible="false">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
@@ -111,6 +121,29 @@
       <Link>Yaesu_Sdr_Worker.deps.json</Link>
     </None>
     <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>Yaesu_Sdr_Worker.runtimeconfig.json</Link>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.exe" Visible="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>Yaesu_Sdr_Worker.exe</Link>
+    </None>
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.dll" Visible="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>Yaesu_Sdr_Worker.dll</Link>
+    </None>
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.deps.json" Visible="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>Yaesu_Sdr_Worker.deps.json</Link>
+    </None>
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.runtimeconfig.json</Link>

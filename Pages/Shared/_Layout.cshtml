@@ -18,13 +18,21 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-gauges@2.1.7/gauge.min.js"></script>
 
     <!-- Calibration engine — exposes window.calibrationEngine for site.js -->
-    <!-- v=9: bump this when calibration-engine.js or calibration-tables.js changes -->
+    <!-- v=15: bump this when calibration-engine.js or calibration-tables.js changes -->
     <script type="module">
-        import { calibrateNumeric, calibrateSMeterLabel, loadFromBackend } from '/js/calibration/calibration-engine.js?v=11';
+        import { calibrateNumeric, calibrateSMeterLabel, calibrateSMeterForGauge, loadFromBackend } from '/js/calibration/calibration-engine.js?v=15';
         // Expose immediately with default tables so site.js never gets undefined.
-        window.calibrationEngine = { calibrateNumeric, calibrateSMeterLabel };
-        // Replace defaults with any user-saved calibration from the backend.
-        loadFromBackend({ 'S-Meter': 'SMETER_LABELS' });
+        window.calibrationEngine = { calibrateNumeric, calibrateSMeterLabel, calibrateSMeterForGauge };
+        // S-Meter calibration drives BOTH the gauge needle position (SMETER
+        // table) AND the snap-to-nearest label ("S7", "+20") (SMETER_LABELS).
+        // Without targeting both, calibrating the S-meter only fixed the
+        // labels and left the gauge needle on hardcoded defaults — #29 bug.
+        const calibMap = { 'S-Meter': ['SMETER', 'SMETER_LABELS'] };
+        // Expose loadFromBackend so the SignalR listener below (and the
+        // Meter Calibration page after save) can refresh the live tables.
+        window.calibrationEngine.reload = () => loadFromBackend(calibMap);
+        // Initial load — replace defaults with any user-saved calibration.
+        window.calibrationEngine.reload();
     </script>
 
     <!-- Meter formatters — exposes window.MeterFormatters for site.js -->

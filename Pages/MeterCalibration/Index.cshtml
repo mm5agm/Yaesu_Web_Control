@@ -113,7 +113,16 @@
             else if (meterName === "IDD") needle = numericCal;
             else if (meterName === "VPA") needle = numericCal;
             else if (meterName === "ALC") needle = raw;
-            else if (meterName === "S-Meter") needle = raw;
+            else if (meterName === "S-Meter") {
+                // Match the home page: translate raw → user-calibrated S-unit →
+                // static gauge dial position so the calibration-page preview
+                // gauge moves the same way as the main meter gauge does.
+                // Without this, the preview gauge stays on raw 0-255 and
+                // ignores the user's edits to the table immediately above it.
+                needle = window.calibrationEngine?.calibrateSMeterForGauge
+                    ? window.calibrationEngine.calibrateSMeterForGauge(raw)
+                    : raw;
+            }
 
             gauge.value = needle;
             gauge.draw();

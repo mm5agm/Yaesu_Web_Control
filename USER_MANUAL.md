@@ -1565,6 +1565,66 @@ Calibration is saved to `%APPDATA%\MM5AGM\Yaesu Web Control\calibration.user.jso
 
 > **Changing radio model later:** if you switch to a different radio in Settings, your existing calibration is **not** automatically reset to the new model's defaults — your custom values stay in place. If you want a fresh start tuned for the new radio, open the **Meter Calibration** page and click the **Reset to Defaults** button. It rebuilds your calibration from the shipped defaults for whichever radio you currently have configured.
 
+### 10.1 Calibrating the S-Meter (receive)
+
+The shipped default is measured on a specific FTdx101MP. Your individual radio may differ by 1–3 S-units. Here is how to calibrate it against your own rig without needing test equipment.
+
+**Before you start — three things to check:**
+
+1. **RF/SQL knob mode must be set to "RF" — not "SQL".** On the FTdx101MP/D, the dual-purpose RF/SQL knob can be switched to act as either RF Gain or Squelch. The S-meter responds to **RF Gain** (which actually attenuates the received signal); it does NOT respond to SQL (which only changes the audio-gating threshold). Many Yaesus briefly show the squelch level on the meter while you turn it in SQL mode — that looks like an S-meter change but isn't. **If you try to calibrate with the knob in SQL mode, YWC's reading will not match the rig's display and the calibration will be wrong.**
+
+    Check or change the mode: **FUNC → OPERATION SETTING → GENERAL → RF/SQL VR → "RF"** (this is the default). The setting is shared between MAIN and SUB bands.
+
+2. **Use the correct knob.** The FTdx101MP/D has **two** concentric RF/SQL knobs — one for MAIN, one for SUB. On the FTdx101MP, the **MAIN AF/RF-SQL knob is the LOWER of the two** stacked knobs on the front panel; the SUB AF/RF-SQL knob is above it. The OUTER ring is RF/SQL; the inner knob is AF (audio level). YWC's VFO A reads the MAIN band's S-meter (`SM0;` CAT query) — so for calibrating the VFO A gauge, you must turn the **lower outer ring** on the FTdx101MP.
+
+3. **Provide a steady signal.** Easiest: connect a **dummy load** to the antenna socket — the receiver picks up internal background noise which is stable and predictable. Alternatively, tune to a strong stable broadcast station or beacon.
+
+**The procedure:**
+
+1. Open the **Meter Calibration** page on YWC. Watch the **Raw** indicator above the S-Meter row — it updates live.
+2. Turn the MAIN RF/SQL knob (outer ring of the lower knob on the FTdx101MP) **fully clockwise** — maximum RF gain. The rig's S-meter will read its highest value with this signal source. Note the YWC Raw value and the S-unit the rig is showing. Click **Edit** on the matching row in the calibration table (or **Add Point** if no row matches) and enter the raw value alongside the S-unit the rig displays.
+3. **Slowly turn the knob anti-clockwise.** Both the rig's S-meter AND YWC's Raw value will drop together — that's RF Gain actually attenuating the signal in the RF/IF stages, not just changing what's shown.
+4. When the rig's S-meter reaches each labelled S-unit boundary (S9 → S7 → S5 → S3 → S1 → S0), pause and update the corresponding row in the calibration table with the YWC Raw value at that point.
+5. Repeat down to S0 (or as far as the knob will go).
+6. Click **Save Calibration**.
+7. **Look at the gauge.** The needle should now move to the correct S-unit position as you adjust the signal. Walk the knob through one more time to verify YWC tracks the rig at each S-unit.
+8. After you're finished, return the knob to fully clockwise (max RF gain) for normal listening.
+
+**Sharing your data.** If your calibration result is meaningfully different from the shipped default — especially for any radio model other than FTdx101MP — please copy your `calibration.user.json` to [Discussion #30](https://github.com/mm5agm/Yaesu_Web_Control/discussions/30). Multiple submissions per model are averaged into improved shipped defaults in future releases.
+
+### 10.2 Calibrating the Power meter (transmit)
+
+The power meter on YWC reads the radio's transmitted RF power. To calibrate it, you transmit at known power levels and record the raw values YWC sees.
+
+**Before you start:**
+
+- Have a **dummy load** connected — not an antenna, since you'll be transmitting briefly at various power levels.
+- Decide the band and mode you want to calibrate on — CW gives the cleanest carrier for short test transmits; SSB into a dummy load with mic gain low also works.
+
+**The procedure:**
+
+1. Open the **Meter Calibration** page on YWC. The Power row's Raw indicator updates only during transmit.
+2. Set the radio's RF Power to a low value (e.g. 5 W) via the radio's RF POWER control or YWC's slider.
+3. Press the PTT or use YWC's TX button briefly — long enough for the meter to stabilise (about a second).
+4. Note the YWC Raw value at that power. Release PTT. Add or edit a row in the calibration table with `raw = <observed>, Radio = <known watts>`.
+5. Increase RF Power to the next test point (e.g. 25 W → 50 W → 100 W → max for your radio).
+6. Repeat brief transmits at each level and record the raw values.
+7. Click **Save Calibration**.
+
+For a quick sanity check after saving: transmit at a known power and watch YWC's power gauge — the needle should sit on the correct watts label.
+
+### 10.3 Other meters
+
+The same general approach applies to other meters (ALC, SWR, Compression, IDD, VPA, TPA), but the techniques differ:
+
+- **SWR**: vary the antenna mismatch in known steps (a known-load or a controllable mismatch box).
+- **ALC**: speak into the mic and adjust MIC GAIN to walk the ALC reading through known points.
+- **Compression**: enable Speech Processor and walk PROC LEVEL.
+- **IDD / VPA**: drain current and PA voltage vary with RF power output and band — calibrate alongside Power.
+- **TPA**: temperature rises during sustained transmit; calibrate at known temperatures from the radio's display.
+
+These are lower-priority for most users than the S-Meter and Power calibrations.
+
 ---
 
 ## 11. Diagnostics

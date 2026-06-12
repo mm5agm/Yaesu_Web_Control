@@ -55,15 +55,19 @@ public class CalibrationStorage
         return Path.Combine(_wwwrootPath, "calibration.default.json");
     }
 
-    public string GetActivePath() => _isDevelopment ? GetDefaultPath() : _userPath;
+    // Both Load and Save target the user APPDATA file regardless of whether
+    // ASPNETCORE_ENVIRONMENT is Development. The earlier behaviour pointed
+    // dev-mode at wwwroot/calibration.default.<model>.json, which meant
+    // anyone running YWC via `dotnet run` from source would silently overwrite
+    // the SHIPPED defaults with their own calibration edits. Colin caught this
+    // on 2026-06-12 after a few rounds of bench-testing for Jacek's #29 — the
+    // FTdx101MP shipped defaults were full of his test mutations. Developers
+    // who genuinely want to edit shipped defaults should use a text editor on
+    // the source file directly, not the in-app Meter Calibration page.
+    public string GetActivePath() => _userPath;
 
     public CalibrationFile Load()
     {
-        if (_isDevelopment)
-        {
-            return LoadFromPath(GetDefaultPath());
-        }
-
         EnsureUserCalibrationExists();
         return LoadFromPath(_userPath);
     }

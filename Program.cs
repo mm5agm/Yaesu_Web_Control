@@ -128,6 +128,23 @@ static int LoadConfiguredHttpPort()
     return 8080;
 }
 
+// ── Suppress Windows critical-error dialogs during DLL load ─────────────────
+// When SoapySDR enumerates plugins (HackRF, RTL-SDR, Airspy, etc.), Windows
+// tries to resolve each plugin's import table. If a plugin's dependencies
+// conflict with whatever happens to be on the user's system — e.g.
+// system32 has a newer hackrf.dll that needs libusb 1.0.27+ functions while
+// YWC bundles an older libusb-1.0.dll, OR vice versa — Windows pops up a
+// modal "Entry Point Not Found" dialog and waits for the user to click OK.
+// That's startling and unhelpful since YWC handles plugin load failures
+// gracefully anyway (the affected SDR just doesn't appear in the device list).
+//
+// SEM_FAILCRITICALERRORS + SEM_NOOPENFILEERRORBOX suppress the dialog so the
+// process can fail the DLL load silently and carry on. Reported by the user
+// on v2.3.1 — the Settings-page auto-scan triggered the dialog because a
+// system32 hackrf.dll from some other SDR software conflicted with YWC's
+// bundled libusb.
+NativeWin32.SetErrorMode(NativeWin32.SEM_FAILCRITICALERRORS | NativeWin32.SEM_NOOPENFILEERRORBOX);
+
 // ── SoapySDR native library resolver ────────────────────────────────────────
 // .NET P/Invoke on Windows does not search PATH directories by default.
 // Resolve SoapySDR.dll explicitly from its install location so the P/Invoke
@@ -452,5 +469,27 @@ catch (Exception ex)
 #pragma warning restore CA1416
 
     throw;
+}
+
+// Win32 P/Invokes used during YWC startup. Kept at the end of Program.cs
+// rather than scattered through the top-level statements so the bootstrap
+// logic stays readable.
+internal static class NativeWin32
+{
+    /// <summary>
+    /// The system does not display the critical-error-handler message box.
+    /// Failing DLL loads return an error code to the caller instead of
+    /// showing the "Entry Point Not Found" / "DLL was not found" dialogs.
+    /// </summary>
+    public const uint SEM_FAILCRITICALERRORS = 0x0001;
+
+    /// <summary>
+    /// The OpenFile function does not display a message box when it fails
+    /// to find a file. Belt-and-braces alongside SEM_FAILCRITICALERRORS.
+    /// </summary>
+    public const uint SEM_NOOPENFILEERRORBOX = 0x8000;
+
+    [DllImport("kernel32.dll")]
+    public static extern uint SetErrorMode(uint uMode);
 }
 

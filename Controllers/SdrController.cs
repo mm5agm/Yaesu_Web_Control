@@ -36,7 +36,16 @@ namespace Yaesu_Web_Control.Controllers
         public IActionResult GetDevices()
         {
             var all   = new List<SdrDeviceInfo>();
-            var notes = new List<string>();
+            // Notes are collected separately as deferred-add candidates and only
+            // attached to the final response if `all` is still empty after we've
+            // merged in worker-held devices. Otherwise we'd report 'No SDR
+            // devices detected' alongside a populated dropdown — which is what
+            // users saw on v2.3.1/v2.3.2 when their SDRs were actively
+            // streaming via workers (the direct enumeration legitimately
+            // returns 0 because the API hides Selected devices, but the
+            // dropdown ends up populated by the worker merge below).
+            var pendingNotes = new List<string>();
+            var notes        = new List<string>();
 
             // ── SDRplay (sdrplay_api.dll) ────────────────────────────────────────
             var sdrplay = SdrplayDevice.EnumerateDevices(out string? sdrplayNote);
@@ -47,7 +56,7 @@ namespace Yaesu_Web_Control.Controllers
             }
             else if (sdrplayNote != null)
             {
-                notes.Add(sdrplayNote);
+                pendingNotes.Add(sdrplayNote);
                 _logger.LogWarning("SDR: SDRplay — {Note}", sdrplayNote);
             }
 
@@ -70,10 +79,11 @@ namespace Yaesu_Web_Control.Controllers
                 }
                 else if (soapy.Count == 0 && all.Count == 0)
                 {
-                    // No devices found via any path — tell the user what SoapySDR searched.
+                    // No devices found via any path — diag deferred to the
+                    // post-worker-merge gate below.
                     string diag = SoapySdrInterop.GetPluginDiagnostics();
-                    notes.Add("No SDR devices detected. " +
-                              "Plugin details: | " + diag.Replace("\n", " | "));
+                    pendingNotes.Add("No SDR devices detected. " +
+                                     "Plugin details: | " + diag.Replace("\n", " | "));
                     _logger.LogWarning("SDR: SoapySDR no devices. {Diag}", diag);
                 }
             }
@@ -82,6 +92,10 @@ namespace Yaesu_Web_Control.Controllers
                 bool missingDependency = ex.Message.Contains("dependencies",
                     StringComparison.OrdinalIgnoreCase);
 
+                // SoapySDR.dll itself is missing — a different problem from
+                // "the DLL is fine but no devices are plugged in". This note
+                // is always relevant to the user regardless of what workers
+                // are doing, so it goes straight to the response.
                 notes.Add(missingDependency
                     ? "SoapySDR.dll loaded but a dependency it needs is missing. " +
                       "Try re-installing the application — the installer bundles all required DLLs."
@@ -124,6 +138,16 @@ namespace Yaesu_Web_Control.Controllers
                 }
                 all.Add(new SdrDeviceInfo(key, label, driver));
                 _logger.LogDebug("SDR: surfaced active worker device {Key} (VFO {Vfo}) — direct enumeration hid it", key, vfo);
+            }
+
+            // Only surface the "no SDRplay devices found" / "no devices detected"
+            // notes if the device list is STILL empty after the worker-held merge.
+            // If workers are holding devices, those messages are misleading —
+            // direct enumeration found nothing because of the API's Selected-device
+            // hiding behaviour, not because the user actually has no SDRs.
+            if (all.Count == 0)
+            {
+                notes.AddRange(pendingNotes);
             }
 
             return Ok(new

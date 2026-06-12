@@ -857,6 +857,18 @@ connection.on("RadioStateUpdate", function (update) {
         return;
     }
 
+    // --- CALIBRATION UPDATED ---
+    // Server broadcasts this when CalibrationService.Save runs (i.e. someone
+    // hit Save Calibration on the Meter Calibration page). All open browser
+    // tabs reload their in-memory calibration tables so the meters reflect
+    // the new values immediately without a full page reload.
+    // Fixes Jacek's #29 follow-up where saved calibration was being ignored
+    // until the user pressed F5.
+    if (update.property === "CalibrationUpdated") {
+        try { window.calibrationEngine?.reload?.(); } catch (e) { /* best-effort */ }
+        return;
+    }
+
     // --- CONNECTION STATE ---
     if (update.property === "IsConnected") {
         const connected = update.value === true || update.value === 'true';
@@ -1383,7 +1395,16 @@ async function pollInitStatus() {
             initPollingStopped = true; // Stop polling
             radioPowerOn = true;
             updateRadioPowerButton();
-            if (window.applySegmentsOnInit) window.applySegmentsOnInit();
+            // NB: previous behaviour called window.applySegmentsOnInit() here,
+            // which auto-tuned the radio to the last-clicked band segment on
+            // every Index-page load. That overwrote whatever frequency the
+            // operator had set manually on the rig and was the root cause of
+            // Jacek SP3L's bug #33 (radio jumps on YWC startup, also fires
+            // on Home->About->Home tab navigation because pollInitStatus runs
+            // on every page mount). The dropdown still restores its saved
+            // value visually via populateSegmentSelect; we just don't push
+            // the saved frequency back to the radio. The rig's current state
+            // is the source of truth.
         } else if (data.status === "radio_off") {
             // Radio is off - hide overlay and let user turn it on via power button
             overlay.style.display = "none";
@@ -2529,14 +2550,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateSMeter(receiver, value) {
+        // The S-meter gauge has hardcoded tick positions on a 0-255 scale and
+        // ignores calibration tables for needle placement. To make the user's
+        // calibration actually affect where the needle sits, translate the raw
+        // ADC value into the gauge position where the calibrated S-unit lives
+        // on the static dial. calibrateSMeterForGauge does the two-step:
+        // raw → user-calibrated S-unit → static gauge position. The history,
+        // raw display, and snap-label keep using the un-translated raw value.
+        // Reported by Jacek SP3L on #29; confirmed broken by Colin on bench
+        // 2026-06-12 and traced to gauge.js:137 hardcoded majorTicks.
+        const gaugePos = window.calibrationEngine?.calibrateSMeterForGauge
+            ? window.calibrationEngine.calibrateSMeterForGauge(value)
+            : value;
         if (receiver === 'A') {
-            if (window.meterPanel) window.meterPanel.update('smeterA', value);
+            if (window.meterPanel) window.meterPanel.update('smeterA', gaugePos);
             if (window.sMeterHistoryA) window.sMeterHistoryA.push(value);
             updateRawSMeterValueA(value);
             const canvasA = document.getElementById('sMeterCanvasA');
             if (canvasA) canvasA.dataset.reading = sMeterLabel(value);
         } else if (receiver === 'B') {
-            if (window.meterPanel) window.meterPanel.update('smeterB', value);
+            if (window.meterPanel) window.meterPanel.update('smeterB', gaugePos);
             if (window.sMeterHistoryB) window.sMeterHistoryB.push(value);
             const canvasB = document.getElementById('sMeterCanvasB');
             if (canvasB) canvasB.dataset.reading = sMeterLabel(value);
@@ -2805,19 +2838,14 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(tryPopulateSegmentsOnLoad, 200);
     });
 
-    // Called by pollInitStatus when initialization reaches "complete".
-    // Applies the saved segment for each VFO, tuning the radio to the segment frequency.
-    window.applySegmentsOnInit = async function () {
-        for (const vfo of ['A', 'B']) {
-            const band = state.lastBand[vfo];
-            if (!band) continue;
-            const savedKey = localStorage.getItem(segmentStorageKey(vfo, band));
-            if (!savedKey) continue;
-            const select = document.getElementById(`segmentSelect${vfo}`);
-            if (!select || !select.querySelector(`option[value="${savedKey}"]`)) continue;
-            await window.onSegmentChange(vfo, savedKey);
-        }
-    };
+    // Removed (#33 fix, 2026-06-12): window.applySegmentsOnInit used to be
+    // called from pollInitStatus when init completed, and it auto-tuned the
+    // radio to the last-clicked band segment for each VFO. That behaviour
+    // overwrote whatever frequency the operator had set manually on the rig,
+    // which Jacek SP3L reported as #33: "YWC changes radio frequency to some
+    // default value". The dropdown UI value is restored by populateSegmentSelect
+    // on DOMContentLoaded; the radio is NOT auto-tuned. If the user wants to
+    // jump to a saved segment, they click the dropdown manually.
 
     // --- Raw Meter Label Visibility State (S-Meter and Power Out) ---
     // Use localStorage to sync across tabs/pages
