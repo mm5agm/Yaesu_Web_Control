@@ -434,17 +434,259 @@ For local testing before going live, an `AlexaSkipSignatureVerification` setting
 
 ### Steps to create the Skill
 
-**[Walkthrough to follow — will document the exact Amazon Developer Console wizard flow once it's been walked through end-to-end on a real account. The Console's wizard branches frequently so verbatim steps from a real session beat generalised instructions.]**
+The Amazon Developer Console wizard branches a lot. These are the exact steps from a real walkthrough on 2026-06-13 with the wording and choices that worked. The console UI changes over time — if labels differ slightly, the *intent* of each step is what matters.
 
-In summary, when documented:
+#### Step 1 — Amazon Developer account
 
-1. Create a custom Skill in the Alexa Developer Console (free Amazon Developer account)
-2. Set the invocation name to "Yaesu Control" or similar
-3. Define the four intents above with their sample utterances and slot types
-4. Configure the Skill's endpoint URL to `https://yourdomain.com/api/alexa` (HTTPS, web service endpoint type)
-5. In YWC's Settings, set `AlexaEnabled` to `true`. **Do not** set `AlexaSkipSignatureVerification` to true once you're past local testing.
-6. Enable the Skill on your Amazon account; pair it to your Echo
-7. Test by saying "Alexa, ask Yaesu Control what's the rig status"
+The skill must live under an Amazon account that's also paired to your Echo (if you have one), otherwise testing on a real device requires Beta Testing invitations and clicked email links. To find which email your Echo is on: Alexa app → More → Settings → Your Account.
+
+1. Go to https://developer.amazon.com/alexa/console/ask
+2. Sign in with the same email as your Echo / shopping account
+3. If you've never developed before, you land on a **Developer Profile registration form** — fill it in:
+   - Full Name: your real name (appears on skill metadata)
+   - Company Name: leave blank or use your callsign
+   - Country, address, phone: required (Amazon need it even for free skills)
+   - Customer support email: your *public-facing* email (e.g. `you@example.com`) — this is shown in the Skill Store listing for users to contact for support
+   - "Will you collect payments?" → **No**
+   - "Will your skill be directed to children under 13?" → **No**
+   - Tick **"Building Alexa experiences"** under interests; leave Fire TV / Mobile and Marketing unticked
+4. Agree to the Amazon Developer Services Agreement → Submit
+5. If you see an **"Account Identity Verification Failed"** banner — ignore it. That's the Amazon **Appstore** (apps for Fire tablets), nothing to do with Alexa. Skill creation works fine without it. Identity verification is only required when you eventually submit a skill for **public release**; for development and personal-Echo use you don't need it.
+6. From the main console, click **Alexa Skills Kit** (not Alexa Voice Service — that's for embedding Alexa into hardware you build)
+
+#### Step 2 — Create the Skill
+
+1. Click **"Create Skill"** (top-right, blue)
+2. **Skill name:** `Yaesu Web Control` (no quotes, just the words). This is the display name in the Alexa app and Skill Store — separate from the spoken invocation name set later.
+3. **Primary locale:** `English (UK)` for UK users / `English (US)` for US, etc. This decides which voice model Amazon uses.
+4. Click **Next**
+5. **Type of experience:** Select **"Other"** (everything else is for fixed pre-built models — news, smart home etc., none fit a custom radio-control skill)
+6. **Choose a model:** **"Custom"** (lets us define our own intents)
+7. **Hosting services:** **"Provision your own"** — your backend is the YWC instance on your PC behind the cloudflared tunnel; not Alexa-Hosted Lambda
+8. Click **Next**
+9. **Template:** **"Start from Scratch"** (other templates load sample intents you'd have to delete)
+10. Click **Next** → **Create Skill** (review page)
+11. Wait 30-60s for provisioning. You land on the skill's **Build** tab.
+
+#### Step 3 — Set the invocation name
+
+The **invocation name** is what users SAY to call the skill. Amazon's rules:
+- Lowercase, 2+ words preferred
+- No third-party trademarks (so **NOT** "yaesu web control" — "Yaesu" is a registered trademark of Yaesu Musen Co. Ltd. Amazon's certification reviewers will reject this for public release, and the console flags it during entry)
+- No Amazon wake words (alexa, echo, amazon, computer)
+- No numbers, no special characters
+
+**Recommended:** `my rig`
+
+1. Build tab → left sidebar → **Invocations** → **Skill Invocation Name**
+2. Type `my rig`
+3. **Save Model** (top)
+
+The brand-warning text under the field is generic boilerplate shown to everyone — it doesn't mean Amazon objected to "my rig" specifically.
+
+#### Step 4 — Configure the endpoint
+
+This points the skill at your cloudflared tunnel.
+
+1. Left sidebar → **Endpoint**
+2. Select **HTTPS** (not AWS Lambda)
+3. **Default Region URL:** `https://yourdomain.com/api/alexa` (use your actual domain from Phase 1)
+4. **Select SSL certificate type:** **"My development endpoint has a certificate from a trusted certificate authority"** (Cloudflare's certificate is publicly-trusted, so no manual cert upload needed)
+5. Leave North America / Europe and India / Far East **blank** — Default Region is the catch-all, and Cloudflare's edge network handles geographic routing automatically
+6. **Save Endpoints** (top-right)
+
+#### Step 5 — Create slot types
+
+These are voice-recognisable enums. We need two custom ones.
+
+**Slot Type 1: `BAND_NAME`**
+
+1. Left sidebar → **Slot Types** → **+ Add Slot Type** → **Create custom slot type**
+2. Name: `BAND_NAME` (uppercase, underscore — convention)
+3. Add these values (one per row, leave ID blank):
+
+| Value | Synonyms (one per box, optional but recommended) |
+|---|---|
+| `160 metres` | `160 meters`, `160m`, `one sixty`, `top band` |
+| `80 metres` | `80 meters`, `80m`, `eighty metres`, `eighty` |
+| `60 metres` | `60 meters`, `60m`, `sixty metres`, `sixty` |
+| `40 metres` | `40 meters`, `40m`, `forty metres`, `forty` |
+| `30 metres` | `30 meters`, `30m`, `thirty metres`, `thirty` |
+| `20 metres` | `20 meters`, `20m`, `twenty metres`, `twenty` |
+| `17 metres` | `17 meters`, `17m`, `seventeen metres`, `seventeen` |
+| `15 metres` | `15 meters`, `15m`, `fifteen metres`, `fifteen` |
+| `12 metres` | `12 meters`, `12m`, `twelve metres`, `twelve` |
+| `10 metres` | `10 meters`, `10m`, `ten metres`, `ten` |
+| `6 metres` | `6 meters`, `6m`, `six metres`, `six`, `magic band` |
+| `4 metres` | `4 meters`, `4m`, `four metres`, `four` |
+| `2 metres` | `2 meters`, `2m`, `two metres`, `two`, `V H F` |
+| `70 centimetres` | `70 centimeters`, `70cm`, `seventy centimetres`, `seventy cm`, `U H F` |
+
+(2m and 70cm currently get a polite "not supported on this radio" response from the YWC backend — they're added now for future FT-991A / FT-710 support without needing to retrain the slot type.)
+
+4. **Save** (top)
+
+**Slot Type 2: `MODE_NAME`**
+
+1. Slot Types → **+ Add Slot Type** → Create custom slot type
+2. Name: `MODE_NAME`
+3. Add these values:
+
+| Value | Synonyms |
+|---|---|
+| `USB` | `U S B`, `upper sideband`, `upper side band`, `upper` |
+| `LSB` | `L S B`, `lower sideband`, `lower side band`, `lower` |
+| `CW` | `C W`, `morse`, `morse code` |
+| `AM` | `A M`, `amplitude modulation` |
+| `FM` | `F M`, `frequency modulation` |
+| `RTTY` | `R T T Y`, `ritty`, `radio teletype`, `teletype` |
+| `FT8` | `F T 8`, `F T eight`, `eff tee eight` |
+| `data` | `digital`, `digi`, `data mode`, `digital mode` |
+| `PSK` | `P S K`, `phase shift keying` |
+
+4. **Save**
+
+#### Step 6 — Create the four intents
+
+The names below MUST match exactly — they're hardcoded in `Controllers/AlexaController.cs:172-175`.
+
+**Intent 1: `SetBandIntent`**
+
+1. Left sidebar → **Intents** → **+ Add Intent** → Create custom intent
+2. Name: `SetBandIntent` (case-sensitive)
+3. **Create Custom Intent**
+
+On the intent edit page:
+
+- **Intent Slots** section: add a slot named `band` (lowercase), set its **Slot Type** to `BAND_NAME`, leave **Multi-Value OFF**
+- **Does this intent require confirmation?** OFF — confirmation adds friction ("you want to tune to 20 metres, is that right?") with no benefit; tuning is non-destructive
+- **Sample Utterances** — add these 6 lines:
+
+```
+set band to {band}
+go to {band}
+switch to {band}
+tune to {band}
+change to {band}
+change band to {band}
+```
+
+When you type `{band}` it should auto-link to the slot (visible as coloured highlighting). If a chooser pops up, pick **Existing → band**.
+
+4. **Save**
+
+**Intent 2: `SetFrequencyIntent`**
+
+1. + Add Intent → Create custom intent → `SetFrequencyIntent`
+2. Slot: name `frequencyMHz` (exact camelCase — matches `AlexaController.cs:242`), type `AMAZON.NUMBER` (start typing "AMAZON" in the slot type dropdown to find it — it's Amazon's built-in number recogniser)
+3. Sample utterances:
+
+```
+tune to {frequencyMHz} megahertz
+set frequency to {frequencyMHz} megahertz
+go to {frequencyMHz} megahertz
+frequency {frequencyMHz} megahertz
+QSY to {frequencyMHz} megahertz
+QSY {frequencyMHz} megahertz
+```
+
+"megahertz" appears in every utterance to disambiguate from band selection ("tune to 14" could mean 14m or 14 MHz; "tune to 14 megahertz" can't).
+
+4. **Save**
+
+**Intent 3: `SetModeIntent`**
+
+1. + Add Intent → `SetModeIntent`
+2. Slot: `mode` (lowercase), type `MODE_NAME`
+3. Sample utterances:
+
+```
+set mode to {mode}
+switch to {mode}
+switch mode to {mode}
+change mode to {mode}
+use {mode}
+{mode} mode
+```
+
+4. **Save**
+
+**Intent 4: `RigStatusIntent`** (no slots — easiest)
+
+1. + Add Intent → `RigStatusIntent`
+2. **No slot to add** — skip the Intent Slots section
+3. Sample utterances:
+
+```
+status
+rig status
+status report
+report status
+give me the status
+what's the status
+what's the rig status
+what is the radio doing
+tell me the status
+```
+
+4. **Save**
+
+#### Step 7 — Build the skill
+
+1. **Build Skill** (top-right, blue) — compiles your interaction model and trains Alexa's voice recogniser
+2. Wait 1-3 minutes for "Build Successful" banner
+
+If the build fails with utterance conflicts or schema errors, Amazon shows them on screen with line references — fix and rebuild.
+
+#### Step 8 — Enable the YWC endpoint
+
+Currently no UI for this exists in YWC's Settings page (TODO before any public release). Manually add the keys to `appsettings.user.json`:
+
+```powershell
+$path = Join-Path $env:APPDATA 'MM5AGM\Yaesu Web Control\appsettings.user.json'
+$json = Get-Content $path -Raw | ConvertFrom-Json
+$json | Add-Member -NotePropertyName 'AlexaEnabled' -NotePropertyValue $true -Force
+$json | Add-Member -NotePropertyName 'AlexaSkipSignatureVerification' -NotePropertyValue $false -Force
+$json | ConvertTo-Json -Depth 20 | Set-Content $path -Encoding utf8
+```
+
+**Restart YWC** so the new setting is read.
+
+If `AlexaEnabled` is missing or `false`, every request to `/api/alexa` returns **404 silently** — that's by design (no probing surface for attackers), but it makes debugging confusing. If the simulator can't reach the skill, this is the first thing to check.
+
+#### Step 9 — Test in the simulator
+
+1. Go to the **Test** tab (top of skill page)
+2. Set **"Skill testing is enabled in:"** to **Development**
+3. In the chat input, type `ask my rig for status` and press Enter
+4. Within 5 seconds, expect a spoken response like *"VFO A is on 14.074 megahertz in the 20m band, mode USB."*
+5. If the response is **"I am unable to reach the requested skill"**, see the gotcha section below
+
+#### Step 10 — Common gotchas
+
+**Gotcha 1: Cloudflare Bot Fight Mode blocks Amazon's request**
+
+Cloudflare's free-tier "Bot Fight Mode" auto-enables on subdomains receiving repeated automated requests. Amazon's Alexa simulator looks bot-like and gets challenged before reaching the tunnel. Symptom: PowerShell tests from your own PC succeed (reach YWC, get logged), but the simulator's request never appears in YWC's logs at all.
+
+Fix: Cloudflare dashboard → mm5agm.co.uk → **Security → Bots** → turn Bot Fight Mode **off**, OR add a **Skip Rule** for the alexa subdomain so Amazon's traffic gets a free pass while the rest of your domain stays protected.
+
+**Gotcha 2: Yaesu trademark in invocation name**
+
+Don't use "Yaesu" anywhere in the invocation name (what users say). Amazon's review process rejects third-party trademarks. The skill *display* name "Yaesu Web Control" is fine — but invocation must be brand-neutral. Use `my rig`, `radio control`, `ham radio`, or similar.
+
+**Gotcha 3: Signature verification fails with clock skew**
+
+The YWC endpoint rejects requests where the body timestamp is more than 150 seconds from current time. If your PC's clock is off (no NTP sync, or laptop just woken from sleep), Amazon's correctly-timestamped requests look stale and get a 400 with `"Alexa request rejected: timestamp ... is Ns away from now"` in YWC's log.
+
+Fix: `w32tm /resync` in admin PowerShell, or check Windows time settings.
+
+**Gotcha 4: Intent name casing**
+
+Intent names are case-sensitive on both sides. `setBandIntent`, `Setbandintent`, or `SET_BAND_INTENT` will all be defined fine in the console but won't dispatch to anything in `AlexaController.DispatchIntent`. Use the exact casing: `SetBandIntent`, `SetFrequencyIntent`, `SetModeIntent`, `RigStatusIntent`.
+
+**Gotcha 5: Endpoint change requires rebuild**
+
+If you change the endpoint URL after the first build, you must click **Build Skill** again. Amazon caches the endpoint in the compiled model.
 
 ### The two Alexa settings in detail
 
