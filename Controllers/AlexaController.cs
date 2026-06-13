@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Yaesu_Web_Control.Models.Alexa;
 using Yaesu_Web_Control.Services;
+using Yaesu_Web_Control.Services.Alexa;
 
 namespace Yaesu_Web_Control.Controllers;
 
@@ -27,22 +29,33 @@ public class AlexaController : ControllerBase
     private readonly RadioStateService _radioState;
     private readonly ICatClient _catClient;
     private readonly ISettingsService _settingsService;
+    private readonly AmazonSignatureVerifier _signatureVerifier;
     private readonly ILogger<AlexaController> _logger;
+
+    // Reused across requests to avoid per-call options allocation. Case
+    // insensitivity matters because Amazon sends camelCase property names
+    // ("request", "intent") and our C# models use PascalCase.
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     public AlexaController(
         RadioStateService radioState,
         ICatClient catClient,
         ISettingsService settingsService,
+        AmazonSignatureVerifier signatureVerifier,
         ILogger<AlexaController> logger)
     {
-        _radioState      = radioState;
-        _catClient       = catClient;
-        _settingsService = settingsService;
-        _logger          = logger;
+        _radioState        = radioState;
+        _catClient         = catClient;
+        _settingsService   = settingsService;
+        _signatureVerifier = signatureVerifier;
+        _logger            = logger;
     }
 
     [HttpPost]
-    public async Task<IActionResult> Handle([FromBody] AlexaRequest request)
+    public async Task<IActionResult> Handle()
     {
         var settings = await _settingsService.GetSettingsAsync();
         if (!settings.AlexaEnabled)
@@ -51,17 +64,75 @@ public class AlexaController : ControllerBase
             return NotFound();
         }
 
-        // TODO Phase 2.5: verify the Amazon SHA-256 signature using the
-        // Signature and SignatureCertChainUrl headers. Until then, only
-        // accept requests when AlexaSkipSignatureVerification=true so
-        // a misconfigured public install can't accept fake intents.
+        // We need the RAW request body bytes for signature verification,
+        // BEFORE model binding deserializes it. So we read the body ourselves
+        // here instead of using [FromBody] on the parameter.
+        string rawBody;
+        using (var reader = new StreamReader(Request.Body, leaveOpen: true))
+        {
+            rawBody = await reader.ReadToEndAsync();
+        }
+
+        // ── Signature verification ──────────────────────────────────────────
+        if (settings.AlexaSkipSignatureVerification)
+        {
+            // Dev-mode bypass. The settings class makes the safety implication
+            // explicit; we log loudly on every request so anyone tailing
+            // production logs notices if this is left on by accident.
+            _logger.LogWarning(
+                "Alexa request: SIGNATURE VERIFICATION BYPASSED (AlexaSkipSignatureVerification=true). " +
+                "This must NEVER be set in a production install — anyone discovering the public tunnel URL " +
+                "could send arbitrary intent requests and drive the radio.");
+        }
+        else
+        {
+            var sigHeader    = Request.Headers["Signature"].ToString();
+            var certChainUrl = Request.Headers["SignatureCertChainUrl"].ToString();
+            var verification = await _signatureVerifier.VerifyAsync(rawBody, sigHeader, certChainUrl);
+            if (!verification.IsValid)
+            {
+                // Log the precise reason for our own diagnosis, but don't
+                // echo it back to the caller — a fake-request attacker can't
+                // binary-search their way to a valid signature this way.
+                _logger.LogWarning("Alexa signature verification failed: {Reason}", verification.FailReason);
+                return BadRequest();
+            }
+        }
+
+        // ── Deserialize after signature OK ──────────────────────────────────
+        AlexaRequest? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<AlexaRequest>(rawBody, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Alexa request body is not valid JSON");
+            return BadRequest();
+        }
+
+        if (request?.Request == null)
+        {
+            _logger.LogWarning("Alexa request body did not contain a 'request' object");
+            return BadRequest();
+        }
+
+        // ── Replay protection: reject stale timestamps ──────────────────────
+        // Amazon documents a 150-second window. Outside that, treat the
+        // request as a replay attempt and reject. The timestamp comes from
+        // the signed body, so an attacker who replays an old request can't
+        // forge a fresh timestamp without breaking the signature.
+        // Skipped in dev-mode bypass since manual curl tests use a fixed
+        // timestamp that drifts out of the window immediately.
         if (!settings.AlexaSkipSignatureVerification)
         {
-            _logger.LogWarning(
-                "Alexa request received but signature verification is not yet implemented. " +
-                "Set AlexaSkipSignatureVerification=true only for local development testing.");
-            return StatusCode(503, AlexaResponse.Speak(
-                "Voice control signature verification is not yet configured. Please check the setup guide."));
+            var ageSeconds = (DateTime.UtcNow - request.Request.Timestamp.ToUniversalTime()).TotalSeconds;
+            if (Math.Abs(ageSeconds) > 150)
+            {
+                _logger.LogWarning("Alexa request rejected: timestamp {Timestamp:O} is {Age:0}s away from now (limit 150s)",
+                    request.Request.Timestamp, ageSeconds);
+                return BadRequest();
+            }
         }
 
         try

@@ -401,9 +401,59 @@ The Alexa Skill setup in Phase 2 will use this URL as its webhook endpoint.
 
 ## Phase 2 — Alexa Skill setup
 
-**[Documentation to follow.]**
+The YWC-side endpoint at `https://yourdomain.com/api/alexa` is already built and ready (see "What's in YWC" below). What's left is creating the Alexa Skill in Amazon's Developer Console that POSTs to it.
 
-In summary: create a custom Skill in the Alexa Developer Console, define the intents (`GoToBandIntent`, `SetFrequencyIntent`, `SetModeIntent`, `RigStatusIntent`, etc.), point the Skill's HTTPS endpoint at `https://alexa.yourdomain.com/api/alexa`, enable the Skill on your Echo.
+### What's in YWC
+
+A REST endpoint at `/api/alexa` that accepts Alexa Skill JSON requests. The endpoint is **dormant by default** — `Settings.AlexaEnabled` is `false` on every install, so a fresh YWC user who hasn't gone through this guide is not exposing a voice-controlled rig surface.
+
+When you turn it on (Phase 2 step 4 below), four intents are handled:
+
+| Intent | Voice example | What it does |
+|---|---|---|
+| `SetBandIntent` | "go to 40 metres" | Tunes VFO A to the band's default frequency |
+| `SetFrequencyIntent` | "set frequency to 14.074 megahertz" | Tunes VFO A to that exact frequency |
+| `SetModeIntent` | "set mode to USB" | Changes VFO A's mode (USB / LSB / CW / FT8 / etc.) |
+| `RigStatusIntent` | "what's the rig status" | Speaks current VFO A frequency, band, mode, and S-meter |
+
+By design there is **no transmit-by-voice intent in v1** — voice-triggered transmit has regulatory and safety concerns that need a more deliberate UX before being exposed. Other things explicitly not in v1: dual-VFO addressing (always VFO A), memory recall, per-mode settings.
+
+### How the endpoint is protected
+
+Amazon signs every Alexa Skill request with their private key. YWC verifies the signature on each incoming request:
+
+1. The `SignatureCertChainUrl` HTTP header is validated — must be `https://s3.amazonaws.com/echo.api/...` (anywhere else is rejected)
+2. The certificate chain at that URL is fetched (cached after the first fetch) and validated against Windows' trusted-root store
+3. The leaf certificate's Subject Alternative Name must include `echo-api.amazon.com`
+4. The SHA-256 RSA signature in the `Signature` header is verified against the raw request body bytes
+5. The body's timestamp must be within 150 seconds of now (replay protection)
+
+If any step fails, the request gets a `400 Bad Request` and is logged. Without all five checks passing, an attacker who learns your public tunnel URL would not be able to drive your radio by sending fake JSON.
+
+For local testing before going live, an `AlexaSkipSignatureVerification` setting bypasses the signature check — see the warning in step 4 below.
+
+### Steps to create the Skill
+
+**[Walkthrough to follow — will document the exact Amazon Developer Console wizard flow once it's been walked through end-to-end on a real account. The Console's wizard branches frequently so verbatim steps from a real session beat generalised instructions.]**
+
+In summary, when documented:
+
+1. Create a custom Skill in the Alexa Developer Console (free Amazon Developer account)
+2. Set the invocation name to "Yaesu Control" or similar
+3. Define the four intents above with their sample utterances and slot types
+4. Configure the Skill's endpoint URL to `https://yourdomain.com/api/alexa` (HTTPS, web service endpoint type)
+5. In YWC's Settings, set `AlexaEnabled` to `true`. **Do not** set `AlexaSkipSignatureVerification` to true once you're past local testing.
+6. Enable the Skill on your Amazon account; pair it to your Echo
+7. Test by saying "Alexa, ask Yaesu Control what's the rig status"
+
+### The two Alexa settings in detail
+
+| Setting | Default | What it does |
+|---|---|---|
+| `AlexaEnabled` | `false` | Master switch. When `false`, every request to `/api/alexa` returns 404 — the endpoint behaves as if it doesn't exist. Turn this on only after the Skill is fully configured and tested. |
+| `AlexaSkipSignatureVerification` | `false` | **Development only.** Bypasses the Amazon signature check on incoming requests. Useful for local testing with curl/Postman. Must NEVER be `true` in a production install — leaves the endpoint accepting any JSON request from anyone. |
+
+Both settings live in `%APPDATA%\MM5AGM\Yaesu Web Control\appsettings.user.json`.
 
 ---
 

@@ -313,6 +313,17 @@ builder.Services.AddSingleton<ProcessStatusCacheService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.MemoryService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.MemoryBankService>();
 
+// Alexa voice-control dependencies. Disabled by default at the controller
+// level (via Settings.AlexaEnabled) — registering services here is safe
+// because nothing uses them until an /api/alexa request arrives.
+// IMemoryCache caches the Amazon cert chain (one HTTPS fetch per cert
+// rotation rather than per request); IHttpClientFactory gives the verifier
+// a properly-pooled HttpClient. See VOICE_CONTROL.md for the user-facing
+// setup and docs/decisions/0002-alexa-voice-control.md for the architecture.
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient(nameof(Yaesu_Web_Control.Services.Alexa.AmazonSignatureVerifier));
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Alexa.AmazonSignatureVerifier>();
+
 // Register DX cluster service — single instance shared between controllers and
 // the background hosted service so the API can read the spot buffer.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.DxClusterService>();
