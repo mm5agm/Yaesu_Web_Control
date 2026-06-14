@@ -664,11 +664,15 @@ If `AlexaEnabled` is missing or `false`, every request to `/api/alexa` returns *
 
 #### Step 10 — Common gotchas
 
-**Gotcha 1: Cloudflare Bot Fight Mode blocks Amazon's request**
+**Gotcha 1: "I am unable to reach the requested skill" with no requests in YWC's log**
 
-Cloudflare's free-tier "Bot Fight Mode" auto-enables on subdomains receiving repeated automated requests. Amazon's Alexa simulator looks bot-like and gets challenged before reaching the tunnel. Symptom: PowerShell tests from your own PC succeed (reach YWC, get logged), but the simulator's request never appears in YWC's logs at all.
+A persistent failure where the simulator returns this message every time, the Device Log shows `code: SKILL_ENDPOINT_ERROR` / `error.type: INVALID_RESPONSE`, and `skillExecutionTimeInMilliseconds: 47` (or any value far shorter than a real cross-continent round-trip). The 47-ms timing is the key signal — Amazon's request is failing immediately, before any real HTTP round-trip could complete.
 
-Fix: Cloudflare dashboard → mm5agm.co.uk → **Security → Bots** → turn Bot Fight Mode **off**, OR add a **Skip Rule** for the alexa subdomain so Amazon's traffic gets a free pass while the rest of your domain stays protected.
+A full diagnostic checklist is in **Step 11** below. Common root causes ordered by frequency:
+
+1. `AlexaEnabled` not set to `true` in `appsettings.user.json` — the controller returns 404 silently by design (Step 8)
+2. PC clock skew breaking the 150 s signature timestamp window — fixable with `w32tm /resync`
+3. Stuck state on Amazon's side — the same skill ID has cached a failure or the skill manifest has gone out of sync with the deployed configuration. Resolution path here is opening a developer support case with Amazon (see Step 11). Initial debugging in this codebase hit exactly this state — Amazon case #20830059391 covers the full reproducer.
 
 **Gotcha 2: Yaesu trademark in invocation name**
 
@@ -687,6 +691,65 @@ Intent names are case-sensitive on both sides. `setBandIntent`, `Setbandintent`,
 **Gotcha 5: Endpoint change requires rebuild**
 
 If you change the endpoint URL after the first build, you must click **Build Skill** again. Amazon caches the endpoint in the compiled model.
+
+#### Step 11 — Diagnostic checklist for "I am unable to reach the requested skill"
+
+When the simulator stubbornly refuses to reach your endpoint, work through this list in order. The aim is to isolate which hop in the chain (Amazon → Cloudflare → tunnel → YWC) is failing — because the same surface-level error message can mean very different things at each layer.
+
+**A. Confirm YWC is reachable from outside the local PC.** Use https://reqbin.com (or any external HTTP testing service) to POST `{"test": "x"}` to your endpoint, e.g. `https://yourdomain.com/api/alexa`.
+
+- Expected: HTTP **400 Bad Request** with a body containing `"title":"Bad Request"`. That's YWC's signature verifier rejecting an unsigned test request — and crucially, the request did reach YWC.
+- If you get a 502 / timeout / connection refused: YWC isn't running, or the tunnel isn't routing.
+- If you get 404: `AlexaEnabled` is `false` (the controller deliberately returns 404 when disabled).
+
+**B. Confirm Cloudflare isn't blocking the traffic.** Cloudflare dashboard → mm5agm.co.uk → **Security → Settings**.
+
+- **Bot Fight Mode** should be **OFF** (the default in newer Cloudflare accounts). The UI used to be at "Security → Bots", now it's a toggle inside "Security → Settings" filtered by "Bot traffic".
+- **Security → Analytics** — look for the "Suspicious activity" counter and the "Requests mitigated by Cloudflare" view. If both are zero, Cloudflare isn't blocking anything.
+
+**C. Confirm the TLS configuration.** Cloudflare dashboard → mm5agm.co.uk → **SSL/TLS → Edge Certificates**.
+
+- Universal SSL should be **Active**, and the **Hosts** column should include both `mm5agm.co.uk` and `*.mm5agm.co.uk` (the wildcard covers your `alexa.` subdomain).
+- **Minimum TLS Version** should be **1.0** (the default — permissive). Setting it to 1.3 will break Amazon's TLS client.
+- **Always Use HTTPS** can be on; it only affects HTTP→HTTPS redirect, not Amazon's already-HTTPS calls.
+
+**D. Confirm the cloudflared tunnel is healthy.** From an admin PowerShell:
+
+```powershell
+cloudflared tunnel info ywc-alexa
+```
+
+Look for at least one active connector with recent `opened_at` timestamps. Four connections (typically `lhr*` and `man*` colos in the UK, or your region's equivalent) is normal.
+
+**E. Confirm the Amazon-side endpoint configuration.** In the Alexa Developer Console → your skill → **Build** → **Endpoint**.
+
+- HTTPS radio button selected (not Lambda)
+- Default Region URL matches your tunnel hostname character-by-character
+- SSL certificate type: "My development endpoint has a certificate from a trusted certificate authority"
+- After any change here, click **Save Endpoints** and then **Build Skill** (top right) — endpoint changes require a rebuild
+
+**F. Read the Device Log.** Test tab → tick the **Device Log** checkbox at the top. Then fire a test utterance. Look for a `SkillDebugger.CaptureError` event — expand its JSON. The `invocationRequest.endpoint` field shows the URL Amazon actually tried (verify it matches your config), and `skillExecutionTimeInMilliseconds` indicates how long Amazon waited before giving up. Values under ~100 ms mean Amazon didn't actually round-trip to your origin — the failure was at TLS handshake or earlier.
+
+**G. Check YWC's log for arriving requests.** The log lives at `%APPDATA%\MM5AGM\Yaesu Web Control\logs\ywc-YYYYMMDD.log`. Search for `AlexaController`:
+
+```powershell
+$log = "C:\Users\<you>\AppData\Roaming\MM5AGM\Yaesu Web Control\logs\ywc-$(Get-Date -Format yyyyMMdd).log"
+Select-String -Path $log -Pattern 'AlexaController' | Select-Object -Last 5
+```
+
+- If you see `Alexa signature verification failed: ...` — Amazon's request arrived but the signature check failed. Likely PC clock skew (Gotcha 3) or bypass disabled when it shouldn't be.
+- If you see `Alexa intent: <IntentName>` — the request arrived and dispatched. The simulator-side failure is post-response, e.g. a malformed JSON response from YWC.
+- If you see nothing at all despite multiple simulator attempts — Amazon's request isn't reaching YWC. Re-check A–F above; the gap is somewhere before YWC.
+
+**H. If the failure is "Amazon's request never arrives" despite every check above passing**, the most likely cause is **stuck state on Amazon's side**: a corrupted skill manifest, cached endpoint failure for your skill ID, or Amazon EU regional issue. This is what the 47-ms timing pattern indicates. At this point your local debugging is exhausted; open a developer support case (Alexa Developer Console → Support → Contact Us → Alexa Skill Building → Can't Launch Skill) with these specifics:
+
+- Skill ID
+- Endpoint URL
+- The Device Log `SkillDebugger.CaptureError` JSON including `skillExecutionTimeInMilliseconds`
+- Evidence the endpoint is reachable from outside (paste the ReqBin result from step A)
+- Steps already tried (rebuild, fresh browser session, all the above checks)
+
+Amazon typically responds within 1-2 business days.
 
 ### The two Alexa settings in detail
 
