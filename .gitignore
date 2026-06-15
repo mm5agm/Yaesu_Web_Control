@@ -143,9 +143,11 @@ Yaesu_Web_Control_Setup*.exe
 
 # Local reference documents — not committed to repo (Yaesu manual PDFs etc.)
 docs/*
-# …but architecture decision records ARE part of the repo
+# …but architecture decision records and design docs ARE part of the repo
 !docs/decisions/
 !docs/decisions/**
+!docs/design/
+!docs/design/**
 
 # Runtime logs
 *.log
