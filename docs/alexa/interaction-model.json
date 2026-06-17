@@ -1,0 +1,121 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "my rig",
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "SetBandIntent",
+          "slots": [
+            {
+              "name": "band",
+              "type": "BAND_NAME"
+            }
+          ],
+          "samples": [
+            "switch to {band}",
+            "tune to {band}",
+            "set band to {band}",
+            "change band to {band}",
+            "change to {band}",
+            "go to {band}"
+          ]
+        },
+        {
+          "name": "SetFrequencyIntent",
+          "slots": [
+            {
+              "name": "frequencyMHz",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "tune to {frequencyMHz} megahertz",
+            "set frequency to {frequencyMHz} megahertz",
+            "go to {frequencyMHz} megahertz",
+            "frequency {frequencyMHz} megahertz",
+            "QSY to {frequencyMHz} megahertz",
+            "QSY {frequencyMHz} megahertz"
+          ]
+        },
+        {
+          "name": "SetModeIntent",
+          "slots": [
+            {
+              "name": "mode",
+              "type": "MODE_NAME"
+            }
+          ],
+          "samples": [
+            "set mode to {mode}",
+            "switch to {mode}",
+            "switch mode to {mode}",
+            "change mode to {mode}",
+            "use {mode}",
+            "{mode} mode"
+          ]
+        },
+        {
+          "name": "RigStatusIntent",
+          "samples": [
+            "status",
+            "rig status",
+            "status report",
+            "report status",
+            "give me the status",
+            "what's the status",
+            "what's the rig status",
+            "what is the radio doing",
+            "tell me the status"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "BAND_NAME",
+          "values": [
+            { "name": { "value": "160 metres", "synonyms": ["160 meters", "160m", "one sixty", "top band"] } },
+            { "name": { "value": "80 metres",  "synonyms": ["80 meters", "80m", "eighty metres", "eighty"] } },
+            { "name": { "value": "60 metres",  "synonyms": ["60 meters", "60m", "sixty metres", "sixty"] } },
+            { "name": { "value": "40 metres",  "synonyms": ["40 meters", "40m", "forty metres", "forty"] } },
+            { "name": { "value": "30 metres",  "synonyms": ["30 meters", "30m", "thirty metres", "thirty"] } },
+            { "name": { "value": "20 metres",  "synonyms": ["20 meters", "20m", "twenty metres", "twenty"] } },
+            { "name": { "value": "17 metres",  "synonyms": ["17 meters", "17m", "seventeen metres", "seventeen"] } },
+            { "name": { "value": "15 metres",  "synonyms": ["15 meters", "15m", "fifteen metres", "fifteen"] } },
+            { "name": { "value": "12 metres",  "synonyms": ["12 meters", "12m", "twelve metres", "twelve"] } },
+            { "name": { "value": "10 metres",  "synonyms": ["10 meters", "10m", "ten metres", "ten"] } },
+            { "name": { "value": "6 metres",   "synonyms": ["6 meters", "6m", "six metres", "six", "magic band"] } },
+            { "name": { "value": "4 metres",   "synonyms": ["4 meters", "4m", "four metres", "four"] } },
+            { "name": { "value": "2 metres",   "synonyms": ["2 meters", "2m", "two metres", "two", "V H F"] } },
+            { "name": { "value": "70 centimetres", "synonyms": ["70 centimeters", "70cm", "seventy centimetres", "seventy cm", "U H F"] } }
+          ]
+        },
+        {
+          "name": "MODE_NAME",
+          "values": [
+            { "name": { "value": "USB",  "synonyms": ["U S B", "upper sideband", "upper side band", "upper"] } },
+            { "name": { "value": "LSB",  "synonyms": ["L S B", "lower sideband", "lower side band", "lower"] } },
+            { "name": { "value": "CW",   "synonyms": ["C W", "morse", "morse code"] } },
+            { "name": { "value": "AM",   "synonyms": ["A M", "amplitude modulation"] } },
+            { "name": { "value": "FM",   "synonyms": ["F M", "frequency modulation"] } },
+            { "name": { "value": "RTTY", "synonyms": ["R T T Y", "ritty", "radio teletype", "teletype"] } },
+            { "name": { "value": "FT8",  "synonyms": ["F T 8", "F T eight", "eff tee eight"] } },
+            { "name": { "value": "data", "synonyms": ["digital", "digi", "data mode", "digital mode"] } },
+            { "name": { "value": "PSK",  "synonyms": ["P S K", "phase shift keying"] } }
+          ]
+        }
+      ]
+    }
+  }
+}

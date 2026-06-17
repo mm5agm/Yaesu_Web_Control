@@ -148,6 +148,9 @@ docs/*
 !docs/decisions/**
 !docs/design/
 !docs/design/**
+# Alexa skill interaction model JSON is shipped to users for one-paste setup
+!docs/alexa/
+!docs/alexa/**
 
 # Runtime logs
 *.log

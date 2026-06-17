@@ -499,150 +499,34 @@ This points the skill at your cloudflared tunnel.
 5. Leave North America / Europe and India / Far East **blank** — Default Region is the catch-all, and Cloudflare's edge network handles geographic routing automatically
 6. **Save Endpoints** (top-right)
 
-#### Step 5 — Create slot types
+#### Step 5 — Upload the interaction model
 
-These are voice-recognisable enums. We need two custom ones.
+YWC ships a ready-made interaction model JSON at [`docs/alexa/interaction-model.json`](docs/alexa/interaction-model.json) in the repository. Uploading it takes about one minute and replaces around thirty minutes of manual entry for the two custom slot types (`BAND_NAME`, `MODE_NAME`) and four intents (`SetBandIntent`, `SetFrequencyIntent`, `SetModeIntent`, `RigStatusIntent`).
 
-**Slot Type 1: `BAND_NAME`**
+1. Open `docs/alexa/interaction-model.json` from your local clone of the YWC repository (or [view the latest version on GitHub](https://github.com/mm5agm/Yaesu_Web_Control/blob/feature/alexa-voice-control/docs/alexa/interaction-model.json) and use the **Copy raw file** button)
+2. **Select all** (`Ctrl+A`) and **copy** (`Ctrl+C`)
+3. In the Alexa Developer Console, left sidebar → **JSON Editor** (under Interaction Model)
+4. **Select all** in the editor pane and **paste** your copied JSON over the existing content
+5. **Save Model** (top of page)
 
-1. Left sidebar → **Slot Types** → **+ Add Slot Type** → **Create custom slot type**
-2. Name: `BAND_NAME` (uppercase, underscore — convention)
-3. Add these values (one per row, leave ID blank):
+What this gives you (matches the manual setup in Appendix A below, exactly):
 
-| Value | Synonyms (one per box, optional but recommended) |
-|---|---|
-| `160 metres` | `160 meters`, `160m`, `one sixty`, `top band` |
-| `80 metres` | `80 meters`, `80m`, `eighty metres`, `eighty` |
-| `60 metres` | `60 meters`, `60m`, `sixty metres`, `sixty` |
-| `40 metres` | `40 meters`, `40m`, `forty metres`, `forty` |
-| `30 metres` | `30 meters`, `30m`, `thirty metres`, `thirty` |
-| `20 metres` | `20 meters`, `20m`, `twenty metres`, `twenty` |
-| `17 metres` | `17 meters`, `17m`, `seventeen metres`, `seventeen` |
-| `15 metres` | `15 meters`, `15m`, `fifteen metres`, `fifteen` |
-| `12 metres` | `12 meters`, `12m`, `twelve metres`, `twelve` |
-| `10 metres` | `10 meters`, `10m`, `ten metres`, `ten` |
-| `6 metres` | `6 meters`, `6m`, `six metres`, `six`, `magic band` |
-| `4 metres` | `4 meters`, `4m`, `four metres`, `four` |
-| `2 metres` | `2 meters`, `2m`, `two metres`, `two`, `V H F` |
-| `70 centimetres` | `70 centimeters`, `70cm`, `seventy centimetres`, `seventy cm`, `U H F` |
+- Invocation name: `my rig`
+- Two custom slot types — `BAND_NAME` (160m through 70cm, with synonyms) and `MODE_NAME` (USB/LSB/CW/AM/FM/RTTY/FT8/data/PSK)
+- Four intents with full sample utterances, including the short single-word `status` form
 
-(2m and 70cm currently get a polite "not supported on this radio" response from the YWC backend — they're added now for future FT-991A / FT-710 support without needing to retrain the slot type.)
+**To use a different invocation name** (e.g. `my shack`, `hf radio`), edit the `invocationName` field in the JSON before pasting. Amazon's rules: lowercase only, two-word names cannot contain articles (`a`/`an`/`the`) or prepositions (`to`/`for`/`in`/etc), no third-party trademarks like Yaesu.
 
-4. **Save** (top)
+If the JSON Editor flags a validation error after paste, you've likely got an extra character or partial copy. Make sure the editor pane contains nothing else and that the paste starts with `{` and ends with `}`.
 
-**Slot Type 2: `MODE_NAME`**
-
-1. Slot Types → **+ Add Slot Type** → Create custom slot type
-2. Name: `MODE_NAME`
-3. Add these values:
-
-| Value | Synonyms |
-|---|---|
-| `USB` | `U S B`, `upper sideband`, `upper side band`, `upper` |
-| `LSB` | `L S B`, `lower sideband`, `lower side band`, `lower` |
-| `CW` | `C W`, `morse`, `morse code` |
-| `AM` | `A M`, `amplitude modulation` |
-| `FM` | `F M`, `frequency modulation` |
-| `RTTY` | `R T T Y`, `ritty`, `radio teletype`, `teletype` |
-| `FT8` | `F T 8`, `F T eight`, `eff tee eight` |
-| `data` | `digital`, `digi`, `data mode`, `digital mode` |
-| `PSK` | `P S K`, `phase shift keying` |
-
-4. **Save**
-
-#### Step 6 — Create the four intents
-
-The names below MUST match exactly — they're hardcoded in `Controllers/AlexaController.cs:172-175`.
-
-**Intent 1: `SetBandIntent`**
-
-1. Left sidebar → **Intents** → **+ Add Intent** → Create custom intent
-2. Name: `SetBandIntent` (case-sensitive)
-3. **Create Custom Intent**
-
-On the intent edit page:
-
-- **Intent Slots** section: add a slot named `band` (lowercase), set its **Slot Type** to `BAND_NAME`, leave **Multi-Value OFF**
-- **Does this intent require confirmation?** OFF — confirmation adds friction ("you want to tune to 20 metres, is that right?") with no benefit; tuning is non-destructive
-- **Sample Utterances** — add these 6 lines:
-
-```
-set band to {band}
-go to {band}
-switch to {band}
-tune to {band}
-change to {band}
-change band to {band}
-```
-
-When you type `{band}` it should auto-link to the slot (visible as coloured highlighting). If a chooser pops up, pick **Existing → band**.
-
-4. **Save**
-
-**Intent 2: `SetFrequencyIntent`**
-
-1. + Add Intent → Create custom intent → `SetFrequencyIntent`
-2. Slot: name `frequencyMHz` (exact camelCase — matches `AlexaController.cs:242`), type `AMAZON.NUMBER` (start typing "AMAZON" in the slot type dropdown to find it — it's Amazon's built-in number recogniser)
-3. Sample utterances:
-
-```
-tune to {frequencyMHz} megahertz
-set frequency to {frequencyMHz} megahertz
-go to {frequencyMHz} megahertz
-frequency {frequencyMHz} megahertz
-QSY to {frequencyMHz} megahertz
-QSY {frequencyMHz} megahertz
-```
-
-"megahertz" appears in every utterance to disambiguate from band selection ("tune to 14" could mean 14m or 14 MHz; "tune to 14 megahertz" can't).
-
-4. **Save**
-
-**Intent 3: `SetModeIntent`**
-
-1. + Add Intent → `SetModeIntent`
-2. Slot: `mode` (lowercase), type `MODE_NAME`
-3. Sample utterances:
-
-```
-set mode to {mode}
-switch to {mode}
-switch mode to {mode}
-change mode to {mode}
-use {mode}
-{mode} mode
-```
-
-4. **Save**
-
-**Intent 4: `RigStatusIntent`** (no slots — easiest)
-
-1. + Add Intent → `RigStatusIntent`
-2. **No slot to add** — skip the Intent Slots section
-3. Sample utterances:
-
-```
-status
-rig status
-status report
-report status
-give me the status
-what's the status
-what's the rig status
-what is the radio doing
-tell me the status
-```
-
-4. **Save**
-
-#### Step 7 — Build the skill
+#### Step 6 — Build the skill
 
 1. **Build Skill** (top-right, blue) — compiles your interaction model and trains Alexa's voice recogniser
 2. Wait 1-3 minutes for "Build Successful" banner
 
 If the build fails with utterance conflicts or schema errors, Amazon shows them on screen with line references — fix and rebuild.
 
-#### Step 8 — Enable the YWC endpoint
+#### Step 7 — Enable the YWC endpoint
 
 Currently no UI for this exists in YWC's Settings page (TODO before any public release). Manually add the keys to `appsettings.user.json`:
 
@@ -658,7 +542,7 @@ $json | ConvertTo-Json -Depth 20 | Set-Content $path -Encoding utf8
 
 If `AlexaEnabled` is missing or `false`, every request to `/api/alexa` returns **404 silently** — that's by design (no probing surface for attackers), but it makes debugging confusing. If the simulator can't reach the skill, this is the first thing to check.
 
-#### Step 9 — Test in the simulator
+#### Step 8 — Test in the simulator
 
 1. Go to the **Test** tab (top of skill page)
 2. Set **"Skill testing is enabled in:"** to **Development**
@@ -666,13 +550,13 @@ If `AlexaEnabled` is missing or `false`, every request to `/api/alexa` returns *
 4. Within 5 seconds, expect a spoken response like *"VFO A is on 14.074 megahertz in the 20m band, mode USB."*
 5. If the response is **"I am unable to reach the requested skill"**, see the gotcha section below
 
-#### Step 10 — Common gotchas
+#### Step 9 — Common gotchas
 
 **Gotcha 1: "I am unable to reach the requested skill" with no requests in YWC's log**
 
 A persistent failure where the simulator returns this message every time, the Device Log shows `code: SKILL_ENDPOINT_ERROR` / `error.type: INVALID_RESPONSE`, and `skillExecutionTimeInMilliseconds: 47` (or any value far shorter than a real cross-continent round-trip). The 47-ms timing is the key signal — Amazon's request is failing immediately, before any real HTTP round-trip could complete.
 
-A full diagnostic checklist is in **Step 11** below. Common root causes ordered by frequency:
+A full diagnostic checklist is in **Step 10** below. Common root causes ordered by frequency:
 
 1. **Wrong SSL certificate type** in the endpoint config — Phase 2 Step 4. The "trusted certificate authority" option looks plausible but causes Amazon to reject the request before it leaves their edge. The wildcard sub-domain option is correct. This is what Amazon developer support case #20830059391 ultimately diagnosed; if you're seeing the 47 ms timing pattern this is the first thing to check.
 2. `AlexaEnabled` not set to `true` in `appsettings.user.json` — the controller returns 404 silently by design (Step 8)
@@ -696,7 +580,7 @@ Intent names are case-sensitive on both sides. `setBandIntent`, `Setbandintent`,
 
 If you change the endpoint URL after the first build, you must click **Build Skill** again. Amazon caches the endpoint in the compiled model.
 
-#### Step 11 — Diagnostic checklist for "I am unable to reach the requested skill"
+#### Step 10 — Diagnostic checklist for "I am unable to reach the requested skill"
 
 When the simulator stubbornly refuses to reach your endpoint, work through this list in order. The aim is to isolate which hop in the chain (Amazon → Cloudflare → tunnel → YWC) is failing — because the same surface-level error message can mean very different things at each layer.
 
@@ -757,6 +641,140 @@ If you've verified check E is correctly set and the failure persists, only then 
 
 Amazon typically responds within 1-2 business days. Case #20830059391 is the canonical example — the resolution turned out to be the SSL setting, which is now check E above.
 
+### Appendix A — Manual model entry (alternative to Step 5)
+
+If you'd rather enter the interaction model by hand than upload the JSON — perhaps to understand what each piece does, or because you want to customise as you go — these are the equivalent manual steps. Skip this entire appendix if you used Step 5.
+
+**A.1 — Create slot type `BAND_NAME`**
+
+1. Left sidebar → **Slot Types** → **+ Add Slot Type** → **Create custom slot type**
+2. Name: `BAND_NAME` (uppercase, underscore — convention)
+3. Add these values (one per row, leave ID blank):
+
+| Value | Synonyms (one per box, optional but recommended) |
+|---|---|
+| `160 metres` | `160 meters`, `160m`, `one sixty`, `top band` |
+| `80 metres` | `80 meters`, `80m`, `eighty metres`, `eighty` |
+| `60 metres` | `60 meters`, `60m`, `sixty metres`, `sixty` |
+| `40 metres` | `40 meters`, `40m`, `forty metres`, `forty` |
+| `30 metres` | `30 meters`, `30m`, `thirty metres`, `thirty` |
+| `20 metres` | `20 meters`, `20m`, `twenty metres`, `twenty` |
+| `17 metres` | `17 meters`, `17m`, `seventeen metres`, `seventeen` |
+| `15 metres` | `15 meters`, `15m`, `fifteen metres`, `fifteen` |
+| `12 metres` | `12 meters`, `12m`, `twelve metres`, `twelve` |
+| `10 metres` | `10 meters`, `10m`, `ten metres`, `ten` |
+| `6 metres` | `6 meters`, `6m`, `six metres`, `six`, `magic band` |
+| `4 metres` | `4 meters`, `4m`, `four metres`, `four` |
+| `2 metres` | `2 meters`, `2m`, `two metres`, `two`, `V H F` |
+| `70 centimetres` | `70 centimeters`, `70cm`, `seventy centimetres`, `seventy cm`, `U H F` |
+
+(2m and 70cm currently get a polite "not supported on this radio" response from the YWC backend — they're added now for future FT-991A / FT-710 support without needing to retrain the slot type.)
+
+4. **Save** (top)
+
+**A.2 — Create slot type `MODE_NAME`**
+
+1. Slot Types → **+ Add Slot Type** → Create custom slot type
+2. Name: `MODE_NAME`
+3. Add these values:
+
+| Value | Synonyms |
+|---|---|
+| `USB` | `U S B`, `upper sideband`, `upper side band`, `upper` |
+| `LSB` | `L S B`, `lower sideband`, `lower side band`, `lower` |
+| `CW` | `C W`, `morse`, `morse code` |
+| `AM` | `A M`, `amplitude modulation` |
+| `FM` | `F M`, `frequency modulation` |
+| `RTTY` | `R T T Y`, `ritty`, `radio teletype`, `teletype` |
+| `FT8` | `F T 8`, `F T eight`, `eff tee eight` |
+| `data` | `digital`, `digi`, `data mode`, `digital mode` |
+| `PSK` | `P S K`, `phase shift keying` |
+
+4. **Save**
+
+**A.3 — Create the four intents**
+
+The names below MUST match exactly — they're hardcoded in `Controllers/AlexaController.cs:172-175`.
+
+**Intent 1: `SetBandIntent`**
+
+1. Left sidebar → **Intents** → **+ Add Intent** → Create custom intent
+2. Name: `SetBandIntent` (case-sensitive) → **Create Custom Intent**
+3. **Intent Slots** section: add a slot named `band` (lowercase), set its **Slot Type** to `BAND_NAME`, leave **Multi-Value OFF**
+4. **Does this intent require confirmation?** OFF — confirmation adds friction with no benefit; tuning is non-destructive
+5. **Sample Utterances**:
+
+```
+set band to {band}
+go to {band}
+switch to {band}
+tune to {band}
+change to {band}
+change band to {band}
+```
+
+When you type `{band}` it should auto-link to the slot. If a chooser pops up, pick **Existing → band**.
+
+6. **Save**
+
+**Intent 2: `SetFrequencyIntent`**
+
+1. + Add Intent → `SetFrequencyIntent`
+2. Slot: name `frequencyMHz` (exact camelCase — matches `AlexaController.cs:242`), type `AMAZON.NUMBER`
+3. Sample utterances:
+
+```
+tune to {frequencyMHz} megahertz
+set frequency to {frequencyMHz} megahertz
+go to {frequencyMHz} megahertz
+frequency {frequencyMHz} megahertz
+QSY to {frequencyMHz} megahertz
+QSY {frequencyMHz} megahertz
+```
+
+"megahertz" appears in every utterance to disambiguate from band selection.
+
+4. **Save**
+
+**Intent 3: `SetModeIntent`**
+
+1. + Add Intent → `SetModeIntent`
+2. Slot: `mode` (lowercase), type `MODE_NAME`
+3. Sample utterances:
+
+```
+set mode to {mode}
+switch to {mode}
+switch mode to {mode}
+change mode to {mode}
+use {mode}
+{mode} mode
+```
+
+4. **Save**
+
+**Intent 4: `RigStatusIntent`** (no slots — easiest)
+
+1. + Add Intent → `RigStatusIntent`
+2. **No slot to add** — skip the Intent Slots section
+3. Sample utterances:
+
+```
+status
+rig status
+status report
+report status
+give me the status
+what's the status
+what's the rig status
+what is the radio doing
+tell me the status
+```
+
+4. **Save**
+
+After all four are saved, return to **Step 6 (Build the skill)** above.
+
 ### The two Alexa settings in detail
 
 | Setting | Default | What it does |
@@ -786,7 +804,7 @@ These are the phrasings most consistent on real Echo hardware. They've been chos
 - "Alexa, ask my rig for status"
 - "Alexa, ask my rig what's the status"
 
-The short `status` form depends on having `status` as a single-word sample utterance on `RigStatusIntent` — the original walkthrough in Step 6 above already lists it; if you're upgrading from an earlier setup you may need to add it.
+The short `status` form depends on having `status` as a single-word sample utterance on `RigStatusIntent`. The uploaded JSON (Step 5) already includes it; if you set the model up manually before this was documented you may need to add it.
 
 **Change band** (supported: 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m, 4m on the FTdx101MP region 1; 2m and 70cm will return "not supported on this radio"):
 
