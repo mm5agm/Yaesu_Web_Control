@@ -6,6 +6,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Yaesu_Web_Control.Hubs;
+using Yaesu_Web_Control.Models;
 using System.Diagnostics; // Place at the top of the file if not already present
 
 namespace Yaesu_Web_Control.Services
@@ -125,6 +126,23 @@ namespace Yaesu_Web_Control.Services
                 radioStateService.RadioPowerOn = true;
                 logger.LogInformation("[RadioInitializationService] Radio responded to FA;: {Response}", faResponse);
 
+                // Safety: force the radio into RX before doing anything else.
+                // Yaesu HF rigs preserve MOX/TX state across power cycles in
+                // some firmwares, so a radio powered off mid-transmit (by YWC,
+                // WSJT-X via rigctld, or a stuck PTT) can come back up still
+                // transmitting. If we don't clear it here, the next operation
+                // happens on a live carrier.
+                try
+                {
+                    await multiplexer.SendCommandAsync("TX0;", "Initialization", stoppingToken);
+                    radioStateService.IsTransmitting = false;
+                    logger.LogInformation("[RadioInitializationService] Sent TX0; safety RX-enforce on connect");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "[RadioInitializationService] TX0; safety RX-enforce failed (non-fatal)");
+                }
+
                 // Send initialization commands and wait for DT0 response (with timeout)
                 logger.LogInformation("[RadioInitializationService] Sending full initialization sequence and waiting for DT0 (timeout 5s)...");
 
@@ -160,11 +178,15 @@ namespace Yaesu_Web_Control.Services
                     stateTasks.Add(multiplexer.SendCommandAsync(CatCommands.FormatMode(persistedState.ModeB, true), "Initialization", stoppingToken)
                         .ContinueWith(t => { if (!t.IsFaulted) radioStateService.ModeB = persistedState.ModeB; }));
                 }
-                if (persistedState.Power > 0)
-                {
-                    stateTasks.Add(multiplexer.SendCommandAsync($"PC{persistedState.Power};", "Initialization", stoppingToken)
-                        .ContinueWith(t => { if (!t.IsFaulted) radioStateService.Power = persistedState.Power; }));
-                }
+                // RF Power is deliberately NOT restored from persisted state
+                // on connect (Issue #35, SP3L-Jacek 2026-06-14). The radio is
+                // the source of truth: if the operator changed the front-panel
+                // power knob while YWC was closed, restoring YWC's last-saved
+                // value would silently overwrite their setting. Same pattern
+                // as MIC GAIN / Speech Processor / PROC LEVEL (Issue #16).
+                // The PC; query in readQueries below populates YWC's UI with
+                // whatever the radio currently has. Front-panel changes while
+                // YWC is running flow through the dispatcher's "PC" case.
                 if (!string.IsNullOrEmpty(persistedState.AntennaA))
                 {
                     stateTasks.Add(multiplexer.SendCommandAsync($"AN0{persistedState.AntennaA};", "Initialization", stoppingToken)
@@ -318,6 +340,8 @@ namespace Yaesu_Web_Control.Services
                     "MG;",                   // MIC Gain
                     "PR;",                   // Speech Processor on/off
                     "PL;",                   // Processor Level
+                    "PC;",                   // RF Power (Issue #35) — radio is
+                                             //   source of truth on connect
                     "ML0;", "ML1;",          // Monitor on/off / level
                     // CW
                     "KP;",                   // CW Pitch
@@ -330,7 +354,7 @@ namespace Yaesu_Web_Control.Services
                     "VD;",                   // VOX Delay
                 };
                 foreach (var q in readQueries)
-                    await multiplexer.SendCommandAsync(q, "Initialization", stoppingToken);
+                    await multiplexer.SendCommandAndDispatchAsync(q, "Initialization", stoppingToken);
 
                 // 5. Set IsInitialized = true FIRST to allow property changes to be persisted and broadcast
                 radioStateService.IsInitialized = true;
@@ -344,6 +368,50 @@ namespace Yaesu_Web_Control.Services
                 radioStateService.SetBand("A", bandA);
                 radioStateService.SetBand("B", bandB);
                 logger.LogInformation("[RadioInitializationService] Bands set: A={BandA}, B={BandB}", bandA, bandB);
+
+                // Backfill per-band antenna profiles when empty. Older
+                // appsettings.user.json files have BandProfile entries that
+                // pre-date the per-band antenna feature (Antenna="" by default)
+                // — without this, users would see Antenna fields stay empty
+                // until they manually clicked an antenna button on each band.
+                // We only fill if Antenna is empty, never overwriting an
+                // existing valid selection.
+                try
+                {
+                    var profilesChanged = false;
+                    if (!string.IsNullOrEmpty(bandA) && !string.IsNullOrEmpty(radioStateService.AntennaA))
+                    {
+                        if (!settings.BandProfilesA.TryGetValue(bandA, out var profA))
+                            profA = new BandProfile();
+                        if (string.IsNullOrEmpty(profA.Antenna))
+                        {
+                            profA.Antenna = radioStateService.AntennaA!;
+                            settings.BandProfilesA[bandA] = profA;
+                            profilesChanged = true;
+                        }
+                    }
+                    if (!string.IsNullOrEmpty(bandB) && !string.IsNullOrEmpty(radioStateService.AntennaB))
+                    {
+                        if (!settings.BandProfilesB.TryGetValue(bandB, out var profB))
+                            profB = new BandProfile();
+                        if (string.IsNullOrEmpty(profB.Antenna))
+                        {
+                            profB.Antenna = radioStateService.AntennaB!;
+                            settings.BandProfilesB[bandB] = profB;
+                            profilesChanged = true;
+                        }
+                    }
+                    if (profilesChanged)
+                    {
+                        await settingsService.SaveSettingsAsync(settings);
+                        logger.LogInformation("[RadioInitializationService] Backfilled empty Antenna fields for current bands (A={BandA}/Ant{AntA}, B={BandB}/Ant{AntB})",
+                            bandA, radioStateService.AntennaA, bandB, radioStateService.AntennaB);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "[RadioInitializationService] Per-band antenna backfill failed (non-fatal)");
+                }
 
                 // 6. Enable auto information
                 await multiplexer.EnableAutoInformationAsync();
@@ -412,6 +480,23 @@ namespace Yaesu_Web_Control.Services
             using var scopeForLogger = _serviceProvider.CreateScope();
             var logger = scopeForLogger.ServiceProvider.GetService<ILogger<RadioInitializationService>>();
             logger?.LogInformation("[RadioInit] StopAsync entered");
+
+            // Safety: send TX0; before disconnecting so YWC never leaves the
+            // radio in transmit. Some Yaesu firmwares preserve MOX/TX state
+            // across power cycles, so a shutdown mid-transmit could otherwise
+            // result in the radio coming back up still keying. Best-effort
+            // with a 1 s timeout so a hung send can't stall host shutdown.
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(1));
+                await _multiplexer.SendCommandAsync("TX0;", "RadioInit-Shutdown", cts.Token);
+                logger?.LogInformation("[RadioInit] TX0; safety RX-enforce sent on shutdown");
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "[RadioInit] TX0; on shutdown failed — non-fatal");
+            }
 
             // FTdx101 power-meter restore (discussion #6, F1ubw). During normal
             // operation MeterPollingService sets the radio's front-panel meter

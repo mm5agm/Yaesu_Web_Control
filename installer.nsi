@@ -1,6 +1,6 @@
 !define APPNAME "Yaesu Web Control"
 !define COMPANY "MM5AGM"
-!define VERSION "2.3.6"
+!define VERSION "2.3.8"
 !define INSTALLDIR "$PROGRAMFILES64\${COMPANY}\${APPNAME}"
 Name "${APPNAME} ${VERSION}"
 OutFile "Yaesu_Web_Control_Setup.exe"
@@ -12,6 +12,21 @@ Page directory
 Page instfiles
 
 Section "Install"
+    ; Stop any running instance of YWC before copying files. Without this,
+    ; an upgrade install on top of a running YWC fails with NSIS's "Error
+    ; opening file for writing" on every locked DLL (Accessibility.dll
+    ; tends to be the first one hit). Reported by Ken KN2D 2026-06-15.
+    ; Also kill the per-SDR worker processes (Yaesu_Sdr_Worker.exe) since
+    ; those are spawned by YWC and hold their own copies of the worker
+    ; binaries — they'd cause the same file-lock failure on a second SDR
+    ; install. /F is the force flag; if the process isn't running,
+    ; taskkill exits non-zero but ExecWait doesn't check the return code,
+    ; so missing-process is harmless. The Sleep gives Windows a moment to
+    ; release the file handles before the File copy begins.
+    ExecWait 'taskkill /F /IM Yaesu_Web_Control.exe'
+    ExecWait 'taskkill /F /IM Yaesu_Sdr_Worker.exe'
+    Sleep 1500
+
     SetOutPath "$INSTDIR"
 
     ; Exclude files that must not be shipped or must not overwrite user data.

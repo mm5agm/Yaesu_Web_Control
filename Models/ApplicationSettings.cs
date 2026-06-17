@@ -181,11 +181,14 @@
         public int SquelchB { get; set; } = 0;
     }
 
-    // Stores per-band IF Width/Shift/Mode so they are restored when the operator returns to a band.
+    // Stores per-band IF Width/Shift/Mode/Antenna so they are restored when the operator returns to a band.
     public class BandProfile
     {
         public string IfWidthCode { get; set; } = "";
         public int IfShiftHz { get; set; } = 0;
         public string Mode { get; set; } = "";
+        // Antenna selection ("1" / "2" / "3"). Empty for legacy profiles
+        // saved before this field existed — guard restore with IsNullOrEmpty.
+        public string Antenna { get; set; } = "";
     }
 }

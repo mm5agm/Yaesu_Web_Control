@@ -6,10 +6,37 @@
 
 <h1 class="mb-3">Diagnostics</h1>
 
-<div class="d-flex align-items-center gap-3 mb-3">
+<div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
     <span>SignalR: <span id="diag-status" class="badge bg-secondary">Connecting&hellip;</span></span>
-    <a href="/Ports" target="_blank" class="btn btn-sm btn-outline-secondary">COM Ports</a>
-    <a href="/api/cat/status" target="_blank" class="btn btn-sm btn-outline-secondary">CAT Status JSON</a>
+    <button type="button" id="diag-toggle-ports" class="btn btn-sm btn-outline-secondary"
+            aria-expanded="false" aria-controls="diag-ports-panel">COM Ports</button>
+    <button type="button" id="diag-toggle-cat" class="btn btn-sm btn-outline-secondary"
+            aria-expanded="false" aria-controls="diag-cat-panel">CAT Status JSON</button>
+</div>
+
+<div id="diag-ports-panel" class="card mb-2" hidden>
+    <div class="card-body py-2 d-flex align-items-start gap-3 flex-wrap">
+        <div class="flex-grow-1">
+            <div class="fw-semibold mb-1">Available COM ports</div>
+            <div id="diag-ports-body" class="small text-muted"><em>Loading&hellip;</em></div>
+        </div>
+        <button type="button" id="diag-ports-refresh" class="btn btn-sm btn-outline-secondary">Refresh</button>
+    </div>
+</div>
+
+<div id="diag-cat-panel" class="card mb-2" hidden>
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="fw-semibold">CAT status (live snapshot)</span>
+            <button type="button" id="diag-cat-refresh" class="btn btn-sm btn-outline-secondary">Refresh</button>
+        </div>
+        <pre id="diag-cat-body"
+             style="max-height:240px;overflow:auto;font-size:12px;background:#1e1e1e;color:#d4d4d4;padding:8px;margin:0"><em style="color:#888">Loading&hellip;</em></pre>
+    </div>
+</div>
+
+<div class="alert alert-secondary py-2 mb-3 small">
+    <strong>Capture workflow:</strong> set filters &rarr; press <strong>Start</strong> &rarr; do the test on the radio &rarr; press <strong>Stop</strong> &rarr; <strong>Save&hellip;</strong> to download. The log only fills while capturing.
 </div>
 
 <div class="row g-3">
@@ -38,22 +65,51 @@
     <div class="col-xl-7">
         <div class="card">
             <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span>SignalR Event Log</span>
-                <div class="d-flex gap-2 align-items-center">
-                    <select id="diag-filter" class="form-select form-select-sm" style="width:auto">
-                        <option value="">All properties</option>
-                        <option value="IsTransmitting">IsTransmitting</option>
-                        <option value="SWRMeter">SWRMeter</option>
-                        <option value="PowerMeter">PowerMeter</option>
-                        <option value="SMeterA">SMeterA</option>
-                        <option value="SMeterB">SMeterB</option>
-                        <option value="ALCMeter">ALCMeter</option>
-                        <option value="CompressionMeter">CompressionMeter</option>
-                        <option value="IDDMeter">IDDMeter</option>
-                        <option value="VDDMeter">VDDMeter</option>
-                        <option value="Temperature">Temperature</option>
+                <span>
+                    SignalR Event Log
+                    <span id="diag-capture-indicator" class="ms-2 small fw-normal text-muted">Idle &mdash; 0 events</span>
+                </span>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                    <select id="diag-filter" class="form-select form-select-sm" style="width:auto"
+                            aria-label="Filter event log by exact property name">
+                        <optgroup label="All / common">
+                            <option value="">All properties</option>
+                            <option value="__SPLIT_INVESTIGATION__">Split investigation set</option>
+                        </optgroup>
+                        <optgroup label="Meters">
+                            <option value="IsTransmitting">IsTransmitting</option>
+                            <option value="SWRMeter">SWRMeter</option>
+                            <option value="PowerMeter">PowerMeter</option>
+                            <option value="SMeterA">SMeterA</option>
+                            <option value="SMeterB">SMeterB</option>
+                            <option value="ALCMeter">ALCMeter</option>
+                            <option value="CompressionMeter">CompressionMeter</option>
+                            <option value="IDDMeter">IDDMeter</option>
+                            <option value="VDDMeter">VDDMeter</option>
+                            <option value="Temperature">Temperature</option>
+                        </optgroup>
+                        <optgroup label="VFO state">
+                            <option value="SplitMode">SplitMode</option>
+                            <option value="TxVfo">TxVfo</option>
+                            <option value="FrequencyA">FrequencyA</option>
+                            <option value="FrequencyB">FrequencyB</option>
+                            <option value="ModeA">ModeA</option>
+                            <option value="ModeB">ModeB</option>
+                            <option value="BandA">BandA</option>
+                            <option value="BandB">BandB</option>
+                            <option value="AntennaA">AntennaA</option>
+                            <option value="AntennaB">AntennaB</option>
+                            <option value="AtuEnabled">AtuEnabled</option>
+                            <option value="AtuTuning">AtuTuning</option>
+                            <option value="RxClarOn">RxClarOn</option>
+                            <option value="TxClarOn">TxClarOn</option>
+                        </optgroup>
                     </select>
-                    <button id="diag-pause" class="btn btn-sm btn-outline-secondary">Pause</button>
+                    <input id="diag-textfilter" type="text" class="form-control form-control-sm"
+                           style="width:140px" placeholder="text filter…"
+                           title="Substring match on property name (case-insensitive). Combines with the dropdown (AND)."
+                           aria-label="Free-text substring filter on property names" />
+                    <button id="diag-startstop" class="btn btn-sm btn-success">Start</button>
                     <button id="diag-clear" class="btn btn-sm btn-outline-secondary">Clear</button>
                     <button id="diag-save" class="btn btn-sm btn-outline-secondary">Save&hellip;</button>
                 </div>
@@ -133,31 +189,82 @@
 
     // ── Event log ─────────────────────────────────────────────────────────────
     const logDiv   = document.getElementById('diag-log');
-    const MAX_LOG  = 2000;
-    let   entries  = [];
-    let   paused   = false;
-    let   filter   = '';
+    // Buffer cap. At ~30 events/sec of meter polling, 2 000 entries roll
+    // over in ~1 minute, which displaces the rare events (like SplitMode
+    // or TxVfo changes) that the user is actively filtering for. 10 000
+    // gives ~5 minutes of unfiltered headroom while still bounding memory.
+    // When a filter is active addEntry pre-filters, so the buffer fills
+    // only with matching events and effectively never rolls over for the
+    // duration of any realistic investigation.
+    const MAX_LOG  = 10000;
+    let   entries    = [];
+    let   capturing  = false;
+    let   filter     = '';
+    let   textFilter = '';
+
+    const indicator = document.getElementById('diag-capture-indicator');
+    function refreshIndicator() {
+        const n = entries.length;
+        indicator.textContent = (capturing ? 'Recording ● — ' : 'Idle — ')
+            + n + ' event' + (n === 1 ? '' : 's');
+        indicator.style.color = capturing ? '#dc3545' : '';
+    }
+
+    // Preset: "Split investigation set" — the minimal set of properties
+    // that actually fire during split toggle and A<->B swap, plus
+    // IsTransmitting to confirm which VFO keyed during a test transmit.
+    const SPLIT_INVESTIGATION_PROPS = new Set([
+        'SplitMode', 'TxVfo',
+        'FrequencyA', 'FrequencyB',
+        'ModeA', 'ModeB',
+        'IsTransmitting'
+    ]);
+
+    function matchesFilter(entry) {
+        // Dropdown match (exact, or preset group)
+        if (filter === '__SPLIT_INVESTIGATION__') {
+            if (!SPLIT_INVESTIGATION_PROPS.has(entry.property)) return false;
+        } else if (filter && entry.property !== filter) {
+            return false;
+        }
+        // Free-text substring match (case-insensitive). ANDed with the dropdown.
+        if (textFilter && !entry.property.toLowerCase().includes(textFilter)) {
+            return false;
+        }
+        return true;
+    }
 
     document.getElementById('diag-filter').addEventListener('change', function () {
         filter = this.value;
         renderLog();
     });
 
-    document.getElementById('diag-pause').addEventListener('click', function () {
-        paused = !paused;
-        this.textContent  = paused ? 'Resume' : 'Pause';
-        this.className    = paused
-            ? 'btn btn-sm btn-warning'
-            : 'btn btn-sm btn-outline-secondary';
+    document.getElementById('diag-textfilter').addEventListener('input', function () {
+        textFilter = this.value.trim().toLowerCase();
+        renderLog();
+    });
+
+    const startStopBtn = document.getElementById('diag-startstop');
+    startStopBtn.addEventListener('click', function () {
+        capturing = !capturing;
+        this.textContent = capturing ? 'Stop' : 'Start';
+        this.className   = capturing
+            ? 'btn btn-sm btn-danger'
+            : 'btn btn-sm btn-success';
+        refreshIndicator();
     });
 
     document.getElementById('diag-clear').addEventListener('click', function () {
         entries = [];
         renderLog();
+        refreshIndicator();
     });
 
     document.getElementById('diag-save').addEventListener('click', function () {
-        const source = filter ? entries.filter(e => e.property === filter) : entries;
+        // Save what's currently visible (i.e. honour both filters), so the
+        // "Split investigation" capture exported from this button matches
+        // exactly what's on screen.
+        const source = (filter || textFilter) ? entries.filter(matchesFilter) : entries;
         const text = source
             .map(e => `${e.time}\t${e.property}\t${JSON.stringify(e.value)}`)
             .join('\n');
@@ -182,8 +289,8 @@
     }
 
     function renderLog() {
-        const visible = filter
-            ? entries.filter(e => e.property === filter)
+        const visible = (filter || textFilter)
+            ? entries.filter(matchesFilter)
             : entries;
 
         if (visible.length === 0) {
@@ -204,11 +311,36 @@
         if (atBottom) logDiv.scrollTop = logDiv.scrollHeight;
     }
 
+    // Render throttle. The previous code called renderLog() — which
+    // innerHTML's the entire visible event list — on every incoming
+    // event. At meter-polling rates (~30 events/sec) the browser spends
+    // so much time re-painting the log that UI controls (the filter
+    // dropdown, Pause button) become sluggish or unresponsive. This
+    // schedules at most one render per ~100 ms (10 Hz), still smooth
+    // enough to look live but leaves plenty of idle time for the
+    // browser to process clicks and dropdown opens.
+    let renderPending = false;
+    function scheduleRender() {
+        if (renderPending) return;
+        renderPending = true;
+        setTimeout(() => {
+            renderPending = false;
+            renderLog();
+        }, 100);
+    }
+
     function addEntry(property, value) {
-        if (paused) return;
-        entries.push({ time: ts(), property, value });
+        if (!capturing) return;
+        const entry = { time: ts(), property, value };
+        // Pre-filter at insert time when a filter is active. Without this,
+        // the high-rate meter polls keep pushing rare-but-interesting
+        // events (SplitMode, TxVfo, etc.) out of the buffer before the
+        // user can inspect them.
+        if ((filter || textFilter) && !matchesFilter(entry)) return;
+        entries.push(entry);
         if (entries.length > MAX_LOG) entries.shift();
-        renderLog();
+        scheduleRender();
+        refreshIndicator();
     }
 
     // ── SignalR connection ────────────────────────────────────────────────────
@@ -259,6 +391,66 @@
             statusBadge.className   = 'badge bg-danger';
             addEntry('_connection', 'failed: ' + err.message);
         });
+
+    // ── COM Ports panel ───────────────────────────────────────────────────────
+    const portsPanel = document.getElementById('diag-ports-panel');
+    const portsBody  = document.getElementById('diag-ports-body');
+    const portsToggle = document.getElementById('diag-toggle-ports');
+    let portsLoaded = false;
+
+    async function loadPorts() {
+        portsBody.innerHTML = '<em>Loading&hellip;</em>';
+        try {
+            const r = await fetch('/api/ports');
+            const j = await r.json();
+            const list = (j.ports && j.ports.length)
+                ? j.ports.map(p => `<code class="me-2">${p}</code>`).join('')
+                : '<em>No COM ports detected.</em>';
+            const com6 = j.com6Present
+                ? '<span class="badge bg-success ms-2">COM6 present</span>'
+                : '<span class="badge bg-danger ms-2">COM6 not present</span>';
+            portsBody.innerHTML = list + com6;
+            portsLoaded = true;
+        } catch (e) {
+            portsBody.innerHTML = '<span class="text-danger">Failed to load: ' + e.message + '</span>';
+        }
+    }
+
+    portsToggle.addEventListener('click', () => {
+        const open = !portsPanel.hidden;
+        portsPanel.hidden = open;
+        portsToggle.setAttribute('aria-expanded', String(!open));
+        if (!open && !portsLoaded) loadPorts();
+    });
+    document.getElementById('diag-ports-refresh').addEventListener('click', loadPorts);
+
+    // ── CAT Status panel ──────────────────────────────────────────────────────
+    const catPanel = document.getElementById('diag-cat-panel');
+    const catBody  = document.getElementById('diag-cat-body');
+    const catToggle = document.getElementById('diag-toggle-cat');
+    let catLoaded = false;
+
+    async function loadCatStatus() {
+        catBody.innerHTML = '<em style="color:#888">Loading&hellip;</em>';
+        try {
+            const r = await fetch('/api/cat/status');
+            const j = await r.json();
+            catBody.textContent = JSON.stringify(j, null, 2);
+            catLoaded = true;
+        } catch (e) {
+            catBody.innerHTML = '<span style="color:#f87171">Failed to load: ' + e.message + '</span>';
+        }
+    }
+
+    catToggle.addEventListener('click', () => {
+        const open = !catPanel.hidden;
+        catPanel.hidden = open;
+        catToggle.setAttribute('aria-expanded', String(!open));
+        if (!open && !catLoaded) loadCatStatus();
+    });
+    document.getElementById('diag-cat-refresh').addEventListener('click', loadCatStatus);
+
+    refreshIndicator();
 
 })();
 </script>

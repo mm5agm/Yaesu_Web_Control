@@ -276,6 +276,10 @@ The vertical axis is calibrated in S-units (S1, S5, S9, S9+30, S9+60) using the 
 
 **Power slider** — Sets the transmit power from 5 W to 200 W (FTdx101MP) or 5 W to 100 W (FTdx101D, FTDX3000, FTdx10, and FT-710). Drag the slider to set the desired power level. The current value is shown to the right of the slider.
 
+The radio is the source of truth for RF Power. On connect, YWC reads the radio's current Power setting via the `PC;` CAT command and reflects whatever the radio reports — so if you change Power on the radio's front panel while YWC is closed, the new value appears in YWC when you reopen it. (Earlier versions overwrote the radio's setting with YWC's last-saved value on connect; that was incorrect and is fixed in v2.3.7.)
+
+The slider snaps to 5 W steps for ease of dragging, but the numerical label shows the radio's **exact** value. If the radio is set to an odd value like 73 W or 91 W via the front-panel knob, the label reads `73 W` or `91 W` even though the slider visually sits at the nearest 5 W mark. Moving the slider yourself sends the chosen 5 W step to the radio, overwriting the odd value.
+
 **MIC Gain / Data Out Gain slider** — Sets the microphone gain (0–100). When the radio is in a data mode (DATA-U, DATA-L, PSK, RTTY, or DATA-FM), the label changes to **Data Out Gain** automatically.
 
 **PROC button** — Toggles the speech processor on and off. The button is amber when the processor is active and grey when off. The speech processor increases the average power of your transmitted audio, which can improve readability at the other end — particularly useful for SSB DX and pile-ups.
@@ -320,10 +324,19 @@ A second small badge in the **top-right corner of the spectrum canvas** shows th
 
 There are two VFO panels side by side:
 
-- **VFO A** (blue border) — the main receiver, present on all supported radios
-- **VFO B** (green border) — the sub-receiver, present on all supported radios.
+- **VFO A** (blue border) — the main receiver, present on all supported radios.
+- **VFO B** (green border) — on the FTdx101MP and FTdx101D this is a fully independent sub-receiver. On single-receiver radios (**FTdx10, FT-710, FTDX3000, FT-991A**) there is only one physical receiver chain inside the radio, so VFO B is a frequency / mode memory slot through which the single receiver is steered.
 
-Both panels have identical controls. All settings are independent — changing a control in VFO A does not affect VFO B.
+**Greying behaviour on single-receiver radios** (FTdx10, FT-710, FTDX3000, FT-991A):
+
+- **Normal mode** (split off): the **active** VFO is white, the **inactive** VFO is grey. The grey VFO's controls (Mode, IF Width, Notch, etc.) still display their stored values for reference, but cannot be edited — those values only apply when you swap that VFO to be active via the **A↔B** button.
+- **Split mode**: the **receive** VFO is white, the **transmit** VFO is grey — opposite of normal mode. This makes sense because in split you spend most of your time receiving on the white panel and only occasionally transmit on the grey one. The grey (TX) panel's **frequency field is still editable** so you can set the TX frequency from YWC without un-splitting first — click a digit and scroll the mouse wheel, or use the keyboard icon next to MHz to type one in. The TX button and the SPLIT badge appear on the grey panel.
+
+On **dual-receiver radios** (FTdx101MP / FTdx101D) neither panel is greyed at any time — both VFOs are real physical receiver chains and are always independently usable.
+
+**Antenna selector visibility:** the per-VFO antenna dropdown is hidden on radios with a single antenna jack (**FTdx10, FT-991A**) since there is nothing to select between. Radios with multiple antenna jacks (FTdx101MP, FTdx101D, FT-710, FTDX3000) keep the selector.
+
+Both panels have identical controls — changing a control on the white panel writes to the radio immediately; changing a control on the grey panel does nothing (apart from the TX frequency in split, as noted).
 
 **VFO-B toggle** — the **VFO-B** button in the toolbar shows or hides the VFO B panel. The last state is remembered across sessions.
 
@@ -396,7 +409,11 @@ Each VFO panel has a row of dropdowns for the main receiver settings. All are tw
 **Mode** — Select the operating mode:
 LSB, USB, CW-U, CW-L, FM, FM-N, AM, AM-N, RTTY-L, RTTY-U, DATA-L, DATA-U, DATA-FM, DATA-FM-N, PSK
 
-**Antenna** — Select the antenna connector: ANT 1, ANT 2, ANT 3
+**Antenna** — Select the antenna connector: ANT 1, ANT 2, ANT 3.
+
+Your antenna choice is **remembered per band per VFO**. Set Ant 1 on 20 m and Ant 2 on 6 m once, and switching between those bands later automatically restores the right antenna without you having to click again. VFO A and VFO B have independent memories — useful on FTdx101MP/D where Main and Sub can listen on different antennas at the same time, and on single-receiver radios where you might want different defaults depending on whether you're using VFO B as a scratch slot.
+
+Existing installs auto-populate empty slots on the next startup with whatever the radio currently has, so you don't need to manually click through every band to seed it.
 
 **Roofing Filter** — Select the roofing filter bandwidth: 12 kHz, 3 kHz, 1.2 kHz, 600 Hz, 300 Hz
 
@@ -511,7 +528,14 @@ The button updates automatically — if the radio is powered off or stops respon
 
 Click the button to toggle the connection. While connecting, it briefly shows "Connecting…". On reconnect the app re-reads all radio settings so the controls reflect the current radio state. Useful if the radio was powered on after the app started, or after a USB cable was unplugged and re-plugged.
 
-**ATU button** — Initiates an ATU (Automatic Tuner Unit) tune cycle. Labelled **ATU: On** (green) when the ATU is active or **ATU: Off** (grey) when bypassed. Clicking the button when active triggers a fresh tune cycle; clicking when inactive activates the ATU. Only applies to radios fitted with an internal or external ATU.
+**ATU button** — Controls the radio's automatic antenna tuner. The button matches the Yaesu front-panel TUNE button's behaviour: short tap and long press do different things.
+
+- **Short tap** toggles the ATU between **ATU On** (green) and **ATU Off** (grey). On = the tuner network is engaged in the signal path; Off = bypassed.
+- **Long press (≥500 ms)** starts the radio's auto-tune cycle. The button turns red and shows **Tuning…** while the radio searches for a low-SWR match — typically 2-7 seconds. When tuning completes the button returns to **ATU On** automatically. Tap the red button during a running tune to stop it early. **Because the tune cycle didn't complete, the ATU is left bypassed (Off)** — the radio doesn't retain partial tuning data, so to find a match you'd need to long-press again for a fresh cycle.
+
+On single-receiver radios (FTdx10, FT-710, FTDX3000) the radio firmware stores the ATU on/off state per VFO. Swapping the active VFO via the **A↔B** button updates YWC's ATU display to match whichever VFO is now active — even if the on/off settings differ between the two. The radio has only one physical tuner, but it remembers per-VFO which setting to apply.
+
+Only applies to radios fitted with an internal or external ATU.
 
 **Mon button** — Toggles the TX monitor (sidetone) on and off. The button is amber when the monitor is active and grey when off. Click to toggle.
 
@@ -1020,7 +1044,7 @@ At the bottom of the Settings page (below the Save Settings button) are two butt
 
 | File in the zip | What it contains |
 |---|---|
-| `appsettings.user.json` | Radio model, COM port, baud rate, band plan, SDR settings, DX cluster login and watch list, CW memory messages, external app paths, per-band Width/Shift/Mode memory, RF Gain, Squelch, antenna selections |
+| `appsettings.user.json` | Radio model, COM port, baud rate, band plan, SDR settings, DX cluster login and watch list, CW memory messages, external app paths, per-band Width/Shift/Mode/Antenna memory, RF Gain, Squelch, antenna selections |
 | `memories.json` | Your radio memory channels (with all advanced fields) |
 | `memory-banks.json` | Saved memory banks (named sets) |
 | `calibration.user.json` | Meter calibration overrides (if you've adjusted any meter scales) |
@@ -1639,6 +1663,8 @@ Access the Diagnostics page from the navigation bar. It is primarily used when s
 
 **SignalR Event Log** — A scrolling log of every radio state update received over the websocket connection, with millisecond timestamps. Use the filter dropdown to narrow the log to a single property (e.g., SWR, Power, S-Meter). The **Pause** button freezes the log so you can read it; **Clear** empties it; **Save…** downloads the current log as a text file.
 
+**About-page Diagnostics block** — the **About** page in the navigation bar has a separate Diagnostics block with a one-click **Copy diagnostics** button. The block lists YWC version, radio model, COM port, browser, .NET runtime, operating system, and (from v2.3.7) the **CPU model + logical core count** and **total physical memory** of the host PC. Paste the block when reporting a bug so it's clear whether you're running on hardware that can comfortably drive two SDRs + radio polling + spectrum render or whether resource pressure might be a factor.
+
 ---
 
 ## 12. Using the App on a Tablet or Phone
@@ -1914,6 +1940,8 @@ All interactive controls in the app have accessible labels that screen readers a
 | Meter gauges | Meter name and current reading — e.g., "S meter, VFO A: S5", "Amplifier supply voltage meter: 50.2 V" |
 | Frequency display | "VFO A frequency" with current value in MHz |
 | Sliders, dropdowns, buttons | Their purpose — e.g., "Transmit power", "VFO A mode" |
+
+**Announcements interrupt rather than queue.** From v2.3.7, the ARIA live region used for hover and value-change announcements is set to `assertive`, meaning each new announcement cancels whatever was previously being read out. Combined with longer debounces on rapid-fire events (mouse-wheel frequency changes wait 500 ms after the last tick before announcing; sweeping the mouse across a row of controls only announces controls you pause on for ≥400 ms), this stops the screen reader from reading every passed-over button on the way to the one you actually wanted. Thanks to Thomas (OZ1JTE) for the detailed report on issue #20 that drove these changes.
 
 ---
 

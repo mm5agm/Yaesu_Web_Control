@@ -386,6 +386,12 @@ try
 
     app.MapGet("/api/status/init", () => new { status = Yaesu_Web_Control.Services.AppStatus.InitializationStatus });
 
+    app.MapGet("/api/ports", () =>
+    {
+        var ports = System.IO.Ports.SerialPort.GetPortNames();
+        return new { ports, com6Present = ports.Contains("COM6") };
+    });
+
     // Serve accessible labels from AppData — copy default on first run so users can find and edit it.
     app.MapGet("/i18n/labels.json", (IWebHostEnvironment env) =>
     {

@@ -523,7 +523,11 @@ export class SpectrumPanel {
         markers.sort((a, b) => a.x - b.x);
 
         ctx.save();
-        ctx.font        = '11px sans-serif';
+        // Band-plan segment marker font: bumped from 11px → 13px for
+        // accessibility (Colin 2026-06-13 — the original size required a
+        // magnifying glass to read the FT8/CW/SSB labels above the
+        // spectrum).
+        ctx.font        = '13px sans-serif';
         ctx.textAlign   = 'center';
         ctx.lineWidth   = 1;
         ctx.strokeStyle = '#80c0ff';
@@ -723,9 +727,10 @@ export class SpectrumPanel {
         ctx.lineWidth   = 1.5;
         ctx.stroke();
 
-        // dB scale labels (right-aligned)
+        // dB scale labels (right-aligned). Font bumped from 10px → 12px
+        // for accessibility (same complaint, same release: 2026-06-13).
         ctx.fillStyle  = '#667799';
-        ctx.font       = '10px monospace';
+        ctx.font       = '12px monospace';
         ctx.textAlign  = 'right';
         for (let db = dbMin; db <= dbMax; db += 20) {
             const y = H - ((db - dbMin) / range) * H;
@@ -780,7 +785,12 @@ export class SpectrumPanel {
         const leftHz  = this._vfoHz - spanHz / 2;
         const firstHz = Math.ceil(leftHz / stepHz) * stepHz;
 
-        ctx.font      = '10px monospace';
+        // Frequency-axis tick label font: bumped from 10px → 13px for
+        // accessibility (Colin 2026-06-13 — the MHz numbers under the
+        // tick marks were unreadable without a magnifying glass).
+        // 13px fits within the existing 20px axisH (label baseline at
+        // specH-4 leaves room for glyphs above).
+        ctx.font      = '13px monospace';
         ctx.textAlign = 'center';
 
         for (let tickHz = firstHz; tickHz <= leftHz + spanHz; tickHz += stepHz) {
@@ -841,16 +851,20 @@ export class SpectrumPanel {
         const freqHz  = leftHz + (x / W) * spanHz;
         const label   = (freqHz / 1e6).toFixed(6) + ' MHz';
 
-        ctx.font      = '11px monospace';
+        // Crosshair frequency readout font: bumped from 11px → 14px for
+        // accessibility (Colin 2026-06-13, same release as the axis-label
+        // bumps). Background box height grew from 16px → 20px and the
+        // y-offset from -12 to -15 to fit the larger glyphs cleanly.
+        ctx.font      = '14px monospace';
         const pad     = 4;
         const tw      = ctx.measureText(label).width;
 
         // Position label to the right of cursor, flip left near the right edge.
         const lx = (x + tw + pad * 2 + 6 < W) ? x + pad : x - tw - pad * 2;
-        const ly = Math.max(14, Math.min(y - pad, specTop - 4));
+        const ly = Math.max(17, Math.min(y - pad, specTop - 4));
 
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(lx, ly - 12, tw + pad * 2, 16);
+        ctx.fillRect(lx, ly - 15, tw + pad * 2, 20);
 
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'left';
@@ -953,9 +967,11 @@ export class SpectrumPanel {
         let lr = document.getElementById('_sr_live');
         if (!lr) {
             // Fallback: create a local live region if site.js hasn't run yet.
+            // assertive (matching site.js's primary live region) so new
+            // cursor announcements interrupt rather than queue.
             lr = document.createElement('div');
             lr.id = '_sr_live';
-            lr.setAttribute('aria-live', 'polite');
+            lr.setAttribute('aria-live', 'assertive');
             lr.setAttribute('aria-atomic', 'true');
             lr.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;';
             document.body.appendChild(lr);

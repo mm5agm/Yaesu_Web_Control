@@ -424,7 +424,8 @@ namespace Yaesu_Web_Control.Controllers
                     {
                         IfWidthCode = _radioStateService.IfWidthA,
                         IfShiftHz   = _radioStateService.IfShiftA,
-                        Mode        = _radioStateService.ModeA ?? ""
+                        Mode        = _radioStateService.ModeA ?? "",
+                        Antenna     = _radioStateService.AntennaA ?? ""
                     };
                     await _settingsService.SaveSettingsAsync(settings);
                 }
@@ -451,6 +452,11 @@ namespace Yaesu_Web_Control.Controllers
                     {
                         await _catClient.SendCommandAsync(CatCommands.FormatMode(profile.Mode, false), "WebUI", CancellationToken.None);
                         _radioStateService.ModeA = profile.Mode;
+                    }
+                    if (!string.IsNullOrEmpty(profile.Antenna))
+                    {
+                        await _catClient.SendCommandAsync($"AN0{profile.Antenna};", "WebUI", CancellationToken.None);
+                        _radioStateService.AntennaA = profile.Antenna;
                     }
                 }
 
@@ -492,7 +498,8 @@ namespace Yaesu_Web_Control.Controllers
                     {
                         IfWidthCode = _radioStateService.IfWidthB,
                         IfShiftHz   = _radioStateService.IfShiftB,
-                        Mode        = _radioStateService.ModeB ?? ""
+                        Mode        = _radioStateService.ModeB ?? "",
+                        Antenna     = _radioStateService.AntennaB ?? ""
                     };
                     await _settingsService.SaveSettingsAsync(settings);
                 }
@@ -519,6 +526,11 @@ namespace Yaesu_Web_Control.Controllers
                     {
                         await _catClient.SendCommandAsync(CatCommands.FormatMode(profile.Mode, true), "WebUI", CancellationToken.None);
                         _radioStateService.ModeB = profile.Mode;
+                    }
+                    if (!string.IsNullOrEmpty(profile.Antenna))
+                    {
+                        await _catClient.SendCommandAsync($"AN1{profile.Antenna};", "WebUI", CancellationToken.None);
+                        _radioStateService.AntennaB = profile.Antenna;
                     }
                 }
 
@@ -552,6 +564,21 @@ namespace Yaesu_Web_Control.Controllers
 
                 _radioStateService.AntennaA = request.Antenna;
 
+                // Persist immediately into the current band's profile.
+                // Without this, the antenna selection only lands in
+                // settings.BandProfilesA when the user switches AWAY from
+                // the band — so a shutdown mid-band would lose the choice.
+                var bandA = _radioStateService.BandA;
+                if (!string.IsNullOrEmpty(bandA))
+                {
+                    var settings = await _settingsService.GetSettingsAsync();
+                    if (!settings.BandProfilesA.TryGetValue(bandA, out var prof))
+                        prof = new BandProfile();
+                    prof.Antenna = request.Antenna;
+                    settings.BandProfilesA[bandA] = prof;
+                    await _settingsService.SaveSettingsAsync(settings);
+                }
+
                 _logger.LogInformation("Set Main antenna to {Antenna}", request.Antenna);
                 return Ok(new { message = $"Antenna {request.Antenna} selected" });
             }
@@ -581,6 +608,19 @@ namespace Yaesu_Web_Control.Controllers
                 await _catClient.SendCommandAsync(command, "WebUI", CancellationToken.None);
 
                 _radioStateService.AntennaB = request.Antenna;
+
+                // Persist immediately into the current band's profile.
+                // See SetAntennaA for the rationale.
+                var bandB = _radioStateService.BandB;
+                if (!string.IsNullOrEmpty(bandB))
+                {
+                    var settings = await _settingsService.GetSettingsAsync();
+                    if (!settings.BandProfilesB.TryGetValue(bandB, out var prof))
+                        prof = new BandProfile();
+                    prof.Antenna = request.Antenna;
+                    settings.BandProfilesB[bandB] = prof;
+                    await _settingsService.SaveSettingsAsync(settings);
+                }
 
                 _logger.LogInformation("Set Sub antenna to {Antenna}", request.Antenna);
                 return Ok(new { message = $"Antenna {request.Antenna} selected" });
@@ -1644,6 +1684,30 @@ namespace Yaesu_Web_Control.Controllers
                     _radioStateService.FrequencyB = freqB;
                 }
 
+                // Re-query ATU state. On single-receiver radios like the
+                // FTdx10 the AC command is global at the CAT layer, but the
+                // radio firmware stores ATU on/off per-VFO internally and
+                // re-applies the now-active VFO's value after SV;. Reading
+                // it back here keeps YWC's display in sync. See issue #34
+                // discussion with Jacek SP3L for the empirical evidence.
+                //
+                // We parse the reply directly because the multiplexer
+                // consumes direct command replies into _pendingResponses
+                // before they reach CatMessageDispatcher.
+                try
+                {
+                    var acResponse = await _catClient.SendCommandAsync("AC;", "WebUI", CancellationToken.None);
+                    if (!string.IsNullOrEmpty(acResponse) && acResponse.StartsWith("AC") && acResponse.Length >= 5)
+                    {
+                        _radioStateService.AtuEnabled = acResponse[4] == '1';
+                    }
+                    _logger.LogDebug("Post-swap AC; reply: {Reply}", acResponse ?? "(null)");
+                }
+                catch (Exception acEx)
+                {
+                    _logger.LogDebug(acEx, "Post-swap AC; query failed (non-fatal)");
+                }
+
                 _logger.LogInformation("VFO A and VFO B swapped");
                 return Ok(new { message = "VFO swapped" });
             }
@@ -1810,6 +1874,7 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
+                // AC P1 P2 P3 ;  — P3=1 ATU ON, P3=0 ATU OFF (P1/P2 always 0)
                 string cmd = request.Enabled ? "AC001;" : "AC000;";
                 await _catClient.SendCommandAsync(cmd, "WebUI", CancellationToken.None);
                 _radioStateService.AtuEnabled = request.Enabled;
@@ -1819,6 +1884,78 @@ namespace Yaesu_Web_Control.Controllers
             {
                 _logger.LogError(ex, "Error setting ATU");
                 return StatusCode(500, new { error = "Failed to set ATU" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        // Auto-tune trigger. Sending AC002; toggles the radio's auto-tune
+        // cycle — once to start, once to stop. The UI binds this to a
+        // long-press of the ATU button.
+        //
+        // The Yaesu CAT manuals (FTdx10 and FTdx101MP both, page 6) say
+        // P2 of AC is "Fixed at 0" — so the radio does NOT report tuning-
+        // in-progress over CAT. The "Tuning…" UI state therefore has to be
+        // managed client-side: the frontend assumes tuning is active for a
+        // safe upper-bound window after pressing, then triggers a state
+        // refresh via the GET endpoint below to capture the settled on/off.
+        [HttpPost("atu/tune")]
+        public async Task<IActionResult> StartAtuTune()
+        {
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                await _catClient.SendCommandAsync("AC002;", "WebUI", CancellationToken.None);
+                _logger.LogInformation("ATU auto-tune toggled (AC002;)");
+                return Ok(new { message = "ATU tune toggled" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error toggling ATU auto-tune");
+                return StatusCode(500, new { error = "Failed to toggle ATU tune" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        // Refresh the ATU on/off state by querying AC; from the radio.
+        // Called by the frontend after a tune cycle in case the radio
+        // didn't auto-report the settled state.
+        //
+        // Important: CatMultiplexerService.OnMessageReceived consumes
+        // direct command replies into _pendingResponses BEFORE they reach
+        // CatMessageDispatcher (only unsolicited auto-info messages flow
+        // through the dispatcher). So we have to parse the AC reply
+        // ourselves and update RadioStateService directly here.
+        //
+        // Reply format after the multiplexer strips the trailing ';':
+        //   "AC" P1 P2 P3   — 5 characters, P3 at index 4.
+        //   P3: 0=Tuner OFF, 1=Tuner ON, 2=Tuning Start/Stop
+        [HttpGet("atu")]
+        public async Task<IActionResult> RefreshAtuState()
+        {
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var reply = await _catClient.SendCommandAsync("AC;", "WebUI", CancellationToken.None);
+                if (!string.IsNullOrEmpty(reply) && reply.StartsWith("AC") && reply.Length >= 5)
+                {
+                    _radioStateService.AtuEnabled = reply[4] == '1';
+                    _logger.LogDebug("ATU refresh: parsed AtuEnabled={State} from reply '{Reply}'",
+                        _radioStateService.AtuEnabled, reply);
+                }
+                else
+                {
+                    _logger.LogWarning("ATU refresh: unexpected AC; reply '{Reply}' (not parsed)", reply ?? "(null)");
+                }
+                return Ok(new { atuEnabled = _radioStateService.AtuEnabled });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error refreshing ATU state");
+                return StatusCode(500, new { error = "Failed to refresh ATU state" });
             }
             finally { _requestSemaphore.Release(); }
         }

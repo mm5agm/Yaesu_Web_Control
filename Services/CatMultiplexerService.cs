@@ -198,6 +198,26 @@ namespace Yaesu_Web_Control.Services
             _logger.LogInformation("✓ Initial state queried");
         }
 
+        // Read-query helper: send a command, await its response, AND forward the
+        // response through CatMessageDispatcher so it updates RadioStateService.
+        //
+        // Plain SendCommandAsync resolves the response via _pendingResponses and
+        // returns it to the awaiter without dispatching — fine for callers that
+        // parse the response themselves, but wrong for "read this property into
+        // app state" queries. Without this helper the readQueries loop in
+        // RadioInitializationService silently failed for every property it
+        // queried (PC, MG, PR, PL, GT0/1, PA0/1, ...). Reported by SP3L-Jacek
+        // as #35: YWC's slider stayed at the persisted Power instead of
+        // reflecting the radio's actual setting on startup.
+        public async Task SendCommandAndDispatchAsync(string command, string clientId, CancellationToken cancellationToken = default)
+        {
+            var response = await SendCommandAsync(command, clientId, cancellationToken);
+            if (!string.IsNullOrEmpty(response))
+            {
+                _messageDispatcher.DispatchMessage(response + ";");
+            }
+        }
+
         public async Task<string?> SendCommandAsync(string command, string clientId, CancellationToken cancellationToken = default, int timeoutMs = 150)
         {
             if (_serialPort?.IsOpen != true)

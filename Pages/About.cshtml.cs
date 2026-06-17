@@ -1,4 +1,6 @@
+using System.Runtime.InteropServices;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Win32;
 using Yaesu_Web_Control.Services;
 
 namespace Yaesu_Web_Control.Pages
@@ -27,6 +29,8 @@ namespace Yaesu_Web_Control.Pages
         public string DxClusterCallsign { get; private set; } = "(blank)";
         public string DotNetVersion     { get; private set; } = System.Environment.Version.ToString();
         public string OsDescription     { get; private set; } = System.Runtime.InteropServices.RuntimeInformation.OSDescription;
+        public string Cpu               { get; private set; } = ReadCpuInfo();
+        public string Memory            { get; private set; } = ReadMemoryInfo();
 
         public async Task OnGetAsync()
         {
@@ -50,5 +54,63 @@ namespace Yaesu_Web_Control.Pages
             if (!string.IsNullOrWhiteSpace(s.DxClusterLoginCallsign))
                 DxClusterCallsign = s.DxClusterLoginCallsign;
         }
+
+        // ── Host hardware probes (Windows-only — fine since YWC is WinExe) ──
+        //
+        // Added 2026-06-15 so bug reports show whether the user's shack PC
+        // can realistically drive two SDRs + radio polling + spectrum render
+        // without saturating CPU or running out of RAM. Cheap to compute,
+        // no extra dependencies — registry + P/Invoke into kernel32.
+
+        private static string ReadCpuInfo()
+        {
+            try
+            {
+                // Same key Task Manager uses for the CPU name shown in
+                // Performance > CPU. Read-only, no admin needed.
+                using var key = Registry.LocalMachine.OpenSubKey(
+                    @"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+                var name = key?.GetValue("ProcessorNameString") as string;
+                var cleaned = string.IsNullOrWhiteSpace(name) ? "(unknown)" : name.Trim();
+                return $"{cleaned}, {System.Environment.ProcessorCount} logical cores";
+            }
+            catch
+            {
+                return $"(unknown), {System.Environment.ProcessorCount} logical cores";
+            }
+        }
+
+        private static string ReadMemoryInfo()
+        {
+            try
+            {
+                var status = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>() };
+                if (GlobalMemoryStatusEx(ref status))
+                {
+                    var totalGiB = status.ullTotalPhys / (1024.0 * 1024 * 1024);
+                    return $"{totalGiB:0.#} GB";
+                }
+            }
+            catch { }
+            return "(unknown)";
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct MEMORYSTATUSEX
+        {
+            public uint  dwLength;
+            public uint  dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
     }
 }

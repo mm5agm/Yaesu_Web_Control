@@ -102,16 +102,39 @@ export class FilterScopePanel {
         canvas.style.height = '80px';
     }
 
-    // Returns the display range in Hz based on the current mode
-    _displayRangeHz() {
-        const mode = (this._state.mode || '').toUpperCase();
-        if (mode === 'AM' || mode === 'AM-N') return 6000;
-        if (mode === 'FM' || mode === 'FM-N' || mode === 'DATA-FM' || mode === 'DATA-FM-N') return 10000;
-        return 3500;
+    // Returns the display bounds in Hz based on the current mode AND
+    // the current passband. The static per-mode default is the lower bound
+    // — if the passband extends past it (e.g. CW with a wide IF Width
+    // where the passband centred on +700 Hz spans negative Hz on the
+    // lower side), the bounds expand to include the whole passband with
+    // a 200 Hz margin on each side. Reported by Jacek SP3L on #34: at
+    // 3 kHz and 12 kHz CW the trapezium's left slope vanished off the
+    // canvas edge because the previous fixed [0, rangeHz] axis couldn't
+    // represent negative audio Hz.
+    _displayBounds() {
+        // Axis tracks the current passband with margin on each side, so the
+        // trapezium fills most of the canvas at every IF Width. This makes
+        // the contour / notch / APF markers proportionally bigger and easier
+        // to read at narrow filters (e.g. 300 Hz CW) where the trapezium
+        // previously occupied only ~10% of the canvas. The labels adapt to
+        // whatever range we're showing.
+        const margin = 300;
+        const ifWidthHz = this._ifWidthHz();
+        const { lo: pbLo, hi: pbHi } = this._passbandEdges(ifWidthHz);
+        return { lo: pbLo - margin, hi: pbHi + margin };
     }
 
-    _hzToX(hz, W, rangeHz) {
-        return Math.round((hz / rangeHz) * W);
+    /**
+     * Returns the current audio passband edges, in Hz, as {lo, hi}. Exposed
+     * so site.js can use the same calculation for the contour slider's
+     * dynamic min/max without duplicating the passband formula.
+     */
+    getPassband() {
+        return this._passbandEdges(this._ifWidthHz());
+    }
+
+    _hzToX(hz, W, loHz, hiHz) {
+        return Math.round(((hz - loHz) / (hiHz - loHz)) * W);
     }
 
     _ifWidthHz() {
@@ -156,7 +179,8 @@ export class FilterScopePanel {
         const ctx    = canvas.getContext('2d');
         const W      = canvas.width;
         const H      = canvas.height;
-        const rangeHz = this._displayRangeHz();
+        const { lo: rangeLo, hi: rangeHi } = this._displayBounds();
+        const rangeHz = rangeHi - rangeLo;
         const axisH  = 14;   // pixels reserved for frequency axis at bottom
         const scopeH = H - axisH;
 
@@ -164,7 +188,7 @@ export class FilterScopePanel {
         ctx.fillStyle = '#1e2a38';
         ctx.fillRect(0, 0, W, H);
 
-        const x = hz => this._hzToX(hz, W, rangeHz);
+        const x = hz => this._hzToX(hz, W, rangeLo, rangeHi);
 
         // --- Passband (trapezoid with sloped sides) ---
         const ifWidthHz = this._ifWidthHz();
@@ -282,7 +306,10 @@ export class FilterScopePanel {
         ctx.strokeStyle = 'rgba(100,120,140,0.3)';
         ctx.lineWidth   = 0.5;
         const step = rangeHz <= 4000 ? 500 : rangeHz <= 7000 ? 1000 : 2000;
-        for (let hz = step; hz < rangeHz; hz += step) {
+        // First grid line at the lowest multiple of step strictly INSIDE
+        // (rangeLo, rangeHi). Ceil handles negative rangeLo correctly.
+        const firstGridHz = Math.ceil((rangeLo + 1) / step) * step;
+        for (let hz = firstGridHz; hz < rangeHi; hz += step) {
             const gx = x(hz) + 0.5;
             ctx.beginPath();
             ctx.moveTo(gx, 0);
@@ -293,11 +320,21 @@ export class FilterScopePanel {
         // --- Frequency axis ---
         ctx.fillStyle = '#8899aa';
         ctx.font      = '9px sans-serif';
-        ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        for (let hz = 0; hz <= rangeHz; hz += step) {
+        const firstLabelHz = Math.ceil(rangeLo / step) * step;
+        const lastLabelHz  = Math.floor(rangeHi / step) * step;
+        for (let hz = firstLabelHz; hz <= rangeHi; hz += step) {
             const lx  = x(hz);
-            const lbl = hz >= 1000 ? (hz / 1000) + 'k' : hz === 0 ? '0' : hz + '';
+            const absHz = Math.abs(hz);
+            const lbl = absHz >= 1000 ? (hz / 1000) + 'k'
+                      : hz === 0      ? '0'
+                      :                  hz + '';
+            // Left-align the leftmost label and right-align the rightmost
+            // so neither gets clipped at the canvas edges (was "-1k"
+            // rendering as just "k" when centred on the left edge).
+            if (hz === firstLabelHz)     ctx.textAlign = 'left';
+            else if (hz === lastLabelHz) ctx.textAlign = 'right';
+            else                          ctx.textAlign = 'center';
             ctx.fillText(lbl, lx, H - 1);
         }
 

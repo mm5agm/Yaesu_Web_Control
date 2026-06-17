@@ -18,8 +18,10 @@ export const MeterFormatters = {
     },
 
     // Slider label and any freestanding power display (unit included).
+    // Space before the unit per SI typography conventions and SP3L-Jacek's
+    // request on #36 ("100 W" instead of "100W").
     powerLabel(watts) {
-        return `${Math.round(watts)}W`;
+        return `${Math.round(watts)} W`;
     },
 
     // ----------------------------------------------------------------

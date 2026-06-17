@@ -437,6 +437,13 @@ namespace Yaesu_Web_Control.Services
         private bool _atuEnabled = false;
         public bool AtuEnabled { get => _atuEnabled; set => SetField(ref _atuEnabled, value); }
 
+        // ATU auto-tune cycle currently in progress. Driven by P2 of the AC
+        // command's answer/auto-info — radio sets P2=1 while the matching
+        // network is being adjusted, P2=0 when finished. The UI uses this to
+        // grey/animate the ATU button while a tune is running.
+        private bool _atuTuning = false;
+        public bool AtuTuning { get => _atuTuning; set => SetField(ref _atuTuning, value); }
+
         // NB Level per VFO: 1–20
         private int _nbLevelA = 10;
         public int NbLevelA { get => _nbLevelA; set => SetField(ref _nbLevelA, value); }
