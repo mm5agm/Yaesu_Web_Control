@@ -86,7 +86,12 @@ public class AlexaController : ControllerBase
         }
         else
         {
-            var sigHeader    = Request.Headers["Signature"].ToString();
+            // Amazon signs every request with BOTH "Signature" (RSA-SHA1, legacy)
+            // and "Signature-256" (RSA-SHA256, modern) for backwards compatibility.
+            // The verifier hashes with SHA-256, so we must read the matching
+            // Signature-256 header — reading the legacy "Signature" header would
+            // give us a SHA-1 signature that never matches a SHA-256 hash.
+            var sigHeader    = Request.Headers["Signature-256"].ToString();
             var certChainUrl = Request.Headers["SignatureCertChainUrl"].ToString();
             var verification = await _signatureVerifier.VerifyAsync(rawBody, sigHeader, certChainUrl);
             if (!verification.IsValid)
