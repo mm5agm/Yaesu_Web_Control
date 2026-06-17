@@ -156,6 +156,9 @@ docs/*
 *.log
 run.log
 
+# Local backup files (e.g. alexa-model-backup.bak from VOICE_CONTROL.md Step 5)
+*.bak
+
 # Local backup scripts
 Backup*.ps1
 
