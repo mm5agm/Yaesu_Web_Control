@@ -491,7 +491,11 @@ This points the skill at your cloudflared tunnel.
 1. Left sidebar → **Endpoint**
 2. Select **HTTPS** (not AWS Lambda)
 3. **Default Region URL:** `https://yourdomain.com/api/alexa` (use your actual domain from Phase 1)
-4. **Select SSL certificate type:** **"My development endpoint has a certificate from a trusted certificate authority"** (Cloudflare's certificate is publicly-trusted, so no manual cert upload needed)
+4. **Select SSL certificate type:** **"My development endpoint is a sub-domain of a domain that has a wildcard certificate from a certificate authority"**
+
+   This is the **non-obvious correct choice** for a cloudflared tunnel. Your subdomain (e.g. `alexa.mm5agm.co.uk`) is served by Cloudflare's *wildcard* certificate (`*.mm5agm.co.uk`), not its own dedicated cert — so the wildcard option is the one Amazon expects.
+
+   Choosing **"My development endpoint has a certificate from a trusted certificate authority"** instead looks plausible (Cloudflare is publicly-trusted, after all) but causes Amazon to reject the request before it ever leaves Amazon's edge — the simulator returns "I am unable to reach the requested skill" with `skillExecutionTimeInMilliseconds: 47` and YWC's log shows no request arrived. Took Amazon developer support case #20830059391 to identify this; saving you the same dead-end.
 5. Leave North America / Europe and India / Far East **blank** — Default Region is the catch-all, and Cloudflare's edge network handles geographic routing automatically
 6. **Save Endpoints** (top-right)
 
@@ -670,9 +674,9 @@ A persistent failure where the simulator returns this message every time, the De
 
 A full diagnostic checklist is in **Step 11** below. Common root causes ordered by frequency:
 
-1. `AlexaEnabled` not set to `true` in `appsettings.user.json` — the controller returns 404 silently by design (Step 8)
-2. PC clock skew breaking the 150 s signature timestamp window — fixable with `w32tm /resync`
-3. Stuck state on Amazon's side — the same skill ID has cached a failure or the skill manifest has gone out of sync with the deployed configuration. Resolution path here is opening a developer support case with Amazon (see Step 11). Initial debugging in this codebase hit exactly this state — Amazon case #20830059391 covers the full reproducer.
+1. **Wrong SSL certificate type** in the endpoint config — Phase 2 Step 4. The "trusted certificate authority" option looks plausible but causes Amazon to reject the request before it leaves their edge. The wildcard sub-domain option is correct. This is what Amazon developer support case #20830059391 ultimately diagnosed; if you're seeing the 47 ms timing pattern this is the first thing to check.
+2. `AlexaEnabled` not set to `true` in `appsettings.user.json` — the controller returns 404 silently by design (Step 8)
+3. PC clock skew breaking the 150 s signature timestamp window — fixable with `w32tm /resync`
 
 **Gotcha 2: Yaesu trademark in invocation name**
 
@@ -725,7 +729,7 @@ Look for at least one active connector with recent `opened_at` timestamps. Four 
 
 - HTTPS radio button selected (not Lambda)
 - Default Region URL matches your tunnel hostname character-by-character
-- SSL certificate type: "My development endpoint has a certificate from a trusted certificate authority"
+- SSL certificate type: **"My development endpoint is a sub-domain of a domain that has a wildcard certificate from a certificate authority"** (the wildcard option — see Phase 2 Step 4 for why this rather than the "trusted CA" option that looks more obvious)
 - After any change here, click **Save Endpoints** and then **Build Skill** (top right) — endpoint changes require a rebuild
 
 **F. Read the Device Log.** Test tab → tick the **Device Log** checkbox at the top. Then fire a test utterance. Look for a `SkillDebugger.CaptureError` event — expand its JSON. The `invocationRequest.endpoint` field shows the URL Amazon actually tried (verify it matches your config), and `skillExecutionTimeInMilliseconds` indicates how long Amazon waited before giving up. Values under ~100 ms mean Amazon didn't actually round-trip to your origin — the failure was at TLS handshake or earlier.
@@ -741,7 +745,9 @@ Select-String -Path $log -Pattern 'AlexaController' | Select-Object -Last 5
 - If you see `Alexa intent: <IntentName>` — the request arrived and dispatched. The simulator-side failure is post-response, e.g. a malformed JSON response from YWC.
 - If you see nothing at all despite multiple simulator attempts — Amazon's request isn't reaching YWC. Re-check A–F above; the gap is somewhere before YWC.
 
-**H. If the failure is "Amazon's request never arrives" despite every check above passing**, the most likely cause is **stuck state on Amazon's side**: a corrupted skill manifest, cached endpoint failure for your skill ID, or Amazon EU regional issue. This is what the 47-ms timing pattern indicates. At this point your local debugging is exhausted; open a developer support case (Alexa Developer Console → Support → Contact Us → Alexa Skill Building → Can't Launch Skill) with these specifics:
+**H. If the failure is "Amazon's request never arrives" despite local-side checks (A, B, C, D, G) passing**, the most likely cause is **wrong SSL certificate type in the Amazon endpoint config** (covered in check E). The "trusted certificate authority" option needs to be the **wildcard sub-domain** option for cloudflared tunnels — see Phase 2 Step 4 for the full explanation. This is what causes the 47 ms timing pattern: Amazon refuses to dial out at all because they think the cert configuration is wrong.
+
+If you've verified check E is correctly set and the failure persists, only then is a developer support case warranted (Alexa Developer Console → Support → Contact Us → Alexa Skill Building → Can't Launch Skill) with these specifics:
 
 - Skill ID
 - Endpoint URL
@@ -749,7 +755,7 @@ Select-String -Path $log -Pattern 'AlexaController' | Select-Object -Last 5
 - Evidence the endpoint is reachable from outside (paste the ReqBin result from step A)
 - Steps already tried (rebuild, fresh browser session, all the above checks)
 
-Amazon typically responds within 1-2 business days.
+Amazon typically responds within 1-2 business days. Case #20830059391 is the canonical example — the resolution turned out to be the SSL setting, which is now check E above.
 
 ### The two Alexa settings in detail
 
@@ -764,15 +770,56 @@ Both settings live in `%APPDATA%\MM5AGM\Yaesu Web Control\appsettings.user.json`
 
 ## Phase 3 — Using it
 
-**[Documentation to follow.]**
+The invocation pattern is:
 
-Example commands once everything is wired:
+> **"Alexa, ask** *<invocation name>* *<utterance>***"**
 
-- "Alexa, ask Yaesu Control to go to 40 metres"
-- "Alexa, ask Yaesu Control to set frequency to 14.074 megahertz"
-- "Alexa, ask Yaesu Control to set mode to CW"
-- "Alexa, ask Yaesu Control for rig status"
-- "Alexa, ask Yaesu Control to turn on the preamp"
+Replacing *<invocation name>* with whatever you set in Phase 2 Step 3 — the rest of this section uses `my rig` (the default suggested above).
+
+### Reliable command list
+
+These are the phrasings most consistent on real Echo hardware. They've been chosen to avoid Alexa's built-in domains (smart-home, music, navigation) preempting the request.
+
+**Get current status:**
+
+- "Alexa, ask my rig status"
+- "Alexa, ask my rig for status"
+- "Alexa, ask my rig what's the status"
+
+The short `status` form depends on having `status` as a single-word sample utterance on `RigStatusIntent` — the original walkthrough in Step 6 above already lists it; if you're upgrading from an earlier setup you may need to add it.
+
+**Change band** (supported: 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m, 4m on the FTdx101MP region 1; 2m and 70cm will return "not supported on this radio"):
+
+- "Alexa, ask my rig to switch to forty metres"
+- "Alexa, ask my rig to tune to twenty metres"
+- "Alexa, ask my rig to set band to eighty metres"
+- "Alexa, ask my rig to change band to fifteen metres"
+
+**Set frequency** (the word "megahertz" is required — disambiguates from a band request):
+
+- "Alexa, ask my rig to tune to fourteen point zero seven four megahertz"
+- "Alexa, ask my rig to set frequency to seven point zero five megahertz"
+- "Alexa, ask my rig to QSY to twenty one point three megahertz"
+
+**Change mode** (supported: USB, LSB, CW, AM, FM, RTTY, FT8, data; "data" maps to DATA-U for FT8/digital):
+
+- "Alexa, ask my rig to switch to USB"
+- "Alexa, ask my rig to switch mode to CW"
+- "Alexa, ask my rig to set mode to LSB"
+- "Alexa, ask my rig to use data"
+
+### Things to avoid
+
+| Pattern | Why |
+|---|---|
+| `"Alexa, tell my rig …"` | The `tell` launch verb is more permissive than `ask` and Alexa is more willing to redirect the request to a built-in domain instead of your skill. Use `ask` always. |
+| `"Alexa, my rig …"` (no launch verb) | Without `ask` / `tell` / `open` / `launch` / `start`, Alexa has no way to know you're addressing a custom skill — she'll treat it as natural-language input to a built-in domain. |
+| `"Alexa, ask my rig to go to forty metres"` | `go to {band}` is in the sample utterances but Alexa's smart-home and navigation domains aggressively claim "go to N metres" before the skill resolution runs. Use `switch to` / `tune to` / `set band to` instead. |
+| Anything with **Yaesu** in the invocation | Amazon rejects third-party trademarks during certification — even for self-use the validation may fail at skill-build time. |
+
+### What works on simulator vs Echo
+
+The Alexa Developer Console **simulator** and a real **Echo device** both hit the same `/api/alexa` endpoint with identical request shape. If a phrasing works in the simulator it'll work on the Echo (and vice versa). Use the simulator to iterate on new utterances quickly without having to keep saying things to your Echo.
 
 ---
 
