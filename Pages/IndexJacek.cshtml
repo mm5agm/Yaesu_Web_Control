@@ -2,62 +2,160 @@
 @model Yaesu_Web_Control.Pages.IndexJacekModel
 @{
     ViewData["Title"] = "Yaesu Web Control — Jacek layout";
+
+    // Per-model meter availability. FTdx10 and FT-710 lack the high-voltage
+    // PA telemetry meters (Temp / IDD / VDD); they only have S, Power, SWR,
+    // ALC, Compression. Same gate the default layout uses -- see
+    // memory/project_radio_meter_availability.md for the matrix.
+    bool isFtdx10 = Model.RadioModel == "FTdx10";
+    bool isFt710  = Model.RadioModel == "FT-710";
+    bool hasPaTelemetry = !isFtdx10 && !isFt710;
 }
 
 @*
-    Jacek SP3L's alternative GUI layout (#48). Scaffolded 2026-06-22; the
-    actual dashboard layout is being built incrementally. For now this page
-    is a placeholder so the routing + Settings dropdown can be wired and
-    tested end-to-end before the layout work begins.
+    Jacek SP3L's alternative GUI layout (#48). Scaffolded 2026-06-22.
 
-    Plan (matches Jacek's mockup, MINUS the SDR spectrum panel per Colin
-    2026-06-22):
+    Layout plan (Phase build order):
+      Phase 1 ✓ : picker + routing + stub
+      Phase 2 → : top horizontal meter strip (current)
+      Phase 3   : side-by-side VFO panels
+      Phase 4   : bottom row (Mic Gain, Proc, Speech Processor, transmit aux)
+      Phase 5   : USER_MANUAL chapter + final polish
 
-      Top row     : 8 meters in a single horizontal strip
-                    (S, Power, SWR, ALC, Comp, Temp, IDD, VDD)
-      Middle row  : VFO-A | VFO-B side-by-side, each containing
-                      large freq display + TX button + Mode + Band buttons
-                      + IF Width / Shift / AF + NB / Notch / NR + Manual
-                      Notch row
-      Bottom row  : Mic Gain, Proc, Speech Processor, transmit auxiliaries
-
-    The view model is IndexModel (inherited via IndexJacekModel) so every
-    state property already loaded by /Index is available here as well --
-    no duplicated state-loading code.
+    No SDR spectrum panel per Colin's working answer 2026-06-22.
 *@
 
-<div class="container-fluid py-3">
-    <div class="alert alert-info">
-        <h4 class="mb-1"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>&nbsp;Jacek layout — work in progress</h4>
-        <p class="mb-2">
-            You're seeing the placeholder for the alternative dashboard layout proposed by
-            Jacek SP3L on <a href="https://github.com/mm5agm/Yaesu_Web_Control/issues/48" target="_blank" rel="noopener">#48</a>.
-            The actual layout is being built; for now this page exists so the layout
-            picker in Settings can be tested without breaking the classic Index.
-        </p>
-        <p class="mb-0">
-            To switch back to the classic layout: <a href="/Settings">Settings</a> →
-            <strong>Layout</strong> → set to <em>Default (classic)</em> → Save → reload.
-        </p>
-    </div>
+<div class="container-fluid py-2">
 
-    <div class="card mb-3">
-        <div class="card-header">Current radio state (debug — confirms the IndexModel pipeline is feeding this page)</div>
-        <div class="card-body">
-            <dl class="row mb-0 small">
-                <dt class="col-sm-3">Radio model</dt>
-                <dd class="col-sm-9"><code>@Model.RadioModel</code></dd>
-                <dt class="col-sm-3">VFO A frequency</dt>
-                <dd class="col-sm-9"><code>@Model.RadioState.FrequencyA Hz</code></dd>
-                <dt class="col-sm-3">VFO A mode</dt>
-                <dd class="col-sm-9"><code>@Model.RadioState.ModeA</code></dd>
-                <dt class="col-sm-3">VFO B frequency</dt>
-                <dd class="col-sm-9"><code>@Model.RadioState.FrequencyB Hz</code></dd>
-                <dt class="col-sm-3">VFO B mode</dt>
-                <dd class="col-sm-9"><code>@Model.RadioState.ModeB</code></dd>
-                <dt class="col-sm-3">MIC gain (persisted)</dt>
-                <dd class="col-sm-9"><code>@Model.MicGain</code></dd>
-            </dl>
+    @* ─────────────────────────────────────────────────────────────────────
+        PHASE 2 — Top horizontal meter strip
+        S / Power / SWR / Compression / ALC are always shown.
+        Temp / IDD / VDD only on radios with high-voltage PA telemetry
+        (FTdx101 family + FTDX3000) -- gated by hasPaTelemetry.
+
+        Canvas IDs MUCH match the default layout's so the existing
+        FTdx101Meters orchestrator + MeterPanel JS find them by ID
+        without modification. The orchestrator pushes SignalR updates
+        into whichever canvases are present.
+    ───────────────────────────────────────────────────────────────────── *@
+    <div class="card border-secondary mb-2">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-start align-items-start flex-wrap"
+                 style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
+
+                <!-- S-Meter rolling history strip — same toggle behaviour as
+                     the default layout. Hidden until the toolbar S-hist
+                     button is on (we don't ship the toolbar yet in this
+                     layout; the strip stays hidden by default). -->
+                <div id="sMeterHistoryContainer"
+                     class="text-center smeter-history-container"
+                     style="display:none; position: relative; height: 135px; min-width: 260px; margin: 0; padding: 0;">
+                    <canvas id="sMeterHistoryCanvas"
+                            role="img" aria-hidden="true"
+                            aria-label="S-meter 30-second history"
+                            data-a11y-key="meters.smeterHistory"
+                            style="display:block; width:100%; height:100%; border-radius:3px;"></canvas>
+                </div>
+
+                <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                    <div class="analog-meter-container">
+                        <canvas id="sMeterCanvas" role="img" aria-hidden="true" aria-label="S meter" data-a11y-key="meters.smeter"></canvas>
+                    </div>
+                </div>
+                <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                    <div class="analog-meter-container">
+                        <canvas id="swrMeterCanvas" role="img" aria-hidden="true" aria-label="SWR meter" data-a11y-key="meters.swr"></canvas>
+                    </div>
+                </div>
+                <div class="text-center power-meter-container" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                    <div class="analog-meter-container">
+                        <canvas id="powerMeterCanvas" role="img" aria-hidden="true" aria-label="Power output meter" data-a11y-key="meters.power"></canvas>
+                    </div>
+                </div>
+                <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                    <div class="analog-meter-container">
+                        <canvas id="compressionMeterCanvas" role="img" aria-hidden="true" aria-label="Compression meter" data-a11y-key="meters.compression"></canvas>
+                    </div>
+                </div>
+                <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                    <div class="analog-meter-container">
+                        <canvas id="alcMeterCanvas" role="img" aria-hidden="true" aria-label="ALC meter" data-a11y-key="meters.alc"></canvas>
+                    </div>
+                </div>
+
+                @if (hasPaTelemetry) {
+                    <!-- High-voltage PA telemetry: FTdx101MP/D + FTDX3000 only. -->
+                    <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                        <div class="analog-meter-container">
+                            <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
+                        </div>
+                    </div>
+                    <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                        <div class="analog-meter-container">
+                            <canvas id="iddMeterCanvas" role="img" aria-hidden="true" aria-label="Drain current meter" data-a11y-key="meters.idd"></canvas>
+                        </div>
+                    </div>
+                    <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                        <div class="analog-meter-container">
+                            <canvas id="vddMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier supply voltage meter" data-a11y-key="meters.vdd"></canvas>
+                        </div>
+                    </div>
+                }
+            </div>
         </div>
     </div>
+
+    @* PLACEHOLDER for Phases 3-4. Replaced by the VFO panels and the
+       bottom row in subsequent commits. Keeps the page useful in the
+       interim so you can confirm meters work without the rest yet. *@
+    <div class="alert alert-info">
+        <h4 class="mb-1"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>&nbsp;Jacek layout — Phase 2 of 4</h4>
+        <p class="mb-2">
+            The top meter strip is live. Side-by-side VFO panels (Phase 3) and the
+            bottom row (Phase 4) are next.
+        </p>
+        <p class="mb-0">
+            Switch back to the classic layout via <a href="/Settings">Settings</a> →
+            <strong>Layout</strong> → <em>Default (classic)</em> → Save → reload.
+        </p>
+    </div>
 </div>
+
+@section Scripts {
+    @* Meter orchestration. Mirrors the default Index.cshtml init: MeterPanel
+       owns the canvases, FTdx101Meters routes SignalR updates through the
+       calibration engine into the right gauges. SignalR connection itself
+       is set up by site.js (loaded via _Layout). *@
+    <script>window.bandPlan = '@Model.BandPlan';</script>
+    <script type="module">
+        import { MeterPanel }         from "/js/guages/meter-panel.js?v=1";
+        import { SMeterHistoryPanel } from "/js/guages/smeter-history-panel.js?v=1";
+        import { FTdx101Meters }      from "/js/orchestrators/FTdx101Meters.js?v=1";
+        import { loadLabels }         from "/js/ui/a11y-labels.js?v=1";
+
+        loadLabels();
+        window.addEventListener('focus', loadLabels);
+        document.addEventListener('DOMContentLoaded', function () {
+            // Build the meter set declaratively. Keys omitted for canvases
+            // that aren't in the DOM (i.e. the PA telemetry meters when
+            // the radio doesn't have them) are silently ignored by MeterPanel.
+            const config = {
+                smeter:      { type: 'smeter', canvasId: 'sMeterCanvas' },
+                power:       { canvasId: 'powerMeterCanvas' },
+                swr:         { canvasId: 'swrMeterCanvas' },
+                compression: { canvasId: 'compressionMeterCanvas' },
+                alc:         { canvasId: 'alcMeterCanvas' }
+            };
+            @if (hasPaTelemetry) {
+                <text>
+                config.temp = { canvasId: 'tempMeterCanvas' };
+                config.idd  = { canvasId: 'iddMeterCanvas' };
+                config.vdd  = { canvasId: 'vddMeterCanvas' };
+                </text>
+            }
+            window.meterPanel = new MeterPanel(config);
+            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine);
+            window.sMeterHistory = new SMeterHistoryPanel('sMeterHistoryCanvas');
+        });
+    </script>
+}
