@@ -27,13 +27,21 @@ namespace Yaesu_Web_Control.Pages
             _settings = settingsService;
         }
 
-        public new async Task<IActionResult> OnGetAsync()
+        // `override` not `new` -- using `new` makes Razor Pages' handler
+        // selector see two OnGetAsync methods on this class and throw
+        // "Multiple handlers matched" at request time. `override` replaces
+        // the inherited method so there's only one handler.
+        public override async Task<IActionResult> OnGetAsync()
         {
             var settings = await _settings.GetSettingsAsync();
             if (!string.Equals(settings.LayoutTemplate, "Jacek", StringComparison.OrdinalIgnoreCase))
             {
                 return RedirectToPage("/Index");
             }
+            // base.OnGetAsync does the full state-load. It also has a
+            // forward-redirect to /IndexJacek when LayoutTemplate=Jacek, but
+            // the GetType() check there suppresses it for this subclass so
+            // we don't bounce in a redirect loop.
             return await base.OnGetAsync();
         }
     }

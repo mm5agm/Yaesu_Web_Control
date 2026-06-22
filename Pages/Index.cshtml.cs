@@ -89,7 +89,10 @@ namespace Yaesu_Web_Control.Pages
 
         public RadioStateViewModel State { get; set; } = new RadioStateViewModel();
 
-        public async Task<IActionResult> OnGetAsync()
+        // `virtual` so IndexJacekModel can override (not hide-with-`new`),
+        // otherwise Razor Pages' handler selector sees both methods on the
+        // derived class and throws "Multiple handlers matched" at request time.
+        public virtual async Task<IActionResult> OnGetAsync()
         {
             if (Yaesu_Web_Control.Services.AppStatus.InitializationStatus == "error")
             {
@@ -103,7 +106,11 @@ namespace Yaesu_Web_Control.Pages
             // dashboard layout in Settings, send them to /IndexJacek which
             // renders the same data through a different Razor page. Anything
             // unrecognised falls back to "Default" via the Settings save path.
-            if (string.Equals(settings.LayoutTemplate, "Jacek", StringComparison.OrdinalIgnoreCase))
+            // The check is skipped when the call comes from
+            // IndexJacekModel.OnGetAsync (which has already verified the
+            // setting and is calling base.OnGetAsync just for the state-load).
+            if (GetType() == typeof(IndexModel) &&
+                string.Equals(settings.LayoutTemplate, "Jacek", StringComparison.OrdinalIgnoreCase))
             {
                 return RedirectToPage("/IndexJacek");
             }
