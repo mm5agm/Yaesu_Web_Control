@@ -176,6 +176,158 @@
     .vfo-inactive .smeter-history-container {
         display: none !important;
     }
+
+    /* ─────────────────────────────────────────────────────────────────────
+       Jacek-layout density tightening (#48 Phase 4).
+       Scoped automatically -- this <style> block only loads on /IndexJacek,
+       so every rule below is implicitly "Jacek-layout only". Target: pull
+       the same control set into a denser dashboard look without changing
+       any markup or JS wiring. Conservative changes only -- if a rule
+       breaks accessibility (focus rings, font scaling, screen-reader
+       hovers) it gets reverted.
+       ───────────────────────────────────────────────────────────────── */
+
+    /* Card header bars (VFO A / VFO B headings): trim vertical padding
+       and shrink the heading text. Default has a chunky h5 + py-1 +
+       gaps; the dashboard look wants the headings to be just a thin
+       label strip above the panel content. */
+    .card-header.bg-primary,
+    .card-header.bg-success {
+        padding-top: 0.15rem !important;
+        padding-bottom: 0.15rem !important;
+    }
+    .card-header.bg-primary h5,
+    .card-header.bg-success h5 {
+        font-size: 0.95rem !important;
+        line-height: 1.1 !important;
+    }
+
+    /* VFO panel body: aggressive inner padding reduction. The default's
+       p-2 (8px) leaves a lot of dead space at the edges; 3px is tight
+       but still gives controls a little breathing room. Combined with
+       the gutter reduction below, this is the biggest visible
+       difference vs the default layout. */
+    #vfoACol > .card > .card-body,
+    #vfoBCol > .card > .card-body {
+        padding: 3px !important;
+    }
+    /* Card outer margin: receiver-card has its own padding via h-100;
+       trim its border to a thin line so the panels look like dashboard
+       tiles rather than chunky cards. */
+    #vfoACol > .card.receiver-card,
+    #vfoBCol > .card.receiver-card {
+        border-width: 1px !important;
+    }
+
+    /* Control labels in the VFO panel's right-hand controls column
+       ("AGC", "IPO/AMP", "ATT", "NR", "NB", "Auto Notch", "Man Notch",
+       "Roofing"). Default labels are big enough to look balanced against
+       the band buttons; Jacek's dashboard wants them tighter. */
+    .vfo-control-label {
+        font-size: 0.7rem !important;
+        line-height: 1.1 !important;
+        margin-bottom: 0.05rem !important;
+        font-weight: 600;
+    }
+
+    /* Form selects inside the VFO panels: shrink the chrome a touch.
+       Bootstrap's form-select-sm already gives us 0.875rem; pulling to
+       0.8rem fits another control or two onto a row at common widths. */
+    #vfoACol .form-select-sm,
+    #vfoBCol .form-select-sm {
+        font-size: 0.8rem !important;
+        padding-top: 0.15rem !important;
+        padding-bottom: 0.15rem !important;
+        padding-right: 1.5rem !important; /* leave room for the dropdown chevron */
+    }
+
+    /* Sliders (Mic Gain, AF Gain, IF Shift, IF Low Cut, NB Level, NR
+       Level): default has fairly generous vertical spacing around the
+       slider track. Tighten so a column of sliders takes less vertical
+       space, which gets us closer to Jacek's dense-controls feel. */
+    #vfoACol .form-range,
+    #vfoBCol .form-range,
+    #vfoACol input[type="range"],
+    #vfoBCol input[type="range"] {
+        margin-top: 0.1rem;
+        margin-bottom: 0.1rem;
+    }
+
+    /* Inter-row margins: aggressively tightened. Bootstrap defaults of
+       16px / 8px between control groups inflate the panel vertically;
+       3-4px is the dashboard look. */
+    #vfoACol .mb-3,
+    #vfoBCol .mb-3 { margin-bottom: 3px !important; }
+    #vfoACol .mb-2,
+    #vfoBCol .mb-2 { margin-bottom: 2px !important; }
+    #vfoACol .mb-1,
+    #vfoBCol .mb-1 { margin-bottom: 1px !important; }
+    #vfoACol .mt-2,
+    #vfoBCol .mt-2 { margin-top: 2px !important; }
+    #vfoACol .mt-1,
+    #vfoBCol .mt-1 { margin-top: 1px !important; }
+    #vfoACol .gap-1,
+    #vfoBCol .gap-1 { gap: 1px !important; }
+    #vfoACol .gap-2,
+    #vfoBCol .gap-2 { gap: 2px !important; }
+
+    /* Tighten the row gap between VFO A and VFO B at desktop widths.
+       Bootstrap's g-3 default is 1.5rem; pulling to ~0.4rem now that
+       the spectrum panel is gone. */
+    #vfoRow {
+        --bs-gutter-x: 0.4rem !important;
+        --bs-gutter-y: 0.4rem !important;
+    }
+
+    /* Receiver-controls-group: the row that holds Save-to-Mem button,
+       band buttons, filter scope, and the right-hand controls column.
+       Tighten the gap between those four blocks. */
+    #vfoACol .receiver-controls-group,
+    #vfoBCol .receiver-controls-group {
+        gap: 4px !important;
+    }
+
+    /* Band buttons (the 12-button grid for 160m..4m). Each button
+       slightly smaller so a 4-wide / 3-tall arrangement fits in less
+       vertical space. */
+    #vfoACol .band-radio-grid label,
+    #vfoBCol .band-radio-grid label,
+    #vfoACol input[name^="band-"] + label,
+    #vfoBCol input[name^="band-"] + label {
+        font-size: 0.75rem !important;
+        padding: 1px 4px !important;
+        min-width: 36px !important;
+        line-height: 1.1 !important;
+    }
+
+    /* The right-hand controls column inside each VFO. The default has
+       gentle padding around each {label, select} pair; pull them
+       together so 8+ selectors stack in less vertical space. */
+    #vfoACol .vfo-controls-column,
+    #vfoBCol .vfo-controls-column {
+        gap: 1px !important;
+    }
+    #vfoACol .vfo-control-item,
+    #vfoBCol .vfo-control-item {
+        margin-bottom: 0 !important;
+    }
+
+    /* Card-bottom strip (clarifier row): tighten too. */
+    #clarifierRow .card-body {
+        padding: 3px !important;
+    }
+
+    /* Manual-notch row + 8 numbered buttons: Jacek's mockup shows them
+       as small uniform-width cells. The default's btn-sm + flex-wrap
+       gets close but the buttons are a bit too big. Cap to ~30px wide
+       so a row of 8 fits cleanly under the manual-notch frequency. */
+    [id^="manualNotchButtonsRow"] .btn,
+    [id^="manualNotchButtonsRow"] .btn-sm {
+        min-width: 30px !important;
+        padding-left: 0.3rem !important;
+        padding-right: 0.3rem !important;
+        font-size: 0.75rem !important;
+    }
 </style>
 
 <!-- Message Box Modal (Windows-style) -->
