@@ -231,6 +231,33 @@
         </div>
     </details>
 
+    <!-- Layout section -->
+    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
+        <summary><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>&nbsp;Layout</summary>
+        <div class="section-body">
+            <p class="text-muted small mb-3">
+                Which main-page layout to use. <strong>Default</strong> is the classic YWC layout
+                with VFOs stacked above the meters; <strong>Jacek</strong> is an alternative
+                dashboard layout proposed by Jacek SP3L on
+                <a href="https://github.com/mm5agm/Yaesu_Web_Control/issues/48" target="_blank" rel="noopener">#48</a>
+                (single horizontal meter strip at the top, dense side-by-side VFO panels).
+                Reload the main page after changing.
+            </p>
+            <div class="mb-3">
+                <label asp-for="Settings.LayoutTemplate" class="form-label">Main-page layout</label>
+                <select asp-for="Settings.LayoutTemplate" class="form-select form-select-sm" style="max-width: 14rem;">
+                    <option value="Default">Default (classic)</option>
+                    <option value="Jacek">Jacek (dashboard)</option>
+                </select>
+                <div class="form-text">
+                    The Jacek layout assumes no SDR spectrum display. If you have an SDR
+                    configured, the Default layout shows it; the Jacek layout will hide the
+                    spectrum panel even if one is configured.
+                </div>
+            </div>
+        </div>
+    </details>
+
     <!-- Radio & CAT -->
     <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
         <summary><i class="bi bi-broadcast" aria-hidden="true"></i>&nbsp;Radio &amp; CAT</summary>

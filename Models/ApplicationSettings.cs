@@ -138,6 +138,21 @@
         // so users with mouse wheels see the uncluttered default layout.
         // Yuri W4YSW request 2026-06-17.
         public bool ShowFrequencyArrowButtons { get; set; } = false;
+
+        // ── Layout ────────────────────────────────────────────────────────
+        // Which main-page layout to serve. The default classic layout is
+        // what every user has seen up to v2.3.9; "Jacek" is an alternative
+        // dashboard layout proposed by Jacek SP3L on #48 (horizontal meter
+        // strip, dense side-by-side VFO panels). Stored as a string rather
+        // than an enum so a future contributor can add a third option
+        // without having to extend an enum + recompile every user's
+        // settings file.
+        //   "Default" -- the classic GUI (everyone defaults here)
+        //   "Jacek"   -- Jacek SP3L's dashboard layout
+        // Adding a new layout: drop in a new Pages/Index<Name>.cshtml,
+        // add the value to the Settings page dropdown, add a redirect
+        // branch in IndexModel.OnGetAsync.
+        public string LayoutTemplate { get; set; } = "Default";
     }
 
     public class RadioState

@@ -222,6 +222,12 @@ namespace Yaesu_Web_Control.Pages
                 // Accessibility
                 current.ShowFrequencyArrowButtons = Settings.ShowFrequencyArrowButtons;
 
+                // Layout (Default / Jacek). Empty or unknown value falls back
+                // to Default so the user never lands on a broken page.
+                current.LayoutTemplate = string.IsNullOrWhiteSpace(Settings.LayoutTemplate)
+                    ? "Default"
+                    : Settings.LayoutTemplate;
+
                 await _settingsService.SaveSettingsAsync(current);
 
                 // Reset initialization status so app will try again

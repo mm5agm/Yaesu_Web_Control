@@ -1,0 +1,63 @@
+@page "/IndexJacek"
+@model Yaesu_Web_Control.Pages.IndexJacekModel
+@{
+    ViewData["Title"] = "Yaesu Web Control — Jacek layout";
+}
+
+@*
+    Jacek SP3L's alternative GUI layout (#48). Scaffolded 2026-06-22; the
+    actual dashboard layout is being built incrementally. For now this page
+    is a placeholder so the routing + Settings dropdown can be wired and
+    tested end-to-end before the layout work begins.
+
+    Plan (matches Jacek's mockup, MINUS the SDR spectrum panel per Colin
+    2026-06-22):
+
+      Top row     : 8 meters in a single horizontal strip
+                    (S, Power, SWR, ALC, Comp, Temp, IDD, VDD)
+      Middle row  : VFO-A | VFO-B side-by-side, each containing
+                      large freq display + TX button + Mode + Band buttons
+                      + IF Width / Shift / AF + NB / Notch / NR + Manual
+                      Notch row
+      Bottom row  : Mic Gain, Proc, Speech Processor, transmit auxiliaries
+
+    The view model is IndexModel (inherited via IndexJacekModel) so every
+    state property already loaded by /Index is available here as well --
+    no duplicated state-loading code.
+*@
+
+<div class="container-fluid py-3">
+    <div class="alert alert-info">
+        <h4 class="mb-1"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>&nbsp;Jacek layout — work in progress</h4>
+        <p class="mb-2">
+            You're seeing the placeholder for the alternative dashboard layout proposed by
+            Jacek SP3L on <a href="https://github.com/mm5agm/Yaesu_Web_Control/issues/48" target="_blank" rel="noopener">#48</a>.
+            The actual layout is being built; for now this page exists so the layout
+            picker in Settings can be tested without breaking the classic Index.
+        </p>
+        <p class="mb-0">
+            To switch back to the classic layout: <a href="/Settings">Settings</a> →
+            <strong>Layout</strong> → set to <em>Default (classic)</em> → Save → reload.
+        </p>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Current radio state (debug — confirms the IndexModel pipeline is feeding this page)</div>
+        <div class="card-body">
+            <dl class="row mb-0 small">
+                <dt class="col-sm-3">Radio model</dt>
+                <dd class="col-sm-9"><code>@Model.RadioModel</code></dd>
+                <dt class="col-sm-3">VFO A frequency</dt>
+                <dd class="col-sm-9"><code>@Model.RadioState.FrequencyA Hz</code></dd>
+                <dt class="col-sm-3">VFO A mode</dt>
+                <dd class="col-sm-9"><code>@Model.RadioState.ModeA</code></dd>
+                <dt class="col-sm-3">VFO B frequency</dt>
+                <dd class="col-sm-9"><code>@Model.RadioState.FrequencyB Hz</code></dd>
+                <dt class="col-sm-3">VFO B mode</dt>
+                <dd class="col-sm-9"><code>@Model.RadioState.ModeB</code></dd>
+                <dt class="col-sm-3">MIC gain (persisted)</dt>
+                <dd class="col-sm-9"><code>@Model.MicGain</code></dd>
+            </dl>
+        </div>
+    </div>
+</div>

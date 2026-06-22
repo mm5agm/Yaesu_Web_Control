@@ -98,6 +98,15 @@ namespace Yaesu_Web_Control.Pages
 
             // Load app button visibility and names
             var settings = await _settingsService.GetSettingsAsync();
+
+            // Alternative-layout routing (#48). If the user picked the Jacek
+            // dashboard layout in Settings, send them to /IndexJacek which
+            // renders the same data through a different Razor page. Anything
+            // unrecognised falls back to "Default" via the Settings save path.
+            if (string.Equals(settings.LayoutTemplate, "Jacek", StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToPage("/IndexJacek");
+            }
             ShowApp1Button = settings.ShowWsjtxButton;
             ShowApp2Button = settings.ShowJtalertButton;
             ShowApp3Button = settings.ShowLog4omButton;
