@@ -154,14 +154,24 @@
        none so it shows-but-doesn't-respond (R5/R9 read-only-but-displaying). */
     .vfo-inactive.vfo-tx-editable .frequency-display,
     .vfo-inactive.vfo-tx-editable [id$="-controls"],
-    .vfo-inactive.vfo-tx-editable .fkb-open-btn,
-    .vfo-inactive.vfo-tx-editable [id^="txButton"] {
+    .vfo-inactive.vfo-tx-editable .fkb-open-btn {
         /* !important is necessary on the button specifically: the freq
            display (a <span>) accepts the override at normal specificity,
            but the <button> computes pointer-events: none even with the
            same selector pattern -- suspected interaction with a UA or
            Bootstrap rule that beats ordinary specificity on <button>
            elements. Forcing the carve-out is the pragmatic fix.  */
+        pointer-events: auto !important;
+        opacity: 1 !important;
+        filter: none !important;
+    }
+    /* The TX button is the transmit control: whenever it is visible on a
+       greyed panel (split mode on single-receiver radios, or the non-active
+       VFO panel on dual-receiver radios) it must stay full-colour and
+       clickable — a dimmed transmit button reads as disabled. This carve-out
+       is deliberately independent of .vfo-tx-editable so it applies in every
+       case the button is shown, not only in split mode. */
+    .vfo-inactive [id^="txButton"] {
         pointer-events: auto !important;
         opacity: 1 !important;
         filter: none !important;

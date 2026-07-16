@@ -2686,6 +2686,14 @@
             const display = document.getElementById('txToggleKeyDisplay');
             if (!input || !setBtn || !clearBtn || !badge || !display) return;
 
+            // Seed the field from a JSON-encoded server value. asp-for drops a
+            // whitespace-only value attribute (a Space key round-trips to ""),
+            // so relying on input.value alone made a Space shortcut render as
+            // "Disabled" after every Settings save/refresh. JsonSerializer
+            // preserves the exact characters, including a lone space.
+            const serverKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Settings.TxToggleKey ?? string.Empty));
+            input.value = serverKey;
+
             let captureActive = false;
 
             function friendlyKeyLabel(key) {
@@ -2713,6 +2721,11 @@
                 badge.style.display = 'inline-block';
                 setBtn.classList.remove('btn-outline-primary');
                 setBtn.classList.add('btn-primary');
+                // Drop focus from the button so pressing Space to choose the
+                // shortcut doesn't also re-activate the focused "Set key"
+                // button (Space/Enter fire a click on a focused button),
+                // which would immediately re-arm capture.
+                setBtn.blur();
             }
 
             setBtn.addEventListener('click', function () {
