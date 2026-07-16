@@ -220,6 +220,35 @@
                     the main screen uncluttered for users who don't need them.
                 </div>
             </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold" for="Settings_TxToggleKey">TX toggle key</label>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <input asp-for="Settings.TxToggleKey"
+                           class="form-control"
+                           id="Settings_TxToggleKey"
+                           style="max-width: 220px;"
+                           readonly
+                           autocomplete="off"
+                           aria-describedby="txToggleKeyHelp txToggleKeyDisplay" />
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="txToggleKeySetBtn">
+                        Set key
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="txToggleKeyClearBtn">
+                        Clear
+                    </button>
+                    <span class="badge text-bg-warning" id="txToggleKeyCaptureBadge" style="display:none;">
+                        Press a key now
+                    </span>
+                </div>
+                <div class="form-text" id="txToggleKeyHelp">
+                    Optional browser shortcut for toggling transmit. Disabled when blank. For safety,
+                    YWC ignores this shortcut while you are typing in an input or text box.
+                </div>
+                <div class="form-text text-warning">
+                    Warning: this directly keys the transmitter. Choose a key you will not press by accident.
+                </div>
+                <div class="form-text" id="txToggleKeyDisplay"></div>
+            </div>
         </div>
     </details>
 
@@ -2646,6 +2675,77 @@
                 if (ft710Section)    ft710Section.style.display    = v === 'FT-710'    ? 'block' : 'none';
                 if (ftdx3000Section) ftdx3000Section.style.display = v === 'FTDX3000'  ? 'block' : 'none';
             });
+        })();
+    </script>
+    <script>
+        (function () {
+            const input = document.getElementById('Settings_TxToggleKey');
+            const setBtn = document.getElementById('txToggleKeySetBtn');
+            const clearBtn = document.getElementById('txToggleKeyClearBtn');
+            const badge = document.getElementById('txToggleKeyCaptureBadge');
+            const display = document.getElementById('txToggleKeyDisplay');
+            if (!input || !setBtn || !clearBtn || !badge || !display) return;
+
+            let captureActive = false;
+
+            function friendlyKeyLabel(key) {
+                if (!key) return 'Disabled';
+                if (key === ' ') return 'Space';
+                if (key === 'Escape') return 'Esc';
+                return key.length === 1 ? key.toUpperCase() : key;
+            }
+
+            function renderCurrentKey() {
+                display.textContent = input.value
+                    ? `Current shortcut: ${friendlyKeyLabel(input.value)}`
+                    : 'Current shortcut: Disabled';
+            }
+
+            function stopCapture() {
+                captureActive = false;
+                badge.style.display = 'none';
+                setBtn.classList.remove('btn-primary');
+                setBtn.classList.add('btn-outline-primary');
+            }
+
+            function startCapture() {
+                captureActive = true;
+                badge.style.display = 'inline-block';
+                setBtn.classList.remove('btn-outline-primary');
+                setBtn.classList.add('btn-primary');
+            }
+
+            setBtn.addEventListener('click', function () {
+                if (captureActive) {
+                    stopCapture();
+                    return;
+                }
+                startCapture();
+            });
+
+            clearBtn.addEventListener('click', function () {
+                input.value = '';
+                stopCapture();
+                renderCurrentKey();
+            });
+
+            document.addEventListener('keydown', function (e) {
+                if (!captureActive) return;
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (e.key === 'Tab') {
+                    stopCapture();
+                    renderCurrentKey();
+                    return;
+                }
+
+                input.value = e.key;
+                stopCapture();
+                renderCurrentKey();
+            }, true);
+
+            renderCurrentKey();
         })();
     </script>
 }

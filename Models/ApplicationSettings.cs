@@ -167,6 +167,12 @@
         // Yuri W4YSW request 2026-06-17.
         public bool ShowFrequencyArrowButtons { get; set; } = false;
 
+        // Browser key that toggles TX (transmit). Empty string = disabled.
+        // Stored as a KeyboardEvent.key value such as "t", "F8", or " ".
+        // Ignored while typing in inputs to avoid accidental keying during
+        // form entry or frequency editing.
+        public string TxToggleKey { get; set; } = "";
+
         // ── Voice Control (in-process SAPI) ───────────────────────────────
         // When true, the navbar mic button is shown and the SAPI recogniser
         // engages on PTT. Default OFF -- voice control is opt-in so users

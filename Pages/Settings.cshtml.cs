@@ -111,6 +111,8 @@ namespace Yaesu_Web_Control.Pages
             ModelState.Remove("Settings.DxClusterHost");
             ModelState.Remove("Settings.DxClusterLoginCallsign");
             ModelState.Remove("Settings.DxClusterPostLoginCommands");
+            // Accessibility TX shortcut is optional — empty = disabled.
+            ModelState.Remove("Settings.TxToggleKey");
 
             if (!ModelState.IsValid)
             {
@@ -244,6 +246,7 @@ namespace Yaesu_Web_Control.Pages
 
                 // Accessibility
                 current.ShowFrequencyArrowButtons = Settings.ShowFrequencyArrowButtons;
+                current.TxToggleKey = Settings.TxToggleKey ?? string.Empty;
 
                 // Voice Control (v1)
                 current.VoiceControlEnabled = Settings.VoiceControlEnabled;

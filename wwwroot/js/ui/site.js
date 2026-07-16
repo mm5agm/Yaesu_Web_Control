@@ -53,11 +53,19 @@ function showServerStoppedOverlay() {
     try { window.sMeterHistoryB?.stop?.();   } catch { /* ignore */ }
 }
 
+function isTypingIntoEditable() {
+    const active = document.activeElement;
+    return !!(active && (
+        active.tagName === 'INPUT' ||
+        active.tagName === 'TEXTAREA' ||
+        active.isContentEditable
+    ));
+}
+
 // --- Fullscreen Toggle: 'f' or 'F' to enter, 'Esc' to exit ---
 document.addEventListener('keydown', function (e) {
     // Ignore if typing in an input, textarea, or contenteditable
-    const active = document.activeElement;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+    if (isTypingIntoEditable()) return;
     if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // Bare F only — guarding against modifiers stops YWC from stealing
         // Ctrl+F (browser find-in-page) and Cmd+F on Mac.
@@ -73,6 +81,23 @@ document.addEventListener('keydown', function (e) {
             e.preventDefault();
         }
     }
+});
+
+// Optional browser TX shortcut. Disabled by default; when configured, it
+// toggles transmit using the same /api/cat/tx flow as the on-screen button.
+document.addEventListener('keydown', function (e) {
+    const configuredKey = window.ywcTxToggleKey;
+    if (!configuredKey || isTypingIntoEditable()) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+
+    const isSingleChar = configuredKey.length === 1 && e.key.length === 1;
+    const keyMatches = isSingleChar
+        ? e.key.toLowerCase() === configuredKey.toLowerCase()
+        : e.key === configuredKey;
+    if (!keyMatches) return;
+
+    e.preventDefault();
+    toggleTx();
 });
 
 // Add/remove fullscreen-mode class on body when entering/exiting fullscreen
