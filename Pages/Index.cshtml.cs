@@ -133,7 +133,7 @@ namespace Yaesu_Web_Control.Pages
             ShowApp4Button = settings.ShowGridtrackerButton;
             ShowApp5Button = settings.ShowFldigiButton;
             ShowFrequencyArrowButtons = settings.ShowFrequencyArrowButtons;
-            TxToggleKey = settings.TxToggleKey;
+            TxToggleKey = settings.TxToggleKey == " " ? "Space" : settings.TxToggleKey;
             App1Name = settings.App1Name;
             App2Name = settings.App2Name;
             App3Name = settings.App3Name;

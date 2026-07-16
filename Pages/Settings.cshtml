@@ -2686,19 +2686,20 @@
             const display = document.getElementById('txToggleKeyDisplay');
             if (!input || !setBtn || !clearBtn || !badge || !display) return;
 
-            // Seed the field from a JSON-encoded server value. asp-for drops a
-            // whitespace-only value attribute (a Space key round-trips to ""),
-            // so relying on input.value alone made a Space shortcut render as
-            // "Disabled" after every Settings save/refresh. JsonSerializer
-            // preserves the exact characters, including a lone space.
-            const serverKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Settings.TxToggleKey ?? string.Empty));
-            input.value = serverKey;
+            // Seed from a JSON-encoded server value (not the asp-for attribute).
+            // A lone space character cannot round-trip through an HTML form /
+            // input value attribute — browsers and Tag Helpers treat
+            // whitespace-only as empty, so Space used to save as "" and show
+            // "Disabled". We store the KeyboardEvent.code token "Space"
+            // instead; migrate any legacy " " on load.
+            const serverKeyRaw = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Settings.TxToggleKey ?? string.Empty));
+            input.value = (serverKeyRaw === ' ') ? 'Space' : serverKeyRaw;
 
             let captureActive = false;
 
             function friendlyKeyLabel(key) {
                 if (!key) return 'Disabled';
-                if (key === ' ') return 'Space';
+                if (key === ' ' || key === 'Space') return 'Space';
                 if (key === 'Escape') return 'Esc';
                 return key.length === 1 ? key.toUpperCase() : key;
             }
@@ -2753,7 +2754,9 @@
                     return;
                 }
 
-                input.value = e.key;
+                // e.key for Space is " "; store "Space" so the value survives
+                // HTML form post / asp-for round-trips (whitespace-only does not).
+                input.value = (e.key === ' ') ? 'Space' : e.key;
                 stopCapture();
                 renderCurrentKey();
             }, true);

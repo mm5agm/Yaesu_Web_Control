@@ -81,6 +81,7 @@ namespace Yaesu_Web_Control.Pages
         {
             Settings = await _settingsService.GetSettingsAsync();
             Settings.BandPlan = Settings.BandPlan switch { "UK" => "Region1", "USA" => "Region2", var v => v };
+            Settings.TxToggleKey = NormalizeTxToggleKey(Settings.TxToggleKey);
             // The Settings page binds a single Sample Rate dropdown that
             // represents 'reset both VFOs to this rate'. Show the current
             // A-side rate as the pre-selected option so the dropdown reflects
@@ -246,7 +247,9 @@ namespace Yaesu_Web_Control.Pages
 
                 // Accessibility
                 current.ShowFrequencyArrowButtons = Settings.ShowFrequencyArrowButtons;
-                current.TxToggleKey = Settings.TxToggleKey ?? string.Empty;
+                // Space cannot round-trip as a lone " " through HTML form posts —
+                // store the KeyboardEvent.code token "Space" (and migrate legacy " ").
+                current.TxToggleKey = NormalizeTxToggleKey(Settings.TxToggleKey);
 
                 // Voice Control (v1)
                 current.VoiceControlEnabled = Settings.VoiceControlEnabled;
@@ -431,6 +434,19 @@ namespace Yaesu_Web_Control.Pages
             }
 
             return addresses;
+        }
+
+        /// <summary>
+        /// Space cannot round-trip through an HTML form as a lone " " (Tag Helpers
+        /// and browsers treat whitespace-only input values as empty). Persist the
+        /// KeyboardEvent.code token instead; migrate any legacy " " on save.
+        /// </summary>
+        private static string NormalizeTxToggleKey(string? key)
+        {
+            if (string.IsNullOrEmpty(key)) return string.Empty;
+            if (key == " " || key.Equals("Space", StringComparison.OrdinalIgnoreCase))
+                return "Space";
+            return key;
         }
     }
 }

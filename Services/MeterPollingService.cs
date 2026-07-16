@@ -15,11 +15,15 @@ namespace Yaesu_Web_Control.Services
         private readonly ILogger<MeterPollingService> _logger;
         private readonly ISettingsService _settingsService;
 
-        // TX debounce: require 2 consecutive TX=false readings before declaring not-transmitting.
-        // A single TX=false poll (e.g. from a stale CAT response mid-burst) would otherwise
-        // clear the SWR rolling-average history and cause a momentary spike on the next reading.
+        // TX debounce: require 2 consecutive TX0 readings before declaring not-transmitting
+        // when we currently believe TX is on. A single TX0 mid-burst would otherwise clear
+        // the SWR rolling-average and cause a momentary spike on the next reading.
+        // Authoritative TX-off (web button / voice / etc. already cleared IsTransmitting)
+        // is accepted on the first confirming TX0 — otherwise this poller would overwrite
+        // that false back to true and the UI would stay on TX for several poll cycles.
         private int _txFalseCount = 0;
         private bool _stableIsTransmitting = false;
+        private const int TxOffDebounceCount = 2;
 
         // Antenna sync: the radio doesn't broadcast AN auto-information messages when the
         // operator changes the antenna on the front panel, so we have to poll. Polling on
@@ -98,7 +102,9 @@ namespace Yaesu_Web_Control.Services
                             _stateService.IsConnected = true;
                     }
 
-                    bool rawIsTransmitting = !string.IsNullOrEmpty(txResponse) && txResponse.Contains("TX1");
+                    // TX1 = keyed; TX2 = keyed (mic) on some Yaesu models — treat both as TX.
+                    bool rawIsTransmitting = !string.IsNullOrEmpty(txResponse)
+                        && (txResponse.Contains("TX1") || txResponse.Contains("TX2"));
                     if (rawIsTransmitting)
                     {
                         _txFalseCount = 0;
@@ -106,11 +112,15 @@ namespace Yaesu_Web_Control.Services
                     }
                     else if (txResponse != null)
                     {
-                        // Only count an explicit TX0 response toward the debounce — a null response
-                        // (radio busy / no reply) should not be treated as "not transmitting".
+                        // Explicit TX0 only — null (radio busy) must not count as unkey.
                         _txFalseCount++;
-                        if (_txFalseCount >= 5)
+                        if (_txFalseCount >= TxOffDebounceCount || !_stateService.IsTransmitting)
                             _stableIsTransmitting = false;
+                    }
+                    else if (!_stateService.IsTransmitting)
+                    {
+                        // Authoritative TX-off already applied; a null poll must not resurrect TX.
+                        _stableIsTransmitting = false;
                     }
                     bool isTransmitting = _stableIsTransmitting;
                     _stateService.IsTransmitting = isTransmitting;

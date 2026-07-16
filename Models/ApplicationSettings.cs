@@ -168,7 +168,9 @@
         public bool ShowFrequencyArrowButtons { get; set; } = false;
 
         // Browser key that toggles TX (transmit). Empty string = disabled.
-        // Stored as a KeyboardEvent.key value such as "t", "F8", or " ".
+        // Stored as a KeyboardEvent.key value such as "t" or "F8", except
+        // Space which is stored as the token "Space" (a lone " " cannot
+        // survive HTML form / input value round-trips).
         // Ignored while typing in inputs to avoid accidental keying during
         // form entry or frequency editing.
         public string TxToggleKey { get; set; } = "";
