@@ -181,6 +181,14 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-07-20 - v2.4.2-pre15 (pre-release)
+
+Split-related work, mostly for the single-receiver radios.
+
+**The +5k (Quick Split) button works now.** It was formatting the VFO B frequency with too many digits, so the radio rejected the command and nothing happened — on every model, it had just never been noticed. It now correctly sets VFO B to VFO A + 5 kHz and enables split, and gives a brief flash when pressed so you can see the press register. Thanks to Giovanni (iu1teu) for reporting it on his FTDX3000; I confirmed it was broken on my own FtdX101MP too.
+
+**New: independent RX / TX VFO selectors (single-receiver radios).** On the FTdx10, FT-710 and FTDX3000, split was previously locked to "VFO A receives, VFO B transmits." There are now separate **RX** and **TX** VFO selectors, so you can choose either VFO for receive and either for transmit — reverse split (B receives, A transmits) and both-on-one-VFO included. Split is simply on whenever RX and TX are different VFOs. This is single-receiver only; the dual-receiver FtdX101 is unchanged. Built on Giovanni's (iu1teu) suggestion and his confirmed FTDX3000 command details — I can't exercise split on my own '101, so I'd particularly welcome his (and other single-receiver owners') confirmation that it behaves correctly.
+
 ## 2026-07-18 - v2.4.2-pre14 (pre-release)
 
 Two radio-specific fixes.
