@@ -742,7 +742,14 @@ namespace Yaesu_Web_Control.Services
                 throw new InvalidOperationException("Serial port is not open.");
 
             var fullCommand = command.EndsWith(";") ? command : command + ";";
+            fullCommand = NormalizeFrequencyWidth(fullCommand);
             var commandBytes = Encoding.ASCII.GetBytes(fullCommand);
+
+            // Diagnostic (temporary — #78 FTDX3000 write investigation): the exact
+            // FA/FB SET command actually written to the port, after width fix.
+            if (fullCommand.Length > 4 && (fullCommand.StartsWith("FA") || fullCommand.StartsWith("FB")))
+                _logger.LogWarning("[wire] freq write -> {Command} (freqDigits={Digits})",
+                    fullCommand, _radioStateService.FrequencyDigits);
 
             _serialPort.Write(commandBytes, 0, commandBytes.Length);
             await Task.Delay(15, cancellationToken);
