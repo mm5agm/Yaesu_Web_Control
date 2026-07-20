@@ -411,6 +411,7 @@ namespace Yaesu_Web_Control.Controllers
                 await _catClient.SendCommandAsync(command, "WebUI", CancellationToken.None);
 
                 _radioStateService.FrequencyA = freq;
+                _radioStateService.MarkUserFrequencyWrite();  // suppress the FA/FB backstop poll briefly (single-receiver radios)
 
                 _logger.LogInformation("Set Receiver A frequency to {Freq}", freq);
                 _logger.LogInformation("[API] SetFrequencyA completed: freq={Freq}", freq);
@@ -445,6 +446,7 @@ namespace Yaesu_Web_Control.Controllers
                 await _catClient.SendCommandAsync(command, "WebUI", CancellationToken.None);
 
                 _radioStateService.FrequencyB = freq;
+                _radioStateService.MarkUserFrequencyWrite();  // suppress the FA/FB backstop poll briefly (single-receiver radios)
 
                 _logger.LogInformation("Set Receiver B frequency to {Freq}", freq);
                 _logger.LogInformation("[API] SetFrequencyB completed: freq={Freq}", freq);

@@ -33,6 +33,19 @@ namespace Yaesu_Web_Control.Services
         private int _antennaPollCounter = 0;
         private const int AntennaPollEvery = 4;
 
+        // Frequency backstop poll — single-receiver radios only. On the FTdx10 /
+        // FT-710 / FTDX3000 the radio's unsolicited FA/FB auto-info pushes are
+        // unreliable, especially over shared-CAT / VSPE setups (iu1teu #78), so
+        // the frequency display can go stale with no way to recover. Poll FA;/FB;
+        // ~once a second (every other ~500 ms cycle) as a fallback — the same
+        // approach iu1teu's own bridge uses on the same radio. The dual-receiver
+        // FTdx101, where auto-info works, is deliberately left event-driven.
+        // Suppressed briefly after a user web-UI write so the read-back can't
+        // fight active tuning (see RadioStateService.LastUserFrequencyWriteUtc).
+        private int _freqPollCounter = 0;
+        private const int FreqPollEvery = 2;
+        private static readonly TimeSpan FreqPollWriteSuppress = TimeSpan.FromMilliseconds(1200);
+
         // Connection health: track consecutive null poll responses to detect radio power-off.
         // The serial port stays "open" on Windows when the radio powers off; null responses (timeouts)
         // are the only signal. After 5 consecutive nulls (~2.5 s) we broadcast disconnected.
@@ -282,6 +295,21 @@ namespace Yaesu_Web_Control.Services
                         if (!string.IsNullOrEmpty(an0)) _dispatcher.DispatchMessage(an0);
                         var an1 = await _multiplexer.SendCommandAsync("AN1;", "MeterPoll", stoppingToken);
                         if (!string.IsNullOrEmpty(an1)) _dispatcher.DispatchMessage(an1);
+                    }
+
+                    // Frequency backstop poll — single-receiver radios only (see field comment).
+                    if (_stateService.IsSingleReceiver && ++_freqPollCounter >= FreqPollEvery)
+                    {
+                        _freqPollCounter = 0;
+                        // Skip while the user is actively tuning from the web UI, so a
+                        // read-back can't briefly show a stale value mid-write.
+                        if (DateTime.UtcNow - _stateService.LastUserFrequencyWriteUtc > FreqPollWriteSuppress)
+                        {
+                            var fa = await _multiplexer.SendCommandAsync("FA;", "MeterPoll", stoppingToken);
+                            if (!string.IsNullOrEmpty(fa)) _dispatcher.DispatchMessage(fa);
+                            var fb = await _multiplexer.SendCommandAsync("FB;", "MeterPoll", stoppingToken);
+                            if (!string.IsNullOrEmpty(fb)) _dispatcher.DispatchMessage(fb);
+                        }
                     }
 
                     await Task.Delay(500, stoppingToken);

@@ -230,6 +230,15 @@ namespace Yaesu_Web_Control.Services
             }
         }
 
+        // Set by CatController whenever the user changes frequency from the web
+        // UI. MeterPollingService's FA/FB backstop poll (single-receiver radios,
+        // where auto-info is unreliable — iu1teu #78) checks this and skips a
+        // poll cycle briefly after a user write, so the poll's read-back can't
+        // fight active tuning. Not touched by dispatcher-driven (radio→state)
+        // frequency updates, only by genuine user writes.
+        public DateTime LastUserFrequencyWriteUtc { get; private set; } = DateTime.MinValue;
+        public void MarkUserFrequencyWrite() => LastUserFrequencyWriteUtc = DateTime.UtcNow;
+
         private string? _fr;
         public string? FR { get => _fr; set => SetField(ref _fr, value); }
         private string? _ft;
