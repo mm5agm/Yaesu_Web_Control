@@ -181,6 +181,14 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-07-20 - v2.4.2-pre18 (pre-release)
+
+Two frequency fixes.
+
+**The radio now tunes live while you hold the ▲/▼ buttons (or spin the mouse wheel).** Previously the on-screen frequency moved as you held, but the radio itself only jumped to the final value when you let go. It now sends the intermediate steps as you go, so the radio tracks your input in real time. Applies to all radios.
+
+**FTDX3000: changing frequency from the browser now works.** The FTDX3000 uses an 8-digit frequency format where every other supported radio uses 9, and YWC was sending 9 digits to all of them — so frequency changes (and the +5k Quick Split) from the web UI were silently ignored by the FTDX3000, even though the display and the radio's own knob worked. YWC now detects each radio's frequency format automatically and matches it. Other radios are unaffected. Thanks to Giovanni (iu1teu) for the testing and logs that pinned this down.
+
 ## 2026-07-20 - v2.4.2-pre17 (pre-release)
 
 Frequency-sync fallback for single-receiver radios.
