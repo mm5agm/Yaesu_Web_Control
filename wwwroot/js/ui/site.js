@@ -856,6 +856,53 @@ function updateSplitButton() {
     }
 }
 
+// Independent RX / TX VFO selectors (single-receiver radios, #78). RX follows
+// activeVfo (VS / FR), TX follows txVfo (FT); split is derived (TX ≠ RX). The
+// selected RX button is filled grey; the selected TX button is red when split
+// is on and filled grey when TX and RX are the same VFO.
+function updateRxTxSelectors() {
+    const rxA = document.getElementById('rxVfoA');
+    if (!rxA) return; // group only rendered on single-receiver radios
+    const pick = (el, on, onClass) => {
+        el.classList.remove('btn-secondary', 'btn-danger', 'btn-outline-secondary');
+        el.classList.add(on ? onClass : 'btn-outline-secondary');
+    };
+    pick(rxA, activeVfo === 0, 'btn-secondary');
+    pick(document.getElementById('rxVfoB'), activeVfo === 1, 'btn-secondary');
+    const split = txVfo !== activeVfo;
+    pick(document.getElementById('txVfoA'), txVfo === 0, split ? 'btn-danger' : 'btn-secondary');
+    pick(document.getElementById('txVfoB'), txVfo === 1, split ? 'btn-danger' : 'btn-secondary');
+}
+
+async function setRxVfo(vfo) {
+    try {
+        const r = await fetch(`/api/cat/rx-vfo/${vfo}`, { method: 'POST' });
+        if (r.ok) {
+            const d = await r.json();
+            activeVfo = d.rxVfo;
+            if (typeof d.splitMode === 'number') splitMode = d.splitMode;
+            updateRxTxSelectors();
+            updateSplitButton();
+            applyVfoActiveStyling();
+        }
+    } catch {}
+}
+
+async function setTxVfo(vfo) {
+    try {
+        const r = await fetch(`/api/cat/tx-vfo/${vfo}`, { method: 'POST' });
+        if (r.ok) {
+            const d = await r.json();
+            txVfo = d.txVfo;
+            if (typeof d.splitMode === 'number') splitMode = d.splitMode;
+            updateRxTxSelectors();
+            updateSplitButton();
+            applyVfoActiveStyling();
+            updateTxButton();
+        }
+    } catch {}
+}
+
 async function setSplit(mode) {
     try {
         const r = await fetch(`/api/cat/split/${mode}`, { method: 'POST' });
@@ -1198,11 +1245,13 @@ connection.on("RadioStateUpdate", function (update) {
         txVfo = update.value;
         updateTxButton();
         applyVfoActiveStyling();
+        updateRxTxSelectors();
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('txVfo', update.value);
     }
     if (update.property === "ActiveVfo") {
         activeVfo = update.value;
         applyVfoActiveStyling();
+        updateRxTxSelectors();
         // In normal mode on a single-receiver radio, the TX button position
         // follows activeVfo (the TX VFO IS the active VFO; FT doesn't move).
         updateTxButton();
@@ -1810,6 +1859,13 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 250);
         setSplit(2);
     });
+    // Independent RX / TX VFO selectors (single-receiver radios only; the group
+    // is not rendered otherwise, so these no-op on dual-receiver radios).
+    document.getElementById('rxVfoA')?.addEventListener('click', () => setRxVfo('A'));
+    document.getElementById('rxVfoB')?.addEventListener('click', () => setRxVfo('B'));
+    document.getElementById('txVfoA')?.addEventListener('click', () => setTxVfo('A'));
+    document.getElementById('txVfoB')?.addEventListener('click', () => setTxVfo('B'));
+    updateRxTxSelectors();
     document.getElementById('swapVfoBtn')?.addEventListener('click', swapVfo);
     document.getElementById('copyBtoABtn')?.addEventListener('click', () => copyVfo('ba'));
     document.getElementById('copyAtoBBtn')?.addEventListener('click', () => copyVfo('ab'));
