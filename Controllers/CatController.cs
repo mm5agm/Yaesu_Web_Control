@@ -1745,7 +1745,7 @@ namespace Yaesu_Web_Control.Controllers
                             long.TryParse(faQs.Substring(2).TrimEnd(';'), out long freqAqs))
                         {
                             long freqBqs = Math.Min(freqAqs + 5000, 75_000_000);
-                            await _catClient.SendCommandAsync($"FB{freqBqs:D11};", "WebUI", CancellationToken.None);
+                            await _catClient.SendCommandAsync($"FB{freqBqs:D9};", "WebUI", CancellationToken.None);
                             _radioStateService.FrequencyB = freqBqs;
                         }
                     }
@@ -1776,7 +1776,7 @@ namespace Yaesu_Web_Control.Controllers
                         long.TryParse(faResponse.Substring(2).TrimEnd(';'), out long freqA))
                     {
                         long freqB = Math.Min(freqA + 5000, 75_000_000);
-                        await _catClient.SendCommandAsync($"FB{freqB:D11};", "WebUI", CancellationToken.None);
+                        await _catClient.SendCommandAsync($"FB{freqB:D9};", "WebUI", CancellationToken.None);
                         _radioStateService.FrequencyB = freqB;
                     }
                     await _catClient.SendCommandAsync("ST1;", "WebUI", CancellationToken.None);
