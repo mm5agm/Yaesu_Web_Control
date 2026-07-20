@@ -181,6 +181,12 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-07-20 - v2.4.2-pre16 (pre-release)
+
+Small fix on top of pre15.
+
+**SUB VC Tune control hidden on hardware that can't use it.** On FtdX101MP hardware revisions that don't support VC Tune over CAT (e.g. ID0682), the MAIN VC Tune control was correctly hidden but the SUB one was not — it appeared on VFO B even though it could never work. Both are now hidden together on those revisions. This only affects the specific blocked hardware revision; other FtdX101MP radios are unchanged.
+
 ## 2026-07-20 - v2.4.2-pre15 (pre-release)
 
 Split-related work, mostly for the single-receiver radios.
