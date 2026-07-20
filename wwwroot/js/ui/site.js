@@ -2291,6 +2291,7 @@ document.addEventListener('DOMContentLoaded', function() {
         localFreq: { A: null, B: null },
         selectedIdx: { A: null, B: null },
         lastSentFreq: { A: null, B: null },
+        _lastFreqSend: { A: 0, B: 0 },   // ms timestamp of the last throttled send-to-radio, per receiver
         lastBackendFreq: { A: null, B: null },
         lastBand: { A: null, B: null },
         lastMode: { A: null, B: null },
@@ -2434,22 +2435,38 @@ document.addEventListener('DOMContentLoaded', function() {
             const newDigits = Array.from(display.querySelectorAll('.digit')).filter(d => d.textContent !== '.');
             newDigits.forEach(d => d.classList.remove('selected'));
             if (newDigits[idx]) newDigits[idx].classList.add('selected');
+            // Send to the radio AS WE STEP, throttled — so a press-and-hold (or a
+            // wheel spin) tunes the radio live instead of only when you let go.
+            // Previously this was a 600 ms trailing debounce, but the ▲/▼
+            // hold-repeat fires every 500 ms, so each step reset the timer and the
+            // radio never moved until release (reported by Colin on the FtdX101).
+            // Leading-edge throttle: move the radio at most every SEND_THROTTLE_MS;
+            // a trailing timer always sends the final position and clears localFreq
+            // so the ~500 ms poll can settle the display once the radio confirms.
+            const SEND_THROTTLE_MS = 250;
+            const sendToRadio = (settle) => {
+                const f = state.localFreq[receiver] ?? newFreq;
+                // Skip the actual CAT write if this frequency was already the last
+                // one sent — stops the trailing timer re-sending a value the
+                // leading edge already pushed during a continuous hold/spin.
+                if (f !== state.lastSentFreq[receiver]) {
+                    setFrequency(receiver, f);
+                    state.lastSentFreq[receiver] = f;
+                    state._lastFreqSend[receiver] = Date.now();
+                }
+                // Only the trailing (settle) send releases localFreq, so the poll
+                // can take over once the radio confirms lastSentFreq. Intermediate
+                // sends keep localFreq set so the display keeps showing the live
+                // in-progress value. state.editing stays true either way — the
+                // fetchRadioStatus reset block clears it once the radio echoes
+                // lastSentFreq back, avoiding the "flip back then settle" race.
+                if (settle) state.localFreq[receiver] = null;
+            };
+            if (Date.now() - (state._lastFreqSend[receiver] || 0) >= SEND_THROTTLE_MS) {
+                sendToRadio(false);   // leading edge: move the radio now
+            }
             clearTimeout(display._debounceTimer);
-            display._debounceTimer = setTimeout(() => {
-                setFrequency(receiver, newFreq);
-                state.lastSentFreq[receiver] = newFreq;
-                state.localFreq[receiver] = null;
-                // IMPORTANT: keep state.editing=true here. The polling tick
-                // at ~500 ms will reset it to false once it sees the radio
-                // confirm data.vfoA.frequency === state.lastSentFreq.A (see
-                // the reset block in fetchRadioStatus). If we clear editing
-                // now, the very next polling tick re-renders the display
-                // with whatever frequency the radio is still reporting --
-                // typically the OLD value, because we just sent the new one
-                // ~tens of ms ago and the radio hasn't echoed back yet.
-                // That race shows up as the digit "flipping back then
-                // settling on the new value" the user reported.
-            }, 600);
+            display._debounceTimer = setTimeout(() => sendToRadio(true), SEND_THROTTLE_MS);
         }
 
         // Auto-select the kHz position when the user hits an arrow / ▲ / ▼
