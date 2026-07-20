@@ -1798,7 +1798,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Split / Swap VFO button handlers
     document.getElementById('splitBtn')?.addEventListener('click', () => setSplit(splitMode > 0 ? 0 : 1));
-    document.getElementById('quickSplitBtn')?.addEventListener('click', () => setSplit(2));
+    // Quick Split (+5k) is a one-shot action, not a persistent mode — the
+    // Split button (red) shows the resulting split state. Give a brief "fired"
+    // flash so the press registers visually, then return to the resting style.
+    const quickSplitBtn = document.getElementById('quickSplitBtn');
+    quickSplitBtn?.addEventListener('click', () => {
+        quickSplitBtn.classList.replace('btn-outline-secondary', 'btn-danger');
+        clearTimeout(quickSplitBtn._flashTimer);
+        quickSplitBtn._flashTimer = setTimeout(() => {
+            quickSplitBtn.classList.replace('btn-danger', 'btn-outline-secondary');
+        }, 250);
+        setSplit(2);
+    });
     document.getElementById('swapVfoBtn')?.addEventListener('click', swapVfo);
     document.getElementById('copyBtoABtn')?.addEventListener('click', () => copyVfo('ba'));
     document.getElementById('copyAtoBBtn')?.addEventListener('click', () => copyVfo('ab'));
