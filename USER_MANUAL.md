@@ -393,6 +393,19 @@ Both panels have identical controls — changing a control on the active (fully 
 > 3. Press **Split** — you are now receiving on 20m and transmitting on 6m
 > 4. Do **not** press +5k, as that would move VFO B back to 20m + 5 kHz
 
+**RX / TX VFO selectors (single-receiver radios only).** On the single-receiver radios (**FTdx10, FT-710, FTDX3000**) a pair of small selectors — **RX [A│B]** and **TX [A│B]** — sits next to the Split and +5k buttons. They let you choose the receive VFO and the transmit VFO **independently**, instead of being limited to the fixed "VFO A receives, VFO B transmits" that the Split button gives. There is no separate split toggle here — **split is derived automatically: you are in split whenever the RX and TX VFOs are different.** That makes all four combinations available directly:
+
+| RX | TX | Result |
+|----|----|--------|
+| A | A | Normal — receive and transmit on VFO A |
+| A | B | Standard split (the same as the Split button) |
+| B | A | Reverse split — receive on B, transmit on A |
+| B | B | Normal — receive and transmit on VFO B |
+
+The currently selected **RX** button is filled in; the selected **TX** button turns **red** whenever you are in split (RX and TX on different VFOs) and is filled grey otherwise. The selectors follow the radio live, so if you change the receive or transmit VFO at the rig the buttons update to match.
+
+These selectors are **not shown on the dual-receiver FtdX101MP / FtdX101D**, where VFO A and VFO B are two independent physical receivers. On those radios you choose the operating (receive) band by clicking a VFO panel's header, and the transmit VFO follows the **Split** button — see §5.5 above and §5.10 Transmit Controls.
+
 ---
 
 ### 5.6 Frequency Display and Tuning
