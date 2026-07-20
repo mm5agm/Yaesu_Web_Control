@@ -29,7 +29,13 @@
     // Empty/unknown ID → hidden (user can reload once radio connects and ID; is received).
     bool hasVcTune    = Yaesu_Web_Control.Services.RadioCapabilities.SupportsVCTuneMain(Model.RadioModel)
                      && Yaesu_Web_Control.Services.RadioCapabilities.SupportsVCTuneCat(Model.RadioState.Id);
-    bool hasVcTuneSub = Yaesu_Web_Control.Services.RadioCapabilities.SupportsVCTuneSubStatic(Model.RadioModel);
+    // SUB VC Tune, like MAIN above, also requires the hardware ID to support
+    // VT CAT — the VT command is shared, so a revision that rejects VT (e.g.
+    // ID0682) can drive neither MAIN nor SUB. Previously this line omitted the
+    // SupportsVCTuneCat check, so the SUB control leaked onto blocked-ID radios
+    // (Colin MM5AGM, FTdx101MP ID0682) even though MAIN was correctly hidden.
+    bool hasVcTuneSub = Yaesu_Web_Control.Services.RadioCapabilities.SupportsVCTuneSubStatic(Model.RadioModel)
+                     && Yaesu_Web_Control.Services.RadioCapabilities.SupportsVCTuneCat(Model.RadioState.Id);
 
     string clarModeInit = (Model.RadioState.RxClarOn, Model.RadioState.TxClarOn) switch
     {
