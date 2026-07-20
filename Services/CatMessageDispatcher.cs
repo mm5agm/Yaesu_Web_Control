@@ -131,15 +131,22 @@
                 {
                     case "FA":
                         // Example: FA01420000;
-                        if (long.TryParse(message.Substring(2).TrimEnd(';'), out var freqA))
+                        var faBody = message.Substring(2).TrimEnd(';');
+                        if (long.TryParse(faBody, out var freqA))
                         {
                             _stateService.FrequencyA = freqA;
+                            // Learn the radio's native frequency width (8 for the
+                            // FTDX3000, 9 for the rest) so writes are formatted to
+                            // match — see RadioStateService.FrequencyDigits.
+                            if (faBody.Length is 8 or 9) _stateService.FrequencyDigits = faBody.Length;
                         }
                         break;
                     case "FB":
-                        if (long.TryParse(message.Substring(2).TrimEnd(';'), out var freqB))
+                        var fbBody = message.Substring(2).TrimEnd(';');
+                        if (long.TryParse(fbBody, out var freqB))
                         {
                             _stateService.FrequencyB = freqB;
+                            if (fbBody.Length is 8 or 9) _stateService.FrequencyDigits = fbBody.Length;
                         }
                         break;
                     case "DT":

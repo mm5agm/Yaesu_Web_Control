@@ -28,6 +28,15 @@ namespace Yaesu_Web_Control.Services
         // whose read code space differs from its set code space.
         public string RadioModel { get; set; } = "";
 
+        // Number of digits this radio uses in FA/FB frequency values. Learned
+        // from the radio's own FA/FB responses (see CatMessageDispatcher) — the
+        // FTDX3000 uses 8, every other supported model uses 9. YWC formats writes
+        // as 9 everywhere, so on an 8-digit radio the write is malformed and
+        // silently ignored (iu1teu #78 — FTDX3000 frequency changes from the UI
+        // never reached the radio). CatMultiplexerService reformats FA/FB writes
+        // to this width. Defaults to 9 (the common case) until a response is seen.
+        public int FrequencyDigits { get; set; } = 9;
+
         private RadioState _initialState;
 
         public RadioStateService(

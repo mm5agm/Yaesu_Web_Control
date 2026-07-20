@@ -365,6 +365,7 @@ namespace Yaesu_Web_Control.Services
                 }
 
                 var fullCommand = request.Command.EndsWith(";") ? request.Command : request.Command + ";";
+                fullCommand = NormalizeFrequencyWidth(fullCommand);
                 var commandBytes = Encoding.ASCII.GetBytes(fullCommand);
 
                 _logger.LogDebug("[{ClientId}] >>> #{RequestId}: {Command}", request.ClientId, request.RequestId, fullCommand.TrimEnd(';'));
@@ -379,6 +380,27 @@ namespace Yaesu_Web_Control.Services
                     request.ClientId, request.RequestId, request.Command);
                 request.CompletionSource.SetException(ex);
             }
+        }
+
+        // The FTDX3000 uses 8-digit FA/FB frequency values; every other supported
+        // radio uses 9. YWC formats writes as 9 digits everywhere, so on an 8-digit
+        // radio a frequency SET (FA/FB with a value) is malformed and silently
+        // ignored — iu1teu #78: FTDX3000 frequency changes from the UI, and +5k,
+        // never reached the radio. We reformat FA/FB SET commands to the width the
+        // radio actually reported at connect (RadioStateService.FrequencyDigits,
+        // learned from its FA/FB responses). No-op for 9-digit radios (the default),
+        // for query forms (FA;/FB;), and for any non-FA/FB command.
+        private string NormalizeFrequencyWidth(string command)
+        {
+            int digits = _radioStateService.FrequencyDigits;
+            if (digits == 9 || command.Length < 4) return command;                  // default width or too short (e.g. "FA;")
+            if (!command.StartsWith("FA") && !command.StartsWith("FB")) return command;
+
+            var body = command.EndsWith(";") ? command[2..^1] : command[2..];
+            if (body.Length == 0 || body.Length == digits) return command;          // query form, or already correct width
+            if (!long.TryParse(body, out var hz)) return command;                    // not a plain frequency value
+
+            return command[..2] + hz.ToString("D" + digits) + ";";
         }
 
         public async Task DisconnectAsync()
