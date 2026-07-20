@@ -181,6 +181,10 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-07-20 - v2.4.2-pre20 (pre-release)
+
+FTDX3000 frequency-write fix, take two — now on the right code path. The 8-digit frequency fix from pre18 was applied to the wrong internal send path, so it never actually took effect. This build applies it where the frequency writes really go out, so an FTDX3000 should finally accept frequency changes (and +5k) from the browser. Still under investigation on Discussion #78; other radios are unaffected.
+
 ## 2026-07-20 - v2.4.2-pre19 (pre-release)
 
 Diagnostic build. Adds extra logging to pin down why frequency changes from the browser aren't reaching an FTDX3000 (investigation on GitHub Discussion #78). No functional change from pre18 — of interest only to that investigation.
