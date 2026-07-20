@@ -417,10 +417,10 @@ The frequency display shows the current VFO frequency in MHz to 1 Hz resolution 
 1. Click on any digit in the frequency display. The selected digit is highlighted.
 2. Roll the mouse wheel up to increase that digit, or down to decrease it.
 3. Carry-over is automatic — for example, scrolling 9 → 0 on the kHz digit also increments the 10 kHz digit.
-4. The new frequency is sent to the radio approximately 200 ms after you stop scrolling.
+4. The radio tunes **live as you scroll** — the frequency is sent several times a second so the rig tracks the display in real time, and the final position is always sent when you stop.
 5. Click anywhere outside the frequency display to deselect.
 
-**On a tablet or phone**, tap a digit to select it, then use the **▲** and **▼** buttons that appear below the display to adjust it.
+**▲ / ▼ step buttons** — small up/down buttons appear below the frequency display (always on a tablet or phone, and on any device when *Show frequency arrow buttons* is enabled in Settings for accessibility). Tap a digit to select it, then press **▲** / **▼** to step it. **Press and hold to repeat**, and the radio tunes live as it steps — it now tracks each step in real time rather than only jumping to the final value when you release.
 
 ---
 
