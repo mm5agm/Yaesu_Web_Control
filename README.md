@@ -181,6 +181,10 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-07-20 - v2.4.2-pre19 (pre-release)
+
+Diagnostic build. Adds extra logging to pin down why frequency changes from the browser aren't reaching an FTDX3000 (investigation on GitHub Discussion #78). No functional change from pre18 — of interest only to that investigation.
+
 ## 2026-07-20 - v2.4.2-pre18 (pre-release)
 
 Two frequency fixes.
