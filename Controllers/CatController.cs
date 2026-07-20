@@ -1835,6 +1835,81 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
+        // Independent RX / TX VFO selection for single-receiver radios (Giovanni
+        // iu1teu, #78). Split is not a separate toggle here — it is derived: the
+        // radio is in split whenever the TX VFO differs from the RX VFO. These
+        // two endpoints plus the derived SplitMode back the web UI's RX/TX
+        // selectors, and share the same FT/VS/FR plumbing the external API will use.
+        [HttpPost("rx-vfo/{vfo}")]
+        public async Task<IActionResult> SetRxVfo(string vfo)
+        {
+            var v = vfo.ToUpperInvariant();
+            if (v != "A" && v != "B")
+                return BadRequest(new { error = "VFO must be A or B" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var rxSettings = await _settingsService.GetSettingsAsync();
+                var rx = v == "B" ? 1 : 0;
+
+                // The FTDX3000 selects the RX VFO via FR, and uses 0/4 (NOT 0/1):
+                // FR0; = VFO-A RX, FR4; = VFO-B RX. Confirmed from a real FTDX3000
+                // in daily use by iu1teu (#78) — it does not use VS for this. The
+                // other single-receiver radios (FTdx10 / FT-710) have no FR and use
+                // VS, the same command the active-vfo endpoint already sends.
+                if (rxSettings.RadioModel == "FTDX3000")
+                    await _catClient.SendCommandAsync(v == "B" ? "FR4;" : "FR0;", "WebUI", CancellationToken.None);
+                else
+                    await _catClient.SendCommandAsync($"VS{rx};", "WebUI", CancellationToken.None);
+
+                _radioStateService.ActiveVfo = rx;
+                _radioStateService.SplitMode = _radioStateService.TxVfo != rx ? 1 : 0;
+                _logger.LogInformation("RX VFO set to {Vfo} (split={Split})", v, _radioStateService.SplitMode);
+                return Ok(new { rxVfo = rx, splitMode = _radioStateService.SplitMode });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting RX VFO");
+                return StatusCode(500, new { error = "Failed to set RX VFO" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        [HttpPost("tx-vfo/{vfo}")]
+        public async Task<IActionResult> SetTxVfo(string vfo)
+        {
+            var v = vfo.ToUpperInvariant();
+            if (v != "A" && v != "B")
+                return BadRequest(new { error = "VFO must be A or B" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var tx = v == "B" ? 1 : 0;
+
+                // FT selects the transmit VFO on all supported models: FT0; = TX on
+                // VFO A, FT1; = TX on VFO B. Already proven driving the FTDX3000
+                // Split button (#78).
+                await _catClient.SendCommandAsync($"FT{tx};", "WebUI", CancellationToken.None);
+
+                _radioStateService.TxVfo = tx;
+                _radioStateService.SplitMode = tx != _radioStateService.ActiveVfo ? 1 : 0;
+                _logger.LogInformation("TX VFO set to {Vfo} (split={Split})", v, _radioStateService.SplitMode);
+                return Ok(new { txVfo = tx, splitMode = _radioStateService.SplitMode });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting TX VFO");
+                return StatusCode(500, new { error = "Failed to set TX VFO" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
         [HttpPost("swap-vfo")]
         public async Task<IActionResult> SwapVfo()
         {

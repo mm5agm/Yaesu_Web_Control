@@ -337,6 +337,22 @@
                     aria-label="Quick split: enable split and set VFO B to VFO A plus 5 kHz">
                 +5k
             </button>
+            @if (isSingleReceiver)
+            {
+                <span id="rxTxSplitGroup" class="d-inline-flex align-items-center gap-1 ms-1"
+                      title="Independent RX / TX VFO selection. Split is on whenever RX and TX are different VFOs.">
+                    <span class="small text-nowrap">RX</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Receive VFO">
+                        <button type="button" id="rxVfoA" class="btn btn-outline-secondary py-0" data-rx="A" aria-label="Receive on VFO A">A</button>
+                        <button type="button" id="rxVfoB" class="btn btn-outline-secondary py-0" data-rx="B" aria-label="Receive on VFO B">B</button>
+                    </div>
+                    <span class="small text-nowrap ms-1">TX</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Transmit VFO">
+                        <button type="button" id="txVfoA" class="btn btn-outline-secondary py-0" data-tx="A" aria-label="Transmit on VFO A">A</button>
+                        <button type="button" id="txVfoB" class="btn btn-outline-secondary py-0" data-tx="B" aria-label="Transmit on VFO B">B</button>
+                    </div>
+                </span>
+            }
             <button id="connectBtn" class="btn btn-danger btn-sm"
                     onclick="toggleCatConnection()" style="padding-top: 1px; padding-bottom: 1px;" title="Connect or disconnect CAT serial port"
                     aria-label="CAT serial connection — currently disconnected">
