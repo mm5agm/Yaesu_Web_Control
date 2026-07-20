@@ -181,6 +181,12 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-07-20 - v2.4.2-pre17 (pre-release)
+
+Frequency-sync fallback for single-receiver radios.
+
+**Live frequency now works even when the radio doesn't broadcast it.** YWC learned about frequency changes only from the radio's auto-information (`AI1;`) pushes, and never polled for frequency itself. On single-receiver radios — particularly the FTDX3000 over a shared-CAT / VSPE connection — those pushes don't reliably arrive, so the on-screen frequency could stop tracking the radio in either direction. YWC now polls the frequency about once a second on single-receiver radios (FTdx10, FT-710, FTDX3000, FT-991A) as a fallback, so the display stays in sync regardless of the radio's auto-info behaviour. It backs off briefly while you're tuning from the browser so it never fights your input. The dual-receiver FtdX101MP/D, where auto-info works reliably, is unchanged. Diagnosed from a log supplied by Giovanni (iu1teu) on his FTDX3000 — thank you.
+
 ## 2026-07-20 - v2.4.2-pre16 (pre-release)
 
 Small fix on top of pre15.
