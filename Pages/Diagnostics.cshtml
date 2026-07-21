@@ -6,6 +6,23 @@
 
 <h1 class="mb-3">Diagnostics</h1>
 
+<div class="alert alert-info py-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+        <button type="button" id="diag-mark-log" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-flag" aria-hidden="true"></i> Start fresh test log
+        </button>
+        <a href="/api/diagnostics/log" class="btn btn-sm btn-primary" download>
+            <i class="bi bi-download" aria-hidden="true"></i> Download test log
+        </a>
+        <span id="diag-mark-result" class="small text-success" role="status"></span>
+    </div>
+    <div class="small">
+        If I've asked you for a log: click <strong>Start fresh test log</strong>, do the test on the radio, then
+        <strong>Download test log</strong> — you'll get just that test's log. Drag the downloaded file straight into the
+        GitHub issue or discussion to attach it. (Need everything? <a href="/api/diagnostics/log?full=1" download>Download the full log</a>.)
+    </div>
+</div>
+
 <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
     <span>SignalR: <span id="diag-status" class="badge bg-secondary">Connecting&hellip;</span></span>
     <button type="button" id="diag-toggle-ports" class="btn btn-sm btn-outline-secondary"
@@ -149,6 +166,23 @@
 @section Scripts {
 <script>
 (function () {
+
+    // "Start fresh test log" — drops a marker in the Serilog file so the
+    // "Download test log" button returns only the lines from here on.
+    document.getElementById('diag-mark-log')?.addEventListener('click', async function () {
+        const result = document.getElementById('diag-mark-result');
+        this.disabled = true;
+        try {
+            const r = await fetch('/api/diagnostics/log/mark', { method: 'POST' });
+            if (result) result.textContent = r.ok
+                ? '✓ Fresh capture started — do your test, then Download test log.'
+                : 'Could not mark the log.';
+        } catch {
+            if (result) result.textContent = 'Could not mark the log.';
+        } finally {
+            this.disabled = false;
+        }
+    });
 
     // ── Meter definitions ─────────────────────────────────────────────────────
     const METERS = [
