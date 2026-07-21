@@ -19,7 +19,13 @@ Yaesu Web Control (**YWC**) is a continuation of my FTdx101_WebApp with more Yae
 | FT-710 | 100 W | Single | Two VFOs; no rear-panel IF output for spectrum |
 | FTDX3000 | 100 W | Single | Two VFOs; no memory tag (MT) command |
 
-**Other Yaesu transceivers** (FT-991A, FTDX5000, etc.) can be added too — the CAT protocol is well documented and most of the groundwork already exists. What's missing is someone who owns the radio and can test against it as support is built. If that's you, open a [Discussion](https://github.com/mm5agm/Yaesu_Web_Control/discussions) and let's talk.
+## Getting your Yaesu radio added — it's easier than you think
+
+I own and test on the **FTdx101MP**; the other supported models are built from Yaesu's published CAT documentation and confirmed by the users who own them. If your Yaesu isn't listed yet — **FT-991A, FTDX5000, FTX-1** and others are all realistic — I'll gladly add it, and **all it takes from you is ordinary operating, not programming.**
+
+"Testing" just means *using your radio normally* with YWC and telling me what happens: change bands, tune around, switch modes, key up, and drop a note on the [Discussions tab](https://github.com/mm5agm/Yaesu_Web_Control/discussions) like *"frequency and mode track fine, but the S-meter reads a bit low."* **No code, no build tools, no command line.** If you can run the installer and operate your rig, you can test — I do the programming, you just tell me what your radio does. Even a one-liner on a model that already works ("works fine on my FT-710") is useful: it tells me which radios have real users behind them.
+
+**FTX-1:** a user has reported it working on HF (run with the model set to *FTdx10*) — frequency and mode track cleanly and quickly. Its 6m/2m/70cm memory handling still needs a little work, so a dedicated FTX-1 profile is on the way once someone can help confirm the VHF/UHF side. If you own an FTX-1, I'd love to hear from you.
 
 ## Main Page
 ![Yaesu Web Control Main Page](pictures/DevelopScreen.png)
@@ -145,12 +151,6 @@ Active development is currently focused on bug fixes and polish for the supporte
 **Voice control v1 shipped in v2.4.0-pre1 (2026-06-24)** and has been extended through the v2.4.0 pre-release series, most recently with independent per-VFO control (separate mic buttons for VFO A and VFO B) and a full Voice Language Pack Manager for editing phrases and macros. It uses **Windows' built-in speech recognition (SAPI 5 / `System.Speech`)** running locally on the user's PC, driven by an editable phrase pack tuned to ham-radio vocabulary, with a press-and-hold microphone button beside each VFO panel — the command targets whichever VFO's button you're holding (single-receiver radios show only one button). Recognised audio never leaves the PC; no cloud account, no public endpoint, no DNS or tunnel setup. A microphone connected to the PC is the only hardware requirement. See [USER_MANUAL.md §17 Voice Control](USER_MANUAL.md#17-voice-control) for what voice does, the full command list, and how to enable it. Feedback from real users is what's wanted right now — please try it and report back.
 
 **On the abandoned Amazon Alexa route:** an earlier proof of concept routed voice through an Echo device over a Cloudflare tunnel into YWC. It worked end-to-end including signature verification, but setting it up required the user to own a domain, run a Cloudflare account, configure a custom Alexa Skill in the Amazon Developer Console, and install `cloudflared` — well over an hour of fiddly setup for the average ham. The local-SAPI approach above is dramatically simpler (one Windows speech-pack install, one Settings toggle) and runs entirely offline. The Alexa branch is therefore retired; the local mic approach is the supported path going forward.
-
-### Which radios get tested?
-
-YWC supports the FTdx101MP, FTdx101D, FTdx10, FT-710, and FTDX3000. I own and test on the FTdx101MP; support for the other four models is implemented against the published CAT documentation and refined when users on those models report. **If you use one of the other four models, please consider dropping a one-liner on the [Discussions tab](https://github.com/mm5agm/Yaesu_Web_Control/discussions)** — even just "works fine on my FT-710" is useful. It tells me which models have actual users behind them and where to focus calibration improvements.
-
----
 
 ## Staying informed about updates
 
