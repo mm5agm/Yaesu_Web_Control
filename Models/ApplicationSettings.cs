@@ -49,6 +49,11 @@
         public string WsjtxUdpAddress { get; set; } = "239.255.0.1";
         public int WsjtxUdpPort { get; set; } = 2237;
 
+        // When false, YWC does NOT bind the WSJT-X UDP port at startup, leaving
+        // it free for another WSJT-X tool. Default true (unchanged behaviour) —
+        // see WsjtxUdpService, which returns early when this is off.
+        public bool WsjtxIntegrationEnabled { get; set; } = true;
+
         // Last Radio State (persisted between sessions)
         public RadioState LastRadioState { get; set; } = new();
 

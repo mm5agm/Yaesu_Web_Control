@@ -70,6 +70,9 @@ namespace Yaesu_Web_Control.Pages
         [BindProperty]
         public int WsjtxUdpPort { get; set; } = 2237;
 
+        [BindProperty]
+        public bool WsjtxIntegrationEnabled { get; set; } = true;
+
         public async Task OnGetAsync()
         {
             var settings = await _settingsService.GetSettingsAsync();
@@ -102,6 +105,7 @@ namespace Yaesu_Web_Control.Pages
             // UDP Settings
             WsjtxUdpAddress = settings.WsjtxUdpAddress;
             WsjtxUdpPort = settings.WsjtxUdpPort;
+            WsjtxIntegrationEnabled = settings.WsjtxIntegrationEnabled;
         }
 
         public async Task<IActionResult> OnPostAsync()
@@ -136,6 +140,7 @@ namespace Yaesu_Web_Control.Pages
             // UDP Settings
             settings.WsjtxUdpAddress = WsjtxUdpAddress;
             settings.WsjtxUdpPort = WsjtxUdpPort;
+            settings.WsjtxIntegrationEnabled = WsjtxIntegrationEnabled;
 
             await _settingsService.SaveSettingsAsync(settings);
 

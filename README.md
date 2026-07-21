@@ -183,6 +183,14 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-07-21 - v2.4.2 (pending release)
+
+*Consolidates the v2.4.2-pre1 … pre20 fixes, plus the following:*
+
+**Optional WSJT-X integration.** YWC listens for WSJT-X on its UDP port (2237) so it can show WSJT-X status — but it did so at every startup, even when you weren't using WSJT-X, which held the port and stopped other WSJT-X tools from using it. There's now an **Enable WSJT-X integration** toggle on the **Application Setup** page (on by default, so nothing changes unless you touch it). Turn it off and YWC no longer binds the port, leaving it free for another WSJT-X program. Restart YWC after changing it.
+
+**Easier log sharing for testing.** The **Diagnostics page** (now linked in the top menu) has **Start fresh test log** and **Download test log** buttons — start a capture, do the test, and download just that test's log to drag into a discussion.
+
 ## 2026-07-20 - v2.4.2-pre20 (pre-release)
 
 FTDX3000 frequency-write fix, take two — now on the right code path. The 8-digit frequency fix from pre18 was applied to the wrong internal send path, so it never actually took effect. This build applies it where the frequency writes really go out, so an FTDX3000 should finally accept frequency changes (and +5k) from the browser. Still under investigation on Discussion #78; other radios are unaffected.
