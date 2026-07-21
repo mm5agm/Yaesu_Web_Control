@@ -152,6 +152,8 @@ docs/*
 !docs/VoiceControl/
 docs/VoiceControl/*
 !docs/VoiceControl/*.md
+# …and the developer guide for adding a new radio.
+!docs/adding-a-radio.md
 
 # Runtime logs
 *.log
