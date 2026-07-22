@@ -9,6 +9,10 @@ they actually calibrated into wwwroot/calibration.default.<Model>.json.
   python scripts/merge-calibration.py -i user-cal.json -m FTDX3000
   python scripts/merge-calibration.py -i user-cal.json -m FTDX3000 --force
 
+Or pipe straight from the clipboard (no file needed):
+
+  Get-Clipboard -Raw | python scripts/merge-calibration.py -m FTDX3000
+
 Minimal-diff by design: it edits only the individual raw values that changed,
 in place, so unchanged meters and the file's hand-formatting stay byte-for-byte
 identical (no whole-file reserialisation). Tolerates an email preamble around
@@ -63,7 +67,7 @@ def find_points_span(text, meter_name):
 
 def main():
     ap = argparse.ArgumentParser(description="Merge a user calibration into a model default.")
-    ap.add_argument('-i', '--input', required=True, help='the emailed calibration JSON file')
+    ap.add_argument('-i', '--input', help='the emailed calibration JSON file (omit to read stdin, e.g. a piped clipboard)')
     ap.add_argument('-m', '--model', required=True, help='radio model, e.g. FTDX3000')
     ap.add_argument('--force', action='store_true', help='also touch meters whose points already match')
     args = ap.parse_args()
@@ -81,7 +85,13 @@ def main():
             print(f"  {f.name[len('calibration.default.'):-len('.json')]}")
         sys.exit(1)
 
-    incoming = load_lenient(Path(args.input).read_text(encoding='utf-8-sig'))
+    if args.input:
+        src = Path(args.input).read_text(encoding='utf-8-sig')
+    else:
+        src = sys.stdin.read()
+        if not src.strip():
+            sys.exit("No input: pass -i <file>, or pipe the JSON in (e.g. Get-Clipboard -Raw | ...).")
+    incoming = load_lenient(src)
     if 'meters' not in incoming:
         sys.exit("Input has no 'meters' array -- is this a YWC calibration export?")
 
@@ -152,8 +162,8 @@ def main():
         for s in structural:
             print(f"  - {s}")
     print("\nReview it, then commit:")
-    print(f"  git diff -- wwwroot/calibration.default.{args.model}.json")
-    print(f"  git add wwwroot/calibration.default.{args.model}.json")
+    print(f"  git diff -- wwwroot/{default_path.name}")
+    print(f"  git add wwwroot/{default_path.name}")
 
 
 if __name__ == '__main__':
