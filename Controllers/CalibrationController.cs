@@ -10,11 +10,13 @@ public class CalibrationController : ControllerBase
 {
     private readonly ICalibrationService _service;
     private readonly IHubContext<RadioHub> _hub;
+    private readonly ILogger<CalibrationController> _log;
 
-    public CalibrationController(ICalibrationService service, IHubContext<RadioHub> hub)
+    public CalibrationController(ICalibrationService service, IHubContext<RadioHub> hub, ILogger<CalibrationController> log)
     {
         _service = service;
         _hub     = hub;
+        _log     = log;
     }
 
     // Broadcast CalibrationUpdated to every connected client so all open
@@ -99,10 +101,26 @@ public class CalibrationController : ControllerBase
     [HttpPost("import-default")]
     public IActionResult ImportDefault([FromBody] ImportDefaultRequest? request)
     {
-        if (!_service.IsDevelopmentMode)
-            return NotFound();   // hidden entirely outside the dev build
+        _log.LogInformation("[cal-import] request received: dev={Dev}, textLen={Len}",
+            _service.IsDevelopmentMode, request?.Text?.Length ?? 0);
 
-        var result = _service.ImportEmailedCalibrationIntoDefault(request?.Text);
-        return result.Ok ? Ok(result) : BadRequest(result);
+        if (!_service.IsDevelopmentMode)
+        {
+            _log.LogWarning("[cal-import] rejected: not development mode");
+            return NotFound();   // hidden entirely outside the dev build
+        }
+
+        try
+        {
+            var result = _service.ImportEmailedCalibrationIntoDefault(request?.Text);
+            _log.LogInformation("[cal-import] result: ok={Ok} changed={Changed} model={Model} updated=[{Updated}] msg={Msg}",
+                result.Ok, result.Changed, result.Model, string.Join(",", result.Updated), result.Message);
+            return result.Ok ? Ok(result) : BadRequest(result);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "[cal-import] threw");
+            return BadRequest(new CalibrationImportResult { Ok = false, Message = "Server error: " + ex.Message });
+        }
     }
 }
