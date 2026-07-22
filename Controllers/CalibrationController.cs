@@ -88,4 +88,21 @@ public class CalibrationController : ControllerBase
             saveTargetPath = _service.GetSavePath(),
         });
     }
+
+    // Developer-only: fold a user-emailed calibration (pasted / read from the
+    // clipboard) into the SHIPPED default file for its radio, editing only the
+    // values that changed. Exposed just so Colin can do it with a button instead
+    // of scripts/merge-calibration.py. Gated to the development build — a normal
+    // installed YWC is Production, so users never see or reach this.
+    public class ImportDefaultRequest { public string? Text { get; set; } }
+
+    [HttpPost("import-default")]
+    public IActionResult ImportDefault([FromBody] ImportDefaultRequest? request)
+    {
+        if (!_service.IsDevelopmentMode)
+            return NotFound();   // hidden entirely outside the dev build
+
+        var result = _service.ImportEmailedCalibrationIntoDefault(request?.Text);
+        return result.Ok ? Ok(result) : BadRequest(result);
+    }
 }

@@ -12,6 +12,7 @@ public interface ICalibrationService
     void ResetToDefault();
     string GetSavePath();
     bool IsDevelopmentMode { get; }
+    CalibrationImportResult ImportEmailedCalibrationIntoDefault(string? emailText);
 }
 
 public class CalibrationService : ICalibrationService
@@ -29,6 +30,9 @@ public class CalibrationService : ICalibrationService
     public bool IsDevelopmentMode => _storage.IsDevelopmentMode;
 
     public string GetSavePath() => _storage.GetActivePath();
+
+    public CalibrationImportResult ImportEmailedCalibrationIntoDefault(string? emailText) =>
+        _storage.ImportEmailedCalibrationIntoDefault(emailText);
 
     public Dictionary<string, List<CalibrationPoint>> GetAllCalibrationTables()
     {

@@ -16,6 +16,10 @@
             <button id="helpBtn" class="btn-help">? Help</button>
             <button type="button" onclick="window.open(window.location.origin + '/Diagnostics', 'diagnostics', 'width=1400,height=900,resizable=yes')" class="btn-help">Diagnostics</button>
             <button id="emailCalBtn" class="btn-secondary" title="Open an email to the developer (Colin, MM5AGM) with your calibration data filled in — helps improve the defaults for your radio">✉ Email calibration to developer</button>
+@if (Model.IsDevelopmentMode)
+{
+            <button id="importDefaultBtn" class="btn-secondary" title="DEV ONLY: read a user's emailed calibration from the clipboard and fold the changed values into the shipped default file for that radio. Leaves a git diff to review.">⬇ Import emailed cal → default (dev)</button>
+}
             <span id="saveStatus" class="save-status"></span>
         </div>
     </div>
@@ -434,6 +438,50 @@
                 if (status) status.textContent = 'Email opened. If it looks empty, paste (Ctrl+V) your calibration and send — it is on your clipboard.';
             } catch (e) {
                 if (status) status.textContent = 'Could not read your calibration data to email.';
+            }
+        });
+
+        // DEV ONLY: "Import emailed cal → default" — reads a user's emailed
+        // calibration from the clipboard and folds the changed values into the
+        // shipped default file for that radio (server auto-detects the model from
+        // the email text). Only wired up in the development build; the button is
+        // not even rendered otherwise, and the endpoint 404s outside dev.
+        document.getElementById('importDefaultBtn')?.addEventListener('click', async () => {
+            const status = document.getElementById('saveStatus');
+            let text = '';
+            try {
+                text = await navigator.clipboard.readText();
+            } catch (_) {
+                if (status) status.textContent = 'Could not read the clipboard — copy the email, then try again.';
+                return;
+            }
+            if (!text || !text.trim()) {
+                if (status) status.textContent = 'Clipboard is empty — copy the whole email first.';
+                return;
+            }
+            if (status) status.textContent = 'Importing…';
+            try {
+                const resp = await fetch('/api/calibration/import-default', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                const r = await resp.json();
+                if (!resp.ok || !r.ok) {
+                    if (status) status.textContent = 'Import failed: ' + (r.message || resp.statusText);
+                    return;
+                }
+                if (r.changed) {
+                    const meters = (r.updated || []).join(', ');
+                    let msg = r.model + ': updated ' + meters + '. Review the git diff, then commit.';
+                    if (r.structural && r.structural.length)
+                        msg += '  (Manual: ' + r.structural.join(', ') + ')';
+                    if (status) status.textContent = msg;
+                } else {
+                    if (status) status.textContent = r.message;
+                }
+            } catch (e) {
+                if (status) status.textContent = 'Import failed: ' + e.message;
             }
         });
     </script>
