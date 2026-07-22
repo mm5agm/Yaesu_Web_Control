@@ -15,6 +15,7 @@
             <button id="txBtn" class="btn-tx">TX</button>
             <button id="helpBtn" class="btn-help">? Help</button>
             <button type="button" onclick="window.open(window.location.origin + '/Diagnostics', 'diagnostics', 'width=1400,height=900,resizable=yes')" class="btn-help">Diagnostics</button>
+            <button id="emailCalBtn" class="btn-secondary" title="Open an email to the developer (Colin, MM5AGM) with your calibration data filled in — helps improve the defaults for your radio">✉ Email calibration to developer</button>
             <span id="saveStatus" class="save-status"></span>
         </div>
     </div>
@@ -411,6 +412,30 @@
 
         await loadCalibration();
         setInterval(pollRawMeters, 750);
+
+        // "Email calibration to developer" — opens the user's own mail client
+        // pre-addressed to Colin (MM5AGM) with their calibration data filled in,
+        // and copies it to the clipboard as a fallback in case the mail client
+        // truncates a long mailto body. (localhost is a secure context, so the
+        // clipboard API works; over a LAN address it may not — the mailto still
+        // opens either way.)
+        document.getElementById('emailCalBtn')?.addEventListener('click', async () => {
+            const status = document.getElementById('saveStatus');
+            const model = '@Model.RadioModel';
+            try {
+                const resp = await fetch('/api/calibration/file');
+                if (!resp.ok) throw new Error('fetch failed');
+                const data = await resp.json();
+                const cal = JSON.stringify(data.calibration, null, 2);
+                const subject = 'YWC calibration data' + (model ? ' — ' + model : '');
+                const body = 'Hi Colin,\n\nHere is my ' + (model || 'radio') + ' calibration data from YWC:\n\n' + cal + '\n\n73';
+                try { await navigator.clipboard.writeText(cal); } catch (_) {}
+                window.location.href = 'mailto:mm5agm@@outlook.com?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+                if (status) status.textContent = 'Email opened. If it looks empty, paste (Ctrl+V) your calibration and send — it is on your clipboard.';
+            } catch (e) {
+                if (status) status.textContent = 'Could not read your calibration data to email.';
+            }
+        });
     </script>
 }
 

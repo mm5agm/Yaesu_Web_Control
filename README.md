@@ -191,6 +191,8 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 **Easier log sharing for testing.** The **Diagnostics page** (now linked in the top menu) has **Start fresh test log** and **Download test log** buttons — start a capture, do the test, and download just that test's log to drag into a discussion.
 
+**Email your calibration to help improve the defaults.** The Meter Calibration page has an **Email calibration to developer** button that opens a pre-addressed email with your radio's calibration data filled in — a one-click way to send real per-radio numbers so future users of your model start with accurate meters.
+
 ## 2026-07-20 - v2.4.2-pre20 (pre-release)
 
 FTDX3000 frequency-write fix, take two — now on the right code path. The 8-digit frequency fix from pre18 was applied to the wrong internal send path, so it never actually took effect. This build applies it where the frequency writes really go out, so an FTDX3000 should finally accept frequency changes (and +5k) from the browser. Still under investigation on Discussion #78; other radios are unaffected.
