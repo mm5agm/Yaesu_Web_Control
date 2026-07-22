@@ -1553,6 +1553,23 @@ Log4OM can receive QSO data from WSJT-X and JTAlert via UDP multicast, log QSOs 
 
 ![Log4OM Hamlib settings showing CAT Status OFFLINE — the documented limitation, not a setup error](pictures/Log4OM_Hamlib.png)
 
+**Workaround — getting a live frequency in Log4OM (contributed by Bill, W1WRH):**
+
+If you specifically want Log4OM's own live frequency readout — for example when you're logging SSB by hand rather than through WSJT-X — one operator has a setup that gives *every* program, Log4OM included, a live, synchronised frequency. It sidesteps the rigctld path above entirely and instead lets YWC and Log4OM share the radio's COM port through a virtual splitter:
+
+1. Use **VSPE** to create a **splitter** from your radio's real COM port to a virtual one — Bill splits physical **COM3** to virtual **COM6**.
+2. Point **YWC** at the virtual port (**COM6**) in Settings.
+3. Leave WSJT-X, Fldigi and GridTracker exactly as they are — they keep working unchanged.
+4. Configure **Log4OM** with **OmniRig on the same virtual port (COM6)**.
+
+With that in place a frequency change in any program is reflected in all of them, and Log4OM shows a live frequency.
+
+A few honest caveats:
+
+- This is a **user-contributed setup, not one I formally test against** — see §15.6 for why virtual-port sharers (VSPE, OmniRig) aren't officially supported. It works for Bill on an FTdx10; results on other hardware may vary.
+- It runs contrary to the "do not use OmniRig" note above. That note holds when OmniRig and YWC each try to open the *physical* port and fight over it; here the VSPE **splitter** is what makes sharing possible, so the two coexist on one virtual port.
+- Watch the **baud rate** — VSPE doesn't always forward port settings through to the physical port, so make sure every app in the chain (and the radio) agree on the same rate (see §15.6).
+
 To make this concrete, here is the full logging chain end-to-end. At the end of a QSO, WSJT-X pops up its **Log QSO** confirmation dialog with all the QSO details (callsign, mode, band, grid, reports, start/end times) — clicking OK is the only manual step the operator takes:
 
 ![WSJT-X Log QSO confirmation dialog — the single click that kicks off the chain that ends with the QSO in Log4OM](pictures/Log4OM_Confirm_Log.png)
