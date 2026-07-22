@@ -189,7 +189,8 @@ def main():
         updated.append(f"{name} ({len(changes)} value(s))")
 
     if not updated:
-        print(f"No value changes to apply for {args.model}.")
+        print(f"No value changes to apply for {model} "
+              f"(their calibration already matches the shipped default).")
         if structural:
             print("Structural differences (handle manually): " + ", ".join(structural))
         sys.exit(0)
