@@ -9,9 +9,14 @@ they actually calibrated into wwwroot/calibration.default.<Model>.json.
   python scripts/merge-calibration.py -i user-cal.json -m FTDX3000
   python scripts/merge-calibration.py -i user-cal.json -m FTDX3000 --force
 
-Or pipe straight from the clipboard (no file needed):
+Or pipe straight from the clipboard (no file needed). If the clipboard holds
+the email you received (subject/body name the radio), the model is auto-detected
+and -m can be dropped:
 
-  Get-Clipboard -Raw | python scripts/merge-calibration.py -m FTDX3000
+  Get-Clipboard -Raw | python scripts/merge-calibration.py
+
+Pass -m only to override, or if the clipboard holds the bare JSON (the in-app
+"copy to clipboard" fallback writes JSON without the model text).
 
 Minimal-diff by design: it edits only the individual raw values that changed,
 in place, so unchanged meters and the file's hand-formatting stay byte-for-byte
@@ -65,25 +70,41 @@ def find_points_span(text, meter_name):
     return None
 
 
+def model_names(available):
+    pre, suf = 'calibration.default.', '.json'
+    return [f.name[len(pre):-len(suf)] for f in available]
+
+
+def detect_model(src, models):
+    """Find the radio model named in the email text around the JSON.
+
+    The 'Email calibration to developer' body says 'my <MODEL> calibration
+    data', and the subject 'YWC calibration data -- <MODEL>', so when you copy
+    the email you received, the model is in the text. Match longest-first so
+    'FTdx10' doesn't win inside 'FTdx101MP'. The JSON payload itself carries no
+    model names to collide with (meter labels are '5', 'S0', ...).
+    """
+    low = src.lower()
+    hits = [m for m in models if m.lower() in low]
+    if not hits:
+        return None
+    hits.sort(key=len, reverse=True)
+    # Ambiguous only if two same-length names both appear (can't happen with the
+    # current five, but guard anyway).
+    if len(hits) > 1 and len(hits[1]) == len(hits[0]):
+        return None
+    return hits[0]
+
+
 def main():
     ap = argparse.ArgumentParser(description="Merge a user calibration into a model default.")
     ap.add_argument('-i', '--input', help='the emailed calibration JSON file (omit to read stdin, e.g. a piped clipboard)')
-    ap.add_argument('-m', '--model', required=True, help='radio model, e.g. FTDX3000')
+    ap.add_argument('-m', '--model', help='radio model, e.g. FTDX3000 (omit to auto-detect from the email text)')
     ap.add_argument('--force', action='store_true', help='also touch meters whose points already match')
     args = ap.parse_args()
 
     repo = Path(__file__).resolve().parent.parent
-    wanted = f'calibration.default.{args.model}.json'.lower()
     available = sorted((repo / 'wwwroot').glob('calibration.default.*.json'))
-    # Match case-insensitively so '-m ftdx10' finds the tracked 'FTdx10' file
-    # (Windows hides the mismatch; a case-sensitive host would not).
-    default_path = next((f for f in available if f.name.lower() == wanted), None)
-    if default_path is None:
-        print(f"No shipped default for model '{args.model}'.")
-        print("Models available:")
-        for f in available:
-            print(f"  {f.name[len('calibration.default.'):-len('.json')]}")
-        sys.exit(1)
 
     if args.input:
         src = Path(args.input).read_text(encoding='utf-8-sig')
@@ -91,6 +112,29 @@ def main():
         src = sys.stdin.read()
         if not src.strip():
             sys.exit("No input: pass -i <file>, or pipe the JSON in (e.g. Get-Clipboard -Raw | ...).")
+
+    model = args.model or detect_model(src, model_names(available))
+    if not model:
+        print("Could not tell which radio this is from the text -- pass -m <Model>.")
+        print("(Auto-detect needs the emailed body/subject, which names the model;")
+        print(" the JSON on its own does not.) Models available:")
+        for m in model_names(available):
+            print(f"  {m}")
+        sys.exit(1)
+
+    wanted = f'calibration.default.{model}.json'.lower()
+    # Match case-insensitively so 'ftdx10' finds the tracked 'FTdx10' file
+    # (Windows hides the mismatch; a case-sensitive host would not).
+    default_path = next((f for f in available if f.name.lower() == wanted), None)
+    if default_path is None:
+        print(f"No shipped default for model '{model}'.")
+        print("Models available:")
+        for m in model_names(available):
+            print(f"  {m}")
+        sys.exit(1)
+    if not args.model:
+        print(f"Auto-detected model: {model}")
+
     incoming = load_lenient(src)
     if 'meters' not in incoming:
         sys.exit("Input has no 'meters' array -- is this a YWC calibration export?")
