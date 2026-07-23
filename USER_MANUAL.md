@@ -1553,21 +1553,64 @@ Log4OM can receive QSO data from WSJT-X and JTAlert via UDP multicast, log QSOs 
 
 ![Log4OM Hamlib settings showing CAT Status OFFLINE — the documented limitation, not a setup error](pictures/Log4OM_Hamlib.png)
 
-**Workaround — getting a live frequency in Log4OM (contributed by Bill, W1WRH):**
+**Workaround — getting a live frequency in Log4OM (raised by Bill, W1WRH; confirmed and documented by Jacek, SP3L):**
 
-If you specifically want Log4OM's own live frequency readout — for example when you're logging SSB by hand rather than through WSJT-X — one operator has a setup that gives *every* program, Log4OM included, a live, synchronised frequency. It sidesteps the rigctld path above entirely and instead lets YWC and Log4OM share the radio's COM port through a virtual splitter:
+If you specifically want Log4OM's own live frequency readout — for example when you're logging SSB by hand rather than through WSJT-X — there is a setup that gives *every* program, Log4OM included, a live, synchronised frequency. It sidesteps the rigctld path above entirely and instead uses **VSPE** (Virtual Serial Port Emulator) to split the radio's real COM port into two virtual ports: one for YWC and one for OmniRig. Neither application touches the physical port directly — the splitter feeds both.
 
-1. Use **VSPE** to create a **splitter** from your radio's real COM port to a virtual one — Bill splits physical **COM3** to virtual **COM6**.
-2. Point **YWC** at the virtual port (**COM6**) in Settings.
-3. Leave WSJT-X, Fldigi and GridTracker exactly as they are — they keep working unchanged.
-4. Configure **Log4OM** with **OmniRig on the same virtual port (COM6)**.
+The step-by-step below was contributed by Jacek (SP3L) and confirmed working on an FTdx10.
 
-With that in place a frequency change in any program is reflected in all of them, and Log4OM shows a live frequency.
+**1. Find your radio's Enhanced COM port.** Open Windows **Device Manager** and note the port numbers your radio is using. You want the **Enhanced** COM port — COM7 in this example.
+
+![Windows Device Manager showing the radio's Enhanced COM port number](pictures/VSPE_01_Device_Manager.png)
+
+**2. Open VSPE.** If you haven't purchased the full licence, you'll see this window — click **[Continue (with limitations)]**.
+
+![VSPE unregistered-licence window with the Continue (with limitations) button](pictures/VSPE_02_Licence_Window.png)
+
+You'll then see the main VSPE window.
+
+![VSPE main window](pictures/VSPE_03_Main_Window.png)
+
+**3. Create a new device.** Click the fifth icon, **[Create new device…]** (a plug with a red asterisk). In the New Device window, select **Virtual Splitter** from the drop-down and give it any title you like.
+
+![VSPE New Device window with Virtual Splitter selected from the drop-down](pictures/VSPE_04_New_Device.png)
+
+**4. Open the splitter settings.** Click **[Next]** to reach the Virtual Splitter — Device Settings window.
+
+![VSPE Virtual Splitter Device Settings window](pictures/VSPE_05_Device_Settings.png)
+
+**5. Point the splitter at your radio's Enhanced COM port.** Select the COM port equal to your radio's Enhanced COM port (COM7 here) and check that the speed shown below it is correct. Adjust it with the **[Settings…]** button if needed.
+
+![VSPE settings — selecting the radio's Enhanced COM port as the splitter source](pictures/VSPE_06_Select_COM_Port.png)
+
+**6. Set the correct speed.** The default for the FTdx10 is **38400** — click the speed value (which may show 115200) and pick **[38400]** from the drop-down. Match this to your own radio's CAT baud rate. Press **[OK]**.
+
+![VSPE speed drop-down set to 38400](pictures/VSPE_07_Speed_Setting.png)
+
+Optionally press **[Test]** — you should see a success pop-up. Press **[OK]** to return.
+
+![VSPE Test success pop-up](pictures/VSPE_08_Test_Popup.png)
+
+**7. Add at least two virtual ports.** Back in the Device Settings window, pick a port number from the drop-down for VSPE to create and click **[Add virtual port]**. Add **at least two** — in this example virtual ports 1 and 2.
+
+![VSPE adding two virtual ports off the splitter](pictures/VSPE_09_Add_Virtual_Ports.png)
+
+**8. Finish.** Click **[Finish]** to return to the main window. Both virtual ports are now active.
+
+![VSPE main window showing both virtual ports active](pictures/VSPE_10_Both_Ports_Active.png)
+
+You can confirm they exist in Device Manager.
+
+![Windows Device Manager showing the two new VSPE virtual ports](pictures/VSPE_11_Device_Manager_Check.png)
+
+**9. Point your applications at the virtual ports.** Set **YWC to use one** of the virtual ports and configure **OmniRig (for Log4OM) to use the other**. **Do not use the original Enhanced COM port in any application.** With that in place, a frequency change in any program is reflected in all of them, and Log4OM shows a live frequency.
+
+> **VSPE must be running before you start YWC and OmniRig.**
 
 A few honest caveats:
 
-- This is a **user-contributed setup, not one I formally test against** — see §15.6 for why virtual-port sharers (VSPE, OmniRig) aren't officially supported. It works for Bill on an FTdx10; results on other hardware may vary.
-- It runs contrary to the "do not use OmniRig" note above. That note holds when OmniRig and YWC each try to open the *physical* port and fight over it; here the VSPE **splitter** is what makes sharing possible, so the two coexist on one virtual port.
+- This is a **user-contributed setup, not one I formally test against** — see §15.6 for why virtual-port sharers (VSPE, OmniRig) aren't officially supported. It's confirmed working on an FTdx10; results on other hardware may vary.
+- It runs contrary to the "do not use OmniRig" note above. That note holds when OmniRig and YWC each try to open the *physical* port and fight over it; here the VSPE **splitter** is what makes sharing possible, because each application gets its own dedicated virtual port and neither touches the physical one.
 - Watch the **baud rate** — VSPE doesn't always forward port settings through to the physical port, so make sure every app in the chain (and the radio) agree on the same rate (see §15.6).
 
 To make this concrete, here is the full logging chain end-to-end. At the end of a QSO, WSJT-X pops up its **Log QSO** confirmation dialog with all the QSO details (callsign, mode, band, grid, reports, start/end times) — clicking OK is the only manual step the operator takes:
