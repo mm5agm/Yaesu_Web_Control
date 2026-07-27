@@ -152,6 +152,10 @@ docs/*
 !docs/VoiceControl/
 docs/VoiceControl/*
 !docs/VoiceControl/*.md
+# …and design/planning docs (markdown only; rough .txt scratch stays local).
+!docs/design/
+docs/design/*
+!docs/design/*.md
 # …and the developer guide for adding a new radio.
 !docs/adding-a-radio.md
 
