@@ -14,6 +14,7 @@
     bool isFtdx10  = Model.RadioModel == "FTdx10";
     bool isFt710   = Model.RadioModel == "FT-710";
     bool isFtdx3000 = Model.RadioModel == "FTDX3000";
+    bool isFtdx5000 = Model.RadioModel == "FTDX5000MP" || Model.RadioModel == "FTDX5000D";
 
     // Single-receiver radios (FTdx10, FT-710, FTDX3000) store per-VFO RX
     // settings but expose only the active VFO's state via CAT — see
@@ -449,8 +450,9 @@
                                 <canvas id="alcMeterCanvas" role="img" aria-hidden="true" aria-label="ALC meter" data-a11y-key="meters.alc"></canvas>
                             </div>
                         </div>
-                        @if (!isFtdx10 && !isFt710) {
-                        <!-- PA Temperature Meter — FTdx101/FTDX3000 only (high-voltage PA board) -->
+                        @if (!isFtdx10 && !isFt710 && !isFtdx5000) {
+                        <!-- PA Temperature Meter — FTdx101/FTDX3000 only (high-voltage PA board).
+                             FTDX5000 excluded: no temperature read-code in its RM meter set. -->
                         <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
