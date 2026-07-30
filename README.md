@@ -193,6 +193,26 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 **Email your calibration to help improve the defaults.** The Meter Calibration page has an **Email calibration to developer** button that opens a pre-addressed email with your radio's calibration data filled in — a one-click way to send real per-radio numbers so future users of your model start with accurate meters.
 
+## 2026-07-30 - v2.4.2-pre23 (pre-release)
+
+Voice control improvements and a quicker Settings page.
+
+- **Right-click a mic button** to see the full list of voice commands, generated live from your own phrase set (so it always matches what your installation actually responds to).
+- **Clearer mic button** — three distinct states (armed / listening / recognised) so it's obvious what the button is doing, with a pressed-in shape change as well as colour.
+- **Band commands are easier to say** — the lead-in word is now optional ("forty metres" works as well as "go to forty metres"), and each band also accepts an unambiguous digit form ("two zero metres", "eight zero metres") for microphones or accents where "twenty" and "eighty" get confused. "top band" works for 160 m.
+- **Better recognition on quiet microphones** — YWC now amplifies a weak mic automatically and is a little more forgiving, so fewer correct commands get dropped.
+- **Choose the microphone and announcement speaker** used by voice control, each with a Test button.
+- **Inline "Save Settings" buttons** in every long section of the Settings page, so you can save without scrolling to the bottom.
+- Dialog close (✕) buttons are now solid red for visibility.
+
+## 2026-07-28 - v2.4.2-pre22 (pre-release)
+
+Adds the **FTDX5000MP** and **FTDX5000D** as dual-receiver models (#85).
+
+## 2026-07-22 - v2.4.2-pre21 (pre-release)
+
+Meter calibration: an **Email calibration to developer** button, plus the developer-side tooling to fold emailed calibration data back into the shipped defaults so future users of a model start with more accurate meters.
+
 ## 2026-07-20 - v2.4.2-pre20 (pre-release)
 
 FTDX3000 frequency-write fix, take two — now on the right code path. The 8-digit frequency fix from pre18 was applied to the wrong internal send path, so it never actually took effect. This build applies it where the frequency writes really go out, so an FTDX3000 should finally accept frequency changes (and +5k) from the browser. Still under investigation on Discussion #78; other radios are unaffected.
