@@ -2459,9 +2459,9 @@ Every command below targets whichever VFO's mic button you're holding down — a
 | Command family | Say | What happens |
 | --- | --- | --- |
 | Set frequency | "tune to fourteen point zero seven four megahertz", "set frequency to fourteen megahertz" | Held VFO tunes to that frequency. Whole MHz, one decimal, or three decimals; "megahertz" is optional |
-| Change band | "go to twenty metres", "switch to forty metres" | Held VFO jumps to that band's default (usually FT8) frequency. Bands: 160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6 and 4 metres |
+| Change band | "forty metres", "go to twenty metres", "switch to eighty metres"; or the digit form "two zero metres", "eight zero metres" | Held VFO jumps to that band's default (usually FT8) frequency. The lead-in word ("go to" / "switch to") is optional. Bands: 160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6 and 4 metres. "top band" also works for 160 m |
 | Step up / down | "tune up" / "step up" / "nudge up"; "tune down" / "step down" / "nudge down" | Held VFO moves by that VFO's configured step size (see below; default 10 kHz) |
-| Set step size | "set step to ten kilohertz", "step size one kilohertz" | Changes the held VFO's step size: 10 Hz, 100 Hz, 1 kHz, 10 kHz, or 100 kHz. Same value as the dropdown next to that VFO's mic button — either one updates the other |
+| Set step size | "set step to ten kilohertz", "step size one kilohertz", or just "ten kilohertz" | Changes the held VFO's step size: 10 Hz, 100 Hz, 1 kHz, 10 kHz, or 100 kHz. The lead-in word is optional here too. Same value as the dropdown next to that VFO's mic button — either one updates the other |
 | Band up / down | "band up" / "band down" | Held VFO jumps to the next/previous ham band |
 | Set mode | "mode U S B", "set mode L S B" (also C W, A M, F M, data, data l, r t t y — spell mode letters out one at a time) | Held VFO switches to that mode |
 | Swap VFOs | "swap V F O", "swap A and B" | VFO A and B contents swap (radio-wide, not VFO-specific) |
@@ -2483,6 +2483,8 @@ A few notes on phrasing:
 - **"megahertz" is optional.** Both "set frequency to fourteen point zero seven four megahertz" and "tune to fourteen point zero seven four" work — say it or skip it.
 - **MHz only — no kHz.** The grammar recognises frequencies in whole-or-decimal **megahertz**, from 1 MHz up to 71 MHz (covering HF + 6 m + 4 m). It does **not** recognise kilohertz input. If you say something the grammar can't parse — e.g. "tune to thirty kilohertz" — the engine will fuzzy-match to the nearest valid in-range phrase ("tune to thirty point eight") and act on that instead. **Listen to the spoken confirmation** that follows every command: it tells you exactly what got recognised, which is the safety net against misrecognition. For sub-MHz tuning (LF, MF, the 30 kHz lower limit on the FTdx101), use the mouse or the keyboard-driven frequency display instead — see §16.7.
 - **Bands supported:** 160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6 and 4 metres. The default frequency picked for each band is roughly the FT8 / digital hangout — adjust with a follow-up "set frequency to …" or "tune up" / "tune down".
+- **Band and step phrases work with or without the lead-in word.** "forty metres" is the same as "go to forty metres", and "ten kilohertz" is the same as "set step to ten kilohertz". Say whichever feels natural.
+- **Digit-form band names for tricky mics/accents.** "twenty metres" and "eighty metres" share the same rhythm, so on a quiet microphone or with a strong accent the speech engine can confuse them. Every band therefore also accepts a **digit form** where the leading word is unmistakable — "two zero metres", "eight zero metres", "four zero metres", and so on. "two" and "eight" sound nothing alike, so these are recognised reliably when the natural form isn't. "top band" is also accepted for 160 m.
 - **Scots variants** are accepted: "go tae forty metres" works the same as "go to forty metres".
 
 **After every command, YWC speaks a short confirmation** through the PC's default audio output:
@@ -2500,9 +2502,11 @@ This is a primary accessibility feature: a partially-sighted operator can drive 
 
 1. Open **Settings** in the YWC top navbar.
 2. Scroll to the **Voice Control** section.
-3. Tick **Enable voice control**, then click **Save**.
+3. Tick **Enable voice control**, then click **Save Settings**. Every long section on the Settings page now has its own **Save Settings** button, so you can save in place without scrolling to the bottom — the one in the Voice Control section sits just above the Voice Phrases editor.
 4. **Restart YWC.** The speech engine is loaded once at startup; the toggle takes effect on the next launch.
 5. Confirm the **Windows speech recognition pack for your active language** is installed. Open Windows → Settings → Time &amp; Language → Speech and check the installed-languages list. The active language defaults to English (United Kingdom) — if it isn't listed, install it from there (most UK Windows installs already have it). The **Active language** dropdown in the Voice Control section lets you switch to any other installed language pack (see [§17.7](#177-more-languages)).
+
+**Choosing the microphone and speaker.** The Voice Control section also lets you pick which **microphone** the recogniser listens to and which **speaker** the spoken confirmations play through, each with a **Test** button. Leave them on the Windows defaults to follow your system settings — but if your default output is tied up by another program (WSJT-X, rig audio) you may never hear the confirmations, so it's worth picking your own speakers here. Picking a device in YWC does **not** change your Windows defaults.
 
 After restart, you should see a **mic button on the Index page beside each VFO panel** — VFO A's next to VFO A's band/mode controls, and (on dual-receiver radios) VFO B's next to VFO B's. If you don't see them, jump to [§17.4 Troubleshooting](#174-troubleshooting).
 
@@ -2510,13 +2514,15 @@ After restart, you should see a **mic button on the Index page beside each VFO p
 
 Each mic button is a **press-and-hold** control — it doesn't latch. The two VFOs' buttons are independent, but only one can be listening at a time (there's a single speech engine underneath); holding one button while the other is already listening simply has no effect until you release the first.
 
-1. **Press and hold** a VFO's mic button. The button colour changes to indicate the speech engine is listening.
+1. **Press and hold** a VFO's mic button. The button has three clear states so you can always tell what it's doing: **amber** when it's armed (pointer over it, not yet listening), a **pulsing red, pressed-in** look while it's listening, and **green** for a moment when a command was recognised. The pressed-in shape change (not just the colour) is there to help if colour alone is hard to make out.
 2. **Speak the command clearly** at a normal volume.
 3. **Release** the button. The engine processes what it heard.
 4. If the phrase matched the grammar, that VFO responds within a fraction of a second. The button returns to its idle colour.
 5. Bold text under the button shows the **last phrase recognised** and which command it matched — useful for spotting misrecognitions ("set frequency to forty metres" instead of "go to forty metres", say).
 
 If you change your mind mid-phrase, just release the button without speaking. Nothing is sent to the radio unless a full grammar match is found.
+
+**Right-click a mic button** (on desktop) to pop up the full list of commands you can say, grouped by category. The list is generated live from your current phrase set, so it always matches what your installation actually responds to — including any phrases you've customised — and it's a quick on-screen reference without leaving the main page. Close it with the red **✕** or the **Esc** key.
 
 **Low-confidence matches are rejected.** If you say something the engine isn't sure about — a phrase outside the grammar, background noise during PTT, an ambient TV in the room — the recognition is dropped rather than fitted to the closest rule. This stops random audio from accidentally firing a "set mode" or "go to band" command that would change the radio's state without you intending it. The "Last heard" hint under the mic button shows what the engine almost picked up; the Diagnostics block on the Settings page logs it as "Low-confidence match".
 
@@ -2535,6 +2541,10 @@ The Settings page → Voice Control section has a **Diagnostics** block that sho
 - You should see `SAPI recogniser ready` shortly after YWC startup and a `Rejected (best alt: '…')` line for each unmatched press. The "best alt" is the engine's best guess at what you said — if it's wildly wrong, the mic itself may have a problem (try Windows Sound settings → Input → speak and see if the level meter responds).
 - If the log shows `Rejected (best alt: '<your phrase>')` and your phrase looks correct, the grammar wording isn't matching what you said. Try one of the alternative phrasings listed in [§17.1](#171-what-you-can-say), or open a [GitHub discussion](https://github.com/mm5agm/Yaesu_Web_Control/discussions) and propose a new phrasing.
 - The raw log file lives at `%APPDATA%\MM5AGM\Yaesu Web Control\logs\ywc-YYYYMMDD.log` if you ever need the unfiltered version (e.g. CAT command traffic, SDR worker status, etc.), but the Diagnostics page is the right tool for voice-specific issues.
+
+**A lot of commands are misheard, or the "best alt" is close but wrong.**
+- A **very quiet microphone** is the usual cause — the engine gets too little signal to be confident, so correct recognitions get dropped and marginal ones get mis-fitted. YWC now amplifies a weak mic automatically, but if recognition is still poor, move closer to the mic, or raise the input level in Windows → Sound settings → Input (and check any hardware `-10 dB / 0 dB` pad switch on the mic itself is set to `0 dB`).
+- For the specific case of **"twenty metres" being heard as "eighty metres"** (or vice versa), use the digit forms **"two zero metres"** / **"eight zero metres"** instead — see [§17.1](#171-what-you-can-say). They can't be confused the way the natural words can.
 
 **"Tune up" doesn't seem to do much.**
 - Check you're watching the VFO panel whose mic button you actually pressed — each VFO steps independently, so "tune up" spoken into VFO B's button moves VFO B, not VFO A.
