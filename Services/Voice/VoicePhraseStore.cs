@@ -357,18 +357,26 @@ namespace Yaesu_Web_Control.Services.Voice
             SetBand = new()
             {
                 Triggers   = ["go to", "switch to"],
+                // Each band carries its natural spoken form plus a digit-spelled
+                // alternate ("two zero metres" etc.). The digit forms exist to
+                // break inherently-confusable acoustic pairs: "twenty metres"
+                // and "eighty metres" share the same rhythm and "-ty metres"
+                // tail, so a quiet/marginal mic (or a strong accent) can smear
+                // the only distinguishing syllable and SAPI snaps to the wrong
+                // rule at good confidence. "two zero" vs "eight zero" have no
+                // such overlap, giving the operator a reliable way to say it.
                 Vocabulary = new()
                 {
-                    ["160"] = ["one sixty metres"],
-                    ["80"]  = ["eighty metres"],
-                    ["60"]  = ["sixty metres"],
-                    ["40"]  = ["forty metres"],
-                    ["30"]  = ["thirty metres"],
-                    ["20"]  = ["twenty metres"],
-                    ["17"]  = ["seventeen metres"],
-                    ["15"]  = ["fifteen metres"],
-                    ["12"]  = ["twelve metres"],
-                    ["10"]  = ["ten metres"],
+                    ["160"] = ["one sixty metres", "one six zero metres", "top band"],
+                    ["80"]  = ["eighty metres",    "eight zero metres"],
+                    ["60"]  = ["sixty metres",     "six zero metres"],
+                    ["40"]  = ["forty metres",     "four zero metres"],
+                    ["30"]  = ["thirty metres",    "three zero metres"],
+                    ["20"]  = ["twenty metres",    "two zero metres"],
+                    ["17"]  = ["seventeen metres", "one seven metres"],
+                    ["15"]  = ["fifteen metres",   "one five metres"],
+                    ["12"]  = ["twelve metres",    "one two metres"],
+                    ["10"]  = ["ten metres",       "one zero metres"],
                     ["6"]   = ["six metres"],
                     ["4"]   = ["four metres"],
                 },

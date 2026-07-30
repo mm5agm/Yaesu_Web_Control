@@ -3,7 +3,8 @@
     "allow": [
       "Bash",
       "PowerShell",
-      "WebFetch"
+      "WebFetch",
+      "Read(//c/Users/colin/source/repos/Icom_Web_Control/Services/Voice/**)"
     ],
     "additionalDirectories": [
       "C:\\build",

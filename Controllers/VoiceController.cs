@@ -60,6 +60,125 @@ namespace Yaesu_Web_Control.Controllers
         [HttpGet("status")]
         public IActionResult Status() => Ok(_voice.CurrentStatus);
 
+        /// <summary>
+        /// Recording-device discovery for the Settings microphone picker. Lists
+        /// the WaveIn devices Windows exposes right now plus which one is
+        /// currently selected (empty = Windows default). System.Speech can't
+        /// target a device by name, so YWC captures the chosen one itself — see
+        /// MicrophoneCapture / VoiceControlService.ApplyInputDevice.
+        /// </summary>
+        [HttpGet("microphones")]
+        public async Task<IActionResult> GetMicrophones()
+        {
+            var selected = (await _settings.GetSettingsAsync()).VoiceInputDeviceName ?? "";
+            var devices = MicrophoneCapture.ListInputDevices()
+                .Select(d => new
+                {
+                    name = d.Name,
+                    isSelected = string.Equals(d.Name, selected, StringComparison.OrdinalIgnoreCase),
+                    present = true,
+                })
+                .ToArray();
+
+            // If the saved device isn't in the live list (unplugged), still
+            // report it so the picker can show it selected-but-missing rather
+            // than silently reverting to the default in the UI.
+            bool selectedPresent = string.IsNullOrEmpty(selected) ||
+                devices.Any(d => d.isSelected);
+
+            return Ok(new
+            {
+                devices,
+                selected,
+                selectedPresent,
+                usingDefault = string.IsNullOrEmpty(selected),
+            });
+        }
+
+        public record SetMicrophoneRequest(string? Name);
+
+        /// <summary>
+        /// Persists the chosen recording device and rebinds the live SAPI
+        /// engine to it — no restart needed. An empty/blank name selects the
+        /// Windows default device.
+        /// </summary>
+        [HttpPost("microphone")]
+        public async Task<IActionResult> SetMicrophone([FromBody] SetMicrophoneRequest request)
+        {
+            var name = request?.Name?.Trim() ?? "";
+            var settings = await _settings.GetSettingsAsync();
+            settings.VoiceInputDeviceName = name;
+            await _settings.SaveSettingsAsync(settings);
+
+            _voice.ApplyInputDevice(string.IsNullOrEmpty(name) ? null : name);
+            _logger.LogInformation("[Voice] Microphone set to {Name}", string.IsNullOrEmpty(name) ? "(Windows default)" : name);
+            return Ok(new { ok = true, name });
+        }
+
+        /// <summary>
+        /// Playback-device discovery for the Settings speaker picker. Lists the
+        /// WaveOut devices Windows exposes right now plus which one is currently
+        /// selected (empty = Windows default). System.Speech can't target an
+        /// output device by name, so YWC renders the confirmation and plays it to
+        /// the chosen device itself — see AudioOutput / VoiceTtsService.
+        /// </summary>
+        [HttpGet("speakers")]
+        public async Task<IActionResult> GetSpeakers()
+        {
+            var selected = (await _settings.GetSettingsAsync()).VoiceOutputDeviceName ?? "";
+            var devices = AudioOutput.ListOutputDevices()
+                .Select(d => new
+                {
+                    name = d.Name,
+                    isSelected = string.Equals(d.Name, selected, StringComparison.OrdinalIgnoreCase),
+                    present = true,
+                })
+                .ToArray();
+
+            bool selectedPresent = string.IsNullOrEmpty(selected) ||
+                devices.Any(d => d.isSelected);
+
+            return Ok(new
+            {
+                devices,
+                selected,
+                selectedPresent,
+                usingDefault = string.IsNullOrEmpty(selected),
+            });
+        }
+
+        public record SetSpeakerRequest(string? Name);
+
+        /// <summary>
+        /// Persists the chosen playback device for spoken confirmations and
+        /// applies it live — no restart needed. An empty/blank name selects the
+        /// Windows default device.
+        /// </summary>
+        [HttpPost("speaker")]
+        public async Task<IActionResult> SetSpeaker([FromBody] SetSpeakerRequest request)
+        {
+            var name = request?.Name?.Trim() ?? "";
+            var settings = await _settings.GetSettingsAsync();
+            settings.VoiceOutputDeviceName = name;
+            await _settings.SaveSettingsAsync(settings);
+
+            _voice.ApplyOutputDevice(string.IsNullOrEmpty(name) ? null : name);
+            _logger.LogInformation("[Voice] Speaker set to {Name}", string.IsNullOrEmpty(name) ? "(Windows default)" : name);
+            return Ok(new { ok = true, name });
+        }
+
+        /// <summary>
+        /// Speak a fixed test phrase through the currently-selected speaker so
+        /// the operator can confirm they'll actually hear confirmations. Used by
+        /// the "Test" button next to the Settings speaker picker.
+        /// </summary>
+        [HttpPost("speaker-test")]
+        public IActionResult TestSpeaker()
+        {
+            _voice.TestSpeak("Voice confirmation test. If you can hear this, announcements will play on this device.");
+            return Ok(new { ok = true });
+        }
+
         public record TryPhraseRequest(List<string> Phrases);
 
         /// <summary>
@@ -272,6 +391,20 @@ namespace Yaesu_Web_Control.Controllers
         {
             var config = _phraseStore.Load();
             return Ok(config);
+        }
+
+        /// <summary>
+        /// Display-ready, grouped list of available voice commands for the
+        /// right-click mic-button help popup. Generated from the live phrase
+        /// config for the active locale, so it always matches what recognition
+        /// actually accepts (including any user-customised phrases).
+        /// </summary>
+        [HttpGet("help")]
+        public IActionResult GetHelp()
+        {
+            var culture = _voice.ActiveCulture;
+            var config = _phraseStore.Load(culture);
+            return Ok(VoiceHelpBuilder.Build(config, culture));
         }
 
         /// <summary>

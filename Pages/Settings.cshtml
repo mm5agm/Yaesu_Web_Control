@@ -293,6 +293,40 @@
                 </div>
                 <div id="voiceLocaleMismatchBanner" class="mt-2"></div>
             </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold" for="voiceInputDevice">Microphone</label>
+                <select class="form-select w-auto" id="voiceInputDevice">
+                    <option value="">Loading…</option>
+                </select>
+                <div class="form-text">
+                    Which microphone the speech recogniser listens to. Choose the mic you'll speak
+                    into — the change takes effect immediately, no restart. Leave on
+                    <em>Windows default recording device</em> to follow your system setting.
+                    Picking one here does <strong>not</strong> change your Windows default, so it
+                    won't disturb other apps (WSJT-X, etc.).
+                </div>
+                <div id="voiceInputDeviceNote" class="mt-2"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold" for="voiceOutputDevice">Announcement speaker</label>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <select class="form-select w-auto" id="voiceOutputDevice">
+                        <option value="">Loading…</option>
+                    </select>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="voiceOutputTestBtn">
+                        <i class="bi bi-volume-up" aria-hidden="true"></i>&nbsp;Test
+                    </button>
+                </div>
+                <div class="form-text">
+                    Which speaker or headset the spoken confirmations play through. Leave on
+                    <em>Windows default playback device</em> to follow your system setting — but if
+                    your default is used by something else (WSJT-X, rig audio) you may never hear
+                    the announcements, so pick your own speakers here. Picking one does
+                    <strong>not</strong> change your Windows default. Press <em>Test</em> to check
+                    you can hear it.
+                </div>
+                <div id="voiceOutputDeviceNote" class="mt-2"></div>
+            </div>
             <div class="mb-3 form-check form-switch">
                 <input class="form-check-input" type="checkbox" role="switch"
                        id="voiceSpokenConfirmationEnabled" asp-for="Settings.VoiceSpokenConfirmationEnabled" />
@@ -318,6 +352,19 @@
                     primitives the app already trusts, not send anything new. Only enable this if you trust
                     the source of any language pack you import, or you're hand-authoring your own commands.
                 </div>
+            </div>
+            <!-- Inline Save Settings: the Voice Control section is very long, so
+                 this lets the settings above be saved without scrolling all the
+                 way to the button at the bottom of the page. Same submit as the
+                 main button; the Voice Phrases below save separately. -->
+            <div class="mb-3 pt-2 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">
+                    Saves all settings on this page. The Voice Phrases below save
+                    separately with their own <em>Save phrases</em> button.
+                </span>
             </div>
             <!-- Voice Phrases editor -->
             <div class="mb-3">
@@ -524,6 +571,157 @@
                 });
             })();
             ywcLoadLocales();
+
+            // ── Microphone picker ──────────────────────────────────────────
+            // System.Speech can't target a device by name, so the chosen mic is
+            // captured server-side and fed to SAPI. This just lists devices and
+            // POSTs the pick; VoiceControlService rebinds live (no restart).
+
+            function renderMicNote(msg) {
+                const note = document.getElementById('voiceInputDeviceNote');
+                if (!note) return;
+                note.innerHTML = msg
+                    ? '<div class="alert alert-warning py-1 px-2 small mb-0">' + escapeHtml(msg) + '</div>'
+                    : '';
+            }
+
+            async function ywcLoadMicrophones() {
+                const select = document.getElementById('voiceInputDevice');
+                if (!select) return;
+                try {
+                    const r = await fetch('/api/voice/microphones');
+                    if (!r.ok) { select.innerHTML = '<option value="">Failed to load</option>'; return; }
+                    const data = await r.json();
+                    let html = '<option value=""' + (data.usingDefault ? ' selected' : '') +
+                        '>Windows default recording device</option>';
+                    html += data.devices.map(d =>
+                        '<option value="' + escapeHtml(d.name) + '"' + (d.isSelected ? ' selected' : '') + '>' +
+                        escapeHtml(d.name) + '</option>').join('');
+                    // A saved device that's no longer plugged in: show it so the
+                    // user sees what's selected rather than a silent revert.
+                    if (!data.usingDefault && !data.selectedPresent && data.selected) {
+                        html += '<option value="' + escapeHtml(data.selected) + '" selected>' +
+                            escapeHtml(data.selected) + ' (not connected)</option>';
+                    }
+                    select.innerHTML = html;
+                    renderMicNote((!data.usingDefault && !data.selectedPresent)
+                        ? 'The saved microphone isn’t connected right now. Reconnect it, or pick another.'
+                        : '');
+                } catch (e) {
+                    select.innerHTML = '<option value="">Failed to load</option>';
+                }
+            }
+
+            (function () {
+                const select = document.getElementById('voiceInputDevice');
+                if (!select) return;
+                select.addEventListener('change', async function () {
+                    const name = select.value;
+                    select.disabled = true;
+                    try {
+                        const r = await fetch('/api/voice/microphone', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name }),
+                        });
+                        if (!r.ok) {
+                            const data = await r.json().catch(() => ({}));
+                            alert('Could not switch microphone: ' + (data.error || ('HTTP ' + r.status)));
+                            await ywcLoadMicrophones();
+                            return;
+                        }
+                        renderMicNote('');
+                        ywcRefreshVoiceDiagnostics();
+                    } catch (e) {
+                        alert('Could not switch microphone: ' + e);
+                    } finally {
+                        select.disabled = false;
+                    }
+                });
+            })();
+            ywcLoadMicrophones();
+
+            // ── Speaker (announcement) picker ──────────────────────────────
+            // System.Speech can't target an output device by name, so the chosen
+            // speaker is rendered-and-played server-side. Lists devices, POSTs the
+            // pick (applied live, no restart), and offers a Test button.
+
+            function renderSpeakerNote(msg) {
+                const note = document.getElementById('voiceOutputDeviceNote');
+                if (!note) return;
+                note.innerHTML = msg
+                    ? '<div class="alert alert-warning py-1 px-2 small mb-0">' + escapeHtml(msg) + '</div>'
+                    : '';
+            }
+
+            async function ywcLoadSpeakers() {
+                const select = document.getElementById('voiceOutputDevice');
+                if (!select) return;
+                try {
+                    const r = await fetch('/api/voice/speakers');
+                    if (!r.ok) { select.innerHTML = '<option value="">Failed to load</option>'; return; }
+                    const data = await r.json();
+                    let html = '<option value=""' + (data.usingDefault ? ' selected' : '') +
+                        '>Windows default playback device</option>';
+                    html += data.devices.map(d =>
+                        '<option value="' + escapeHtml(d.name) + '"' + (d.isSelected ? ' selected' : '') + '>' +
+                        escapeHtml(d.name) + '</option>').join('');
+                    if (!data.usingDefault && !data.selectedPresent && data.selected) {
+                        html += '<option value="' + escapeHtml(data.selected) + '" selected>' +
+                            escapeHtml(data.selected) + ' (not connected)</option>';
+                    }
+                    select.innerHTML = html;
+                    renderSpeakerNote((!data.usingDefault && !data.selectedPresent)
+                        ? 'The saved speaker isn’t connected right now. Reconnect it, or pick another.'
+                        : '');
+                } catch (e) {
+                    select.innerHTML = '<option value="">Failed to load</option>';
+                }
+            }
+
+            (function () {
+                const select = document.getElementById('voiceOutputDevice');
+                if (select) {
+                    select.addEventListener('change', async function () {
+                        const name = select.value;
+                        select.disabled = true;
+                        try {
+                            const r = await fetch('/api/voice/speaker', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ name }),
+                            });
+                            if (!r.ok) {
+                                const data = await r.json().catch(() => ({}));
+                                alert('Could not switch speaker: ' + (data.error || ('HTTP ' + r.status)));
+                                await ywcLoadSpeakers();
+                                return;
+                            }
+                            renderSpeakerNote('');
+                        } catch (e) {
+                            alert('Could not switch speaker: ' + e);
+                        } finally {
+                            select.disabled = false;
+                        }
+                    });
+                }
+                const testBtn = document.getElementById('voiceOutputTestBtn');
+                if (testBtn) {
+                    testBtn.addEventListener('click', async function () {
+                        testBtn.disabled = true;
+                        try {
+                            await fetch('/api/voice/speaker-test', { method: 'POST' });
+                        } catch (e) {
+                            alert('Could not play test announcement: ' + e);
+                        } finally {
+                            // Re-enable after a moment so it can't be spammed while
+                            // the phrase is still playing.
+                            setTimeout(() => { testBtn.disabled = false; }, 1500);
+                        }
+                    });
+                }
+            })();
+            ywcLoadSpeakers();
 
             async function ywcOpenGrammarsFolder() {
                 try {
@@ -1672,6 +1870,13 @@
                             </div>
                             <span asp-validation-for="Settings.BandPlan" class="text-danger"></span>
                         </div>
+            <!-- Inline Save Settings so this section can be saved in place. -->
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
         </div>
     </details>
 
@@ -1720,6 +1925,13 @@
                             <strong>External Applications:</strong> Configure WSJT-X, JTAlert, and Log4OM on the
                             <a asp-page="/ApplicationSetup" class="alert-link">Application Setup</a> page.
                         </div>
+            <!-- Inline Save Settings so this section can be saved in place. -->
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
         </div>
     </details>
 
@@ -1921,6 +2133,13 @@
                     </div>
                 </div>
             </div>
+            <!-- Inline Save Settings so this long section can be saved in place. -->
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
         </div>
     </details>
 
@@ -2018,6 +2237,13 @@
                             (without saving) and shows what it returns.
                         </small>
                     </div>
+            <!-- Inline Save Settings so this section can be saved in place. -->
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
         </div>
     </details>
 

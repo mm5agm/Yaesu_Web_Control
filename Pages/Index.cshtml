@@ -202,6 +202,78 @@
     .vfo-inactive .smeter-history-container {
         display: none !important;
     }
+
+    /* Voice command help popup (right-click a mic button). */
+    #voiceHelpBody .vh-intro   { color: #bbb; font-size: 0.85rem; margin-bottom: 0.75rem; }
+    #voiceHelpBody .vh-group   { margin-bottom: 0.85rem; }
+    #voiceHelpBody .vh-group h6 { color: #4db8ff; font-size: 0.8rem; text-transform: uppercase;
+                                  letter-spacing: 0.04em; margin: 0 0 0.35rem 0; }
+    #voiceHelpBody .vh-item    { display: flex; flex-wrap: wrap; gap: 0.25rem 0.6rem;
+                                 align-items: baseline; padding: 0.15rem 0; }
+    #voiceHelpBody .vh-what    { flex: 0 0 auto; min-width: 190px; }
+    #voiceHelpBody .vh-ex      { color: #ffd47a; font-size: 0.85rem; }
+    #voiceHelpBody .vh-ex code { color: #ffd47a; background: #333; border-radius: 3px;
+                                 padding: 1px 5px; margin-right: 4px; white-space: nowrap; }
+
+    /* Voice PTT button — three visually distinct states so the operator can
+       always tell whether it's listening:
+         1. Rest / hover (armed, NOT listening) -> amber outline. Bootstrap
+            normally fills btn-outline-danger solid RED on hover, which was
+            indistinguishable from the pressed/listening red; we override that
+            to amber so "hovering" never looks like "listening".
+         2. Pressed / listening -> solid red, pressed *in* (scaled down), with a
+            bright pulsing ring and a breathing icon. Impossible to mistake.
+         3. Release (pointer still on the button) -> snaps back to the amber
+            hover look, so the red->amber change is proof the release registered.
+       The pressed-in scale means the shape changes too, not just colour, which
+       helps a partially-sighted operator. */
+
+    /* Armed hover — amber, deliberately not red. :not(.voice-mic-listening)
+       so it never fights the pressed state. */
+    .voice-mic-btn.btn-outline-danger:hover:not(.voice-mic-listening) {
+        background-color: #ffe69c;
+        border-color: #ffc107;
+        color: #664d03;
+    }
+
+    /* Pressed / listening — wins over every other state. */
+    .voice-mic-btn.voice-mic-listening,
+    .voice-mic-btn.voice-mic-listening:hover {
+        background-color: #dc3545 !important;
+        border-color: #b02a37 !important;
+        color: #fff !important;
+        transform: scale(0.94);
+        animation: voiceMicPulse 1s ease-in-out infinite;
+    }
+    .voice-mic-btn.voice-mic-listening > i {
+        animation: voiceMicIcon 1s ease-in-out infinite;
+    }
+    @@keyframes voiceMicPulse {
+        0%   { box-shadow: 0 0 0 0    rgba(220, 53, 69, 0.75); }
+        70%  { box-shadow: 0 0 0 18px rgba(220, 53, 69, 0);    }
+        100% { box-shadow: 0 0 0 0    rgba(220, 53, 69, 0);    }
+    }
+    @@keyframes voiceMicIcon {
+        0%, 100% { transform: scale(1);    opacity: 1;   }
+        50%      { transform: scale(1.12); opacity: 0.85; }
+    }
+
+    /* Dialog close (✕) button — a solid red so it stands out clearly against
+       the dark dialog header. The default btn-outline-secondary was a faint
+       grey outline that several operators found hard to spot. */
+    .ywc-dialog-close {
+        background: #c0392b;
+        color: #fff;
+        border: 1px solid #e74c3c;
+        font-weight: bold;
+        line-height: 1;
+    }
+    .ywc-dialog-close:hover,
+    .ywc-dialog-close:focus {
+        background: #e74c3c;
+        color: #fff;
+        border-color: #ff6b5a;
+    }
 </style>
 
 <!-- Message Box Modal (Windows-style) -->
@@ -803,9 +875,9 @@
                                     <option value="100000">100 kHz</option>
                                 </select>
                                 <button id="voiceMicBtnA" type="button"
-                                        class="btn btn-outline-danger d-flex align-items-center justify-content-center"
+                                        class="btn btn-outline-danger voice-mic-btn d-flex align-items-center justify-content-center"
                                         style="width:140px; height:120px; padding:0;"
-                                        title="Hold to give a VFO A voice command"
+                                        title="Hold to give a VFO A voice command (right-click for the command list)"
                                         aria-label="Voice command VFO A — hold to speak">
                                     <i class="bi bi-mic-fill" style="font-size:4.5rem; line-height:1;" aria-hidden="true"></i>
                                 </button>
@@ -1214,9 +1286,9 @@
                                         <option value="100000">100 kHz</option>
                                     </select>
                                     <button id="voiceMicBtnB" type="button"
-                                            class="btn btn-outline-danger d-flex align-items-center justify-content-center"
+                                            class="btn btn-outline-danger voice-mic-btn d-flex align-items-center justify-content-center"
                                             style="width:140px; height:120px; padding:0;"
-                                            title="Hold to give a VFO B voice command"
+                                            title="Hold to give a VFO B voice command (right-click for the command list)"
                                             aria-label="Voice command VFO B — hold to speak">
                                         <i class="bi bi-mic-fill" style="font-size:4.5rem; line-height:1;" aria-hidden="true"></i>
                                     </button>
@@ -1599,7 +1671,7 @@
 <dialog id="voxDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:280px;" aria-labelledby="voxDialogTitle">
     <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
         <strong id="voxDialogTitle">VOX Controls</strong>
-        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('voxDialog').close()" aria-label="Close VOX controls">✕</button>
+        <button class="btn btn-sm ywc-dialog-close" onclick="document.getElementById('voxDialog').close()" aria-label="Close VOX controls">✕</button>
     </div>
     <div class="p-3 d-flex flex-column gap-2">
         <div class="d-flex align-items-center gap-2">
@@ -1639,7 +1711,7 @@
 <dialog id="fmDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:300px;" aria-labelledby="fmDialogTitle">
     <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
         <strong id="fmDialogTitle">FM Repeater</strong>
-        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('fmDialog').close()" aria-label="Close FM repeater controls">✕</button>
+        <button class="btn btn-sm ywc-dialog-close" onclick="document.getElementById('fmDialog').close()" aria-label="Close FM repeater controls">✕</button>
     </div>
     <div class="p-3 d-flex flex-column gap-2">
         <div class="d-flex align-items-center gap-2">
@@ -1692,7 +1764,7 @@
 <dialog id="cwDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:320px;" aria-labelledby="cwDialogTitle">
     <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
         <strong id="cwDialogTitle">CW Keyer</strong>
-        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('cwDialog').close()" aria-label="Close CW keyer controls">✕</button>
+        <button class="btn btn-sm ywc-dialog-close" onclick="document.getElementById('cwDialog').close()" aria-label="Close CW keyer controls">✕</button>
     </div>
     <div class="p-3 d-flex flex-column gap-2">
         <div class="d-flex align-items-center gap-2">
@@ -1785,7 +1857,7 @@
 <dialog id="dxWatchDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:320px; max-width:420px;" aria-labelledby="dxWatchTitle">
     <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
         <strong id="dxWatchTitle">DX Watch</strong>
-        <button class="btn btn-sm btn-outline-secondary"
+        <button class="btn btn-sm ywc-dialog-close"
                 onclick="document.getElementById('dxWatchDialog').close()"
                 aria-label="Close DX watch panel">✕</button>
     </div>
@@ -1835,7 +1907,7 @@
     <dialog id="audioFilterDialog@(vfo)" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:380px; max-width:520px; position:fixed; margin:0;" aria-labelledby="audioFilterDialogTitle@(vfo)">
         <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
             <strong id="audioFilterDialogTitle@(vfo)">Audio Filter — VFO @vfo <span id="audioFilterModeLabel@(vfo)" class="text-info ms-1"></span></strong>
-            <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('audioFilterDialog@(vfo)').close()" aria-label="Close VFO @vfo Audio Filter dialog">✕</button>
+            <button class="btn btn-sm ywc-dialog-close" onclick="document.getElementById('audioFilterDialog@(vfo)').close()" aria-label="Close VFO @vfo Audio Filter dialog">✕</button>
         </div>
         <div class="p-3 d-flex flex-column gap-3">
             <div id="audioFilterStatus@(vfo)" class="small text-warning" style="min-height:1.2em;"></div>
@@ -1888,7 +1960,7 @@
 <dialog id="voiceDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:340px; max-width:480px;" aria-labelledby="voiceDialogTitle">
     <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
         <strong id="voiceDialogTitle">Voice Announcements</strong>
-        <button class="btn btn-sm btn-outline-secondary"
+        <button class="btn btn-sm ywc-dialog-close"
                 onclick="document.getElementById('voiceDialog').close()"
                 aria-label="Close voice announcements panel">✕</button>
     </div>
@@ -1943,6 +2015,21 @@
     </div>
 </dialog>
 
+<!-- Voice command list — opened by right-clicking either mic button.
+     Body is generated from the live phrase config via GET /api/voice/help,
+     so it always matches what recognition actually accepts (voice-control.js). -->
+<dialog id="voiceHelpDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:360px; max-width:560px;" aria-labelledby="voiceHelpTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="voiceHelpTitle">Voice commands</strong>
+        <button class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('voiceHelpDialog').close()"
+                aria-label="Close voice command help">✕</button>
+    </div>
+    <div id="voiceHelpBody" class="p-3" style="max-height:70vh; overflow-y:auto;">
+        <div class="text-muted small">Loading…</div>
+    </div>
+</dialog>
+
 <!-- UTC clock info popover — opened by clicking the top-bar clock.
      Explains the clock source, what depends on it, and how to verify
      the PC's time-sync state. -->
@@ -1951,7 +2038,7 @@
         aria-labelledby="utcClockInfoTitle">
     <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
         <strong id="utcClockInfoTitle">UTC clock — where does the time come from?</strong>
-        <button class="btn btn-sm btn-outline-secondary"
+        <button class="btn btn-sm ywc-dialog-close"
                 onclick="document.getElementById('utcClockInfoDialog').close()"
                 aria-label="Close UTC clock info">✕</button>
     </div>
@@ -1997,7 +2084,7 @@
                 <input class="form-check-input" type="checkbox" id="dxSpotsAllBandsChk">
                 <label class="form-check-label small" for="dxSpotsAllBandsChk">All bands</label>
             </div>
-            <button class="btn btn-sm btn-outline-secondary"
+            <button class="btn btn-sm ywc-dialog-close"
                     onclick="document.getElementById('dxSpotsDialog').close()"
                     aria-label="Close DX spots panel">✕</button>
         </div>
@@ -3211,7 +3298,7 @@
             }, { passive: true });
         }
 
-        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog'].forEach(id => {
+        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
             makeDraggable(dlg, dlg.querySelector('div'));
