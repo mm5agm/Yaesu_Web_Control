@@ -1960,6 +1960,12 @@ A **Feature request** template is also available for ideas / improvements rather
 
 ### 14.2 Common problems
 
+**First thing to try: hard-refresh the browser (Ctrl+F5)**
+
+If something on screen isn't behaving the way you expect — a VFO panel looks greyed out or locked when it shouldn't be, a reading has stopped updating, a control seems stuck, or the layout looks wrong — the quickest fix is almost always a hard refresh of the browser. Click into the YWC page, then hold **Ctrl** and press **F5** (do it a couple of times if needed). If that doesn't help, close the browser tab completely and open a fresh one to the YWC address.
+
+This matters most **after you change the Radio Model or other settings**: the page carries some information decided at the moment it first loaded, so a browser showing a cached copy from a previous session can look out of step with your current setup. A hard refresh forces a completely fresh copy. If the problem clears after a hard refresh, there was nothing wrong with your setup; if it survives a hard refresh, it's worth reporting (see Section 14.1).
+
 **App shows "Initialising…" and never clears**
 
 - Check that the radio is powered on.
