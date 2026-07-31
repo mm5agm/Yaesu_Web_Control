@@ -193,6 +193,17 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 **Email your calibration to help improve the defaults.** The Meter Calibration page has an **Email calibration to developer** button that opens a pre-addressed email with your radio's calibration data filled in — a one-click way to send real per-radio numbers so future users of your model start with accurate meters.
 
+## 2026-07-31 - v2.4.2-pre24 (pre-release)
+
+More voice control fixes.
+
+- **"Transmit on" now actually keys the radio.** A bug meant the voice transmit command asserted *receive* instead of keying, so "transmit on" did nothing. Now "transmit on" keys the radio via CAT and "transmit off" returns to receive, on the FTdx101MP, FTdx10 and FT-710.
+- **The en-GB (British English) voice pack loads reliably** — fixed a grammar-compile error that could stop the British-English command set from building on some systems.
+- **Tune to any frequency by voice** — voice tuning now accepts full-Hz precision, so you can ask for exact frequencies rather than being limited to kHz steps.
+- **More natural command wording** — added spoken synonyms for asking the radio's status ("frequency", "mode", "band") and for transmit, so the commands work the way they come naturally.
+
+If you use voice control with the en-US pack, download the refreshed **YWC-VoicePack-en-US-v2.zip** from the voice section of the User Manual to pick up the new synonyms.
+
 ## 2026-07-30 - v2.4.2-pre23 (pre-release)
 
 Voice control improvements and a quicker Settings page.
