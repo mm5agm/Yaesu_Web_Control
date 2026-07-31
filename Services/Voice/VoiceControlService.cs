@@ -807,9 +807,12 @@ namespace Yaesu_Web_Control.Services.Voice
             return (intent, args);
         }
 
-        // Maps digit-word -> kHz contribution at the first-fractional position.
-        // "fourteen point zero seven four" -> tokens after "point": zero, seven, four.
+        // Maps digit-word -> Hz contribution by fractional position, most-
+        // significant first. "fourteen point zero seven four" -> tokens after
+        // "point": zero, seven, four.
         //   zero * 100_000 + seven * 10_000 + four * 1_000 = 74_000 Hz fractional.
+        // Up to six fractional digits are read, so "one two three four five six"
+        // resolves to 123_456 Hz — full 1 Hz voice tuning.
         private static readonly Dictionary<string, int> _digitWords =
             new(StringComparer.OrdinalIgnoreCase)
             {
@@ -829,7 +832,9 @@ namespace Yaesu_Web_Control.Services.Voice
 
             long fracHz = 0;
             long multiplier = 100_000; // first frac digit = hundreds of kHz
-            for (int i = pointIdx + 1; i < tokens.Length && multiplier >= 1_000; i++)
+            // multiplier >= 1 lets the loop consume up to six fractional digits
+            // (100_000 .. 1 Hz); it then divides to 0 and the guard stops it.
+            for (int i = pointIdx + 1; i < tokens.Length && multiplier >= 1; i++)
             {
                 if (!_digitWords.TryGetValue(tokens[i], out var d)) break; // hit "megahertz" or other non-digit
                 fracHz += d * multiplier;
