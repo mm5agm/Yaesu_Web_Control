@@ -1,7 +1,7 @@
 
 # Yaesu Web Control
 
-![Latest release](https://img.shields.io/badge/Latest%20release-v2.4.1-blue?style=flat-square)
+![Latest release](https://img.shields.io/badge/Latest%20release-v2.4.2-blue?style=flat-square)
 ![Downloads](https://img.shields.io/github/downloads/mm5agm/Yaesu_Web_Control/latest/Yaesu_Web_Control_Setup.exe?label=Downloads&style=flat-square)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue?style=flat-square)
 
@@ -183,9 +183,17 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
-## 2026-07-21 - v2.4.2 (pending release)
+## 2026-08-01 - v2.4.2
 
-*Consolidates the v2.4.2-pre1 … pre20 fixes, plus the following:*
+*The first stable release since v2.4.1, consolidating the whole v2.4.2-pre1 … pre24 run. Highlights:*
+
+**New radios to try — FTDX5000MP and FTDX5000D.** I've added both FTDX5000 variants as dual-receiver models. They're brand new and still being proven on real hardware with an owner's help, so I'd call them *available to test* rather than fully signed off — if you have an FTDX5000, please give it a go and let me know how you get on (#85).
+
+**FTDX3000 now works both ways.** Frequency syncs radio-to-web and web-to-radio, band changes and direct entry work, and split — including reverse split and the "+5k" quick-split — is confirmed on real hardware. One thing still outstanding: the **power meter reads high** because it's using a placeholder calibration. If you own an FTDX3000 and can send me your real power readings from the Meter Calibration page, I'll ship an accurate power curve for it.
+
+**Clearer spectrum display.** The spectrum now finds and flattens the noise floor automatically and pins it near the bottom of the display, with two-stage smoothing for a cleaner trace and better-defined signal peaks. The old Low/High level sliders are replaced by a single **Range** control; the SDR **Gain** slider stays as before.
+
+**Voice control improvements.** "Transmit on" now actually keys the radio (it previously asserted receive by mistake); the British-English (en-GB) voice pack loads reliably; you can tune to any exact frequency by voice; band commands are easier to say (the lead-in word is optional, plus digit forms like "two zero metres"); right-click a mic button to see the full command list for your own phrase set; the mic button shows three clear states; and you can choose the microphone and announcement speaker, each with a Test button.
 
 **Optional WSJT-X integration.** YWC listens for WSJT-X on its UDP port (2237) so it can show WSJT-X status — but it did so at every startup, even when you weren't using WSJT-X, which held the port and stopped other WSJT-X tools from using it. There's now an **Enable WSJT-X integration** toggle on the **Application Setup** page (on by default, so nothing changes unless you touch it). Turn it off and YWC no longer binds the port, leaving it free for another WSJT-X program. Restart YWC after changing it.
 
