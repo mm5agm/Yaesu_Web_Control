@@ -220,6 +220,39 @@
                     the main screen uncluttered for users who don't need them.
                 </div>
             </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold" for="Settings_TxToggleKey">TX toggle key</label>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    @* data-val="false": optional blank must never get client-side
+                       required (same silent-block class of bug as #65). Server
+                       already ModelState.Remove's this field. *@
+                    <input asp-for="Settings.TxToggleKey"
+                           class="form-control"
+                           id="Settings_TxToggleKey"
+                           style="max-width: 220px;"
+                           readonly
+                           autocomplete="off"
+                           data-val="false"
+                           aria-describedby="txToggleKeyHelp txToggleKeyDisplay" />
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="txToggleKeySetBtn">
+                        Set key
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="txToggleKeyClearBtn">
+                        Clear
+                    </button>
+                    <span class="badge text-bg-warning" id="txToggleKeyCaptureBadge" style="display:none;">
+                        Press a key now
+                    </span>
+                </div>
+                <div class="form-text" id="txToggleKeyHelp">
+                    Optional browser shortcut for toggling transmit. Disabled when blank. For safety,
+                    YWC ignores this shortcut while you are typing in an input or text box.
+                </div>
+                <div class="form-text text-warning">
+                    Warning: this directly keys the transmitter. Choose a key you will not press by accident.
+                </div>
+                <div class="form-text" id="txToggleKeyDisplay"></div>
+            </div>
         </div>
     </details>
 
@@ -260,6 +293,40 @@
                 </div>
                 <div id="voiceLocaleMismatchBanner" class="mt-2"></div>
             </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold" for="voiceInputDevice">Microphone</label>
+                <select class="form-select w-auto" id="voiceInputDevice">
+                    <option value="">Loading…</option>
+                </select>
+                <div class="form-text">
+                    Which microphone the speech recogniser listens to. Choose the mic you'll speak
+                    into — the change takes effect immediately, no restart. Leave on
+                    <em>Windows default recording device</em> to follow your system setting.
+                    Picking one here does <strong>not</strong> change your Windows default, so it
+                    won't disturb other apps (WSJT-X, etc.).
+                </div>
+                <div id="voiceInputDeviceNote" class="mt-2"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold" for="voiceOutputDevice">Announcement speaker</label>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <select class="form-select w-auto" id="voiceOutputDevice">
+                        <option value="">Loading…</option>
+                    </select>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="voiceOutputTestBtn">
+                        <i class="bi bi-volume-up" aria-hidden="true"></i>&nbsp;Test
+                    </button>
+                </div>
+                <div class="form-text">
+                    Which speaker or headset the spoken confirmations play through. Leave on
+                    <em>Windows default playback device</em> to follow your system setting — but if
+                    your default is used by something else (WSJT-X, rig audio) you may never hear
+                    the announcements, so pick your own speakers here. Picking one does
+                    <strong>not</strong> change your Windows default. Press <em>Test</em> to check
+                    you can hear it.
+                </div>
+                <div id="voiceOutputDeviceNote" class="mt-2"></div>
+            </div>
             <div class="mb-3 form-check form-switch">
                 <input class="form-check-input" type="checkbox" role="switch"
                        id="voiceSpokenConfirmationEnabled" asp-for="Settings.VoiceSpokenConfirmationEnabled" />
@@ -285,6 +352,19 @@
                     primitives the app already trusts, not send anything new. Only enable this if you trust
                     the source of any language pack you import, or you're hand-authoring your own commands.
                 </div>
+            </div>
+            <!-- Inline Save Settings: the Voice Control section is very long, so
+                 this lets the settings above be saved without scrolling all the
+                 way to the button at the bottom of the page. Same submit as the
+                 main button; the Voice Phrases below save separately. -->
+            <div class="mb-3 pt-2 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">
+                    Saves all settings on this page. The Voice Phrases below save
+                    separately with their own <em>Save phrases</em> button.
+                </span>
             </div>
             <!-- Voice Phrases editor -->
             <div class="mb-3">
@@ -491,6 +571,157 @@
                 });
             })();
             ywcLoadLocales();
+
+            // ── Microphone picker ──────────────────────────────────────────
+            // System.Speech can't target a device by name, so the chosen mic is
+            // captured server-side and fed to SAPI. This just lists devices and
+            // POSTs the pick; VoiceControlService rebinds live (no restart).
+
+            function renderMicNote(msg) {
+                const note = document.getElementById('voiceInputDeviceNote');
+                if (!note) return;
+                note.innerHTML = msg
+                    ? '<div class="alert alert-warning py-1 px-2 small mb-0">' + escapeHtml(msg) + '</div>'
+                    : '';
+            }
+
+            async function ywcLoadMicrophones() {
+                const select = document.getElementById('voiceInputDevice');
+                if (!select) return;
+                try {
+                    const r = await fetch('/api/voice/microphones');
+                    if (!r.ok) { select.innerHTML = '<option value="">Failed to load</option>'; return; }
+                    const data = await r.json();
+                    let html = '<option value=""' + (data.usingDefault ? ' selected' : '') +
+                        '>Windows default recording device</option>';
+                    html += data.devices.map(d =>
+                        '<option value="' + escapeHtml(d.name) + '"' + (d.isSelected ? ' selected' : '') + '>' +
+                        escapeHtml(d.name) + '</option>').join('');
+                    // A saved device that's no longer plugged in: show it so the
+                    // user sees what's selected rather than a silent revert.
+                    if (!data.usingDefault && !data.selectedPresent && data.selected) {
+                        html += '<option value="' + escapeHtml(data.selected) + '" selected>' +
+                            escapeHtml(data.selected) + ' (not connected)</option>';
+                    }
+                    select.innerHTML = html;
+                    renderMicNote((!data.usingDefault && !data.selectedPresent)
+                        ? 'The saved microphone isn’t connected right now. Reconnect it, or pick another.'
+                        : '');
+                } catch (e) {
+                    select.innerHTML = '<option value="">Failed to load</option>';
+                }
+            }
+
+            (function () {
+                const select = document.getElementById('voiceInputDevice');
+                if (!select) return;
+                select.addEventListener('change', async function () {
+                    const name = select.value;
+                    select.disabled = true;
+                    try {
+                        const r = await fetch('/api/voice/microphone', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name }),
+                        });
+                        if (!r.ok) {
+                            const data = await r.json().catch(() => ({}));
+                            alert('Could not switch microphone: ' + (data.error || ('HTTP ' + r.status)));
+                            await ywcLoadMicrophones();
+                            return;
+                        }
+                        renderMicNote('');
+                        ywcRefreshVoiceDiagnostics();
+                    } catch (e) {
+                        alert('Could not switch microphone: ' + e);
+                    } finally {
+                        select.disabled = false;
+                    }
+                });
+            })();
+            ywcLoadMicrophones();
+
+            // ── Speaker (announcement) picker ──────────────────────────────
+            // System.Speech can't target an output device by name, so the chosen
+            // speaker is rendered-and-played server-side. Lists devices, POSTs the
+            // pick (applied live, no restart), and offers a Test button.
+
+            function renderSpeakerNote(msg) {
+                const note = document.getElementById('voiceOutputDeviceNote');
+                if (!note) return;
+                note.innerHTML = msg
+                    ? '<div class="alert alert-warning py-1 px-2 small mb-0">' + escapeHtml(msg) + '</div>'
+                    : '';
+            }
+
+            async function ywcLoadSpeakers() {
+                const select = document.getElementById('voiceOutputDevice');
+                if (!select) return;
+                try {
+                    const r = await fetch('/api/voice/speakers');
+                    if (!r.ok) { select.innerHTML = '<option value="">Failed to load</option>'; return; }
+                    const data = await r.json();
+                    let html = '<option value=""' + (data.usingDefault ? ' selected' : '') +
+                        '>Windows default playback device</option>';
+                    html += data.devices.map(d =>
+                        '<option value="' + escapeHtml(d.name) + '"' + (d.isSelected ? ' selected' : '') + '>' +
+                        escapeHtml(d.name) + '</option>').join('');
+                    if (!data.usingDefault && !data.selectedPresent && data.selected) {
+                        html += '<option value="' + escapeHtml(data.selected) + '" selected>' +
+                            escapeHtml(data.selected) + ' (not connected)</option>';
+                    }
+                    select.innerHTML = html;
+                    renderSpeakerNote((!data.usingDefault && !data.selectedPresent)
+                        ? 'The saved speaker isn’t connected right now. Reconnect it, or pick another.'
+                        : '');
+                } catch (e) {
+                    select.innerHTML = '<option value="">Failed to load</option>';
+                }
+            }
+
+            (function () {
+                const select = document.getElementById('voiceOutputDevice');
+                if (select) {
+                    select.addEventListener('change', async function () {
+                        const name = select.value;
+                        select.disabled = true;
+                        try {
+                            const r = await fetch('/api/voice/speaker', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ name }),
+                            });
+                            if (!r.ok) {
+                                const data = await r.json().catch(() => ({}));
+                                alert('Could not switch speaker: ' + (data.error || ('HTTP ' + r.status)));
+                                await ywcLoadSpeakers();
+                                return;
+                            }
+                            renderSpeakerNote('');
+                        } catch (e) {
+                            alert('Could not switch speaker: ' + e);
+                        } finally {
+                            select.disabled = false;
+                        }
+                    });
+                }
+                const testBtn = document.getElementById('voiceOutputTestBtn');
+                if (testBtn) {
+                    testBtn.addEventListener('click', async function () {
+                        testBtn.disabled = true;
+                        try {
+                            await fetch('/api/voice/speaker-test', { method: 'POST' });
+                        } catch (e) {
+                            alert('Could not play test announcement: ' + e);
+                        } finally {
+                            // Re-enable after a moment so it can't be spammed while
+                            // the phrase is still playing.
+                            setTimeout(() => { testBtn.disabled = false; }, 1500);
+                        }
+                    });
+                }
+            })();
+            ywcLoadSpeakers();
 
             async function ywcOpenGrammarsFolder() {
                 try {
@@ -1521,13 +1752,17 @@
                                 <option value="FTdx10">FTdx10</option>
                                 <option value="FT-710">FT-710</option>
                                 <option value="FTDX3000">FTDX3000</option>
+                                <option value="FTDX5000MP">FTDX5000MP</option>
+                                <option value="FTDX5000D">FTDX5000D</option>
                             </select>
                             <div class="form-text">
                                 <strong>FTdx101MP:</strong> 200W output, dual receivers (VFO A + VFO B shown by default)<br />
                                 <strong>FTdx101D:</strong> 100W output, dual receivers (VFO A + VFO B shown by default)<br />
                                 <strong>FTdx10:</strong> 100W output, single receiver (VFO B for split/memory)<br />
                                 <strong>FT-710:</strong> 100W output, single receiver (VFO B for split/memory)<br />
-                                <strong>FTDX3000:</strong> 100W output, single receiver, SDR IF output available (9 MHz)
+                                <strong>FTDX3000:</strong> 100W output, single receiver, SDR IF output available (9 MHz)<br />
+                                <strong>FTDX5000MP:</strong> 200W output, dual receivers (VFO A + VFO B shown by default); new profile, testing in progress<br />
+                                <strong>FTDX5000D:</strong> 200W output, dual receivers (VFO A + VFO B shown by default); new profile, testing in progress
                             </div>
                             <span asp-validation-for="Settings.RadioModel" class="text-danger"></span>
                         </div>
@@ -1560,21 +1795,16 @@
                                 </div>
                             </div>
                             <div id="filtersFtdx10Section" style="display:@(Model.Settings.RadioModel == "FTdx10" ? "block" : "none")">
-                                <div class="alert alert-info py-2 mb-2">
-                                    The FTdx10 selects its roofing filter automatically — there is no CAT command to control it.
-                                    The radio switches to the appropriate filter based on DSP bandwidth and mode.
-                                    Tick any optional filters you have installed for your own reference.
+                                <div class="form-text mb-2">
+                                    The FTdx10 roofing filter is selectable via CAT. 12 kHz, 3 kHz, and 500 Hz
+                                    are fitted as standard. Tick the optional filter if you have it installed.
                                 </div>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="filter4" name="Settings.InstalledRoofingFilters" value="4"
-                                           @(Model.Settings.InstalledRoofingFilters.Contains("4") ? "checked" : "") />
-                                    <label class="form-check-label" for="filter4">1.2 kHz installed (optional — YF-130CN)</label>
+                                    <input class="form-check-input" type="checkbox" id="filterFtdx10A" name="Settings.InstalledRoofingFilters" value="A"
+                                           @(Model.Settings.InstalledRoofingFilters.Contains("A") ? "checked" : "") />
+                                    <label class="form-check-label" for="filterFtdx10A">300 Hz (optional — YF-130CW)</label>
                                 </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="filter5" name="Settings.InstalledRoofingFilters" value="5"
-                                           @(Model.Settings.InstalledRoofingFilters.Contains("5") ? "checked" : "") />
-                                    <label class="form-check-label" for="filter5">300 Hz installed (optional — YF-130CW)</label>
-                                </div>
+                                <div class="form-text text-muted mt-1">12 kHz, 3 kHz, and 500 Hz are always shown.</div>
                             </div>
                             <div id="filtersFt710Section" style="display:@(Model.Settings.RadioModel == "FT-710" ? "block" : "none")">
                                 <div class="alert alert-info py-2 mb-0">
@@ -1640,6 +1870,13 @@
                             </div>
                             <span asp-validation-for="Settings.BandPlan" class="text-danger"></span>
                         </div>
+            <!-- Inline Save Settings so this section can be saved in place. -->
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
         </div>
     </details>
 
@@ -1688,6 +1925,13 @@
                             <strong>External Applications:</strong> Configure WSJT-X, JTAlert, and Log4OM on the
                             <a asp-page="/ApplicationSetup" class="alert-link">Application Setup</a> page.
                         </div>
+            <!-- Inline Save Settings so this section can be saved in place. -->
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
         </div>
     </details>
 
@@ -1889,6 +2133,13 @@
                     </div>
                 </div>
             </div>
+            <!-- Inline Save Settings so this long section can be saved in place. -->
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
         </div>
     </details>
 
@@ -1986,6 +2237,13 @@
                             (without saving) and shows what it returns.
                         </small>
                     </div>
+            <!-- Inline Save Settings so this section can be saved in place. -->
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
         </div>
     </details>
 
@@ -2117,34 +2375,6 @@
         </a>
     </div>
     </form>
-
-    <script>
-        // Save button feedback: "Saving…" the instant the form is submitted
-        // (the POST → redirect → reload round trip takes a few seconds, and
-        // without this the button just sits there looking unresponsive),
-        // then "Saved ✓" on the reloaded page after a successful save,
-        // reverting back to normal after a few seconds. #65 follow-up.
-        (function () {
-            var form = document.getElementById('settingsForm');
-            var btn = document.getElementById('saveSettingsBtn');
-            var icon = document.getElementById('saveSettingsIcon');
-            var label = document.getElementById('saveSettingsLabel');
-            if (!form || !btn || !icon || !label) return;
-
-            form.addEventListener('submit', function () {
-                btn.disabled = true;
-                icon.className = 'spinner-border spinner-border-sm';
-                label.textContent = 'Saving…';
-            });
-
-            if (btn.dataset.saveSuccess === '1') {
-                setTimeout(function () {
-                    icon.className = 'bi bi-save';
-                    label.textContent = 'Save Settings';
-                }, 3000);
-            }
-        })();
-    </script>
 
     <!-- Backup / Restore — outside the main form so the import button doesn't trigger a save -->
     <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
@@ -2291,6 +2521,75 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Must run AFTER _ValidationScriptsPartial so jQuery Validate is present.
+        // "Saving…" only when the form will actually POST. Previously the spinner
+        // ran even when unobtrusive validation cancelled the post (blank optional
+        // fields with implicit [Required]) — looked like a save that "didn't persist".
+        (function () {
+            var form = document.getElementById('settingsForm');
+            var btn = document.getElementById('saveSettingsBtn');
+            var icon = document.getElementById('saveSettingsIcon');
+            var label = document.getElementById('saveSettingsLabel');
+            if (!form || !btn || !icon || !label) return;
+
+            function resetSaveButton() {
+                btn.disabled = false;
+                icon.className = 'bi bi-save';
+                label.textContent = 'Save Settings';
+            }
+
+            function markSaving() {
+                btn.disabled = true;
+                icon.className = 'spinner-border spinner-border-sm';
+                label.textContent = 'Saving…';
+            }
+
+            function revealFirstInvalid() {
+                var invalid = form.querySelector('.input-validation-error, :invalid');
+                if (!invalid) return;
+                var section = invalid.closest('details.settings-section');
+                if (section) section.open = true;
+                invalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (typeof invalid.focus === 'function') invalid.focus();
+            }
+
+            if (window.jQuery) {
+                var $form = window.jQuery(form);
+                $form.on('invalid-form.validate', function () {
+                    resetSaveButton();
+                    revealFirstInvalid();
+                });
+                // Only flip the button to Saving… when Validate says the post may proceed.
+                $form.on('submit', function (e) {
+                    if ($form.data('validator') && !$form.valid()) {
+                        e.preventDefault();
+                        resetSaveButton();
+                        revealFirstInvalid();
+                        return;
+                    }
+                    markSaving();
+                });
+            } else {
+                form.addEventListener('submit', function (e) {
+                    if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
+                        e.preventDefault();
+                        resetSaveButton();
+                        revealFirstInvalid();
+                        return;
+                    }
+                    markSaving();
+                });
+            }
+
+            if (btn.dataset.saveSuccess === '1') {
+                setTimeout(function () {
+                    icon.className = 'bi bi-save';
+                    label.textContent = 'Save Settings';
+                }, 3000);
+            }
+        })();
+    </script>
     <script type="module">
         // hwVer (per SDRplay API header) → friendly model name. Kept in sync
         // with the C# HwVerToModel in Services/Sdr/SdrplayDevice.cs.
@@ -2646,6 +2945,93 @@
                 if (ft710Section)    ft710Section.style.display    = v === 'FT-710'    ? 'block' : 'none';
                 if (ftdx3000Section) ftdx3000Section.style.display = v === 'FTDX3000'  ? 'block' : 'none';
             });
+        })();
+    </script>
+    <script>
+        (function () {
+            const input = document.getElementById('Settings_TxToggleKey');
+            const setBtn = document.getElementById('txToggleKeySetBtn');
+            const clearBtn = document.getElementById('txToggleKeyClearBtn');
+            const badge = document.getElementById('txToggleKeyCaptureBadge');
+            const display = document.getElementById('txToggleKeyDisplay');
+            if (!input || !setBtn || !clearBtn || !badge || !display) return;
+
+            // Seed from a JSON-encoded server value (not the asp-for attribute).
+            // A lone space character cannot round-trip through an HTML form /
+            // input value attribute — browsers and Tag Helpers treat
+            // whitespace-only as empty, so Space used to save as "" and show
+            // "Disabled". We store the KeyboardEvent.code token "Space"
+            // instead; migrate any legacy " " on load.
+            const serverKeyRaw = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Settings.TxToggleKey ?? string.Empty));
+            input.value = (serverKeyRaw === ' ') ? 'Space' : serverKeyRaw;
+
+            let captureActive = false;
+
+            function friendlyKeyLabel(key) {
+                if (!key) return 'Disabled';
+                if (key === ' ' || key === 'Space') return 'Space';
+                if (key === 'Escape') return 'Esc';
+                return key.length === 1 ? key.toUpperCase() : key;
+            }
+
+            function renderCurrentKey() {
+                display.textContent = input.value
+                    ? `Current shortcut: ${friendlyKeyLabel(input.value)}`
+                    : 'Current shortcut: Disabled';
+            }
+
+            function stopCapture() {
+                captureActive = false;
+                badge.style.display = 'none';
+                setBtn.classList.remove('btn-primary');
+                setBtn.classList.add('btn-outline-primary');
+            }
+
+            function startCapture() {
+                captureActive = true;
+                badge.style.display = 'inline-block';
+                setBtn.classList.remove('btn-outline-primary');
+                setBtn.classList.add('btn-primary');
+                // Drop focus from the button so pressing Space to choose the
+                // shortcut doesn't also re-activate the focused "Set key"
+                // button (Space/Enter fire a click on a focused button),
+                // which would immediately re-arm capture.
+                setBtn.blur();
+            }
+
+            setBtn.addEventListener('click', function () {
+                if (captureActive) {
+                    stopCapture();
+                    return;
+                }
+                startCapture();
+            });
+
+            clearBtn.addEventListener('click', function () {
+                input.value = '';
+                stopCapture();
+                renderCurrentKey();
+            });
+
+            document.addEventListener('keydown', function (e) {
+                if (!captureActive) return;
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (e.key === 'Tab') {
+                    stopCapture();
+                    renderCurrentKey();
+                    return;
+                }
+
+                // e.key for Space is " "; store "Space" so the value survives
+                // HTML form post / asp-for round-trips (whitespace-only does not).
+                input.value = (e.key === ' ') ? 'Space' : e.key;
+                stopCapture();
+                renderCurrentKey();
+            }, true);
+
+            renderCurrentKey();
         })();
     </script>
 }

@@ -287,6 +287,29 @@
             // Init completion signal — must be last
             "DT0;"
         };
+
+        // P1=0-Fixed receive-control queries for single-receiver radios.
+        // Used by the init ping-pong (temporarily switch VS to read the
+        // inactive VFO's stored settings) and by the debounced post-VS
+        // re-query burst after front-panel A/B presses.
+        public static readonly string[] SingleReceiverPerVfoQueries =
+        {
+            "MD0;",          // mode — per-VFO at CAT level; re-read after VS for safety
+            "RF0;",          // roofing filter
+            "GT0;",          // AGC
+            "PA0;",          // IPO/AMP
+            "RA0;",          // Attenuator
+            "NR0;", "RL0;",  // NR + DNR level
+            "NB0;", "NL0;",  // NB + NB level
+            "BC0;",          // Auto Notch
+            "BP00;", "BP01;",// Manual Notch on/off + freq
+            "CO00;", "CO01;", "CO02;", "CO03;", // Contour + APF
+            "SH0;",          // IF Width
+            "IS0;",          // IF Shift
+            "AG0;",          // AF Gain
+            "RG0;",          // RF Gain
+            "SQ0;",          // Squelch
+        };
     }
 
     public static class IFCommandParser

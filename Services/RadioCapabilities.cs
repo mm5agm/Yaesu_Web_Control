@@ -32,7 +32,10 @@ public static class RadioCapabilities
     /// </summary>
     public static bool IsDualReceiver(string radioModel) => radioModel switch
     {
-        "FTdx101MP" or "FTdx101D" => true,
+        // FTDX5000 (all variants — 5000/MP/D share the CAT command set) is a
+        // true MAIN+SUB dual-receiver radio addressed by P1=0/1 exactly like
+        // the FTdx101MP. See docs/design/ftdx5000-dual-receiver-plan.md.
+        "FTdx101MP" or "FTdx101D" or "FTDX5000MP" or "FTDX5000D" => true,
         _ => false
     };
 

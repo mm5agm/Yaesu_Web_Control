@@ -76,6 +76,15 @@
          docs/VoiceControl/v1-plan.md. Windows-only — the surrounding
          project is already net10.0-windows so no portability change. -->
     <PackageReference Include="System.Speech" Version="10.0.1" />
+    <!-- NAudio.WinMM: WaveIn/WaveOut (MME) device enumeration + capture/playback
+         only. Lets the user pick a specific microphone and announcement speaker
+         in Settings — System.Speech can bind only to the Windows *default*
+         recording/playback device or to a raw audio Stream, so we capture the
+         chosen mic ourselves (48 kHz/16-bit/mono, fed to SAPI via
+         SetInputToAudioStream) and render+play confirmations to the chosen
+         speaker. See Services/Voice/MicrophoneCapture.cs and AudioOutput.cs.
+         WinMM subset keeps WASAPI/MediaFoundation out. -->
+    <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
   </ItemGroup>
 
   <!-- Voice control grammar files shipped alongside the exe so

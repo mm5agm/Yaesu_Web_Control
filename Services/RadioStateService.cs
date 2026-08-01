@@ -22,6 +22,21 @@ namespace Yaesu_Web_Control.Services
         // writing to *A state — see #34 R2 controls-bleed-across-panels fix.
         public bool IsSingleReceiver { get; set; } = false;
 
+        // Configured radio model (e.g. "FTDX3000"). Set by RadioInitialization-
+        // Service at startup. The dispatcher uses this to normalise model-
+        // specific CAT read codes — notably the FTDX3000 roofing-filter answer,
+        // whose read code space differs from its set code space.
+        public string RadioModel { get; set; } = "";
+
+        // Number of digits this radio uses in FA/FB frequency values. Learned
+        // from the radio's own FA/FB responses (see CatMessageDispatcher) — the
+        // FTDX3000 uses 8, every other supported model uses 9. YWC formats writes
+        // as 9 everywhere, so on an 8-digit radio the write is malformed and
+        // silently ignored (iu1teu #78 — FTDX3000 frequency changes from the UI
+        // never reached the radio). CatMultiplexerService reformats FA/FB writes
+        // to this width. Defaults to 9 (the common case) until a response is seen.
+        public int FrequencyDigits { get; set; } = 9;
+
         private RadioState _initialState;
 
         public RadioStateService(
@@ -59,6 +74,8 @@ namespace Yaesu_Web_Control.Services
             IfWidthB = _initialState.IfWidthB ?? "8";
             IfShiftA = _initialState.IfShiftA;
             IfShiftB = _initialState.IfShiftB;
+            AfGainA = _initialState.AfGainA;
+            AfGainB = _initialState.AfGainB;
         }
 
         public RadioState InitialState => _initialState;
@@ -221,6 +238,15 @@ namespace Yaesu_Web_Control.Services
                 UpdateBandFromFrequency();
             }
         }
+
+        // Set by CatController whenever the user changes frequency from the web
+        // UI. MeterPollingService's FA/FB backstop poll (single-receiver radios,
+        // where auto-info is unreliable — iu1teu #78) checks this and skips a
+        // poll cycle briefly after a user write, so the poll's read-back can't
+        // fight active tuning. Not touched by dispatcher-driven (radio→state)
+        // frequency updates, only by genuine user writes.
+        public DateTime LastUserFrequencyWriteUtc { get; private set; } = DateTime.MinValue;
+        public void MarkUserFrequencyWrite() => LastUserFrequencyWriteUtc = DateTime.UtcNow;
 
         private string? _fr;
         public string? FR { get => _fr; set => SetField(ref _fr, value); }
@@ -451,9 +477,9 @@ namespace Yaesu_Web_Control.Services
         private int? _temperature;
         public int? Temperature { get => _temperature; set => SetField(ref _temperature, value); }
 
-        private int _afGainA = 128;
+        private int _afGainA;
         public int AfGainA { get => _afGainA; set => SetField(ref _afGainA, value); }
-        private int _afGainB = 128;
+        private int _afGainB;
         public int AfGainB { get => _afGainB; set => SetField(ref _afGainB, value); }
 
         private int _micGain = 50;
@@ -564,6 +590,99 @@ namespace Yaesu_Web_Control.Services
         // Split mode: 0 = OFF, 1 = ON (VFO A = RX, VFO B = TX), 2 = ON + Quick Split (+5 kHz)
         private int _splitMode = 0;
         public int SplitMode { get => _splitMode; set => SetField(ref _splitMode, value); }
+
+        // Snapshot of every UI-relevant state property, replayed to each newly
+        // connected SignalR client by RadioHub.OnConnectedAsync through the
+        // normal RadioStateUpdate envelope. Broadcasts only fire on *change*,
+        // so a browser that connects after initialization (second tab, another
+        // computer) would otherwise keep the frontend's JS defaults for any
+        // property not server-rendered in Index.cshtml — most visibly
+        // ActiveVfo/TxVfo/SplitMode, which made VFO A always look active on
+        // late-joining clients. Property names must match the handlers in
+        // wwwroot/js/ui/site.js. Meters are excluded (they stream at ~10 Hz).
+        public IReadOnlyList<KeyValuePair<string, object>> GetClientStateSnapshot()
+        {
+            return new List<KeyValuePair<string, object>>
+            {
+                new("IsConnected", IsConnected),
+                new("RadioPowerOn", RadioPowerOn),
+                new("FrequencyA", FrequencyA),
+                new("FrequencyB", FrequencyB),
+                new("BandA", BandA),
+                new("BandB", BandB),
+                new("ModeA", ModeA ?? ""),
+                new("ModeB", ModeB ?? ""),
+                new("AntennaA", AntennaA ?? ""),
+                new("AntennaB", AntennaB ?? ""),
+                new("ActiveVfo", ActiveVfo),
+                new("TxVfo", TxVfo),
+                new("SplitMode", SplitMode),
+                new("IsTransmitting", IsTransmitting),
+                new("Power", Power),
+                new("RoofingFilterA", RoofingFilterA ?? ""),
+                new("RoofingFilterB", RoofingFilterB ?? ""),
+                new("AgcA", AgcA),
+                new("AgcB", AgcB),
+                new("IpoA", IpoA),
+                new("IpoB", IpoB),
+                new("AttA", AttA),
+                new("AttB", AttB),
+                new("NrA", NrA),
+                new("NrB", NrB),
+                new("NrLevelA", NrLevelA),
+                new("NrLevelB", NrLevelB),
+                new("NbA", NbA),
+                new("NbB", NbB),
+                new("NbLevelA", NbLevelA),
+                new("NbLevelB", NbLevelB),
+                new("AutoNotchA", AutoNotchA),
+                new("AutoNotchB", AutoNotchB),
+                new("ManualNotchA", ManualNotchA),
+                new("ManualNotchB", ManualNotchB),
+                new("ManualNotchFreqA", ManualNotchFreqA),
+                new("ManualNotchFreqB", ManualNotchFreqB),
+                new("IfWidthA", IfWidthA),
+                new("IfWidthB", IfWidthB),
+                new("IfShiftA", IfShiftA),
+                new("IfShiftB", IfShiftB),
+                new("RxClarOn", RxClarOn),
+                new("TxClarOn", TxClarOn),
+                new("ClarifierOffsetA", ClarifierOffsetA),
+                new("ClarifierOffsetB", ClarifierOffsetB),
+                new("ContourOnA", ContourOnA),
+                new("ContourOnB", ContourOnB),
+                new("ContourFreqA", ContourFreqA),
+                new("ContourFreqB", ContourFreqB),
+                new("ApfOnA", ApfOnA),
+                new("ApfOnB", ApfOnB),
+                new("ApfFreqA", ApfFreqA),
+                new("ApfFreqB", ApfFreqB),
+                new("AfGainA", AfGainA),
+                new("AfGainB", AfGainB),
+                new("RfGainA", RfGainA),
+                new("RfGainB", RfGainB),
+                new("SquelchA", SquelchA),
+                new("SquelchB", SquelchB),
+                new("ProcEnabled", ProcEnabled),
+                new("ProcLevel", ProcLevel),
+                new("AtuEnabled", AtuEnabled),
+                new("AtuTuning", AtuTuning),
+                new("MonitorOn", MonitorOn),
+                new("MonitorLevelA", MonitorLevelA),
+                new("MonitorLevelB", MonitorLevelB),
+                new("VoxOn", VoxOn),
+                new("VoxGain", VoxGain),
+                new("VoxDelay", VoxDelay),
+                new("CwPitch", CwPitch),
+                new("CwSpeed", CwSpeed),
+                new("CwBreakIn", CwBreakIn),
+                new("CwBreakInDelay", CwBreakInDelay),
+                new("FmShiftDir", FmShiftDir),
+                new("FmOffsetHz", FmOffsetHz),
+                new("CtcssMode", CtcssMode),
+                new("CtcssTone", CtcssTone),
+            };
+        }
 
         public RadioState GetState()
         {

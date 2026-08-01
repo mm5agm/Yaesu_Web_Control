@@ -24,6 +24,17 @@ namespace Yaesu_Web_Control.Services
         private int _ritOffset = 0;
         private int _xitOffset = 0;
 
+        // TX safety watchdog. A rigctld client can key the radio and then fail to
+        // send the matching release — WSJT-X's Tune-stop not sending PTT-off, a
+        // client crash, or a dropped connection all leave the radio keyed forever.
+        // We track PTT keyed via rigctld and force TX0; if it is held past
+        // TxSafetyTimeoutSeconds, or if the client that keyed it disconnects.
+        private const int TxSafetyTimeoutSeconds = 180;
+        private readonly object _pttLock = new();
+        private bool _rigctldPttActive = false;
+        private string? _pttClientId = null;
+        private CancellationTokenSource? _pttWatchdogCts;
+
         private static readonly HashSet<string> SupportedModes = new()
         {
             "LSB", "USB", "CW", "CW-R", "RTTY", "RTTY-R", "AM", "FM",
@@ -162,6 +173,11 @@ namespace Yaesu_Web_Control.Services
                 {
                     _clients.Remove(client);
                 }
+
+                // Safety net: never leave the radio keyed because a client that
+                // held PTT went away without releasing it.
+                await ReleasePttIfClientHeldAsync(clientId);
+
                 client.Close();
                 _logger.LogInformation("[{ClientId}] Client disconnected", clientId);
             }
@@ -368,10 +384,101 @@ namespace Yaesu_Web_Control.Services
         {
             // Hamlib set_ptt values: 0=off, 1=on, 2=on (mic), 3=on (data) — WSJT-X in
             // Data/Pkt PTT mode sends 3, not 1, so any nonzero value must key the radio.
-            var command = ptt == "0" ? "TX0;" : "TX1;";
+            var keyed = ptt != "0";
+            var command = keyed ? "TX1;" : "TX0;";
             _logger.LogInformation("Rigctld set_ptt: {Ptt} (client: {ClientId})", ptt, clientId);
             await _multiplexer.SendCommandAsync(command, clientId);
+
+            if (keyed)
+                ArmTxWatchdog(clientId);
+            else
+                DisarmTxWatchdog();
+
             return "RPRT 0";
+        }
+
+        // Start (or restart) the TX safety timeout for a rigctld-initiated key-up.
+        private void ArmTxWatchdog(string clientId)
+        {
+            CancellationToken token;
+            lock (_pttLock)
+            {
+                _pttWatchdogCts?.Cancel();
+                _pttWatchdogCts?.Dispose();
+                _pttWatchdogCts = new CancellationTokenSource();
+                _rigctldPttActive = true;
+                _pttClientId = clientId;
+                token = _pttWatchdogCts.Token;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(TxSafetyTimeoutSeconds), token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return; // Released normally, or re-armed by a newer key-up.
+                }
+
+                bool stillActive;
+                lock (_pttLock)
+                {
+                    stillActive = _rigctldPttActive;
+                    _rigctldPttActive = false;
+                    _pttClientId = null;
+                }
+
+                if (stillActive)
+                {
+                    _logger.LogWarning(
+                        "TX safety watchdog: PTT held via rigctld for over {Seconds}s with no release (client: {ClientId}). Forcing TX0;.",
+                        TxSafetyTimeoutSeconds, clientId);
+                    try { await _multiplexer.SendCommandAsync("TX0;", clientId); }
+                    catch (Exception ex) { _logger.LogError(ex, "TX safety watchdog: failed to force TX0;."); }
+                }
+            });
+        }
+
+        // Cancel the TX safety timeout after a normal release.
+        private void DisarmTxWatchdog()
+        {
+            lock (_pttLock)
+            {
+                _pttWatchdogCts?.Cancel();
+                _pttWatchdogCts?.Dispose();
+                _pttWatchdogCts = null;
+                _rigctldPttActive = false;
+                _pttClientId = null;
+            }
+        }
+
+        // On client disconnect: if that client keyed the radio and never released
+        // it, force the radio back to RX so a dropped connection can't leave it keyed.
+        private async Task ReleasePttIfClientHeldAsync(string clientId)
+        {
+            bool shouldRelease = false;
+            lock (_pttLock)
+            {
+                if (_rigctldPttActive && _pttClientId == clientId)
+                {
+                    shouldRelease = true;
+                    _pttWatchdogCts?.Cancel();
+                    _pttWatchdogCts?.Dispose();
+                    _pttWatchdogCts = null;
+                    _rigctldPttActive = false;
+                    _pttClientId = null;
+                }
+            }
+
+            if (shouldRelease)
+            {
+                _logger.LogWarning(
+                    "rigctld client {ClientId} disconnected while holding PTT. Forcing TX0; for safety.", clientId);
+                try { await _multiplexer.SendCommandAsync("TX0;", clientId); }
+                catch (Exception ex) { _logger.LogError(ex, "Failed to force TX0; after client disconnect."); }
+            }
         }
 
         private string SetVfo(string vfo)

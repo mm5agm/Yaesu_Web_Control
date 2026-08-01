@@ -82,7 +82,15 @@ jobs:
           Write-Host "OK: $('{0:N0}' -f (Get-Item Yaesu_Web_Control_Setup.exe).Length) bytes"
         shell: pwsh
 
+      - name: Upload installer as workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yaesu_Web_Control_Setup
+          path: Yaesu_Web_Control_Setup.exe
+
       - name: Upload installer to GitHub Release
+        if: github.event_name == 'release' || github.event.inputs.tag != ''
         run: |
           # release event carries tag in GITHUB_REF_NAME; dispatch uses the input
           if ("${{ github.event_name }}" -eq "release") {

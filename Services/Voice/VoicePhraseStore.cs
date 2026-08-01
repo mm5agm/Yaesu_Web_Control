@@ -86,9 +86,10 @@ namespace Yaesu_Web_Control.Services.Voice
                 var json = File.ReadAllText(path);
                 var config = JsonSerializer.Deserialize<VoicePhrasesConfig>(json, _jsonOpts);
                 // Version 3 changed SetMode/SetBand to DecomposedCommand and merged
-                // Verbs+Connectors into Triggers for SetFrequency. Older files are
-                // reset to defaults rather than partially migrated.
-                if (config == null || config.Version < 6)
+                // Verbs+Connectors into Triggers for SetFrequency. Version 7 added
+                // the natural "status frequency" / "transmit on" trigger synonyms.
+                // Older files are reset to defaults rather than partially migrated.
+                if (config == null || config.Version < 7)
                     return BuildDefaults();
                 return config;
             }
@@ -320,7 +321,7 @@ namespace Yaesu_Web_Control.Services.Voice
 
         public static VoicePhrasesConfig BuildDefaults() => new()
         {
-            Version = 6,
+            Version = 7,
             SimpleCommands = new()
             {
                 ["SwapVFO"]          = ["swap v f o", "swap v f os", "swap a and b", "swap a b", "switch v f o", "switch a and b"],
@@ -328,10 +329,10 @@ namespace Yaesu_Web_Control.Services.Voice
                 ["NudgeDown"]        = ["tune down", "step down", "frequency down", "down one step", "tune lower", "nudge down", "nudge lower"],
                 ["BandUp"]           = ["band up", "next band", "up one band"],
                 ["BandDown"]         = ["band down", "previous band", "down one band"],
-                ["StatusFrequency"]  = ["what frequency", "what is my frequency", "read frequency", "current frequency"],
-                ["StatusMode"]       = ["what mode", "what is my mode", "read mode", "current mode"],
-                ["StatusBand"]       = ["what band", "what band am I on", "current band"],
-                ["TxOn"]             = ["key transmitter", "start transmitting", "transmit now"],
+                ["StatusFrequency"]  = ["what frequency", "what is my frequency", "read frequency", "current frequency", "status frequency"],
+                ["StatusMode"]       = ["what mode", "what is my mode", "read mode", "current mode", "status mode"],
+                ["StatusBand"]       = ["what band", "what band am I on", "current band", "status band"],
+                ["TxOn"]             = ["key transmitter", "start transmitting", "transmit now", "transmit on"],
                 ["TxOff"]            = ["stop transmitting", "go to receive", "transmit off"],
                 ["SplitOn"]          = ["split on", "enable split", "split transmit"],
                 ["SplitOff"]         = ["split off", "disable split", "simplex"],
@@ -357,18 +358,26 @@ namespace Yaesu_Web_Control.Services.Voice
             SetBand = new()
             {
                 Triggers   = ["go to", "switch to"],
+                // Each band carries its natural spoken form plus a digit-spelled
+                // alternate ("two zero metres" etc.). The digit forms exist to
+                // break inherently-confusable acoustic pairs: "twenty metres"
+                // and "eighty metres" share the same rhythm and "-ty metres"
+                // tail, so a quiet/marginal mic (or a strong accent) can smear
+                // the only distinguishing syllable and SAPI snaps to the wrong
+                // rule at good confidence. "two zero" vs "eight zero" have no
+                // such overlap, giving the operator a reliable way to say it.
                 Vocabulary = new()
                 {
-                    ["160"] = ["one sixty metres"],
-                    ["80"]  = ["eighty metres"],
-                    ["60"]  = ["sixty metres"],
-                    ["40"]  = ["forty metres"],
-                    ["30"]  = ["thirty metres"],
-                    ["20"]  = ["twenty metres"],
-                    ["17"]  = ["seventeen metres"],
-                    ["15"]  = ["fifteen metres"],
-                    ["12"]  = ["twelve metres"],
-                    ["10"]  = ["ten metres"],
+                    ["160"] = ["one sixty metres", "one six zero metres", "top band"],
+                    ["80"]  = ["eighty metres",    "eight zero metres"],
+                    ["60"]  = ["sixty metres",     "six zero metres"],
+                    ["40"]  = ["forty metres",     "four zero metres"],
+                    ["30"]  = ["thirty metres",    "three zero metres"],
+                    ["20"]  = ["twenty metres",    "two zero metres"],
+                    ["17"]  = ["seventeen metres", "one seven metres"],
+                    ["15"]  = ["fifteen metres",   "one five metres"],
+                    ["12"]  = ["twelve metres",    "one two metres"],
+                    ["10"]  = ["ten metres",       "one zero metres"],
                     ["6"]   = ["six metres"],
                     ["4"]   = ["four metres"],
                 },

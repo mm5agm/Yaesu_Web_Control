@@ -1,0 +1,53 @@
+# Line-ending normalization for the whole repo.
+#
+# `text=auto` makes the repository authoritative about line endings regardless
+# of each contributor's local `core.autocrlf` setting: text is stored as LF in
+# git, and Windows working copies are checked out with CRLF automatically. This
+# stops cross-contributor line-ending flips (e.g. a whole-file CRLF<->LF churn
+# in a PR) that otherwise happen when one person's git normalizes and another's
+# doesn't.
+* text=auto
+
+# Explicit text types (belt-and-braces even if content auto-detection is off).
+*.cs        text diff=csharp
+*.cshtml    text
+*.razor     text
+*.csproj    text
+*.props     text
+*.targets   text
+*.js        text
+*.mjs       text
+*.css       text
+*.html      text
+*.json      text
+*.md        text
+*.yml       text
+*.yaml      text
+*.xml       text
+*.config    text
+*.nsi       text
+*.txt       text
+
+# Windows-native files: keep CRLF on checkout everywhere.
+*.sln       text eol=crlf
+*.ps1       text eol=crlf
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+
+# Unix shell scripts: always LF.
+*.sh        text eol=lf
+
+# Binary assets — never normalize or diff as text.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.zip       binary
+*.exe       binary
+*.dll       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.eot       binary

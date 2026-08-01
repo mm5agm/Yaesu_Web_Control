@@ -25,8 +25,14 @@ const IF_WIDTH_TABLES = {
 // Roofing filter code → Hz (FTdx101MP/D)
 const ROOFING_HZ = { '6':12000,'7':3000,'8':1200,'9':600,'A':300,'a':300 };
 
-// FTDX3000 roofing filter codes 0-5
-const ROOFING_HZ_3000 = { '0':15000,'1':6000,'2':3000,'3':600,'4':300,'5':150 };
+// FTdx10 roofing filter read codes 6/7/9/A (500 Hz standard, not 600 Hz)
+const ROOFING_HZ_FTDX10 = { '6':12000,'7':3000,'9':500,'A':300,'a':300 };
+
+// FTDX3000 roofing filter set codes (P2): 0=Auto (no fixed width), 1=15k,
+// 2=6k, 3=3k, 4=600, 5=300. Keyed to match the dropdown values in Index.cshtml
+// and the normalised state code from the backend. Auto (0) has no single width
+// so it falls through to null and no roofing outline is drawn.
+const ROOFING_HZ_3000 = { '1':15000,'2':6000,'3':3000,'4':600,'5':300 };
 
 export class FilterScopePanel {
     constructor(canvasId, radioModel, initialState = {}) {
@@ -154,6 +160,9 @@ export class FilterScopePanel {
     _roofingHz() {
         if (this._model === 'FTDX3000') {
             return ROOFING_HZ_3000[String(this._state.roofingCode)] || null;
+        }
+        if (this._model === 'FTdx10') {
+            return ROOFING_HZ_FTDX10[String(this._state.roofingCode)] || null;
         }
         return ROOFING_HZ[String(this._state.roofingCode)] || null;
     }

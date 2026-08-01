@@ -395,7 +395,10 @@ namespace Yaesu_Web_Control.Services.Voice
 
         private async Task<DispatchResult> TxOnAsync(CancellationToken ct)
         {
-            await SendCommand("TX0;", ct);
+            // TX P1: 0=CAT TX off (receive), 1=CAT TX on (key by CAT), 2=read-only
+            // "keyed via PTT" answer. Same across FTdx101MP / FTdx10 / FT-710.
+            // Keying therefore needs TX1; -- TX0; would just assert receive.
+            await SendCommand("TX1;", ct);
             _state.IsTransmitting = true;
             _logger.LogInformation("[Voice] TxOn");
             return new DispatchResult(true, "Transmitting");
@@ -403,7 +406,9 @@ namespace Yaesu_Web_Control.Services.Voice
 
         private async Task<DispatchResult> TxOffAsync(CancellationToken ct)
         {
-            await SendCommand("RX;", ct);
+            // TX0; = CAT TX off (return to receive). There is no standalone RX;
+            // command in the FTdx101MP / FTdx10 / FT-710 CAT sets.
+            await SendCommand("TX0;", ct);
             _state.IsTransmitting = false;
             _logger.LogInformation("[Voice] TxOff");
             return new DispatchResult(true, "Receive");

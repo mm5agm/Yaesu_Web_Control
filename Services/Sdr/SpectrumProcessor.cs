@@ -71,8 +71,19 @@ namespace Yaesu_Web_Control.Services.Sdr
             // so 0 dB = full-scale signal.
             Fourier.Forward(complex, FourierOptions.AsymmetricScaling);
 
-            if (_ema is null || _ema.Length != fftSize)
-                _ema = new float[fftSize];
+            // Capture the EMA buffer into a local before the loop. ResetSmoothing()
+            // runs on the control-channel thread (a DSP/gain change) and sets _ema
+            // to null; without this capture a reset landing between the null-check
+            // and the loop below would NRE the streaming thread mid-frame and crash
+            // the worker (observed when the Gain slider is dragged rapidly). Using a
+            // local means an in-flight frame always finishes against a valid buffer;
+            // a concurrent reset simply takes effect on the next frame.
+            float[]? ema = _ema;
+            if (ema is null || ema.Length != fftSize)
+            {
+                ema  = new float[fftSize];
+                _ema = ema;
+            }
 
             float[] bins   = new float[fftSize];
             float   invN   = 1.0f / fftSize;
@@ -100,8 +111,8 @@ namespace Yaesu_Web_Control.Services.Sdr
                 else if (db > hi) db = hi;
 
                 // 5.7 EMA: y[n] = α·x[n] + (1−α)·y[n−1].
-                float smoothed = alpha * db + keep * _ema[i];
-                _ema[i]  = smoothed;
+                float smoothed = alpha * db + keep * ema[i];
+                ema[i]   = smoothed;
                 bins[i]  = smoothed;
             }
 

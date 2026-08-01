@@ -1,7 +1,7 @@
 
 # Yaesu Web Control
 
-![Latest release](https://img.shields.io/badge/Latest%20release-v2.4.1-blue?style=flat-square)
+![Latest release](https://img.shields.io/badge/Latest%20release-v2.4.2-blue?style=flat-square)
 ![Downloads](https://img.shields.io/github/downloads/mm5agm/Yaesu_Web_Control/latest/Yaesu_Web_Control_Setup.exe?label=Downloads&style=flat-square)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue?style=flat-square)
 
@@ -19,7 +19,15 @@ Yaesu Web Control (**YWC**) is a continuation of my FTdx101_WebApp with more Yae
 | FT-710 | 100 W | Single | Two VFOs; no rear-panel IF output for spectrum |
 | FTDX3000 | 100 W | Single | Two VFOs; no memory tag (MT) command |
 
-**Other Yaesu transceivers** (FT-991A, FTDX5000, etc.) can be added too — the CAT protocol is well documented and most of the groundwork already exists. What's missing is someone who owns the radio and can test against it as support is built. If that's you, open a [Discussion](https://github.com/mm5agm/Yaesu_Web_Control/discussions) and let's talk.
+## Getting your Yaesu radio added — it's easier than you think
+
+I own and test on the **FTdx101MP**; the other supported models are built from Yaesu's published CAT documentation and confirmed by the users who own them. If your Yaesu isn't listed yet — **FT-991A, FTDX5000, FTX-1** and others are all realistic — I'll gladly add it, and **all it takes from you is ordinary operating, not programming.**
+
+"Testing" just means *using your radio normally* with YWC and telling me what happens: change bands, tune around, switch modes, key up, and drop a note on the [Discussions tab](https://github.com/mm5agm/Yaesu_Web_Control/discussions) like *"frequency and mode track fine, but the S-meter reads a bit low."* **No code, no build tools, no command line.** If you can run the installer and operate your rig, you can test — I do the programming, you just tell me what your radio does. Even a one-liner on a model that already works ("works fine on my FT-710") is useful: it tells me which radios have real users behind them.
+
+**What it might involve.** Now and then I'll ask you to try a **pre-release** — a test build with a fix in it, installed exactly like a normal release — and, if something's misbehaving, to send me a **log file** so I can see what your radio and YWC actually did. YWC makes that easy: open the **Diagnostics page** (in the menu across the top of YWC), click **Start fresh test log**, do the test, then **Download test log** — you get a small log of just that test to **drag straight into the GitHub discussion or issue**. (The full logs also live on disk at `%APPDATA%\MM5AGM\Yaesu Web Control\logs\ywc-<date>.log` if you ever need them directly.) That's genuinely the whole job: install, operate, and occasionally send a file across.
+
+**FTX-1:** a user has reported it working on HF (run with the model set to *FTdx10*) — frequency and mode track cleanly and quickly. Its 6m/2m/70cm memory handling still needs a little work, so a dedicated FTX-1 profile is on the way once someone can help confirm the VHF/UHF side. If you own an FTX-1, I'd love to hear from you.
 
 ## Main Page
 ![Yaesu Web Control Main Page](pictures/DevelopScreen.png)
@@ -146,12 +154,6 @@ Active development is currently focused on bug fixes and polish for the supporte
 
 **On the abandoned Amazon Alexa route:** an earlier proof of concept routed voice through an Echo device over a Cloudflare tunnel into YWC. It worked end-to-end including signature verification, but setting it up required the user to own a domain, run a Cloudflare account, configure a custom Alexa Skill in the Amazon Developer Console, and install `cloudflared` — well over an hour of fiddly setup for the average ham. The local-SAPI approach above is dramatically simpler (one Windows speech-pack install, one Settings toggle) and runs entirely offline. The Alexa branch is therefore retired; the local mic approach is the supported path going forward.
 
-### Which radios get tested?
-
-YWC supports the FTdx101MP, FTdx101D, FTdx10, FT-710, and FTDX3000. I own and test on the FTdx101MP; support for the other four models is implemented against the published CAT documentation and refined when users on those models report. **If you use one of the other four models, please consider dropping a one-liner on the [Discussions tab](https://github.com/mm5agm/Yaesu_Web_Control/discussions)** — even just "works fine on my FT-710" is useful. It tells me which models have actual users behind them and where to focus calibration improvements.
-
----
-
 ## Staying informed about updates
 
 Recent versions of YWC include an in-app update check that pops up a banner the first time you run it after a new release lands. If you're already running v2.2.x or later you'll get those notifications automatically — no action needed.
@@ -171,7 +173,130 @@ If you're talking to another Yaesu operator running an older YWC, **a heads-up t
 
 ---
 
+## Contributors
+
+YWC is mostly my own work, but I'm grateful for the community contributions that have improved it:
+
+- **Fabio Valente (CR7CDC)** — an optional keyboard transmit shortcut plus split-mode UI fixes ([#79](https://github.com/mm5agm/Yaesu_Web_Control/pull/79)); FTdx10 roofing-filter CAT support and an FTDX3000 roofing read-code fix ([#80](https://github.com/mm5agm/Yaesu_Web_Control/pull/80)); and a set of single-receiver VFO routing fixes, including correct state on late-joining browser tabs and devices ([#81](https://github.com/mm5agm/Yaesu_Web_Control/pull/81)).
+
+---
+
 ## Release Notes
+
+## 2026-08-01 - v2.4.2
+
+*The first stable release since v2.4.1, consolidating the whole v2.4.2-pre1 … pre24 run. Highlights:*
+
+**New radios to try — FTDX5000MP and FTDX5000D.** I've added both FTDX5000 variants as dual-receiver models. They're brand new and still being proven on real hardware with an owner's help, so I'd call them *available to test* rather than fully signed off — if you have an FTDX5000, please give it a go and let me know how you get on (#85).
+
+**FTDX3000 now works both ways.** Frequency syncs radio-to-web and web-to-radio, band changes and direct entry work, and split — including reverse split and the "+5k" quick-split — is confirmed on real hardware. One thing still outstanding: the **power meter reads high** because it's using a placeholder calibration. If you own an FTDX3000 and can send me your real power readings from the Meter Calibration page, I'll ship an accurate power curve for it.
+
+**Clearer spectrum display.** The spectrum now finds and flattens the noise floor automatically and pins it near the bottom of the display, with two-stage smoothing for a cleaner trace and better-defined signal peaks. The old Low/High level sliders are replaced by a single **Range** control; the SDR **Gain** slider stays as before.
+
+**Voice control improvements.** "Transmit on" now actually keys the radio (it previously asserted receive by mistake); the British-English (en-GB) voice pack loads reliably; you can tune to any exact frequency by voice; band commands are easier to say (the lead-in word is optional, plus digit forms like "two zero metres"); right-click a mic button to see the full command list for your own phrase set; the mic button shows three clear states; and you can choose the microphone and announcement speaker, each with a Test button.
+
+**Optional WSJT-X integration.** YWC listens for WSJT-X on its UDP port (2237) so it can show WSJT-X status — but it did so at every startup, even when you weren't using WSJT-X, which held the port and stopped other WSJT-X tools from using it. There's now an **Enable WSJT-X integration** toggle on the **Application Setup** page (on by default, so nothing changes unless you touch it). Turn it off and YWC no longer binds the port, leaving it free for another WSJT-X program. Restart YWC after changing it.
+
+**Easier log sharing for testing.** The **Diagnostics page** (now linked in the top menu) has **Start fresh test log** and **Download test log** buttons — start a capture, do the test, and download just that test's log to drag into a discussion.
+
+**Email your calibration to help improve the defaults.** The Meter Calibration page has an **Email calibration to developer** button that opens a pre-addressed email with your radio's calibration data filled in — a one-click way to send real per-radio numbers so future users of your model start with accurate meters.
+
+## 2026-07-31 - v2.4.2-pre24 (pre-release)
+
+More voice control fixes.
+
+- **"Transmit on" now actually keys the radio.** A bug meant the voice transmit command asserted *receive* instead of keying, so "transmit on" did nothing. Now "transmit on" keys the radio via CAT and "transmit off" returns to receive, on the FTdx101MP, FTdx10 and FT-710.
+- **The en-GB (British English) voice pack loads reliably** — fixed a grammar-compile error that could stop the British-English command set from building on some systems.
+- **Tune to any frequency by voice** — voice tuning now accepts full-Hz precision, so you can ask for exact frequencies rather than being limited to kHz steps.
+- **More natural command wording** — added spoken synonyms for asking the radio's status ("frequency", "mode", "band") and for transmit, so the commands work the way they come naturally.
+
+If you use voice control with the en-US pack, download the refreshed **YWC-VoicePack-en-US-v2.zip** from the voice section of the User Manual to pick up the new synonyms.
+
+## 2026-07-30 - v2.4.2-pre23 (pre-release)
+
+Voice control improvements and a quicker Settings page.
+
+- **Right-click a mic button** to see the full list of voice commands, generated live from your own phrase set (so it always matches what your installation actually responds to).
+- **Clearer mic button** — three distinct states (armed / listening / recognised) so it's obvious what the button is doing, with a pressed-in shape change as well as colour.
+- **Band commands are easier to say** — the lead-in word is now optional ("forty metres" works as well as "go to forty metres"), and each band also accepts an unambiguous digit form ("two zero metres", "eight zero metres") for microphones or accents where "twenty" and "eighty" get confused. "top band" works for 160 m.
+- **Better recognition on quiet microphones** — YWC now amplifies a weak mic automatically and is a little more forgiving, so fewer correct commands get dropped.
+- **Choose the microphone and announcement speaker** used by voice control, each with a Test button.
+- **Inline "Save Settings" buttons** in every long section of the Settings page, so you can save without scrolling to the bottom.
+- Dialog close (✕) buttons are now solid red for visibility.
+
+## 2026-07-28 - v2.4.2-pre22 (pre-release)
+
+Adds the **FTDX5000MP** and **FTDX5000D** as dual-receiver models (#85).
+
+## 2026-07-22 - v2.4.2-pre21 (pre-release)
+
+Meter calibration: an **Email calibration to developer** button, plus the developer-side tooling to fold emailed calibration data back into the shipped defaults so future users of a model start with more accurate meters.
+
+## 2026-07-20 - v2.4.2-pre20 (pre-release)
+
+FTDX3000 frequency-write fix, take two — now on the right code path. The 8-digit frequency fix from pre18 was applied to the wrong internal send path, so it never actually took effect. This build applies it where the frequency writes really go out, so an FTDX3000 should finally accept frequency changes (and +5k) from the browser. Still under investigation on Discussion #78; other radios are unaffected.
+
+## 2026-07-20 - v2.4.2-pre19 (pre-release)
+
+Diagnostic build. Adds extra logging to pin down why frequency changes from the browser aren't reaching an FTDX3000 (investigation on GitHub Discussion #78). No functional change from pre18 — of interest only to that investigation.
+
+## 2026-07-20 - v2.4.2-pre18 (pre-release)
+
+Two frequency fixes.
+
+**The radio now tunes live while you hold the ▲/▼ buttons (or spin the mouse wheel).** Previously the on-screen frequency moved as you held, but the radio itself only jumped to the final value when you let go. It now sends the intermediate steps as you go, so the radio tracks your input in real time. Applies to all radios.
+
+**FTDX3000: changing frequency from the browser now works.** The FTDX3000 uses an 8-digit frequency format where every other supported radio uses 9, and YWC was sending 9 digits to all of them — so frequency changes (and the +5k Quick Split) from the web UI were silently ignored by the FTDX3000, even though the display and the radio's own knob worked. YWC now detects each radio's frequency format automatically and matches it. Other radios are unaffected. Thanks to Giovanni (iu1teu) for the testing and logs that pinned this down.
+
+## 2026-07-20 - v2.4.2-pre17 (pre-release)
+
+Frequency-sync fallback for single-receiver radios.
+
+**Live frequency now works even when the radio doesn't broadcast it.** YWC learned about frequency changes only from the radio's auto-information (`AI1;`) pushes, and never polled for frequency itself. On single-receiver radios — particularly the FTDX3000 over a shared-CAT / VSPE connection — those pushes don't reliably arrive, so the on-screen frequency could stop tracking the radio in either direction. YWC now polls the frequency about once a second on single-receiver radios (FTdx10, FT-710, FTDX3000, FT-991A) as a fallback, so the display stays in sync regardless of the radio's auto-info behaviour. It backs off briefly while you're tuning from the browser so it never fights your input. The dual-receiver FtdX101MP/D, where auto-info works reliably, is unchanged. Diagnosed from a log supplied by Giovanni (iu1teu) on his FTDX3000 — thank you.
+
+## 2026-07-20 - v2.4.2-pre16 (pre-release)
+
+Small fix on top of pre15.
+
+**SUB VC Tune control hidden on hardware that can't use it.** On FtdX101MP hardware revisions that don't support VC Tune over CAT (e.g. ID0682), the MAIN VC Tune control was correctly hidden but the SUB one was not — it appeared on VFO B even though it could never work. Both are now hidden together on those revisions. This only affects the specific blocked hardware revision; other FtdX101MP radios are unchanged.
+
+## 2026-07-20 - v2.4.2-pre15 (pre-release)
+
+Split-related work, mostly for the single-receiver radios.
+
+**The +5k (Quick Split) button works now.** It was formatting the VFO B frequency with too many digits, so the radio rejected the command and nothing happened — on every model, it had just never been noticed. It now correctly sets VFO B to VFO A + 5 kHz and enables split, and gives a brief flash when pressed so you can see the press register. Thanks to Giovanni (iu1teu) for reporting it on his FTDX3000; I confirmed it was broken on my own FtdX101MP too.
+
+**New: independent RX / TX VFO selectors (single-receiver radios).** On the FTdx10, FT-710 and FTDX3000, split was previously locked to "VFO A receives, VFO B transmits." There are now separate **RX** and **TX** VFO selectors, so you can choose either VFO for receive and either for transmit — reverse split (B receives, A transmits) and both-on-one-VFO included. Split is simply on whenever RX and TX are different VFOs. This is single-receiver only; the dual-receiver FtdX101 is unchanged. Built on Giovanni's (iu1teu) suggestion and his confirmed FTDX3000 command details — I can't exercise split on my own '101, so I'd particularly welcome his (and other single-receiver owners') confirmation that it behaves correctly.
+
+## 2026-07-18 - v2.4.2-pre14 (pre-release)
+
+Two radio-specific fixes.
+
+**FTdx101: the active VFO is shown again.** On the dual-receiver FTdx101, the panel that the main tuning knob currently controls (MAIN or SUB) now has a subtle highlight, and it follows along live when you select MAIN/SUB on the radio. You can also click a VFO panel's header to make that band active from the browser. This indicator had been lost in an earlier VFO-panel rework — thanks to Pierre VK6IS for spotting it. Tested on my own FTdx101MP.
+
+**FTDX3000: the Split button works now.** The Split button was sending a command the FTDX3000 doesn't have, so it silently did nothing on that radio. It's now driven through the correct command (the one that selects which VFO transmits). Thanks to Giovanni (iu1teu) for confirming the fault on his FTDX3000 — this fix is on his radio's word rather than mine, so I'd welcome his confirmation that it now behaves.
+
+## 2026-07-17 - v2.4.2-pre13 (pre-release)
+
+Point fix on top of pre12. The keyboard TX-toggle shortcut added in pre11 introduced a regression where the **Settings page would silently fail to save** whenever the TX toggle key was left blank (which it is by default, and always on a fresh install) — the same class of problem as the earlier Settings-save bug: an empty optional field was being treated as required and the browser quietly blocked the whole form before it could be submitted. That's fixed, and the Save button now only shows "Saving…" when the form is genuinely being submitted (and jumps to the offending field if something really is invalid). Thanks to Fabio Valente (CR7CDC) for catching and fixing his own earlier change. If you were on pre11 or pre12, this is the one to move to.
+
+## 2026-07-17 - v2.4.2-pre12 (pre-release)
+
+Two contributions from Fabio Valente (CR7CDC), both focused on the single-receiver radios (FTdx10 / FT-710 / FTDX3000).
+
+**Roofing filter fixes.** The FTdx10's roofing filter is now selectable from the VFO panels — it was previously assumed to be automatic and offered no control. On the FTDX3000, the roofing read-back is corrected: the radio reports its filter in a different code space than the one used to set it, which had mislabelled 600 Hz / 300 Hz and desynced the dropdown while in AUTO. Both were verified against the CAT manuals and Hamlib's roofing-filter tables.
+
+**Single-receiver VFO handling.** A set of fixes for how YWC tracks which VFO is active on single-receiver radios: settings changed on VFO B no longer carry over to VFO A when you switch, memory recall now tunes the *active* VFO rather than always VFO A, and the display re-reads the radio after a front-panel A/B press so it stays in step. Also fixed — a browser tab or device that connects *after* startup (a second tab, a phone, a remote session) now receives the full current state on connect, instead of showing defaults for things like Split and the active-VFO indicator.
+
+I've tested these on my own FTdx101 (dual-receiver) to confirm nothing regressed there, and Fabio has tested on his FTdx10 — but the single-receiver behaviour would really benefit from confirmation on an FTdx10, FT-710 or FTDX3000. If you run one of those, this is a good release to try and report back on.
+
+## 2026-07-16 - v2.4.2-pre11 (pre-release)
+
+Two things in this build.
+
+**A transmit safety net for the WSJT-X / rigctld bridge (follow-up to pre10's PTT fix).** After pre10 got the radio keying correctly again, wa6auf found that using WSJT-X's Tune could leave the radio stuck transmitting — WSJT-X keyed it, but its "stop" never reached YWC, so the carrier stayed on until he dropped it by hand with YWC's own Transmit button. Whatever the reason a release goes missing, YWC shouldn't ever let itself be left transmitting, so I've added a safety net: if the radio is keyed through the rigctld bridge and no release arrives, YWC now forces it back to receive automatically — both if the connection drops while keyed, and after a timeout. I haven't been able to reproduce wa6auf's exact setup, so I'm treating this as a safeguard rather than a confirmed fix pending his retest.
+
+**A keyboard transmit shortcut and split-mode fixes (contributed by Fabio Valente).** Fabio added an optional keyboard shortcut to toggle transmit — off by default; set a key under Settings → Accessibility — fixed the inactive-VFO greying in split mode so the TX button and split badge stay full-colour and clickable, and hardened the transmit-state detection so the on-screen TX indicator clears the instant you unkey. Thank you Fabio. The greying fix applies to the single-receiver radios (FTdx10 / FT-710 / FTDX3000); it's been tested on Fabio's FT-DX-10 and the transmit changes on my FTdx101.
 
 ## 2026-07-16 - v2.4.2-pre10 (pre-release)
 
@@ -237,7 +362,7 @@ For Steve this wasn't just an annoyance — it meant he couldn't change the seri
 
 ### English (US) voice control language pack
 
-Added a US-English variant of the built-in Voice Control phrase pack (same commands, "meters" instead of "metres", the one UK-only trigger phrase dropped) — install it via **Settings → Voice Control → Preview import** using the pack shipped at `/voice-packs/YWC-VoicePack-en-US-v1.zip`. See [USER_MANUAL.md §17.7](USER_MANUAL.md#177-more-languages) for how to author and share further language packs.
+Added a US-English variant of the built-in Voice Control phrase pack (same commands, "meters" instead of "metres", the one UK-only trigger phrase dropped) — install it via **Settings → Voice Control → Preview import** using the pack shipped at `/voice-packs/YWC-VoicePack-en-US-v2.zip`. See [USER_MANUAL.md §17.7](USER_MANUAL.md#177-more-languages) for how to author and share further language packs.
 
 ## 2026-07-10 - v2.4.0
 

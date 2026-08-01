@@ -53,11 +53,27 @@ function showServerStoppedOverlay() {
     try { window.sMeterHistoryB?.stop?.();   } catch { /* ignore */ }
 }
 
+function isTypingIntoEditable() {
+    const active = document.activeElement;
+    if (active && (
+        active.tagName === 'INPUT' ||
+        active.tagName === 'TEXTAREA' ||
+        active.isContentEditable
+    )) return true;
+    // The on-screen frequency keypad is a text-entry surface even though focus
+    // sits on its buttons (a <dialog>, not an <input>). Treat it as "typing" so
+    // global shortcuts (TX toggle, fullscreen) don't fire while a frequency is
+    // being entered — otherwise a non-digit shortcut key sails past the keypad's
+    // own keydown handler (which only swallows digits/Escape/nav) to the rig.
+    const freqKb = document.getElementById('freqKeyboardDialog');
+    if (freqKb && freqKb.open) return true;
+    return false;
+}
+
 // --- Fullscreen Toggle: 'f' or 'F' to enter, 'Esc' to exit ---
 document.addEventListener('keydown', function (e) {
     // Ignore if typing in an input, textarea, or contenteditable
-    const active = document.activeElement;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+    if (isTypingIntoEditable()) return;
     if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // Bare F only — guarding against modifiers stops YWC from stealing
         // Ctrl+F (browser find-in-page) and Cmd+F on Mac.
@@ -73,6 +89,28 @@ document.addEventListener('keydown', function (e) {
             e.preventDefault();
         }
     }
+});
+
+// Optional browser TX shortcut. Disabled by default; when configured, it
+// toggles transmit using the same /api/cat/tx flow as the on-screen button.
+document.addEventListener('keydown', function (e) {
+    const configuredKey = window.ywcTxToggleKey;
+    // Empty string only — do not use falsy check; a legacy " " must still match.
+    if (configuredKey == null || configuredKey === '' || isTypingIntoEditable()) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+
+    // Settings stores Space as the token "Space" (HTML cannot round-trip " ").
+    // Accept both the token and a legacy lone-space value.
+    const isSpaceShortcut = configuredKey === 'Space' || configuredKey === ' ';
+    const keyMatches = isSpaceShortcut
+        ? (e.key === ' ')
+        : (configuredKey.length === 1 && e.key.length === 1
+            ? e.key.toLowerCase() === configuredKey.toLowerCase()
+            : e.key === configuredKey);
+    if (!keyMatches) return;
+
+    e.preventDefault();
+    toggleTx();
 });
 
 // Add/remove fullscreen-mode class on body when entering/exiting fullscreen
@@ -589,8 +627,9 @@ let txVfo = 0; // 0 = VFO A, 1 = VFO B (the TX VFO — only flips with split)
 let activeVfo = 0;
 
 // Apply the .vfo-inactive class to whichever VFO panel is NOT the active
-// (TX) one — but only on single-receiver radios (FTdx10, FT-710, FTDX3000).
-// Dual-receiver radios (FTdx101MP/D) leave both panels active because each
+// (RX) one — but only on single-receiver radios (FTdx10, FT-710, FTDX3000).
+// CSS greys only that panel's .card-body (header stays normal so TX looks
+// enabled). Dual-receiver radios leave both panels active because each
 // VFO is its own physical receiver chain. The data-single-receiver
 // attribute on #vfoRow is rendered server-side from RadioCapabilities.cs.
 // See docs/decisions/0003-single-vs-dual-receiver-ui.md.
@@ -610,13 +649,26 @@ function applyVfoActiveStyling() {
 
     const singleReceiver = vfoRow.dataset.singleReceiver === 'true';
     if (!singleReceiver) {
-        // Dual-receiver: both panels are real receivers, both stay active.
+        // Dual-receiver (FTdx101): both panels are real receivers, so neither
+        // is greyed. But still show WHICH band is active — the MAIN/SUB band
+        // the main tuning knob controls — with a subtle highlight, driven by
+        // activeVfo (VS: 0 = MAIN/A, 1 = SUB/B). The radio auto-broadcasts VS
+        // when you press MAIN⇄SUB-select on the front panel, so this follows
+        // live. (Restores an indicator dropped in the ADR-0003 rework — Pierre
+        // VK6IS #FTdx101.)
         aCol.classList.remove('vfo-inactive');
         bCol.classList.remove('vfo-inactive');
         aSpec?.classList.remove('vfo-inactive');
         bSpec?.classList.remove('vfo-inactive');
+        aCol.classList.toggle('vfo-active', activeVfo === 0);
+        bCol.classList.toggle('vfo-active', activeVfo === 1);
         return;
     }
+
+    // Single-receiver uses greying (below), not the active highlight — clear
+    // any stale highlight in case the RadioModel was switched mid-session.
+    aCol.classList.remove('vfo-active');
+    bCol.classList.remove('vfo-active');
 
     // Single-receiver: white = active VFO (the one currently RECEIVING),
     // grey = the other one. This is true in BOTH normal and split mode:
@@ -636,9 +688,10 @@ function applyVfoActiveStyling() {
     // (VS command) for both cases is deterministic and matches what the
     // radio is actually doing.
     //
-    // The TX button and SPLIT badge land on the grey panel in split mode
-    // (R8) automatically because updateTxButton / updateSplitButton derive
-    // the TX position as "opposite of active" on single-receiver radios.
+    // The TX button and SPLIT badge land on the inactive panel in split
+    // mode (R8) because updateTxButton / updateSplitButton derive the TX
+    // position as "opposite of active" on single-receiver radios. The
+    // card header is not greyed, so TX stays full-colour and clickable.
     //
     // The spectrum panel is NOT greyed — on single-receiver radios the
     // single spectrum always shows the live receive signal. The second
@@ -649,10 +702,10 @@ function applyVfoActiveStyling() {
 
     activeCol.classList.remove('vfo-inactive', 'vfo-tx-editable');
     inactiveCol.classList.add('vfo-inactive');
-    // R10/R11: in split mode the grey panel IS the TX VFO — operators must
-    // still be able to set the TX frequency from YWC without un-splitting.
-    // The .vfo-tx-editable class re-enables pointer-events on the frequency
-    // display while leaving every other control on the grey panel read-only.
+    // R10/R11: in split mode the inactive panel IS the TX VFO — operators
+    // must still be able to set the TX frequency from YWC without
+    // un-splitting. .vfo-tx-editable re-enables the frequency field while
+    // leaving every other card-body control read-only.
     inactiveCol.classList.toggle('vfo-tx-editable', splitOn);
 
     // Make sure neither spectrum carries a stale inactive class from a
@@ -698,7 +751,7 @@ async function toggleTx() {
             const data = await response.json();
             isTransmitting = data.transmitting;
             updateTxButton();
-
+            updateTxIndicators(isTransmitting);
         } else {
 
         }
@@ -772,10 +825,10 @@ function updateSplitButton() {
         btn.textContent = active ? 'Split ON' : 'Split';
     }
 
-    // R8: the SPLIT TX badge belongs on the TX VFO's header — the grey
-    // panel. On single-receiver radios the TX VFO is the OPPOSITE of the
-    // active VFO; on dual-receiver radios it's whichever VFO the FT
-    // command points to. Show one badge, hide the other.
+    // R8: the SPLIT TX badge belongs on the TX VFO's header. On
+    // single-receiver radios the TX VFO is the OPPOSITE of the active VFO;
+    // on dual-receiver radios it's whichever VFO the FT command points to.
+    // Show one badge, hide the other.
     let txVfoIdx;
     if (isSingleReceiver) {
         txVfoIdx = (activeVfo === 0) ? 1 : 0;   // opposite of RX
@@ -803,6 +856,53 @@ function updateSplitButton() {
     }
 }
 
+// Independent RX / TX VFO selectors (single-receiver radios, #78). RX follows
+// activeVfo (VS / FR), TX follows txVfo (FT); split is derived (TX ≠ RX). The
+// selected RX button is filled grey; the selected TX button is red when split
+// is on and filled grey when TX and RX are the same VFO.
+function updateRxTxSelectors() {
+    const rxA = document.getElementById('rxVfoA');
+    if (!rxA) return; // group only rendered on single-receiver radios
+    const pick = (el, on, onClass) => {
+        el.classList.remove('btn-secondary', 'btn-danger', 'btn-outline-secondary');
+        el.classList.add(on ? onClass : 'btn-outline-secondary');
+    };
+    pick(rxA, activeVfo === 0, 'btn-secondary');
+    pick(document.getElementById('rxVfoB'), activeVfo === 1, 'btn-secondary');
+    const split = txVfo !== activeVfo;
+    pick(document.getElementById('txVfoA'), txVfo === 0, split ? 'btn-danger' : 'btn-secondary');
+    pick(document.getElementById('txVfoB'), txVfo === 1, split ? 'btn-danger' : 'btn-secondary');
+}
+
+async function setRxVfo(vfo) {
+    try {
+        const r = await fetch(`/api/cat/rx-vfo/${vfo}`, { method: 'POST' });
+        if (r.ok) {
+            const d = await r.json();
+            activeVfo = d.rxVfo;
+            if (typeof d.splitMode === 'number') splitMode = d.splitMode;
+            updateRxTxSelectors();
+            updateSplitButton();
+            applyVfoActiveStyling();
+        }
+    } catch {}
+}
+
+async function setTxVfo(vfo) {
+    try {
+        const r = await fetch(`/api/cat/tx-vfo/${vfo}`, { method: 'POST' });
+        if (r.ok) {
+            const d = await r.json();
+            txVfo = d.txVfo;
+            if (typeof d.splitMode === 'number') splitMode = d.splitMode;
+            updateRxTxSelectors();
+            updateSplitButton();
+            applyVfoActiveStyling();
+            updateTxButton();
+        }
+    } catch {}
+}
+
 async function setSplit(mode) {
     try {
         const r = await fetch(`/api/cat/split/${mode}`, { method: 'POST' });
@@ -823,6 +923,15 @@ async function swapVfo() {
     try {
         await fetch('/api/cat/swap-vfo', { method: 'POST' });
         // FrequencyA/B updates arrive via SignalR; the endpoint also broadcasts immediately
+    } catch {}
+}
+
+// Dual-receiver only: make a VFO the active (MAIN/SUB) band by sending VS.
+// The ActiveVfo update arrives via SignalR and moves the highlight; setting
+// it server-side too avoids flicker.
+async function setActiveVfo(vfo) {
+    try {
+        await fetch(`/api/cat/active-vfo/${vfo}`, { method: 'POST' });
     } catch {}
 }
 
@@ -1136,11 +1245,13 @@ connection.on("RadioStateUpdate", function (update) {
         txVfo = update.value;
         updateTxButton();
         applyVfoActiveStyling();
+        updateRxTxSelectors();
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('txVfo', update.value);
     }
     if (update.property === "ActiveVfo") {
         activeVfo = update.value;
         applyVfoActiveStyling();
+        updateRxTxSelectors();
         // In normal mode on a single-receiver radio, the TX button position
         // follows activeVfo (the TX VFO IS the active VFO; FT doesn't move).
         updateTxButton();
@@ -1736,10 +1847,48 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Split / Swap VFO button handlers
     document.getElementById('splitBtn')?.addEventListener('click', () => setSplit(splitMode > 0 ? 0 : 1));
-    document.getElementById('quickSplitBtn')?.addEventListener('click', () => setSplit(2));
+    // Quick Split (+5k) is a one-shot action, not a persistent mode — the
+    // Split button (red) shows the resulting split state. Give a brief "fired"
+    // flash so the press registers visually, then return to the resting style.
+    const quickSplitBtn = document.getElementById('quickSplitBtn');
+    quickSplitBtn?.addEventListener('click', () => {
+        quickSplitBtn.classList.replace('btn-outline-secondary', 'btn-danger');
+        clearTimeout(quickSplitBtn._flashTimer);
+        quickSplitBtn._flashTimer = setTimeout(() => {
+            quickSplitBtn.classList.replace('btn-danger', 'btn-outline-secondary');
+        }, 250);
+        setSplit(2);
+    });
+    // Independent RX / TX VFO selectors (single-receiver radios only; the group
+    // is not rendered otherwise, so these no-op on dual-receiver radios).
+    document.getElementById('rxVfoA')?.addEventListener('click', () => setRxVfo('A'));
+    document.getElementById('rxVfoB')?.addEventListener('click', () => setRxVfo('B'));
+    document.getElementById('txVfoA')?.addEventListener('click', () => setTxVfo('A'));
+    document.getElementById('txVfoB')?.addEventListener('click', () => setTxVfo('B'));
+    updateRxTxSelectors();
     document.getElementById('swapVfoBtn')?.addEventListener('click', swapVfo);
     document.getElementById('copyBtoABtn')?.addEventListener('click', () => copyVfo('ba'));
     document.getElementById('copyAtoBBtn')?.addEventListener('click', () => copyVfo('ab'));
+
+    // Dual-receiver only: click a VFO panel's header to make it the active
+    // (MAIN/SUB) band. Ignored on single-receiver (greying already shows the
+    // active VFO) and when the click lands on a control inside the header.
+    (function wireVfoActiveSelect() {
+        const vfoRow = document.getElementById('vfoRow');
+        if (!vfoRow || vfoRow.dataset.singleReceiver === 'true') return;
+        const wire = (colId, vfo) => {
+            const header = document.querySelector(`#${colId} .card-header`);
+            if (!header) return;
+            header.style.cursor = 'pointer';
+            header.title = `Click to make VFO ${vfo} the active (MAIN/SUB) band`;
+            header.addEventListener('click', (e) => {
+                if (e.target.closest('button, input, select, a, [role="button"], .badge')) return;
+                setActiveVfo(vfo);
+            });
+        };
+        wire('vfoACol', 'A');
+        wire('vfoBCol', 'B');
+    })();
 
     // Clarifier: seed JS state from server-rendered HTML values
     const clarSlider = document.getElementById('clarOffsetSlider');
@@ -2142,6 +2291,7 @@ document.addEventListener('DOMContentLoaded', function() {
         localFreq: { A: null, B: null },
         selectedIdx: { A: null, B: null },
         lastSentFreq: { A: null, B: null },
+        _lastFreqSend: { A: 0, B: 0 },   // ms timestamp of the last throttled send-to-radio, per receiver
         lastBackendFreq: { A: null, B: null },
         lastBand: { A: null, B: null },
         lastMode: { A: null, B: null },
@@ -2285,22 +2435,38 @@ document.addEventListener('DOMContentLoaded', function() {
             const newDigits = Array.from(display.querySelectorAll('.digit')).filter(d => d.textContent !== '.');
             newDigits.forEach(d => d.classList.remove('selected'));
             if (newDigits[idx]) newDigits[idx].classList.add('selected');
+            // Send to the radio AS WE STEP, throttled — so a press-and-hold (or a
+            // wheel spin) tunes the radio live instead of only when you let go.
+            // Previously this was a 600 ms trailing debounce, but the ▲/▼
+            // hold-repeat fires every 500 ms, so each step reset the timer and the
+            // radio never moved until release (reported by Colin on the FtdX101).
+            // Leading-edge throttle: move the radio at most every SEND_THROTTLE_MS;
+            // a trailing timer always sends the final position and clears localFreq
+            // so the ~500 ms poll can settle the display once the radio confirms.
+            const SEND_THROTTLE_MS = 250;
+            const sendToRadio = (settle) => {
+                const f = state.localFreq[receiver] ?? newFreq;
+                // Skip the actual CAT write if this frequency was already the last
+                // one sent — stops the trailing timer re-sending a value the
+                // leading edge already pushed during a continuous hold/spin.
+                if (f !== state.lastSentFreq[receiver]) {
+                    setFrequency(receiver, f);
+                    state.lastSentFreq[receiver] = f;
+                    state._lastFreqSend[receiver] = Date.now();
+                }
+                // Only the trailing (settle) send releases localFreq, so the poll
+                // can take over once the radio confirms lastSentFreq. Intermediate
+                // sends keep localFreq set so the display keeps showing the live
+                // in-progress value. state.editing stays true either way — the
+                // fetchRadioStatus reset block clears it once the radio echoes
+                // lastSentFreq back, avoiding the "flip back then settle" race.
+                if (settle) state.localFreq[receiver] = null;
+            };
+            if (Date.now() - (state._lastFreqSend[receiver] || 0) >= SEND_THROTTLE_MS) {
+                sendToRadio(false);   // leading edge: move the radio now
+            }
             clearTimeout(display._debounceTimer);
-            display._debounceTimer = setTimeout(() => {
-                setFrequency(receiver, newFreq);
-                state.lastSentFreq[receiver] = newFreq;
-                state.localFreq[receiver] = null;
-                // IMPORTANT: keep state.editing=true here. The polling tick
-                // at ~500 ms will reset it to false once it sees the radio
-                // confirm data.vfoA.frequency === state.lastSentFreq.A (see
-                // the reset block in fetchRadioStatus). If we clear editing
-                // now, the very next polling tick re-renders the display
-                // with whatever frequency the radio is still reporting --
-                // typically the OLD value, because we just sent the new one
-                // ~tens of ms ago and the radio hasn't echoed back yet.
-                // That race shows up as the digit "flipping back then
-                // settling on the new value" the user reported.
-            }, 600);
+            display._debounceTimer = setTimeout(() => sendToRadio(true), SEND_THROTTLE_MS);
         }
 
         // Auto-select the kHz position when the user hits an arrow / ▲ / ▼

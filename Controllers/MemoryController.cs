@@ -81,7 +81,7 @@ namespace Yaesu_Web_Control.Controllers
             return Ok();
         }
 
-        // ── Recall (tune VFO A to a memory) ─────────────────────────────────
+        // ── Recall (tune the active VFO to a memory) ────────────────────────
 
         [HttpPost("{id:int}/recall")]
         public async Task<IActionResult> Recall(int id)
@@ -91,20 +91,28 @@ namespace Yaesu_Web_Control.Controllers
 
             var settings = await _settingsService.GetSettingsAsync();
             bool useCf = settings.RadioModel is "FTdx10" or "FT-710";
+            bool targetB = RadioCapabilities.VfoIsB(
+                _radioStateService.IsSingleReceiver,
+                _radioStateService.ActiveVfo,
+                "A");
 
             // Set mode before frequency so the radio applies any pitch/carrier offset
             // (e.g. CW sidetone offset) before the VFO is tuned — prevents ~700 Hz landing error.
             if (ModeToCode.TryGetValue(memory.Mode, out char modeCode))
             {
-                await _catClient.SendCommandAsync($"MD0{modeCode};", "MemRecall", CancellationToken.None);
-                _radioStateService.ModeA = memory.Mode;
+                char mdP1 = targetB ? '1' : '0';
+                await _catClient.SendCommandAsync($"MD{mdP1}{modeCode};", "MemRecall", CancellationToken.None);
+                if (targetB) _radioStateService.ModeB = memory.Mode;
+                else _radioStateService.ModeA = memory.Mode;
                 await Task.Delay(50);
             }
 
             // Set frequency
             string freqStr = memory.FrequencyHz.ToString("D9");
-            await _catClient.SendCommandAsync($"FA{freqStr};", "MemRecall", CancellationToken.None);
-            _radioStateService.FrequencyA = memory.FrequencyHz;
+            string freqCmd = targetB ? "FB" : "FA";
+            await _catClient.SendCommandAsync($"{freqCmd}{freqStr};", "MemRecall", CancellationToken.None);
+            if (targetB) _radioStateService.FrequencyB = memory.FrequencyHz;
+            else _radioStateService.FrequencyA = memory.FrequencyHz;
 
             // Set clarifier
             if (useCf)
@@ -126,7 +134,8 @@ namespace Yaesu_Web_Control.Controllers
                     await _catClient.SendCommandAsync($"RD{Math.Abs(memory.ClarifierOffsetHz):D4};", "MemRecall", CancellationToken.None);
             }
 
-            _radioStateService.ClarifierOffsetA = memory.ClarifierOffsetHz;
+            if (targetB) _radioStateService.ClarifierOffsetB = memory.ClarifierOffsetHz;
+            else _radioStateService.ClarifierOffsetA = memory.ClarifierOffsetHz;
             _radioStateService.RxClarOn = memory.RxClarOn;
             _radioStateService.TxClarOn = memory.TxClarOn;
 
@@ -135,19 +144,22 @@ namespace Yaesu_Web_Control.Controllers
             if (!string.IsNullOrEmpty(memory.Antenna))
             {
                 await _catClient.SendCommandAsync($"AN0{memory.Antenna};", "MemRecall", CancellationToken.None);
-                _radioStateService.AntennaA = memory.Antenna;
+                if (targetB) _radioStateService.AntennaB = memory.Antenna;
+                else _radioStateService.AntennaA = memory.Antenna;
             }
             if (!string.IsNullOrEmpty(memory.IfWidthCode) && int.TryParse(memory.IfWidthCode, out int ifw))
             {
                 await _catClient.SendCommandAsync($"SH00{ifw:D2};", "MemRecall", CancellationToken.None);
-                _radioStateService.IfWidthA = memory.IfWidthCode;
+                if (targetB) _radioStateService.IfWidthB = memory.IfWidthCode;
+                else _radioStateService.IfWidthA = memory.IfWidthCode;
             }
             if (memory.IfShiftHz.HasValue)
             {
                 int shift = memory.IfShiftHz.Value;
                 char sign = shift >= 0 ? '+' : '-';
                 await _catClient.SendCommandAsync($"IS00{sign}{Math.Abs(shift):D4};", "MemRecall", CancellationToken.None);
-                _radioStateService.IfShiftA = shift;
+                if (targetB) _radioStateService.IfShiftB = shift;
+                else _radioStateService.IfShiftA = shift;
             }
             if (!string.IsNullOrEmpty(memory.RoofingCode))
             {
@@ -155,29 +167,35 @@ namespace Yaesu_Web_Control.Controllers
                 if (settings.RadioModel is not ("FTdx10" or "FT-710"))
                 {
                     await _catClient.SendCommandAsync($"RF0{memory.RoofingCode};", "MemRecall", CancellationToken.None);
-                    _radioStateService.RoofingFilterA = memory.RoofingCode;
+                    if (targetB) _radioStateService.RoofingFilterB = memory.RoofingCode;
+                    else _radioStateService.RoofingFilterA = memory.RoofingCode;
                 }
             }
             if (memory.NbOn.HasValue)
             {
                 await _catClient.SendCommandAsync($"NB0{(memory.NbOn.Value ? 1 : 0)};", "MemRecall", CancellationToken.None);
-                _radioStateService.NbA = memory.NbOn.Value ? "1" : "0";
+                string nbVal = memory.NbOn.Value ? "1" : "0";
+                if (targetB) _radioStateService.NbB = nbVal;
+                else _radioStateService.NbA = nbVal;
             }
             if (memory.NbLevel.HasValue)
             {
                 int nbl = Math.Clamp(memory.NbLevel.Value, 1, 20);
                 await _catClient.SendCommandAsync($"NL0{nbl:D3};", "MemRecall", CancellationToken.None);
-                _radioStateService.NbLevelA = nbl;
+                if (targetB) _radioStateService.NbLevelB = nbl;
+                else _radioStateService.NbLevelA = nbl;
             }
             if (!string.IsNullOrEmpty(memory.NrLevel))
             {
                 await _catClient.SendCommandAsync($"NR0{memory.NrLevel};", "MemRecall", CancellationToken.None);
-                _radioStateService.NrA = memory.NrLevel;
+                if (targetB) _radioStateService.NrB = memory.NrLevel;
+                else _radioStateService.NrA = memory.NrLevel;
             }
             if (!string.IsNullOrEmpty(memory.AgcMode))
             {
                 await _catClient.SendCommandAsync($"GT0{memory.AgcMode};", "MemRecall", CancellationToken.None);
-                _radioStateService.AgcA = memory.AgcMode;
+                if (targetB) _radioStateService.AgcB = memory.AgcMode;
+                else _radioStateService.AgcA = memory.AgcMode;
             }
             if (memory.PowerWatts.HasValue)
             {

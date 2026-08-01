@@ -49,6 +49,11 @@
         public string WsjtxUdpAddress { get; set; } = "239.255.0.1";
         public int WsjtxUdpPort { get; set; } = 2237;
 
+        // When false, YWC does NOT bind the WSJT-X UDP port at startup, leaving
+        // it free for another WSJT-X tool. Default true (unchanged behaviour) —
+        // see WsjtxUdpService, which returns early when this is off.
+        public bool WsjtxIntegrationEnabled { get; set; } = true;
+
         // Last Radio State (persisted between sessions)
         public RadioState LastRadioState { get; set; } = new();
 
@@ -167,6 +172,18 @@
         // Yuri W4YSW request 2026-06-17.
         public bool ShowFrequencyArrowButtons { get; set; } = false;
 
+        // Browser key that toggles TX (transmit). Empty / null = disabled.
+        // Stored as a KeyboardEvent.key value such as "t" or "F8", except
+        // Space which is stored as the token "Space" (a lone " " cannot
+        // survive HTML form / input value round-trips).
+        // Ignored while typing in inputs to avoid accidental keying during
+        // form entry or frequency editing.
+        // Nullable so an empty input does not get an implicit [Required] from
+        // <Nullable>enable</Nullable> — that would make jQuery unobtrusive
+        // validation silently block the entire Settings form (same class of
+        // bug as #65 / SdrplayInstallPath and the DX-cluster fields).
+        public string? TxToggleKey { get; set; } = "";
+
         // ── Voice Control (in-process SAPI) ───────────────────────────────
         // When true, the navbar mic button is shown and the SAPI recogniser
         // engages on PTT. Default OFF -- voice control is opt-in so users
@@ -212,6 +229,24 @@
         // an app restart. Defaults to en-GB since that's the only pack that
         // ships today. docs/VoiceControl/language-pack-manager-design.md §4.4.
         public string VoiceActiveLocale { get; set; } = "en-GB";
+
+        // Recording device the speech recogniser listens to (MME product name,
+        // e.g. "Microphone (USB Audio Device)"). Empty = Windows default
+        // recording device. System.Speech can only bind to the default device
+        // or a raw stream, so a chosen device is captured ourselves and fed to
+        // SAPI via SetInputToAudioStream (see Services/Voice/MicrophoneCapture.cs).
+        // Name-keyed rather than index-keyed because a device's index shifts as
+        // others are plugged/unplugged, whereas the picked name is stable.
+        public string VoiceInputDeviceName { get; set; } = "";
+
+        // Playback device the spoken confirmation announcements play through
+        // (MME product name). Empty = Windows default playback device. If the
+        // Windows default is claimed by something else (WSJT-X, rig audio) the
+        // operator may never hear confirmations, so they can point them at their
+        // own speakers/headset here. System.Speech can't target an output device
+        // by name, so the chosen-device path renders the phrase to a WAV and
+        // plays it via NAudio (see Services/Voice/AudioOutput.cs, VoiceTtsService).
+        public string VoiceOutputDeviceName { get; set; } = "";
     }
 
     public class RadioState

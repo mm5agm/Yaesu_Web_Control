@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Speech.Recognition;
+using System.Speech.AudioFormat;
 using Yaesu_Web_Control.Hubs;
 using Yaesu_Web_Control.Services;
 
@@ -60,6 +61,17 @@ namespace Yaesu_Web_Control.Services.Voice
         private bool _audioWired;
         private string _activeCulture = VoicePhraseStore.DefaultCulture;
 
+        // Microphone selection (Settings → Voice Control). _configuredMicName is
+        // the WaveIn product name the user picked, or null/empty for the Windows
+        // default device. When a specific device is chosen we capture it via
+        // _micStream and feed SAPI SetInputToAudioStream, because System.Speech
+        // can't target a device by name. _boundMicIndex is the WaveIn index
+        // currently bound (-1 = the default device is bound). See
+        // MicrophoneCapture / EnsureAudioInput. All guarded by _engineLock.
+        private volatile string? _configuredMicName;
+        private MicrophoneStream? _micStream;
+        private int _boundMicIndex = -1;
+
         // §6.5 "Test this pack" dry run -- set for the duration of a
         // StartListeningAsync(dryRun: true) session; OnSpeechRecognized reads
         // it to skip actually sending the matched CAT command.
@@ -107,6 +119,8 @@ namespace Yaesu_Web_Control.Services.Voice
             // grab, no holding the recogniser in memory. The user can flip
             // the toggle in Settings and restart YWC to enable.
             var settings = await _settings.GetSettingsAsync();
+            _configuredMicName = settings.VoiceInputDeviceName;
+            _tts.ApplyOutputDevice(settings.VoiceOutputDeviceName);
             if (settings.VoiceControlEnabled)
             {
                 TryInitialiseEngine(string.IsNullOrWhiteSpace(settings.VoiceActiveLocale)
@@ -160,13 +174,12 @@ namespace Yaesu_Web_Control.Services.Voice
                 _targetVfo = vfo;
                 try
                 {
-                    if (!_audioWired)
-                    {
-                        // Deferred until first start so YWC boots fine on
-                        // machines without a microphone.
-                        _engine.SetInputToDefaultAudioDevice();
-                        _audioWired = true;
-                    }
+                    // Bind the configured input (chosen mic or Windows default).
+                    // Deferred until first start so YWC boots fine on machines
+                    // without a microphone. For a chosen device we then drop any
+                    // audio captured while idle so recognition starts clean.
+                    EnsureAudioInput();
+                    _micStream?.DiscardBuffered();
                     _engine.RecognizeAsync(RecognizeMode.Multiple);
                     UpdateStatus(VoiceState.Listening);
                     return true;
@@ -207,6 +220,142 @@ namespace Yaesu_Web_Control.Services.Voice
             }
             return Task.CompletedTask;
         }
+
+        // ── Audio input binding ────────────────────────────────────────────
+        // System.Speech can bind only to the Windows default device or to a raw
+        // PCM stream. When the user picks a specific mic in Settings we capture
+        // it ourselves (MicrophoneStream, 48 kHz/16-bit/mono) and feed SAPI via
+        // SetInputToAudioStream; otherwise we use SetInputToDefaultAudioDevice.
+        // All three methods below must be called with _engineLock held.
+
+        private static SpeechAudioFormatInfo MicFormat() =>
+            new(MicrophoneCapture.SampleRate, AudioBitsPerSample.Sixteen, AudioChannel.Mono);
+
+        /// <summary>
+        /// Idempotently bind the configured input. Latches like the original
+        /// default-device behaviour: once the correct device is bound, repeated
+        /// PTT starts don't re-open it. A configured mic that's since been
+        /// unplugged (index -1) falls back to the Windows default.
+        /// </summary>
+        private void EnsureAudioInput()
+        {
+            if (_engine == null) return;
+
+            int index = MicrophoneCapture.FindDeviceIndex(_configuredMicName);
+            if (index < 0)
+            {
+                if (!_audioWired || _micStream != null)
+                {
+                    DisposeMicStream();
+                    _engine.SetInputToDefaultAudioDevice();
+                    _boundMicIndex = -1;
+                    _audioWired = true;
+                }
+                return;
+            }
+
+            if (_micStream == null || _boundMicIndex != index)
+            {
+                DisposeMicStream();
+                var stream = new MicrophoneStream(index, _logger);
+                _engine.SetInputToAudioStream(stream, MicFormat());
+                _micStream = stream;
+                _boundMicIndex = index;
+                _audioWired = true;
+                _logger.LogInformation("[Voice] Listening on microphone '{Name}' (WaveIn #{Index})", _configuredMicName, index);
+            }
+        }
+
+        /// <summary>
+        /// Ensure the configured input is bound and discard any audio queued
+        /// since the last recognition, so ambient noise / a previous utterance
+        /// isn't replayed as the first match. For the default device that means
+        /// SetInputToNull()+SetInputToDefaultAudioDevice(); for a chosen mic it
+        /// clears the capture queue (or binds fresh, which is inherently clean).
+        /// </summary>
+        private void FlushAudioInput()
+        {
+            if (_engine == null) return;
+
+            int index = MicrophoneCapture.FindDeviceIndex(_configuredMicName);
+            if (index < 0)
+            {
+                DisposeMicStream();
+                _engine.SetInputToNull();
+                _engine.SetInputToDefaultAudioDevice();
+                _boundMicIndex = -1;
+                _audioWired = true;
+                return;
+            }
+
+            if (_micStream == null || _boundMicIndex != index)
+                EnsureAudioInput();          // fresh bind -> already clean
+            else
+                _micStream.DiscardBuffered();
+        }
+
+        private void DisposeMicStream()
+        {
+            if (_micStream == null) return;
+            try { _engine?.SetInputToNull(); } catch { /* best-effort */ }
+            try { _micStream.Dispose(); } catch { /* best-effort */ }
+            _micStream = null;
+            _boundMicIndex = -1;
+        }
+
+        /// <summary>
+        /// Apply a newly-chosen input device (from the Settings picker) without
+        /// an app restart. Persistence is the caller's job; this only updates
+        /// the live engine. If currently listening, recognition is rebound to
+        /// the new device immediately; otherwise the change takes effect on the
+        /// next PTT press. Pass null/empty for the Windows default device.
+        /// </summary>
+        public void ApplyInputDevice(string? deviceName)
+        {
+            lock (_engineLock)
+            {
+                _configuredMicName = deviceName;
+                bool wasListening = _status.State == VoiceState.Listening;
+                if (_engine != null && wasListening)
+                {
+                    try { _engine.RecognizeAsyncCancel(); } catch { /* best-effort */ }
+                }
+
+                // Drop the current binding so the next EnsureAudioInput rebinds
+                // to the new device.
+                DisposeMicStream();
+                _audioWired = false;
+
+                if (_engine != null && wasListening)
+                {
+                    try
+                    {
+                        EnsureAudioInput();
+                        _micStream?.DiscardBuffered();
+                        _engine.RecognizeAsync(RecognizeMode.Multiple);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "[Voice] Failed to rebind input device '{Device}'", deviceName);
+                        UpdateStatus(VoiceState.Error, error: ex.Message);
+                    }
+                }
+            }
+            _logger.LogInformation("[Voice] Input device set to '{Device}'",
+                string.IsNullOrWhiteSpace(deviceName) ? "(Windows default)" : deviceName);
+        }
+
+        /// <summary>
+        /// Apply a newly-chosen playback device for spoken confirmations (from
+        /// the Settings picker). Delegates to the TTS service; persistence is the
+        /// caller's job. Pass null/empty for the Windows default device.
+        /// </summary>
+        public void ApplyOutputDevice(string? deviceName) => _tts.ApplyOutputDevice(deviceName);
+
+        /// <summary>Speak a phrase now — used by the Settings "Test" button so
+        /// the operator can confirm the chosen speaker actually makes sound
+        /// without having to issue a live voice command.</summary>
+        public void TestSpeak(string text) => _tts.Speak(text);
 
         /// <summary>
         /// Reloads the grammar for the active culture without restarting the
@@ -281,12 +430,11 @@ namespace Yaesu_Web_Control.Services.Voice
                         // Try It test, sits queued in the engine's audio buffer
                         // and gets consumed as the start of the next
                         // Recognize() call, matching against a phrase the user
-                        // never said this time. SetInputToNull() followed by
-                        // SetInputToDefaultAudioDevice() discards that queue so
-                        // each test only hears audio spoken after it starts.
-                        engine.SetInputToNull();
-                        engine.SetInputToDefaultAudioDevice();
-                        _audioWired = true;
+                        // never said this time. FlushAudioInput() discards that
+                        // queue (whether the input is the Windows default device
+                        // or a chosen mic) so each test only hears audio spoken
+                        // after it starts.
+                        FlushAudioInput();
 
                         engine.UnloadAllGrammars();
                         var builder = new System.Speech.Recognition.GrammarBuilder(
@@ -365,8 +513,7 @@ namespace Yaesu_Web_Control.Services.Voice
                     // Flush before resuming live listening too, so nothing
                     // spoken during the Try It test (or the silence after it)
                     // gets replayed into the live grammar as its first match.
-                    engine.SetInputToNull();
-                    engine.SetInputToDefaultAudioDevice();
+                    FlushAudioInput();
                     engine.RecognizeAsync(RecognizeMode.Multiple);
                 }
             }
@@ -462,6 +609,7 @@ namespace Yaesu_Web_Control.Services.Voice
                 try
                 {
                     _engine?.RecognizeAsyncCancel();
+                    DisposeMicStream();          // stop/release any captured mic
                     _engine?.Dispose();
                 }
                 catch (Exception ex)
@@ -483,7 +631,12 @@ namespace Yaesu_Web_Control.Services.Voice
         // good match typically sits at 0.85+). Tune downward if too many
         // legitimate phrases get rejected, upward if more misfits slip
         // through.
-        private const float MinConfidence = 0.6f;
+        //
+        // Lowered 0.6 -> 0.5 for parity with IWC: on a quiet mic even correctly-
+        // heard commands land in the 0.5-0.6 band (a starved signal depresses
+        // SAPI's confidence), so 0.6 rejected good commands. The AGC boost above
+        // is the primary lift; 0.5 catches the ones that remain borderline.
+        private const float MinConfidence = 0.5f;
 
         private async void OnSpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
         {
@@ -654,9 +807,12 @@ namespace Yaesu_Web_Control.Services.Voice
             return (intent, args);
         }
 
-        // Maps digit-word -> kHz contribution at the first-fractional position.
-        // "fourteen point zero seven four" -> tokens after "point": zero, seven, four.
+        // Maps digit-word -> Hz contribution by fractional position, most-
+        // significant first. "fourteen point zero seven four" -> tokens after
+        // "point": zero, seven, four.
         //   zero * 100_000 + seven * 10_000 + four * 1_000 = 74_000 Hz fractional.
+        // Up to six fractional digits are read, so "one two three four five six"
+        // resolves to 123_456 Hz — full 1 Hz voice tuning.
         private static readonly Dictionary<string, int> _digitWords =
             new(StringComparer.OrdinalIgnoreCase)
             {
@@ -676,7 +832,9 @@ namespace Yaesu_Web_Control.Services.Voice
 
             long fracHz = 0;
             long multiplier = 100_000; // first frac digit = hundreds of kHz
-            for (int i = pointIdx + 1; i < tokens.Length && multiplier >= 1_000; i++)
+            // multiplier >= 1 lets the loop consume up to six fractional digits
+            // (100_000 .. 1 Hz); it then divides to 0 and the guard stops it.
+            for (int i = pointIdx + 1; i < tokens.Length && multiplier >= 1; i++)
             {
                 if (!_digitWords.TryGetValue(tokens[i], out var d)) break; // hit "megahertz" or other non-digit
                 fracHz += d * multiplier;

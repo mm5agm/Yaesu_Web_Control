@@ -130,6 +130,7 @@ namespace Yaesu_Web_Control.Services
                 // currently active per VS, instead of always writing to *A
                 // state. See #34 R2 controls-bleed fix.
                 radioStateService.IsSingleReceiver = RadioCapabilities.IsSingleReceiver(settings.RadioModel);
+                radioStateService.RadioModel = settings.RadioModel;
                 logger.LogInformation("[RadioInitializationService] Radio responded to FA;: {Response}", faResponse);
 
                 // Safety: force the radio into RX before doing anything else.
@@ -197,18 +198,22 @@ namespace Yaesu_Web_Control.Services
                     stateTasks.Add(multiplexer.SendCommandAsync($"AN1{persistedState.AntennaB};", "Initialization", stoppingToken)
                         .ContinueWith(t => { if (!t.IsFaulted) radioStateService.AntennaB = persistedState.AntennaB; }));
                 }
-                // Restore AF Gain — only if the user previously saved a non-zero value.
-                // 0 is the int default (never saved), so sending AG0000; on every fresh start
-                // would silence the radio.
-                if (persistedState.AfGainA > 0 && persistedState.AfGainA <= 255)
+                // Restore AF Gain — only on dual-receiver radios. On
+                // single-receiver the radio is the source of truth (same
+                // precedent as Mode #38, RF Power #35, MIC Gain #16); the
+                // AG0;/AG1; readQueries and ping-pong AG0; populate the UI.
+                if (!radioStateService.IsSingleReceiver)
                 {
-                    stateTasks.Add(multiplexer.SendCommandAsync($"AG0{persistedState.AfGainA:D3};", "Initialization", stoppingToken)
-                        .ContinueWith(t => { if (!t.IsFaulted) radioStateService.AfGainA = persistedState.AfGainA; }));
-                }
-                if (persistedState.AfGainB > 0 && persistedState.AfGainB <= 255)
-                {
-                    stateTasks.Add(multiplexer.SendCommandAsync($"AG1{persistedState.AfGainB:D3};", "Initialization", stoppingToken)
-                        .ContinueWith(t => { if (!t.IsFaulted) radioStateService.AfGainB = persistedState.AfGainB; }));
+                    if (persistedState.AfGainA > 0 && persistedState.AfGainA <= 255)
+                    {
+                        stateTasks.Add(multiplexer.SendCommandAsync($"AG0{persistedState.AfGainA:D3};", "Initialization", stoppingToken)
+                            .ContinueWith(t => { if (!t.IsFaulted) radioStateService.AfGainA = persistedState.AfGainA; }));
+                    }
+                    if (persistedState.AfGainB > 0 && persistedState.AfGainB <= 255)
+                    {
+                        stateTasks.Add(multiplexer.SendCommandAsync($"AG1{persistedState.AfGainB:D3};", "Initialization", stoppingToken)
+                            .ContinueWith(t => { if (!t.IsFaulted) radioStateService.AfGainB = persistedState.AfGainB; }));
+                    }
                 }
                 // MIC GAIN, Speech Processor ON/OFF, and PROC LEVEL are
                 // deliberately NOT restored from persisted state on connect
@@ -409,24 +414,7 @@ namespace Yaesu_Web_Control.Services
                     // routes through SetPerVfo's 300 ms buffer; by the time
                     // the buffer flushes, ActiveVfo is still = otherVfo, so
                     // they land in the right slot.
-                    string[] perVfoQueries = {
-                        "MD0;",          // mode is per-VFO at the CAT level but the radio
-                                         // updates display mode on swap so re-read for safety
-                        "GT0;",          // AGC
-                        "PA0;",          // IPO/AMP
-                        "RA0;",          // Attenuator
-                        "NR0;", "RL0;",  // NR + DNR level
-                        "NB0;", "NL0;",  // NB + NB level
-                        "BC0;",          // Auto Notch
-                        "BP00;", "BP01;",// Manual Notch on/off + freq
-                        "CO00;", "CO01;", "CO02;", "CO03;", // Contour + APF
-                        "SH0;",          // IF Width
-                        "IS0;",          // IF Shift
-                        "AG0;",          // AF Gain
-                        "RG0;",          // RF Gain
-                        "SQ0;",          // Squelch
-                    };
-                    foreach (var q in perVfoQueries)
+                    foreach (var q in CatCommands.SingleReceiverPerVfoQueries)
                         await multiplexer.SendCommandAndDispatchAsync(q, "Initialization", stoppingToken);
 
                     // Wait for the buffered dispatches to drain (BufferDelayMs

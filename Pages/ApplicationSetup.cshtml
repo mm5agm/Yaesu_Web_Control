@@ -144,6 +144,18 @@
             <h6><i class="bi bi-broadcast"></i> WSJT-X UDP Settings</h6>
             <p class="text-muted">Configure the UDP connection for WSJT-X integration (only applies if using WSJT-X).</p>
 
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" asp-for="WsjtxIntegrationEnabled" id="wsjtxIntegrationEnabled" />
+                <label class="form-check-label" for="wsjtxIntegrationEnabled">
+                    <strong>Enable WSJT-X integration</strong>
+                </label>
+                <div class="form-text">
+                    When on, YWC listens on the WSJT-X UDP port below (default 2237) to show WSJT-X status.
+                    Turn it <strong>off</strong> if another WSJT-X program needs that port — YWC will then leave it free.
+                    <strong>Restart YWC after changing.</strong>
+                </div>
+            </div>
+
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label">UDP Address:</label>

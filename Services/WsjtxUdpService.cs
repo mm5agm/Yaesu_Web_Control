@@ -56,6 +56,11 @@ namespace Yaesu_Web_Control.Services
             {
                 _logger.LogWarning("Loading WSJT-X UDP settings...");
                 var settings = await _settingsService.GetSettingsAsync();
+                if (!settings.WsjtxIntegrationEnabled)
+                {
+                    _logger.LogWarning("WSJT-X integration is disabled in settings — not binding the UDP port, so it stays free for other WSJT-X tools.");
+                    return;
+                }
                 _logger.LogWarning("WSJT-X UDP Settings: Address={Address}, Port={Port}", settings.WsjtxUdpAddress, settings.WsjtxUdpPort);
                 udpClient = CreateUdpListener(settings.WsjtxUdpAddress, settings.WsjtxUdpPort);
                 _logger.LogWarning("WSJT-X UDP listener ACTIVE on port {Port} (address filter: {Address})", settings.WsjtxUdpPort, settings.WsjtxUdpAddress);

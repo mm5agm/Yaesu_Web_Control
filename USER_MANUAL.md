@@ -68,6 +68,7 @@
     - 15.6 [Can I use VSPE / OmniRig / com0com?](#156-can-i-use-vspe-omnirig-com0com-or-a-similar-virtual-com-port-sharer)
     - 15.7 [What is the TX button for?](#157-what-is-the-tx-button-for-when-i-press-it-the-radio-goes-into-tx-mode-but-theres-no-audio-from-my-microphone)
     - 15.8 [Why was Alexa voice control dropped in favour of the built-in microphone?](#158-why-was-alexa-voice-control-dropped-in-favour-of-the-built-in-microphone-method)
+    - 15.9 [WSJT-X is very slow to key the radio (long PTT / Tune delay)](#159-wsjt-x-is-very-slow-to-key-the-radio-1020-second-delay-on-ptt--tune)
 16. [Accessibility and Screen Readers](#16-accessibility-and-screen-readers)
     - 16.1 [Making Everything Bigger](#161-making-everything-bigger)
     - 16.2 [Windows High Contrast Mode](#162-windows-high-contrast-mode)
@@ -103,7 +104,7 @@ Supported radios:
 |-------|-------|-----------|
 | FTdx101MP | 200 W | Dual |
 | FTdx101D | 100 W | Dual |
-| FTDX3000 | 100 W | Dual |
+| FTDX3000 | 100 W | Single |
 | FTdx10 | 100 W | Single |
 | FT-710 | 100 W | Single |
 
@@ -155,7 +156,7 @@ Before the app can communicate with your radio you need to tell it which serial 
 
 1. Open a browser and go to **http://localhost:8080**. If port 8080 was already in use on your PC (e.g. Plex, Jenkins, MiniTool ShadowMaker), YWC will have automatically picked the next free port from 8081–8089. **Hover over the YWC tray icon** down by the Windows clock to see the actual URL — or simply double-click the tray icon to have YWC open the right URL in your default browser.
 2. Click the **Settings** link in the navigation bar.
-3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, dual receiver), **FTdx10** (100 W, single receiver), or **FT-710** (100 W, single receiver).
+3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, single receiver), **FTdx10** (100 W, single receiver), or **FT-710** (100 W, single receiver).
 4. Set **Serial Port** to the COM port your radio is connected to. If you are unsure, go to **Diagnostics → Ports** to see a list of available ports, or check Windows Device Manager.
 5. Set **Baud Rate** to match the radio's CAT baud rate. The factory default is **38400** on all supported radios. You can verify or change this on the radio under **Menu → CAT Rate**.
 6. Select your **Band Plan**: Region 1 (Europe/Africa/Middle East), Region 2 (Americas), Region 3 (Asia-Pacific), or Japan.
@@ -361,8 +362,8 @@ There are two VFO panels side by side:
 
 **Greying behaviour on single-receiver radios** (FTdx10, FT-710, FTDX3000, FT-991A):
 
-- **Normal mode** (split off): the **active** VFO is white, the **inactive** VFO is grey. The grey VFO's controls (Mode, IF Width, Notch, etc.) still display their stored values for reference, but cannot be edited — those values only apply when you swap that VFO to be active via the **A↔B** button.
-- **Split mode**: the **receive** VFO is white, the **transmit** VFO is grey — opposite of normal mode. This makes sense because in split you spend most of your time receiving on the white panel and only occasionally transmit on the grey one. The grey (TX) panel's **frequency field is still editable** so you can set the TX frequency from YWC without un-splitting first — click a digit and scroll the mouse wheel, or use the keyboard icon next to MHz to type one in. The TX button and the SPLIT badge appear on the grey panel.
+- **Normal mode** (split off): the **active** VFO panel is fully usable; the **inactive** VFO's card body is greyed. Mode, IF Width, Notch, and the rest still display their stored values for reference, but cannot be edited — those values only apply when you swap that VFO to be active via the **A↔B** button. The card header (title, ZIN, TX when shown) stays normal colour.
+- **Split mode**: the **receive** VFO is fully usable; the **transmit** VFO's card body is greyed — opposite of normal mode for which panel is inactive. The TX panel's **frequency field is still editable** so you can set the TX frequency from YWC without un-splitting first — click a digit and scroll the mouse wheel, or use the keyboard icon next to MHz to type one in. Everything else in that card body stays read-only. The card header stays normal, so the TX button and SPLIT badge on the transmit panel remain full-colour and clearly active.
 
 On **dual-receiver radios** (FTdx101MP / FTdx101D) neither panel is greyed at any time — both VFOs are real physical receiver chains and are always independently usable.
 
@@ -372,7 +373,7 @@ On **dual-receiver radios** (FTdx101MP / FTdx101D) there are **two** S-meter gau
 
 **Antenna selector visibility:** the per-VFO antenna dropdown is hidden on radios with a single antenna jack (**FTdx10, FT-991A**) since there is nothing to select between. Radios with multiple antenna jacks (FTdx101MP, FTdx101D, FT-710, FTDX3000) keep the selector.
 
-Both panels have identical controls — changing a control on the white panel writes to the radio immediately; changing a control on the grey panel does nothing (apart from the TX frequency in split, as noted).
+Both panels have identical controls — changing a control on the active (fully usable) panel writes to the radio immediately; changing a control on the inactive panel's greyed body does nothing (apart from the TX frequency in split, as noted).
 
 **VFO-B toggle** — the **VFO-B** button in the toolbar shows or hides the VFO B panel. The last state is remembered across sessions.
 
@@ -392,6 +393,19 @@ Both panels have identical controls — changing a control on the white panel wr
 > 3. Press **Split** — you are now receiving on 20m and transmitting on 6m
 > 4. Do **not** press +5k, as that would move VFO B back to 20m + 5 kHz
 
+**RX / TX VFO selectors (single-receiver radios only).** On the single-receiver radios (**FTdx10, FT-710, FTDX3000**) a pair of small selectors — **RX [A│B]** and **TX [A│B]** — sits next to the Split and +5k buttons. They let you choose the receive VFO and the transmit VFO **independently**, instead of being limited to the fixed "VFO A receives, VFO B transmits" that the Split button gives. There is no separate split toggle here — **split is derived automatically: you are in split whenever the RX and TX VFOs are different.** That makes all four combinations available directly:
+
+| RX | TX | Result |
+|----|----|--------|
+| A | A | Normal — receive and transmit on VFO A |
+| A | B | Standard split (the same as the Split button) |
+| B | A | Reverse split — receive on B, transmit on A |
+| B | B | Normal — receive and transmit on VFO B |
+
+The currently selected **RX** button is filled in; the selected **TX** button turns **red** whenever you are in split (RX and TX on different VFOs) and is filled grey otherwise. The selectors follow the radio live, so if you change the receive or transmit VFO at the rig the buttons update to match.
+
+These selectors are **not shown on the dual-receiver FtdX101MP / FtdX101D**, where VFO A and VFO B are two independent physical receivers. On those radios you choose the operating (receive) band by clicking a VFO panel's header, and the transmit VFO follows the **Split** button — see §5.5 above and §5.10 Transmit Controls.
+
 ---
 
 ### 5.6 Frequency Display and Tuning
@@ -403,10 +417,10 @@ The frequency display shows the current VFO frequency in MHz to 1 Hz resolution 
 1. Click on any digit in the frequency display. The selected digit is highlighted.
 2. Roll the mouse wheel up to increase that digit, or down to decrease it.
 3. Carry-over is automatic — for example, scrolling 9 → 0 on the kHz digit also increments the 10 kHz digit.
-4. The new frequency is sent to the radio approximately 200 ms after you stop scrolling.
+4. The radio tunes **live as you scroll** — the frequency is sent several times a second so the rig tracks the display in real time, and the final position is always sent when you stop.
 5. Click anywhere outside the frequency display to deselect.
 
-**On a tablet or phone**, tap a digit to select it, then use the **▲** and **▼** buttons that appear below the display to adjust it.
+**▲ / ▼ step buttons** — small up/down buttons appear below the frequency display (always on a tablet or phone, and on any device when *Show frequency arrow buttons* is enabled in Settings for accessibility). Tap a digit to select it, then press **▲** / **▼** to step it. **Press and hold to repeat**, and the radio tunes live as it steps — it now tracks each step in real time rather than only jumping to the final value when you release.
 
 ---
 
@@ -882,7 +896,7 @@ Clicking **Restart Now** stops YWC and (when running as the installed exe) autom
 
 | Setting | Description |
 |---------|-------------|
-| Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, dual RX), **FTdx10** (100 W, single RX), or **FT-710** (100 W, single RX) |
+| Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), or **FT-710** (100 W, single RX) |
 | Serial Port | COM port the radio's USB/serial cable is connected to (e.g., COM3) |
 | Baud Rate | Must match the radio's CAT Rate setting. Default: 38400 |
 | Band Plan | **IARU Region 1** (Europe, Africa, Middle East — includes 4m), **IARU Region 2** (Americas), **IARU Region 3** (Asia-Pacific), or **Japan** (JARL). Affects which bands and segment frequencies are shown. UK is Region 1; USA, Canada, and South America are Region 2; Australia, New Zealand, and most of Asia (except Japan) are Region 3. |
@@ -1539,6 +1553,66 @@ Log4OM can receive QSO data from WSJT-X and JTAlert via UDP multicast, log QSOs 
 
 ![Log4OM Hamlib settings showing CAT Status OFFLINE — the documented limitation, not a setup error](pictures/Log4OM_Hamlib.png)
 
+**Workaround — getting a live frequency in Log4OM (raised by Bill, W1WRH; confirmed and documented by Jacek, SP3L):**
+
+If you specifically want Log4OM's own live frequency readout — for example when you're logging SSB by hand rather than through WSJT-X — there is a setup that gives *every* program, Log4OM included, a live, synchronised frequency. It sidesteps the rigctld path above entirely and instead uses **VSPE** (Virtual Serial Port Emulator) to split the radio's real COM port into two virtual ports: one for YWC and one for OmniRig. Neither application touches the physical port directly — the splitter feeds both.
+
+The step-by-step below was contributed by Jacek (SP3L) and confirmed working on an FTdx10.
+
+**1. Find your radio's Enhanced COM port.** Open Windows **Device Manager** and note the port numbers your radio is using. You want the **Enhanced** COM port — COM7 in this example.
+
+![Windows Device Manager showing the radio's Enhanced COM port number](pictures/VSPE_01_Device_Manager.png)
+
+**2. Open VSPE.** If you haven't purchased the full licence, you'll see this window — click **[Continue (with limitations)]**.
+
+![VSPE unregistered-licence window with the Continue (with limitations) button](pictures/VSPE_02_Licence_Window.png)
+
+You'll then see the main VSPE window.
+
+![VSPE main window](pictures/VSPE_03_Main_Window.png)
+
+**3. Create a new device.** Click the fifth icon, **[Create new device…]** (a plug with a red asterisk). In the New Device window, select **Virtual Splitter** from the drop-down and give it any title you like.
+
+![VSPE New Device window with Virtual Splitter selected from the drop-down](pictures/VSPE_04_New_Device.png)
+
+**4. Open the splitter settings.** Click **[Next]** to reach the Virtual Splitter — Device Settings window.
+
+![VSPE Virtual Splitter Device Settings window](pictures/VSPE_05_Device_Settings.png)
+
+**5. Point the splitter at your radio's Enhanced COM port.** Select the COM port equal to your radio's Enhanced COM port (COM7 here) and check that the speed shown below it is correct. Adjust it with the **[Settings…]** button if needed.
+
+![VSPE settings — selecting the radio's Enhanced COM port as the splitter source](pictures/VSPE_06_Select_COM_Port.png)
+
+**6. Set the correct speed.** The default for the FTdx10 is **38400** — click the speed value (which may show 115200) and pick **[38400]** from the drop-down. Match this to your own radio's CAT baud rate. Press **[OK]**.
+
+![VSPE speed drop-down set to 38400](pictures/VSPE_07_Speed_Setting.png)
+
+Optionally press **[Test]** — you should see a success pop-up. Press **[OK]** to return.
+
+![VSPE Test success pop-up](pictures/VSPE_08_Test_Popup.png)
+
+**7. Add at least two virtual ports.** Back in the Device Settings window, pick a port number from the drop-down for VSPE to create and click **[Add virtual port]**. Add **at least two** — in this example virtual ports 1 and 2.
+
+![VSPE adding two virtual ports off the splitter](pictures/VSPE_09_Add_Virtual_Ports.png)
+
+**8. Finish.** Click **[Finish]** to return to the main window. Both virtual ports are now active.
+
+![VSPE main window showing both virtual ports active](pictures/VSPE_10_Both_Ports_Active.png)
+
+You can confirm they exist in Device Manager.
+
+![Windows Device Manager showing the two new VSPE virtual ports](pictures/VSPE_11_Device_Manager_Check.png)
+
+**9. Point your applications at the virtual ports.** Set **YWC to use one** of the virtual ports and configure **OmniRig (for Log4OM) to use the other**. **Do not use the original Enhanced COM port in any application.** With that in place, a frequency change in any program is reflected in all of them, and Log4OM shows a live frequency.
+
+> **VSPE must be running before you start YWC and OmniRig.**
+
+A few honest caveats:
+
+- This is a **user-contributed setup, not one I formally test against** — see §15.6 for why virtual-port sharers (VSPE, OmniRig) aren't officially supported. It's confirmed working on an FTdx10; results on other hardware may vary.
+- It runs contrary to the "do not use OmniRig" note above. That note holds when OmniRig and YWC each try to open the *physical* port and fight over it; here the VSPE **splitter** is what makes sharing possible, because each application gets its own dedicated virtual port and neither touches the physical one.
+- Watch the **baud rate** — VSPE doesn't always forward port settings through to the physical port, so make sure every app in the chain (and the radio) agree on the same rate (see §15.6).
+
 To make this concrete, here is the full logging chain end-to-end. At the end of a QSO, WSJT-X pops up its **Log QSO** confirmation dialog with all the QSO details (callsign, mode, band, grid, reports, start/end times) — clicking OK is the only manual step the operator takes:
 
 ![WSJT-X Log QSO confirmation dialog — the single click that kicks off the chain that ends with the QSO in Log4OM](pictures/Log4OM_Confirm_Log.png)
@@ -1886,6 +1960,12 @@ A **Feature request** template is also available for ideas / improvements rather
 
 ### 14.2 Common problems
 
+**First thing to try: hard-refresh the browser (Ctrl+F5)**
+
+If something on screen isn't behaving the way you expect — a VFO panel looks greyed out or locked when it shouldn't be, a reading has stopped updating, a control seems stuck, or the layout looks wrong — the quickest fix is almost always a hard refresh of the browser. Click into the YWC page, then hold **Ctrl** and press **F5** (do it a couple of times if needed). If that doesn't help, close the browser tab completely and open a fresh one to the YWC address.
+
+This matters most **after you change the Radio Model or other settings**: the page carries some information decided at the moment it first loaded, so a browser showing a cached copy from a previous session can look out of step with your current setup. A hard refresh forces a completely fresh copy. If the problem clears after a hard refresh, there was nothing wrong with your setup; if it survives a hard refresh, it's worth reporting (see Section 14.1).
+
 **App shows "Initialising…" and never clears**
 
 - Check that the radio is powered on.
@@ -2084,6 +2164,26 @@ What people use it for in practice:
 3. **Digital-mode keying tests.** When WSJT-X (or similar) is feeding audio into the rear DATA jack, the TX button gives you a CAT-driven way to verify the keying side of the path without starting a real QSO.
 
 To transmit voice from your microphone, press the PTT button on the mic itself.
+
+---
+
+### 15.9 WSJT-X is very slow to key the radio (10–20 second delay on PTT / Tune)
+
+If pressing **Test PTT** or **Tune** in WSJT-X takes ten to twenty seconds before the radio actually transmits — and sometimes seems to stay in transmit afterwards — the delay is almost certainly **not** in YWC.
+
+When this was traced from an operator's logs ([issue #73](https://github.com/mm5agm/Yaesu_Web_Control/issues/73)), YWC was keying the radio within about 40 *milliseconds* of receiving each PTT command — the wait was happening *before* the command ever reached YWC. WSJT-X talks to YWC's rigctld server over the local loopback address (`127.0.0.1`), and on some Windows machines that loopback path can be bottlenecked by legacy networking.
+
+The fix that resolved it for that operator: **disable NetBIOS over TCP/IP**. It's a legacy protocol that can slow down local loopback traffic. To disable it:
+
+1. Open **Network Connections** (press **Win + R**, type `ncpa.cpl`, press Enter).
+2. Right-click your active network adapter → **Properties**.
+3. Select **Internet Protocol Version 4 (TCP/IPv4)** → **Properties**.
+4. Click **Advanced…**, then open the **WINS** tab.
+5. Under *NetBIOS setting*, choose **Disable NetBIOS over TCP/IP**, then **OK** out.
+
+This is a machine-specific networking quirk rather than a YWC bug, so it won't affect most setups — but if you're seeing long PTT delays with an otherwise-working WSJT-X ↔ YWC link, it's the first thing to try.
+
+As a safety backstop, YWC (v2.4.2 and later) will force the radio back to receive if a program keys it through rigctld and never sends the matching release, so a stuck transmit can't be left keyed indefinitely — but that's a safety net, not a cure for the delay. The loopback fix above is the real solution.
 
 ---
 
@@ -2365,9 +2465,9 @@ Every command below targets whichever VFO's mic button you're holding down — a
 | Command family | Say | What happens |
 | --- | --- | --- |
 | Set frequency | "tune to fourteen point zero seven four megahertz", "set frequency to fourteen megahertz" | Held VFO tunes to that frequency. Whole MHz, one decimal, or three decimals; "megahertz" is optional |
-| Change band | "go to twenty metres", "switch to forty metres" | Held VFO jumps to that band's default (usually FT8) frequency. Bands: 160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6 and 4 metres |
+| Change band | "forty metres", "go to twenty metres", "switch to eighty metres"; or the digit form "two zero metres", "eight zero metres" | Held VFO jumps to that band's default (usually FT8) frequency. The lead-in word ("go to" / "switch to") is optional. Bands: 160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6 and 4 metres. "top band" also works for 160 m |
 | Step up / down | "tune up" / "step up" / "nudge up"; "tune down" / "step down" / "nudge down" | Held VFO moves by that VFO's configured step size (see below; default 10 kHz) |
-| Set step size | "set step to ten kilohertz", "step size one kilohertz" | Changes the held VFO's step size: 10 Hz, 100 Hz, 1 kHz, 10 kHz, or 100 kHz. Same value as the dropdown next to that VFO's mic button — either one updates the other |
+| Set step size | "set step to ten kilohertz", "step size one kilohertz", or just "ten kilohertz" | Changes the held VFO's step size: 10 Hz, 100 Hz, 1 kHz, 10 kHz, or 100 kHz. The lead-in word is optional here too. Same value as the dropdown next to that VFO's mic button — either one updates the other |
 | Band up / down | "band up" / "band down" | Held VFO jumps to the next/previous ham band |
 | Set mode | "mode U S B", "set mode L S B" (also C W, A M, F M, data, data l, r t t y — spell mode letters out one at a time) | Held VFO switches to that mode |
 | Swap VFOs | "swap V F O", "swap A and B" | VFO A and B contents swap (radio-wide, not VFO-specific) |
@@ -2389,6 +2489,8 @@ A few notes on phrasing:
 - **"megahertz" is optional.** Both "set frequency to fourteen point zero seven four megahertz" and "tune to fourteen point zero seven four" work — say it or skip it.
 - **MHz only — no kHz.** The grammar recognises frequencies in whole-or-decimal **megahertz**, from 1 MHz up to 71 MHz (covering HF + 6 m + 4 m). It does **not** recognise kilohertz input. If you say something the grammar can't parse — e.g. "tune to thirty kilohertz" — the engine will fuzzy-match to the nearest valid in-range phrase ("tune to thirty point eight") and act on that instead. **Listen to the spoken confirmation** that follows every command: it tells you exactly what got recognised, which is the safety net against misrecognition. For sub-MHz tuning (LF, MF, the 30 kHz lower limit on the FTdx101), use the mouse or the keyboard-driven frequency display instead — see §16.7.
 - **Bands supported:** 160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6 and 4 metres. The default frequency picked for each band is roughly the FT8 / digital hangout — adjust with a follow-up "set frequency to …" or "tune up" / "tune down".
+- **Band and step phrases work with or without the lead-in word.** "forty metres" is the same as "go to forty metres", and "ten kilohertz" is the same as "set step to ten kilohertz". Say whichever feels natural.
+- **Digit-form band names for tricky mics/accents.** "twenty metres" and "eighty metres" share the same rhythm, so on a quiet microphone or with a strong accent the speech engine can confuse them. Every band therefore also accepts a **digit form** where the leading word is unmistakable — "two zero metres", "eight zero metres", "four zero metres", and so on. "two" and "eight" sound nothing alike, so these are recognised reliably when the natural form isn't. "top band" is also accepted for 160 m.
 - **Scots variants** are accepted: "go tae forty metres" works the same as "go to forty metres".
 
 **After every command, YWC speaks a short confirmation** through the PC's default audio output:
@@ -2406,9 +2508,11 @@ This is a primary accessibility feature: a partially-sighted operator can drive 
 
 1. Open **Settings** in the YWC top navbar.
 2. Scroll to the **Voice Control** section.
-3. Tick **Enable voice control**, then click **Save**.
+3. Tick **Enable voice control**, then click **Save Settings**. Every long section on the Settings page now has its own **Save Settings** button, so you can save in place without scrolling to the bottom — the one in the Voice Control section sits just above the Voice Phrases editor.
 4. **Restart YWC.** The speech engine is loaded once at startup; the toggle takes effect on the next launch.
 5. Confirm the **Windows speech recognition pack for your active language** is installed. Open Windows → Settings → Time &amp; Language → Speech and check the installed-languages list. The active language defaults to English (United Kingdom) — if it isn't listed, install it from there (most UK Windows installs already have it). The **Active language** dropdown in the Voice Control section lets you switch to any other installed language pack (see [§17.7](#177-more-languages)).
+
+**Choosing the microphone and speaker.** The Voice Control section also lets you pick which **microphone** the recogniser listens to and which **speaker** the spoken confirmations play through, each with a **Test** button. Leave them on the Windows defaults to follow your system settings — but if your default output is tied up by another program (WSJT-X, rig audio) you may never hear the confirmations, so it's worth picking your own speakers here. Picking a device in YWC does **not** change your Windows defaults.
 
 After restart, you should see a **mic button on the Index page beside each VFO panel** — VFO A's next to VFO A's band/mode controls, and (on dual-receiver radios) VFO B's next to VFO B's. If you don't see them, jump to [§17.4 Troubleshooting](#174-troubleshooting).
 
@@ -2416,13 +2520,15 @@ After restart, you should see a **mic button on the Index page beside each VFO p
 
 Each mic button is a **press-and-hold** control — it doesn't latch. The two VFOs' buttons are independent, but only one can be listening at a time (there's a single speech engine underneath); holding one button while the other is already listening simply has no effect until you release the first.
 
-1. **Press and hold** a VFO's mic button. The button colour changes to indicate the speech engine is listening.
+1. **Press and hold** a VFO's mic button. The button has three clear states so you can always tell what it's doing: **amber** when it's armed (pointer over it, not yet listening), a **pulsing red, pressed-in** look while it's listening, and **green** for a moment when a command was recognised. The pressed-in shape change (not just the colour) is there to help if colour alone is hard to make out.
 2. **Speak the command clearly** at a normal volume.
 3. **Release** the button. The engine processes what it heard.
 4. If the phrase matched the grammar, that VFO responds within a fraction of a second. The button returns to its idle colour.
 5. Bold text under the button shows the **last phrase recognised** and which command it matched — useful for spotting misrecognitions ("set frequency to forty metres" instead of "go to forty metres", say).
 
 If you change your mind mid-phrase, just release the button without speaking. Nothing is sent to the radio unless a full grammar match is found.
+
+**Right-click a mic button** (on desktop) to pop up the full list of commands you can say, grouped by category. The list is generated live from your current phrase set, so it always matches what your installation actually responds to — including any phrases you've customised — and it's a quick on-screen reference without leaving the main page. Close it with the red **✕** or the **Esc** key.
 
 **Low-confidence matches are rejected.** If you say something the engine isn't sure about — a phrase outside the grammar, background noise during PTT, an ambient TV in the room — the recognition is dropped rather than fitted to the closest rule. This stops random audio from accidentally firing a "set mode" or "go to band" command that would change the radio's state without you intending it. The "Last heard" hint under the mic button shows what the engine almost picked up; the Diagnostics block on the Settings page logs it as "Low-confidence match".
 
@@ -2441,6 +2547,10 @@ The Settings page → Voice Control section has a **Diagnostics** block that sho
 - You should see `SAPI recogniser ready` shortly after YWC startup and a `Rejected (best alt: '…')` line for each unmatched press. The "best alt" is the engine's best guess at what you said — if it's wildly wrong, the mic itself may have a problem (try Windows Sound settings → Input → speak and see if the level meter responds).
 - If the log shows `Rejected (best alt: '<your phrase>')` and your phrase looks correct, the grammar wording isn't matching what you said. Try one of the alternative phrasings listed in [§17.1](#171-what-you-can-say), or open a [GitHub discussion](https://github.com/mm5agm/Yaesu_Web_Control/discussions) and propose a new phrasing.
 - The raw log file lives at `%APPDATA%\MM5AGM\Yaesu Web Control\logs\ywc-YYYYMMDD.log` if you ever need the unfiltered version (e.g. CAT command traffic, SDR worker status, etc.), but the Diagnostics page is the right tool for voice-specific issues.
+
+**A lot of commands are misheard, or the "best alt" is close but wrong.**
+- A **very quiet microphone** is the usual cause — the engine gets too little signal to be confident, so correct recognitions get dropped and marginal ones get mis-fitted. YWC now amplifies a weak mic automatically, but if recognition is still poor, move closer to the mic, or raise the input level in Windows → Sound settings → Input (and check any hardware `-10 dB / 0 dB` pad switch on the mic itself is set to `0 dB`).
+- For the specific case of **"twenty metres" being heard as "eighty metres"** (or vice versa), use the digit forms **"two zero metres"** / **"eight zero metres"** instead — see [§17.1](#171-what-you-can-say). They can't be confused the way the natural words can.
 
 **"Tune up" doesn't seem to do much.**
 - Check you're watching the VFO panel whose mic button you actually pressed — each VFO steps independently, so "tune up" spoken into VFO B's button moves VFO B, not VFO A.
@@ -2471,7 +2581,7 @@ If there's a particular command or phrasing you'd like added to the *built-in* d
 
 ### 17.7 More languages
 
-Only **English (UK)** ships as the built-in default, but the language pack system itself is already multi-language. As of v2.4.1 an **English (US)** pack is also available — same commands and phrases as the UK default, with US spelling ("meters" instead of "metres"). Get it from `/voice-packs/YWC-VoicePack-en-US-v1.zip` on your running YWC instance and install it via **Preview import** below.
+Only **English (UK)** ships as the built-in default, but the language pack system itself is already multi-language. As of v2.4.1 an **English (US)** pack is also available — same commands and phrases as the UK default, with US spelling ("meters" instead of "metres"). Get it from `/voice-packs/YWC-VoicePack-en-US-v2.zip` on your running YWC instance and install it via **Preview import** below.
 
 1. **The Windows speech pack for the target language must be installed** on the operator's PC (Windows → Settings → Time &amp; Language → Speech → Add a language). Microsoft ships full recognition packs for US English, French, German, Spanish, Italian, Japanese, Mandarin Chinese, Brazilian Portuguese and Australian English (the list shifts between Windows releases). Some languages only ship voice synthesis, not recognition — those can't be used for voice control regardless of what YWC does.
 2. **A phrase pack for that culture.** The **Active language** dropdown in Settings → Voice Control lists every culture with an installed pack (a ✓ or ⚠ shows whether Windows also has a matching recogniser). Installing a new one means either importing a `YWC-VoicePack-<culture>-vN.zip` someone else has authored and shared (**Preview import** → **Install**), or hand-authoring `Commands.<culture>.json` and dropping it into `Grammars\<culture>\` via **Open user grammars folder** — the semantic keys (intent names, parameter vocab) stay identical to the English defaults, only the phrases change.

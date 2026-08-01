@@ -6,13 +6,21 @@
     public class CatMessageDispatcher
     {
         private readonly RadioStateService _stateService;
+        private readonly ILogger<CatMessageDispatcher> _logger;
 
         // Callback for initialization complete
         public Action? OnInitializationComplete { get; set; }
 
-        public CatMessageDispatcher(RadioStateService stateService)
+        // Invoked after a VS change on single-receiver radios once init is
+        // complete. CatMultiplexerService wires a debounced per-VFO re-query.
+        public Action? OnActiveVfoChanged { get; set; }
+
+        public CatMessageDispatcher(
+            RadioStateService stateService,
+            ILogger<CatMessageDispatcher> logger)
         {
             _stateService = stateService;
+            _logger = logger;
             _ = ProcessPendingAsync();
         }
 
@@ -28,17 +36,22 @@
         // write the new VFO's values to the OLD ActiveVfo's slot.
         //
         // Pre5 fix (Jacek SP3L #34, after pre4): buffer single-receiver
-        // P1=0-Fixed broadcasts for 300 ms before applying. If VS arrives
-        // during the buffer window (indicating a swap), the queued updates
-        // route to the NEW ActiveVfo when they're applied. Dual-receiver
-        // (FTdx101) routes immediately by P1 -- no race possible there.
+        // P1=0-Fixed broadcasts for 300 ms before applying so A/B-press
+        // broadcasts that arrive before VS can settle. Updates whose
+        // ActiveVfo changed between enqueue and flush are dropped — any
+        // broadcast spanning a VS boundary is ambiguous; ground truth comes
+        // from the post-VS re-query burst. Dual-receiver (FTdx101) routes
+        // immediately by P1 — no race possible there.
         //
         // Items process in arrival order on a single consumer task so
         // last-write-wins semantics for the same property are preserved.
 
         private const int BufferDelayMs = 300;
 
-        private sealed record PendingDispatch(DateTimeOffset EnqueuedAt, Action<bool> Apply);
+        private sealed record PendingDispatch(
+            DateTimeOffset EnqueuedAt,
+            int ActiveVfoAtEnqueue,
+            Action<bool> Apply);
 
         private readonly System.Threading.Channels.Channel<PendingDispatch> _pending
             = System.Threading.Channels.Channel.CreateUnbounded<PendingDispatch>();
@@ -50,6 +63,13 @@
                 var age = DateTimeOffset.UtcNow - item.EnqueuedAt;
                 var wait = TimeSpan.FromMilliseconds(BufferDelayMs) - age;
                 if (wait > TimeSpan.Zero) await Task.Delay(wait);
+                if (_stateService.ActiveVfo != item.ActiveVfoAtEnqueue)
+                {
+                    _logger.LogDebug(
+                        "Dropped buffered P1=0-Fixed update: ActiveVfo changed {Old} → {New} during {DelayMs} ms buffer",
+                        item.ActiveVfoAtEnqueue, _stateService.ActiveVfo, BufferDelayMs);
+                    continue;
+                }
                 try { item.Apply(_stateService.ActiveVfo == 1); }
                 catch { /* per-item failures shouldn't break the consumer */ }
             }
@@ -58,9 +78,9 @@
         /// <summary>
         /// Apply a per-VFO receive-control update. On dual-receiver radios,
         /// writes immediately using the message's P1. On single-receiver
-        /// radios, buffers the update for 300 ms then applies using whichever
-        /// ActiveVfo is current at apply-time (after any VS broadcast that
-        /// arrived during the buffer window). See class comment above.
+        /// radios, buffers the update for 300 ms then applies using ActiveVfo
+        /// at apply-time unless ActiveVfo changed since enqueue (drop). See
+        /// class comment above.
         /// </summary>
         /// <param name="p1Char">The P1 character from the CAT message (used
         /// on dual-receiver only).</param>
@@ -70,7 +90,10 @@
         {
             if (_stateService.IsSingleReceiver)
             {
-                _pending.Writer.TryWrite(new PendingDispatch(DateTimeOffset.UtcNow, apply));
+                _pending.Writer.TryWrite(new PendingDispatch(
+                    DateTimeOffset.UtcNow,
+                    _stateService.ActiveVfo,
+                    apply));
             }
             else
             {
@@ -108,15 +131,22 @@
                 {
                     case "FA":
                         // Example: FA01420000;
-                        if (long.TryParse(message.Substring(2).TrimEnd(';'), out var freqA))
+                        var faBody = message.Substring(2).TrimEnd(';');
+                        if (long.TryParse(faBody, out var freqA))
                         {
                             _stateService.FrequencyA = freqA;
+                            // Learn the radio's native frequency width (8 for the
+                            // FTDX3000, 9 for the rest) so writes are formatted to
+                            // match — see RadioStateService.FrequencyDigits.
+                            if (faBody.Length is 8 or 9) _stateService.FrequencyDigits = faBody.Length;
                         }
                         break;
                     case "FB":
-                        if (long.TryParse(message.Substring(2).TrimEnd(';'), out var freqB))
+                        var fbBody = message.Substring(2).TrimEnd(';');
+                        if (long.TryParse(fbBody, out var freqB))
                         {
                             _stateService.FrequencyB = freqB;
+                            if (fbBody.Length is 8 or 9) _stateService.FrequencyDigits = fbBody.Length;
                         }
                         break;
                     case "DT":
@@ -124,9 +154,10 @@
                         break;
                     case "MD":
                         // Example: MD01; (VFO A, LSB), MD12; (VFO B, USB)
+                        // Single-receiver: P1 is "0 Fixed" — routes via SetPerVfo's
+                        // 300 ms buffer so A/B-press broadcasts land on ActiveVfo.
                         if (message.Length >= 5)
                         {
-                            var vfo = message[2]; // '0' for A, '1' for B
                             var modeCode = message[3];
                             string? mode = modeCode switch
                             {
@@ -149,10 +180,10 @@
                             };
                             if (mode != null)
                             {
-                                if (vfo == '0')
-                                    _stateService.ModeA = mode;
-                                else if (vfo == '1')
-                                    _stateService.ModeB = mode;
+                                SetPerVfo(message[2], routeB => {
+                                    if (routeB) _stateService.ModeB = mode;
+                                    else        _stateService.ModeA = mode;
+                                });
                             }
                         }
                         break;
@@ -174,24 +205,22 @@
                     case "RF":
                         // Example: RF06; (VFO A, 12kHz filter), RF19; (VFO B, 600Hz filter)
                         // Response format: RF + P1 (0=Main/A, 1=Sub/B) + P3 (filter code 6-A)
+                        // Single-receiver: P1 is "0 Fixed" — routes via SetPerVfo's 300 ms
+                        // buffer so A/B-press broadcasts land on the new ActiveVfo.
                         if (message.Length >= 4)
                         {
-                            var vfo = message[2]; // '0' for A, '1' for B
                             var filterCode = message[3].ToString();
-                            if (vfo == '0')
-                                _stateService.RoofingFilterA = filterCode;
-                            else if (vfo == '1')
-                                _stateService.RoofingFilterB = filterCode;
-                        }
-                        break;
-                    case "RU":
-                        // FTdx10 roofing filter. Response: RU{n}; n=0(Auto),1(15kHz),2(6kHz),3(3kHz)
-                        // Single shared filter — store in both A and B so both dropdowns stay in sync.
-                        if (message.Length >= 3)
-                        {
-                            var ruCode = message[2].ToString();
-                            _stateService.RoofingFilterA = ruCode;
-                            _stateService.RoofingFilterB = ruCode;
+                            // FTDX3000 answers RF in a read-code space (P3) that
+                            // differs from its dropdown set codes (P2); normalise
+                            // so the UI stays in sync. Other single-receiver
+                            // radios (FTdx10) already report in dropdown codes.
+                            var code = _stateService.RadioModel == "FTDX3000"
+                                ? Ftdx3000Roofing.NormalizeReadCode(filterCode)
+                                : filterCode;
+                            SetPerVfo(message[2], routeB => {
+                                if (routeB) _stateService.RoofingFilterB = code;
+                                else        _stateService.RoofingFilterA = code;
+                            });
                         }
                         break;
                     case "GT":
@@ -460,7 +489,16 @@
                         // R2 root cause: dispatcher had no case for VS so the
                         // radio's broadcast was silently dropped.
                         if (message.Length >= 4 && int.TryParse(message.Substring(2, 1), out int activeVfo))
+                        {
+                            var previous = _stateService.ActiveVfo;
                             _stateService.ActiveVfo = activeVfo;
+                            if (_stateService.IsSingleReceiver
+                                && _stateService.IsInitialized
+                                && previous != activeVfo)
+                            {
+                                OnActiveVfoChanged?.Invoke();
+                            }
+                        }
                         break;
                     case "AC":
                         // AC{P1}{P2}{P3}; per FTdx10 / FTdx101MP CAT manual page 6:

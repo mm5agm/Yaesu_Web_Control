@@ -15,11 +15,15 @@ namespace Yaesu_Web_Control.Services
         private readonly ILogger<MeterPollingService> _logger;
         private readonly ISettingsService _settingsService;
 
-        // TX debounce: require 2 consecutive TX=false readings before declaring not-transmitting.
-        // A single TX=false poll (e.g. from a stale CAT response mid-burst) would otherwise
-        // clear the SWR rolling-average history and cause a momentary spike on the next reading.
+        // TX debounce: require 2 consecutive TX0 readings before declaring not-transmitting
+        // when we currently believe TX is on. A single TX0 mid-burst would otherwise clear
+        // the SWR rolling-average and cause a momentary spike on the next reading.
+        // Authoritative TX-off (web button / voice / etc. already cleared IsTransmitting)
+        // is accepted on the first confirming TX0 — otherwise this poller would overwrite
+        // that false back to true and the UI would stay on TX for several poll cycles.
         private int _txFalseCount = 0;
         private bool _stableIsTransmitting = false;
+        private const int TxOffDebounceCount = 2;
 
         // Antenna sync: the radio doesn't broadcast AN auto-information messages when the
         // operator changes the antenna on the front panel, so we have to poll. Polling on
@@ -28,6 +32,19 @@ namespace Yaesu_Web_Control.Services
         // selector in sync with the radio without saturating the serial bus.
         private int _antennaPollCounter = 0;
         private const int AntennaPollEvery = 4;
+
+        // Frequency backstop poll — single-receiver radios only. On the FTdx10 /
+        // FT-710 / FTDX3000 the radio's unsolicited FA/FB auto-info pushes are
+        // unreliable, especially over shared-CAT / VSPE setups (iu1teu #78), so
+        // the frequency display can go stale with no way to recover. Poll FA;/FB;
+        // ~once a second (every other ~500 ms cycle) as a fallback — the same
+        // approach iu1teu's own bridge uses on the same radio. The dual-receiver
+        // FTdx101, where auto-info works, is deliberately left event-driven.
+        // Suppressed briefly after a user web-UI write so the read-back can't
+        // fight active tuning (see RadioStateService.LastUserFrequencyWriteUtc).
+        private int _freqPollCounter = 0;
+        private const int FreqPollEvery = 2;
+        private static readonly TimeSpan FreqPollWriteSuppress = TimeSpan.FromMilliseconds(1200);
 
         // Connection health: track consecutive null poll responses to detect radio power-off.
         // The serial port stays "open" on Windows when the radio powers off; null responses (timeouts)
@@ -98,7 +115,9 @@ namespace Yaesu_Web_Control.Services
                             _stateService.IsConnected = true;
                     }
 
-                    bool rawIsTransmitting = !string.IsNullOrEmpty(txResponse) && txResponse.Contains("TX1");
+                    // TX1 = keyed; TX2 = keyed (mic) on some Yaesu models — treat both as TX.
+                    bool rawIsTransmitting = !string.IsNullOrEmpty(txResponse)
+                        && (txResponse.Contains("TX1") || txResponse.Contains("TX2"));
                     if (rawIsTransmitting)
                     {
                         _txFalseCount = 0;
@@ -106,11 +125,15 @@ namespace Yaesu_Web_Control.Services
                     }
                     else if (txResponse != null)
                     {
-                        // Only count an explicit TX0 response toward the debounce — a null response
-                        // (radio busy / no reply) should not be treated as "not transmitting".
+                        // Explicit TX0 only — null (radio busy) must not count as unkey.
                         _txFalseCount++;
-                        if (_txFalseCount >= 5)
+                        if (_txFalseCount >= TxOffDebounceCount || !_stateService.IsTransmitting)
                             _stableIsTransmitting = false;
+                    }
+                    else if (!_stateService.IsTransmitting)
+                    {
+                        // Authoritative TX-off already applied; a null poll must not resurrect TX.
+                        _stableIsTransmitting = false;
                     }
                     bool isTransmitting = _stableIsTransmitting;
                     _stateService.IsTransmitting = isTransmitting;
@@ -272,6 +295,21 @@ namespace Yaesu_Web_Control.Services
                         if (!string.IsNullOrEmpty(an0)) _dispatcher.DispatchMessage(an0);
                         var an1 = await _multiplexer.SendCommandAsync("AN1;", "MeterPoll", stoppingToken);
                         if (!string.IsNullOrEmpty(an1)) _dispatcher.DispatchMessage(an1);
+                    }
+
+                    // Frequency backstop poll — single-receiver radios only (see field comment).
+                    if (_stateService.IsSingleReceiver && ++_freqPollCounter >= FreqPollEvery)
+                    {
+                        _freqPollCounter = 0;
+                        // Skip while the user is actively tuning from the web UI, so a
+                        // read-back can't briefly show a stale value mid-write.
+                        if (DateTime.UtcNow - _stateService.LastUserFrequencyWriteUtc > FreqPollWriteSuppress)
+                        {
+                            var fa = await _multiplexer.SendCommandAsync("FA;", "MeterPoll", stoppingToken);
+                            if (!string.IsNullOrEmpty(fa)) _dispatcher.DispatchMessage(fa);
+                            var fb = await _multiplexer.SendCommandAsync("FB;", "MeterPoll", stoppingToken);
+                            if (!string.IsNullOrEmpty(fb)) _dispatcher.DispatchMessage(fb);
+                        }
                     }
 
                     await Task.Delay(500, stoppingToken);

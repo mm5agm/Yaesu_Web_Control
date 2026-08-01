@@ -27,15 +27,29 @@ namespace Yaesu_Web_Control.Services.Voice
     ///                      "Macro:{name}|{cat}" encoding both spoken name
     ///                      (for the TTS confirmation) and CAT string to send.
     ///
-    ///   SetFrequency     — three flat variants (whole / one frac digit /
-    ///                      three frac digits) to avoid the SAPI nested-
-    ///                      optional compile bug ("'' rule reference not
+    ///   SetFrequency     — flat variants (whole + 1..6 fractional digits,
+    ///                      giving full 1 Hz voice resolution) to avoid the SAPI
+    ///                      nested-optional compile bug ("'' rule reference not
     ///                      defined"). Uses GrammarBuilder + Choices throughout
     ///                      — Grammar.LoadCfg throws PlatformNotSupportedException
     ///                      on .NET 6+ so SRGS XML loading is not available.
     /// </summary>
     internal static class VoiceGrammar
     {
+        /// <summary>
+        /// Decomposed commands whose trigger prefix is made optional in the
+        /// grammar (see BuildDecomposed). Their vocabulary carries its own unit
+        /// word ("...metres", "...hertz"/"...k"), so a bare value is unambiguous
+        /// and the user can skip the lead-in ("forty metres" == "go to forty
+        /// metres"). Single source of truth: consumed by Build() below and by
+        /// VoiceHelpBuilder so the on-screen help matches what actually works.
+        /// The other decomposed commands (mode/att/preamp/agc/af gain) have bare
+        /// vocabulary ("data", "fifty", "fast") that would collide across
+        /// branches without a mandatory trigger, so they stay trigger-required.
+        /// </summary>
+        public static readonly IReadOnlySet<string> TriggerOptionalCommands =
+            new HashSet<string>(StringComparer.Ordinal) { "SetBand", "SetNudgeStep" };
+
         public static Grammar Build(VoicePhrasesConfig cfg, string culture = "en-GB")
         {
             // GrammarBuilder.Culture defaults to the current thread's culture,
@@ -71,17 +85,35 @@ namespace Yaesu_Web_Control.Services.Voice
             }
 
             Try("SetMode",                () => BuildDecomposed("SetMode",        cfg.SetMode));
-            Try("SetBand",                () => BuildDecomposed("SetBand",        cfg.SetBand));
-            Try("SetNudgeStep",           () => BuildDecomposed("SetNudgeStep",   cfg.SetNudgeStep));
+            // SetBand/SetNudgeStep vocabulary words carry their own unit
+            // ("...metres", "...hertz"), so they're self-identifying and the
+            // trigger can be optional — the user can say a bare "forty metres"
+            // as well as "go to forty metres".
+            Try("SetBand",                () => BuildDecomposed("SetBand",        cfg.SetBand,      triggerOptional: TriggerOptionalCommands.Contains("SetBand")));
+            Try("SetNudgeStep",           () => BuildDecomposed("SetNudgeStep",   cfg.SetNudgeStep, triggerOptional: TriggerOptionalCommands.Contains("SetNudgeStep")));
             Try("SetAttenuator",          () => BuildDecomposed("SetAttenuator",  cfg.SetAttenuator));
             Try("SetPreamp",              () => BuildDecomposed("SetPreamp",      cfg.SetPreamp));
             Try("SetAgc",                 () => BuildDecomposed("SetAgc",         cfg.SetAgc));
             Try("SetAfGain",              () => BuildDecomposed("SetAfGain",      cfg.SetAfGain));
             if (cfg.Macros?.Count > 0)
                 Try("Macros",             () => BuildMacros(cfg.Macros));
-            Try("SetFrequency_Whole",     () => BuildSetFrequency_Whole(cfg.SetFrequency));
-            Try("SetFrequency_OneDigit",  () => BuildSetFrequency_OneDigit(cfg.SetFrequency));
-            Try("SetFrequency_ThreeDigit",() => BuildSetFrequency_ThreeDigit(cfg.SetFrequency));
+            // TWO frequency variants only. The SAPI grammar compiler under the
+            // en-GB culture has a hard limit on how many prefix-sharing variants
+            // it can factor: measured empirically, 3 SetFrequency variants
+            // compile but 4+ throw "'' rule reference not defined" and then
+            // "Empty rule is not allowed" (they share the intent + whole-MHz
+            // head, and the factoring collapses to an empty rule). The original
+            // grammar had exactly 3 (whole, 1-digit, 3-digit); expanding to one
+            // flat variant per fractional length (1..6) exceeded the limit.
+            //
+            // So the fractional part is a SINGLE variant with a {1,6} repeat over
+            // the digit Choices, which SAPI compiles cleanly under en-GB and
+            // still gives full 1 Hz resolution (6 fractional digits). The actual
+            // digits are recovered from the recognised phrase text by
+            // VoiceControlService.ParseFractionalHzFromText, so the repeat needs
+            // no per-position semantic slot.
+            Try("SetFrequency_Whole",      () => BuildSetFrequency_Whole(cfg.SetFrequency));
+            Try("SetFrequency_Fractional", () => BuildSetFrequency_Fractional(cfg.SetFrequency));
 
             if (variants.Count == 0)
                 throw new InvalidOperationException("[VoiceGrammar] No grammar variants compiled — check phrase lists.");
@@ -200,15 +232,15 @@ namespace Yaesu_Web_Control.Services.Voice
                 new XElement(SrgsNs + "tag", $"out=\"{EscapeTag(intent)}\";"));
         }
 
-        // Mirrors BuildSetFrequency_Whole/OneDigit/ThreeDigit above: three
-        // flat variants referencing shared sub-rules, rather than nested
-        // optionals — SRGS has no SAPI compile bug to dodge, but keeping the
-        // same shape means this stays a faithful transcription of the live
-        // grammar rather than a from-scratch reinterpretation. Point/frac-
-        // digit/megahertz words carry no semantic tag here, matching the
-        // live GrammarBuilder, which appends those as plain Choices with no
-        // SemanticResultValue — only the trigger and the whole-MHz value
-        // carry semantics in either representation.
+        // Mirrors BuildSetFrequency_Whole/_Fractional above: a whole-MHz branch
+        // and a single fractional branch whose digit run is a {1,6} repeat,
+        // rather than one branch per length. SRGS has no SAPI compile bug to
+        // dodge, but keeping the same shape means this stays a faithful
+        // transcription of the live grammar rather than a from-scratch
+        // reinterpretation. Point/frac-digit/megahertz words carry no semantic
+        // tag here, matching the live GrammarBuilder, which appends those as
+        // plain Choices with no SemanticResultValue — only the trigger and the
+        // whole-MHz value carry semantics in either representation.
         private static IEnumerable<XElement> BuildSetFrequencySrgsItems(SetFrequencyPhrases cfg)
         {
             if (cfg == null || cfg.Triggers.Count == 0 || cfg.Mhz.Count == 0) yield break;
@@ -226,20 +258,14 @@ namespace Yaesu_Web_Control.Services.Voice
 
             if (cfg.FracDigits.Count > 0 && cfg.Point.Count > 0)
             {
+                // Single fractional branch with a 1-6 digit repeat, mirroring the
+                // live grammar's BuildSetFrequency_Fractional.
                 yield return new XElement(SrgsNs + "item",
                     TriggerOneOf(),
                     new XElement(SrgsNs + "ruleref", new XAttribute("uri", "#mhzWhole")),
                     new XElement(SrgsNs + "ruleref", new XAttribute("uri", "#point")),
-                    new XElement(SrgsNs + "ruleref", new XAttribute("uri", "#fracDigit")),
-                    OptionalMegahertz());
-
-                yield return new XElement(SrgsNs + "item",
-                    TriggerOneOf(),
-                    new XElement(SrgsNs + "ruleref", new XAttribute("uri", "#mhzWhole")),
-                    new XElement(SrgsNs + "ruleref", new XAttribute("uri", "#point")),
-                    new XElement(SrgsNs + "ruleref", new XAttribute("uri", "#fracDigit")),
-                    new XElement(SrgsNs + "ruleref", new XAttribute("uri", "#fracDigit")),
-                    new XElement(SrgsNs + "ruleref", new XAttribute("uri", "#fracDigit")),
+                    new XElement(SrgsNs + "item", new XAttribute("repeat", "1-6"),
+                        new XElement(SrgsNs + "ruleref", new XAttribute("uri", "#fracDigit"))),
                     OptionalMegahertz());
             }
         }
@@ -298,7 +324,7 @@ namespace Yaesu_Web_Control.Services.Voice
         // NormaliseIntent in VoiceControlService splits on ':' to recover
         // the intent name and parameter value.
 
-        private static GrammarBuilder? BuildDecomposed(string intentPrefix, DecomposedCommand cmd)
+        private static GrammarBuilder? BuildDecomposed(string intentPrefix, DecomposedCommand cmd, bool triggerOptional = false)
         {
             if (cmd.Triggers.Count == 0 || cmd.Vocabulary.Count == 0) return null;
 
@@ -315,7 +341,14 @@ namespace Yaesu_Web_Control.Services.Voice
             if (!any) return null;
 
             var gb = new GrammarBuilder();
-            gb.Append(new Choices(cmd.Triggers.ToArray()));          // non-semantic trigger
+            // Non-semantic trigger prefix. When triggerOptional, wrap it in a
+            // 0-1 repeat so a bare vocabulary word ("forty metres") matches too —
+            // only safe where the vocabulary is self-identifying (see
+            // TriggerOptionalCommands).
+            if (triggerOptional)
+                gb.Append(new GrammarBuilder(new Choices(cmd.Triggers.ToArray())), 0, 1);
+            else
+                gb.Append(new Choices(cmd.Triggers.ToArray()));      // non-semantic trigger
             gb.Append(new SemanticResultKey("intent", valueChoices)); // value encodes intent
             return gb;
         }
@@ -345,44 +378,41 @@ namespace Yaesu_Web_Control.Services.Voice
         }
 
         // ── SetFrequency variants ─────────────────────────────────────────
-        // Three flat variants to avoid the nested-optional SAPI compile bug.
-        // Triggers now include the connector word ("tune to", "set frequency to")
-        // so there is no separate Connectors list — the user edits one field.
+        // Flat variants (whole + 1..6 fractional digits) to avoid the nested-
+        // optional SAPI compile bug. Triggers now include the connector word
+        // ("tune to", "set frequency to") so there is no separate Connectors
+        // list — the user edits one field.
 
+        // Whole-MHz variant: "<trigger> <whole MHz> [megahertz]". The trailing
+        // "megahertz" is optional so a bare "tune to fourteen" also matches.
         private static GrammarBuilder? BuildSetFrequency_Whole(SetFrequencyPhrases cfg)
         {
             if (!HasFrequencyBase(cfg)) return null;
             var gb = new GrammarBuilder();
             gb.Append(new SemanticResultKey("intent", FrequencyTriggerChoices(cfg)));
             gb.Append(new SemanticResultKey("mhz_whole", MhzChoices(cfg)));
-            gb.Append(new GrammarBuilder(new Choices(cfg.Megahertz.ToArray())), 0, 1);
+            if (cfg.Megahertz.Count > 0)
+                gb.Append(new GrammarBuilder(new Choices(cfg.Megahertz.ToArray())), 0, 1);
             return gb;
         }
 
-        private static GrammarBuilder? BuildSetFrequency_OneDigit(SetFrequencyPhrases cfg)
+        // Fractional variant: "<trigger> <whole MHz> point <1..6 digits> [megahertz]".
+        // The fractional digits are a SINGLE {1,6} repeat over one digit Choices
+        // — keeping SetFrequency to just two prefix-sharing variants, which the
+        // en-GB SAPI compiler accepts (see the variant-count note in Build). Six
+        // digits after the point give full 1 Hz resolution; the digits are read
+        // back from the recognised text by ParseFractionalHzFromText, so no
+        // per-digit semantic slot is needed here.
+        private static GrammarBuilder? BuildSetFrequency_Fractional(SetFrequencyPhrases cfg)
         {
             if (!HasFrequencyBase(cfg) || cfg.FracDigits.Count == 0 || cfg.Point.Count == 0) return null;
             var gb = new GrammarBuilder();
             gb.Append(new SemanticResultKey("intent", FrequencyTriggerChoices(cfg)));
             gb.Append(new SemanticResultKey("mhz_whole", MhzChoices(cfg)));
             gb.Append(new Choices(cfg.Point.ToArray()));
-            gb.Append(new Choices(cfg.FracDigits.ToArray()));
-            gb.Append(new GrammarBuilder(new Choices(cfg.Megahertz.ToArray())), 0, 1);
-            return gb;
-        }
-
-        private static GrammarBuilder? BuildSetFrequency_ThreeDigit(SetFrequencyPhrases cfg)
-        {
-            if (!HasFrequencyBase(cfg) || cfg.FracDigits.Count == 0 || cfg.Point.Count == 0) return null;
-            var gb = new GrammarBuilder();
-            gb.Append(new SemanticResultKey("intent", FrequencyTriggerChoices(cfg)));
-            gb.Append(new SemanticResultKey("mhz_whole", MhzChoices(cfg)));
-            gb.Append(new Choices(cfg.Point.ToArray()));
-            // Three separate Choices instances — reusing one triggers SAPI compile bug.
-            gb.Append(new Choices(cfg.FracDigits.ToArray()));
-            gb.Append(new Choices(cfg.FracDigits.ToArray()));
-            gb.Append(new Choices(cfg.FracDigits.ToArray()));
-            gb.Append(new GrammarBuilder(new Choices(cfg.Megahertz.ToArray())), 0, 1);
+            gb.Append(new GrammarBuilder(new Choices(cfg.FracDigits.ToArray())), 1, 6);
+            if (cfg.Megahertz.Count > 0)
+                gb.Append(new GrammarBuilder(new Choices(cfg.Megahertz.ToArray())), 0, 1);
             return gb;
         }
 

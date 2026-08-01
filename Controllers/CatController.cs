@@ -411,6 +411,7 @@ namespace Yaesu_Web_Control.Controllers
                 await _catClient.SendCommandAsync(command, "WebUI", CancellationToken.None);
 
                 _radioStateService.FrequencyA = freq;
+                _radioStateService.MarkUserFrequencyWrite();  // suppress the FA/FB backstop poll briefly (single-receiver radios)
 
                 _logger.LogInformation("Set Receiver A frequency to {Freq}", freq);
                 _logger.LogInformation("[API] SetFrequencyA completed: freq={Freq}", freq);
@@ -445,6 +446,7 @@ namespace Yaesu_Web_Control.Controllers
                 await _catClient.SendCommandAsync(command, "WebUI", CancellationToken.None);
 
                 _radioStateService.FrequencyB = freq;
+                _radioStateService.MarkUserFrequencyWrite();  // suppress the FA/FB backstop poll briefly (single-receiver radios)
 
                 _logger.LogInformation("Set Receiver B frequency to {Freq}", freq);
                 _logger.LogInformation("[API] SetFrequencyB completed: freq={Freq}", freq);
@@ -717,19 +719,22 @@ namespace Yaesu_Web_Control.Controllers
             { "A", "5" }   // 300 Hz (option)
         };
 
-        // FTdx10 roofing filter display names (RU command code -> display name)
+        // FTdx10 roofing filter display names (RF read code P3 -> display name)
         private static readonly Dictionary<string, string> FtdxTenRoofingFilterNames = new()
         {
-            { "1", "15 kHz" },
-            { "2", "6 kHz" },
-            { "3", "3 kHz" }
+            { "6", "12 kHz" },
+            { "7", "3 kHz" },
+            { "9", "500 Hz" },
+            { "A", "300 Hz" }
         };
 
-        // FTDX3000 roofing filter display names (RF0x code -> display name)
-        private static readonly Dictionary<string, string> Ftdx3000RoofingFilterNames = new()
+        // FTdx10 roofing filter set codes (read code P3 -> set code P2 used in RF command)
+        private static readonly Dictionary<string, string> FtdxTenRoofingFilterSetCodes = new()
         {
-            { "0", "Auto" }, { "1", "15 kHz" }, { "2", "6 kHz" },
-            { "3", "3 kHz" }, { "4", "600 Hz" }, { "5", "300 Hz" }
+            { "6", "1" },  // 12 kHz
+            { "7", "2" },  // 3 kHz
+            { "9", "4" },  // 500 Hz
+            { "A", "5" }   // 300 Hz (optional)
         };
 
         [HttpPost("roofingfilter/a")]
@@ -747,21 +752,14 @@ namespace Yaesu_Web_Control.Controllers
                 bool isFt710   = settings.RadioModel == "FT-710";
                 bool isFtdx3000 = settings.RadioModel == "FTDX3000";
 
-                if (isFtdx10 || isFt710)
+                if (isFt710)
                     return Ok(new { message = "Roofing filter is selected automatically by the radio" });
 
+                if (isFtdx10)
+                    return await SetFtdx10RoofingFilterAsync(request);
+
                 if (isFtdx3000)
-                {
-                    // FTDX3000: P1 is always 0 (single receiver); code is the filter number directly
-                    await _catClient.SendCommandAsync($"RF0{request.Filter};", "WebUI", CancellationToken.None);
-                    await Task.Delay(100);
-                    var readback = await _catClient.SendCommandAsync("RF0;", "WebUI", CancellationToken.None);
-                    var actualCode = readback?.Length >= 4 ? readback[3].ToString() : request.Filter;
-                    var displayName = Ftdx3000RoofingFilterNames.GetValueOrDefault(actualCode, actualCode);
-                    _radioStateService.RoofingFilterA = actualCode;
-                    _logger.LogInformation("Set Main roofing filter (FTDX3000) to {Filter}", displayName);
-                    return Ok(new { message = $"Roofing filter set to {displayName}", filter = actualCode, filterName = displayName });
-                }
+                    return await SetFtdx3000RoofingFilterAsync(request);
 
                 // FTdx101MP/D: RF command with set code conversion
                 if (!RoofingFilterSetCodes.TryGetValue(request.Filter, out var setCode))
@@ -823,21 +821,14 @@ namespace Yaesu_Web_Control.Controllers
                 bool isFt710   = settings.RadioModel == "FT-710";
                 bool isFtdx3000 = settings.RadioModel == "FTDX3000";
 
-                if (isFtdx10 || isFt710)
+                if (isFt710)
                     return Ok(new { message = "Roofing filter is selected automatically by the radio" });
 
+                if (isFtdx10)
+                    return await SetFtdx10RoofingFilterAsync(request);
+
                 if (isFtdx3000)
-                {
-                    // FTDX3000 has a single receiver — P1 is always 0; VFO B shares the same filter
-                    await _catClient.SendCommandAsync($"RF0{request.Filter};", "WebUI", CancellationToken.None);
-                    await Task.Delay(100);
-                    var readback = await _catClient.SendCommandAsync("RF0;", "WebUI", CancellationToken.None);
-                    var actualCode = readback?.Length >= 4 ? readback[3].ToString() : request.Filter;
-                    var displayName = Ftdx3000RoofingFilterNames.GetValueOrDefault(actualCode, actualCode);
-                    _radioStateService.RoofingFilterB = actualCode;
-                    _logger.LogInformation("Set Sub roofing filter (FTDX3000) to {Filter}", displayName);
-                    return Ok(new { message = $"Roofing filter set to {displayName}", filter = actualCode, filterName = displayName });
-                }
+                    return await SetFtdx3000RoofingFilterAsync(request);
 
                 // FTdx101MP/D: RF command with set code conversion
                 if (!RoofingFilterSetCodes.TryGetValue(request.Filter, out var setCode))
@@ -884,6 +875,75 @@ namespace Yaesu_Web_Control.Controllers
             }
         }
 
+        /// <summary>
+        /// FTdx10 single-receiver roofing filter: RF0 P2 set / RF0 P3 read.
+        /// Per-VFO state is tracked in the active VFO slot (inactive panel is
+        /// not editable on single-receiver radios).
+        /// </summary>
+        private async Task<IActionResult> SetFtdx10RoofingFilterAsync(RoofingFilterRequest request)
+        {
+            if (!FtdxTenRoofingFilterSetCodes.TryGetValue(request.Filter, out var setCode))
+                return BadRequest(new { error = $"Invalid filter code: {request.Filter}" });
+
+            var rfCommand = $"RF0{setCode};";
+            _logger.LogInformation("Sending roofing filter command (FTdx10): {Command}", rfCommand);
+            await _catClient.SendCommandAsync(rfCommand, "WebUI", CancellationToken.None);
+
+            await Task.Delay(100);
+            var rfReadResponse = await _catClient.SendCommandAsync("RF0;", "WebUI", CancellationToken.None);
+            _logger.LogInformation("Read back roofing filter response (FTdx10): {Response}", rfReadResponse);
+
+            if (!string.IsNullOrEmpty(rfReadResponse) && rfReadResponse.Length >= 4)
+            {
+                var actualFilter = rfReadResponse[3].ToString();
+                if (_radioStateService.ActiveVfo == 1) _radioStateService.RoofingFilterB = actualFilter;
+                else                                   _radioStateService.RoofingFilterA = actualFilter;
+
+                if (actualFilter != request.Filter)
+                {
+                    var requestedName = FtdxTenRoofingFilterNames.GetValueOrDefault(request.Filter, request.Filter);
+                    var actualName = FtdxTenRoofingFilterNames.GetValueOrDefault(actualFilter, actualFilter);
+                    _logger.LogWarning("Roofing filter {Requested} not available, radio returned {Actual}", requestedName, actualName);
+                    return Ok(new { message = $"Filter {requestedName} not installed. Using {actualName}.", warning = true, filter = actualFilter, filterName = actualName });
+                }
+
+                var filterName = FtdxTenRoofingFilterNames.GetValueOrDefault(actualFilter, actualFilter);
+                _logger.LogInformation("Set roofing filter (FTdx10) to {Filter}", filterName);
+                return Ok(new { message = $"Roofing filter {filterName} selected", filter = actualFilter, filterName });
+            }
+
+            if (_radioStateService.ActiveVfo == 1) _radioStateService.RoofingFilterB = request.Filter;
+            else                                   _radioStateService.RoofingFilterA = request.Filter;
+            var fallbackName = FtdxTenRoofingFilterNames.GetValueOrDefault(request.Filter, request.Filter);
+            return Ok(new { message = $"Roofing filter {fallbackName} selected", filter = request.Filter, filterName = fallbackName });
+        }
+
+        /// <summary>
+        /// FTDX3000 single-receiver roofing filter: RF0 P2 set / RF0 P3 read.
+        /// The read-back code (P3) uses a different value space than the set code
+        /// (P2) — 600 Hz reads back as 7, 300 Hz as 8, and AUTO reports the
+        /// filter in circuit (4/5/6/9/A) — so the read code is normalised back
+        /// to the dropdown's set-code space. Per-VFO state is tracked in the
+        /// active VFO slot. See <see cref="Ftdx3000Roofing"/>.
+        /// </summary>
+        private async Task<IActionResult> SetFtdx3000RoofingFilterAsync(RoofingFilterRequest request)
+        {
+            // P1 is always 0 (single receiver); the set code is the filter number directly.
+            await _catClient.SendCommandAsync($"RF0{request.Filter};", "WebUI", CancellationToken.None);
+            await Task.Delay(100);
+            var readback = await _catClient.SendCommandAsync("RF0;", "WebUI", CancellationToken.None);
+
+            var readCode = readback?.Length >= 4 ? readback[3].ToString() : request.Filter;
+            var stateCode = Ftdx3000Roofing.NormalizeReadCode(readCode);
+            var displayName = Ftdx3000Roofing.ReadCodeNames.GetValueOrDefault(readCode,
+                              Ftdx3000Roofing.SetCodeNames.GetValueOrDefault(stateCode, stateCode));
+
+            if (_radioStateService.ActiveVfo == 1) _radioStateService.RoofingFilterB = stateCode;
+            else                                   _radioStateService.RoofingFilterA = stateCode;
+            _logger.LogInformation("Set roofing filter (FTDX3000) to {Filter} (read code {ReadCode})", displayName, readCode);
+            return Ok(new { message = $"Roofing filter set to {displayName}", filter = stateCode, filterName = displayName });
+        }
+
         [HttpPost("mode/{receiver}")]
         public async Task<IActionResult> SetMode(string receiver, [FromBody] ModeRequest request)
         {
@@ -895,29 +955,22 @@ namespace Yaesu_Web_Control.Controllers
                 await EnsureConnectedAsync();
                 string displayMode = CatCodeToMode.TryGetValue(request.Mode, out var modeName) ? modeName : request.Mode;
 
-                bool vfoIsA = receiver.ToUpper() == "A";
-                if (vfoIsA)
-                {
-                    await _catClient.SendCommandAsync($"MD0{request.Mode};", "User");
-                    _radioStateService.ModeA = displayMode;
-                }
-                else if (receiver.ToUpper() == "B")
-                {
-                    await _catClient.SendCommandAsync($"MD1{request.Mode};", "User");
-                    _radioStateService.ModeB = displayMode;
-                }
-                else
-                {
+                var recv = receiver.ToUpperInvariant();
+                if (recv != "A" && recv != "B")
                     return BadRequest(new { error = "Invalid receiver specified" });
-                }
+
+                await _catClient.SendCommandAsync($"MD{VfoP1Outgoing(recv)}{request.Mode};", "User");
+                if (VfoIsB(recv)) _radioStateService.ModeB = displayMode;
+                else               _radioStateService.ModeA = displayMode;
 
                 // Re-apply Contour and APF state — mode changes on the FTdx101 cause the
                 // radio to restore its per-mode Contour/APF settings, overriding what we have set.
                 var modeSettings = await _settingsService.GetSettingsAsync();
                 bool isFtdx3000 = modeSettings.RadioModel == "FTDX3000";
+                bool targetB = VfoIsB(recv);
                 // P1=0 on FTDX3000 (special CO format) and on every single-receiver
                 // model (P1 Fixed=0). Dual-receiver -> P1 by VFO.
-                string p1 = isFtdx3000 ? "0" : VfoP1Outgoing(vfoIsA ? "A" : "B");
+                string p1 = isFtdx3000 ? "0" : VfoP1Outgoing(recv);
 
                 if (isFtdx3000)
                 {
@@ -942,10 +995,10 @@ namespace Yaesu_Web_Control.Controllers
                 }
                 else
                 {
-                    bool contourOn  = vfoIsA ? _radioStateService.ContourOnA  : _radioStateService.ContourOnB;
-                    int  contourHz  = vfoIsA ? _radioStateService.ContourFreqA : _radioStateService.ContourFreqB;
-                    bool apfOn      = vfoIsA ? _radioStateService.ApfOnA       : _radioStateService.ApfOnB;
-                    int  apfHz      = vfoIsA ? _radioStateService.ApfFreqA     : _radioStateService.ApfFreqB;
+                    bool contourOn  = targetB ? _radioStateService.ContourOnB  : _radioStateService.ContourOnA;
+                    int  contourHz  = targetB ? _radioStateService.ContourFreqB : _radioStateService.ContourFreqA;
+                    bool apfOn      = targetB ? _radioStateService.ApfOnB       : _radioStateService.ApfOnA;
+                    int  apfHz      = targetB ? _radioStateService.ApfFreqB     : _radioStateService.ApfFreqA;
 
                     int  cFreq = Math.Max(100, Math.Min(3200, contourHz));
                     await _catClient.SendCommandAsync($"CO{p1}0000{(contourOn ? 1 : 0)};", "User");
@@ -956,7 +1009,7 @@ namespace Yaesu_Web_Control.Controllers
                     await _catClient.SendCommandAsync($"CO{p1}3{aVvvv:D4};", "User");
                 }
 
-                _logger.LogInformation("Sending CAT command: MD{Vfo}{Mode}; for Receiver {Receiver}", vfoIsA ? "0" : "1", request.Mode, receiver);
+                _logger.LogInformation("Sending CAT command: MD{Vfo}{Mode}; for Receiver {Receiver}", VfoP1Outgoing(recv), request.Mode, recv);
                 return Ok(new { message = $"Mode {displayMode} selected for Receiver {receiver}" });
             }
             catch (Exception ex)
@@ -1678,6 +1731,42 @@ namespace Yaesu_Web_Control.Controllers
             {
                 await EnsureConnectedAsync();
 
+                // FTDX3000 has no ST command (confirmed no-op by iu1teu/Giovanni on
+                // #78) — split is driven by FT instead: FT2; = TX on VFO A (no split,
+                // TX=RX), FT3; = TX on VFO B (split). Read-back FT; answers FT0 (TX=A)
+                // / FT1 (TX=B). The other supported models (FTdx101/FTdx10/FT-710) all
+                // have ST, so they fall through to the ST path below.
+                var splitSettings = await _settingsService.GetSettingsAsync();
+                if (splitSettings.RadioModel == "FTDX3000")
+                {
+                    if (mode == 2)
+                    {
+                        // Quick split: VFO B = VFO A + 5 kHz, then transmit on B.
+                        var faQs = await _catClient.SendCommandAsync("FA;", "WebUI", CancellationToken.None);
+                        if (!string.IsNullOrWhiteSpace(faQs) && faQs.StartsWith("FA") &&
+                            long.TryParse(faQs.Substring(2).TrimEnd(';'), out long freqAqs))
+                        {
+                            long freqBqs = Math.Min(freqAqs + 5000, 75_000_000);
+                            await _catClient.SendCommandAsync($"FB{freqBqs:D9};", "WebUI", CancellationToken.None);
+                            _radioStateService.FrequencyB = freqBqs;
+                        }
+                    }
+
+                    bool ftSplitOn = mode != 0;               // mode 1 or 2 → split on
+                    await _catClient.SendCommandAsync(ftSplitOn ? "FT3;" : "FT2;", "WebUI", CancellationToken.None);
+
+                    var ftResp = await _catClient.SendCommandAsync("FT;", "WebUI", CancellationToken.None);
+                    int ftTxVfo = ftSplitOn ? 1 : 0;
+                    if (!string.IsNullOrWhiteSpace(ftResp) && ftResp.StartsWith("FT") && ftResp.Length >= 3)
+                        ftTxVfo = ftResp[2] == '1' ? 1 : 0;
+                    _radioStateService.TxVfo = ftTxVfo;
+                    int ftSplitMode = ftTxVfo == 1 ? 1 : 0;
+                    _radioStateService.SplitMode = ftSplitMode;
+                    _logger.LogInformation("Split (FTDX3000) via FT: TX VFO = {TxVfo}, splitMode = {Mode}",
+                        ftTxVfo == 1 ? "B" : "A", ftSplitMode);
+                    return Ok(new { splitMode = ftSplitMode });
+                }
+
                 if (mode == 2)
                 {
                     // Quick Split: implement explicitly so it works whether split is already on or off.
@@ -1689,7 +1778,7 @@ namespace Yaesu_Web_Control.Controllers
                         long.TryParse(faResponse.Substring(2).TrimEnd(';'), out long freqA))
                     {
                         long freqB = Math.Min(freqA + 5000, 75_000_000);
-                        await _catClient.SendCommandAsync($"FB{freqB:D11};", "WebUI", CancellationToken.None);
+                        await _catClient.SendCommandAsync($"FB{freqB:D9};", "WebUI", CancellationToken.None);
                         _radioStateService.FrequencyB = freqB;
                     }
                     await _catClient.SendCommandAsync("ST1;", "WebUI", CancellationToken.None);
@@ -1714,6 +1803,111 @@ namespace Yaesu_Web_Control.Controllers
             {
                 _logger.LogError(ex, "Error setting split mode");
                 return StatusCode(500, new { error = "Failed to set split mode" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        // Set the active/operating band on dual-receiver radios (FTdx101).
+        // VS selects which band the main tuning knob controls: 0 = MAIN (VFO A),
+        // 1 = SUB (VFO B). The radio auto-broadcasts VS, so the UI highlight
+        // follows automatically; we also set ActiveVfo here to avoid UI flicker.
+        [HttpPost("active-vfo/{vfo}")]
+        public async Task<IActionResult> SetActiveVfo(string vfo)
+        {
+            var v = vfo.ToUpperInvariant();
+            if (v != "A" && v != "B")
+                return BadRequest(new { error = "VFO must be A or B" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var vs = v == "B" ? 1 : 0;
+                await _catClient.SendCommandAsync($"VS{vs};", "WebUI", CancellationToken.None);
+                _radioStateService.ActiveVfo = vs;
+                _logger.LogInformation("Active VFO set to {Vfo} (VS{Vs})", v, vs);
+                return Ok(new { activeVfo = vs });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting active VFO");
+                return StatusCode(500, new { error = "Failed to set active VFO" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        // Independent RX / TX VFO selection for single-receiver radios (Giovanni
+        // iu1teu, #78). Split is not a separate toggle here — it is derived: the
+        // radio is in split whenever the TX VFO differs from the RX VFO. These
+        // two endpoints plus the derived SplitMode back the web UI's RX/TX
+        // selectors, and share the same FT/VS/FR plumbing the external API will use.
+        [HttpPost("rx-vfo/{vfo}")]
+        public async Task<IActionResult> SetRxVfo(string vfo)
+        {
+            var v = vfo.ToUpperInvariant();
+            if (v != "A" && v != "B")
+                return BadRequest(new { error = "VFO must be A or B" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var rxSettings = await _settingsService.GetSettingsAsync();
+                var rx = v == "B" ? 1 : 0;
+
+                // The FTDX3000 selects the RX VFO via FR, and uses 0/4 (NOT 0/1):
+                // FR0; = VFO-A RX, FR4; = VFO-B RX. Confirmed from a real FTDX3000
+                // in daily use by iu1teu (#78) — it does not use VS for this. The
+                // other single-receiver radios (FTdx10 / FT-710) have no FR and use
+                // VS, the same command the active-vfo endpoint already sends.
+                if (rxSettings.RadioModel == "FTDX3000")
+                    await _catClient.SendCommandAsync(v == "B" ? "FR4;" : "FR0;", "WebUI", CancellationToken.None);
+                else
+                    await _catClient.SendCommandAsync($"VS{rx};", "WebUI", CancellationToken.None);
+
+                _radioStateService.ActiveVfo = rx;
+                _radioStateService.SplitMode = _radioStateService.TxVfo != rx ? 1 : 0;
+                _logger.LogInformation("RX VFO set to {Vfo} (split={Split})", v, _radioStateService.SplitMode);
+                return Ok(new { rxVfo = rx, splitMode = _radioStateService.SplitMode });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting RX VFO");
+                return StatusCode(500, new { error = "Failed to set RX VFO" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        [HttpPost("tx-vfo/{vfo}")]
+        public async Task<IActionResult> SetTxVfo(string vfo)
+        {
+            var v = vfo.ToUpperInvariant();
+            if (v != "A" && v != "B")
+                return BadRequest(new { error = "VFO must be A or B" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var tx = v == "B" ? 1 : 0;
+
+                // FT selects the transmit VFO on all supported models: FT0; = TX on
+                // VFO A, FT1; = TX on VFO B. Already proven driving the FTDX3000
+                // Split button (#78).
+                await _catClient.SendCommandAsync($"FT{tx};", "WebUI", CancellationToken.None);
+
+                _radioStateService.TxVfo = tx;
+                _radioStateService.SplitMode = tx != _radioStateService.ActiveVfo ? 1 : 0;
+                _logger.LogInformation("TX VFO set to {Vfo} (split={Split})", v, _radioStateService.SplitMode);
+                return Ok(new { txVfo = tx, splitMode = _radioStateService.SplitMode });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting TX VFO");
+                return StatusCode(500, new { error = "Failed to set TX VFO" });
             }
             finally { _requestSemaphore.Release(); }
         }

@@ -20,6 +20,7 @@
     var selectedBand = (Model.Item3 ?? "").Trim().ToLowerInvariant();
 }
 <div class="band-buttons-container">
+    <span class="vfo-control-label d-block mb-1" aria-hidden="true">Band</span>
     <div class="band-radio-grid" id="bandRadioGroup@(receiver)" role="radiogroup" aria-label="Band — use arrow keys to change band">
         @for (int idx = 0; idx < bands.Length; idx++)
         {

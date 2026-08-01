@@ -34,10 +34,18 @@ namespace Yaesu_Web_Control.Hubs
         {
             _connections.TryAdd(Context.ConnectionId, 0);
             CancelShutdown();
-            await Clients.Caller.SendAsync("RadioStateUpdate",
-                new { property = "FrequencyA", value = _radioState.FrequencyA });
-            await Clients.Caller.SendAsync("RadioStateUpdate",
-                new { property = "FrequencyB", value = _radioState.FrequencyB });
+
+            // Replay the full state snapshot to this client only. Regular
+            // broadcasts fire on change, so without this a browser that
+            // connects after startup (second tab, another computer) keeps the
+            // frontend JS defaults for everything not server-rendered in the
+            // Razor page — most visibly ActiveVfo/TxVfo/SplitMode, which made
+            // VFO A always appear active on late-joining clients.
+            foreach (var (property, value) in _radioState.GetClientStateSnapshot())
+            {
+                await Clients.Caller.SendAsync("RadioStateUpdate", new { property, value });
+            }
+
             await base.OnConnectedAsync();
         }
 

@@ -98,6 +98,9 @@ namespace Yaesu_Web_Control.Pages
         // Default false; user enables via Settings > Accessibility.
         public bool ShowFrequencyArrowButtons { get; set; } = false;
 
+        // Optional browser key that toggles TX. Empty = disabled.
+        public string TxToggleKey { get; set; } = string.Empty;
+
         // Voice control nudge step defaults for each VFO's mic button
         // dropdown, server-rendered so voice-control.js has a starting
         // value before it can fetch/receive anything.
@@ -130,6 +133,7 @@ namespace Yaesu_Web_Control.Pages
             ShowApp4Button = settings.ShowGridtrackerButton;
             ShowApp5Button = settings.ShowFldigiButton;
             ShowFrequencyArrowButtons = settings.ShowFrequencyArrowButtons;
+            TxToggleKey = settings.TxToggleKey == " " ? "Space" : (settings.TxToggleKey ?? string.Empty);
             App1Name = settings.App1Name;
             App2Name = settings.App2Name;
             App3Name = settings.App3Name;
