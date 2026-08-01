@@ -78,7 +78,7 @@ namespace Yaesu_Web_Control.Services.Sdr
             // the worker (observed when the Gain slider is dragged rapidly). Using a
             // local means an in-flight frame always finishes against a valid buffer;
             // a concurrent reset simply takes effect on the next frame.
-            float[] ema = _ema;
+            float[]? ema = _ema;
             if (ema is null || ema.Length != fftSize)
             {
                 ema  = new float[fftSize];
