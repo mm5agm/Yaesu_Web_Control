@@ -252,21 +252,34 @@ namespace Yaesu_Web_Control.Controllers
             return tcs.Task;
         }
 
-        // ── Spectrum DSP knobs (Low / High / Zoom-gain) ─────────────────────
+        // ── Spectrum DSP knobs (Gain only, since the auto-floor port) ───────
         //
-        // POST /api/sdr/dsp/{vfo}  body { gainLinear, dbFloor, dbCeiling }
+        // POST /api/sdr/dsp/{vfo}  body { gainLinear }
         //
-        // Persists the three values to appsettings.user.json AND pushes them
-        // live to the worker holding {vfo}. The slider UI calls this on each
-        // committed change. Returns { applied = true|false } — applied=false
-        // means the persist succeeded but no worker was connected to push to
-        // (settings will be re-sent when a worker spawns).
+        // Since the client-side auto-floor port (see wwwroot/js/sdr/spectrum-panel.js),
+        // the trace's vertical scaling is done entirely in the browser — the worker's
+        // dB clamp window is FORCED WIDE ([WideDbFloor, WideDbCeiling]) so the client
+        // always receives the full dynamic range to auto-range against. The only
+        // per-VFO knob left here is GainLinear (waterfall brightness). We still write
+        // the wide window into Low/High settings so existing users' stale narrow
+        // Low/High values auto-migrate on the first Gain change (and SdrManager pushes
+        // the same wide window on worker spawn).
+        //
+        // Persists to appsettings.user.json AND pushes live to the worker holding
+        // {vfo}. Returns { applied = true|false } — applied=false means the persist
+        // succeeded but no worker was connected to push to.
+
+        // Fixed wide clamp window — the client auto-floor windows within this.
+        private const float WideDbFloor   = -160f;
+        private const float WideDbCeiling = 0f;
 
         public class DspSettingsRequest
         {
             public float GainLinear { get; set; } = 1.0f;
-            public float DbFloor    { get; set; } = -120f;
-            public float DbCeiling  { get; set; } = 0f;
+            // DbFloor/DbCeiling are accepted for backward compatibility but ignored:
+            // the worker window is forced wide (see WideDbFloor/WideDbCeiling).
+            public float DbFloor    { get; set; } = WideDbFloor;
+            public float DbCeiling  { get; set; } = WideDbCeiling;
         }
 
         [HttpPost("dsp/{vfo}")]
@@ -277,28 +290,27 @@ namespace Yaesu_Web_Control.Controllers
             if (req == null)          return BadRequest(new { error = "missing body" });
             if (!float.IsFinite(req.GainLinear) || req.GainLinear <= 0)
                 return BadRequest(new { error = "gainLinear must be > 0" });
-            if (!float.IsFinite(req.DbFloor) || !float.IsFinite(req.DbCeiling) || req.DbFloor >= req.DbCeiling)
-                return BadRequest(new { error = "dbFloor must be < dbCeiling and both finite" });
 
-            // Persist to settings (round-trip read-modify-write).
+            // Persist to settings (round-trip read-modify-write). Force the wide
+            // clamp window so any stale narrow Low/High is migrated away.
             var settings = await _settings.GetSettingsAsync();
             if (v == "B")
             {
                 settings.SdrSpectrumGainB   = req.GainLinear;
-                settings.SdrSpectrumLowDbB  = req.DbFloor;
-                settings.SdrSpectrumHighDbB = req.DbCeiling;
+                settings.SdrSpectrumLowDbB  = WideDbFloor;
+                settings.SdrSpectrumHighDbB = WideDbCeiling;
             }
             else
             {
                 settings.SdrSpectrumGainA   = req.GainLinear;
-                settings.SdrSpectrumLowDbA  = req.DbFloor;
-                settings.SdrSpectrumHighDbA = req.DbCeiling;
+                settings.SdrSpectrumLowDbA  = WideDbFloor;
+                settings.SdrSpectrumHighDbA = WideDbCeiling;
             }
             await _settings.SaveSettingsAsync(settings);
 
             // Push live to the worker if one is connected for this VFO.
             bool applied = await _sdrManager.TrySendDspSettingsAsync(
-                v, new DspSettingsPayload(req.GainLinear, req.DbFloor, req.DbCeiling));
+                v, new DspSettingsPayload(req.GainLinear, WideDbFloor, WideDbCeiling));
 
             return Ok(new { applied });
         }

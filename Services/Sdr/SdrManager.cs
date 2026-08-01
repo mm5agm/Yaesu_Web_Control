@@ -170,13 +170,15 @@ public sealed class SdrManager : BackgroundService
             // Replay persisted DSP settings BEFORE publishing the writer so a
             // concurrent slider POST can't grab the slot mid-startup and race
             // its WriteDspSettingsAsync against ours on the same NetworkStream.
+            // Force a WIDE clamp window regardless of any persisted (possibly stale,
+            // narrow) Low/High. Since the client-side auto-floor port the browser does
+            // all vertical scaling, so the worker must stream the full dynamic range;
+            // the persisted Low/High are ignored here (SdrController writes the same
+            // wide window on any Gain change). Only Gain is a live per-VFO knob.
+            const float wideFloor = -160f, wideCeiling = 0f;
             var dsp = vfo == "B"
-                ? new DspSettingsPayload(config.SdrSpectrumGainB,
-                                          config.SdrSpectrumLowDbB,
-                                          config.SdrSpectrumHighDbB)
-                : new DspSettingsPayload(config.SdrSpectrumGainA,
-                                          config.SdrSpectrumLowDbA,
-                                          config.SdrSpectrumHighDbA);
+                ? new DspSettingsPayload(config.SdrSpectrumGainB, wideFloor, wideCeiling)
+                : new DspSettingsPayload(config.SdrSpectrumGainA, wideFloor, wideCeiling);
             try { await writer.WriteDspSettingsAsync(dsp, stoppingToken).ConfigureAwait(false); }
             catch (Exception ex)
             {
