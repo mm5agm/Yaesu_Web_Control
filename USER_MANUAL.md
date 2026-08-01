@@ -324,14 +324,13 @@ The spectrum display is only visible if an SDR device has been configured in Set
 
 **Resize spectrum vs waterfall** — Hover the horizontal boundary between the spectrum trace (top) and the waterfall (bottom); the cursor becomes a vertical-resize arrow. Drag up to give the spectrum more vertical room — useful when you're hunting weak signals close to the noise floor. Drag down to give the waterfall more history. The ratio is remembered per VFO across browser reloads, so the next time you open YWC the panel is back the way you left it. Two short grey grip-bars at the centre of the boundary mark the handle; they turn cyan while you're dragging.
 
-**Speed slider** — The slider next to Gain controls how fast the waterfall scrolls, from **Full** speed down to **1/128**. Drag it left to slow the waterfall down if signal trails are scrolling past faster than you can read them; the spectrum trace above it keeps updating live regardless of this setting. Set independently per VFO and remembered across browser reloads.
+**Automatic noise floor** — you no longer set a floor level by hand. YWC tracks your band noise continuously and pins it near the bottom of the panel automatically, so the trace stays framed the same way whether the band is quiet or busy and whichever SDR you use. As conditions change the floor re-tracks on its own; there is no floor slider to chase.
 
-**dB range** — The dropdown beside the **Hold** button picks the vertical scale of the spectrum trace, in dBFS:
+**Range slider** — Sets the vertical scale of the spectrum trace as **dB of headroom above the auto-tracked noise floor**, from 5 dB up to 160 dB (default 60). Drag it **left** for a smaller range to make peaks taller — a zoom into weak signals sitting just above the noise. Drag it **right** for a larger range to flatten the trace and keep strong signals from clipping off the top. Because the floor is pinned automatically, the Range slider only decides how much of the scale sits above it. Set independently per VFO and remembered across browser reloads.
 
-- **0/-120** (default) — the full SDR range; signals span the whole vertical height of the spectrum panel.
-- **-40/-120**, **-60/-120**, **-80/-120** — progressively zoom into the lower part of the scale, where weak signals normally sit. The strongest signals get clipped at the top of the panel, but the noise floor and anything just above it spreads out vertically and is much easier to see.
+**Gain slider** — Brightens the **waterfall**, lifting weak signals up its colour scale so faint trails stand out. It no longer changes the spectrum trace above — the trace auto-ranges (see Range slider), so Gain now works purely on waterfall brightness. Set independently per VFO and remembered across browser reloads.
 
-Pick whichever lets you see your noise floor without weak signals being squashed into the bottom row of pixels. The choice is remembered per VFO.
+**Speed slider** — Controls how fast the waterfall scrolls, from **Full** speed down to **1/128**. Drag it left to slow the waterfall down if signal trails are scrolling past faster than you can read them; the spectrum trace above it keeps updating live regardless of this setting. Set independently per VFO and remembered across browser reloads.
 
 **DX cluster spots** — If you have configured a DX cluster server in Settings (see §6.6), incoming spots are overlaid as small yellow callsign labels along the top of the spectrum at each spot's frequency. Clicking on a spot (within a few pixels of its marker) tunes VFO A exactly to that frequency. Spots outside the current span are not drawn; spots older than the configured age (default 15 minutes) are removed automatically.
 
