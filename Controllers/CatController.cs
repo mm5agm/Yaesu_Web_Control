@@ -481,7 +481,7 @@ namespace Yaesu_Web_Control.Controllers
 
                 // Save current band profile before switching
                 var oldBand = _radioStateService.BandA;
-                if (!string.IsNullOrEmpty(oldBand))
+                if (!string.IsNullOrEmpty(oldBand) && oldBand != BandPlanService.UnknownBand)
                 {
                     settings.BandProfilesA[oldBand] = new BandProfile
                     {
@@ -555,7 +555,7 @@ namespace Yaesu_Web_Control.Controllers
 
                 // Save current band profile before switching
                 var oldBand = _radioStateService.BandB;
-                if (!string.IsNullOrEmpty(oldBand))
+                if (!string.IsNullOrEmpty(oldBand) && oldBand != BandPlanService.UnknownBand)
                 {
                     settings.BandProfilesB[oldBand] = new BandProfile
                     {
@@ -632,7 +632,7 @@ namespace Yaesu_Web_Control.Controllers
                 // settings.BandProfilesA when the user switches AWAY from
                 // the band — so a shutdown mid-band would lose the choice.
                 var bandA = _radioStateService.BandA;
-                if (!string.IsNullOrEmpty(bandA))
+                if (!string.IsNullOrEmpty(bandA) && bandA != BandPlanService.UnknownBand)
                 {
                     var settings = await _settingsService.GetSettingsAsync();
                     if (!settings.BandProfilesA.TryGetValue(bandA, out var prof))
@@ -675,7 +675,7 @@ namespace Yaesu_Web_Control.Controllers
                 // Persist immediately into the current band's profile.
                 // See SetAntennaA for the rationale.
                 var bandB = _radioStateService.BandB;
-                if (!string.IsNullOrEmpty(bandB))
+                if (!string.IsNullOrEmpty(bandB) && bandB != BandPlanService.UnknownBand)
                 {
                     var settings = await _settingsService.GetSettingsAsync();
                     if (!settings.BandProfilesB.TryGetValue(bandB, out var prof))

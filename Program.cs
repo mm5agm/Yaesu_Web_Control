@@ -255,6 +255,12 @@ builder.Services.AddSignalR();
 // Register the persistence service (no hub dependency)
 builder.Services.AddSingleton<RadioStatePersistenceService>();
 
+// Band edges for the operator's own IARU region, read from
+// wwwroot/bandplan.default.json — the same file the browser overlays at
+// startup. RadioStateService resolves BandA/BandB through this, so the server
+// and the waterfall can no longer disagree about where a band ends.
+builder.Services.AddSingleton<IBandPlanService, BandPlanService>();
+
 // Register RadioStateService and CatMessageBuffer as singletons
 builder.Services.AddSingleton<RadioStateService>();
 builder.Services.AddSingleton<CatMessageBuffer>();

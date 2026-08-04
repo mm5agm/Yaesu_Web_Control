@@ -3667,6 +3667,11 @@
             // ─ Formatters ─
             function fmtBand(b) {
                 if (!b) return '';
+                // The server reports "Unknown" for a frequency outside every
+                // allocation in the operator's own region. Since band names
+                // became region-resolved that is a normal thing to hear, and
+                // "out of band" says what has actually happened.
+                if (String(b).toLowerCase() === 'unknown') return 'out of band';
                 const m = String(b).match(/^(\d+)m$/i);
                 return m ? `${m[1]} metres` : String(b);
             }

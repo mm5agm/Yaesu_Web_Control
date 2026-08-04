@@ -39,11 +39,19 @@ namespace Yaesu_Web_Control.Services
 
         private RadioState _initialState;
 
+        // Resolves frequencies to band names in the operator's own IARU region.
+        // Assigned FIRST in the constructor: the FrequencyA/FrequencyB
+        // initialisers below call UpdateBandFromFrequency() -> GetBandFromFrequency
+        // -> _bandPlan.BandForFrequency, so a null field here NREs at startup.
+        private readonly IBandPlanService _bandPlan;
+
         public RadioStateService(
             ILogger<RadioStateService> logger,
             RadioStatePersistenceService statePersistence,
-            IHubContext<RadioHub> hubContext)
+            IHubContext<RadioHub> hubContext,
+            IBandPlanService bandPlan)
         {
+            _bandPlan = bandPlan;
             _logger = logger;
             _statePersistence = statePersistence;
             _hubContext = hubContext;
@@ -715,22 +723,17 @@ namespace Yaesu_Web_Control.Services
             BandA = newBandA;
             BandB = newBandB;
         }
-        public string GetBandFromFrequency(long freq)
-        {
-            if (freq >= 1800000 && freq < 2000000) return "160m";
-            if (freq >= 3500000 && freq < 4000000) return "80m";
-            if (freq >= 5258000 && freq <= 5408000) return "60m";
-            if (freq >= 7000000 && freq < 7300000) return "40m";
-            if (freq >= 10100000 && freq < 10150000) return "30m";
-            if (freq >= 14000000 && freq < 14350000) return "20m";
-            if (freq >= 18068000 && freq < 18168000) return "17m";
-            if (freq >= 21000000 && freq < 21450000) return "15m";
-            if (freq >= 24890000 && freq < 24990000) return "12m";
-            if (freq >= 28000000 && freq < 29700000) return "10m";
-            if (freq >= 50000000 && freq < 54000000) return "6m";
-            if (freq >= 70000000 && freq < 70500000) return "4m";
-            return "Unknown";
-        }
+        /// <summary>
+        /// Band name for a frequency, in the operator's own IARU region.
+        ///
+        /// This used to be a hardcoded ladder here, region-blind and generous
+        /// with the edges — it disagreed with the browser's region-aware
+        /// BAND_EDGES (R1 80m: 3.800 there, 4.000 here). BandPlanService now
+        /// answers from wwwroot/bandplan.default.json, the same table the
+        /// browser uses. Off-band still returns "Unknown", so every existing
+        /// consumer behaves as before.
+        /// </summary>
+        public string GetBandFromFrequency(long freq) => _bandPlan.BandForFrequency(freq);
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
