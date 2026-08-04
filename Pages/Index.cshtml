@@ -2147,7 +2147,7 @@
         import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=5";
         import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=2";
         import "/js/ui/if-width-tables.js?v=3";
-        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=5";
+        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=6";
         import { loadLabels }           from "/js/ui/a11y-labels.js?v=1";
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=14";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
@@ -2155,8 +2155,21 @@
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
+
+        // Out-of-band marker (site.js applyBandOutOfBand) needs the nearest band
+        // resolved to the operator's own region. Resolve BAND_EDGES inside the
+        // arrow so it picks up any loadBandPlanFromServer() overlay applied later.
+        const _ywcRegion0 = '@Model.BandPlan';
+        window.nearestBandForHz = (hz) =>
+            nearestBandForHz(hz, BAND_EDGES[_ywcRegion0] || BAND_EDGES.Region1);
+
         loadLabels();
-        window.addEventListener('focus', loadLabels);
+        // loadLabels() rewrites every title from labels.json on each focus,
+        // wiping the "out of band" title suffix; restore it once that has run.
+        window.addEventListener('focus', async () => {
+            await loadLabels();
+            if (typeof window.refreshBandOutOfBand === 'function') window.refreshBandOutOfBand();
+        });
         document.addEventListener('DOMContentLoaded', function () {
             initFreqKeyboard();
             initMemoriesPanel();

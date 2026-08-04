@@ -457,6 +457,18 @@ pre, code { tab-size: 4; }
     color: #0f5132;
 }
 
+/* Out-of-band marker: nearest band in the operator's region is flagged red
+   when the radio is parked outside every allocation. Applied by
+   applyBandOutOfBand() in site.js. Kept distinct from the checked states above
+   so it reads as a warning, not a selection. */
+.band-radio-label.band-oob,
+.band-radio-label.band-oob:hover {
+    background-color: #dc3545;
+    border-color: #842029;
+    color: #000;
+}
+.band-radio-label.band-oob span { font-weight: bold; }
+
 /* Responsive: 3 columns on smaller screens, still sized to content */
 @media (max-width: 768px) {
     .band-radio-grid {
@@ -472,6 +484,22 @@ pre, code { tab-size: 4; }
     font-weight: bold;
     font-size: 0.8rem;
     padding-right: 2.25rem;
+}
+
+/* Out-of-band segment dropdown: the frequency is outside every allocation in
+   the operator's region, so the dropdown shows "OOB" and goes red. The
+   :disabled qualifier is what outranks Bootstrap's own .form-select:disabled
+   background; opacity:1 undoes Bootstrap's dimming so the red reads as a
+   warning, not a greyed-out control. .segment-select is already bold. */
+.segment-select.segment-oob,
+.segment-select.segment-oob:disabled,
+.segment-select.segment-oob:hover,
+.segment-select.segment-oob:focus {
+    background-color: #dc3545;
+    border-color: #842029;
+    color: #000;
+    font-weight: bold;
+    opacity: 1;
 }
 
 /* Maximize usable width for receiver panels */
