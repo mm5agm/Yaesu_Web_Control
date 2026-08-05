@@ -185,6 +185,20 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-08-05 - v2.4.3-pre4 (pre-release)
+
+*YWC no longer needs an internet connection. If your shack PC is online, nothing you can see changes and you can safely ignore this one. If it is not, this is the release that makes YWC work at all.*
+
+**The control panel could open with no meters, no icons and no value that ever changed.** Up to pre3 the page fetched three files — the meter-gauge library, the icon font, and the library that carries live updates from the radio to the browser — from public servers on the internet rather than from your own PC. Without the last of those, the page's script stopped before it started: you got the layout and the buttons, but dead gauges, a frequency that never moved, and empty boxes where the icons should be.
+
+This went unnoticed for a long time because it is invisible on any PC that has ever been online. Browsers keep their own copy of those files for a year, so once they had arrived they kept working — including with the network unplugged. Only a PC that had **never** been online saw the failure, which is a perfectly ordinary way to run a shack computer and one I had not thought about. It was found in YWC's sister app, Icom Web Control, when an operator sent a screenshot of the page stuck on "Transferring data from cdn.jsdelivr.net…"; YWC had the same three files and the same problem.
+
+All three now ship inside YWC and are served from your own PC. **Nothing on the page is fetched from the internet any more.**
+
+**What still uses the internet, and what happens without it.** Exactly two things, both optional and both already well-behaved offline: the **DX cluster** spot feed, which is off until you switch it on and simply shows *Disconnected* if it cannot reach the server, and the **update check**, which stays silent rather than complaining. Everything else — the radio link, the SDR, meters, spectrum, the rigctld bridge for WSJT-X — is local and always was.
+
+**Documentation:** the User Manual now says plainly what needs an internet connection and what does not (Section 1), and the symptom above is in Troubleshooting (Section 14.2) for anyone still on an older build.
+
 ## 2026-08-05 - v2.4.3-pre3 (pre-release)
 
 *Follows pre2 with a spectrum-return fix, a friendlier "already running" box, and better SDR diagnostics.*
