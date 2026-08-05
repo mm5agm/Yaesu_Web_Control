@@ -33,7 +33,10 @@ export class AudioCapture {
       }
     });
 
-    this._ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    this._ctx = new AudioContext({
+      sampleRate: SAMPLE_RATE,
+      latencyHint: 'interactive'
+    });
     const source = this._ctx.createMediaStreamSource(this._stream);
 
     if (this._codec === 'opus' && supportsWebCodecsOpus()) {

@@ -1,6 +1,7 @@
 /** Shared wire constants — keep in sync with Services/Audio/AudioConstants.cs */
 export const SAMPLE_RATE = 48000;
-export const FRAME_SAMPLES = 960;
+/** 10 ms frames — lower packetization delay than 20 ms. */
+export const FRAME_SAMPLES = 480;
 export const MSG_OPUS_RX = 0x01;
 export const MSG_OPUS_TX = 0x02;
 export const MSG_PCM_RX = 0x03;

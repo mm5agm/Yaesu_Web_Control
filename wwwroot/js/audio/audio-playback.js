@@ -4,7 +4,8 @@ import {
 } from './audio-protocol.js';
 
 /**
- * Jitter-buffered playback of RX Opus or PCM16 frames.
+ * Low-latency playback of RX Opus or PCM16 frames.
+ * Worklet queue is hard-capped (~30 ms) so bursts cannot accumulate delay.
  */
 export class AudioPlayback {
   constructor() {
@@ -13,8 +14,8 @@ export class AudioPlayback {
     this._decoder = null;
     this._codec = 'pcm16';
     this._muted = false;
-    this._queue = []; // Float32Array frames
-    this._maxQueue = 8; // ~160 ms
+    /** Max queued frames in the worklet (~3 × 10 ms). */
+    this._maxQueueFrames = 3;
   }
 
   get muted() { return this._muted; }
@@ -22,7 +23,11 @@ export class AudioPlayback {
 
   async start(codec) {
     this._codec = codec || 'pcm16';
-    this._ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    // Prefer low output latency when the browser supports it.
+    this._ctx = new AudioContext({
+      sampleRate: SAMPLE_RATE,
+      latencyHint: 'interactive'
+    });
 
     if (this._codec === 'opus' && supportsWebCodecsOpus()) {
       try {
@@ -33,14 +38,21 @@ export class AudioPlayback {
       }
     }
 
+    const maxFrames = this._maxQueueFrames;
     const processorCode = `
       class YwcPlaybackProcessor extends AudioWorkletProcessor {
         constructor() {
           super();
           this.queue = [];
           this.offset = 0;
+          this.maxFrames = ${maxFrames};
           this.port.onmessage = (ev) => {
-            if (ev.data && ev.data.length) this.queue.push(ev.data);
+            if (!ev.data || !ev.data.length) return;
+            this.queue.push(ev.data);
+            while (this.queue.length > this.maxFrames) {
+              this.queue.shift();
+              this.offset = 0;
+            }
           };
         }
         process(inputs, outputs) {
@@ -82,10 +94,8 @@ export class AudioPlayback {
   async _startOpusDecoder() {
     this._decoder = new AudioDecoder({
       output: (audioData) => {
-        const planes = audioData.numberOfChannels;
         const frames = audioData.numberOfFrames;
         const buf = new Float32Array(frames);
-        // copyTo planar channel 0
         audioData.copyTo(buf, { planeIndex: 0 });
         audioData.close();
         this._enqueue(buf);
@@ -107,26 +117,21 @@ export class AudioPlayback {
       return;
     }
 
-    if (type === MSG_OPUS_RX) {
-      if (this._decoder) {
-        const chunk = new EncodedAudioChunk({
-          type: 'key',
-          timestamp: performance.now() * 1000,
-          data: payload
-        });
-        try { this._decoder.decode(chunk); }
-        catch (e) { console.warn('decode failed', e); }
-      }
+    if (type === MSG_OPUS_RX && this._decoder) {
+      const chunk = new EncodedAudioChunk({
+        type: 'key',
+        timestamp: performance.now() * 1000,
+        data: payload
+      });
+      try { this._decoder.decode(chunk); }
+      catch (e) { console.warn('decode failed', e); }
     }
   }
 
   _enqueue(float32) {
     if (!this._worklet) return;
-    // Cap queue to limit latency
-    this._queue.push(float32);
-    while (this._queue.length > this._maxQueue) this._queue.shift();
-    const frame = this._queue.shift();
-    if (frame) this._worklet.port.postMessage(frame, [frame.buffer]);
+    // Transfer ownership to the worklet (zero-copy).
+    this._worklet.port.postMessage(float32, [float32.buffer]);
   }
 
   async stop() {
@@ -136,6 +141,5 @@ export class AudioPlayback {
     try { await this._ctx?.close(); } catch { /* ignore */ }
     this._ctx = null;
     this._worklet = null;
-    this._queue = [];
   }
 }
