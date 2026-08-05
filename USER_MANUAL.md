@@ -328,7 +328,7 @@ The spectrum display is only visible if an SDR device has been configured in Set
 
 **Range slider** — Sets the vertical scale of the spectrum trace as **dB of headroom above the auto-tracked noise floor**, from 5 dB up to 160 dB (default 60). Drag it **left** for a smaller range to make peaks taller — a zoom into weak signals sitting just above the noise. Drag it **right** for a larger range to flatten the trace and keep strong signals from clipping off the top. Because the floor is pinned automatically, the Range slider only decides how much of the scale sits above it. Set independently per VFO and remembered across browser reloads.
 
-**Gain slider** — Brightens the **waterfall**, lifting weak signals up its colour scale so faint trails stand out. It no longer changes the spectrum trace above — the trace auto-ranges (see Range slider), so Gain now works purely on waterfall brightness. Set independently per VFO and remembered across browser reloads.
+**Bright slider** — Brightens the **waterfall**, lifting weak signals up its colour scale so faint trails stand out. It does not touch the spectrum trace above — the trace auto-ranges (see Range slider), so Bright works purely on waterfall brightness. At its **Off** end the waterfall sits at a genuinely dark baseline, with the colours keyed to the auto-tracked noise floor so only real signals show colour; slide it up to bring the weakest trails out as far as you want. (This replaced the old **Gain** slider — once the trace scaled itself automatically, Gain only ever changed waterfall brightness, so it became a proper brightness control.) Set independently per VFO and remembered across browser reloads.
 
 **Speed slider** — Controls how fast the waterfall scrolls, from **Full** speed down to **1/128**. Drag it left to slow the waterfall down if signal trails are scrolling past faster than you can read them; the spectrum trace above it keeps updating live regardless of this setting. Set independently per VFO and remembered across browser reloads.
 
@@ -2003,9 +2003,13 @@ This matters most **after you change the Radio Model or other settings**: the pa
 
 - The meters use a default calibration that may not exactly match every individual radio. See Section 10 to adjust the calibration.
 
-**App will not start — "Another instance is already running"**
+**App will not start — "Already Running"**
 
-- Only one instance of the app can run at a time. Check the Windows taskbar or system tray for an existing instance. If the previous instance crashed and left a stale lock, restart Windows.
+- Only one instance of the app can run at a time. If you launch it again while a copy is already running, a box appears offering three choices:
+  - **Yes** — open the running copy in your browser (at its address, e.g. `http://localhost:8080`).
+  - **No** — close the running copy and start a fresh one. YWC asks the old copy to close cleanly first, and force-ends it if it will not go.
+  - **Cancel** — do nothing and leave the running copy alone.
+- The box also shows the running copy's process ID, or notes that its window may be minimised to the system tray. If **No** reports it "could not be closed", end **Yaesu_Web_Control.exe** in Windows Task Manager (**Ctrl+Shift+Esc**) and start it again.
 
 **App shuts down unexpectedly after closing the browser**
 

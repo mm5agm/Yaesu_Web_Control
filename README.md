@@ -185,6 +185,16 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-08-05 - v2.4.3-pre3 (pre-release)
+
+*Follows pre2 with a spectrum-return fix, a friendlier "already running" box, and better SDR diagnostics.*
+
+**The spectrum comes straight back when you return to the main screen.** After a trip to another page — Meter Calibration, say — coming back to the home page could leave the spectrum blank for several seconds before it filled in, and sometimes needed a hard refresh. The cause was on the server: while YWC was still holding the connection from the page you'd just left, the spectrum feed to every open page could stall for a few seconds until that old connection was cleaned up. The feed no longer waits on any one page like that, so the spectrum starts drawing again the moment the panel appears.
+
+**A more useful "already running" box.** If you start YWC while a copy is already running, the message is no longer a dead-end **OK** — it now offers **Yes** (open the running copy in your browser), **No** (close the running copy and start fresh) and **Cancel** (do nothing). This matters most when the running copy has got stuck with no visible window: before, the only way out was Task Manager.
+
+**Sharper diagnostics when an RTL-SDR isn't found.** For the case where a dongle works in other SDR programs but YWC's device scan comes up empty, the log now records exactly how many devices the scan returned and — decisively — the full path each SDR support DLL was actually loaded from. That makes it easy to spot when another SDR app's copy of a library, sitting on the Windows PATH, has quietly shadowed the one YWC ships. No day-to-day change; it only helps when chasing a "no device detected" report.
+
 ## 2026-08-05 - v2.4.3-pre2 (pre-release)
 
 *Follows pre1 with a rework of the spectrum waterfall controls.*
