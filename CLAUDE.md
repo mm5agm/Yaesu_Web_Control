@@ -29,7 +29,32 @@ There are no automated tests. Verification is manual via the browser at `http://
 
 ## Release Process
 
-Before releasing: bump `Models/AppVersion.cs`, `installer.nsi`, add release notes to `README.md`, update `USER_MANUAL.md` if needed, and bump the per-release download badge in `README.md` to the new version (search for the previous `vX.Y.Z` tag in the shields.io URL near the top of the file).
+Before releasing, bump the version in **all three** files — five sites in total:
+
+- `Models/AppVersion.cs` — `Current` (and `ReleaseDate`)
+- `installer.nsi` — `!define VERSION`
+- `Yaesu_Web_Control.csproj` — `<Version>`, `<FileVersion>`, `<AssemblyVersion>`
+  (the last two are four-part: `X.Y.Z.0`)
+
+`.\scripts\bump-version.ps1 -Version X.Y.Z` does the first two plus the README
+badge. **It does not touch the csproj** — that one is by hand, and it is the one
+that gets forgotten: it sat on `1.5.6` while `AppVersion.cs` read `2.4.2`.
+`finish-release.ps1` now refuses to release unless all five agree.
+
+Then update the documentation:
+
+- `README.md` — add the release-notes entry (date-first heading, e.g.
+  `## 2026-08-01 - v2.4.2`), and bump the per-release badge in the shields.io
+  URL near the top. Pre-releases get their own heading too, but **not** a badge
+  bump — the badge tracks full releases only.
+- `USER_MANUAL.md` — bring every section the release touches in line with what
+  the app now does, and re-capture any screenshot the change makes wrong.
+
+Do not start the git steps until both documents are done. `finish-release.ps1`
+helps with the mechanical half — it rewrites the version strings in the manual
+and the README badge — but it refuses to release at all unless you have written
+the README release-notes entry yourself, and it can only *warn* that the manual
+looks stale, never judge whether a section is right.
 
 ```powershell
 # 1. Commit everything on develop
@@ -52,7 +77,15 @@ gh release create vX.Y.Z --title "vX.Y.Z" --notes "See README.md for full releas
 ```
 
 **Step 4 is required.** The build workflow triggers on `release: [created]`, not on tag push alone.
-Alternatively run `.\scripts\finish-release.ps1 -Version vX.Y.Z` which does all four steps.
+
+`.\scripts\finish-release.ps1 -Version vX.Y.Z` does all of the above, with the
+version and documentation checks in front of it, and stops before tagging if
+anything is wrong. Prefer it to the raw commands: run by hand, the merge can
+conflict and leave `main` unmerged while the tag and release go out anyway,
+which is how the sibling repo (IWC) shipped v1.0.0's code as v1.0.3.
+
+**Do not use `.\scripts\create-release.ps1`.** It is an older route to the same
+place, it has none of those checks, and it generates release notes from git log.
 
 User settings persist to `%APPDATA%\MM5AGM\Yaesu Web Control\appsettings.user.json`.  
 Radio state persists to `%APPDATA%\MM5AGM\Yaesu Web Control\radio_state.json`.
