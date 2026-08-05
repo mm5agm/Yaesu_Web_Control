@@ -77,6 +77,17 @@ The project follows a modular, maintainable, and predictable architecture:
 The codebase should feel like it was written by a disciplined engineering team.
 
 ====================================================================
+PLATFORMS
+====================================================================
+
+- **Windows (`net10.0-windows`)** — full product: WinForms tray, SDR workers,
+  Voice Control (SAPI). Shipped via NSIS installer.
+- **macOS / Linux (`net10.0`)** — CAT + web UI only. macOS has an Avalonia
+  menu-bar tray; Linux is console (or Docker). SDR and Voice Control are
+  compiled/gated out. See USER_MANUAL §1 / §15.10 and CLAUDE.md operational
+  differences table.
+
+====================================================================
 DOMAIN CONCEPTS
 ====================================================================
 

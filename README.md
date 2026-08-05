@@ -31,11 +31,38 @@ I own and test on the **FTdx101MP**; the other supported models are built from Y
 
 **FTX-1:** a user has reported it working on HF (run with the model set to *FTdx10*) — frequency and mode track cleanly and quickly. Its 6m/2m/70cm memory handling still needs a little work, so a dedicated FTX-1 profile is on the way once someone can help confirm the VHF/UHF side. If you own an FTX-1, I'd love to hear from you.
 
+### Platforms (Windows vs macOS / Linux)
+
+| | **Windows** (shipped installer) | **macOS / Linux** (CAT-only host) |
+|---|---|---|
+| How to run | Download installer from [Releases](https://github.com/mm5agm/Yaesu_Web_Control/releases) | `dotnet run --framework net10.0`, or **Linux Docker** (`Dockerfile` / `docker-compose.yml`, amd64 + arm64 / Pi) |
+| Host UI | System tray | macOS menu-bar status item · Linux/Docker: console only |
+| CAT + browser UI | Yes | Yes |
+| SDR spectrum | Yes | No |
+| Voice Control (SAPI) | Yes | No |
+| Voice announcements (browser TTS) | Yes | Yes |
+| Serial port | `COM3`, … | macOS `/dev/cu.*` · Linux `/dev/ttyUSB*` / `/dev/ttyACM*` |
+| User data | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` (Docker: `./data/ywc` volume) |
+| Auto-exit when no browser | Default on | Default on — turn **off** for headless; Docker forces off |
+
+Full operational detail: [USER_MANUAL.md §1](USER_MANUAL.md#1-introduction) and [§15.10](USER_MANUAL.md#1510-whats-different-on-macos--linux-vs-windows).
+
 ### Building from source (developers)
 
-The shipped installer remains **Windows-only** (tray icon, voice control, SDR spectrum). The project also multi-targets `net10.0` for a **CAT-only console host** usable on macOS/Linux: `dotnet run --framework net10.0`, then open `http://localhost:8080`. Set the serial port to a `/dev/cu.*` (macOS) or `/dev/ttyUSB*` / `/dev/ttyACM*` (Linux) device. SDR and Voice Control are disabled on that host. On **macOS**, a menu-bar status item mirrors the Windows tray (Open / About / user data folder / Exit). Settings includes **Automatically exit when no browser is connected** (default on) so you can keep the process alive with no browser open.
+```bash
+# Windows product (tray + voice + SDR)
+dotnet run --project Yaesu_Web_Control.csproj --framework net10.0-windows
 
-**Linux Docker (x64 or arm64 / Raspberry Pi):** see `Dockerfile` and `docker-compose.yml`. Build and run with `docker compose up -d --build`, set `YWC_SERIAL_DEVICE` to your USB-serial node, then open `http://<host>:8080`. The image is CAT + web UI only; settings/logs persist under the `./data/ywc` volume.
+# CAT-only host (macOS / Linux / Windows without WinForms features)
+dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
+# then open http://localhost:8080
+
+# Linux Docker (x64 or arm64 / Raspberry Pi)
+export YWC_SERIAL_DEVICE=/dev/ttyUSB0
+docker compose up -d --build
+```
+
+On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host.
 
 ## Main Page
 ![Yaesu Web Control Main Page](pictures/DevelopScreen.png)
