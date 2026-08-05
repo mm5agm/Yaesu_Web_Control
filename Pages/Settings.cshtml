@@ -1842,21 +1842,36 @@
                         </div>
                         <div class="mb-3">
                             <label asp-for="Settings.SerialPort" class="form-label">Serial Port</label>
+                            <div class="input-group">
+                                <select asp-for="Settings.SerialPort" class="form-select" id="Settings_SerialPort"
+                                        data-selected="@Model.Settings.SerialPort" required>
+                                    @if (!string.IsNullOrWhiteSpace(Model.Settings.SerialPort))
+                                    {
+                                        <option value="@Model.Settings.SerialPort" selected>@Model.Settings.SerialPort</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="">Loading ports…</option>
+                                    }
+                                </select>
+                                <button type="button" class="btn btn-outline-secondary" id="btnRefreshSerialPorts"
+                                        title="Refresh port list">
+                                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                                    <span class="visually-hidden">Refresh</span>
+                                </button>
+                            </div>
                             @if (Model.IsWindowsHost)
                             {
-                                <input asp-for="Settings.SerialPort" class="form-control" placeholder="COM3" required />
                                 <div class="form-text">
-                                    Enter the COM port where your radio is connected (e.g., COM3, COM4).
-                                    <br /><strong>Tip:</strong> Check Device Manager to find the correct port.
+                                    Choose the radio's <strong>Enhanced</strong> (CAT) COM port — not Standard / TX-control if two appear.
+                                    Use Refresh if you just plugged the radio in.
                                 </div>
                             }
                             else
                             {
-                                <input asp-for="Settings.SerialPort" class="form-control" placeholder="/dev/cu.usbserial-…" required />
                                 <div class="form-text">
-                                    Enter the serial device path (e.g. <code>/dev/cu.usbserial-XXXX</code> or <code>/dev/cu.usbmodem…</code>).
-                                    Prefer <code>cu.*</code> over <code>tty.*</code> on macOS.
-                                    <br /><strong>Tip:</strong> Run <code>ls /dev/cu.*</code> in Terminal, or check Diagnostics → Ports.
+                                    Choose the radio's CAT serial device. Prefer <code>cu.*</code> over <code>tty.*</code> on macOS.
+                                    Use Refresh if you just plugged the radio in.
                                 </div>
                             }
                             <span asp-validation-for="Settings.SerialPort" class="text-danger"></span>
@@ -2661,6 +2676,72 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Serial port dropdown — same /api/ports source as Diagnostics
+        (function () {
+            async function loadSerialPorts() {
+                const sel = document.getElementById('Settings_SerialPort');
+                if (!sel) return;
+                const selected = sel.getAttribute('data-selected') || sel.value || '';
+                const selectedKey = selected.toLowerCase();
+                try {
+                    const res = await fetch('/api/ports');
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    const ports = Array.isArray(data.ports) ? data.ports.slice() : [];
+                    ports.sort(function (a, b) {
+                        return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+                    });
+
+                    const found = ports.some(function (p) { return String(p).toLowerCase() === selectedKey; });
+
+                    sel.innerHTML = '';
+                    if (selected && !found) {
+                        const missing = document.createElement('option');
+                        missing.value = selected;
+                        missing.textContent = selected + ' (not currently detected)';
+                        missing.selected = true;
+                        sel.appendChild(missing);
+                    }
+
+                    if (ports.length === 0 && !selected) {
+                        const empty = document.createElement('option');
+                        empty.value = '';
+                        empty.textContent = 'No serial ports detected';
+                        sel.appendChild(empty);
+                    } else {
+                        ports.forEach(function (p) {
+                            const opt = document.createElement('option');
+                            opt.value = p;
+                            opt.textContent = p;
+                            if (String(p).toLowerCase() === selectedKey) opt.selected = true;
+                            sel.appendChild(opt);
+                        });
+                    }
+
+                    if (sel.value) sel.setAttribute('data-selected', sel.value);
+                } catch (e) {
+                    console.warn('Serial port list failed', e);
+                    if (!sel.options.length) {
+                        const err = document.createElement('option');
+                        err.value = selected || '';
+                        err.textContent = selected
+                            ? selected + ' (list unavailable)'
+                            : 'Could not load ports';
+                        err.selected = true;
+                        sel.appendChild(err);
+                    }
+                }
+            }
+
+            document.getElementById('btnRefreshSerialPorts')?.addEventListener('click', function () {
+                const sel = document.getElementById('Settings_SerialPort');
+                if (sel?.value) sel.setAttribute('data-selected', sel.value);
+                loadSerialPorts();
+            });
+            loadSerialPorts();
+        })();
+    </script>
     <script>
         // Remote audio device list + HTTPS certificate generation
         (function () {
