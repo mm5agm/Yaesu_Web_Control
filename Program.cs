@@ -193,6 +193,25 @@ static int LoadConfiguredHttpPort()
     return 8080;
 }
 
+static (bool enabled, int port) LoadConfiguredHttps()
+{
+    try
+    {
+        var path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MM5AGM", "Yaesu Web Control", "appsettings.user.json");
+        if (!File.Exists(path)) return (false, 8443);
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        bool enabled = doc.RootElement.TryGetProperty("HttpsEnabled", out var e) && e.ValueKind == JsonValueKind.True;
+        int port = 8443;
+        if (doc.RootElement.TryGetProperty("HttpsPort", out var p) && p.TryGetInt32(out int hp) && hp >= 1 && hp <= 65535)
+            port = hp;
+        return (enabled, port);
+    }
+    catch { }
+    return (false, 8443);
+}
+
 #if WINDOWS
 // ── Suppress Windows critical-error dialogs during DLL load ─────────────────
 // When SoapySDR enumerates plugins (HackRF, RTL-SDR, Airspy, etc.), Windows
@@ -369,6 +388,11 @@ builder.Services.AddHostedService<RigctldServer>();
 // Register your settings service
 builder.Services.AddSingleton<ISettingsService, SettingsService>();
 
+// Remote radio audio (browser ↔ USB) — opt-in; devices open only while a client is connected.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioSessionManager>();
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>());
+
 // Audio filter EX address map — loaded once at startup from
 // wwwroot/data/audio-filter-ex-map.json; used by the Audio Filter popout
 // controller endpoints to translate per-radio menu addresses.
@@ -446,10 +470,48 @@ if (chosenPort < 0)
 }
 
 // Force the web host to use the chosen port on all interfaces.
-builder.WebHost.UseUrls($"http://0.0.0.0:{chosenPort}");
+// Optional HTTPS (self-signed) dual-binds when enabled and a cert exists.
+var (httpsWanted, httpsPortCfg) = LoadConfiguredHttps();
+bool httpsActive = false;
+int? httpsListenPort = null;
+if (httpsWanted)
+{
+    if (Yaesu_Web_Control.Services.Audio.HttpsCertificateService.CertificateExists)
+    {
+        if (IsPortFree(httpsPortCfg) || httpsPortCfg == chosenPort)
+        {
+            httpsActive = true;
+            httpsListenPort = httpsPortCfg;
+        }
+        else
+        {
+            Log.Warning("HTTPS enabled but port {Port} is in use ({Owner}); staying HTTP-only",
+                httpsPortCfg, GetPortOwner(httpsPortCfg) ?? "unknown");
+        }
+    }
+    else
+    {
+        Log.Warning("HTTPS enabled but no certificate at {Path}; generate one in Settings and restart",
+            Yaesu_Web_Control.Services.Audio.HttpsCertificateService.CertificatePath);
+    }
+}
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(chosenPort);
+    if (httpsActive && httpsListenPort is int hp)
+    {
+        options.ListenAnyIP(hp, listen =>
+        {
+            listen.UseHttps(Yaesu_Web_Control.Services.Audio.HttpsCertificateService.CertificatePath,
+                Yaesu_Web_Control.Services.Audio.HttpsCertificateService.PfxPassword);
+        });
+        Log.Information("HTTPS listening on 0.0.0.0:{Port}", hp);
+    }
+});
 
 // Publish the chosen port so every consumer reads from one source of truth.
-builder.Services.AddSingleton(new HttpPortInfo(chosenPort));
+builder.Services.AddSingleton(new HttpPortInfo(chosenPort, httpsListenPort, httpsActive));
 
 builder.Services.AddSingleton<BrowserLauncher>();
 #if WINDOWS
@@ -538,6 +600,7 @@ try
             RequestPath = "/pictures"
         });
     }
+    app.UseWebSockets();
     app.UseRouting();
     app.UseAuthorization();
     //app.MapGet("/", () => "ROOT ROUTE HIT");
@@ -547,6 +610,12 @@ try
 
     // MAP SIGNALR HUB:
     app.MapHub<Yaesu_Web_Control.Hubs.RadioHub>("/radioHub");
+
+    // Remote audio WebSocket (binary Opus/PCM frames) — not SignalR.
+    app.Map("/audio", async (HttpContext ctx, Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService bridge) =>
+    {
+        await bridge.HandleWebSocketAsync(ctx);
+    });
 
     app.MapGet("/api/status/init", () => new { status = Yaesu_Web_Control.Services.AppStatus.InitializationStatus });
 

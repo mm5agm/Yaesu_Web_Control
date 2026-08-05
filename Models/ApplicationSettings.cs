@@ -254,6 +254,31 @@
         // by name, so the chosen-device path renders the phrase to a WAV and
         // plays it via NAudio (see Services/Voice/AudioOutput.cs, VoiceTtsService).
         public string VoiceOutputDeviceName { get; set; } = "";
+
+        // ── Remote Audio (browser ↔ radio USB) ─────────────────────────────
+        // Opt-in Opus/PCM bridge so a remote browser can hear radio RX and send
+        // mic audio into radio TX over the existing LAN/VPN path. Off by default.
+        public bool AudioStreamingEnabled { get; set; } = false;
+
+        /// <summary>PortAudio capture device name for radio RX (USB recording). Empty = default input.</summary>
+        public string? AudioRadioRxDevice { get; set; } = "";
+
+        /// <summary>PortAudio playback device name for radio TX (USB playback). Empty = default output.</summary>
+        public string? AudioRadioTxDevice { get; set; } = "";
+
+        public float AudioRxGain { get; set; } = 1.0f;
+        public float AudioTxGain { get; set; } = 1.0f;
+
+        // ── Optional HTTPS (self-signed; restart to apply) ────────────────
+        // Required for getUserMedia from a remote browser (secure context).
+        public bool HttpsEnabled { get; set; } = false;
+        public int HttpsPort { get; set; } = 8443;
+
+        /// <summary>
+        /// Extra SAN hostnames/IPs (newline or comma separated) baked into the
+        /// self-signed cert — e.g. WireGuard IP or LAN hostname.
+        /// </summary>
+        public string? HttpsSanHosts { get; set; } = "";
     }
 
     public class RadioState
