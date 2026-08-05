@@ -1,33 +1,36 @@
-# macOS / Linux CAT-only host, Docker (amd64/arm64), and platform docs
+# Native remote audio (browser ↔ radio USB) + optional HTTPS
 
 ## Summary
 
-Makes Yaesu Web Control runnable as a **CAT + web UI** host outside Windows, without shipping SDR spectrum or Voice Control on those platforms. The Windows installer path (`net10.0-windows`) is unchanged.
+Adds **in-browser send/receive audio** so a remote operator on LAN/VPN can operate SSB without Mumble/SonoBus. Built on top of `feature/macos-and-linux-build` (this MR is **audio/HTTPS only** — no platform/Docker changes).
 
-- **Multi-TFM:** `net10.0-windows` (full product: WinForms tray, voice, SDR worker) and `net10.0` (CAT-only console host for macOS/Linux).
-- **macOS menu-bar tray** via Avalonia (`MacSystemTrayService`), driven on the process main thread after Kestrel `StartAsync` (AppKit-safe). Linux uses plain `app.Run()` with no tray.
-- **`AutoShutdownWhenNoBrowsers`** setting (default on) so a headless shack can keep the process alive with no browser tabs; **Docker forces keep-alive** and skips local browser open (`HostRuntime.IsContainer`).
-- **Linux Docker** multi-arch image (`linux/amd64`, `linux/arm64`) + `docker-compose.yml` with serial device pass-through and a data volume under `XDG_CONFIG_HOME=/data`.
-- **UI/docs:** Settings/Index gate Windows-only panels with `IsWindowsHost`; serial validation accepts `/dev/…` on Unix; README / USER_MANUAL / CLAUDE document the operational differences (platforms table, install paths, FAQ §15.10).
+- **Remote Audio bridge:** PortAudio host I/O ↔ dedicated `/audio` WebSocket ↔ browser mic/speakers (PCM16 preferred; Opus via Concentus / WebCodecs when negotiated).
+- **Settings:** opt-in Remote Audio section with radio RX (capture) / TX (playback) device pickers and gains; devices open only while a session is active.
+- **Single session:** second browser is rejected busy; PTT stays on existing CAT TX controls.
+- **Optional self-signed HTTPS:** generate cert in Settings, dual-listen HTTP + HTTPS after restart — required for remote `getUserMedia` (secure context).
+- **Docs:** USER_MANUAL §6.2 / §6.8 / §18 and FAQ §15.7 updated.
 
 ### Notable code
 
 | Area | Change |
 |------|--------|
-| `Yaesu_Web_Control.csproj` | Dual TFM; compile-remove WinForms tray / voice / SDR controller on `net10.0`; Avalonia + DBus pin on CAT-only |
-| `Program.cs` | `#if WINDOWS` for tray/voice/SDR; macOS tray main-loop; Linux `app.Run()` |
-| `RadioHub.cs` | Respects auto-shutdown setting; containers never auto-exit |
-| `Services/MacSystemTrayService.cs` | Open / About / user data / Exit |
-| `Dockerfile`, `docker-compose.yml`, `docker/entrypoint.sh` | Publish `net10.0` RID image; data dir under `/data`; container defaults via `HostRuntime` / `ApplyContainerDefaults` (no baked settings file) |
-| CI `release.yml` | Explicit `-f net10.0-windows` for the Windows publish |
+| `Services/Audio/*` | Bridge, PortAudio enumeration, Opus codec, wire protocol, HTTPS cert helper |
+| `Controllers/AudioController.cs` | `/api/audio/devices`, status, cert generate |
+| `Program.cs` | WebSockets `/audio`; Kestrel dual-bind when HTTPS enabled |
+| `Pages/Settings.cshtml` | Remote Audio + HTTPS UI |
+| `Pages/Index.cshtml` + `wwwroot/js/audio/*` | Start/Stop bar, mute, levels |
+| `Models/ApplicationSettings.cs` | `AudioStreaming*`, `Https*` settings |
+| `USER_MANUAL.md` | Remote audio setup, MOD SOURCE, TLS/VPN troubleshooting |
 
 ## Test plan
 
-- [ ] `dotnet build -f net10.0-windows` succeeds (Windows product TFM; OK with `EnableWindowsTargeting` on macOS)
-- [ ] `dotnet build -f net10.0` / `dotnet run --framework net10.0` on macOS — menu-bar status item appears; Open / Exit work; log shows `macOS menu-bar status item ready`
-- [ ] CAT: set Serial Port to `/dev/cu.*`, Test Connection, meters/frequency update in the browser
-- [ ] Settings: **Automatically exit when no browser is connected** off → closing all tabs does not exit the host within ~30s
-- [ ] Settings: SDR / Voice Control sections hidden on CAT-only host; still present on Windows TFM
-- [ ] Docker: `docker build --platform linux/arm64 -t ywc:local .` (and/or `linux/amd64`); `docker run -p 8080:8080 -v …:/data ywc:local` serves HTTP 200
-- [ ] Docker compose on Linux/Pi with `YWC_SERIAL_DEVICE` — radio CAT works; settings persist under `./data/ywc` after Save Settings
-- [ ] Windows installer / `net10.0-windows` smoke: tray, optional SDR/voice regression (no intentional behaviour change)
+- [ ] `dotnet build -f net10.0` and `-f net10.0-windows` succeed
+- [ ] Settings → Remote Audio: enable; RX/TX device lists populate (Refresh works); Save persists
+- [ ] Index Remote Audio bar appears only when enabled; Start prompts for mic; RX audible; TX meter moves when speaking
+- [ ] CAT TX button / toggle still keys the radio independently of the audio stream
+- [ ] Second browser Start audio → busy / rejected
+- [ ] Disable Remote Audio → bar hidden; no PortAudio devices held
+- [ ] HTTPS: Generate cert with SAN (LAN/WG IP); Enable HTTPS; Save; **restart**; open `https://…:8443`; accept warning; Start audio works remotely
+- [ ] Radio MOD SOURCE = USB/REAR; confirm TX audio modulates when keyed
+- [ ] Voice Control mic (Windows) remains independent of radio USB device pickers
+- [ ] Diff vs `feature/macos-and-linux-build` contains only audio/HTTPS files (no Docker/macOS tray churn)
