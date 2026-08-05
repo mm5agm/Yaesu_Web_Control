@@ -1,0 +1,58 @@
+{
+  "model": "FTdx10",
+  "placeholders": {
+    "PWR": [
+      [30, 76, 112, 157, 190, 222]
+    ],
+    "SWR": [
+      [0, 51, 77, 128, 173, 242]
+    ],
+    "Compression": [
+      [0, 56, 102, 140, 204]
+    ],
+    "ALC": [
+      [30, 76, 112, 157, 190, 222]
+    ],
+    "TPA": [
+      [14, 60, 106, 152, 198, 244]
+    ],
+    "IDD": [
+      [0, 51, 102, 153, 204, 242]
+    ],
+    "VPA": [
+      [170, 182, 194, 206, 218, 235]
+    ],
+    "S-Meter": [
+      [0, 4, 30, 65, 95, 131, 171, 208, 255],
+      [0, 4, 30, 65, 95, 131, 171, 213, 255]
+    ]
+  },
+  "contributions": [
+    {
+      "id": "backfill-ftdx10",
+      "from": null,
+      "date": "2026-06-14",
+      "appVersion": null,
+      "note": "Provisional back-fill of the FTdx10 S-meter change committed in acb35a6 (the \u002B40 dB point moved from raw 208 to 213). Provenance is unstated in the commit \u2014 recorded with from=null rather than guessing a callsign. [VERIFY] Check the email archive for an FTdx10 calibration around 2026-06-14: if one exists it carries the sender\u0027s callsign and the full measured vector, and should replace this entry. Because from=null, this entry is NOT superseded by a later import and will sit here until corrected by hand.",
+      "meters": {
+        "S-Meter": {
+          "labels": [
+            "S0",
+            "S1",
+            "S3",
+            "S5",
+            "S7",
+            "S9",
+            "\u002B20",
+            "\u002B40",
+            "\u002B60"
+          ],
+          "raw": [0, 4, 30, 65, 95, 131, 171, 213, 255]
+        }
+      },
+      "unmeasured": [],
+      "excluded": false,
+      "excludedReason": null
+    }
+  ]
+}

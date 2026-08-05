@@ -107,6 +107,13 @@ The process is the same for all numeric meters:
 ## Where Calibration Data Is Saved
 
 - **Installed app:** `%APPDATA%\MM5AGM\Yaesu Web Control\calibration.user.json`
-- **Development:** `wwwroot/calibration.default.json`
+- **Development:** `%APPDATA%\MM5AGM\Yaesu Web Control\calibration.user.json` (the
+  same per-user file — a development build no longer writes into `wwwroot`).
 
 The save path is shown at the top of the Meter Calibration page.
+
+The shipped defaults in `wwwroot/calibration.default.<Model>.json` are **not**
+hand-edited. They are derived from the measurements operators send in, kept in
+`calibration-contributions/<Model>.json` (a development-only artefact, never
+shipped). See [`calibration-contributions/README.md`](calibration-contributions/README.md)
+for how a contribution becomes a shipped number and how to undo a bad one.

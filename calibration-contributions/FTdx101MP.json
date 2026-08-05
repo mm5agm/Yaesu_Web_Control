@@ -1,0 +1,58 @@
+{
+  "model": "FTdx101MP",
+  "placeholders": {
+    "PWR": [
+      [30, 76, 112, 157, 190, 222]
+    ],
+    "SWR": [
+      [0, 51, 77, 128, 173, 242]
+    ],
+    "Compression": [
+      [0, 56, 102, 140, 204]
+    ],
+    "ALC": [
+      [30, 76, 112, 157, 190, 222]
+    ],
+    "TPA": [
+      [14, 60, 106, 152, 198, 244]
+    ],
+    "IDD": [
+      [0, 51, 102, 153, 204, 242]
+    ],
+    "VPA": [
+      [170, 182, 194, 206, 218, 235]
+    ],
+    "S-Meter": [
+      [0, 4, 30, 65, 95, 131, 171, 208, 255],
+      [0, 5, 30, 67, 97, 130, 172, 212, 255]
+    ]
+  },
+  "contributions": [
+    {
+      "id": "backfill-ftdx101mp",
+      "from": "MM5AGM",
+      "date": "2026-07-22",
+      "appVersion": null,
+      "note": "Provisional back-fill of the FTdx101MP S-meter recalibration committed in 1da2a4e (Colin MM5AGM, a real bench measurement). Only the S-meter was measured; the other meters shipped as placeholders. This entry reconstructs the store from git history \u2014 the next real import from MM5AGM supersedes it (one contribution per callsign).",
+      "meters": {
+        "S-Meter": {
+          "labels": [
+            "S0",
+            "S1",
+            "S3",
+            "S5",
+            "S7",
+            "S9",
+            "\u002B20",
+            "\u002B40",
+            "\u002B60"
+          ],
+          "raw": [0, 5, 30, 67, 97, 130, 172, 212, 255]
+        }
+      },
+      "unmeasured": [],
+      "excluded": false,
+      "excludedReason": null
+    }
+  ]
+}

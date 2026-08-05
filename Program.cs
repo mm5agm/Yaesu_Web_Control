@@ -246,6 +246,10 @@ builder.Services.Configure<HostOptions>(opts =>
     opts.ShutdownTimeout = TimeSpan.FromSeconds(2);
 });
 
+// Must be registered BEFORE CalibrationStorage — the storage constructor
+// injects it so the median-based contributions store sits underneath the
+// dev-only import path. See docs/design/calibration-contributions-port-from-iwc.md.
+builder.Services.AddSingleton<CalibrationContributionsStore>();
 builder.Services.AddSingleton<CalibrationStorage>();
 builder.Services.AddSingleton<ICalibrationService, CalibrationService>();
 

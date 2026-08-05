@@ -18,7 +18,18 @@
             <button id="emailCalBtn" class="btn-secondary" title="Open an email to the developer (Colin, MM5AGM) with your calibration data filled in — helps improve the defaults for your radio">✉ Email calibration to developer</button>
 @if (Model.IsDevelopmentMode)
 {
-            <button id="importDefaultBtn" class="btn-secondary" title="DEV ONLY: read a user's emailed calibration from the clipboard and fold the changed values into the shipped default file for that radio. Leaves a git diff to review.">⬇ Import emailed cal → default (dev)</button>
+                @* Who these numbers came from. Recorded in calibration-contributions/,
+                   which is committed to git — so CALLSIGN ONLY, never an email
+                   address, a real name or a location. *@
+                <input id="contribFrom" type="text" size="9" placeholder="Callsign"
+                       aria-label="Contributor callsign"
+                       title="Callsign of the operator whose radio these numbers came from. Callsign only — this is committed to git. Leave blank for an anonymous contribution." />
+                <input id="contribNote" type="text" size="22" placeholder="How measured"
+                       aria-label="How the calibration was measured"
+                       title="How it was measured: signal generator, known-good wattmeter, by eye against another rig. Stored with the numbers so a rough measurement can be told from a lab one." />
+                <button id="importDefaultBtn" class="btn-help" title="Read an emailed calibration from the clipboard, record it as a contribution, and re-derive the shipped default from the median of all contributions (developer only)">⬇ Import emailed cal → default (dev)</button>
+                <button id="importCurrentBtn" class="btn-help" title="Record the calibration currently SAVED on this PC as a contribution and re-derive the shipped default — no email, no clipboard (developer only)">⬇ My saved cal → default (dev)</button>
+                <button id="recomputeBtn" class="btn-help" title="Re-derive the shipped default from the contributions already on disk, recording nothing new. Use after marking a bad contribution &quot;excluded&quot; (developer only)">↻ Recompute from contributions (dev)</button>
 }
             <span id="saveStatus" class="save-status"></span>
         </div>
@@ -441,49 +452,135 @@
             }
         });
 
-        // DEV ONLY: "Import emailed cal → default" — reads a user's emailed
-        // calibration from the clipboard and folds the changed values into the
-        // shipped default file for that radio (server auto-detects the model from
-        // the email text). Only wired up in the development build; the button is
-        // not even rendered otherwise, and the endpoint 404s outside dev.
+        // ── Developer-only: who this contribution is from ──
+        // The callsign sticks between imports because Colin promotes his own
+        // bench calibration far more often than anyone else's, and an import
+        // recorded with a blank callsign can't be matched up and superseded
+        // later — it just accumulates as another anonymous vote.
+        const contribFrom = document.getElementById("contribFrom");
+        const contribNote = document.getElementById("contribNote");
+        if (contribFrom) {
+            contribFrom.value = localStorage.getItem("ywc.contribFrom") || "";
+            contribFrom.addEventListener("change", () =>
+                localStorage.setItem("ywc.contribFrom", contribFrom.value.trim()));
+        }
+        function contributionMeta() {
+            return {
+                from: contribFrom ? contribFrom.value.trim() : "",
+                note: contribNote ? contribNote.value.trim() : ""
+            };
+        }
+
+        // ── Developer-only: import an emailed calibration into the default ──
+        // Colin copies a user's emailed JSON to the clipboard, then clicks this.
+        // The values are recorded as one contribution; what lands in the shipped
+        // file is the median across every contribution held for that radio, and
+        // only the "raw" numbers that actually move are rewritten, so the git
+        // diff stays tiny and reviewable.
         document.getElementById('importDefaultBtn')?.addEventListener('click', async () => {
-            const status = document.getElementById('saveStatus');
-            let text = '';
-            try {
-                text = await navigator.clipboard.readText();
-            } catch (_) {
-                if (status) status.textContent = 'Could not read the clipboard — copy the email, then try again.';
+            const status = document.getElementById("saveStatus");
+            if (!navigator.clipboard || !navigator.clipboard.readText) {
+                status.textContent = "Clipboard read not available in this browser.";
                 return;
             }
-            if (!text || !text.trim()) {
-                if (status) status.textContent = 'Clipboard is empty — copy the whole email first.';
-                return;
-            }
-            if (status) status.textContent = 'Importing…';
             try {
-                const resp = await fetch('/api/calibration/import-default', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text })
+                const text = await navigator.clipboard.readText();
+                const resp = await fetch("/api/calibration/import-default", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(Object.assign({ text }, contributionMeta()))
                 });
-                const r = await resp.json();
-                if (!resp.ok || !r.ok) {
-                    if (status) status.textContent = 'Import failed: ' + (r.message || resp.statusText);
-                    return;
-                }
-                if (r.changed) {
-                    const meters = (r.updated || []).join(', ');
-                    let msg = r.model + ': updated ' + meters + '. Review the git diff, then commit.';
-                    if (r.structural && r.structural.length)
-                        msg += '  (Manual: ' + r.structural.join(', ') + ')';
-                    if (status) status.textContent = msg;
-                } else {
-                    if (status) status.textContent = r.message;
-                }
-            } catch (e) {
-                if (status) status.textContent = 'Import failed: ' + e.message;
+                reportImport(status, resp, await resp.json());
+            } catch (err) {
+                status.textContent = "Import failed: " + err.message;
             }
         });
+
+        // ── Developer-only: promote MY OWN saved calibration into the default ──
+        // Colin's own workflow: calibrate his radio on this PC, save, then fold
+        // those values into the shipped table. That used to require emailing
+        // himself and round-tripping through the clipboard, and a silently
+        // failed clipboard copy meant an older calibration got imported instead.
+        // The server reads the saved file directly, so nothing can go stale.
+        document.getElementById('importCurrentBtn')?.addEventListener('click', async () => {
+            const status = document.getElementById("saveStatus");
+            status.textContent = "Importing saved calibration into the shipped default…";
+            try {
+                const resp = await fetch("/api/calibration/import-default/current", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(contributionMeta())
+                });
+                reportImport(status, resp, await resp.json());
+            } catch (err) {
+                status.textContent = "Import failed: " + err.message;
+            }
+        });
+
+        // ── Developer-only: recompute the default from what's already on disk ──
+        // The undo for a bad contribution: mark it "excluded": true in
+        // calibration-contributions/<Model>.json, click this, and the shipped
+        // numbers fall back to the median of the contributions that remain.
+        document.getElementById('recomputeBtn')?.addEventListener('click', async () => {
+            const status = document.getElementById("saveStatus");
+            status.textContent = "Recomputing the shipped default from contributions…";
+            try {
+                const resp = await fetch("/api/calibration/contributions/recompute", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: "{}"
+                });
+                reportImport(status, resp, await resp.json());
+            } catch (err) {
+                status.textContent = "Recompute failed: " + err.message;
+            }
+        });
+
+        function reportImport(status, resp, r) {
+            if (!(resp.ok && r.ok)) {
+                status.textContent = "Import failed: " + (r.message || ("HTTP " + resp.status));
+                status.title = "";
+                return;
+            }
+
+            const bits = [];
+            if (r.changed) {
+                bits.push("Updated " + r.fileName + " (" + r.model + ") from " +
+                          (r.contributors || 0) + " contribution(s): " +
+                          (r.updated && r.updated.length ? r.updated.join(", ") : "—"));
+            } else {
+                bits.push((r.message || "No changes — default already matches.") + " (" + (r.model || "") + ")");
+            }
+            // Un-measured meters are normal and expected — people calibrate the
+            // meters they care about — so they are a count, not a warning.
+            if (r.unmeasured && r.unmeasured.length)
+                bits.push(r.unmeasured.length + " meter(s) left at the shipped values");
+            if (r.refused && r.refused.length)
+                bits.push("⚠ " + r.refused.length + " refused");
+            if (r.structural && r.structural.length)
+                bits.push("⚠ structural: " + r.structural.join(", "));
+            status.textContent = bits.join(" · ");
+
+            // Detail is too long for the status line but is exactly what decides
+            // whether this is worth committing, so it goes in the tooltip and the
+            // console rather than nowhere.
+            const detail = [];
+            if (r.unmeasured && r.unmeasured.length)
+                detail.push("Un-measured (placeholders echoed back): " + r.unmeasured.join(", "));
+            if (r.refused && r.refused.length)
+                detail.push("Refused:\n  " + r.refused.join("\n  "));
+            if (r.spread && r.spread.length) {
+                const worst = r.spread.slice()
+                    .sort((a, b) => (b.max - b.min) - (a.max - a.min))
+                    .slice(0, 8)
+                    .map(s => "  " + s.meter + " [" + s.label + "]: " +
+                              s.min + "–" + s.max + " (n=" + s.n + ") → " + s.chosen);
+                detail.push("Widest disagreement between contributors:\n" + worst.join("\n"));
+                console.table(r.spread);
+            }
+            status.title = detail.join("\n\n");
+            if (detail.length) console.log("[cal-import]\n" + detail.join("\n\n"));
+        }
     </script>
 }
 
@@ -789,7 +886,7 @@
         <h3>Where Calibration Data Is Saved</h3>
         <ul>
             <li><strong>Installed app:</strong> %APPDATA%\MM5AGM\Yaesu Web Control\calibration.user.json</li>
-            <li><strong>Development:</strong> wwwroot/calibration.default.json</li>
+            <li><strong>Development:</strong> the same %APPDATA%\MM5AGM\Yaesu Web Control\calibration.user.json file</li>
         </ul>
         <p>The save path is shown at the top of this page.</p>
     </div>
