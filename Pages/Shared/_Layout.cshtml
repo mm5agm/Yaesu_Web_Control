@@ -11,11 +11,18 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/Yaesu_Web_Control.styles.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/gauge-debug.css" />
+    @* Bootstrap Icons, Canvas Gauges and SignalR (further down) are served from
+       wwwroot/lib, not from a CDN. YWC runs on a shack PC that may never have an
+       internet connection: fetched from jsdelivr/cdnjs these three worked only
+       because the browser had cached them from an earlier online visit, and on a
+       machine that had never been online the meters and every live value silently
+       failed to appear. Restore them with `libman restore`, never by pointing these
+       tags back at a CDN. *@
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
 
     <!-- Canvas Gauges Library for Analog Meters -->
-    <script src="https://cdn.jsdelivr.net/npm/canvas-gauges@2.1.7/gauge.min.js"></script>
+    <script src="~/lib/canvas-gauges/gauge.min.js"></script>
 
     <!-- Calibration engine — exposes window.calibrationEngine for site.js -->
     <!-- v=15: bump this when calibration-engine.js or calibration-tables.js changes -->
@@ -104,7 +111,10 @@
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    @* Served locally on purpose — see the note in <head>. Without this file
+       `signalR` is undefined, site.js dies on the first HubConnectionBuilder
+       (line 175), and the page shows no live values at all. *@
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     <script src="~/js/ui/site.js" asp-append-version="true"></script>
     @{
         // Voice Control: server-render the enable flag so voice-control.js
