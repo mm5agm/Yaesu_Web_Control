@@ -5,9 +5,12 @@ namespace Yaesu_Web_Control.Services.Audio
     {
         public const int SampleRate = 48_000;
         public const int Channels = 1;
-        /// <summary>20 ms at 48 kHz.</summary>
-        public const int FrameSamples = 960;
+        /// <summary>10 ms at 48 kHz — lower packetization delay than 20 ms.</summary>
+        public const int FrameSamples = 480;
         public const int OpusBitrate = 32_000;
+
+        /// <summary>Max host TX ring depth (~40 ms) before dropping oldest samples.</summary>
+        public const int PlaybackRingMaxSamples = FrameSamples * 4;
 
         public const byte MsgOpusRx = 0x01;
         public const byte MsgOpusTx = 0x02;

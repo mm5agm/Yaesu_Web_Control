@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Microsoft.Extensions.Hosting;
 using PortAudioSharp;
 using Yaesu_Web_Control.Models;
@@ -11,7 +11,8 @@ namespace Yaesu_Web_Control.Services.Audio
 {
     /// <summary>
     /// Bridges radio USB audio (PortAudio) to a single browser WebSocket client
-    /// using Opus (preferred) or PCM16 frames.
+    /// using Opus or PCM16 frames. RX packets are sent as soon as a frame is
+    /// ready (not on a timer) to keep LAN latency low.
     /// </summary>
     public sealed class RadioAudioBridgeService : IHostedService, IDisposable
     {
@@ -19,7 +20,6 @@ namespace Yaesu_Web_Control.Services.Audio
         private readonly ISettingsService _settings;
         private readonly AudioSessionManager _sessions;
 
-        private readonly ConcurrentQueue<byte[]> _txQueue = new();
         private readonly object _deviceLock = new();
 
         private PortAudioSharp.Stream? _captureStream;
@@ -30,11 +30,13 @@ namespace Yaesu_Web_Control.Services.Audio
         private float _txGain = 1f;
         private int _rxSeq;
         private CancellationTokenSource? _pumpCts;
-        private Task? _pumpTask;
+        private Task? _sendTask;
+        private Task? _levelsTask;
         private WebSocket? _activeSocket;
+        private Channel<byte[]>? _outChannel;
         private readonly float[] _captureAccum = new float[AudioConstants.FrameSamples * 4];
         private int _captureAccumLen;
-        private readonly float[] _playbackRing = new float[AudioConstants.SampleRate]; // 1s
+        private readonly float[] _playbackRing = new float[AudioConstants.PlaybackRingMaxSamples];
         private int _playbackWrite;
         private int _playbackRead;
         private int _playbackCount;
@@ -125,7 +127,6 @@ namespace Yaesu_Web_Control.Services.Audio
             _codecName = AudioConstants.CodecOpus;
             _codec = new OpusCodec();
 
-            // Wait for client hello (control) before opening devices, so we can pick codec.
             using var helloCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             helloCts.CancelAfter(TimeSpan.FromSeconds(10));
             var hello = await ReceiveOneMessageAsync(socket, helloCts.Token);
@@ -160,9 +161,6 @@ namespace Yaesu_Web_Control.Services.Audio
                     if (s == AudioConstants.CodecOpus) wantsOpus = true;
                     if (s == AudioConstants.CodecPcm16) wantsPcm = true;
                 }
-                // Prefer PCM16 when offered — reliable across browsers without
-                // depending on WebCodecs↔Concentus Opus packet interop. Opus
-                // remains available when the client only advertises opus.
                 if (wantsPcm) _codecName = AudioConstants.CodecPcm16;
                 else if (wantsOpus) _codecName = AudioConstants.CodecOpus;
             }
@@ -182,8 +180,16 @@ namespace Yaesu_Web_Control.Services.Audio
                 frameSamples = AudioConstants.FrameSamples
             });
 
+            _outChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(48)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = false
+            });
+
             _pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            _pumpTask = Task.Run(() => LevelPumpAsync(_pumpCts.Token), _pumpCts.Token);
+            _sendTask = Task.Run(() => SendPumpAsync(socket, _pumpCts.Token), _pumpCts.Token);
+            _levelsTask = Task.Run(() => LevelsPumpAsync(socket, _pumpCts.Token), _pumpCts.Token);
 
             var buffer = new byte[64 * 1024];
             while (socket.State == WebSocketState.Open && !ct.IsCancellationRequested)
@@ -205,13 +211,9 @@ namespace Yaesu_Web_Control.Services.Audio
                 if (!AudioWireProtocol.TryParse(body, out var msgType, out _, out var msgPayload)) continue;
 
                 if (msgType == AudioConstants.MsgOpusTx || msgType == AudioConstants.MsgPcmTx)
-                {
                     HandleTxAudio(msgType, msgPayload);
-                }
                 else if (msgType == AudioConstants.MsgControl)
-                {
                     HandleControl(msgPayload);
-                }
             }
         }
 
@@ -275,7 +277,6 @@ namespace Yaesu_Web_Control.Services.Audio
                 {
                     if (_playbackCount >= _playbackRing.Length)
                     {
-                        // Drop oldest sample on overrun
                         _playbackRead = (_playbackRead + 1) % _playbackRing.Length;
                         _playbackCount--;
                     }
@@ -326,12 +327,18 @@ namespace Yaesu_Web_Control.Services.Audio
                     var rxInfo = PortAudio.GetDeviceInfo(rxIndex);
                     var txInfo = PortAudio.GetDeviceInfo(txIndex);
 
+                    const double targetLatency = 0.01;
+                    double inLat = Math.Min(rxInfo.defaultLowInputLatency > 0 ? rxInfo.defaultLowInputLatency : targetLatency, 0.02);
+                    double outLat = Math.Min(txInfo.defaultLowOutputLatency > 0 ? txInfo.defaultLowOutputLatency : targetLatency, 0.02);
+                    inLat = Math.Max(inLat, 0.005);
+                    outLat = Math.Max(outLat, 0.005);
+
                     var inParams = new StreamParameters
                     {
                         device = rxIndex,
                         channelCount = 1,
                         sampleFormat = SampleFormat.Float32,
-                        suggestedLatency = rxInfo.defaultLowInputLatency,
+                        suggestedLatency = inLat,
                         hostApiSpecificStreamInfo = IntPtr.Zero
                     };
 
@@ -340,7 +347,7 @@ namespace Yaesu_Web_Control.Services.Audio
                         device = txIndex,
                         channelCount = 1,
                         sampleFormat = SampleFormat.Float32,
-                        suggestedLatency = txInfo.defaultLowOutputLatency,
+                        suggestedLatency = outLat,
                         hostApiSpecificStreamInfo = IntPtr.Zero
                     };
 
@@ -386,8 +393,8 @@ namespace Yaesu_Web_Control.Services.Audio
                     _playbackStream.Start();
                     _devicesOpen = true;
                     _logger.LogInformation(
-                        "Audio devices open — RX '{Rx}' (#{RxI}), TX '{Tx}' (#{TxI}), codec={Codec}",
-                        rxInfo.name, rxIndex, txInfo.name, txIndex, _codecName);
+                        "Audio devices open — RX '{Rx}' (#{RxI}), TX '{Tx}' (#{TxI}), codec={Codec}, frame={Frame} samples",
+                        rxInfo.name, rxIndex, txInfo.name, txIndex, _codecName, AudioConstants.FrameSamples);
                     return null;
                 }
                 catch (Exception ex)
@@ -401,7 +408,6 @@ namespace Yaesu_Web_Control.Services.Audio
 
         private void OnCaptureSamples(float[] samples)
         {
-            // Accumulate to 20 ms frames, encode, queue for send.
             Span<float> frame = stackalloc float[AudioConstants.FrameSamples];
             int offset = 0;
             while (offset < samples.Length)
@@ -444,7 +450,8 @@ namespace Yaesu_Web_Control.Services.Audio
                     }
 
                     uint seq = (uint)Interlocked.Increment(ref _rxSeq);
-                    _txQueue.Enqueue(AudioWireProtocol.Frame(msgType, seq, packet));
+                    var framed = AudioWireProtocol.Frame(msgType, seq, packet);
+                    _outChannel?.Writer.TryWrite(framed);
 
                     int remain = _captureAccumLen - AudioConstants.FrameSamples;
                     if (remain > 0)
@@ -454,54 +461,69 @@ namespace Yaesu_Web_Control.Services.Audio
             }
         }
 
-        private async Task LevelPumpAsync(CancellationToken ct)
+        private async Task SendPumpAsync(WebSocket socket, CancellationToken ct)
+        {
+            var channel = _outChannel;
+            if (channel == null) return;
+
+            try
+            {
+                await foreach (var frame in channel.Reader.ReadAllAsync(ct))
+                {
+                    if (socket.State != WebSocketState.Open) break;
+                    await socket.SendAsync(frame, WebSocketMessageType.Binary, true, ct);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Audio send pump failed");
+            }
+        }
+
+        private async Task LevelsPumpAsync(WebSocket socket, CancellationToken ct)
         {
             while (!ct.IsCancellationRequested)
             {
                 try
                 {
-                    var socket = _activeSocket;
-                    if (socket is { State: WebSocketState.Open })
-                    {
-                        while (_txQueue.TryDequeue(out var frame))
-                        {
-                            await socket.SendAsync(frame, WebSocketMessageType.Binary, true, ct);
-                        }
-
-                        // Periodic levels (~5 Hz)
-                        var levels = AudioWireProtocol.FrameControl(
-                            (uint)Interlocked.Increment(ref _rxSeq),
-                            new { cmd = "levels", rx = _rxLevel, tx = _txLevel });
-                        await socket.SendAsync(levels, WebSocketMessageType.Binary, true, ct);
-                    }
+                    await Task.Delay(100, ct);
+                    if (socket.State != WebSocketState.Open) break;
+                    var levels = AudioWireProtocol.FrameControl(
+                        (uint)Interlocked.Increment(ref _rxSeq),
+                        new { cmd = "levels", rx = _rxLevel, tx = _txLevel });
+                    await socket.SendAsync(levels, WebSocketMessageType.Binary, true, ct);
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "Audio pump send failed");
+                    _logger.LogDebug(ex, "Audio levels pump failed");
                     break;
                 }
-
-                try { await Task.Delay(50, ct); }
-                catch (OperationCanceledException) { break; }
             }
         }
 
         private async Task StopSessionAsync()
         {
+            try { _outChannel?.Writer.TryComplete(); } catch { /* ignore */ }
             try { _pumpCts?.Cancel(); } catch { /* ignore */ }
-            if (_pumpTask != null)
+            if (_sendTask != null)
             {
-                try { await _pumpTask; } catch { /* ignore */ }
-                _pumpTask = null;
+                try { await _sendTask; } catch { /* ignore */ }
+                _sendTask = null;
+            }
+            if (_levelsTask != null)
+            {
+                try { await _levelsTask; } catch { /* ignore */ }
+                _levelsTask = null;
             }
             _pumpCts?.Dispose();
             _pumpCts = null;
+            _outChannel = null;
             CloseDevices();
             _codec?.Dispose();
             _codec = null;
             _activeSocket = null;
-            while (_txQueue.TryDequeue(out _)) { }
             lock (_playbackLock)
             {
                 _playbackCount = 0;
