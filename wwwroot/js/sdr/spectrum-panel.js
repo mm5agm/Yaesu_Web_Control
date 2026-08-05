@@ -257,6 +257,12 @@ export class SpectrumPanel {
     // signal sitting on the noise floor can be pushed near full colour.
     static WATERFALL_BRIGHT_MAX = 60;
 
+    // dB above the tracked noise floor that maps black → full red in the
+    // waterfall colour scale (see _dbToColor). Keeping this floor-relative
+    // (rather than an absolute dBFS window) is what makes the noise floor render
+    // dark regardless of YWC's absolute signal levels.
+    static WATERFALL_COLOR_SPAN_DB = 70;
+
     _loadWaterfallBrightness() {
         try {
             const v = parseInt(localStorage.getItem('ywc.waterfallBright.' + this._vfo), 10);
@@ -1529,17 +1535,20 @@ export class SpectrumPanel {
      * Maps a dBFS value to an RGB thermal colour: black → blue → cyan →
      * green → yellow → red.
      *
-     * The waterfall uses a FIXED reference window (−120 … 0 dBFS), deliberately
-     * independent of the Range slider (which scales only the trace), so
-     * "Bright = Off" always means the same dark baseline. The Bright slider
-     * (_wfBrightDb) is the only thing that lifts weak signals up the colour
-     * scale. Instance method (not static) so it can read the per-panel
-     * brightness.
+     * Colour is keyed to height ABOVE the auto-tracked noise floor, not an
+     * absolute dBFS window: the floor maps to black and WATERFALL_COLOR_SPAN_DB
+     * above it maps to full red. YWC's absolute signal levels sit higher in
+     * dBFS than IWC's scope, so IWC's fixed −120…0 window left even the noise
+     * coloured here — keying to the floor keeps the noise dark on any radio.
+     * The Bright slider (_wfBrightDb) adds lift so weak signals can be pushed up
+     * the scale; at "Off" (0) the noise floor is the dark baseline. Independent
+     * of the Range slider, which scales only the trace. Instance method (not
+     * static) so it can read the per-panel floor and brightness.
      */
     _dbToColor(db) {
-        // Bright slider adds _wfBrightDb of lift before mapping into the fixed
-        // 120 dB window; at Off (0) the mapping is the original dark baseline.
-        const t = Math.max(0, Math.min(1, (db + this._wfBrightDb + 120) / 120));
+        const floor = (this._autoFloorDb != null) ? this._autoFloorDb : -120;
+        const t = Math.max(0, Math.min(1,
+            (db - floor + this._wfBrightDb) / SpectrumPanel.WATERFALL_COLOR_SPAN_DB));
         if (t < 0.2)  return [0,                   0,                   Math.round(t * 5 * 180)];
         if (t < 0.4)  return [0,                   Math.round((t - 0.2) * 5 * 200), 180];
         if (t < 0.6)  return [0,                   200,                 Math.round(180 - (t - 0.4) * 5 * 180)];
