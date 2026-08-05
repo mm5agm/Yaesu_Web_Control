@@ -613,7 +613,14 @@ try
         finally
         {
             Log.Information("[Lifecycle] macOS tray loop ended — stopping host");
-            await app.StopAsync();
+            // Avalonia's MainLoop installs AvaloniaSynchronizationContext on this
+            // thread. After MainLoop returns the dispatcher is no longer pumping,
+            // so awaiting StopAsync here posts its continuations onto a dead
+            // queue and hangs forever — Ctrl+C / tray Exit never finish (logs
+            // stop at "tray loop ended"; only kill works). Clear the context
+            // and run host shutdown on the thread pool.
+            SynchronizationContext.SetSynchronizationContext(null);
+            await Task.Run(() => app.StopAsync()).ConfigureAwait(false);
         }
     }
     else

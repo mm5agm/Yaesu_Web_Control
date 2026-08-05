@@ -9,6 +9,7 @@
    - 2.1 [Windows (installer)](#21-windows-installer)
    - 2.2 [macOS / Linux (from source)](#22-macos--linux-from-source)
    - 2.3 [Linux Docker (including Raspberry Pi)](#23-linux-docker-including-raspberry-pi)
+   - 2.4 [USB serial driver (Windows / macOS / Linux)](#24-usb-serial-driver-windows--macos--linux)
 3. [First-Time Setup](#3-first-time-setup)
 4. [Starting the Application](#4-starting-the-application)
 5. [Main Control Panel](#5-main-control-panel)
@@ -73,6 +74,7 @@
     - 15.8 [Why was Alexa voice control dropped in favour of the built-in microphone?](#158-why-was-alexa-voice-control-dropped-in-favour-of-the-built-in-microphone-method)
     - 15.9 [WSJT-X is very slow to key the radio (long PTT / Tune delay)](#159-wsjt-x-is-very-slow-to-key-the-radio-1020-second-delay-on-ptt--tune)
     - 15.10 [What's different on macOS / Linux vs Windows?](#1510-whats-different-on-macos--linux-vs-windows)
+    - 15.11 [Test Connection fails / CAT does not respond over USB](#1511-test-connection-fails--cat-does-not-respond-over-usb)
 16. [Accessibility and Screen Readers](#16-accessibility-and-screen-readers)
     - 16.1 [Making Everything Bigger](#161-making-everything-bigger)
     - 16.2 [Windows High Contrast Mode](#162-windows-high-contrast-mode)
@@ -114,6 +116,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | macOS: `/dev/cu.*` · Linux: `/dev/ttyUSB*` / `/dev/ttyACM*` | Same as Linux; pass device into the container |
+| USB serial driver | [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) required on **Windows, macOS, and Linux** — **reboot the host after install** (see [§2.4](#24-usb-serial-driver-windows--macos--linux)) |
 | Settings / logs folder | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` | Volume `./data/ywc` → `/data/MM5AGM/Yaesu Web Control/` |
 | Auto-exit when no browser | Default **on** | Default **on** (turn **off** for a headless shack) | Forced **off** in containers |
 | Opens a local browser on start | Yes | Yes (desktop) | No |
@@ -166,18 +169,24 @@ The application was written for operators who want a large, clean, touchscreen-f
 
 ## 2. Installation
 
+> **Before connecting the radio over USB:** install the Silicon Labs CP210x VCP driver and **reboot the computer**. Required on Windows, macOS, and Linux — see [§2.4](#24-usb-serial-driver-windows--macos--linux).
+
 ### 2.1 Windows (installer)
 
-1. Download the installer from the [GitHub Releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
-2. Run the installer. .NET 10 is bundled — you do not need to install it separately.
-3. A desktop shortcut and a Start Menu entry are created automatically.
-4. The first time you run the app, Windows may show a **Smart App Control** or **Unknown Publisher** warning. Click **More info → Run anyway** to proceed. This warning appears because the installer is not signed with a commercial certificate.
+1. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** (see [§2.4](#24-usb-serial-driver-windows--macos--linux)).
+2. Download the installer from the [GitHub Releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
+3. Run the installer. .NET 10 is bundled — you do not need to install it separately.
+4. A desktop shortcut and a Start Menu entry are created automatically.
+5. The first time you run the app, Windows may show a **Smart App Control** or **Unknown Publisher** warning. Click **More info → Run anyway** to proceed. This warning appears because the installer is not signed with a commercial certificate.
 
 This is the supported product build: tray icon, SDR spectrum, and Voice Control.
 
 ### 2.2 macOS / Linux (from source)
 
 There is no signed desktop installer for macOS or Linux yet. Build the **CAT-only** target with the [.NET 10 SDK](https://dotnet.microsoft.com/download):
+
+1. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** (see [§2.4](#24-usb-serial-driver-windows--macos--linux)).
+2. Then:
 
 ```bash
 git clone https://github.com/mm5agm/Yaesu_Web_Control.git
@@ -195,6 +204,8 @@ Then open `http://localhost:8080` (or the port shown in the console / menu-bar t
 
 For an always-on CAT controller on an x64 PC or arm64 Pi, use the repo `Dockerfile` / `docker-compose.yml` (multi-arch `linux/amd64` and `linux/arm64`):
 
+Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on the **host** (not inside the container) and **reboot the host** before first use — see [§2.4](#24-usb-serial-driver-windows--macos--linux). Then:
+
 ```bash
 # Find the radio's USB-serial node on the host
 ls /dev/ttyUSB* /dev/ttyACM*
@@ -205,11 +216,34 @@ docker compose up -d --build
 
 Open `http://<host>:8080`. Settings and logs persist under `./data/ywc` by default. Auto-exit and local browser-open are disabled in the container. If the serial port is permission-denied, set `YWC_DIALOUT_GID` to the host `dialout` GID (`getent group dialout`) or see comments in `docker-compose.yml`.
 
+### 2.4 USB serial driver (Windows / macOS / Linux)
+
+Modern Yaesu HF radios (FTdx101, FTdx10, FT-710, and similar) talk CAT over USB through a built-in **Silicon Labs CP210x** USB-to-UART bridge. The host OS must have the official **CP210x Virtual COM Port (VCP)** driver installed:
+
+**[CP210x USB to UART Bridge VCP Drivers (Silicon Labs downloads)](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads)**
+
+| OS | What to do |
+|---|---|
+| **Windows** | Download and install the Windows VCP package from that page, then **reboot**. |
+| **macOS** | Download and install the Macintosh VCP package from that page, then **reboot**. Allow the Driver Extension under System Settings if prompted. |
+| **Linux** | Install the matching Linux VCP package from that page when required for your distribution/kernel, then **reboot**. (Some kernels already include a CP210x module; if ports appear but CAT never answers, still install Silicon Labs' package and reboot.) |
+
+**After installing, reboot the host.** Skipping the reboot is a common reason the port appears in the OS (or opens in YWC) but **Test Connection** fails with no reply from the radio.
+
+Many of these radios expose **two** virtual ports on one USB cable:
+
+- **Enhanced** — CAT (frequency, mode, meters). **This is the port YWC must use.**
+- **Standard** — TX controls (PTT, CW keying, digital). Not for CAT.
+
+On Windows, Device Manager labels them clearly. On macOS they show as two `/dev/cu.usbserial-…` devices — if Test Connection fails on one, try the other after the driver + reboot.
+
 ---
 
 ## 3. First-Time Setup
 
 Before the app can communicate with your radio you need to tell it which serial port the radio is connected to and what baud rate to use.
+
+Confirm the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) is installed and that you **rebooted** after installing it ([§2.4](#24-usb-serial-driver-windows--macos--linux)).
 
 **Required — radio connection:**
 
@@ -219,9 +253,9 @@ Before the app can communicate with your radio you need to tell it which serial 
    - **Linux / Docker:** use the URL printed at startup, or `http://<host>:8080` from another device on the LAN.
 2. Click the **Settings** link in the navigation bar.
 3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, single receiver), **FTdx10** (100 W, single receiver), or **FT-710** (100 W, single receiver).
-4. Set **Serial Port**:
-   - **Windows:** a COM port (e.g. `COM3`). Use **Diagnostics → Ports** or Device Manager if unsure.
-   - **macOS:** prefer a `/dev/cu.*` device (e.g. `ls /dev/cu.*` in Terminal).
+4. Set **Serial Port** to the radio's **Enhanced** (CAT) virtual port — not the Standard / TX-control port if two appear:
+   - **Windows:** a COM port (e.g. `COM3`). Use **Diagnostics → Ports** or Device Manager (*Silicon Labs Dual CP210x… Enhanced COM Port*).
+   - **macOS:** prefer a `/dev/cu.*` device (e.g. `ls /dev/cu.usbserial-*` in Terminal). Try the other `cu.usbserial-…` node if Test Connection fails.
    - **Linux / Docker:** `/dev/ttyUSB0`, `/dev/ttyACM0`, or a stable `/dev/serial/by-id/…` path. In Docker the path inside the container should match what you passed via `YWC_SERIAL_DEVICE`.
 5. Set **Baud Rate** to match the radio's CAT baud rate. The factory default is **38400** on all supported radios. You can verify or change this on the radio under **Menu → CAT Rate**.
 6. Select your **Band Plan**: Region 1 (Europe/Africa/Middle East), Region 2 (Americas), Region 3 (Asia-Pacific), or Japan.
@@ -229,7 +263,8 @@ Before the app can communicate with your radio you need to tell it which serial 
 8. On a headless macOS/Linux/Docker host, turn **off** **Automatically exit when no browser is connected** in Settings (Docker already forces this off) so closing the browser does not stop the CAT server.
 9. Click **Save Settings**, then **Test Connection**. A green tick means the app is talking to the radio.
 
-If you see a red cross, double-check the serial port and baud rate, then try again. On Linux, confirm your user (or the container's dialout group) can open the device.
+If you see a red cross, double-check the serial port (Enhanced vs Standard), baud rate, and that the Silicon Labs driver was installed with a reboot. On Linux, confirm your user (or the container's dialout group) can open the device. See [§15.11](#1511-test-connection-fails--cat-does-not-respond-over-usb).
+
 
 **Optional — extras you can set up later in Settings:**
 
@@ -978,7 +1013,7 @@ Clicking **Restart Now** stops YWC and (when running as the installed exe) autom
 | Setting | Description |
 |---------|-------------|
 | Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), or **FT-710** (100 W, single RX) |
-| Serial Port | Path to the radio's USB/serial cable. **Windows:** `COM3`, `COM4`, … **macOS:** `/dev/cu.usbserial-…` (prefer `cu.*` over `tty.*`). **Linux / Docker:** `/dev/ttyUSB0`, `/dev/ttyACM0`, or `/dev/serial/by-id/…`. |
+| Serial Port | Path to the radio's **Enhanced** (CAT) USB/serial port. **Windows:** `COM3`, `COM4`, … (Device Manager: *Enhanced COM Port*). **macOS:** `/dev/cu.usbserial-…` (prefer `cu.*` over `tty.*`). **Linux / Docker:** `/dev/ttyUSB0`, `/dev/ttyACM0`, or `/dev/serial/by-id/…`. Requires the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and a **host reboot** after install — [§2.4](#24-usb-serial-driver-windows--macos--linux). |
 | Baud Rate | Must match the radio's CAT Rate setting. Default: 38400 |
 | Band Plan | **IARU Region 1** (Europe, Africa, Middle East — includes 4m), **IARU Region 2** (Americas), **IARU Region 3** (Asia-Pacific), or **Japan** (JARL). Affects which bands and segment frequencies are shown. UK is Region 1; USA, Canada, and South America are Region 2; Australia, New Zealand, and most of Asia (except Japan) are Region 3. |
 
@@ -2064,7 +2099,8 @@ This matters most **after you change the Radio Model or other settings**: the pa
 **App shows "Initialising…" and never clears**
 
 - Check that the radio is powered on.
-- Check the COM port in Settings. Go to **Diagnostics → Ports** to see which ports are available.
+- Confirm the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) is installed and that you **rebooted** afterwards ([§2.4](#24-usb-serial-driver-windows--macos--linux)).
+- Check the COM / `/dev/…` port in Settings — use the **Enhanced** (CAT) port, not Standard. Go to **Diagnostics → Ports** to see which ports are available.
 - Check the baud rate in Settings matches the radio's **Menu → CAT Rate** setting (default 38400).
 - Click **Test Connection** in Settings.
 - If meters and frequency are otherwise updating live and only the overlay itself is stuck, this was a known bug (a one-off network hiccup during startup could strand the overlay permanently) fixed in v2.4.2-pre2 — just reload the page, or update to the latest version.
@@ -2081,6 +2117,7 @@ Up to and including v2.4.2 — and in the v2.4.3 pre-releases up to pre3 — the
 
 - The radio may not be responding to CAT commands. Test the connection from the Settings page.
 - Check that no other software (e.g., another instance of the app, Ham Radio Deluxe, WSJT-X in direct CAT mode, Omni-rig) is using the same COM port. If you use Log4OM with Omni-rig, see Section 9.3 — Omni-rig is not needed and will conflict with this app.
+- On a fresh Mac/PC, install the Silicon Labs VCP driver and reboot before blaming the cable ([§15.11](#1511-test-connection-fails--cat-does-not-respond-over-usb)).
 
 **WSJT-X does not show as connected**
 
@@ -2302,13 +2339,31 @@ As a safety backstop, YWC (v2.4.2 and later) will force the radio back to receiv
 |---|---|
 | Getting the app | Windows: signed-ish installer from Releases. macOS/Linux: build `net10.0` from source, or run Linux via Docker (`Dockerfile` / `docker-compose.yml`, amd64 + arm64). |
 | Host chrome | Windows tray · macOS menu-bar item · Linux/Docker console only |
-| Serial port | `COMn` on Windows; `/dev/cu.*` on macOS; `/dev/ttyUSB*` / `/dev/ttyACM*` on Linux (pass through with `YWC_SERIAL_DEVICE` in Docker) |
+| Serial port | `COMn` on Windows; `/dev/cu.*` on macOS; `/dev/ttyUSB*` / `/dev/ttyACM*` on Linux (pass through with `YWC_SERIAL_DEVICE` in Docker). Always use the **Enhanced** CAT port when two CP210x ports appear. |
+| USB serial driver | Same on all three: install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)) |
 | Settings & logs | Windows `%APPDATA%\MM5AGM\Yaesu Web Control\` · Unix `~/.config/MM5AGM/Yaesu Web Control/` · Docker volume under `/data/…` |
 | Leaving the shack with no browser open | Turn **off** “Automatically exit when no browser is connected”. Docker already forces that behaviour. |
 | SDR / Voice Control | Not on macOS/Linux/Docker. Use a Windows host if you need those. |
 | WSJT-X / Log4OM launch buttons | Default paths are Windows. On other OSes run those apps yourself and point them at YWC's rigctld over the network. |
 
 The browser UI from a phone or tablet is the same regardless of which OS hosts YWC — only the machine that owns the serial cable (or Docker device mapping) must run the host.
+
+---
+
+### 15.11 Test Connection fails / CAT does not respond over USB
+
+**Most common fix:** install the official [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) for your OS (**Windows, macOS, or Linux**) and **reboot the host**. Built-in or incomplete USB-serial stacks can make the port show up and even open in YWC while CAT commands (`ID;`, etc.) get no reply. After a proper install + reboot, Test Connection should start working once the baud rate and Enhanced port are correct.
+
+Checklist:
+
+1. Driver installed from the Silicon Labs downloads page above, then **reboot**.
+2. Radio powered on; rear-panel USB cable connected.
+3. Settings baud rate matches **Menu → CAT Rate** (usually **38400**).
+4. Serial Port is the **Enhanced** (CAT) virtual port, not Standard / TX-only. On macOS try the other `/dev/cu.usbserial-…` if the first fails.
+5. No other app is holding the same port.
+6. Prefer a direct USB port over a flaky hub when diagnosing.
+
+See also [§2.4](#24-usb-serial-driver-windows--macos--linux) and [§3](#3-first-time-setup).
 
 ---
 

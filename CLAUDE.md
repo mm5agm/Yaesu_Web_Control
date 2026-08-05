@@ -32,7 +32,9 @@ dotnet publish -c Release -f net10.0-windows -r win-x64 --self-contained
 
 On macOS, set **Serial Port** to a `/dev/cu.*` device. On Linux, use `/dev/ttyUSB*` or `/dev/ttyACM*`. SDR spectrum and Voice Control are Windows-only and are hidden on the CAT-only host.
 
-**Docker (linux/amd64 + linux/arm64):** `Dockerfile` + `docker-compose.yml` publish the `net10.0` CAT-only host. Data volume is `XDG_CONFIG_HOME=/data` → `MM5AGM/Yaesu Web Control/`. Pass the serial device with `devices:` / `YWC_SERIAL_DEVICE`. Container runs with auto-shutdown and local browser-open disabled.
+**USB CAT:** install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on Windows, macOS, and Linux, then **reboot the host** before first use (see USER_MANUAL §2.4).
+
+**Docker (linux/amd64 + linux/arm64):** `Dockerfile` + `docker-compose.yml` publish the `net10.0` CAT-only host. Data volume is `XDG_CONFIG_HOME=/data` → `MM5AGM/Yaesu Web Control/`. Pass the serial device with `devices:` / `YWC_SERIAL_DEVICE`. Container runs with auto-shutdown and local browser-open disabled. Install the Silicon Labs driver on the **host** and reboot before mapping the device into the container.
 
 ### Operational differences (Windows vs macOS/Linux)
 

@@ -42,10 +42,13 @@ I own and test on the **FTdx101MP**; the other supported models are built from Y
 | Voice Control (SAPI) | Yes | No |
 | Voice announcements (browser TTS) | Yes | Yes |
 | Serial port | `COM3`, … | macOS `/dev/cu.*` · Linux `/dev/ttyUSB*` / `/dev/ttyACM*` |
+| USB serial driver | [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on **Windows, macOS, and Linux** — **reboot after install** |
 | User data | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` (Docker: `./data/ywc` volume) |
 | Auto-exit when no browser | Default on | Default on — turn **off** for headless; Docker forces off |
 
-Full operational detail: [USER_MANUAL.md §1](USER_MANUAL.md#1-introduction) and [§15.10](USER_MANUAL.md#1510-whats-different-on-macos--linux-vs-windows).
+Full operational detail: [USER_MANUAL.md §1](USER_MANUAL.md#1-introduction), [§2.4 USB serial driver](USER_MANUAL.md#24-usb-serial-driver-windows--macos--linux), and [§15.10](USER_MANUAL.md#1510-whats-different-on-macos--linux-vs-windows).
+
+Before first CAT use on any OS: install the Silicon Labs driver from the link above and reboot the host.
 
 ### Building from source (developers)
 
@@ -62,7 +65,7 @@ export YWC_SERIAL_DEVICE=/dev/ttyUSB0
 docker compose up -d --build
 ```
 
-On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host.
+On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio.
 
 ## Main Page
 ![Yaesu Web Control Main Page](pictures/DevelopScreen.png)
