@@ -210,7 +210,7 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 ### 5.1 Top Bar
 
-The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.0.0**) are shown in the top-left corner.
+The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.4.3**) are shown in the top-left corner.
 
 **Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the latest version or if the internet is not available.
 

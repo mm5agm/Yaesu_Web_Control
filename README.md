@@ -185,6 +185,16 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-08-05 - v2.4.3-pre1 (pre-release)
+
+*A tester build with the region-aware band handling and a rework of how the meter calibration defaults are built. Highlights:*
+
+**Band and segment display now agree with your region.** The server and the on-screen band plan used to work out band edges separately, so they could disagree about where a band starts and ends. They now read the same region-aware table (IARU Region 1/2/3), so the band name, the band buttons and the waterfall always tell the same story.
+
+**A clear "out of band" marker.** When you tune outside every allocation in your region, the nearest band button is now marked in red instead of simply going blank — before, nothing was selected and it looked as though the display had frozen. The segment dropdown shows **out of band** in the same situation (which is different from "--", meaning no activity plan for that segment). This also fixed two long-standing segment-matching bugs where the top segment claimed everything above it and a below-the-band frequency was quietly snapped to the lowest segment.
+
+**Better meter-calibration defaults under the hood.** The calibration figures that ship with the app are no longer hand-edited. Every operator's contributed calibration is kept, and each shipped value is the median across all contributions for that radio — so a second person sending numbers no longer overwrites the first, a single odd reading is outvoted, and a bad one can be removed cleanly. This is invisible in day-to-day use; it just means the meters a new owner of each model starts with should get more accurate over time as real numbers come in.
+
 ## 2026-08-01 - v2.4.2
 
 *The first stable release since v2.4.1, consolidating the whole v2.4.2-pre1 … pre24 run. Highlights:*

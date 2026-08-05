@@ -5,7 +5,11 @@
       "PowerShell",
       "WebFetch",
       "Read(//c/Users/colin/source/repos/Icom_Web_Control/Services/Voice/**)",
-      "Read(//c/Users/colin/source/repos/Icom_Web_Control/wwwroot/js/sdr/**)"
+      "Read(//c/Users/colin/source/repos/Icom_Web_Control/wwwroot/js/sdr/**)",
+      "Read(//c/Users/colin/source/repos/Icom_Web_Control/Models/Calibration/**)",
+      "Read(//c/Users/colin/source/repos/Icom_Web_Control/Controllers/**)",
+      "Read(//c/Users/colin/source/repos/Icom_Web_Control/calibration-contributions/**)",
+      "Read(//c/Users/colin/source/repos/Icom_Web_Control/**)"
     ],
     "additionalDirectories": [
       "C:\\build",
