@@ -176,9 +176,9 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <Version>1.5.6</Version>
-    <FileVersion>1.5.6.0</FileVersion>
-    <AssemblyVersion>1.5.6.0</AssemblyVersion>
+    <Version>2.4.2</Version>
+    <FileVersion>2.4.2.0</FileVersion>
+    <AssemblyVersion>2.4.2.0</AssemblyVersion>
     <AssemblyTitle>Yaesu Web Control</AssemblyTitle>
     <Product>Yaesu Web Control</Product>
     <Description>Browser-based CAT controller for Yaesu HF transceivers</Description>

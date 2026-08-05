@@ -36,10 +36,11 @@ Before releasing, bump the version in **all three** files — five sites in tota
 - `Yaesu_Web_Control.csproj` — `<Version>`, `<FileVersion>`, `<AssemblyVersion>`
   (the last two are four-part: `X.Y.Z.0`)
 
-`.\scripts\bump-version.ps1 -Version X.Y.Z` does the first two plus the README
-badge. **It does not touch the csproj** — that one is by hand, and it is the one
-that gets forgotten: it sat on `1.5.6` while `AppVersion.cs` read `2.4.2`.
-`finish-release.ps1` now refuses to release unless all five agree.
+`.\scripts\bump-version.ps1 -Version X.Y.Z` does all five, plus the README
+badge. The csproj was only added to it in August 2026 — before that nothing
+watched it, and it sat on `1.5.6` from the May release right through to `2.4.2`,
+so every installer built in between reported a meaningless version in its file
+properties. `finish-release.ps1` now refuses to release unless all five agree.
 
 Then update the documentation:
 
