@@ -9,7 +9,10 @@
       "Read(//c/Users/colin/source/repos/Icom_Web_Control/Models/Calibration/**)",
       "Read(//c/Users/colin/source/repos/Icom_Web_Control/Controllers/**)",
       "Read(//c/Users/colin/source/repos/Icom_Web_Control/calibration-contributions/**)",
-      "Read(//c/Users/colin/source/repos/Icom_Web_Control/**)"
+      "Read(//c/Users/colin/source/repos/Icom_Web_Control/**)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:mm5agm.github.io)",
+      "WebFetch(domain:www.qrz.com)"
     ],
     "additionalDirectories": [
       "C:\\build",
