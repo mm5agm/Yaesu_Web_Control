@@ -53,4 +53,12 @@ namespace Yaesu_Web_Control.Services.Voice
         bool DryRun = false,
         string Vfo = "A"
     );
+
+    /// <summary>
+    /// Result of dispatching a voice (or VC-Tune) intent. <c>Success</c> drives
+    /// spoken-confirmation status; <c>ConfirmationPhrase</c> is the human-readable
+    /// description. <c>IsReadBack</c> = true for status queries — spoken without
+    /// appending ", successful".
+    /// </summary>
+    public record DispatchResult(bool Success, string ConfirmationPhrase, bool IsReadBack = false);
 }

@@ -10,18 +10,29 @@ Before making any changes, read and follow all rules in `.claude/rules.md` and `
 
 ## Build & Run
 
-**Target:** .NET 10, x64 Windows only (`net10.0-windows`, `OutputType=WinExe`, `UseWindowsForms=true`).
+**Targets:** multi-TFM — Windows product (`net10.0-windows`, WinExe + WinForms tray/voice/SDR) and CAT-only host (`net10.0`, console; macOS/Linux).
 
 ```bash
-# Build
+# Build both TFMs (on Windows) or the portable TFM (on macOS/Linux)
 dotnet build Yaesu_Web_Control.csproj
 
-# Run (launches WinForms host + Kestrel on http://0.0.0.0:8080)
-dotnet run --project Yaesu_Web_Control.csproj
+# Windows product (tray + voice + SDR)
+dotnet build -f net10.0-windows
+dotnet run --project Yaesu_Web_Control.csproj --framework net10.0-windows
 
-# Publish self-contained
-dotnet publish -c Release -r win-x64 --self-contained
+# CAT-only host (macOS / Linux / Windows without WinForms features)
+dotnet build -f net10.0
+dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
+# then open http://localhost:8080 — on macOS a menu-bar status item provides
+# Open / About / Open user data folder / Exit (Ctrl+C also works)
+
+# Publish Windows self-contained installer input
+dotnet publish -c Release -f net10.0-windows -r win-x64 --self-contained
 ```
+
+On macOS, set **Serial Port** to a `/dev/cu.*` device. On Linux, use `/dev/ttyUSB*` or `/dev/ttyACM*`. SDR spectrum and Voice Control are Windows-only and are hidden on the CAT-only host.
+
+**Docker (linux/amd64 + linux/arm64):** `Dockerfile` + `docker-compose.yml` publish the `net10.0` CAT-only host. Data volume is `XDG_CONFIG_HOME=/data` → `MM5AGM/Yaesu Web Control/`. Pass the serial device with `devices:` / `YWC_SERIAL_DEVICE`. Container runs with auto-shutdown and local browser-open disabled.
 
 There are no automated tests. Verification is manual via the browser at `http://localhost:8080`.
 

@@ -52,6 +52,7 @@ namespace Yaesu_Web_Control.Services
                 else
                 {
                     _cachedSettings = new ApplicationSettings();
+                    ApplyContainerDefaults(_cachedSettings);
                     MigrateSdrSampleRate(_cachedSettings);   // fills A/B from defaults when file is brand new
                     _logger.LogWarning("Settings file does not exist at {Path}. Using defaults: SerialPort={SerialPort}, WebAddress={WebAddress}, HttpPort={HttpPort}",
                         _settingsFilePath, _cachedSettings.SerialPort, _cachedSettings.WebAddress, _cachedSettings.HttpPort);
@@ -190,6 +191,19 @@ namespace Yaesu_Web_Control.Services
             Directory.CreateDirectory(newFolder);
             foreach (var file in Directory.GetFiles(oldFolder))
                 File.Copy(file, Path.Combine(newFolder, Path.GetFileName(file)), overwrite: false);
+        }
+
+        /// <summary>
+        /// First-run defaults when hosted in Docker / a container: keep the
+        /// process alive with no browser tabs, and prefer a common USB-serial
+        /// path (override in Settings once the real device is known).
+        /// </summary>
+        private static void ApplyContainerDefaults(ApplicationSettings s)
+        {
+            if (!HostRuntime.IsContainer) return;
+            s.AutoShutdownWhenNoBrowsers = false;
+            if (string.Equals(s.SerialPort, "COM3", StringComparison.OrdinalIgnoreCase))
+                s.SerialPort = "/dev/ttyUSB0";
         }
     }
 }

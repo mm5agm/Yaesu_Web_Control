@@ -31,6 +31,12 @@ I own and test on the **FTdx101MP**; the other supported models are built from Y
 
 **FTX-1:** a user has reported it working on HF (run with the model set to *FTdx10*) — frequency and mode track cleanly and quickly. Its 6m/2m/70cm memory handling still needs a little work, so a dedicated FTX-1 profile is on the way once someone can help confirm the VHF/UHF side. If you own an FTX-1, I'd love to hear from you.
 
+### Building from source (developers)
+
+The shipped installer remains **Windows-only** (tray icon, voice control, SDR spectrum). The project also multi-targets `net10.0` for a **CAT-only console host** usable on macOS/Linux: `dotnet run --framework net10.0`, then open `http://localhost:8080`. Set the serial port to a `/dev/cu.*` (macOS) or `/dev/ttyUSB*` / `/dev/ttyACM*` (Linux) device. SDR and Voice Control are disabled on that host. On **macOS**, a menu-bar status item mirrors the Windows tray (Open / About / user data folder / Exit). Settings includes **Automatically exit when no browser is connected** (default on) so you can keep the process alive with no browser open.
+
+**Linux Docker (x64 or arm64 / Raspberry Pi):** see `Dockerfile` and `docker-compose.yml`. Build and run with `docker compose up -d --build`, set `YWC_SERIAL_DEVICE` to your USB-serial node, then open `http://<host>:8080`. The image is CAT + web UI only; settings/logs persist under the `./data/ywc` volume.
+
 ## Main Page
 ![Yaesu Web Control Main Page](pictures/DevelopScreen.png)
 

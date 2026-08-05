@@ -202,9 +202,9 @@ A small **YWC tray icon** appears in the Windows system tray (down by the clock,
 If the radio is powered on and the serial connection is correct, a brief "Initialising…" overlay appears while the app reads the current radio state. After a few seconds the overlay disappears and all controls reflect the current state of the radio. This includes frequencies, mode, antenna, AGC, NB level, ATU state, VOX settings, FM repeater settings, CW keyer speed and break-in mode, IF width, IF shift, and more — no software defaults are applied.
 
 **Closing the app:** Three ways:
-1. **Right-click the tray icon → Exit Yaesu Web Control.** Cleanest — confirms first, then shuts the server down properly.
-2. **Close the browser tab and walk away.** The app detects no browser is connected and begins a 30-second countdown; if no browser reconnects within 30 seconds it exits automatically.
-3. **Force-quit** via Task Manager (Ctrl+Shift+Esc → find `Yaesu_Web_Control.exe` → End Task). Use this only if something has hung.
+1. **Tray / menu-bar Exit.** On Windows: right-click the tray icon → Exit Yaesu Web Control (confirms first). On macOS (CAT-only host): click the menu-bar status item → Exit Yaesu Web Control. Cleanest shutdown.
+2. **Close the browser tab and walk away.** When **Automatically exit when no browser is connected** is enabled in Settings (default), the app detects no browser is connected and begins a 30-second countdown; if no browser reconnects within 30 seconds it exits automatically. Turn that setting **off** to keep the host running with no browser open (quit via the tray/menu-bar, or Ctrl+C in the console).
+3. **Force-quit** via Task Manager (Ctrl+Shift+Esc → find `Yaesu_Web_Control.exe` → End Task), or Activity Monitor / Ctrl+C on macOS. Use this only if something has hung.
 
 **Accessing the app from another device:** If you set **Network Interface** to `0.0.0.0 (all interfaces)` in Settings (the default), the app is also accessible from any device on your local network. The Settings page shows the full URL for each network interface — bookmark one of these on your tablet or phone.
 

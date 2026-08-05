@@ -5,7 +5,7 @@
 *.userosscache
 *.sln.docstates
 appsettings.user.json
-
+.cursor
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
@@ -182,3 +182,6 @@ Backup*.ps1
 # Local planning notes
 plan.txt
 .tmp_*
+
+# Local Docker volume (docker-compose default)
+data/

@@ -128,8 +128,12 @@
         var _ywcVoiceEnabled = false;
         try
         {
+            // Voice control is Windows-product only (SAPI). Keep mic buttons hidden
+            // on the CAT-only (net10.0) host even when running on Windows.
+#if WINDOWS
             var _ywcSettings = await _ywcSettingsService.GetSettingsAsync();
             _ywcVoiceEnabled = _ywcSettings.VoiceControlEnabled;
+#endif
         }
         catch { /* settings unavailable -> defaults */ }
     }

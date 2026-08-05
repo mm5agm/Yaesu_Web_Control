@@ -1,18 +1,30 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFrameworks>net10.0-windows;net10.0</TargetFrameworks>
     <RollForward>Minor</RollForward>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
+    <!-- Allow restoring/building the Windows TFM on macOS/Linux CI or dev machines
+         (packaging still targets win-x64 on Windows runners). -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- Disable automatic content inclusion so we can manage wwwroot ourselves -->
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+  </PropertyGroup>
+
+  <!-- Windows product build: WinForms tray host, voice (SAPI), SDR worker companion. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <OutputType>WinExe</OutputType>
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>x64</Platforms>
     <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
+  </PropertyGroup>
 
-    <!-- Disable automatic content inclusion so we can manage wwwroot ourselves -->
-    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+  <!-- macOS / Linux CAT-only host: console process, no WinForms / voice / SDR worker. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -55,6 +67,30 @@
     <Compile Remove="Services\SerialPortCatClient.cs" />
   </ItemGroup>
 
+  <!-- CAT-only TFM: omit WinForms tray, SAPI/NAudio voice stack, and
+       FolderBrowserDialog-based SDR controller. VCTuneRecognizer stays
+       (intent dispatch for VC-Tune UI); its GrammarBuilder surface is
+       #if WINDOWS. Mac menu-bar tray lives in MacSystemTrayService. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <Compile Remove="Services\SystemTrayService.cs" />
+    <Compile Remove="Controllers\SdrController.cs" />
+    <Compile Remove="Controllers\VoiceController.cs" />
+    <Compile Remove="Services\Voice\VoiceControlService.cs" />
+    <Compile Remove="Services\Voice\VoiceGrammar.cs" />
+    <Compile Remove="Services\Voice\VoiceTtsService.cs" />
+    <Compile Remove="Services\Voice\MicrophoneCapture.cs" />
+    <Compile Remove="Services\Voice\AudioOutput.cs" />
+    <Compile Remove="Services\Voice\IntentDispatcher.cs" />
+    <Compile Remove="Services\Voice\VoicePhraseStore.cs" />
+    <Compile Remove="Services\Voice\VoiceHelpBuilder.cs" />
+    <Compile Remove="Services\Voice\VoicePhraseValidator.cs" />
+  </ItemGroup>
+
+  <!-- Windows TFM does not need the Avalonia-backed macOS tray. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <Compile Remove="Services\MacSystemTrayService.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Remove="layout-old.cshtml" />
   </ItemGroup>
@@ -71,10 +107,12 @@
     <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="System.IO.Ports" Version="10.0.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <!-- System.Speech: Windows SAPI 5 grammar-based speech recognition.
          In-process voice control, replaces the parked Alexa work. See
-         docs/VoiceControl/v1-plan.md. Windows-only — the surrounding
-         project is already net10.0-windows so no portability change. -->
+         docs/VoiceControl/v1-plan.md. -->
     <PackageReference Include="System.Speech" Version="10.0.1" />
     <!-- NAudio.WinMM: WaveIn/WaveOut (MME) device enumeration + capture/playback
          only. Lets the user pick a specific microphone and announcement speaker
@@ -87,10 +125,18 @@
     <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
   </ItemGroup>
 
+  <!-- Avalonia TrayIcon for the macOS menu-bar status item on the CAT-only host.
+       Pin Tmds.DBus.Protocol above the vulnerable 0.21.2 pulled transitively by
+       Avalonia's Linux backend (NU1903 / GHSA-xrw6-gwf8-vvr9). -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.9" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2" />
+  </ItemGroup>
+
   <!-- Voice control grammar files shipped alongside the exe so
        VoiceControlService can load them at startup. Only .srgs is shipped;
        the README in this folder is documentation, not loaded by code. -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <Content Include="Grammars\*.srgs">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
@@ -105,7 +151,7 @@
     we just want MSBuild to build it before us and the post-build copy
     target below to land its output next to YWC's exe.
   -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <ProjectReference Include="Workers\Yaesu_Sdr_Worker\Yaesu_Sdr_Worker.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <Private>false</Private>
@@ -129,46 +175,46 @@
        The CI workflow uses the latter (RID=win-x64) for the
        installer; local dev typically uses the former. v2.3.0 shipped
        with only the no-RID form and the CI publish failed. -->
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == ''">
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.exe" Visible="false">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows' And '$(RuntimeIdentifier)' == ''">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.exe" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.exe</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.dll" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.dll" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.dll</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.deps.json" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.deps.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.deps.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.deps.json</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.runtimeconfig.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.runtimeconfig.json</Link>
     </None>
   </ItemGroup>
 
-  <ItemGroup Condition="'$(RuntimeIdentifier)' != ''">
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.exe" Visible="false">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows' And '$(RuntimeIdentifier)' != ''">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.exe" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.exe</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.dll" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.dll" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.dll</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.deps.json" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.deps.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.deps.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.deps.json</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.runtimeconfig.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.runtimeconfig.json</Link>
@@ -218,5 +264,3 @@
   </ItemGroup>
 
 </Project>
-
-

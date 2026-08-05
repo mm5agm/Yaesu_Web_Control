@@ -256,6 +256,8 @@
         </div>
     </details>
 
+    @if (Model.IsWindowsHost)
+    {
     <!-- Voice Control section -->
     <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
         <summary><i class="bi bi-mic-fill" aria-hidden="true"></i>&nbsp;Voice Control</summary>
@@ -1738,6 +1740,14 @@
             })();
         </script>
     </details>
+    }
+    else
+    {
+    <div class="alert alert-secondary mb-3" role="status">
+        <i class="bi bi-mic-mute" aria-hidden="true"></i>
+        Voice Control (Windows SAPI) is not available on this host. CAT control and the web UI work as usual.
+    </div>
+    }
 
     <!-- Radio & CAT -->
     <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
@@ -1832,11 +1842,23 @@
                         </div>
                         <div class="mb-3">
                             <label asp-for="Settings.SerialPort" class="form-label">Serial Port</label>
-                            <input asp-for="Settings.SerialPort" class="form-control" placeholder="COM3" required />
-                            <div class="form-text">
-                                Enter the COM port where your radio is connected (e.g., COM3, COM4).
-                                <br /><strong>Tip:</strong> Check Device Manager to find the correct port.
-                            </div>
+                            @if (Model.IsWindowsHost)
+                            {
+                                <input asp-for="Settings.SerialPort" class="form-control" placeholder="COM3" required />
+                                <div class="form-text">
+                                    Enter the COM port where your radio is connected (e.g., COM3, COM4).
+                                    <br /><strong>Tip:</strong> Check Device Manager to find the correct port.
+                                </div>
+                            }
+                            else
+                            {
+                                <input asp-for="Settings.SerialPort" class="form-control" placeholder="/dev/cu.usbserial-…" required />
+                                <div class="form-text">
+                                    Enter the serial device path (e.g. <code>/dev/cu.usbserial-XXXX</code> or <code>/dev/cu.usbmodem…</code>).
+                                    Prefer <code>cu.*</code> over <code>tty.*</code> on macOS.
+                                    <br /><strong>Tip:</strong> Run <code>ls /dev/cu.*</code> in Terminal, or check Diagnostics → Ports.
+                                </div>
+                            }
                             <span asp-validation-for="Settings.SerialPort" class="text-danger"></span>
                         </div>
                         <div class="mb-3">
@@ -1916,6 +1938,17 @@
                             </div>
                             <span asp-validation-for="Settings.HttpPort" class="text-danger"></span>
                         </div>
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" asp-for="Settings.AutoShutdownWhenNoBrowsers" />
+                            <label class="form-check-label" asp-for="Settings.AutoShutdownWhenNoBrowsers">
+                                Automatically exit when no browser is connected
+                            </label>
+                            <div class="form-text">
+                                When enabled (default), the app waits 30 seconds after the last browser tab closes,
+                                then exits. Turn this off to keep the host running with no browser open
+                                (quit via the system tray on Windows, or Ctrl+C in the console on macOS).
+                            </div>
+                        </div>
                         <div class="alert alert-warning" role="alert">
                             <i class="bi bi-exclamation-triangle-fill"></i>
                             <strong>Important:</strong> Save Settings and Restart the application after changing web server settings.
@@ -1935,6 +1968,8 @@
         </div>
     </details>
 
+    @if (Model.IsWindowsHost)
+    {
     <!-- SDR Spectrum Display -->
     <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
         <summary>
@@ -2142,6 +2177,14 @@
             </div>
         </div>
     </details>
+    }
+    else
+    {
+    <div class="alert alert-secondary mb-3" role="status">
+        <i class="bi bi-broadcast-pin" aria-hidden="true"></i>
+        SDR Spectrum Display is not available on this host (CAT-only build).
+    </div>
+    }
 
     <!-- DX Cluster -->
     <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
@@ -2270,6 +2313,8 @@
         </div>
     </div>
 
+    @if (Model.IsWindowsHost)
+    {
     <!-- Voice Control: Test this pack modal (§6.5) -->
     <div class="modal fade" id="voiceTestPackModal" tabindex="-1" aria-labelledby="voiceTestPackModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -2311,6 +2356,7 @@
             </div>
         </div>
     </div>
+    }
 
     <!-- CW Memory Messages -->
     <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
