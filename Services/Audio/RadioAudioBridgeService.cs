@@ -442,8 +442,8 @@ namespace Yaesu_Web_Control.Services.Audio
                     _playbackStream.Start();
                     _devicesOpen = true;
                     _logger.LogInformation(
-                        "Audio devices open — RX '{Rx}' (#{RxI}, {InCh}ch @{RxRate} Hz), TX '{Tx}' (#{TxI}, {OutCh}ch @{TxRate} Hz), codec={Codec}, bridge={Bridge} Hz",
-                        rxInfo.name, rxIndex, inCh, rxRate, txInfo.name, txIndex, outCh, txRate, _codecName, AudioConstants.SampleRate);
+                        "Audio devices open — RX '{Rx}' (#{RxI}, {InCh}ch @{RxRate} Hz), TX '{Tx}' (#{TxI}, {OutCh}ch @{TxRate} Hz), codec={Codec}, bridge={Bridge} Hz, frame={Frame} samples",
+                        rxInfo.name, rxIndex, inCh, rxRate, txInfo.name, txIndex, outCh, txRate, _codecName, AudioConstants.SampleRate, AudioConstants.FrameSamples);
                     return null;
                 }
                 catch (PortAudioException ex)
