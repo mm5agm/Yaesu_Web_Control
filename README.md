@@ -185,6 +185,12 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-08-05 - v2.4.3-pre2 (pre-release)
+
+*Follows pre1 with a rework of the spectrum waterfall controls.*
+
+**A dedicated waterfall Brightness control.** The three sliders under each spectrum are now **Range**, **Speed** and **Bright**. The old **Gain** slider is gone — with the trace now scaling itself automatically, that control only ever changed the waterfall's brightness anyway, so it's been replaced by a proper **Bright** slider that lifts weak signals up the waterfall's colour scale without touching the trace above it. At **Off** the waterfall now sits at a genuinely dark baseline: the colours are keyed to the automatically-tracked noise floor, so noise stays dark and only real signals show colour, then Bright brings the weak ones up as far as you want.
+
 ## 2026-08-05 - v2.4.3-pre1 (pre-release)
 
 *A tester build with the region-aware band handling and a rework of how the meter calibration defaults are built. Highlights:*
