@@ -692,12 +692,12 @@
                         <label class="text-nowrap mb-0" title="Vertical scale — dB of headroom above the auto-tracked noise floor. Smaller = taller peaks (zoom in on weak signals); larger = flatter. The noise floor stays pinned near the bottom automatically, so there's no floor slider to chase.">Range</label>
                         <input type="range" class="form-range spectrum-range-slider" data-vfo="A" min="5" max="160" step="1" value="60" aria-label="VFO A spectrum vertical range (dB above the noise floor)" style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-range-label" data-vfo="A" style="min-width:3.5em; text-align:right;">60 dB</span>
-                        <label class="text-nowrap mb-0 ms-2" title="Waterfall brightness — lifts weak signals up the waterfall colour scale. The spectrum trace above auto-ranges, so this now brightens the waterfall.">Gain</label>
-                        <input type="range" class="form-range spectrum-gain-slider" data-vfo="A" min="0" max="30" step="1" value="@((int)Math.Round(20.0 * Math.Log10(Math.Max(0.0001, (double)Model.SdrSpectrumGainA))))" aria-label="VFO A waterfall brightness (dB)" style="flex:1; min-width:60px;">
-                        <span class="text-monospace spectrum-gain-label" data-vfo="A" style="min-width:3.5em; text-align:right;">+@((int)Math.Round(20.0 * Math.Log10(Math.Max(0.0001, (double)Model.SdrSpectrumGainA)))) dB</span>
                         <label class="text-nowrap mb-0 ms-2" title="How fast the waterfall scrolls, from full speed down to 1/128. Does not affect the spectrum trace above it.">Speed</label>
                         <input type="range" class="form-range spectrum-speed-slider" data-vfo="A" min="0" max="7" step="1" value="0" aria-label="VFO A waterfall scroll speed" style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-speed-label" data-vfo="A" style="min-width:3.5em; text-align:right;">Full</span>
+                        <label class="text-nowrap mb-0 ms-2" title="Waterfall brightness — lifts weak signals up the waterfall colour scale. The spectrum trace auto-ranges, so this brightens the waterfall only, leaving the trace unchanged.">Bright</label>
+                        <input type="range" class="form-range spectrum-bright-slider" data-vfo="A" min="0" max="60" step="1" value="0" aria-label="VFO A waterfall brightness" style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-bright-label" data-vfo="A" style="min-width:3.5em; text-align:right;">Off</span>
                     </div>
                     <div class="card-body p-0">
                         <canvas id="spectrumCanvasA" role="img" aria-hidden="true" aria-label="RF spectrum display VFO A" style="display:block; width:100%;"></canvas>
@@ -727,12 +727,12 @@
                         <label class="text-nowrap mb-0" title="Vertical scale — dB of headroom above the auto-tracked noise floor. Smaller = taller peaks (zoom in on weak signals); larger = flatter. The noise floor stays pinned near the bottom automatically, so there's no floor slider to chase.">Range</label>
                         <input type="range" class="form-range spectrum-range-slider" data-vfo="B" min="5" max="160" step="1" value="60" aria-label="VFO B spectrum vertical range (dB above the noise floor)" style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-range-label" data-vfo="B" style="min-width:3.5em; text-align:right;">60 dB</span>
-                        <label class="text-nowrap mb-0 ms-2" title="Waterfall brightness — lifts weak signals up the waterfall colour scale. The spectrum trace above auto-ranges, so this now brightens the waterfall.">Gain</label>
-                        <input type="range" class="form-range spectrum-gain-slider" data-vfo="B" min="0" max="30" step="1" value="@((int)Math.Round(20.0 * Math.Log10(Math.Max(0.0001, (double)Model.SdrSpectrumGainB))))" aria-label="VFO B waterfall brightness (dB)" style="flex:1; min-width:60px;">
-                        <span class="text-monospace spectrum-gain-label" data-vfo="B" style="min-width:3.5em; text-align:right;">+@((int)Math.Round(20.0 * Math.Log10(Math.Max(0.0001, (double)Model.SdrSpectrumGainB)))) dB</span>
                         <label class="text-nowrap mb-0 ms-2" title="How fast the waterfall scrolls, from full speed down to 1/128. Does not affect the spectrum trace above it.">Speed</label>
                         <input type="range" class="form-range spectrum-speed-slider" data-vfo="B" min="0" max="7" step="1" value="0" aria-label="VFO B waterfall scroll speed" style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-speed-label" data-vfo="B" style="min-width:3.5em; text-align:right;">Full</span>
+                        <label class="text-nowrap mb-0 ms-2" title="Waterfall brightness — lifts weak signals up the waterfall colour scale. The spectrum trace auto-ranges, so this brightens the waterfall only, leaving the trace unchanged.">Bright</label>
+                        <input type="range" class="form-range spectrum-bright-slider" data-vfo="B" min="0" max="60" step="1" value="0" aria-label="VFO B waterfall brightness" style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-bright-label" data-vfo="B" style="min-width:3.5em; text-align:right;">Off</span>
                     </div>
                     <div class="card-body p-0">
                         <canvas id="spectrumCanvasB" role="img" aria-hidden="true" aria-label="RF spectrum display VFO B" style="display:block; width:100%;"></canvas>
@@ -2566,47 +2566,20 @@
                 });
             });
 
-            // Spectrum DSP sliders — Range (vertical scale) and Gain (waterfall
-            // brightness). The old Low/High pair is gone: the trace now auto-tracks
-            // the noise floor (see SpectrumPanel auto-floor), so the operator only
-            // sets how much dB of headroom sits above it.
-            //   • Range is PURELY client-side — it drives panel.setSpectrumRange()
-            //     and is persisted per-VFO in localStorage by the panel. It never
-            //     touches the server; the worker's clamp window is fixed wide
-            //     server-side so the client's auto-floor always sees real dynamic
-            //     range (see SdrController / SdrManager).
-            //   • Gain is the one server-side knob left. With the trace auto-ranging
-            //     it no longer moves the trace (auto-floor cancels a uniform dB
-            //     shift), but the waterfall's colour map is fixed-window, so Gain
-            //     now acts as waterfall brightness. It's debounced-POSTed to
-            //     /api/sdr/dsp/{vfo} which persists it and pushes it to the worker.
-            (function wireDspSliders() {
-                const debTimers = { A: null, B: null };
-                const DEBOUNCE_MS = 150;
-
-                function scheduleSendGain(vfo) {
-                    if (debTimers[vfo]) clearTimeout(debTimers[vfo]);
-                    debTimers[vfo] = setTimeout(async () => {
-                        debTimers[vfo] = null;
-                        const gainDb = parseFloat(document.querySelector(`.spectrum-gain-slider[data-vfo="${vfo}"]`).value);
-                        const gainLinear = Math.pow(10, gainDb / 20);
-                        try {
-                            await fetch(`/api/sdr/dsp/${vfo}`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ gainLinear })
-                            });
-                        } catch { /* network error — slider stays at user's value */ }
-                    }, DEBOUNCE_MS);
-                }
-
+            // Spectrum display sliders — Range (vertical scale), Speed (waterfall
+            // scroll rate) and Bright (waterfall colour lift). All three are PURELY
+            // client-side and persisted per-VFO in localStorage by the panel; none
+            // touch the server. The old Low/High pair and the Gain round-trip to the
+            // worker are both gone — the trace auto-tracks the noise floor (see
+            // SpectrumPanel auto-floor) and the worker streams a fixed wide window,
+            // so the operator only sets how much dB of headroom sits above the floor
+            // (Range) and how the waterfall reads (Speed below, Bright further down).
+            (function wireRangeSliders() {
                 ['A', 'B'].forEach(vfo => {
                     const rangeSlider = document.querySelector(`.spectrum-range-slider[data-vfo="${vfo}"]`);
                     const rangeLabel  = document.querySelector(`.spectrum-range-label[data-vfo="${vfo}"]`);
-                    const gainSlider  = document.querySelector(`.spectrum-gain-slider[data-vfo="${vfo}"]`);
-                    const gainLabel   = document.querySelector(`.spectrum-gain-label[data-vfo="${vfo}"]`);
                     const panel       = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
-                    if (!rangeSlider || !gainSlider || !panel) return;   // VFO B hidden when no SDR
+                    if (!rangeSlider || !panel) return;   // VFO B hidden when no SDR
 
                     // Sync the Range slider to the panel's persisted value (localStorage).
                     const initialRange = Math.round(panel.getSpectrumRange());
@@ -2617,14 +2590,6 @@
                         const r = parseInt(rangeSlider.value, 10);
                         rangeLabel.textContent = r + ' dB';
                         panel.setSpectrumRange(r);
-                    });
-
-                    gainSlider.addEventListener('input', () => {
-                        gainLabel.textContent = '+' + gainSlider.value + ' dB';
-                        // A big gain step shifts the whole dBFS floor; snap the
-                        // auto-floor so it re-seeds instantly instead of drifting.
-                        panel.snapAutoFloor();
-                        scheduleSendGain(vfo);
                     });
                 });
             })();
@@ -2653,6 +2618,31 @@
                     const divisor = speeds[parseInt(slider.value, 10)];
                     label.textContent = formatSpeed(divisor);
                     panel.setWaterfallSpeed(divisor);
+                });
+            });
+
+            // Waterfall brightness — purely client-side (like Range and Speed): it
+            // adds a dB lift to the waterfall's colour mapping only, leaving the
+            // spectrum trace alone. 0 = "Off". Persisted per-VFO in localStorage by
+            // the panel. Replaces the old Gain slider, which drove the worker's
+            // pre-dB gain; with the trace auto-ranging that only ever brightened the
+            // waterfall, so it's now done entirely in the browser.
+            ['A', 'B'].forEach(vfo => {
+                const slider = document.querySelector(`.spectrum-bright-slider[data-vfo="${vfo}"]`);
+                const label  = document.querySelector(`.spectrum-bright-label[data-vfo="${vfo}"]`);
+                const panel  = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+                if (!slider || !label || !panel) return;
+
+                const formatBright = (db) => db <= 0 ? 'Off' : `+${db}`;
+
+                const initial = panel.getWaterfallBrightness();
+                slider.value = String(initial);
+                label.textContent = formatBright(initial);
+
+                slider.addEventListener('input', () => {
+                    const db = parseInt(slider.value, 10);
+                    label.textContent = formatBright(db);
+                    panel.setWaterfallBrightness(db);
                 });
             });
 
