@@ -68,6 +68,17 @@ namespace Yaesu_Web_Control.Controllers
             {
                 var soapy = SoapySdrInterop.EnumerateDevices();
 
+                // Always record the raw enumerate result — a plain device count plus
+                // the driver of each hit. When a user reports "my RTL-SDR works in
+                // other apps but not here", this one line separates "SoapySDR saw it
+                // but we filtered/failed it" from "SoapySDR itself returned nothing".
+                _logger.LogInformation(
+                    "SDR: SoapySDR enumerate returned {Count} device(s){Drivers}",
+                    soapy.Count,
+                    soapy.Count == 0
+                        ? ""
+                        : " — drivers: " + string.Join(", ", soapy.Select(d => d.Driver)));
+
                 // If the direct SDRplay path already found devices, suppress SoapySDR's
                 // sdrplay-driver entries — they are the same physical hardware via an
                 // inferior code path and would show as duplicates in the dropdown.

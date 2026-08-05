@@ -211,33 +211,33 @@ public sealed class SdrManager : BackgroundService
                     break;
                 }
 
+                // Every broadcast below is dispatched fire-and-forget (see Dispatch).
+                // This loop's one job is to drain the worker; it must never block on
+                // client I/O. Awaiting Clients.All.SendAsync waits on the *slowest*
+                // client's transport pipe — a page frozen into the bfcache during
+                // navigation, or any dead/slow socket, has a stalled pipe that large
+                // spectrum frames quickly fill. A blocking await there freezes frame
+                // delivery to *every* client for ~7 s until the zombie is reaped.
                 switch (msg)
                 {
                     case SpectrumFrameMsg sf:
-                        await _hub.Clients.All.SendAsync(
-                            "RadioStateUpdate",
-                            new
-                            {
-                                property = "SpectrumUpdate",
-                                value    = new { sdrId = vfo, bins = sf.Bins, centreHz = sf.CentreHz, spanHz = sf.SpanHz },
-                            },
-                            stoppingToken).ConfigureAwait(false);
+                        Dispatch(BroadcastFrame(vfo, sf, stoppingToken), vfo);
 
                         if (++heartbeatCounter >= StatusHeartbeatFrames)
                         {
                             heartbeatCounter = 0;
-                            await BroadcastStatus(vfo, "streaming", stoppingToken).ConfigureAwait(false);
+                            Dispatch(BroadcastStatus(vfo, "streaming", stoppingToken), vfo);
                         }
                         break;
 
                     case StatusUpdateMsg s:
                         _logger.LogInformation("SDR {Vfo}: worker status — {Status}", vfo, s.Status);
-                        await BroadcastStatus(vfo, s.Status, stoppingToken).ConfigureAwait(false);
+                        Dispatch(BroadcastStatus(vfo, s.Status, stoppingToken), vfo);
                         break;
 
                     case ErrorReportMsg er:
                         _logger.LogWarning("SDR {Vfo}: worker error — {Error}", vfo, er.Error);
-                        await BroadcastDetail(vfo, er.Error, stoppingToken).ConfigureAwait(false);
+                        Dispatch(BroadcastDetail(vfo, er.Error, stoppingToken), vfo);
                         break;
                 }
             }
@@ -330,6 +330,40 @@ public sealed class SdrManager : BackgroundService
     }
 
     // ── SignalR helpers — sdrId-tagged for per-VFO routing on the frontend ────
+
+    // Fire-and-forget a hub broadcast so the worker read loop never blocks on
+    // client I/O. Faults are expected here — a slow or aborted client's send will
+    // throw — so we observe and swallow them rather than leaving the Task
+    // unobserved. Frames and status are real-time and disposable; a dropped one
+    // is corrected by the next.
+    private void Dispatch(Task sendTask, string vfo)
+    {
+        _ = sendTask.ContinueWith(
+            t => _logger.LogDebug(t.Exception, "SDR {Vfo}: hub broadcast dropped", vfo),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private async Task BroadcastFrame(string vfo, SpectrumFrameMsg sf, CancellationToken ct)
+    {
+        try
+        {
+            await _hub.Clients.All.SendAsync(
+                "RadioStateUpdate",
+                new
+                {
+                    property = "SpectrumUpdate",
+                    value    = new { sdrId = vfo, bins = sf.Bins, centreHz = sf.CentreHz, spanHz = sf.SpanHz },
+                },
+                ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "SDR {Vfo}: spectrum frame broadcast dropped", vfo);
+        }
+    }
 
     private async Task BroadcastStatus(string vfo, string status, CancellationToken ct)
     {

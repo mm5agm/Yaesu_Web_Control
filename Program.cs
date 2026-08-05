@@ -17,16 +17,73 @@ var mutex = new Mutex(initiallyOwned: true, name: MutexName, out bool createdNew
 
 if (!createdNew)
 {
+    // An OK-only "already running" box is a dead end when the running copy is a
+    // stuck one: the operator sees no window, closes nothing, and every relaunch
+    // hits the same box with Task Manager the only way out. Offer the two useful
+    // actions instead: go to the running copy, or end it and start fresh.
 #pragma warning disable CA1416
-    MessageBox.Show(
-        "Yaesu Web Control is already running.",
-        "Already Running",
-        MessageBoxButtons.OK,
-        MessageBoxIcon.Information);
-#pragma warning restore CA1416
+    var me = Process.GetCurrentProcess();
+    Process[] others;
+    try   { others = Process.GetProcessesByName(me.ProcessName).Where(p => p.Id != me.Id).ToArray(); }
+    catch { others = Array.Empty<Process>(); }
 
+    int existingPort = LoadConfiguredHttpPort();
+    string url = $"http://localhost:{existingPort}";
+    string who = others.Length > 0
+        ? $"(process ID {string.Join(", ", others.Select(p => p.Id))})"
+        : "(its window may be minimised to the system tray)";
+
+    var choice = MessageBox.Show(
+        $"Yaesu Web Control is already running {who}.\n\n" +
+        $"Yes\t— open the running copy at {url}\n" +
+        "No\t— close the running copy and start a new one\n" +
+        "Cancel\t— do nothing",
+        "Already Running",
+        MessageBoxButtons.YesNoCancel,
+        MessageBoxIcon.Information);
+
+    if (choice == DialogResult.Yes)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+        mutex.Dispose();
+        return;
+    }
+
+    if (choice != DialogResult.No)
+    {
+        mutex.Dispose();
+        return;
+    }
+
+    // Asked to end the running copy: request a clean close first, then force it.
+    foreach (var p in others)
+    {
+        try
+        {
+            if (!p.CloseMainWindow() || !p.WaitForExit(4000))
+                p.Kill(entireProcessTree: true);
+            p.WaitForExit(4000);
+        }
+        catch { /* already gone, or access denied — the mutex retry below decides */ }
+    }
+
+    // The old process holds the mutex until it actually exits; give the handle a
+    // moment to be released, then try to claim it ourselves.
     mutex.Dispose();
-    return;
+    Thread.Sleep(500);
+    mutex = new Mutex(initiallyOwned: true, name: MutexName, out createdNew);
+    if (!createdNew)
+    {
+        MessageBox.Show(
+            "The running copy of Yaesu Web Control could not be closed.\n\n" +
+            "End \"Yaesu_Web_Control.exe\" in Task Manager (Ctrl+Shift+Esc), then start it again.",
+            "Still Running",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
+        mutex.Dispose();
+        return;
+    }
+#pragma warning restore CA1416
 }
 
 // Keep the mutex alive for the lifetime of the process

@@ -75,9 +75,29 @@ export class SdrSpectrumPipeline {
             }
             this._pipeline.handleMessage(msg);
         });
-        conn.start().catch(() => { /* reconnect is handled by withAutomaticReconnect */ });
+        conn.start()
+            .catch(() => { /* reconnect is handled by withAutomaticReconnect */ });
 
         this._connection = conn;
+    }
+
+    /**
+     * Close the SignalR connection immediately.
+     *
+     * Call this on `pagehide` (i.e. when navigating away or being frozen into
+     * the bfcache). Without it, the browser keeps the socket half-open while the
+     * page is frozen, so the server still counts this page as a live client.
+     * When the page returns and a fresh connection forms, the worker's per-frame
+     * broadcast (`Clients.All.SendAsync`) back-pressures on that zombie client —
+     * spectrum frames are large, its send buffer fills, and frame delivery to
+     * the *new* connection stalls for several seconds until the transport reaps
+     * the zombie. Stopping here lets the server drop it at once, so the reloaded
+     * page starts receiving frames in ~100ms instead of ~7s.
+     */
+    disconnect() {
+        const conn = this._connection;
+        this._connection = null;
+        if (conn) { try { conn.stop(); } catch { /* may already be closed */ } }
     }
 
     /**

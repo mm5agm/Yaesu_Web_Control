@@ -2143,7 +2143,7 @@
         import { MeterPanel }           from "/js/guages/meter-panel.js?v=1";
         import { SMeterHistoryPanel }   from "/js/guages/smeter-history-panel.js?v=1";
         import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=1";
-        import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=1";
+        import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=4";
         import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=5";
         import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=2";
         import "/js/ui/if-width-tables.js?v=3";
@@ -2162,6 +2162,18 @@
         const _ywcRegion0 = '@Model.BandPlan';
         window.nearestBandForHz = (hz) =>
             nearestBandForHz(hz, BAND_EDGES[_ywcRegion0] || BAND_EDGES.Region1);
+
+        // bfcache guard. When the browser restores this page from its
+        // back/forward cache (e.g. returning from Meter Calibration via the
+        // Back button), DOMContentLoaded does NOT fire — so none of the init
+        // below runs and the spectrum SignalR connection is never re-opened.
+        // The panels sit frozen and only a hard reload (Ctrl+F5) brings them
+        // back. Forcing a fresh load on a persisted restore re-runs init and
+        // reconnects the spectrum pipeline. (Registered at module-eval time; the
+        // listener survives in the restored page, so it fires on the restore.)
+        window.addEventListener('pageshow', function (e) {
+            if (e.persisted) window.location.reload();
+        });
 
         loadLabels();
         // loadLabels() rewrites every title from labels.json on each focus,
@@ -2287,8 +2299,16 @@
             const spectrumPipeline = new SdrSpectrumPipeline();
 
             // Per-VFO spectrum routing.
-            spectrumPipeline.onSpectrumUpdate('A', data => spectrumPanelA.update(data));
-            spectrumPipeline.onSpectrumUpdate('B', data => spectrumPanelB.update(data));
+            //
+            // An incoming frame is itself proof the SDR is streaming — the worker
+            // only emits frames while streaming. Waiting for the periodic
+            // "streaming" heartbeat (SdrStatus, re-sent every ~3s) to un-hide the
+            // container means a freshly-loaded page can sit blank for up to that
+            // long even though frames are already flowing. So promote the VFO to
+            // "streaming" on its first frame, which reveals the panel within
+            // ~100ms of connecting instead of waiting on the heartbeat.
+            spectrumPipeline.onSpectrumUpdate('A', data => { spectrumPanelA.update(data); markStreamingFromFrame('A'); });
+            spectrumPipeline.onSpectrumUpdate('B', data => { spectrumPanelB.update(data); markStreamingFromFrame('B'); });
 
             // Per-VFO status routing — drives the panel state + small badge in the header.
             function setStatusBadge(vfo, status) {
@@ -2355,6 +2375,20 @@
                     // Both configured — honour the active mode.
                     applyMode(currentMode);
                 }
+            }
+
+            // Promote a VFO to "streaming" the moment its first frame arrives, so
+            // the container reveals without waiting for the periodic heartbeat.
+            // A no-op once already streaming, so it costs nothing per frame after
+            // the first. A later real SdrStatus (e.g. "disconnected") still wins
+            // through the onStatusChange handler below.
+            function markStreamingFromFrame(vfo) {
+                if (sdrState[vfo] === 'streaming') return;
+                sdrState[vfo] = 'streaming';
+                const panel = vfo === 'A' ? spectrumPanelA : spectrumPanelB;
+                panel.setStatus('streaming');
+                setStatusBadge(vfo, 'streaming');
+                updateContainerVisibility();
             }
 
             // Mono/Multi toggle — persisted in localStorage so the user's
@@ -2476,6 +2510,17 @@
                 .catch(() => { /* ignore */ });
 
             spectrumPipeline.connect();
+            // Drop the spectrum SignalR connection the instant we navigate away or
+            // get frozen into the bfcache. If we don't, the frozen page's socket
+            // stays half-open and the server still treats it as a live client; when
+            // we come back and open a fresh connection, the worker's per-frame
+            // Clients.All.SendAsync back-pressures on that zombie (spectrum frames
+            // are large, its buffer fills) and frame delivery to the new connection
+            // stalls for ~7 s until the transport reaps it. Disconnecting here lets
+            // the server drop it at once, so the reloaded page traces almost instantly.
+            window.addEventListener('pagehide', function () {
+                try { spectrumPipeline.disconnect(); } catch { /* already gone */ }
+            });
             // Expose both panels globally for cross-module access (overlay redraws,
             // band-plan reloads, etc.). window.spectrumPanel kept pointing at the
             // A panel as a backward-compatible alias for code that may still expect
