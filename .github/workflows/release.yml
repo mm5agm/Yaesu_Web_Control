@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup .NET 10
         run: |
@@ -84,7 +84,7 @@ jobs:
 
       - name: Upload installer as workflow artifact
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Yaesu_Web_Control_Setup
           path: Yaesu_Web_Control_Setup.exe
