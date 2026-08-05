@@ -132,6 +132,10 @@ namespace Yaesu_Web_Control.Pages
             ModelState.Remove("Settings.DxClusterPostLoginCommands");
             // Accessibility TX shortcut is optional — empty = disabled.
             ModelState.Remove("Settings.TxToggleKey");
+            // Remote audio device names may be empty (use PortAudio defaults).
+            ModelState.Remove("Settings.AudioRadioRxDevice");
+            ModelState.Remove("Settings.AudioRadioTxDevice");
+            ModelState.Remove("Settings.HttpsSanHosts");
 
             if (!ModelState.IsValid)
             {
@@ -174,6 +178,8 @@ namespace Yaesu_Web_Control.Pages
                 var oldRadioModel = current.RadioModel;
                 var oldWebAddress = current.WebAddress;
                 var oldHttpPort   = current.HttpPort;
+                var oldHttpsEnabled = current.HttpsEnabled;
+                var oldHttpsPort    = current.HttpsPort;
 
                 // Capture pre-change CAT connection values so the radio reconnect
                 // below only fires when something that actually affects the CAT
@@ -276,6 +282,18 @@ namespace Yaesu_Web_Control.Pages
                 current.VoiceControlEnabled = Settings.VoiceControlEnabled;
                 current.VoiceSpokenConfirmationEnabled = Settings.VoiceSpokenConfirmationEnabled;
 
+                // Remote audio + optional HTTPS
+                current.AudioStreamingEnabled = Settings.AudioStreamingEnabled;
+                current.AudioRadioRxDevice = Settings.AudioRadioRxDevice ?? "";
+                current.AudioRadioTxDevice = Settings.AudioRadioTxDevice ?? "";
+                current.AudioRxGain = Math.Clamp(Settings.AudioRxGain, 0.05f, 4f);
+                current.AudioTxGain = Math.Clamp(Settings.AudioTxGain, 0.05f, 4f);
+                current.HttpsEnabled = Settings.HttpsEnabled;
+                current.HttpsPort = (Settings.HttpsPort >= 1 && Settings.HttpsPort <= 65535)
+                    ? Settings.HttpsPort
+                    : 8443;
+                current.HttpsSanHosts = Settings.HttpsSanHosts ?? "";
+
                 await _settingsService.SaveSettingsAsync(current);
 
                 // Only reconnect the radio if something that actually affects the
@@ -342,6 +360,8 @@ namespace Yaesu_Web_Control.Pages
                     reasons.Add($"web server address ({oldWebAddress} → {current.WebAddress})");
                 if (oldHttpPort != current.HttpPort)
                     reasons.Add($"HTTP port ({oldHttpPort} → {current.HttpPort})");
+                if (oldHttpsEnabled != current.HttpsEnabled || oldHttpsPort != current.HttpsPort)
+                    reasons.Add("HTTPS settings");
                 if (reasons.Count > 0)
                 {
                     RestartRequiredReason = string.Join(" and ", reasons);

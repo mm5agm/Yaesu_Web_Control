@@ -643,6 +643,38 @@
         </div>
     </div>
 
+    <!-- Remote Audio bar — visible when Settings → Remote Audio is enabled -->
+    <div id="remoteAudioBar" class="row mt-2" style="display:none;">
+        <div class="col-12">
+            <div class="card border-secondary">
+                <div class="card-body py-2 d-flex flex-wrap align-items-center gap-3">
+                    <strong class="me-1"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
+                    <button type="button" class="btn btn-sm btn-success" id="remoteAudioStartBtn">Start audio</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="remoteAudioStopBtn" disabled>Stop</button>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="remoteAudioMicMute" />
+                        <label class="form-check-label" for="remoteAudioMicMute">Mute mic</label>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="remoteAudioRxMute" />
+                        <label class="form-check-label" for="remoteAudioRxMute">Mute RX</label>
+                    </div>
+                    <span class="small text-muted" id="remoteAudioStatus">Idle</span>
+                    <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
+                        <span class="small">RX</span>
+                        <div class="progress flex-grow-1" style="height:8px; width:80px;">
+                            <div id="remoteAudioRxMeter" class="progress-bar bg-info" style="width:0%"></div>
+                        </div>
+                        <span class="small">TX</span>
+                        <div class="progress flex-grow-1" style="height:8px; width:80px;">
+                            <div id="remoteAudioTxMeter" class="progress-bar bg-warning" style="width:0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Spectrum Display — dual-VFO layout (v2.3.0+).
          Each panel has its own canvas. Mono A / Mono B / Multi toggle below
          hides/shows individual panels. Outer container hides itself when no
@@ -2153,6 +2185,7 @@
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=14";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
+        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=1";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -2177,6 +2210,7 @@
         });
 
         loadLabels();
+        initRemoteAudioUi();
         // loadLabels() rewrites every title from labels.json on each focus,
         // wiping the "out of band" title suffix; restore it once that has run.
         window.addEventListener('focus', async () => {

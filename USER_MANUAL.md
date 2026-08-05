@@ -40,6 +40,7 @@
    - 6.5 [CW Memory Messages](#65-cw-memory-messages-m1m5)
    - 6.6 [DX Cluster](#66-dx-cluster)
    - 6.7 [Backup &amp; Restore](#67-backup--restore)
+   - 6.8 [Remote Audio](#68-remote-audio)
 7. [Application Setup](#7-application-setup)
    - 7.1 [External App Buttons](#71-external-app-buttons)
    - 7.2 [WSJT-X UDP Settings](#72-wsjt-x-udp-settings)
@@ -91,6 +92,7 @@
     - 17.5 [Privacy](#175-privacy)
     - 17.6 [Adding your own commands](#176-adding-your-own-commands)
     - 17.7 [More languages](#177-more-languages)
+18. [Remote Audio](#18-remote-audio)
 
 ---
 
@@ -1030,8 +1032,12 @@ After changing the serial port or baud rate, click **Test Connection** to verify
 | Network Interface | `localhost` (this PC only) or `0.0.0.0` (all interfaces, including LAN). Choose `0.0.0.0` to access the app from a tablet or phone |
 | HTTP port | Port Kestrel listens on (default **8080**; if busy, YWC tries 8081–8089 at startup). Changing this needs a restart. |
 | Automatically exit when no browser is connected | When **on** (default on desktop hosts), YWC exits ~30 seconds after the last heartbeating browser tab closes. Turn **off** for a headless shack / always-on Pi so closing the browser does not stop CAT. **Docker always keeps the host running** regardless of this checkbox. |
+| Enable HTTPS | Optional TLS listener (default port **8443**) using a YWC-generated self-signed certificate. Required for **remote microphone** access (browsers block `getUserMedia` on plain `http://` except localhost). See [§18 Remote Audio](#18-remote-audio). |
+| HTTPS port | Port for the HTTPS listener when enabled (default **8443**). HTTP continues on the HTTP port (dual-listen). Restart required. |
+| Certificate SAN hostnames / IPs | Extra names/IPs embedded in the self-signed cert (e.g. WireGuard IP). Always includes `localhost`. |
+| Generate self-signed certificate | Writes `https.pfx` under the YWC user-data folder. Overwrites any existing cert. **Restart YWC** after generating if HTTPS is enabled. |
 
-> **Note:** After changing the network interface or HTTP port, save settings and restart the application.
+> **Note:** After changing the network interface, HTTP/HTTPS port, or HTTPS enable flag, save settings and restart the application.
 
 The Settings page also shows the full URL for each detected network interface so you can bookmark the correct address on your tablet.
 
@@ -1314,6 +1320,21 @@ Click **Import full backup…**, pick a previously exported zip, and confirm the
 - **Experimenting safely** — export before trying something risky; import the file to revert if it goes wrong.
 
 The files inside the zip are plain JSON; you can extract and inspect or hand-edit them if needed. They live at `%APPDATA%\MM5AGM\Yaesu Web Control\` and are also accessible directly without going through the export.
+
+---
+
+### 6.8 Remote Audio
+
+**Settings → Remote Audio** enables in-browser send/receive audio between a remote operator and the radio’s USB sound devices on the YWC host (an alternative to Mumble/SonoBus for remote SSB over LAN or VPN).
+
+| Setting | Description |
+|---------|-------------|
+| Enable remote audio | Opt-in. When off, no audio devices are opened and the Index bar is hidden. |
+| Radio RX device (capture) | PortAudio input used for what you **hear** in the browser (usually Yaesu USB recording). Empty = system default input. |
+| Radio TX device (playback) | PortAudio output used for browser **mic → radio** (usually Yaesu USB playback). Empty = system default output. |
+| RX / TX gain | Software gain applied in the bridge (0.05–4). |
+
+Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
 
 ---
 
@@ -2293,21 +2314,21 @@ The Alexa code **isn't deleted** — it lives on a parked branch and can be revi
 
 ### 15.7 What is the TX button for? When I press it the radio goes into TX mode but there's no audio from my microphone.
 
-The TX button in YWC sends the `TX1;` CAT command, which puts the radio into transmit mode (PTT engaged) but **does not route any audio into the radio**. With nothing modulating the carrier, what actually goes on-air depends on the current mode:
+The TX button in YWC sends the `TX1;` CAT command, which puts the radio into transmit mode (PTT engaged) but **by itself does not create microphone audio**. With nothing modulating the carrier, what actually goes on-air depends on the current mode and how audio is fed:
 
 - **CW** — an unmodulated carrier (a steady tone). Useful for tune-up, SWR measurement, or driving an external tuner / amplifier into its tune cycle.
-- **SSB / AM / FM** — the TX path is open but no audio is being injected, so the on-air signal is effectively silent.
-- **DATA / digital modes** — the same as SSB until something else (WSJT-X via the rear DATA jack or USB audio) is feeding audio in.
+- **SSB / AM / FM** — the TX path is open; you need audio into the radio (front mic, or USB/REAR audio from the PC).
+- **DATA / digital modes** — typically USB audio from WSJT-X (or similar) into the rear DATA/USB path.
 
-In short, the TX button is "key the radio for testing", not "open the mic". The radio's microphone input is only routed to the TX path when the mic's own **PTT button** (or footswitch, or VOX) triggers TX. YWC doesn't intercept or route audio at all — that side is between your mic and the radio.
+**Local mic:** press the PTT on the hand mic / footswitch / VOX as usual.
 
-What people use it for in practice:
+**Remote browser mic:** enable [Remote Audio](#18-remote-audio), pick the radio’s USB devices in Settings, use HTTPS for non-localhost browsers, click **Start audio** on the Index page, then use the TX button (or TX toggle key) for PTT. On the radio, set **MOD SOURCE** to USB / REAR (USB).
+
+What people use the TX button for without remote audio:
 
 1. **Tune-up.** Switch to CW, click TX, watch your SWR or let your ATU find a match.
 2. **Driving an external amplifier or antenna tuner** into its auto-tune cycle.
-3. **Digital-mode keying tests.** When WSJT-X (or similar) is feeding audio into the rear DATA jack, the TX button gives you a CAT-driven way to verify the keying side of the path without starting a real QSO.
-
-To transmit voice from your microphone, press the PTT button on the mic itself.
+3. **Digital-mode keying tests.** When WSJT-X is feeding audio into USB, the TX button verifies CAT keying.
 
 ---
 
@@ -2770,6 +2791,60 @@ Only **English (UK)** ships as the built-in default, but the language pack syste
 3. **Switching locale takes effect immediately** — no restart needed, unlike the initial enable toggle.
 
 The **Voice Phrases editor** itself currently only edits the **en-GB** pack in place; editing an *installed non-English pack* through the same in-app grid isn't wired up yet — for now, translate by hand-editing that culture's JSON file directly, or ask a fluent speaker to export their pack after editing it locally. If you'd like a particular language prioritised for a built-in default, or want the editor to support editing other locales directly, please open a GitHub discussion or issue and mention it.
+
+---
+
+## 18. Remote Audio
+
+Remote Audio streams **radio RX → browser speakers** and **browser microphone → radio TX** over a dedicated WebSocket on the YWC host. PTT remains the normal Index **TX** button (or optional TX toggle key). It is intended for **LAN or VPN** use (for example WireGuard) as a simpler alternative to running Mumble or SonoBus alongside YWC.
+
+> **Not supported in Docker for v1.** USB audio device access from containers is host-specific and unreliable; run the native host on Windows, macOS, or Linux instead.
+
+### 18.1 Radio setup
+
+1. Connect the radio’s USB cable so the PC sees both CAT and USB audio.
+2. In the radio menu, set **MOD SOURCE** to **REAR** with **REAR SELECT = USB**, or **MOD SOURCE = USB** on models that use that wording (e.g. FT-710). Same idea as FT-Control / digital-mode USB audio.
+3. Confirm the OS lists Yaesu (or “USB Audio”) playback and recording devices.
+
+### 18.2 YWC host setup
+
+1. Open **Settings → Remote Audio**.
+2. Enable **remote audio**.
+3. Pick **Radio RX device** (capture / what you hear) and **Radio TX device** (playback / where mic audio goes). Use **Refresh device list** after plugging the radio in.
+4. Optionally adjust RX/TX gain.
+5. **Save Settings**.
+
+### 18.3 HTTPS for remote browsers
+
+Browsers only allow the microphone on a **secure context** (`https://` or `localhost`).
+
+1. Under **Settings → Web / HTTP**, enter any WireGuard/LAN IPs or hostnames under **Certificate SAN hostnames / IPs**.
+2. Click **Generate self-signed certificate**.
+3. Enable **HTTPS**, note the HTTPS port (default **8443**), **Save Settings**, and **restart YWC**.
+4. On the remote machine, open `https://<host>:8443` (not the HTTP port). Accept the certificate warning once (Advanced → Proceed), or trust the cert in the OS if you prefer.
+
+Local testing on the same PC can use `http://localhost:8080` without HTTPS.
+
+### 18.4 Operating
+
+1. Open the Index page (over HTTPS if remote).
+2. Click **Start audio** on the Remote Audio bar. Grant microphone permission when asked.
+3. You should hear RX audio; speak into the mic (levels show on the bar).
+4. Use **TX** / your TX toggle key to key the radio. Audio flows continuously (like Mumble); CAT controls PTT.
+5. **Mute mic** / **Mute RX** as needed. **Stop** ends the session and closes host audio devices.
+6. Only **one** audio session is allowed at a time; a second browser is rejected busy.
+
+### 18.5 Troubleshooting
+
+| Symptom | What to try |
+|---------|-------------|
+| Mic permission denied / “requires HTTPS” | Use the HTTPS URL; regenerate the cert with the IP you type in the address bar; restart after enabling HTTPS. |
+| No RX sound | Check Radio RX device; confirm radio AF gain / USB volume; look at the RX meter while Start audio is active. |
+| TX keys but no modulation | Confirm MOD SOURCE / USB; check Radio TX device; unmute mic; watch the TX meter while speaking. |
+| Choppy audio | Prefer wired Ethernet/VPN; reduce other load; stay on LAN/VPN (no TURN/WebRTC in v1). |
+| “Audio session busy” | Stop audio in the other tab/browser first. |
+| Devices missing from the list | Unplug/replug USB; Refresh device list; check OS privacy permissions for microphone (host process). |
+| Voice Control vs radio USB | Keep Voice Control’s mic on your headset; leave Remote Audio devices on the Yaesu USB endpoints. |
 
 ---
 
