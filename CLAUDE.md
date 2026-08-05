@@ -43,7 +43,7 @@ On macOS, set **Serial Port** to a `/dev/cu.*` device. On Linux, use `/dev/ttyUS
 | Settings UI gates | `IsWindowsHost == true` | `IsWindowsHost == false` — hides SDR / Voice / Windows-only panels |
 | Serial validation | `COM*` | `/dev/…` |
 | AppData | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `$XDG_CONFIG_HOME` or `~/.config/MM5AGM/Yaesu Web Control/` |
-| `AutoShutdownWhenNoBrowsers` | Default true | Default true; Docker seed + `HostRuntime.IsContainer` force keep-alive |
+| `AutoShutdownWhenNoBrowsers` | Default true | Default true; `HostRuntime.IsContainer` forces keep-alive |
 | Browser auto-open | Yes | Skipped when `HostRuntime.IsContainer` |
 | Operator-facing docs | `USER_MANUAL.md` §§1–4, 6.2–6.3, 15.10, 17 | Same |
 

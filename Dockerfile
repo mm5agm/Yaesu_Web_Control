@@ -62,9 +62,8 @@ RUN usermod -aG dialout app \
 
 COPY --from=build /app/publish .
 COPY docker/entrypoint.sh /entrypoint.sh
-COPY docker/appsettings.user.json /opt/ywc/docker-seed/appsettings.user.json
 RUN chmod +x /entrypoint.sh \
-    && chown -R app:app /app /opt/ywc
+    && chown -R app:app /app
 
 USER app
 EXPOSE 8080

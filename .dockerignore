@@ -29,4 +29,3 @@ installer.nsi
 fatal_startup_error.log
 appsettings.user.json
 **/appsettings.user.json
-!docker/appsettings.user.json
