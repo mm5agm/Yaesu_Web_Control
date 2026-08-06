@@ -20,6 +20,14 @@
         /// </summary>
         public bool AutoShutdownWhenNoBrowsers { get; set; } = true;
 
+        /// <summary>
+        /// When true (default), the host opens the default browser to the control
+        /// panel URL once after Kestrel starts. Set false to start quietly —
+        /// open the UI from the system tray / menu bar, or browse to the URL
+        /// yourself. Docker / containers always skip auto-open regardless.
+        /// </summary>
+        public bool OpenBrowserOnStartup { get; set; } = true;
+
         public string RadioModel { get; set; } = "FTdx101MP"; // MP = dual receiver, D = single receiver
 
 

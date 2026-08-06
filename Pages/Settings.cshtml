@@ -1954,6 +1954,17 @@
                             <span asp-validation-for="Settings.HttpPort" class="text-danger"></span>
                         </div>
                         <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" asp-for="Settings.OpenBrowserOnStartup" />
+                            <label class="form-check-label" asp-for="Settings.OpenBrowserOnStartup">
+                                Open browser automatically on startup
+                            </label>
+                            <div class="form-text">
+                                When enabled (default), YWC opens your default browser to the control panel after
+                                the web server starts. Turn this off to start quietly — open the UI from the
+                                system tray / menu bar, or browse to the URL yourself. Docker never auto-opens.
+                            </div>
+                        </div>
+                        <div class="mb-3 form-check form-switch">
                             <input class="form-check-input" type="checkbox" asp-for="Settings.AutoShutdownWhenNoBrowsers" />
                             <label class="form-check-label" asp-for="Settings.AutoShutdownWhenNoBrowsers">
                                 Automatically exit when no browser is connected

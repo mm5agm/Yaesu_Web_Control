@@ -311,7 +311,7 @@ None of these are required for basic operation. Get the radio connection working
 
 ### Windows
 
-Double-click the **Yaesu Web Control** shortcut on your desktop. The app starts in the background and your default browser opens automatically to whichever port YWC managed to bind (usually `http://localhost:8080`, but YWC will fall back to 8081–8089 if 8080 was already in use).
+Double-click the **Yaesu Web Control** shortcut on your desktop. The app starts in the background and — with **Open browser automatically on startup** enabled (the default) — your default browser opens to whichever port YWC managed to bind (usually `http://localhost:8080`, but YWC will fall back to 8081–8089 if 8080 was already in use). If you turned that setting off, use the tray icon’s **Open** action (or browse to the URL yourself).
 
 A small **YWC tray icon** appears in the Windows system tray (down by the clock, possibly under the **Show hidden icons ︿** arrow). The tray icon is your "the app is running" indicator and gives you a clean way to manage it without juggling Task Manager:
 
@@ -330,7 +330,7 @@ A small **YWC tray icon** appears in the Windows system tray (down by the clock,
 
 ### macOS (CAT-only host)
 
-Launch **Yaesu Web Control** from Applications (DMG install — [§2.2](#22-macos-dmg)), or run `dotnet run --framework net10.0` from a source checkout. Either way Kestrel starts and a **menu-bar status item** offers the same Open / About / Open user data folder / Exit actions as the Windows tray. User data lives under `~/.config/MM5AGM/Yaesu Web Control/`. The browser may open automatically on a desktop Mac; if not, use the menu-bar **Open** item or browse to the URL yourself.
+Launch **Yaesu Web Control** from Applications (DMG install — [§2.2](#22-macos-dmg)), or run `dotnet run --framework net10.0` from a source checkout. Either way Kestrel starts and a **menu-bar status item** offers the same Open / About / Open user data folder / Exit actions as the Windows tray. User data lives under `~/.config/MM5AGM/Yaesu Web Control/`. With **Open browser automatically on startup** enabled (default), the browser opens on a desktop Mac; if you turned it off (or it didn’t open), use the menu-bar **Open** item or browse to the URL yourself.
 
 ### Linux (from source)
 
@@ -1066,6 +1066,7 @@ After changing the serial port or baud rate, click **Test Connection** to verify
 |---------|-------------|
 | Network Interface | `localhost` (this PC only) or `0.0.0.0` (all interfaces, including LAN). Choose `0.0.0.0` to access the app from a tablet or phone |
 | HTTP port | Port Kestrel listens on (default **8080**; if busy, YWC tries 8081–8089 at startup). Changing this needs a restart. |
+| Open browser automatically on startup | When **on** (default), YWC opens your default browser to the control panel after the web server starts. Turn **off** to start quietly — open the UI from the system tray / menu bar, or browse to the URL yourself. Tray/menu **Open** still works when this is off. **Docker never auto-opens** a browser. |
 | Automatically exit when no browser is connected | When **on** (default on desktop hosts), YWC exits ~30 seconds after the last heartbeating browser tab closes. Turn **off** for a headless shack / always-on Pi so closing the browser does not stop CAT. **Docker always keeps the host running** regardless of this checkbox. |
 | Enable HTTPS | Optional TLS listener (default port **8443**) using a YWC-generated self-signed certificate. Required for **remote microphone** access (browsers block `getUserMedia` on plain `http://` except localhost). See [§18 Remote Audio](#18-remote-audio). |
 | HTTPS port | Port for the HTTPS listener when enabled (default **8443**). HTTP continues on the HTTP port (dual-listen). Restart required. |
@@ -1370,6 +1371,8 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 | RX / TX gain | Software gain applied in the bridge (0.05–4). |
 
 Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
+
+On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window that owns the audio session. Use this before opening Settings (or any other page) so RX/TX keep running — navigating away from Home otherwise closes the in-page session. While audio is in the pop-out, Home still shows status/levels/mutes, and the filter-scope FFT on Home stays live. Only one audio session is allowed at a time; handing off briefly reconnects.
 
 ---
 
@@ -2882,6 +2885,16 @@ Local testing on the same PC can use `http://localhost:8080` without HTTPS.
 5. **Mute mic** / **Mute RX** as needed. **Stop** ends the session and closes host audio devices.
 6. Only **one** audio session is allowed at a time; a second browser is rejected busy.
 
+#### Pop-out window (keep audio while changing pages)
+
+Audio on the Index page stops when you leave Home (for example to open **Settings**). To keep streaming:
+
+1. Click **Pop out** on the Remote Audio bar. A small **Remote Audio** window opens.
+2. If you were already streaming, YWC hands the session to that window (brief reconnect). Otherwise click **Start audio** in the pop-out.
+3. Leave the pop-out open while you use Settings or other pages. Home shows status such as *In pop-out window (streaming)*; mute switches on Home still control the pop-out session. Filter-scope on Home keeps receiving live RX spectrum from the pop-out.
+4. **Stop** on Home stops the pop-out session. **Close** in the pop-out (or closing the window) ends audio and returns control to Home.
+5. If the browser blocks the window, allow pop-ups for the YWC site and try again.
+
 ### 18.5 Troubleshooting
 
 | Symptom | What to try |
@@ -2890,7 +2903,9 @@ Local testing on the same PC can use `http://localhost:8080` without HTTPS.
 | No RX sound | Check Radio RX device; confirm radio AF gain / USB volume; look at the RX meter while Start audio is active. |
 | TX keys but no modulation | Confirm MOD SOURCE / USB; check Radio TX device; unmute mic; watch the TX meter while speaking. |
 | Choppy audio | Prefer wired Ethernet/VPN; reduce other load; stay on LAN/VPN (no TURN/WebRTC in v1). |
-| “Audio session busy” | Stop audio in the other tab/browser first. |
+| “Audio session busy” | Stop audio in the other tab/browser (or pop-out window) first. |
+| Audio dies when opening Settings | Use **Pop out** before leaving Home so the session lives in the separate window. |
+| Pop-out blocked | Allow pop-ups for the YWC origin; click **Pop out** / **Open pop-out** again. |
 | Devices missing from the list | Unplug/replug USB; Refresh device list; check OS privacy permissions for microphone (host process). |
 | Voice Control vs radio USB | Keep Voice Control’s mic on your headset; leave Remote Audio devices on the Yaesu USB endpoints. |
 

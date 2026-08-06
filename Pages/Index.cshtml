@@ -218,6 +218,20 @@
     #voiceHelpBody .vh-ex code { color: #ffd47a; background: #333; border-radius: 3px;
                                  padding: 1px 5px; margin-right: 4px; white-space: nowrap; }
 
+    #remoteAudioBar .remote-audio-icon-btn {
+        width: 2rem;
+        height: 2rem;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+    #remoteAudioBar .remote-audio-btn-icon {
+        font-size: 1rem;
+        line-height: 1;
+    }
+
     /* Voice PTT button — three visually distinct states so the operator can
        always tell whether it's listening:
          1. Rest / hover (armed, NOT listening) -> amber outline. Bootstrap
@@ -652,16 +666,44 @@
             <div class="card border-secondary">
                 <div class="card-body py-2 d-flex flex-wrap align-items-center gap-3">
                     <strong class="me-1"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
-                    <button type="button" class="btn btn-sm btn-success" id="remoteAudioStartBtn">Start audio</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="remoteAudioStopBtn" disabled>Stop</button>
-                    <div class="form-check form-switch mb-0">
-                        <input class="form-check-input" type="checkbox" id="remoteAudioMicMute" />
-                        <label class="form-check-label" for="remoteAudioMicMute">Mute mic</label>
-                    </div>
-                    <div class="form-check form-switch mb-0">
-                        <input class="form-check-input" type="checkbox" id="remoteAudioRxMute" />
-                        <label class="form-check-label" for="remoteAudioRxMute">Mute RX</label>
-                    </div>
+                    <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Connect to transceiver audio" aria-label="Connect to transceiver audio">
+                        <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioStartBtn"
+                                aria-label="Connect to transceiver audio">
+                            <i class="bi bi-telephone-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Disconnect transceiver audio" aria-label="Disconnect transceiver audio">
+                        <button type="button" class="btn btn-sm btn-danger remote-audio-icon-btn" id="remoteAudioStopBtn" disabled
+                                aria-label="Disconnect transceiver audio">
+                            <i class="bi bi-telephone-x-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block remote-audio-tip" id="remoteAudioPopoutTip" data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          data-bs-title="Popout audio, useful to navigate YWC without interrupting the audio stream"
+                          aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
+                        <button type="button" class="btn btn-sm btn-outline-secondary remote-audio-icon-btn" id="remoteAudioPopoutBtn"
+                                aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
+                            <i class="bi bi-window-plus remote-audio-btn-icon" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block remote-audio-tip" id="remoteAudioMicMuteTip" data-bs-toggle="tooltip"
+                          data-bs-placement="top" data-bs-title="Mute microphone" aria-label="Mute microphone">
+                        <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioMicMute"
+                                aria-pressed="false" aria-label="Mute microphone" disabled>
+                            <i class="bi bi-mic-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block remote-audio-tip" id="remoteAudioRxMuteTip" data-bs-toggle="tooltip"
+                          data-bs-placement="top" data-bs-title="Deafen — mute received audio"
+                          aria-label="Deafen — mute received audio">
+                        <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioRxMute"
+                                aria-pressed="false" aria-label="Deafen — mute received audio" disabled>
+                            <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
+                        </button>
+                    </span>
                     <span class="small text-muted" id="remoteAudioStatus">Idle</span>
                     <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
                         <span class="small">RX</span>
@@ -2223,7 +2265,7 @@
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=14";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
-        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=3";
+        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=11";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
