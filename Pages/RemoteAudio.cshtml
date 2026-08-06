@@ -1,0 +1,96 @@
+@page
+@model Yaesu_Web_Control.Pages.RemoteAudioModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Remote Audio";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>Remote Audio - Yaesu Web Control</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <style>
+        body { margin: 0; background: #1a1d21; color: #e8e8e8; }
+        .remote-audio-popout { padding: 12px 14px; }
+        .remote-audio-popout .card {
+            background: #22262b;
+            border-color: #444;
+        }
+        .remote-audio-popout .form-check-label { color: #ddd; }
+        .remote-audio-popout .text-muted { color: #9aa0a6 !important; }
+        #remoteAudioBar .remote-audio-icon-btn {
+            width: 2rem;
+            height: 2rem;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+        #remoteAudioBar .remote-audio-btn-icon {
+            font-size: 1rem;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="remote-audio-popout" id="remoteAudioBar">
+        <div class="card border-secondary">
+            <div class="card-body py-2 d-flex flex-wrap align-items-center gap-3">
+                <strong class="me-1"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
+                <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                      data-bs-title="Connect to transceiver audio" aria-label="Connect to transceiver audio">
+                    <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioStartBtn"
+                            aria-label="Connect to transceiver audio">
+                        <i class="bi bi-telephone-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                    </button>
+                </span>
+                <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                      data-bs-title="Disconnect transceiver audio" aria-label="Disconnect transceiver audio">
+                    <button type="button" class="btn btn-sm btn-danger remote-audio-icon-btn" id="remoteAudioStopBtn" disabled
+                            aria-label="Disconnect transceiver audio">
+                        <i class="bi bi-telephone-x-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                    </button>
+                </span>
+                <span class="d-inline-block remote-audio-tip" id="remoteAudioMicMuteTip" data-bs-toggle="tooltip"
+                      data-bs-placement="top" data-bs-title="Mute microphone" aria-label="Mute microphone">
+                    <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioMicMute"
+                            aria-pressed="false" aria-label="Mute microphone" disabled>
+                        <i class="bi bi-mic-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                    </button>
+                </span>
+                <span class="d-inline-block remote-audio-tip" id="remoteAudioRxMuteTip" data-bs-toggle="tooltip"
+                      data-bs-placement="top" data-bs-title="Deafen — mute received audio"
+                      aria-label="Deafen — mute received audio">
+                    <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioRxMute"
+                            aria-pressed="false" aria-label="Deafen — mute received audio" disabled>
+                        <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
+                    </button>
+                </span>
+                <span class="small text-muted" id="remoteAudioStatus">Idle</span>
+                <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
+                    <span class="small">RX</span>
+                    <div class="progress flex-grow-1" style="height:8px; width:80px;">
+                        <div id="remoteAudioRxMeter" class="progress-bar bg-info" style="width:0%"></div>
+                    </div>
+                    <span class="small">TX</span>
+                    <div class="progress flex-grow-1" style="height:8px; width:80px;">
+                        <div id="remoteAudioTxMeter" class="progress-bar bg-warning" style="width:0%"></div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-light" id="remoteAudioCloseBtn" title="Close this window">Close</button>
+            </div>
+        </div>
+    </div>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
+    <script type="module">
+        import { initRemoteAudioPopout } from "/js/audio/remote-audio-ui.js?v=11";
+        initRemoteAudioPopout();
+    </script>
+</body>
+</html>

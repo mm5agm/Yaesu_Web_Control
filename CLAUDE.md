@@ -46,7 +46,7 @@ On macOS, set **Serial Port** to a `/dev/cu.*` device. On Linux, use `/dev/ttyUS
 | Serial validation | `COM*` | `/dev/…` |
 | AppData | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `$XDG_CONFIG_HOME` or `~/.config/MM5AGM/Yaesu Web Control/` |
 | `AutoShutdownWhenNoBrowsers` | Default true | Default true; `HostRuntime.IsContainer` forces keep-alive |
-| Browser auto-open | Yes | Skipped when `HostRuntime.IsContainer` |
+| Browser auto-open | `OpenBrowserOnStartup` (default true) | Same setting; skipped when `HostRuntime.IsContainer` |
 | Operator-facing docs | `USER_MANUAL.md` §§1–4, 6.2–6.3, 15.10, 17 | Same |
 
 There are no automated tests. Verification is manual via the browser at `http://localhost:8080`.
