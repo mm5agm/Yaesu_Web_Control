@@ -162,9 +162,9 @@ MR/MW (full channel read/write) are deferred — they may already be in the memo
 - The Settings dropdown label for Jacek's layout stays **SP3L**.
 - The `feature/jacek-gui` branch's Settings-dropdown skeleton is still useful; the rest of that branch's premise (a second Razor page) is not.
 
-**Sequencing — IWC first.** Build the skin mechanism in IWC (`docs/design/iwc-clone-split-plan.md` Phase 7, where the design already lives), then port to YWC. IWC has no contributors working in it, so the ~4,500-line `Index.cshtml` refactor cannot collide; YWC has three open PRs (#90, #92, #93) all touching `Index.cshtml`, `Settings.cshtml` and `site.js`. Layout-independent work — notably **keyboard shortcuts**, which are also a screen-reader path — can proceed in YWC meanwhile.
+**Sequencing — IWC first.** Build the skin mechanism in IWC (`docs/design/iwc-clone-split-plan.md` Phase 7, where the design already lives), then port to YWC. IWC has no contributors working in it, so the ~4,500-line `Index.cshtml` refactor cannot collide; YWC has two open draft PRs (#90, #92) touching `Index.cshtml`, `Settings.cshtml` and `site.js`. (#93 was a third until its author closed it on 2026-08-06 — it was a concept spike, never a merge request.) Layout-independent work — notably **keyboard shortcuts**, which are also a screen-reader path — can proceed in YWC meanwhile.
 
-**Open question:** is responsive (desktop/tablet/mobile) behaviour a property of each skin, carried by media queries inside every skin stylesheet, or a separate axis? Put to Fabio in the PR #93 thread; not yet answered.
+**Open question:** is responsive (desktop/tablet/mobile) behaviour a property of each skin, carried by media queries inside every skin stylesheet, or a separate axis? Put to Fabio in the PR #93 thread; unanswered there, and #93 is now closed — he said he would follow up by email, so **the answer will not appear in this repo unless it is copied back in.**
 
 **Accessibility is a condition, not a preference.** A skin offered in the Settings dropdown or made default must carry its `data-a11y-key` attributes — voice control and screen-reader labelling exist for partially-sighted operators and regressions are release blockers. An experimental skin behind a flag and unlisted in Settings may ship without them if labelled as such.
 
@@ -182,11 +182,11 @@ MR/MW (full channel read/write) are deferred — they may already be in the memo
 1. ~~**Spectrum placement**~~ — **resolved.** Fabio's PR #93 screenshots answer it. Confirm the final choice against his layout rather than re-opening the question with Jacek.
 2. **"Button OFF" semantics** — does pressing a control button to OFF mean "send the radio's default value" (active write) or "this YWC panel stops tracking / go configure from front panel" (read-only handoff)? Needs resolution for IF Width and similar always-on controls. Skin-independent — it is a behaviour question, not a layout one.
 3. **Low Cut / Audio Filter** — in the current layout these are per-mode parameters accessed via the Audio Filter popout (EX commands). Jacek's mockup removed Low Cut. Under skins this becomes a control-manifest question: which skins show the group, which collapse it.
-4. **Responsive axis** — skin-carried media queries, or a separate axis? Put to Fabio, unanswered.
+4. **Responsive axis** — skin-carried media queries, or a separate axis? Put to Fabio, unanswered; now moved to email with the closure of #93, so it needs chasing rather than waiting for.
 
 **Implementation order (revised for skins — supersedes the second-page order):**
 
-1. **Build the mechanism in IWC first** and prove it there. Do not start in YWC while #90, #92 and #93 are open against `Index.cshtml`.
+1. **Build the mechanism in IWC first** and prove it there. Do not start in YWC while #90 and #92 are open against `Index.cshtml`.
 2. Port to YWC: refactor `Pages/Index.cshtml` so every control group is a named CSS grid area, declared once. This is the bulk of the work (~4,500 lines). No behaviour change — the default skin must look identical to today when finished.
 3. Extract the current look into `wwwroot/css/skins/classic.css` as skin zero.
 4. Wire the Settings "GUI Layout" dropdown to the active skin (store choice in `appsettings.user.json`, apply via a class or attribute on the page root — **not** by serving a different Razor page). The `feature/jacek-gui` skeleton covers most of this.

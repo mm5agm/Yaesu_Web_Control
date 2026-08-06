@@ -28,6 +28,15 @@ PR #93 — independently arriving at **exactly the agreed mechanism**: a second 
 a companion stylesheet, and a Settings switch. His screenshots also answer Jacek's
 spectrum-placement question, which unblocks the phase.
 
+PR #93 was **never a merge request**, and its author closed it on 2026-08-06 saying so:
+*"this MR was never meant to be merged, but instead share some concepts… hence the whole
+separate stack for the UI, to leave the existing one as is/unaffected."* That is worth
+recording precisely, because it makes the evidence stronger rather than weaker. Nobody
+asked him to pick a mechanism, and nothing was riding on the one he picked — a second
+Razor page is simply what an experienced developer reaches for when exploring an
+alternative layout in this codebase as it stands today. The pull request is closed; the
+observation it produced is not.
+
 So the second-page approach is not a contributor's misstep. It is what this project had
 already committed to, and two people reached it independently. It is being changed
 anyway, for one reason.
@@ -111,10 +120,12 @@ line in each skin's area map. Fixing a bug costs once.
   price of the maintenance property, and it is being paid deliberately.
 - **The one-off refactor is large.** `Index.cshtml` is ~4,500 lines. Getting every
   control into a named grid area is the bulk of the work and is not a weekend.
-- **Most of the markup in PR #93 will be discarded.** Fabio's design survives — the
+- **The markup in PR #93 is not carried forward.** Fabio's design survives — the
   arrangement, the panel grouping, the promote/bury decisions, the tablet and mobile
-  work. His 1,318 lines of HTML do not. He was told this directly in the PR thread on
-  2026-08-06, before investing further.
+  work. His 1,318 lines of HTML do not. He was told this in the PR thread on 2026-08-06,
+  before investing further, and closed the PR the same day as a concept spike that had
+  served its purpose. So no contributed work is being rejected here; the cost is that
+  a future skin contributor cannot hand over a page, only a layout.
 - **Responsive behaviour is not yet settled.** Whether a responsive breakpoint is a
   property of each skin (media queries inside every skin stylesheet) or a separate axis
   is an open question, put to Fabio in the same thread.
@@ -141,6 +152,8 @@ meanwhile — notably keyboard shortcuts, which are also a screen-reader path.
 - [Issue #48](https://github.com/mm5agm/Yaesu_Web_Control/issues/48) — Jacek SP3L's
   original request
 - [PR #93](https://github.com/mm5agm/Yaesu_Web_Control/pull/93) — Fabio Valente's
-  prototype, and the thread where this decision was explained to him
+  prototype, and the thread where this decision was explained to him. **Closed** on
+  2026-08-06 by its author as a concept spike; GitHub keeps the diff and the screenshots,
+  so it stays readable as the design input this ADR treats it as.
 - IWC `docs/design/iwc-clone-split-plan.md` Phase 7 — the skin design this adopts, minus
   its per-skin-Razor-partial option
