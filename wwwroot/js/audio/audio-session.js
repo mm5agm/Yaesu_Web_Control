@@ -138,6 +138,11 @@ export class AudioSession {
     if (this._playback) this._playback.muted = muted;
   }
 
+  /** Live RX FFT for filter-scope, or null when not streaming / muted. */
+  getSpectrum() {
+    return this._playback?.getSpectrum() ?? null;
+  }
+
   async stop() {
     this._running = false;
     try { await this._capture?.stop(); } catch { /* ignore */ }
