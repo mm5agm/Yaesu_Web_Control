@@ -11,6 +11,8 @@ export class AudioPlayback {
   constructor() {
     this._ctx = null;
     this._worklet = null;
+    this._analyser = null;
+    this._freqBuf = null;
     this._decoder = null;
     this._codec = 'pcm16';
     this._muted = false;
@@ -20,6 +22,21 @@ export class AudioPlayback {
 
   get muted() { return this._muted; }
   set muted(v) { this._muted = !!v; }
+
+  /**
+   * Live FFT magnitude bins for the filter-scope display, or null when
+   * muted / not started (caller should fall back to decorative bars).
+   * @returns {{ data: Uint8Array, sampleRate: number, fftSize: number } | null}
+   */
+  getSpectrum() {
+    if (!this._analyser || !this._freqBuf || this._muted) return null;
+    this._analyser.getByteFrequencyData(this._freqBuf);
+    return {
+      data: this._freqBuf,
+      sampleRate: this._ctx.sampleRate,
+      fftSize: this._analyser.fftSize
+    };
+  }
 
   async start(codec) {
     this._codec = codec || 'pcm16';
@@ -87,7 +104,15 @@ export class AudioPlayback {
     URL.revokeObjectURL(url);
 
     this._worklet = new AudioWorkletNode(this._ctx, 'ywc-playback');
-    this._worklet.connect(this._ctx.destination);
+    // Analyser sits on the playback path so filter-scope can show real RX spectrum.
+    this._analyser = this._ctx.createAnalyser();
+    this._analyser.fftSize = 512;
+    this._analyser.smoothingTimeConstant = 0.7;
+    this._analyser.minDecibels = -90;
+    this._analyser.maxDecibels = -20;
+    this._freqBuf = new Uint8Array(this._analyser.frequencyBinCount);
+    this._worklet.connect(this._analyser);
+    this._analyser.connect(this._ctx.destination);
     if (this._ctx.state === 'suspended') await this._ctx.resume();
   }
 
@@ -138,8 +163,11 @@ export class AudioPlayback {
     try { this._decoder?.close(); } catch { /* ignore */ }
     this._decoder = null;
     try { this._worklet?.disconnect(); } catch { /* ignore */ }
+    try { this._analyser?.disconnect(); } catch { /* ignore */ }
     try { await this._ctx?.close(); } catch { /* ignore */ }
     this._ctx = null;
     this._worklet = null;
+    this._analyser = null;
+    this._freqBuf = null;
   }
 }

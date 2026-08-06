@@ -1,5 +1,16 @@
 import { createAudioSession } from './audio-session.js';
 
+function attachFilterScopeSpectrum(session) {
+  const provider = () => session.getSpectrum();
+  window.filterScopePanelA?.setSpectrumProvider?.(provider);
+  window.filterScopePanelB?.setSpectrumProvider?.(provider);
+}
+
+function clearFilterScopeSpectrum() {
+  window.filterScopePanelA?.setSpectrumProvider?.(null);
+  window.filterScopePanelB?.setSpectrumProvider?.(null);
+}
+
 /**
  * Index-page Remote Audio controls. Shown only when Settings has audio enabled.
  */
@@ -39,6 +50,8 @@ export async function initRemoteAudioUi() {
       }
       if (startBtn) startBtn.disabled = s === 'streaming';
       if (stopBtn) stopBtn.disabled = s !== 'streaming';
+      if (s === 'streaming') attachFilterScopeSpectrum(session);
+      else clearFilterScopeSpectrum();
     },
     onLevels: (rx, tx) => {
       if (rxMeter) rxMeter.style.width = `${Math.min(100, Math.round(rx * 100))}%`;
