@@ -72,6 +72,13 @@
                         <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
                     </button>
                 </span>
+                <label class="small text-muted mb-0" for="remoteAudioMicSelect">Mic</label>
+                <select id="remoteAudioMicSelect" class="form-select form-select-sm"
+                        style="width:auto; max-width:14rem;"
+                        title="Browser microphone sent to the radio"
+                        aria-label="Browser microphone for remote audio TX">
+                    <option value="">Default microphone</option>
+                </select>
                 <span class="small text-muted" id="remoteAudioStatus">Idle</span>
                 <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
                     <span class="small">RX</span>
@@ -89,7 +96,7 @@
     </div>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
     <script type="module">
-        import { initRemoteAudioPopout } from "/js/audio/remote-audio-ui.js?v=11";
+        import { initRemoteAudioPopout } from "/js/audio/remote-audio-ui.js?v=12";
         initRemoteAudioPopout();
     </script>
 </body>

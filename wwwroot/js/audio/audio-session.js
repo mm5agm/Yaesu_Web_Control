@@ -22,7 +22,10 @@ export class AudioSession {
 
   get running() { return this._running; }
 
-  async start() {
+  /**
+   * @param {{ deviceId?: string }} [opts]
+   */
+  async start(opts = {}) {
     if (this._running) return;
     if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
       throw new Error('Microphone requires HTTPS (or localhost). Enable HTTPS in Settings → Web / HTTP, restart, and open the HTTPS URL.');
@@ -60,7 +63,7 @@ export class AudioSession {
           this._ws.send(buf);
       }
     });
-    await this._capture.start();
+    await this._capture.start({ deviceId: opts.deviceId || '' });
 
     this._ws.onmessage = (ev) => this._onMessage(ev.data);
     this._ws.onclose = () => {

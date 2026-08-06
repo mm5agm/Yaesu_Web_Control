@@ -22,16 +22,31 @@ export class AudioCapture {
   get muted() { return this._muted; }
   set muted(v) { this._muted = !!v; }
 
-  async start() {
-    this._stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-        channelCount: 1,
-        sampleRate: SAMPLE_RATE
+  /**
+   * @param {{ deviceId?: string }} [opts] — browser audioinput deviceId; empty = default.
+   */
+  async start(opts = {}) {
+    const deviceId = (opts.deviceId || '').trim();
+    const audio = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      channelCount: 1,
+      sampleRate: SAMPLE_RATE
+    };
+    if (deviceId) audio.deviceId = { exact: deviceId };
+
+    try {
+      this._stream = await navigator.mediaDevices.getUserMedia({ audio });
+    } catch (e) {
+      // Stale saved deviceId — fall back to the default mic.
+      if (deviceId && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError' || e.name === 'NotReadableError')) {
+        delete audio.deviceId;
+        this._stream = await navigator.mediaDevices.getUserMedia({ audio });
+      } else {
+        throw e;
       }
-    });
+    }
 
     this._ctx = new AudioContext({
       sampleRate: SAMPLE_RATE,

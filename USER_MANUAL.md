@@ -1366,8 +1366,8 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 | Setting | Description |
 |---------|-------------|
 | Enable remote audio | Opt-in. When off, no audio devices are opened and the Index bar is hidden. |
-| Radio RX device (capture) | PortAudio input used for what you **hear** in the browser (usually Yaesu USB recording). Empty = system default input. Entries are labelled with the PortAudio host API (e.g. `Windows WASAPI`) so Windows duplicates of the same USB CODEC are distinguishable — prefer **Windows WASAPI** when several appear. |
-| Radio TX device (playback) | PortAudio output used for browser **mic → radio** (usually Yaesu USB playback). Empty = system default output. Same host-API labelling as RX. |
+| Radio RX device (capture) | PortAudio input used for what you **hear** in the browser (usually Yaesu USB recording). Empty = system default input. On Windows the list is limited to **WASAPI** endpoints so the same USB CODEC is not repeated under MME / DirectSound / WDM-KS. |
+| Radio TX device (playback) | PortAudio output used for browser **mic → radio** (usually Yaesu USB playback). Empty = system default output. Same WASAPI-only listing on Windows as RX. |
 | RX / TX gain | Software gain applied in the bridge (0.05–4). |
 
 Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
@@ -2861,7 +2861,7 @@ Remote Audio streams **radio RX → browser speakers** and **browser microphone 
 
 1. Open **Settings → Remote Audio**.
 2. Enable **remote audio**.
-3. Pick **Radio RX device** (capture / what you hear) and **Radio TX device** (playback / where mic audio goes). Use **Refresh device list** after plugging the radio in. On Windows the same USB device may list several times (MME / DirectSound / WASAPI / WDM-KS) — choose the **Windows WASAPI** entry when available.
+3. Pick **Radio RX device** (capture / what you hear) and **Radio TX device** (playback / where mic audio goes). Use **Refresh device list** after plugging the radio in. On Windows only **WASAPI** devices are shown.
 4. Optionally adjust RX/TX gain.
 5. **Save Settings**.
 
@@ -2880,7 +2880,7 @@ Local testing on the same PC can use `http://localhost:8080` without HTTPS.
 
 1. Open the Index page (over HTTPS if remote).
 2. Click **Start audio** on the Remote Audio bar. Grant microphone permission when asked.
-3. You should hear RX audio; speak into the mic (levels show on the bar).
+3. You should hear RX audio; speak into the mic (levels show on the bar). Use the **Mic** dropdown to pick which browser microphone is sent to the radio (saved in the browser).
 4. Use **TX** / your TX toggle key to key the radio. Audio flows continuously (like Mumble); CAT controls PTT.
 5. **Mute mic** / **Mute RX** as needed. **Stop** ends the session and closes host audio devices.
 6. Only **one** audio session is allowed at a time; a second browser is rejected busy.
@@ -2900,14 +2900,14 @@ Audio on the Index page stops when you leave Home (for example to open **Setting
 | Symptom | What to try |
 |---------|-------------|
 | Mic permission denied / “requires HTTPS” | Use the HTTPS URL; regenerate the cert with the IP you type in the address bar; restart after enabling HTTPS. |
-| No RX sound | Check Radio RX device (on Windows try the **Windows WASAPI** entry); confirm radio AF gain / USB volume; look at the RX meter while Start audio is active. |
-| TX keys but no modulation | Confirm MOD SOURCE / USB; check Radio TX device (prefer **Windows WASAPI**); unmute mic; watch the TX meter while speaking. |
-| Choppy audio | Prefer wired Ethernet/VPN; reduce other load; stay on LAN/VPN (no TURN/WebRTC in v1). On Windows, avoid WDM-KS unless you need exclusive mode. |
+| No RX sound | Check Radio RX device; confirm radio AF gain / USB volume; look at the RX meter while Start audio is active. |
+| TX keys but no modulation | Confirm MOD SOURCE / USB; check Radio TX device; unmute mic; watch the TX meter while speaking. |
+| Choppy audio | Prefer wired Ethernet/VPN; reduce other load; stay on LAN/VPN (no TURN/WebRTC in v1). |
 | “Audio session busy” | Stop audio in the other tab/browser (or pop-out window) first. |
 | Audio dies when opening Settings | Use **Pop out** before leaving Home so the session lives in the separate window. |
 | Pop-out blocked | Allow pop-ups for the YWC origin; click **Pop out** / **Open pop-out** again. |
 | Devices missing from the list | Unplug/replug USB; Refresh device list; check OS privacy permissions for microphone (host process). |
-| Same device listed many times (Windows) | Expected — PortAudio exposes each endpoint per host API. Labels show the API in brackets; pick **Windows WASAPI** and Save so the choice is remembered. |
+| Wrong browser mic | Use the **Mic** dropdown on the Remote Audio bar (Home or pop-out). Choice is remembered in the browser. |
 | Voice Control vs radio USB | Keep Voice Control’s mic on your headset; leave Remote Audio devices on the Yaesu USB endpoints. |
 
 ---

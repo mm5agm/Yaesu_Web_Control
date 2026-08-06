@@ -6,15 +6,17 @@ namespace Yaesu_Web_Control.Services.Audio
 {
     /// <summary>
     /// Enumerates PortAudio devices. Persistence keys are
-    /// <c>{name} [{hostApi}]</c> so Windows duplicates across MME / WASAPI /
-    /// DirectSound / WDM-KS stay distinct. Legacy name-only settings still match.
+    /// <c>{name} [{hostApi}]</c>. On Windows only <strong>WASAPI</strong>
+    /// endpoints are listed (MME / DirectSound / WDM-KS duplicates are hidden).
+    /// Legacy name-only settings still resolve.
     /// </summary>
     public static class AudioDeviceEnumerator
     {
         private static readonly object Sync = new();
         private static bool _initialized;
 
-        // Prefer shared-mode / modern APIs when a legacy name matches several entries.
+        // Prefer shared-mode / modern APIs when a legacy name matches several entries
+        // (mainly relevant on non-Windows, or if the WASAPI filter is relaxed later).
         private static readonly string[] PreferredHostApiSubstrings =
         {
             "WASAPI",
@@ -65,7 +67,8 @@ namespace Yaesu_Web_Control.Services.Audio
                     // Skip devices that won't describe themselves.
                 }
             }
-            return list;
+
+            return FilterForHost(list);
         }
 
         public static IReadOnlyList<AudioDeviceInfo> ListInputs() =>
@@ -99,11 +102,27 @@ namespace Yaesu_Web_Control.Services.Audio
                 var exact = candidates.FirstOrDefault(d =>
                     string.Equals(d.HostApiName, hostApi, StringComparison.OrdinalIgnoreCase));
                 if (exact != null) return exact.Index;
-                // Host API from settings no longer present — fall through to name match.
+                // Saved host API filtered out (e.g. old DirectSound key) — use name match.
             }
 
             if (candidates.Count == 1) return candidates[0].Index;
             return PreferHostApi(candidates).Index;
+        }
+
+        /// <summary>
+        /// On Windows, keep only WASAPI endpoints so USB CODECs are not listed
+        /// four times. If WASAPI yields nothing, fall back to the full list.
+        /// Other OSes are unchanged (Core Audio / ALSA / etc.).
+        /// </summary>
+        private static IReadOnlyList<AudioDeviceInfo> FilterForHost(List<AudioDeviceInfo> all)
+        {
+            if (!OperatingSystem.IsWindows() || all.Count == 0)
+                return all;
+
+            var wasapi = all
+                .Where(d => d.HostApiName.Contains("WASAPI", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            return wasapi.Count > 0 ? wasapi : all;
         }
 
         private static AudioDeviceInfo PreferHostApi(IReadOnlyList<AudioDeviceInfo> matches)

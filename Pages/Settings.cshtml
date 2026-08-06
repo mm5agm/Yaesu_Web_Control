@@ -2055,7 +2055,7 @@
                             data-selected="@Model.Settings.AudioRadioRxDevice">
                         <option value="">(Default input)</option>
                     </select>
-                    <div class="form-text">Usually the Yaesu USB <em>recording</em> endpoint — what you hear in the browser. On Windows the same device may appear once per audio API (prefer <strong>Windows WASAPI</strong>).</div>
+                    <div class="form-text">Usually the Yaesu USB <em>recording</em> endpoint — what you hear in the browser. On Windows only <strong>WASAPI</strong> devices are listed.</div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label" for="audioRadioTxDevice">Radio TX device (playback)</label>
@@ -2063,7 +2063,7 @@
                             data-selected="@Model.Settings.AudioRadioTxDevice">
                         <option value="">(Default output)</option>
                     </select>
-                    <div class="form-text">Usually the Yaesu USB <em>playback</em> endpoint — where browser mic audio is sent. Labels include the PortAudio host API so duplicates are distinguishable.</div>
+                    <div class="form-text">Usually the Yaesu USB <em>playback</em> endpoint — where browser mic audio is sent. On Windows only <strong>WASAPI</strong> devices are listed.</div>
                 </div>
             </div>
             <div class="row g-3 mt-1">

@@ -327,6 +327,20 @@ namespace Yaesu_Web_Control.Services.Audio
                     var rxInfo = PortAudio.GetDeviceInfo(rxIndex);
                     var txInfo = PortAudio.GetDeviceInfo(txIndex);
 
+                    // WASAPI shared mode usually requires the device mix format
+                    // (typically stereo). Opening mono against a 2-ch USB CODEC
+                    // fails with InvalidChannelCount — open stereo and mix to mono.
+                    int inCh = rxInfo.maxInputChannels >= 2 ? 2 : Math.Max(1, rxInfo.maxInputChannels);
+                    int outCh = txInfo.maxOutputChannels >= 2 ? 2 : Math.Max(1, txInfo.maxOutputChannels);
+
+                    // Same for sample rate: WASAPI rejects a rate that isn't the
+                    // shared-mode mix format. Open at each device's default and
+                    // resample to/from the 48 kHz bridge.
+                    int rxRate = PickDeviceSampleRate(rxInfo.defaultSampleRate);
+                    int txRate = PickDeviceSampleRate(txInfo.defaultSampleRate);
+                    uint rxFrames = DeviceFramesPerBuffer(rxRate);
+                    uint txFrames = DeviceFramesPerBuffer(txRate);
+
                     const double targetLatency = 0.01;
                     double inLat = Math.Min(rxInfo.defaultLowInputLatency > 0 ? rxInfo.defaultLowInputLatency : targetLatency, 0.02);
                     double outLat = Math.Min(txInfo.defaultLowOutputLatency > 0 ? txInfo.defaultLowOutputLatency : targetLatency, 0.02);
@@ -336,7 +350,7 @@ namespace Yaesu_Web_Control.Services.Audio
                     var inParams = new StreamParameters
                     {
                         device = rxIndex,
-                        channelCount = 1,
+                        channelCount = inCh,
                         sampleFormat = SampleFormat.Float32,
                         suggestedLatency = inLat,
                         hostApiSpecificStreamInfo = IntPtr.Zero
@@ -345,7 +359,7 @@ namespace Yaesu_Web_Control.Services.Audio
                     var outParams = new StreamParameters
                     {
                         device = txIndex,
-                        channelCount = 1,
+                        channelCount = outCh,
                         sampleFormat = SampleFormat.Float32,
                         suggestedLatency = outLat,
                         hostApiSpecificStreamInfo = IntPtr.Zero
@@ -355,9 +369,20 @@ namespace Yaesu_Web_Control.Services.Audio
                         ref StreamCallbackTimeInfo timeInfo, StreamCallbackFlags statusFlags, IntPtr userData) =>
                     {
                         if (input == IntPtr.Zero) return StreamCallbackResult.Continue;
-                        var samples = new float[frameCount];
-                        Marshal.Copy(input, samples, 0, (int)frameCount);
-                        OnCaptureSamples(samples);
+                        int interleaved = (int)frameCount * inCh;
+                        var raw = new float[interleaved];
+                        Marshal.Copy(input, raw, 0, interleaved);
+                        var mono = new float[frameCount];
+                        if (inCh == 1)
+                        {
+                            Array.Copy(raw, mono, (int)frameCount);
+                        }
+                        else
+                        {
+                            for (int i = 0; i < (int)frameCount; i++)
+                                mono[i] = 0.5f * (raw[i * inCh] + raw[i * inCh + 1]);
+                        }
+                        OnCaptureSamples(Resample(mono, rxRate, AudioConstants.SampleRate));
                         return StreamCallbackResult.Continue;
                     };
 
@@ -365,17 +390,41 @@ namespace Yaesu_Web_Control.Services.Audio
                         ref StreamCallbackTimeInfo timeInfo, StreamCallbackFlags statusFlags, IntPtr userData) =>
                     {
                         if (output == IntPtr.Zero) return StreamCallbackResult.Continue;
-                        var samples = new float[frameCount];
-                        PullPlayback(samples);
-                        Marshal.Copy(samples, 0, output, (int)frameCount);
+                        int bridgeCount = Math.Max(1,
+                            (int)Math.Round(frameCount * (double)AudioConstants.SampleRate / txRate));
+                        var bridge = new float[bridgeCount];
+                        PullPlayback(bridge);
+                        var mono = Resample(bridge, AudioConstants.SampleRate, txRate);
+                        // Callback asked for frameCount samples; pad/truncate if rounding drifted.
+                        if (mono.Length != frameCount)
+                        {
+                            var adjusted = new float[frameCount];
+                            Array.Copy(mono, adjusted, Math.Min(mono.Length, (int)frameCount));
+                            mono = adjusted;
+                        }
+                        if (outCh == 1)
+                        {
+                            Marshal.Copy(mono, 0, output, (int)frameCount);
+                        }
+                        else
+                        {
+                            var interleaved = new float[frameCount * outCh];
+                            for (int i = 0; i < (int)frameCount; i++)
+                            {
+                                float s = mono[i];
+                                interleaved[i * outCh] = s;
+                                interleaved[i * outCh + 1] = s;
+                            }
+                            Marshal.Copy(interleaved, 0, output, interleaved.Length);
+                        }
                         return StreamCallbackResult.Continue;
                     };
 
                     _captureStream = new PortAudioSharp.Stream(
                         inParams: inParams,
                         outParams: null,
-                        sampleRate: AudioConstants.SampleRate,
-                        framesPerBuffer: (uint)AudioConstants.FrameSamples,
+                        sampleRate: rxRate,
+                        framesPerBuffer: rxFrames,
                         streamFlags: StreamFlags.ClipOff,
                         callback: captureCb,
                         userData: IntPtr.Zero);
@@ -383,8 +432,8 @@ namespace Yaesu_Web_Control.Services.Audio
                     _playbackStream = new PortAudioSharp.Stream(
                         inParams: null,
                         outParams: outParams,
-                        sampleRate: AudioConstants.SampleRate,
-                        framesPerBuffer: (uint)AudioConstants.FrameSamples,
+                        sampleRate: txRate,
+                        framesPerBuffer: txFrames,
                         streamFlags: StreamFlags.ClipOff,
                         callback: playbackCb,
                         userData: IntPtr.Zero);
@@ -393,9 +442,16 @@ namespace Yaesu_Web_Control.Services.Audio
                     _playbackStream.Start();
                     _devicesOpen = true;
                     _logger.LogInformation(
-                        "Audio devices open — RX '{Rx}' (#{RxI}), TX '{Tx}' (#{TxI}), codec={Codec}, frame={Frame} samples",
-                        rxInfo.name, rxIndex, txInfo.name, txIndex, _codecName, AudioConstants.FrameSamples);
+                        "Audio devices open — RX '{Rx}' (#{RxI}, {InCh}ch @{RxRate} Hz), TX '{Tx}' (#{TxI}, {OutCh}ch @{TxRate} Hz), codec={Codec}, bridge={Bridge} Hz",
+                        rxInfo.name, rxIndex, inCh, rxRate, txInfo.name, txIndex, outCh, txRate, _codecName, AudioConstants.SampleRate);
                     return null;
+                }
+                catch (PortAudioException ex)
+                {
+                    string detail = PortAudio.GetErrorText(ex.ErrorCode);
+                    _logger.LogError(ex, "Failed to open audio devices ({Code}: {Detail})", ex.ErrorCode, detail);
+                    CloseDevices();
+                    return $"Failed to open audio devices: {ex.ErrorCode} — {detail}";
                 }
                 catch (Exception ex)
                 {
@@ -404,6 +460,41 @@ namespace Yaesu_Web_Control.Services.Audio
                     return $"Failed to open audio devices: {ex.Message}";
                 }
             }
+        }
+
+        private static int PickDeviceSampleRate(double defaultRate)
+        {
+            int rate = (int)Math.Round(defaultRate);
+            if (rate >= 8_000 && rate <= 192_000) return rate;
+            return AudioConstants.SampleRate;
+        }
+
+        /// <summary>~10 ms worth of frames at the device rate (matches bridge frame duration).</summary>
+        private static uint DeviceFramesPerBuffer(int deviceRate) =>
+            (uint)Math.Max(64, (int)Math.Round(deviceRate * AudioConstants.FrameSamples / (double)AudioConstants.SampleRate));
+
+        private static float[] Resample(ReadOnlySpan<float> input, int inRate, int outRate)
+        {
+            if (inRate == outRate || input.Length == 0)
+                return input.ToArray();
+
+            int outLen = Math.Max(1, (int)Math.Round(input.Length * (double)outRate / inRate));
+            var output = new float[outLen];
+            double ratio = (double)inRate / outRate;
+            int last = input.Length - 1;
+            for (int i = 0; i < outLen; i++)
+            {
+                double src = i * ratio;
+                int i0 = (int)src;
+                if (i0 >= last)
+                {
+                    output[i] = input[last];
+                    continue;
+                }
+                double frac = src - i0;
+                output[i] = (float)(input[i0] + (input[i0 + 1] - input[i0]) * frac);
+            }
+            return output;
         }
 
         private void OnCaptureSamples(float[] samples)

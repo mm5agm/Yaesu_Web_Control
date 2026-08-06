@@ -704,6 +704,13 @@
                             <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
                         </button>
                     </span>
+                    <label class="small text-muted mb-0" for="remoteAudioMicSelect">Mic</label>
+                    <select id="remoteAudioMicSelect" class="form-select form-select-sm"
+                            style="width:auto; max-width:16rem;"
+                            title="Browser microphone sent to the radio"
+                            aria-label="Browser microphone for remote audio TX">
+                        <option value="">Default microphone</option>
+                    </select>
                     <span class="small text-muted" id="remoteAudioStatus">Idle</span>
                     <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
                         <span class="small">RX</span>
@@ -2265,7 +2272,7 @@
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=14";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
-        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=11";
+        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=12";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;

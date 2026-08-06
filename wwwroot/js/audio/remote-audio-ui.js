@@ -2,8 +2,9 @@ import { createAudioSession } from './audio-session.js';
 
 const CHANNEL_NAME = 'ywc-remote-audio';
 const POPOUT_STORAGE_KEY = 'ywc.remoteAudio.popout';
+const MIC_STORAGE_KEY = 'ywc.remoteAudio.browserMic';
 const POPOUT_WINDOW_NAME = 'ywc-remote-audio';
-const POPOUT_FEATURES = 'width=560,height=240,resizable=yes,scrollbars=no';
+const POPOUT_FEATURES = 'width=560,height=280,resizable=yes,scrollbars=no';
 const SPECTRUM_HZ = 15;
 const HEARTBEAT_MS = 2000;
 const HEARTBEAT_STALE_MS = 6000;
@@ -110,6 +111,18 @@ function isPopoutOwned() {
   }
 }
 
+function getSavedMicId() {
+  try { return localStorage.getItem(MIC_STORAGE_KEY) || ''; }
+  catch { return ''; }
+}
+
+function saveMicId(id) {
+  try {
+    if (id) localStorage.setItem(MIC_STORAGE_KEY, id);
+    else localStorage.removeItem(MIC_STORAGE_KEY);
+  } catch { /* ignore */ }
+}
+
 function openPopoutWindow(autostart) {
   const q = autostart ? '?autostart=1' : '';
   return window.open(`/RemoteAudio${q}`, POPOUT_WINDOW_NAME, POPOUT_FEATURES);
@@ -134,6 +147,7 @@ function bindRemoteAudioControls(role) {
   const statusEl = document.getElementById('remoteAudioStatus');
   const rxMeter = document.getElementById('remoteAudioRxMeter');
   const txMeter = document.getElementById('remoteAudioTxMeter');
+  const micSelect = document.getElementById('remoteAudioMicSelect');
 
   const channel = openChannel();
   let session = null;
@@ -145,6 +159,37 @@ function bindRemoteAudioControls(role) {
   let lastHeartbeat = remoteOwned ? Date.now() : 0;
   let streamStatus = 'idle';
   let streamCodec = null;
+
+  function selectedMicId() {
+    return (micSelect?.value || getSavedMicId() || '').trim();
+  }
+
+  async function refreshMicList() {
+    if (!micSelect || !navigator.mediaDevices?.enumerateDevices) return;
+    const saved = selectedMicId();
+    let devices = [];
+    try {
+      devices = await navigator.mediaDevices.enumerateDevices();
+    } catch {
+      return;
+    }
+    const mics = devices.filter(d => d.kind === 'audioinput');
+    micSelect.innerHTML = '';
+    const def = document.createElement('option');
+    def.value = '';
+    def.textContent = 'Default microphone';
+    micSelect.appendChild(def);
+    for (const d of mics) {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Microphone ${micSelect.options.length}`;
+      micSelect.appendChild(opt);
+    }
+    if (saved && [...micSelect.options].some(o => o.value === saved))
+      micSelect.value = saved;
+    else
+      micSelect.value = '';
+  }
 
   function setStatusText(text) {
     if (statusEl) statusEl.textContent = text;
@@ -166,6 +211,8 @@ function bindRemoteAudioControls(role) {
     const streaming = streamStatus === 'streaming';
     if (micMute) micMute.disabled = !streaming;
     if (rxMute) rxMute.disabled = !streaming;
+    // Index locks the mic picker only while the popout is actively streaming.
+    if (micSelect) micSelect.disabled = role === 'index' && remoteOwned && streaming;
     if (!streaming) {
       setMicMuteUi(micMute, micMuteIcon, micMuteTip, false);
       setRxMuteUi(rxMute, rxMuteIcon, rxMuteTip, false);
@@ -175,14 +222,15 @@ function bindRemoteAudioControls(role) {
       if (stopBtn) stopBtn.disabled = !streaming;
       return;
     }
-    if (remoteOwned) {
+    if (remoteOwned && streaming) {
       if (startBtn) startBtn.disabled = true;
-      if (stopBtn) stopBtn.disabled = !streaming;
+      if (stopBtn) stopBtn.disabled = false;
       setPopoutHints(true);
     } else {
+      // Popout stopped (or never started): unlock Start on the main bar.
       if (startBtn) startBtn.disabled = streaming;
       if (stopBtn) stopBtn.disabled = !streaming;
-      setPopoutHints(false);
+      setPopoutHints(!!(remoteOwned || isPopoutOwned()));
     }
   }
 
@@ -277,7 +325,8 @@ function bindRemoteAudioControls(role) {
   async function startLocal() {
     try {
       setStatusText('Connecting…');
-      await ensureSession().start();
+      await ensureSession().start({ deviceId: selectedMicId() });
+      await refreshMicList(); // labels appear after permission grant
     } catch (e) {
       const msg = e.message || String(e);
       setStatusText(msg);
@@ -292,6 +341,7 @@ function bindRemoteAudioControls(role) {
     streamCodec = null;
     stopSpectrumRelay();
     if (role === 'popout') {
+      // Unlock the Index bar — ownership only applies while streaming.
       post({ type: 'status', status: 'stopped' });
       post({ type: 'spectrum', data: null });
       setStatusText('Stopped');
@@ -328,29 +378,28 @@ function bindRemoteAudioControls(role) {
       if (role === 'index') {
         if (msg.type === 'heartbeat') {
           lastHeartbeat = Date.now();
-          if (!remoteOwned) {
+          const streaming = msg.status === 'streaming';
+          if (streaming) {
             remoteOwned = true;
             setPopoutOwned(true);
-            attachRemoteSpectrum();
-          }
-          if (msg.status) {
-            streamStatus = msg.status === 'streaming' ? 'streaming' : msg.status;
+            streamStatus = 'streaming';
             streamCodec = msg.codec || null;
-            setStatusText(msg.status === 'streaming'
-              ? `In pop-out window (streaming${msg.codec ? ` · ${msg.codec}` : ''})`
-              : `In pop-out window (${msg.status})`);
+            setStatusText(`In pop-out window (streaming${msg.codec ? ` · ${msg.codec}` : ''})`);
+            attachRemoteSpectrum();
+          } else if (remoteOwned) {
+            // Popout still open but no longer streaming — free the main bar.
+            clearRemoteOwnershipUi();
           }
           updateLocalButtons();
           return;
         }
         if (msg.type === 'hello' && msg.role === 'popout') {
           lastHeartbeat = Date.now();
-          remoteOwned = true;
-          setPopoutOwned(true);
+          // Don't lock Start until the popout is actually streaming.
           setStatusText('In pop-out window');
-          attachRemoteSpectrum();
-          updateLocalButtons();
+          setPopoutHints(true);
           post({ type: 'requestStatus' });
+          updateLocalButtons();
           return;
         }
         if (msg.type === 'ownership') {
@@ -359,10 +408,8 @@ function bindRemoteAudioControls(role) {
             clearRemoteOwnershipUi();
             return;
           }
-          remoteOwned = true;
-          setPopoutOwned(true);
           setStatusText('In pop-out window');
-          attachRemoteSpectrum();
+          setPopoutHints(true);
           updateLocalButtons();
           return;
         }
@@ -371,20 +418,21 @@ function bindRemoteAudioControls(role) {
           return;
         }
         if (msg.type === 'status') {
-          remoteOwned = true;
-          setPopoutOwned(true);
           lastHeartbeat = Date.now();
-          streamStatus = msg.status === 'streaming' ? 'streaming' : (msg.status || 'idle');
-          streamCodec = msg.codec || null;
-          setStatusText(msg.status === 'streaming'
-            ? `In pop-out window (streaming${msg.codec ? ` · ${msg.codec}` : ''})`
-            : `In pop-out window (${msg.status || 'idle'})`);
-          if (msg.status === 'streaming') attachRemoteSpectrum();
-          else {
-            latestSpectrum = null;
+          if (msg.status === 'streaming') {
+            remoteOwned = true;
+            setPopoutOwned(true);
+            streamStatus = 'streaming';
+            streamCodec = msg.codec || null;
+            setStatusText(`In pop-out window (streaming${msg.codec ? ` · ${msg.codec}` : ''})`);
             attachRemoteSpectrum();
+            updateLocalButtons();
+            return;
           }
-          updateLocalButtons();
+          // stopped / idle / disconnected from popout
+          clearRemoteOwnershipUi();
+          if (msg.status && msg.status !== 'idle')
+            setStatusText(msg.status.charAt(0).toUpperCase() + msg.status.slice(1));
           return;
         }
         if (msg.type === 'levels') {
@@ -443,12 +491,12 @@ function bindRemoteAudioControls(role) {
   }
 
   startBtn?.addEventListener('click', async () => {
-    if (role === 'index' && remoteOwned) return;
+    if (role === 'index' && remoteOwned && streamStatus === 'streaming') return;
     await startLocal();
   });
 
   stopBtn?.addEventListener('click', async () => {
-    if (role === 'index' && remoteOwned) {
+    if (role === 'index' && remoteOwned && streamStatus === 'streaming') {
       post({ type: 'stop' });
       return;
     }
@@ -458,7 +506,7 @@ function bindRemoteAudioControls(role) {
   micMute?.addEventListener('click', () => {
     const next = !isTogglePressed(micMute);
     setMicMuteUi(micMute, micMuteIcon, micMuteTip, next);
-    if (role === 'index' && remoteOwned) {
+    if (role === 'index' && remoteOwned && streamStatus === 'streaming') {
       post({ type: 'setMute', mic: next });
       return;
     }
@@ -468,11 +516,15 @@ function bindRemoteAudioControls(role) {
   rxMute?.addEventListener('click', () => {
     const next = !isTogglePressed(rxMute);
     setRxMuteUi(rxMute, rxMuteIcon, rxMuteTip, next);
-    if (role === 'index' && remoteOwned) {
+    if (role === 'index' && remoteOwned && streamStatus === 'streaming') {
       post({ type: 'setMute', rx: next });
       return;
     }
     session?.setRxMuted(next);
+  });
+
+  micSelect?.addEventListener('change', () => {
+    saveMicId(micSelect.value || '');
   });
 
   popoutBtn?.addEventListener('click', async () => {
@@ -486,11 +538,16 @@ function bindRemoteAudioControls(role) {
       setStatusText('Pop-out blocked — allow pop-ups for this site');
       return;
     }
-    remoteOwned = true;
-    setPopoutOwned(true);
     lastHeartbeat = Date.now();
     setStatusText(wasStreaming ? 'Handing off to pop-out…' : 'In pop-out window');
-    attachRemoteSpectrum();
+    setPopoutHints(true);
+    // Lock only once the popout reports streaming (or after autostart handoff).
+    if (wasStreaming) {
+      remoteOwned = true;
+      setPopoutOwned(true);
+      streamStatus = 'streaming';
+      attachRemoteSpectrum();
+    }
     updateLocalButtons();
   });
 
@@ -521,7 +578,7 @@ function bindRemoteAudioControls(role) {
   } else {
     if (remoteOwned) {
       setStatusText('In pop-out window');
-      attachRemoteSpectrum();
+      setPopoutHints(true);
       post({ type: 'requestStatus' });
     }
     staleTimer = setInterval(() => {
@@ -537,6 +594,10 @@ function bindRemoteAudioControls(role) {
   setRxMuteUi(rxMute, rxMuteIcon, rxMuteTip, false);
   updateLocalButtons();
   ensureRemoteAudioTooltips();
+  refreshMicList();
+  try {
+    navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshMicList());
+  } catch { /* ignore */ }
 }
 
 /**
