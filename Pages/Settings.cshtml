@@ -2055,7 +2055,7 @@
                             data-selected="@Model.Settings.AudioRadioRxDevice">
                         <option value="">(Default input)</option>
                     </select>
-                    <div class="form-text">Usually the Yaesu USB <em>recording</em> endpoint — what you hear in the browser.</div>
+                    <div class="form-text">Usually the Yaesu USB <em>recording</em> endpoint — what you hear in the browser. On Windows the same device may appear once per audio API (prefer <strong>Windows WASAPI</strong>).</div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label" for="audioRadioTxDevice">Radio TX device (playback)</label>
@@ -2063,7 +2063,7 @@
                             data-selected="@Model.Settings.AudioRadioTxDevice">
                         <option value="">(Default output)</option>
                     </select>
-                    <div class="form-text">Usually the Yaesu USB <em>playback</em> endpoint — where browser mic audio is sent.</div>
+                    <div class="form-text">Usually the Yaesu USB <em>playback</em> endpoint — where browser mic audio is sent. Labels include the PortAudio host API so duplicates are distinguishable.</div>
                 </div>
             </div>
             <div class="row g-3 mt-1">
@@ -2766,22 +2766,49 @@
                     const data = await res.json();
                     const rxSelected = rxSel.getAttribute('data-selected') || '';
                     const txSelected = txSel.getAttribute('data-selected') || '';
-                    rxSel.innerHTML = '<option value="">(Default input)</option>';
-                    (data.inputs || []).forEach(function (d) {
-                        const opt = document.createElement('option');
-                        opt.value = d.name;
-                        opt.textContent = d.name;
-                        if (d.name === rxSelected) opt.selected = true;
-                        rxSel.appendChild(opt);
-                    });
-                    txSel.innerHTML = '<option value="">(Default output)</option>';
-                    (data.outputs || []).forEach(function (d) {
-                        const opt = document.createElement('option');
-                        opt.value = d.name;
-                        opt.textContent = d.name;
-                        if (d.name === txSelected) opt.selected = true;
-                        txSel.appendChild(opt);
-                    });
+                    // Keys are "{name} [{hostApi}]" so Windows MME/WASAPI/DS/WDM-KS
+                    // duplicates stay distinct. Legacy bare-name settings still match.
+                    function pickSelectedKey(devices, selected) {
+                        if (!selected) return '';
+                        const list = devices || [];
+                        const exact = list.find(function (d) {
+                            return (d.key || d.displayName || d.name) === selected;
+                        });
+                        if (exact) return exact.key || exact.displayName || exact.name;
+                        // Legacy bare name — prefer WASAPI / Core Audio when several match.
+                        const byName = list.filter(function (d) { return d.name === selected; });
+                        const prefer = byName.find(function (d) { return /WASAPI/i.test(d.hostApiName || ''); })
+                            || byName.find(function (d) { return /Core Audio/i.test(d.hostApiName || ''); })
+                            || byName[0];
+                        return prefer ? (prefer.key || prefer.displayName || prefer.name) : '';
+                    }
+                    function fillAudioSelect(sel, devices, selected, defaultLabel) {
+                        const matchKey = pickSelectedKey(devices, selected);
+                        sel.innerHTML = '';
+                        const def = document.createElement('option');
+                        def.value = '';
+                        def.textContent = defaultLabel;
+                        if (!selected) def.selected = true;
+                        sel.appendChild(def);
+                        (devices || []).forEach(function (d) {
+                            const key = d.key || d.displayName || d.name;
+                            const opt = document.createElement('option');
+                            opt.value = key;
+                            opt.textContent = d.displayName || key;
+                            if (key === matchKey) opt.selected = true;
+                            sel.appendChild(opt);
+                        });
+                        // Saved key not in the live list — keep it visible so Save doesn't wipe it.
+                        if (selected && !matchKey) {
+                            const orphan = document.createElement('option');
+                            orphan.value = selected;
+                            orphan.textContent = selected + ' (not present)';
+                            orphan.selected = true;
+                            sel.appendChild(orphan);
+                        }
+                    }
+                    fillAudioSelect(rxSel, data.inputs, rxSelected, '(Default input)');
+                    fillAudioSelect(txSel, data.outputs, txSelected, '(Default output)');
                 } catch (e) {
                     console.warn('Audio device list failed', e);
                 }

@@ -268,10 +268,18 @@
         // mic audio into radio TX over the existing LAN/VPN path. Off by default.
         public bool AudioStreamingEnabled { get; set; } = false;
 
-        /// <summary>PortAudio capture device name for radio RX (USB recording). Empty = default input.</summary>
+        /// <summary>
+        /// PortAudio capture device for radio RX (USB recording). Empty = default input.
+        /// Stored as <c>{name} [{hostApi}]</c> (e.g. <c>Microphone (USB Audio CODEC) [Windows WASAPI]</c>)
+        /// so Windows duplicates across MME/WASAPI/DirectSound/WDM-KS stay distinct.
+        /// Legacy bare names still resolve.
+        /// </summary>
         public string? AudioRadioRxDevice { get; set; } = "";
 
-        /// <summary>PortAudio playback device name for radio TX (USB playback). Empty = default output.</summary>
+        /// <summary>
+        /// PortAudio playback device for radio TX (USB playback). Empty = default output.
+        /// Same <c>{name} [{hostApi}]</c> key format as <see cref="AudioRadioRxDevice"/>.
+        /// </summary>
         public string? AudioRadioTxDevice { get; set; } = "";
 
         public float AudioRxGain { get; set; } = 1.0f;

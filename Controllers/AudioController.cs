@@ -31,9 +31,27 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 var inputs = AudioDeviceEnumerator.ListInputs()
-                    .Select(d => new { d.Index, d.Name, d.DefaultSampleRate });
+                    .Select(d => new
+                    {
+                        d.Index,
+                        d.Name,
+                        d.HostApiName,
+                        d.HostApiIndex,
+                        displayName = d.DisplayName,
+                        key = d.PersistenceKey,
+                        d.DefaultSampleRate
+                    });
                 var outputs = AudioDeviceEnumerator.ListOutputs()
-                    .Select(d => new { d.Index, d.Name, d.DefaultSampleRate });
+                    .Select(d => new
+                    {
+                        d.Index,
+                        d.Name,
+                        d.HostApiName,
+                        d.HostApiIndex,
+                        displayName = d.DisplayName,
+                        key = d.PersistenceKey,
+                        d.DefaultSampleRate
+                    });
                 return Ok(new { inputs, outputs });
             }
             catch (Exception ex)
