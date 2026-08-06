@@ -30,6 +30,11 @@
 
         public string RadioModel { get; set; } = "FTdx101MP"; // MP = dual receiver, D = single receiver
 
+        // Main-page layout template for the radio control screen.
+        // "Default" keeps the classic Index.cshtml layout users already know.
+        // "UiV2" enables the spectrum-first responsive /ui-v2 layout.
+        public string LayoutTemplate { get; set; } = "Default";
+
 
         // External Applications - Command Lines.
         // RULE: paths containing spaces MUST be wrapped in double quotes; any

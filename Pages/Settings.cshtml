@@ -71,6 +71,29 @@
         </div>
     }
 
+    <!-- Main-page layout -->
+    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
+        <summary><i class="bi bi-layout-text-window" aria-hidden="true"></i>&nbsp;Main-page layout</summary>
+        <div class="section-body">
+            <div class="mb-2">
+                <label asp-for="Settings.LayoutTemplate" class="form-label">Layout template</label>
+                <select asp-for="Settings.LayoutTemplate" class="form-select form-select-sm" style="max-width: 14rem;">
+                    <option value="Default">Default (classic)</option>
+                    <option value="UiV2">UI v2 (preview)</option>
+                </select>
+                <div class="form-text">
+                    UI v2 is spectrum-first and optimized for touch. Classic remains available on this device
+                    by switching back to <strong>Default</strong> and reloading.
+                </div>
+            </div>
+
+            <div class="alert alert-info mb-0 py-2" role="status">
+                <i class="bi bi-lightbulb" aria-hidden="true"></i>
+                You may need to reload the browser page after changing this option.
+            </div>
+        </div>
+    </details>
+
     <!-- Network Access URLs Card -->
     <div class="row mb-4">
         <div class="col-lg-6 mb-4 mb-lg-0">

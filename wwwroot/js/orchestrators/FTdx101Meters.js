@@ -29,6 +29,21 @@ export class FTdx101Meters {
         this._wasTransmittingPower = false;
         this._wasTransmittingSWR   = false;
 
+        // Compression / ALC: same CAT path as SWR (MS13+RM0 or RM3/RM4) and
+        // the same transient-zero problem — a single 0 mid-burst would slam
+        // the bar to empty then snap back. Hold zeros until sustained, and
+        // average non-zero samples so the display eases between readings.
+        this._compHistory          = [];
+        this._alcHistory           = [];
+        this._compHistoryLength    = 7;
+        this._alcHistoryLength     = 7;
+        this._compZeroCount        = 0;
+        this._alcZeroCount         = 0;
+        this._compZeroThreshold    = 3;
+        this._alcZeroThreshold     = 3;
+        this._wasTransmittingComp  = false;
+        this._wasTransmittingALC   = false;
+
         // IDD filter state
         this._iddLast      = 0;
         this._iddZeroCount = 0;
@@ -138,22 +153,84 @@ export class FTdx101Meters {
     }
 
     _processCompression(raw) {
-        const db = this._isTransmitting
-            ? Math.max(0, Math.min(20, this._calibration.calibrateNumeric('Compression', raw)))
-            : 0;
+        if (!this._isTransmitting) {
+            this._compHistory         = [];
+            this._compZeroCount       = 0;
+            this._wasTransmittingComp = false;
+            this._meterPanel.update('compression', 0);
+            return { skip: false, gaugeKey: 'compression', displayValue: { db: 0 } };
+        }
+        if (!this._wasTransmittingComp) {
+            this._compHistory = [];
+            this._compZeroCount = 0;
+        }
+        this._wasTransmittingComp = true;
+
+        // Transient zero while TX: hold the last averaged reading so the bar
+        // doesn't flicker empty between syllables / CAT glitches.
+        if (raw === 0) {
+            this._compZeroCount++;
+            if (this._compZeroCount < this._compZeroThreshold) {
+                if (this._compHistory.length === 0) return { skip: true };
+                const held = this._compHistory.reduce((s, v) => s + v, 0) / this._compHistory.length;
+                const db = Math.max(0, Math.min(20, this._calibration.calibrateNumeric('Compression', held)));
+                this._meterPanel.update('compression', db);
+                return { skip: false, gaugeKey: 'compression', displayValue: { db } };
+            }
+            // Sustained zero — clear history and show 0.
+            this._compHistory = [];
+            this._meterPanel.update('compression', 0);
+            return { skip: false, gaugeKey: 'compression', displayValue: { db: 0 } };
+        }
+
+        this._compZeroCount = 0;
+        this._compHistory.push(raw);
+        if (this._compHistory.length > this._compHistoryLength) this._compHistory.shift();
+        if (this._compHistory.length < 2) return { skip: true };
+        const rawAvg = this._compHistory.reduce((s, v) => s + v, 0) / this._compHistory.length;
+        const db = Math.max(0, Math.min(20, this._calibration.calibrateNumeric('Compression', rawAvg)));
         this._meterPanel.update('compression', db);
         return { skip: false, gaugeKey: 'compression', displayValue: { db } };
     }
 
     _processALC(raw) {
         if (!this._isTransmitting) {
+            this._alcHistory         = [];
+            this._alcZeroCount       = 0;
+            this._wasTransmittingALC = false;
             this._meterPanel.update('alc', 0);
             return { skip: false, gaugeKey: 'alc', displayValue: { percent: 0, alcVolts: 0, rawValue: 0 } };
         }
-        const alcVolts = this._calibration.calibrateNumeric('ALC', raw);
-        const percent  = Math.round((raw / 255) * 100);
-        this._meterPanel.update('alc', raw);  // gauge uses raw 0–255 scale
-        return { skip: false, gaugeKey: 'alc', displayValue: { percent, alcVolts, rawValue: raw } };
+        if (!this._wasTransmittingALC) {
+            this._alcHistory = [];
+            this._alcZeroCount = 0;
+        }
+        this._wasTransmittingALC = true;
+
+        if (raw === 0) {
+            this._alcZeroCount++;
+            if (this._alcZeroCount < this._alcZeroThreshold) {
+                if (this._alcHistory.length === 0) return { skip: true };
+                const held = this._alcHistory.reduce((s, v) => s + v, 0) / this._alcHistory.length;
+                const alcVolts = this._calibration.calibrateNumeric('ALC', held);
+                const percent  = Math.round((held / 255) * 100);
+                this._meterPanel.update('alc', held);
+                return { skip: false, gaugeKey: 'alc', displayValue: { percent, alcVolts, rawValue: held } };
+            }
+            this._alcHistory = [];
+            this._meterPanel.update('alc', 0);
+            return { skip: false, gaugeKey: 'alc', displayValue: { percent: 0, alcVolts: 0, rawValue: 0 } };
+        }
+
+        this._alcZeroCount = 0;
+        this._alcHistory.push(raw);
+        if (this._alcHistory.length > this._alcHistoryLength) this._alcHistory.shift();
+        if (this._alcHistory.length < 2) return { skip: true };
+        const rawAvg   = this._alcHistory.reduce((s, v) => s + v, 0) / this._alcHistory.length;
+        const alcVolts = this._calibration.calibrateNumeric('ALC', rawAvg);
+        const percent  = Math.round((rawAvg / 255) * 100);
+        this._meterPanel.update('alc', rawAvg);
+        return { skip: false, gaugeKey: 'alc', displayValue: { percent, alcVolts, rawValue: rawAvg } };
     }
 
     _processIDD(raw) {

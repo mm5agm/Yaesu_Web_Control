@@ -27,30 +27,29 @@ namespace Yaesu_Web_Control.Services
 
         // Antenna sync: the radio doesn't broadcast AN auto-information messages when the
         // operator changes the antenna on the front panel, so we have to poll. Polling on
-        // every meter-cycle (2 Hz) would be wasteful for a near-static value, so we poll
-        // every Nth cycle (~2 seconds at the current loop cadence). Keeps the YWC antenna
-        // selector in sync with the radio without saturating the serial bus.
+        // every meter-cycle would be wasteful for a near-static value, so we poll every
+        // Nth cycle (~2 s at the fast S-meter cadence).
         private int _antennaPollCounter = 0;
-        private const int AntennaPollEvery = 4;
+        private const int AntennaPollEvery = 20;
 
         // Frequency backstop poll — single-receiver radios only. On the FTdx10 /
         // FT-710 / FTDX3000 the radio's unsolicited FA/FB auto-info pushes are
         // unreliable, especially over shared-CAT / VSPE setups (iu1teu #78), so
         // the frequency display can go stale with no way to recover. Poll FA;/FB;
-        // ~once a second (every other ~500 ms cycle) as a fallback — the same
-        // approach iu1teu's own bridge uses on the same radio. The dual-receiver
-        // FTdx101, where auto-info works, is deliberately left event-driven.
+        // ~once a second as a fallback — the same approach iu1teu's own bridge
+        // uses on the same radio. The dual-receiver FTdx101, where auto-info
+        // works, is deliberately left event-driven.
         // Suppressed briefly after a user web-UI write so the read-back can't
         // fight active tuning (see RadioStateService.LastUserFrequencyWriteUtc).
         private int _freqPollCounter = 0;
-        private const int FreqPollEvery = 2;
+        private const int FreqPollEvery = 10;
         private static readonly TimeSpan FreqPollWriteSuppress = TimeSpan.FromMilliseconds(1200);
 
         // Connection health: track consecutive null poll responses to detect radio power-off.
         // The serial port stays "open" on Windows when the radio powers off; null responses (timeouts)
-        // are the only signal. After 5 consecutive nulls (~2.5 s) we broadcast disconnected.
+        // are the only signal. After ~2 s of consecutive nulls we broadcast disconnected.
         private int _consecutiveNullCount = 0;
-        private const int DisconnectThreshold = 5;
+        private const int DisconnectThreshold = 20;
 
         // S-meter zero-flash debounce. Yaesu radios occasionally respond to
         // SM0; with a transient zero — typically when the radio is busy
@@ -70,6 +69,27 @@ namespace Yaesu_Web_Control.Services
         // doesn't hold the other's needle back.
         private int _sMeterBZeroCount = 0;
 
+        // Slow PA sensors (IDD / VDD / Temp) — useful but not RX-critical.
+        // Polled every Nth fast cycle so the S-meter / TX meters stay snappy.
+        private int _slowMeterCounter = 0;
+        private const int SlowMeterEvery = 5;
+
+        // RX fast-path: while receiving, TX; is not needed every cycle. Polling it
+        // every tick burns a full CAT round-trip that could be another SM0;. When
+        // keyed we poll TX every cycle (TX-off debounce + TX meters). While RX we
+        // sample TX every Nth cycle — key-up detection stays within ~150–250 ms.
+        private int _txPollCounter = 0;
+        private const int TxPollEveryRx = 3;
+
+        // Target ~12–15 Hz for S-meter on the RX fast path (SM0/SM1 only + short
+        // delay). TX cycles are heavier and naturally run slower. Docs historically
+        // said ~10 Hz; the previous fixed 500 ms delay capped the loop at 2 Hz.
+        private const int FastLoopDelayMs = 20;
+
+        // Cache model-dependent RM path so we don't hit SettingsService every cycle.
+        private string? _cachedRadioModel;
+        private bool _useRm0Pair;
+
         public MeterPollingService(
             CatMultiplexerService multiplexer,
             RadioStateService stateService,
@@ -86,20 +106,59 @@ namespace Yaesu_Web_Control.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Meter polling service started (S-Meter, Power, SWR)");
+            _logger.LogInformation("Meter polling service started (S-Meter RX fast path; TX/PA sensors deferred)");
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    _logger.LogDebug("[MeterPolling][DEBUG] Polling TX status...");
-                    var txResponse = await _multiplexer.SendCommandAsync("TX;", "MeterPoll", stoppingToken);
-                    _logger.LogDebug("[MeterPolling][DEBUG] TX response: {0}", txResponse);
+                    // TX status: every cycle while keyed (debounce + TX meters); every
+                    // Nth cycle while RX so the serial bus stays free for SM0;/SM1;.
+                    string? txResponse = null;
+                    bool polledTx = _stableIsTransmitting || ++_txPollCounter >= TxPollEveryRx;
+                    if (polledTx)
+                    {
+                        _txPollCounter = 0;
+                        _logger.LogDebug("[MeterPolling][DEBUG] Polling TX status...");
+                        txResponse = await _multiplexer.SendCommandAsync("TX;", "MeterPoll", stoppingToken);
+                        _logger.LogDebug("[MeterPolling][DEBUG] TX response: {0}", txResponse);
 
-                    // Connection health tracking: only applies once the radio has been successfully
-                    // initialised (IsConnected = true). Null responses mean no reply from the radio.
-                    // Don't count null responses toward disconnect while transmitting — the radio may
-                    // be too busy handling TX to answer CAT queries (hardware PTT in particular).
-                    if (txResponse == null)
+                        // TX1 = keyed; TX2 = keyed (mic) on some Yaesu models — treat both as TX.
+                        bool rawIsTransmitting = !string.IsNullOrEmpty(txResponse)
+                            && (txResponse.Contains("TX1") || txResponse.Contains("TX2"));
+                        if (rawIsTransmitting)
+                        {
+                            _txFalseCount = 0;
+                            _stableIsTransmitting = true;
+                        }
+                        else if (txResponse != null)
+                        {
+                            // Explicit TX0 only — null (radio busy) must not count as unkey.
+                            _txFalseCount++;
+                            if (_txFalseCount >= TxOffDebounceCount || !_stateService.IsTransmitting)
+                                _stableIsTransmitting = false;
+                        }
+                        else if (!_stateService.IsTransmitting)
+                        {
+                            // Authoritative TX-off already applied; a null poll must not resurrect TX.
+                            _stableIsTransmitting = false;
+                        }
+                        _logger.LogDebug("[MeterPolling] TX poll: raw='{Raw}', rawTX={RawTX}, stableTX={StableTX}",
+                            txResponse, rawIsTransmitting, _stableIsTransmitting);
+                    }
+
+                    bool isTransmitting = _stableIsTransmitting;
+                    _stateService.IsTransmitting = isTransmitting;
+
+                    _logger.LogDebug("[MeterPolling][DEBUG] Polling S-Meter A...");
+                    var smAResponse = await _multiplexer.SendCommandAsync(CatCommands.SMeterMain + ";", "MeterPoll", stoppingToken);
+                    _logger.LogDebug("[MeterPolling][DEBUG] S-Meter A response: {0}", smAResponse);
+
+                    // Connection health: prefer the TX reply when we asked; otherwise use
+                    // SM0 so deferred-TX RX cycles still detect radio power-off. Nulls mean
+                    // no reply. Don't count toward disconnect while transmitting — the radio
+                    // may be too busy for CAT (hardware PTT in particular).
+                    var healthResponse = polledTx ? txResponse : smAResponse;
+                    if (healthResponse == null)
                     {
                         if (_stateService.IsConnected && !_stableIsTransmitting)
                         {
@@ -115,33 +174,6 @@ namespace Yaesu_Web_Control.Services
                             _stateService.IsConnected = true;
                     }
 
-                    // TX1 = keyed; TX2 = keyed (mic) on some Yaesu models — treat both as TX.
-                    bool rawIsTransmitting = !string.IsNullOrEmpty(txResponse)
-                        && (txResponse.Contains("TX1") || txResponse.Contains("TX2"));
-                    if (rawIsTransmitting)
-                    {
-                        _txFalseCount = 0;
-                        _stableIsTransmitting = true;
-                    }
-                    else if (txResponse != null)
-                    {
-                        // Explicit TX0 only — null (radio busy) must not count as unkey.
-                        _txFalseCount++;
-                        if (_txFalseCount >= TxOffDebounceCount || !_stateService.IsTransmitting)
-                            _stableIsTransmitting = false;
-                    }
-                    else if (!_stateService.IsTransmitting)
-                    {
-                        // Authoritative TX-off already applied; a null poll must not resurrect TX.
-                        _stableIsTransmitting = false;
-                    }
-                    bool isTransmitting = _stableIsTransmitting;
-                    _stateService.IsTransmitting = isTransmitting;
-                    _logger.LogDebug("[MeterPolling] TX poll: raw='{Raw}', rawTX={RawTX}, stableTX={StableTX}", txResponse, rawIsTransmitting, isTransmitting);
-
-                    _logger.LogDebug("[MeterPolling][DEBUG] Polling S-Meter A...");
-                    var smAResponse = await _multiplexer.SendCommandAsync(CatCommands.SMeterMain + ";", "MeterPoll", stoppingToken);
-                    _logger.LogDebug("[MeterPolling][DEBUG] S-Meter A response: {0}", smAResponse);
                     int sMeterA = CatCommands.ParseSMeter(smAResponse ?? "");
 
                     // Zero-flash debounce (see _sMeterZeroCount comment). Apply
@@ -188,104 +220,107 @@ namespace Yaesu_Web_Control.Services
                         }
                     }
 
-                    _logger.LogDebug("[MeterPolling][DEBUG] Polling Power Meter...");
-                    var powerResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterPower + ";", "MeterPoll", stoppingToken);
-                    _logger.LogDebug("[MeterPolling][DEBUG] Power Meter response: {0}", powerResponse);
-                    int power = CatCommands.ParseMeterReading(powerResponse ?? "");
-                    _logger.LogDebug("[MeterPolling][DEBUG] TX={IsTransmitting} Power raw='{Raw}', parsed={Value}", isTransmitting, powerResponse, power);
                     if (isTransmitting)
                     {
-                        _stateService.PowerMeter = power;
+                        _logger.LogDebug("[MeterPolling][DEBUG] Polling Power Meter...");
+                        var powerResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterPower + ";", "MeterPoll", stoppingToken);
+                        _logger.LogDebug("[MeterPolling][DEBUG] Power Meter response: {0}", powerResponse);
+                        int power = CatCommands.ParseMeterReading(powerResponse ?? "");
                         _logger.LogDebug("[MeterPolling] Power meter (TX): raw='{Raw}', value={Value}", powerResponse, power);
+                        _stateService.PowerMeter = power;
                     }
-                    else
+                    else if (_stateService.PowerMeter != 0)
                     {
-                        // Always broadcast PowerMeter=0 when not transmitting
-                        if (_stateService.PowerMeter != 0)
-                        {
-                            _stateService.PowerMeter = 0;
-                            _logger.LogDebug("[MeterPolling] Power meter (not TX): value=0");
-                        }
+                        _stateService.PowerMeter = 0;
+                        _logger.LogDebug("[MeterPolling] Power meter (not TX): value=0");
                     }
 
-                    // SWR and Compression meter polling differs by radio model.
-                    //
-                    //  - FTdx101MP / FTdx101D: RM6 (the documented SWR read) returns
-                    //    stale/wrong values, so we have to set both meter slots via
-                    //    MS13 (compression-left, SWR-right) and then read both at once
-                    //    with RM0. Pre-existing workaround, do not regress.
-                    //
-                    //  - FTdx10 / FT-710 / FTDX3000: MS13+RM0 doesn't read SWR
-                    //    correctly (reported by OE5HMR on FTdx10, 2026-06-01).
-                    //    Reverting to the documented direct reads — RM3 for
-                    //    compression, RM6 for SWR — which is what Yaesu's CAT
-                    //    manual specifies for these radios.
-                    var settings = await _settingsService.GetSettingsAsync();
-                    bool useRm0Pair = settings.RadioModel is "FTdx101MP" or "FTdx101D";
-                    int compression;
-                    int swr;
-                    if (useRm0Pair)
-                    {
-                        _logger.LogDebug("[MeterPolling][DEBUG] Polling Compression+SWR (MS13+RM0)... TX={IsTransmitting}", isTransmitting);
-                        await _multiplexer.SendCommandAsync(CatCommands.SetMetersCompAndSWR + ";", "MeterPoll", stoppingToken);
-                        var compSwrResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterBoth + ";", "MeterPoll", stoppingToken);
-                        _logger.LogDebug("[MeterPolling][DEBUG] MS13+RM0 response: '{Raw}'", compSwrResponse);
-                        compression = CatCommands.ParseRm0LeftMeter(compSwrResponse ?? "");
-                        swr         = CatCommands.ParseRm0RightMeter(compSwrResponse ?? "");
-                    }
-                    else
-                    {
-                        _logger.LogDebug("[MeterPolling][DEBUG] Polling Compression (RM3) and SWR (RM6) directly... TX={IsTransmitting}", isTransmitting);
-                        var compResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterComp + ";", "MeterPoll", stoppingToken);
-                        _logger.LogDebug("[MeterPolling][DEBUG] RM3 response: '{Raw}'", compResponse);
-                        compression = CatCommands.ParseMeterReading(compResponse ?? "");
-                        var swrResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterSWR + ";", "MeterPoll", stoppingToken);
-                        _logger.LogDebug("[MeterPolling][DEBUG] RM6 response: '{Raw}'", swrResponse);
-                        swr = CatCommands.ParseMeterReading(swrResponse ?? "");
-                    }
-                    _logger.LogDebug("[MeterPolling][DEBUG] TX={IsTransmitting} Compression={Comp} SWR={SWR}", isTransmitting, compression, swr);
-                    _stateService.SWRMeter = isTransmitting ? swr : 0;
+                    // TX-only meters: skip CAT reads while receiving so the S-meter
+                    // loop stays as fast as the serial bus allows.
                     if (isTransmitting)
                     {
+                        // SWR and Compression meter polling differs by radio model.
+                        //
+                        //  - FTdx101MP / FTdx101D: RM6 (the documented SWR read) returns
+                        //    stale/wrong values, so we have to set both meter slots via
+                        //    MS13 (compression-left, SWR-right) and then read both at once
+                        //    with RM0. Pre-existing workaround, do not regress.
+                        //
+                        //  - FTdx10 / FT-710 / FTDX3000: MS13+RM0 doesn't read SWR
+                        //    correctly (reported by OE5HMR on FTdx10, 2026-06-01).
+                        //    Reverting to the documented direct reads — RM3 for
+                        //    compression, RM6 for SWR — which is what Yaesu's CAT
+                        //    manual specifies for these radios.
+                        if (_cachedRadioModel is null)
+                        {
+                            var settings = await _settingsService.GetSettingsAsync();
+                            _cachedRadioModel = settings.RadioModel ?? "";
+                            _useRm0Pair = _cachedRadioModel is "FTdx101MP" or "FTdx101D";
+                        }
+                        bool useRm0Pair = _useRm0Pair;
+                        int compression;
+                        int swr;
+                        if (useRm0Pair)
+                        {
+                            _logger.LogDebug("[MeterPolling][DEBUG] Polling Compression+SWR (MS13+RM0)... TX={IsTransmitting}", isTransmitting);
+                            await _multiplexer.SendCommandAsync(CatCommands.SetMetersCompAndSWR + ";", "MeterPoll", stoppingToken);
+                            var compSwrResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterBoth + ";", "MeterPoll", stoppingToken);
+                            _logger.LogDebug("[MeterPolling][DEBUG] MS13+RM0 response: '{Raw}'", compSwrResponse);
+                            compression = CatCommands.ParseRm0LeftMeter(compSwrResponse ?? "");
+                            swr         = CatCommands.ParseRm0RightMeter(compSwrResponse ?? "");
+                        }
+                        else
+                        {
+                            _logger.LogDebug("[MeterPolling][DEBUG] Polling Compression (RM3) and SWR (RM6) directly... TX={IsTransmitting}", isTransmitting);
+                            var compResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterComp + ";", "MeterPoll", stoppingToken);
+                            _logger.LogDebug("[MeterPolling][DEBUG] RM3 response: '{Raw}'", compResponse);
+                            compression = CatCommands.ParseMeterReading(compResponse ?? "");
+                            var swrResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterSWR + ";", "MeterPoll", stoppingToken);
+                            _logger.LogDebug("[MeterPolling][DEBUG] RM6 response: '{Raw}'", swrResponse);
+                            swr = CatCommands.ParseMeterReading(swrResponse ?? "");
+                        }
+                        _logger.LogDebug("[MeterPolling][DEBUG] TX={IsTransmitting} Compression={Comp} SWR={SWR}", isTransmitting, compression, swr);
+                        _stateService.SWRMeter = swr;
                         _stateService.CompressionMeter = compression;
+
+                        _logger.LogDebug("[MeterPolling][DEBUG] Polling ALC Meter...");
+                        var alcResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterALC + ";", "MeterPoll", stoppingToken);
+                        _logger.LogDebug("[MeterPolling][DEBUG] ALC Meter response: {0}", alcResponse);
+                        _stateService.ALCMeter = CatCommands.ParseMeterReading(alcResponse ?? "");
                     }
                     else
                     {
+                        if (_stateService.SWRMeter != 0)
+                            _stateService.SWRMeter = 0;
                         if (_stateService.CompressionMeter != 0)
                             _stateService.CompressionMeter = 0;
-                    }
-
-                    _logger.LogDebug("[MeterPolling][DEBUG] Polling IDD Meter...");
-                    var iddResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterIDD + ";", "MeterPoll", stoppingToken);
-                    _logger.LogDebug("[MeterPolling][DEBUG] IDD Meter response: {0}", iddResponse);
-                    int idd = CatCommands.ParseMeterReading(iddResponse ?? "");
-                    _stateService.IDDMeter = idd;
-
-                    _logger.LogDebug("[MeterPolling][DEBUG] Polling ALC Meter...");
-                    var alcResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterALC + ";", "MeterPoll", stoppingToken);
-                    _logger.LogDebug("[MeterPolling][DEBUG] ALC Meter response: {0}", alcResponse);
-                    int alc = CatCommands.ParseMeterReading(alcResponse ?? "");
-                    if (isTransmitting)
-                    {
-                        _stateService.ALCMeter = alc;
-                    }
-                    else
-                    {
                         if (_stateService.ALCMeter != 0)
                             _stateService.ALCMeter = 0;
                     }
 
-                    _logger.LogDebug("[MeterPolling][DEBUG] Polling VDD Meter...");
-                    var vddResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterVDD + ";", "MeterPoll", stoppingToken);
-                    _logger.LogDebug("[MeterPolling][DEBUG] VDD Meter response: {0}", vddResponse);
-                    int vdd = CatCommands.ParseMeterReading(vddResponse ?? "");
-                    _stateService.VDDMeter = vdd;
+                    // IDD / VDD / Temp — slower cadence so S-meter / TX meters stay snappy.
+                    if (++_slowMeterCounter >= SlowMeterEvery)
+                    {
+                        _slowMeterCounter = 0;
 
-                    _logger.LogDebug("[MeterPolling][DEBUG] Polling Temperature...");
-                    var tempResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterTemp + ";", "MeterPoll", stoppingToken);
-                    _logger.LogDebug("[MeterPolling][DEBUG] Temperature response: {0}", tempResponse);
-                    int temp = CatCommands.ParseMeterReading(tempResponse ?? "");
-                    _stateService.Temperature = temp;
+                        _logger.LogDebug("[MeterPolling][DEBUG] Polling IDD Meter...");
+                        var iddResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterIDD + ";", "MeterPoll", stoppingToken);
+                        _logger.LogDebug("[MeterPolling][DEBUG] IDD Meter response: {0}", iddResponse);
+                        int idd = CatCommands.ParseMeterReading(iddResponse ?? "");
+                        _stateService.IDDMeter = idd;
+
+                        _logger.LogDebug("[MeterPolling][DEBUG] Polling VDD Meter...");
+                        var vddResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterVDD + ";", "MeterPoll", stoppingToken);
+                        _logger.LogDebug("[MeterPolling][DEBUG] VDD Meter response: {0}", vddResponse);
+                        int vdd = CatCommands.ParseMeterReading(vddResponse ?? "");
+                        _stateService.VDDMeter = vdd;
+
+                        _logger.LogDebug("[MeterPolling][DEBUG] Polling Temperature...");
+                        var tempResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterTemp + ";", "MeterPoll", stoppingToken);
+                        _logger.LogDebug("[MeterPolling][DEBUG] Temperature response: {0}", tempResponse);
+                        int temp = CatCommands.ParseMeterReading(tempResponse ?? "");
+                        _stateService.Temperature = temp;
+                    }
 
                     // Antenna poll (low cadence — see field comment above).
                     if (++_antennaPollCounter >= AntennaPollEvery)
@@ -312,7 +347,7 @@ namespace Yaesu_Web_Control.Services
                         }
                     }
 
-                    await Task.Delay(500, stoppingToken);
+                    await Task.Delay(FastLoopDelayMs, stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -321,7 +356,7 @@ namespace Yaesu_Web_Control.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "[MeterPolling][FATAL] Exception in polling loop: {Message}\nStackTrace: {StackTrace}", ex.Message, ex.StackTrace);
-                    try { await Task.Delay(500, stoppingToken); } catch (OperationCanceledException) { break; }
+                    try { await Task.Delay(FastLoopDelayMs, stoppingToken); } catch (OperationCanceledException) { break; }
                 }
             }
         }

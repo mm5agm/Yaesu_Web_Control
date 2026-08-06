@@ -118,7 +118,7 @@ namespace Yaesu_Web_Control.Pages
 
         public RadioStateViewModel State { get; set; } = new RadioStateViewModel();
 
-        public async Task<IActionResult> OnGetAsync()
+        public virtual async Task<IActionResult> OnGetAsync()
         {
             // Deliberately no server-side redirect to Settings on
             // InitializationStatus == "error" here. If radio initialization
@@ -134,6 +134,15 @@ namespace Yaesu_Web_Control.Pages
 
             // Load app button visibility and names
             var settings = await _settingsService.GetSettingsAsync();
+
+            // Optional alternative-layout redirect (#48 roadmap): if the user
+            // selected UI v2, send / to /ui-v2. Guarded by GetType() so
+            // UiV2Model (derived) can call base.OnGetAsync without looping.
+            if (GetType() == typeof(IndexModel) &&
+                string.Equals(settings.LayoutTemplate, "UiV2", System.StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToPage("/UiV2");
+            }
             ShowApp1Button = settings.ShowWsjtxButton;
             ShowApp2Button = settings.ShowJtalertButton;
             ShowApp3Button = settings.ShowLog4omButton;

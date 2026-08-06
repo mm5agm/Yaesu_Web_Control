@@ -143,7 +143,7 @@ function rebuildIfWidthSelect(selectEl, model, mode) {
     const options = ifWidthOptionsFor(model, mode);
     // Hide the entire row when the dropdown does not apply (AM/FM modes).
     // The row contains both the label and the select — walk up to find it.
-    const row = selectEl.closest('.d-flex');
+    const row = selectEl.closest('.d-flex, .u2-slider-row');
     if (!options) {
         if (row) row.style.display = 'none';
         return;

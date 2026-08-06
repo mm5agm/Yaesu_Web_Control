@@ -1,0 +1,1318 @@
+@page "/ui-v2"
+@model Yaesu_Web_Control.Pages.UiV2Model
+@{
+    ViewData["Title"] = "UI v2";
+    bool isSingleReceiver = Yaesu_Web_Control.Services.RadioCapabilities.IsSingleReceiver(Model.RadioModel);
+    string modeA = Model.RadioState.ModeA ?? "USB";
+    string radioModel = Model.RadioModel ?? "";
+    bool isFtdx10 = radioModel.Contains("FTdx10", StringComparison.OrdinalIgnoreCase);
+    bool isFt710 = radioModel.Contains("FT-710", StringComparison.OrdinalIgnoreCase) || radioModel.Contains("FT710", StringComparison.OrdinalIgnoreCase);
+    bool isFtdx3000 = radioModel.Contains("FTDX3000", StringComparison.OrdinalIgnoreCase) || radioModel.Contains("FTdx3000", StringComparison.OrdinalIgnoreCase);
+
+    // Roofing options — same model rules as Index (CAT RF codes, not labels alone).
+    var roofingOptions = new (string Value, string Label)[]
+            { ("A","300 Hz"), ("9","600 Hz"), ("8","1.2 kHz"), ("7","3 kHz"), ("6","12 kHz") }
+            .Where(o => Model.InstalledRoofingFilters.Contains(o.Value))
+            .ToArray();
+    var roofingOptionsFtdx10 = new (string Value, string Label)[]
+            { ("6","12 kHz"), ("7","3 kHz"), ("9","500 Hz"), ("A","300 Hz") }
+            .Where(o => o.Value == "6" || o.Value == "7" || o.Value == "9"
+                     || Model.InstalledRoofingFilters.Contains(o.Value))
+            .ToArray();
+    var roofingOptions3000 = new (string Value, string Label)[]
+            { ("0","Auto"), ("1","15 kHz"), ("2","6 kHz"), ("3","3 kHz"), ("4","600 Hz"), ("5","300 Hz") }
+            .Where(o => o.Value == "0" || o.Value == "1" || o.Value == "2" || o.Value == "3"
+                     || Model.InstalledRoofingFilters.Contains(o.Value))
+            .ToArray();
+}
+
+<link rel="stylesheet" href="~/css/ui-v2.css" asp-append-version="true" />
+
+<div class="ui-v2-console" id="vfoRow" data-ui-v2="true" data-radio-model="@Model.RadioModel" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
+
+    <!-- Top bar -->
+    <header class="u2-top">
+        <div class="u2-top-left">
+            <span class="u2-model">@Model.RadioModel</span>
+            <span class="u2-dot" id="catDot" aria-hidden="true"></span>
+            <button type="button" id="connectBtn" class="u2-btn u2-btn-sm u2-btn-bad"
+                    onclick="toggleCatConnection()"
+                    aria-label="CAT serial connection">Disconnected</button>
+            <button type="button" id="radioPowerBtn" class="u2-btn u2-btn-sm"
+                    onclick="toggleRadioPower()"
+                    aria-label="Radio power on or off">Power</button>
+        </div>
+        <div class="u2-top-right">
+            <span id="utcClock" class="u2-utc" aria-label="Current UTC time">--:--:--Z</span>
+            <a class="u2-btn u2-btn-sm" href="/Settings" title="Settings">Settings</a>
+            <a class="u2-btn u2-btn-sm" href="/" title="Classic UI">Classic</a>
+        </div>
+    </header>
+
+    <main class="u2-main">
+        <!-- Left: VFO / Mode / Band (desktop) -->
+        <aside class="u2-col u2-col-side" aria-label="VFO and mode">
+            <div class="u2-section">
+                <h2>VFO</h2>
+                @* VFO B is always shown — even on single-receiver radios (FTdx10 etc.)
+                   it is a real frequency/mode slot used for Split. *@
+                <div class="u2-vfo-row">
+                    <label>A</label>
+                    <span id="freqASide" class="u2-freq frequency-display" aria-hidden="true">--.--.--</span>
+                </div>
+                <div class="u2-vfo-row">
+                    <label>B</label>
+                    <span id="freqB" class="u2-freq frequency-display digit-display" role="spinbutton"
+                          tabindex="0" aria-label="VFO B frequency" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0">--.--.--</span>
+                </div>
+                <div class="u2-btn-row" style="margin-top:6px;">
+                    <button type="button" id="swapVfoBtn" class="u2-btn u2-btn-sm">A ↔ B</button>
+                    <button type="button" id="splitBtn" class="u2-btn u2-btn-sm">Split</button>
+                    <button type="button" id="copyAtoBBtn" class="u2-btn u2-btn-sm">A=B</button>
+                    <button type="button" id="copyBtoABtn" class="u2-btn u2-btn-sm">B=A</button>
+                    <button type="button" id="quickSplitBtn" class="u2-btn u2-btn-sm">+5k</button>
+                </div>
+            </div>
+
+            <div class="u2-section">
+                <h2>Mode A</h2>
+                <div class="u2-mode-grid" id="modeChipGroupA" role="group" aria-label="VFO A mode">
+                    @foreach (var m in new[] { "USB", "LSB", "CW-U", "CW-L", "AM", "FM" })
+                    {
+                        <button type="button" class="u2-btn u2-btn-mode @(modeA == m ? "u2-btn-active" : "")"
+                                data-mode="@m" onclick="u2SetMode('A', '@m')">@m</button>
+                    }
+                </div>
+                <select id="modeSelectA" class="u2-sr-only" aria-hidden="true" tabindex="-1"
+                        onchange="setMode('A', this.value)">
+                    <option value="USB" selected="@(modeA == "USB" ? "selected" : null)">USB</option>
+                    <option value="LSB" selected="@(modeA == "LSB" ? "selected" : null)">LSB</option>
+                    <option value="CW-U" selected="@(modeA == "CW-U" ? "selected" : null)">CW-U</option>
+                    <option value="CW-L" selected="@(modeA == "CW-L" ? "selected" : null)">CW-L</option>
+                    <option value="AM" selected="@(modeA == "AM" ? "selected" : null)">AM</option>
+                    <option value="FM" selected="@(modeA == "FM" ? "selected" : null)">FM</option>
+                </select>
+
+                <h2 style="margin-top:10px;">Mode B</h2>
+                <div class="u2-mode-grid" id="modeChipGroupB" role="group" aria-label="VFO B mode">
+                    @foreach (var m in new[] { "USB", "LSB", "CW-U", "CW-L", "AM", "FM" })
+                    {
+                        <button type="button" class="u2-btn u2-btn-mode @(Model.RadioState.ModeB == m ? "u2-btn-active" : "")"
+                                data-mode="@m" onclick="u2SetMode('B', '@m')">@m</button>
+                    }
+                </div>
+                <select id="modeSelectB" class="u2-sr-only" aria-hidden="true" tabindex="-1"
+                        onchange="setMode('B', this.value)">
+                    <option value="USB" selected="@(Model.RadioState.ModeB == "USB" ? "selected" : null)">USB</option>
+                    <option value="LSB" selected="@(Model.RadioState.ModeB == "LSB" ? "selected" : null)">LSB</option>
+                    <option value="CW-U" selected="@(Model.RadioState.ModeB == "CW-U" ? "selected" : null)">CW-U</option>
+                    <option value="CW-L" selected="@(Model.RadioState.ModeB == "CW-L" ? "selected" : null)">CW-L</option>
+                    <option value="AM" selected="@(Model.RadioState.ModeB == "AM" ? "selected" : null)">AM</option>
+                    <option value="FM" selected="@(Model.RadioState.ModeB == "FM" ? "selected" : null)">FM</option>
+                </select>
+            </div>
+
+            <div class="u2-section" style="flex:1; min-height:0; overflow:auto;">
+                <h2>Band</h2>
+                @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", "A", "20m"))
+            </div>
+        </aside>
+
+        <!-- Center: band scope + S-hist above VFO display + meters -->
+        <section class="u2-col u2-col-center" aria-label="Main display">
+            <div class="u2-scope-stage" aria-label="Band scope and S-meter history">
+                <div class="u2-spectrum" id="spectrumContainer">
+                    <div class="u2-spectrum-toolbar">
+                        <strong class="u2-scope-title">Band Scope</strong>
+                        <span class="u2-utc" id="spectrumStatusBadgeA">—</span>
+                        <div class="u2-btn-row" style="margin-left:auto;">
+                            <button type="button" class="u2-btn u2-btn-sm span-btn" data-hz="62500" data-vfo="A">62.5k</button>
+                            <button type="button" class="u2-btn u2-btn-sm span-btn" data-hz="125000" data-vfo="A">125k</button>
+                            <button type="button" class="u2-btn u2-btn-sm span-btn" data-hz="250000" data-vfo="A">250k</button>
+                            <button type="button" class="u2-btn u2-btn-sm span-btn" data-hz="500000" data-vfo="A">500k</button>
+                            <button type="button" class="u2-btn u2-btn-sm span-btn" data-hz="1024000" data-vfo="A">1M</button>
+                            <button type="button" class="u2-btn u2-btn-sm span-btn" data-hz="2048000" data-vfo="A">2M</button>
+                            <button type="button" class="u2-btn u2-btn-sm spectrum-hold-btn" data-vfo="A">Hold</button>
+                        </div>
+                    </div>
+                    <div class="u2-scope-row">
+                        <div id="filterScopeContainerA" class="u2-filter-scope">
+                            <canvas id="filterScopeCanvasA" role="img" aria-label="VFO A filter / IF band scope"></canvas>
+                        </div>
+                        <div id="spectrumContainerA" class="u2-spectrum-panel">
+                            <canvas id="spectrumCanvasA" class="u2-spectrum-canvas" role="img" aria-label="RF band scope VFO A"></canvas>
+                        </div>
+                    </div>
+                    @if (!isSingleReceiver)
+                    {
+                        <div id="spectrumContainerB" class="u2-sr-only" aria-hidden="true">
+                            <canvas id="spectrumCanvasB" width="1" height="1"></canvas>
+                            <span id="spectrumStatusBadgeB"></span>
+                        </div>
+                        <div id="filterScopeContainerB" class="u2-sr-only" aria-hidden="true">
+                            <canvas id="filterScopeCanvasB" width="1" height="1"></canvas>
+                        </div>
+                    }
+                </div>
+
+                <div class="u2-shist @(isSingleReceiver ? "" : "u2-shist-dual")" id="sMeterHistoryContainer" aria-label="S-meter history">
+                    <div class="u2-shist-block">
+                        <div class="u2-shist-head">
+                            <strong class="u2-scope-title">@(isSingleReceiver ? "S-Hist" : "S-Hist A")</strong>
+                            <span class="u2-utc">30 s</span>
+                        </div>
+                        <canvas id="sMeterHistoryCanvas" role="img" aria-label="S-meter history strip chart VFO A"></canvas>
+                    </div>
+                    @if (!isSingleReceiver)
+                    {
+                        <div class="u2-shist-block" id="sMeterHistoryContainerB">
+                            <div class="u2-shist-head">
+                                <strong class="u2-scope-title">S-Hist B</strong>
+                                <span class="u2-utc">30 s</span>
+                            </div>
+                            <canvas id="sMeterHistoryCanvasB" role="img" aria-label="S-meter history strip chart VFO B"></canvas>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="u2-display" id="u2DisplayA">
+                <div class="u2-display-top">
+                    <button type="button" class="u2-vfo-pill u2-vfo-pill-a u2-vfo-active" id="u2ActivePillA"
+                            onclick="window.setActiveVfo && window.setActiveVfo('A')"
+                            title="Make VFO A active (RX / MAIN)">VFO A · RX</button>
+                    <span id="u2DisplayMode">@modeA</span>
+                    <span id="u2DisplayBand">—</span>
+                </div>
+                <div class="u2-display-freq">
+                    <span id="freqA" class="frequency-display digit-display" role="spinbutton"
+                          tabindex="0" aria-label="VFO A frequency" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"
+                          title="Click a digit, then scroll or use ↑↓. Or open 123 keypad.">--.--.--</span>
+                    <div id="freqA-controls" class="u2-freq-step"
+                         style="display:@(Model.ShowFrequencyArrowButtons ? "inline-flex" : "none");">
+                        <button type="button" id="freqA-up" class="u2-btn u2-btn-sm" aria-label="Step VFO A selected digit up" title="Step up">▲</button>
+                        <button type="button" id="freqA-down" class="u2-btn u2-btn-sm" aria-label="Step VFO A selected digit down" title="Step down">▼</button>
+                    </div>
+                    <button type="button" class="u2-btn u2-btn-sm fkb-open-btn" data-freq-keyboard="A"
+                            aria-label="Enter VFO A frequency" title="Frequency keypad">123</button>
+                    <div id="freqB-controls" class="u2-freq-step u2-sr-only" aria-hidden="true">
+                        <button type="button" id="freqB-up"></button>
+                        <button type="button" id="freqB-down"></button>
+                    </div>
+                    <button type="button" class="u2-sr-only fkb-open-btn" data-freq-keyboard="B" tabindex="-1" aria-hidden="true">123</button>
+                </div>
+                <div class="u2-display-vfo-b" id="u2DisplayB">
+                    <button type="button" class="u2-vfo-pill u2-vfo-pill-b" id="u2ActivePillB"
+                            onclick="window.setActiveVfo && window.setActiveVfo('B')"
+                            title="Make VFO B active (RX / SUB)">VFO B</button>
+                    <span id="freqBDisplay" class="u2-vfo-b-freq" aria-hidden="true">--.--.--</span>
+                    <span id="u2DisplayModeB" class="u2-vfo-b-mode">@(Model.RadioState.ModeB ?? "—")</span>
+                    <span id="splitTxBadgeB" class="u2-split-badge" style="display:none;">SPLIT TX</span>
+                    <span id="splitTxBadgeA" class="u2-sr-only" style="display:none;"></span>
+                </div>
+                <div class="u2-display-bottom">
+                    <div class="u2-meter" title="S-meter">
+                        <span class="u2-meter-label">S</span>
+                        <div class="u2-meter-track"><div class="u2-meter-fill" id="sMeterBar" style="width:0%"></div></div>
+                        <span class="u2-meter-val" id="sMeterValue">S0</span>
+                    </div>
+                    <div class="u2-meter" title="Power">
+                        <span class="u2-meter-label">PWR</span>
+                        <div class="u2-meter-track"><div class="u2-meter-fill pwr" id="powerMeterBar" style="width:0%"></div></div>
+                        <span class="u2-meter-val" id="powerMeterValue">0 W</span>
+                    </div>
+                    <div class="u2-meter" title="SWR">
+                        <span class="u2-meter-label">SWR</span>
+                        <div class="u2-meter-track"><div class="u2-meter-fill swr" id="swrMeterBar" style="width:0%"></div></div>
+                        <span class="u2-meter-val" id="swrMeterValue">1.0:1</span>
+                    </div>
+                    <div class="u2-meter" title="Compression">
+                        <span class="u2-meter-label">COMP</span>
+                        <div class="u2-meter-track"><div class="u2-meter-fill comp" id="compressionMeterBar" style="width:0%"></div></div>
+                        <span class="u2-meter-val" id="compressionMeterValue">0.0 dB</span>
+                    </div>
+                    <div class="u2-meter" title="ALC">
+                        <span class="u2-meter-label">ALC</span>
+                        <div class="u2-meter-track"><div class="u2-meter-fill alc" id="alcMeterBar" style="width:0%"></div></div>
+                        <span class="u2-meter-val" id="alcMeterValue">0 V</span>
+                    </div>
+                    <div class="u2-meter" title="Drain current">
+                        <span class="u2-meter-label">ID</span>
+                        <div class="u2-meter-track"><div class="u2-meter-fill idd" id="iddMeterBar" style="width:0%"></div></div>
+                        <span class="u2-meter-val" id="iddMeterValue">0.0 A</span>
+                    </div>
+                    <div class="u2-meter" title="PA supply voltage">
+                        <span class="u2-meter-label">VDD</span>
+                        <div class="u2-meter-track"><div class="u2-meter-fill vdd" id="vddMeterBar" style="width:0%"></div></div>
+                        <span class="u2-meter-val" id="vddMeterValue">0.0 V</span>
+                    </div>
+                    <div id="alcBar" class="u2-sr-only" aria-hidden="true"></div>
+                    <span id="alcValue" class="u2-sr-only" aria-hidden="true"></span>
+                    <div class="u2-rx-tx">
+                        <span class="u2-ind rx on" id="rxInd">RX</span>
+                        <span class="u2-ind tx" id="txInd">TX</span>
+                        <button type="button" id="txButtonA" class="u2-btn u2-btn-sm u2-btn-tx" onclick="toggleTx()"
+                                title="Toggle transmit" aria-label="Toggle transmit">TX</button>
+                        <button type="button" id="txButtonB" class="u2-btn u2-btn-sm u2-btn-tx" onclick="toggleTx()"
+                                style="display:none;" title="Toggle transmit" aria-label="Toggle transmit">TX</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right: filter / AF-RF (desktop) -->
+        <aside class="u2-col u2-col-side" aria-label="Filter and audio">
+            <div class="u2-section">
+                <h2>Filter</h2>
+                <div class="u2-slider-row">
+                    <label>Width <span id="ifWidthValueA">—</span></label>
+                    <select id="ifWidthSelectA" class="u2-btn" style="width:100%;"
+                            aria-label="VFO A IF width"
+                            onchange="window.radioControl && window.radioControl.setIfWidth('A', this.value); document.getElementById('ifWidthValueA').textContent=this.options[this.selectedIndex]?.text||this.value; if(window.filterScopePanelA) window.filterScopePanelA.setState({ifWidthCode: this.value});">
+                        @* Options rebuilt by IfWidth.rebuildIfWidthSelect (mode/model SH codes). *@
+                    </select>
+                </div>
+                <div class="u2-slider-row">
+                    <label>Shift <span id="ifShiftValueA">@Model.RadioState.IfShiftA</span></label>
+                    <input type="range" id="ifShiftSliderA" min="-1000" max="1000" step="20"
+                           value="@Model.RadioState.IfShiftA"
+                           aria-label="VFO A IF shift"
+                           oninput="document.getElementById('ifShiftValueA').textContent = this.value; if(window.filterScopePanelA) window.filterScopePanelA.setState({ifShiftHz: parseInt(this.value)||0})" />
+                    <button type="button" class="u2-btn u2-btn-sm" onclick="resetIfShift('A')" title="Zero IF Shift">Zero</button>
+                </div>
+                @if (!isFt710)
+                {
+                <div class="u2-slider-row">
+                    <label>Roof</label>
+                    <select id="roofingFilterSelectA" class="u2-btn" style="width:100%;"
+                            aria-label="VFO A roofing filter"
+                            onchange="window.radioControl && window.radioControl.setRoofingFilter('A', this.value); if(window.filterScopePanelA) window.filterScopePanelA.setState({roofingCode: this.value});">
+                        @if (isFtdx10)
+                        {
+                            @foreach (var opt in roofingOptionsFtdx10)
+                            {
+                                <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterA==opt.Value ? "selected" : null)">@opt.Label</option>
+                            }
+                        }
+                        else if (isFtdx3000)
+                        {
+                            @foreach (var opt in roofingOptions3000)
+                            {
+                                <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterA==opt.Value ? "selected" : null)">@opt.Label</option>
+                            }
+                        }
+                        else
+                        {
+                            @foreach (var opt in roofingOptions)
+                            {
+                                <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterA==opt.Value ? "selected" : null)">@opt.Label</option>
+                            }
+                        }
+                    </select>
+                </div>
+                }
+                else
+                {
+                    <select id="roofingFilterSelectA" class="u2-sr-only" aria-hidden="true" tabindex="-1"></select>
+                }
+            </div>
+
+            <div class="u2-section">
+                <h2>AF / RF</h2>
+                <div class="u2-slider-row">
+                    <label>AF <span id="afGainValueA">@Model.AfGainA</span></label>
+                    <input type="range" id="afGainSliderA" min="0" max="255" step="1"
+                           value="@Model.AfGainA"
+                           oninput="document.getElementById('afGainValueA').textContent = this.value" />
+                </div>
+                <div class="u2-slider-row">
+                    <label>RF <span id="rfGainValueA">@Model.RadioState.RfGainA</span></label>
+                    <input type="range" id="rfGainSliderA" min="0" max="255" step="1"
+                           value="@Model.RadioState.RfGainA"
+                           oninput="document.getElementById('rfGainValueA').textContent = this.value"
+                           onchange="window.setRfGain && window.setRfGain('A', this.value)" />
+                </div>
+                <div class="u2-slider-row">
+                    <label>Power <span id="powerValue">@Model.RadioState.Power</span> W</label>
+                    <input type="range" id="powerSlider" min="5" max="200" step="5"
+                           value="@Model.RadioState.Power"
+                           oninput="window.radioControl && window.radioControl.updatePowerDisplay('A', this.value)"
+                           onchange="window.radioControl && window.radioControl.setPower('A', this.value)" />
+                </div>
+            </div>
+
+            <div class="u2-section" style="flex:1;">
+                <h2>DSP</h2>
+                <div class="u2-btn-row">
+                    <button type="button" class="u2-btn u2-btn-sm" id="nrChipA"
+                            onclick="u2ToggleSwitch('nrSelectA', (on) => window.radioControl?.setNr('A', on ? '1' : '0'))">NR</button>
+                    <button type="button" class="u2-btn u2-btn-sm" id="nbChipA"
+                            onclick="u2ToggleSwitch('nbSelectA', (on) => window.radioControl?.setNoiseBlanker('A', on ? '1' : '0'))">NB</button>
+                    <button type="button" class="u2-btn u2-btn-sm" id="anChipA"
+                            onclick="u2ToggleSwitch('autoNotchSelectA', (on) => window.radioControl?.setAutoNotch('A', on ? '1' : '0'))">AN</button>
+                    <button type="button" class="u2-btn u2-btn-sm" id="mnChipA"
+                            onclick="u2ToggleSwitch('manualNotchSelectA', (on) => window.radioControl?.setManualNotch('A', on ? '1' : '0'))">MN</button>
+                </div>
+                <input type="checkbox" class="u2-sr-only" id="nrSelectA" role="switch"
+                       @(Model.RadioState.NrA != "0" ? "checked" : null)
+                       onchange="window.radioControl && window.radioControl.setNr('A', this.checked ? '1' : '0')" />
+                <input type="checkbox" class="u2-sr-only" id="nbSelectA" role="switch"
+                       @(Model.RadioState.NbA == "1" ? "checked" : null)
+                       onchange="window.radioControl && window.radioControl.setNoiseBlanker('A', this.checked ? '1' : '0')" />
+                <input type="checkbox" class="u2-sr-only" id="autoNotchSelectA" role="switch"
+                       @(Model.RadioState.AutoNotchA == "1" ? "checked" : null)
+                       onchange="window.radioControl && window.radioControl.setAutoNotch('A', this.checked ? '1' : '0')" />
+                <input type="checkbox" class="u2-sr-only" id="manualNotchSelectA" role="switch"
+                       @(Model.RadioState.ManualNotchA == "1" ? "checked" : null)
+                       onchange="window.radioControl && window.radioControl.setManualNotch('A', this.checked ? '1' : '0')" />
+
+                <div class="u2-slider-row" style="margin-top:8px;">
+                    <label>AGC</label>
+                    <select id="agcSelectA" class="u2-btn" style="width:100%;"
+                            onchange="window.radioControl && window.radioControl.setAgc('A', this.value)">
+                        <option value="0" selected="@(Model.RadioState.AgcA == "0" ? "selected" : null)">OFF</option>
+                        <option value="1" selected="@(Model.RadioState.AgcA == "1" ? "selected" : null)">FAST</option>
+                        <option value="2" selected="@(Model.RadioState.AgcA == "2" ? "selected" : null)">MID</option>
+                        <option value="3" selected="@(Model.RadioState.AgcA == "3" ? "selected" : null)">SLOW</option>
+                        <option value="4" selected="@(Model.RadioState.AgcA == "4" ? "selected" : null)">AUTO</option>
+                    </select>
+                </div>
+                <div class="u2-slider-row">
+                    <label>IPO / ATT</label>
+                    <div class="u2-btn-row">
+                        <select id="ipoSelectA" class="u2-btn" style="flex:1;"
+                                onchange="window.radioControl && window.radioControl.setIpo('A', this.value)">
+                            <option value="0" selected="@(Model.RadioState.IpoA == "0" ? "selected" : null)">IPO</option>
+                            <option value="1" selected="@(Model.RadioState.IpoA == "1" ? "selected" : null)">AMP1</option>
+                            <option value="2" selected="@(Model.RadioState.IpoA == "2" ? "selected" : null)">AMP2</option>
+                        </select>
+                        <select id="attSelectA" class="u2-btn" style="flex:1;"
+                                onchange="window.radioControl && window.radioControl.setAttenuator('A', this.value)">
+                            <option value="00" selected="@(Model.RadioState.AttA == "00" ? "selected" : null)">ATT OFF</option>
+                            <option value="06" selected="@(Model.RadioState.AttA == "06" ? "selected" : null)">6 dB</option>
+                            <option value="12" selected="@(Model.RadioState.AttA == "12" ? "selected" : null)">12 dB</option>
+                            <option value="18" selected="@(Model.RadioState.AttA == "18" ? "selected" : null)">18 dB</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Remote Audio — shown when enabled in Settings -->
+    <div id="remoteAudioBar" class="u2-audio-bar" style="display:none;" aria-label="Remote audio">
+        <strong class="u2-audio-title"><i class="bi bi-soundwave" aria-hidden="true"></i> Audio</strong>
+        <button type="button" class="u2-btn u2-btn-sm u2-btn-ok" id="remoteAudioStartBtn"
+                aria-label="Connect to transceiver audio" title="Connect">
+            <i class="bi bi-telephone-fill" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="u2-btn u2-btn-sm u2-btn-bad" id="remoteAudioStopBtn" disabled
+                aria-label="Disconnect transceiver audio" title="Disconnect">
+            <i class="bi bi-telephone-x-fill" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="u2-btn u2-btn-sm" id="remoteAudioPopoutBtn"
+                aria-label="Pop out remote audio" title="Pop out">
+            <i class="bi bi-window-plus" aria-hidden="true"></i>
+        </button>
+        <span id="remoteAudioPopoutTip" class="u2-sr-only"></span>
+        <button type="button" class="u2-btn u2-btn-sm u2-btn-ok" id="remoteAudioMicMute"
+                aria-pressed="false" aria-label="Mute microphone" title="Mic mute" disabled>
+            <i class="bi bi-mic-fill" aria-hidden="true"></i>
+        </button>
+        <span id="remoteAudioMicMuteTip" class="u2-sr-only"></span>
+        <button type="button" class="u2-btn u2-btn-sm u2-btn-ok" id="remoteAudioRxMute"
+                aria-pressed="false" aria-label="Mute received audio" title="RX mute" disabled>
+            <i class="bi bi-headphones" aria-hidden="true"></i>
+        </button>
+        <span id="remoteAudioRxMuteTip" class="u2-sr-only"></span>
+        <span class="u2-utc" id="remoteAudioStatus">Idle</span>
+        <div class="u2-audio-meters">
+            <span>RX</span>
+            <div class="u2-meter-track u2-audio-track"><div id="remoteAudioRxMeter" class="u2-meter-fill" style="width:0%;background:#38bdf8;"></div></div>
+            <span>TX</span>
+            <div class="u2-meter-track u2-audio-track"><div id="remoteAudioTxMeter" class="u2-meter-fill" style="width:0%;background:#eab308;"></div></div>
+        </div>
+    </div>
+
+    <!-- Bottom function keys -->
+    <footer class="u2-bottom" aria-label="Function keys">
+        <button type="button" class="u2-btn u2-btn-func u2-mobile-only" onclick="u2Open('dlgBand')">Band</button>
+        <button type="button" class="u2-btn u2-btn-func u2-mobile-only" onclick="u2Open('dlgMode')">Mode</button>
+        <button type="button" class="u2-btn u2-btn-func" id="nrFuncBtn"
+                onclick="u2ToggleSwitch('nrSelectA', (on) => window.radioControl?.setNr('A', on ? '1' : '0'))">NR</button>
+        <button type="button" class="u2-btn u2-btn-func" id="nbFuncBtn"
+                onclick="u2ToggleSwitch('nbSelectA', (on) => window.radioControl?.setNoiseBlanker('A', on ? '1' : '0'))">NB</button>
+        <button type="button" class="u2-btn u2-btn-func" onclick="u2Open('dlgDsp')">DSP</button>
+        <button type="button" class="u2-btn u2-btn-func u2-btn-tx" id="txMoxBtn" onclick="toggleTx()"
+                title="Toggle transmit (MOX)">MOX</button>
+        <button type="button" class="u2-btn u2-btn-func" onclick="u2Open('dlgTx')">TX Set</button>
+        <button type="button" class="u2-btn u2-btn-func" onclick="u2Open('dlgClar')">Clar</button>
+        <button type="button" class="u2-btn u2-btn-func" onclick="u2Open('dlgSpectrum')">Scope</button>
+        <button type="button" id="monitorOnBtn"
+                class="u2-btn u2-btn-func @(Model.MonitorOn ? "u2-btn-warn" : "")"
+                onclick="toggleMonitor()">MON</button>
+        <button type="button" id="atuBtn"
+                class="u2-btn u2-btn-func @(Model.AtuEnabled ? "u2-btn-ok" : "")">ATU</button>
+    </footer>
+
+    <!-- ══ Dialogs ══ -->
+    <dialog id="dlgBand" class="u2-dialog">
+        <div class="u2-dialog-head">
+            <h3>Band</h3>
+            <button type="button" class="u2-btn u2-btn-sm" onclick="u2Close('dlgBand')">Close</button>
+        </div>
+        <div class="u2-dialog-body" id="dlgBandBody"></div>
+    </dialog>
+
+    <dialog id="dlgMode" class="u2-dialog">
+        <div class="u2-dialog-head">
+            <h3>Mode</h3>
+            <button type="button" class="u2-btn u2-btn-sm" onclick="u2Close('dlgMode')">Close</button>
+        </div>
+        <div class="u2-dialog-body">
+            <h2 style="margin:0;font-size:12px;color:#9fb3c8;">Mode A</h2>
+            <div class="u2-mode-grid" id="modeChipGroupAMobile">
+                @foreach (var m in new[] { "USB", "LSB", "CW-U", "CW-L", "AM", "FM" })
+                {
+                    <button type="button" class="u2-btn u2-btn-mode @(modeA == m ? "u2-btn-active" : "")"
+                            data-mode="@m" onclick="u2SetMode('A', '@m');">@m</button>
+                }
+            </div>
+            <h2 style="margin:8px 0 0;font-size:12px;color:#9fb3c8;">Mode B</h2>
+            <div class="u2-mode-grid" id="modeChipGroupBMobile">
+                @foreach (var m in new[] { "USB", "LSB", "CW-U", "CW-L", "AM", "FM" })
+                {
+                    <button type="button" class="u2-btn u2-btn-mode @(Model.RadioState.ModeB == m ? "u2-btn-active" : "")"
+                            data-mode="@m" onclick="u2SetMode('B', '@m');">@m</button>
+                }
+            </div>
+            <div class="u2-btn-row" style="margin-top:8px;">
+                <button type="button" class="u2-btn" onclick="document.getElementById('swapVfoBtn')?.click()">A ↔ B</button>
+                <button type="button" class="u2-btn" onclick="document.getElementById('splitBtn')?.click()">Split</button>
+                <button type="button" class="u2-btn" onclick="document.getElementById('copyAtoBBtn')?.click()">A=B</button>
+                <button type="button" class="u2-btn" onclick="document.getElementById('copyBtoABtn')?.click()">B=A</button>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="dlgDsp" class="u2-dialog">
+        <div class="u2-dialog-head">
+            <h3>DSP / Filter</h3>
+            <button type="button" class="u2-btn u2-btn-sm" onclick="u2Close('dlgDsp')">Close</button>
+        </div>
+        <div class="u2-dialog-body" id="dlgDspBody">
+            <p class="u2-utc">Use the right-hand panel on desktop. On mobile, controls below:</p>
+            <div class="u2-slider-row">
+                <label>AF <span id="afGainValueADlg">@Model.AfGainA</span></label>
+                <input type="range" min="0" max="255" step="1" value="@Model.AfGainA"
+                       oninput="const s=document.getElementById('afGainSliderA'); if(s){s.value=this.value;s.dispatchEvent(new Event('input')); document.getElementById('afGainValueADlg').textContent=this.value;}"
+                       onchange="const s=document.getElementById('afGainSliderA'); if(s){s.value=this.value;s.dispatchEvent(new Event('change'));}" />
+            </div>
+            <div class="u2-slider-row">
+                <label>RF <span id="rfGainValueADlg">@Model.RadioState.RfGainA</span></label>
+                <input type="range" min="0" max="255" step="1" value="@Model.RadioState.RfGainA"
+                       oninput="const s=document.getElementById('rfGainSliderA'); if(s){s.value=this.value; document.getElementById('rfGainValueA').textContent=this.value; document.getElementById('rfGainValueADlg').textContent=this.value;}"
+                       onchange="const s=document.getElementById('rfGainSliderA'); if(s){s.value=this.value;s.dispatchEvent(new Event('change'));}" />
+            </div>
+            <div class="u2-slider-row">
+                <label>IF Shift <span id="ifShiftValueADlg">@Model.RadioState.IfShiftA</span></label>
+                <input type="range" min="-1000" max="1000" step="20" value="@Model.RadioState.IfShiftA"
+                       oninput="const s=document.getElementById('ifShiftSliderA'); if(s){s.value=this.value; document.getElementById('ifShiftValueA').textContent=this.value; document.getElementById('ifShiftValueADlg').textContent=this.value;}"
+                       onchange="const s=document.getElementById('ifShiftSliderA'); if(s){s.value=this.value;s.dispatchEvent(new Event('change'));}" />
+            </div>
+            <div class="u2-slider-row">
+                <label>AGC</label>
+                <select class="u2-btn" style="width:100%;"
+                        onchange="document.getElementById('agcSelectA').value=this.value; document.getElementById('agcSelectA').dispatchEvent(new Event('change'));">
+                    <option value="0" selected="@(Model.RadioState.AgcA == "0" ? "selected" : null)">OFF</option>
+                    <option value="1" selected="@(Model.RadioState.AgcA == "1" ? "selected" : null)">FAST</option>
+                    <option value="2" selected="@(Model.RadioState.AgcA == "2" ? "selected" : null)">MID</option>
+                    <option value="3" selected="@(Model.RadioState.AgcA == "3" ? "selected" : null)">SLOW</option>
+                    <option value="4" selected="@(Model.RadioState.AgcA == "4" ? "selected" : null)">AUTO</option>
+                </select>
+            </div>
+            <div class="u2-btn-row">
+                <button type="button" class="u2-btn" onclick="u2ToggleSwitch('autoNotchSelectA', (on) => window.radioControl?.setAutoNotch('A', on ? '1' : '0'))">Auto Notch</button>
+                <button type="button" class="u2-btn" onclick="u2ToggleSwitch('manualNotchSelectA', (on) => window.radioControl?.setManualNotch('A', on ? '1' : '0'))">Man Notch</button>
+            </div>
+            <div class="u2-slider-row">
+                <label>Notch Hz <span id="manualNotchFreqValueA">@Model.RadioState.ManualNotchFreqA Hz</span></label>
+                <input type="range" id="manualNotchFreqA" min="10" max="3200" step="10"
+                       value="@Model.RadioState.ManualNotchFreqA"
+                       oninput="document.getElementById('manualNotchFreqValueA').textContent = this.value + ' Hz'"
+                       onchange="window.radioControl && window.radioControl.setManualNotchFreq('A', this.value)" />
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="dlgTx" class="u2-dialog">
+        <div class="u2-dialog-head">
+            <h3>TX</h3>
+            <button type="button" class="u2-btn u2-btn-sm" onclick="u2Close('dlgTx')">Close</button>
+        </div>
+        <div class="u2-dialog-body">
+            <div class="u2-btn-row">
+                <button type="button" class="u2-btn u2-btn-tx" onclick="toggleTx()">MOX / TX</button>
+            </div>
+            <div class="u2-slider-row">
+                <label>Power <span id="powerValueDlg">@Model.RadioState.Power</span> W</label>
+                <input type="range" min="5" max="200" step="5" value="@Model.RadioState.Power"
+                       oninput="const s=document.getElementById('powerSlider'); if(s){s.value=this.value; document.getElementById('powerValue').textContent=this.value; document.getElementById('powerValueDlg').textContent=this.value;}"
+                       onchange="const s=document.getElementById('powerSlider'); if(s){s.value=this.value;s.dispatchEvent(new Event('change'));}" />
+            </div>
+            <div class="u2-slider-row">
+                <label>Mic <span id="micGainValue">@Model.MicGain</span></label>
+                <input type="range" id="micGainSlider" min="0" max="100" step="1" value="@Model.MicGain"
+                       oninput="document.getElementById('micGainValue').textContent = this.value"
+                       onchange="setMicGain(this.value)" />
+            </div>
+            <div class="u2-btn-row">
+                <button type="button" id="procBtn" class="u2-btn @(Model.ProcEnabled ? "u2-btn-ok" : "")" onclick="toggleProc()">
+                    @(Model.ProcEnabled ? "Proc On" : "Proc Off")
+                </button>
+                <button type="button" id="voxBtn" class="u2-btn @(Model.VoxOn ? "u2-btn-warn" : "")" onclick="toggleVox()">
+                    @(Model.VoxOn ? "VOX On" : "VOX Off")
+                </button>
+                <button type="button" id="voxOnBtn" class="u2-sr-only @(Model.VoxOn ? "btn-warning" : "btn-outline-secondary")" aria-hidden="true"></button>
+            </div>
+            <div class="u2-slider-row">
+                <label>Proc level <span id="procLevelValue">@Model.ProcLevel</span></label>
+                <input type="range" id="procLevelSlider" min="0" max="100" step="1" value="@Model.ProcLevel"
+                       oninput="document.getElementById('procLevelValue').textContent = this.value"
+                       onchange="setProcLevel(this.value)" />
+            </div>
+            <div class="u2-slider-row">
+                <label>Mon level <span id="monLevelValue">@Model.MonitorLevelA</span></label>
+                <input type="range" id="monLevelSlider" min="0" max="100" step="1" value="@Model.MonitorLevelA"
+                       oninput="document.getElementById('monLevelValue').textContent = this.value"
+                       onchange="setMonitorLevel(this.value)" />
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="dlgClar" class="u2-dialog">
+        <div class="u2-dialog-head">
+            <h3>Clarifier</h3>
+            <button type="button" class="u2-btn u2-btn-sm" onclick="u2Close('dlgClar')">Close</button>
+        </div>
+        <div class="u2-dialog-body">
+            <div class="u2-btn-row" id="clarVfoGroup">
+                <button type="button" class="u2-btn u2-btn-active" id="clarVfoABtn" onclick="selectClarVfo('A')">VFO A</button>
+                <button type="button" class="u2-btn" id="clarVfoBBtn" onclick="selectClarVfo('B')">VFO B</button>
+            </div>
+            <div class="u2-slider-row">
+                <label id="clarModeLabel">Mode</label>
+                <select id="clarModeSelect" class="u2-btn" style="width:100%;" onchange="setClarifierMode(this.value)">
+                    <option value="off" selected="@(Model.RadioState.RxClarOn == false && Model.RadioState.TxClarOn == false ? "selected" : null)">OFF</option>
+                    <option value="rx" selected="@(Model.RadioState.RxClarOn == true && Model.RadioState.TxClarOn == false ? "selected" : null)">RX</option>
+                    <option value="tx" selected="@(Model.RadioState.RxClarOn == false && Model.RadioState.TxClarOn == true ? "selected" : null)">TX</option>
+                    <option value="rxtx" selected="@(Model.RadioState.RxClarOn == true && Model.RadioState.TxClarOn == true ? "selected" : null)">RX+TX</option>
+                </select>
+            </div>
+            <div class="u2-slider-row">
+                <label>Offset <span id="clarOffsetValue">@Model.RadioState.ClarifierOffsetA</span> Hz</label>
+                <div class="u2-btn-row">
+                    <button type="button" class="u2-btn" onclick="nudgeClarifier(-10)">−</button>
+                    <input type="range" id="clarOffsetSlider" min="-9990" max="9990" step="10"
+                           value="@Model.RadioState.ClarifierOffsetA" style="flex:1;"
+                           oninput="document.getElementById('clarOffsetValue').textContent = this.value"
+                           onchange="setClarifierOffset(parseInt(this.value))" />
+                    <button type="button" class="u2-btn" onclick="nudgeClarifier(10)">+</button>
+                    <button type="button" class="u2-btn" onclick="resetClarifier()">Reset</button>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="dlgSpectrum" class="u2-dialog">
+        <div class="u2-dialog-head">
+            <h3>Spectrum</h3>
+            <button type="button" class="u2-btn u2-btn-sm" onclick="u2Close('dlgSpectrum')">Close</button>
+        </div>
+        <div class="u2-dialog-body">
+            <div class="u2-slider-row">
+                <label>Range <span class="spectrum-range-label" data-vfo="A">60 dB</span></label>
+                <input type="range" class="spectrum-range-slider" data-vfo="A" min="5" max="160" step="1" value="60" />
+            </div>
+            <div class="u2-slider-row">
+                <label>Speed <span class="spectrum-speed-label" data-vfo="A">Full</span></label>
+                <input type="range" class="spectrum-speed-slider" data-vfo="A" min="0" max="7" step="1" value="0" />
+            </div>
+            <div class="u2-slider-row">
+                <label>Bright <span class="spectrum-bright-label" data-vfo="A">Off</span></label>
+                <input type="range" class="spectrum-bright-slider" data-vfo="A" min="0" max="60" step="1" value="0" />
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Hidden stubs site.js may look for -->
+    <div class="u2-sr-only" aria-hidden="true">
+        <div id="vfoACol"></div>
+        <div id="vfoBCol"></div>
+        <div id="vfoAStatusLine"></div>
+        <div id="vfoBStatusLine"></div>
+        <input type="checkbox" id="nrSelectB" /><input type="checkbox" id="nbSelectB" />
+        <input type="checkbox" id="autoNotchSelectB" /><input type="checkbox" id="manualNotchSelectB" />
+        <input type="range" id="afGainSliderB" /><span id="afGainValueB"></span>
+        <input type="range" id="rfGainSliderB" /><span id="rfGainValueB"></span>
+        <input type="range" id="ifShiftSliderB" /><span id="ifShiftValueB"></span>
+        <select id="agcSelectB"></select><select id="ipoSelectB"></select>
+        <select id="attSelectB"></select><select id="ifWidthSelectB"></select>
+        <select id="roofingFilterSelectB"></select>
+        <input type="range" id="manualNotchFreqB" /><span id="manualNotchFreqValueB"></span>
+    </div>
+</div>
+
+<!-- Frequency entry keypad (shared with classic Index; initFreqKeyboard wires it) -->
+<dialog id="freqKeyboardDialog" class="fkb-dialog" aria-labelledby="freqKeyboardTitle" aria-modal="true">
+    <div class="fkb-header" id="freqKeyboardHeader">
+        <span class="fkb-title" id="freqKeyboardTitle">VFO A Frequency</span>
+        <button type="button" class="fkb-close" id="freqKeyboardClose" aria-label="Close frequency keyboard" title="Close">✕</button>
+    </div>
+    <div class="fkb-display-row">
+        <div class="fkb-display" id="freqKeyboardDisplay" role="status" aria-live="polite" aria-label="Entered frequency"></div>
+        <span class="fkb-mhz-label" aria-hidden="true">MHz</span>
+    </div>
+    <div class="fkb-error" id="freqKeyboardError" role="alert" aria-live="assertive"></div>
+    <div class="fkb-pad">
+        <button type="button" class="fkb-key fkb-num" data-digit="7" aria-label="7">7</button>
+        <button type="button" class="fkb-key fkb-num" data-digit="8" aria-label="8">8</button>
+        <button type="button" class="fkb-key fkb-num" data-digit="9" aria-label="9">9</button>
+        <button type="button" class="fkb-key fkb-nav" id="freqKbLeft" aria-label="Move cursor left">◀</button>
+        <button type="button" class="fkb-key fkb-num" data-digit="4" aria-label="4">4</button>
+        <button type="button" class="fkb-key fkb-num" data-digit="5" aria-label="5">5</button>
+        <button type="button" class="fkb-key fkb-num" data-digit="6" aria-label="6">6</button>
+        <button type="button" class="fkb-key fkb-nav" id="freqKbRight" aria-label="Move cursor right">▶</button>
+        <button type="button" class="fkb-key fkb-num" data-digit="1" aria-label="1">1</button>
+        <button type="button" class="fkb-key fkb-num" data-digit="2" aria-label="2">2</button>
+        <button type="button" class="fkb-key fkb-num" data-digit="3" aria-label="3">3</button>
+        <button type="button" class="fkb-key fkb-backspace" id="freqKbBackspace" aria-label="Backspace">⌫</button>
+        <button type="button" class="fkb-key fkb-num" data-digit="0" aria-label="0">0</button>
+        <button type="button" class="fkb-key fkb-clear" id="freqKbClear" aria-label="Clear">CLR</button>
+        <button type="button" class="fkb-key fkb-enter" id="freqKbEnter" aria-label="Enter frequency">↵ Enter</button>
+    </div>
+</dialog>
+
+@section Scripts {
+    <script>
+        window.ywcTxToggleKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.TxToggleKey));
+        window.ywcIsWindowsHost = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IsWindowsHost));
+        window.bandPlan = '@Model.BandPlan';
+        window._radioModel = '@Model.RadioModel';
+
+        async function setRfGain(receiver, value) {
+            try {
+                await fetch(`/api/cat/rfgain/${receiver.toLowerCase()}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: parseInt(value) })
+                });
+            } catch (e) { console.error('setRfGain error:', e); }
+        }
+        window.setRfGain = setRfGain;
+    </script>
+    <script>
+        function u2Open(id) {
+            const d = document.getElementById(id);
+            if (!d) return;
+            if (id === 'dlgBand') {
+                const body = document.getElementById('dlgBandBody');
+                const src = document.querySelector('.u2-col-side .band-buttons-container');
+                if (body && src && !body.dataset.ready) {
+                    body.appendChild(src.cloneNode(true));
+                    body.dataset.ready = '1';
+                    body.querySelectorAll('input[type=radio]').forEach(inp => {
+                        inp.addEventListener('change', () => {
+                            const live = document.querySelector(`.u2-col-side input[name="${inp.name}"][value="${inp.value}"]`);
+                            if (live) { live.checked = true; live.dispatchEvent(new Event('change', { bubbles: true })); }
+                            u2Close('dlgBand');
+                        });
+                    });
+                }
+            }
+            if (typeof d.showModal === 'function') d.showModal();
+        }
+        function u2Close(id) {
+            const d = document.getElementById(id);
+            if (d && d.open) d.close();
+        }
+        function u2SetMode(vfo, mode) {
+            // Call window.setMode directly (same as classic Index). The IIFE
+            // radioControl.setMode used to miss MODE_TO_CAT_CODE and no-op'ed.
+            if (typeof setMode === 'function') setMode(vfo, mode);
+            else if (window.setMode) window.setMode(vfo, mode);
+            const sel = document.getElementById('modeSelect' + vfo);
+            if (sel) sel.value = mode;
+            u2SyncModeChips(vfo, mode);
+            const panel = vfo === 'B' ? window.filterScopePanelB : window.filterScopePanelA;
+            if (panel) panel.setState({ mode });
+            if (window.IfWidth) {
+                window.IfWidth.rebuildIfWidthSelect(
+                    document.getElementById('ifWidthSelect' + vfo),
+                    window._radioModel,
+                    mode
+                );
+                if (vfo === 'A') {
+                    const wSel = document.getElementById('ifWidthSelectA');
+                    const wLab = document.getElementById('ifWidthValueA');
+                    if (wSel && wLab && wSel.selectedIndex >= 0) {
+                        wLab.textContent = wSel.options[wSel.selectedIndex].text;
+                    }
+                }
+            }
+        }
+
+        window.u2ApplyActiveVfo = function (state) {
+            const aActive = state.activeVfo === 0;
+            const bActive = state.activeVfo === 1;
+            const single = !!state.singleReceiver;
+            const splitOn = (state.splitMode || 0) > 0;
+            const display = document.getElementById('u2DisplayA');
+            const rowB = document.getElementById('u2DisplayB');
+            const pillA = document.getElementById('u2ActivePillA');
+            const pillB = document.getElementById('u2ActivePillB');
+
+            display?.classList.toggle('u2-vfo-active', aActive);
+            display?.classList.toggle('u2-vfo-inactive', single && !aActive);
+            rowB?.classList.toggle('u2-vfo-active', bActive);
+            rowB?.classList.toggle('u2-vfo-inactive', single && !bActive && !splitOn);
+            rowB?.classList.toggle('u2-vfo-tx', single && !bActive && splitOn);
+
+            if (pillA) {
+                pillA.classList.toggle('u2-vfo-active', aActive);
+                pillA.textContent = aActive
+                    ? (splitOn ? 'VFO A · RX' : 'VFO A · ACTIVE')
+                    : (splitOn && single ? 'VFO A · TX' : 'VFO A');
+            }
+            if (pillB) {
+                pillB.classList.toggle('u2-vfo-active', bActive);
+                pillB.textContent = bActive
+                    ? (splitOn ? 'VFO B · RX' : 'VFO B · ACTIVE')
+                    : (splitOn && single ? 'VFO B · TX' : 'VFO B');
+            }
+        };
+        function u2SyncModeChips(vfo, mode) {
+            const groups = vfo === 'B'
+                ? '#modeChipGroupB .u2-btn-mode, #modeChipGroupBMobile .u2-btn-mode'
+                : '#modeChipGroupA .u2-btn-mode, #modeChipGroupAMobile .u2-btn-mode';
+            document.querySelectorAll(groups).forEach(b => {
+                b.classList.toggle('u2-btn-active', b.dataset.mode === mode);
+            });
+            if (vfo === 'A') {
+                const dm = document.getElementById('u2DisplayMode');
+                if (dm) dm.textContent = mode;
+            } else {
+                const dm = document.getElementById('u2DisplayModeB');
+                if (dm) dm.textContent = mode;
+            }
+        }
+        function u2ToggleSwitch(id, apply) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.checked = !el.checked;
+            el.dispatchEvent(new Event('change'));
+            if (typeof apply === 'function') apply(el.checked);
+            u2SyncDspChips();
+        }
+        function u2SyncDspChips() {
+            const map = [
+                ['nrSelectA', 'nrChipA', 'nrFuncBtn'],
+                ['nbSelectA', 'nbChipA', 'nbFuncBtn'],
+                ['autoNotchSelectA', 'anChipA'],
+                ['manualNotchSelectA', 'mnChipA'],
+            ];
+            map.forEach(([id, ...btns]) => {
+                const el = document.getElementById(id);
+                const on = !!(el && el.checked);
+                btns.forEach(bid => {
+                    const b = document.getElementById(bid);
+                    if (b) b.classList.toggle('u2-btn-active', on);
+                });
+            });
+        }
+
+        async function setMicGain(value) {
+            try {
+                await fetch('/api/cat/micgain', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: parseInt(value) })
+                });
+            } catch (e) { /* ignore */ }
+        }
+        async function toggleProc() {
+            const btn = document.getElementById('procBtn');
+            const enabled = btn && (btn.classList.contains('u2-btn-ok') || btn.classList.contains('btn-success'));
+            try {
+                const response = await fetch('/api/cat/proc', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: !enabled })
+                });
+                if (response.ok) updateProcButton(!enabled);
+            } catch (e) { /* ignore */ }
+        }
+        async function setProcLevel(value) {
+            try {
+                await fetch('/api/cat/proclevel', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: parseInt(value) })
+                });
+            } catch (e) { /* ignore */ }
+        }
+        function updateProcButton(enabled) {
+            const btn = document.getElementById('procBtn');
+            if (!btn) return;
+            btn.classList.toggle('u2-btn-ok', enabled);
+            btn.classList.toggle('btn-success', enabled);
+            btn.textContent = enabled ? 'Proc On' : 'Proc Off';
+        }
+
+        const ATU_LONG_PRESS_MS = 500;
+        const ATU_TUNE_AUTOCLEAR_MS = 8000;
+        let atuPressTimer = null, atuLongFired = false, atuAutoclearTimer = null;
+
+        async function toggleAtu() {
+            const btn = document.getElementById('atuBtn');
+            const enabled = btn && (btn.classList.contains('u2-btn-ok') || btn.classList.contains('btn-success'));
+            try {
+                await fetch('/api/cat/atu', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: !enabled })
+                });
+                updateAtuButton(!enabled);
+            } catch (e) { /* ignore */ }
+        }
+        async function refreshAtuAfterTune() {
+            let finalEnabled = null;
+            try {
+                const r = await fetch('/api/cat/atu');
+                if (r.ok) finalEnabled = (await r.json()).atuEnabled === true;
+            } catch (e) { /* ignore */ }
+            const btn = document.getElementById('atuBtn');
+            if (btn && finalEnabled !== null) btn.dataset.atuEnabled = finalEnabled ? 'true' : 'false';
+            updateAtuTuningState(false);
+        }
+        async function startAtuTune() {
+            try {
+                await fetch('/api/cat/atu/tune', { method: 'POST' });
+                updateAtuTuningState(true);
+                clearTimeout(atuAutoclearTimer);
+                atuAutoclearTimer = setTimeout(refreshAtuAfterTune, ATU_TUNE_AUTOCLEAR_MS);
+            } catch (e) { /* ignore */ }
+        }
+        async function stopAtuTune() {
+            try { fetch('/api/cat/atu/tune', { method: 'POST' }); } catch (e) {}
+            clearTimeout(atuAutoclearTimer);
+            atuAutoclearTimer = null;
+            setTimeout(refreshAtuAfterTune, 500);
+        }
+        function updateAtuButton(enabled) {
+            const btn = document.getElementById('atuBtn');
+            if (!btn || btn.dataset.tuning === 'true') return;
+            btn.classList.toggle('u2-btn-ok', enabled);
+            btn.classList.toggle('btn-success', enabled);
+            btn.textContent = enabled ? 'ATU' : 'ATU';
+        }
+        function updateAtuTuningState(tuning) {
+            const btn = document.getElementById('atuBtn');
+            if (!btn) return;
+            if (tuning) {
+                btn.dataset.tuning = 'true';
+                btn.classList.add('u2-btn-bad');
+                btn.textContent = 'Tune…';
+            } else {
+                btn.dataset.tuning = 'false';
+                btn.classList.remove('u2-btn-bad');
+                updateAtuButton(btn.dataset.atuEnabled === 'true');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const atuBtn = document.getElementById('atuBtn');
+            if (atuBtn) {
+                atuBtn.dataset.atuEnabled = '@(Model.AtuEnabled ? "true" : "false")';
+                atuBtn.addEventListener('pointerdown', function () {
+                    atuLongFired = false;
+                    clearTimeout(atuPressTimer);
+                    atuPressTimer = setTimeout(() => { atuLongFired = true; startAtuTune(); }, ATU_LONG_PRESS_MS);
+                });
+                const cancelPress = () => { clearTimeout(atuPressTimer); atuPressTimer = null; };
+                atuBtn.addEventListener('pointerup', function () {
+                    clearTimeout(atuPressTimer); atuPressTimer = null;
+                    if (!atuLongFired) {
+                        if (atuBtn.dataset.tuning === 'true') stopAtuTune();
+                        else toggleAtu();
+                    }
+                });
+                atuBtn.addEventListener('pointerleave', cancelPress);
+                atuBtn.addEventListener('pointercancel', cancelPress);
+            }
+            u2SyncDspChips();
+        });
+
+        let _monitorOn = @(Model.MonitorOn ? "true" : "false");
+        function _updateMonitorBtn(on) {
+            _monitorOn = on;
+            const btn = document.getElementById('monitorOnBtn');
+            if (!btn) return;
+            btn.classList.toggle('u2-btn-warn', on);
+            btn.classList.toggle('btn-warning', on);
+        }
+        async function toggleMonitor() {
+            const newOn = !_monitorOn;
+            _monitorOn = newOn;
+            _updateMonitorBtn(newOn);
+            try {
+                await fetch('/api/cat/monitoron', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ on: newOn })
+                });
+            } catch (e) { /* ignore */ }
+        }
+        async function setMonitorLevel(value) {
+            try {
+                await fetch('/api/cat/monitorlevel/a', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ level: parseInt(value) })
+                });
+            } catch (e) { /* ignore */ }
+        }
+
+        async function toggleVox() {
+            const btn = document.getElementById('voxOnBtn');
+            const on = btn && (btn.classList.contains('btn-warning') || btn.classList.contains('u2-btn-warn'));
+            try {
+                await fetch('/api/cat/vox', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ on: !on })
+                });
+                updateVoxButton(!on);
+            } catch (e) { /* ignore */ }
+        }
+        function updateVoxButton(on) {
+            const btn = document.getElementById('voxOnBtn');
+            const mainBtn = document.getElementById('voxBtn');
+            [btn, mainBtn].forEach(b => {
+                if (!b) return;
+                b.classList.toggle('btn-warning', on);
+                b.classList.toggle('u2-btn-warn', on);
+                if (b === mainBtn) b.textContent = on ? 'VOX On' : 'VOX Off';
+            });
+        }
+
+        let _catConnected = false;
+        function _applyConnectBtnState(connected) {
+            const btn = document.getElementById('connectBtn');
+            const dot = document.getElementById('catDot');
+            if (btn) {
+                btn.classList.toggle('u2-btn-ok', connected);
+                btn.classList.toggle('u2-btn-bad', !connected);
+                btn.classList.toggle('btn-success', connected);
+                btn.classList.toggle('btn-danger', !connected);
+                btn.textContent = connected ? 'Connected' : 'Disconnected';
+            }
+            if (dot) dot.classList.toggle('on', connected);
+            _catConnected = connected;
+        }
+        async function toggleCatConnection() {
+            const btn = document.getElementById('connectBtn');
+            try {
+                if (_catConnected) {
+                    const r = await fetch('/api/cat/disconnect', { method: 'POST' });
+                    if ((await r.json()).success) _applyConnectBtnState(false);
+                } else {
+                    if (btn) btn.textContent = 'Connecting…';
+                    const r = await fetch('/api/cat/connect', { method: 'POST' });
+                    _applyConnectBtnState((await r.json()).success);
+                }
+            } catch (e) {
+                _applyConnectBtnState(false);
+            }
+        }
+
+        fetch('/api/cat/status').then(r => r.json()).then(d => _applyConnectBtnState(d.isConnected === true)).catch(() => {});
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const utcClockEl = document.getElementById('utcClock');
+            if (utcClockEl) {
+                const pad2 = (n) => String(n).padStart(2, '0');
+                const tick = () => {
+                    const d = new Date();
+                    utcClockEl.textContent = `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}Z`;
+                };
+                tick();
+                setInterval(tick, 1000);
+            }
+            // Mirror main freq into side label + VFO B into center secondary line
+            const freqA = document.getElementById('freqA');
+            const side = document.getElementById('freqASide');
+            if (freqA && side) {
+                const sync = () => { side.textContent = freqA.textContent; };
+                sync();
+                new MutationObserver(sync).observe(freqA, { childList: true, characterData: true, subtree: true });
+            }
+            const freqB = document.getElementById('freqB');
+            const freqBDisp = document.getElementById('freqBDisplay');
+            if (freqB && freqBDisp) {
+                const syncB = () => { freqBDisp.textContent = freqB.textContent; };
+                syncB();
+                new MutationObserver(syncB).observe(freqB, { childList: true, characterData: true, subtree: true });
+            }
+            // Band label in display
+            const syncBand = () => {
+                const checked = document.querySelector('.u2-col-side input[name="band-A"]:checked');
+                const el = document.getElementById('u2DisplayBand');
+                if (el) el.textContent = checked ? checked.value : '—';
+            };
+            syncBand();
+            document.querySelectorAll('.u2-col-side input[name="band-A"]').forEach(i => i.addEventListener('change', syncBand));
+        });
+
+        window.setMicGain = setMicGain;
+        window.toggleProc = toggleProc;
+        window.setProcLevel = setProcLevel;
+        window.toggleAtu = toggleAtu;
+        window.startAtuTune = startAtuTune;
+        window.stopAtuTune = stopAtuTune;
+        window.updateAtuButton = updateAtuButton;
+        window.updateAtuTuningState = updateAtuTuningState;
+        window._updateMonitorBtn = _updateMonitorBtn;
+        window.toggleMonitor = toggleMonitor;
+        window.setMonitorLevel = setMonitorLevel;
+        window.toggleCatConnection = toggleCatConnection;
+        window.toggleVox = toggleVox;
+        window.updateVoxButton = updateVoxButton;
+        window.updateProcButton = updateProcButton;
+        window.u2SetMode = u2SetMode;
+        window.u2SyncModeChips = u2SyncModeChips;
+        window.u2ToggleSwitch = u2ToggleSwitch;
+        window.u2Open = u2Open;
+        window.u2Close = u2Close;
+        window.u2SyncDspChips = u2SyncDspChips;
+        window.toggleTx = toggleTx;
+        window.setActiveVfo = setActiveVfo;
+
+        try { if (typeof applyVfoActiveStyling === 'function') applyVfoActiveStyling(); } catch { /* ignore */ }
+
+        // Keep footer MOX label in sync when site.js restyles #txButtonA.
+        (function () {
+            const syncMox = () => {
+                const btnA = document.getElementById('txButtonA');
+                const mox = document.getElementById('txMoxBtn');
+                if (!mox || !btnA) return;
+                const on = btnA.classList.contains('btn-danger')
+                    || /\bON\b/i.test(btnA.textContent || '');
+                mox.classList.toggle('u2-btn-bad', on);
+                mox.classList.toggle('u2-btn-warn', !on);
+                mox.textContent = on ? 'TX ON' : 'MOX';
+            };
+            const btnA = document.getElementById('txButtonA');
+            if (btnA) {
+                new MutationObserver(syncMox).observe(btnA, {
+                    attributes: true, attributeFilter: ['class', 'style'],
+                    childList: true, characterData: true, subtree: true
+                });
+            }
+            try { window.updateTxButton?.(); } catch { /* ignore */ }
+            syncMox();
+        })();
+    </script>
+
+    <script type="module">
+        import { MeterPanel }          from "/js/guages/meter-panel.js?v=1";
+        import { FTdx101Meters }       from "/js/orchestrators/FTdx101Meters.js?v=2";
+        import { SdrSpectrumPipeline } from "/js/sdr/sdr-spectrum-pipeline.js?v=4";
+        import { SpectrumPanel }       from "/js/sdr/spectrum-panel.js?v=5";
+        import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=3";
+        import { SMeterHistoryPanel }  from "/js/guages/smeter-history-panel.js?v=1";
+        import { initRemoteAudioUi }   from "/js/audio/remote-audio-ui.js?v=11";
+        import { initFreqKeyboard }    from "/js/ui/freq-keyboard.js?v=14";
+        import "/js/ui/if-width-tables.js?v=3";
+
+        const isSingleReceiver = @(isSingleReceiver ? "true" : "false");
+
+        initFreqKeyboard();
+
+        // Mode-aware IF Width SH codes (same as classic Index).
+        if (window.IfWidth) {
+            window.IfWidth.rebuildIfWidthSelect(
+                document.getElementById('ifWidthSelectA'),
+                window._radioModel,
+                '@Model.RadioState.ModeA'
+            );
+            window.IfWidth.rebuildIfWidthSelect(
+                document.getElementById('ifWidthSelectB'),
+                window._radioModel,
+                '@Model.RadioState.ModeB'
+            );
+            const wSel = document.getElementById('ifWidthSelectA');
+            const wLab = document.getElementById('ifWidthValueA');
+            if (wSel && wLab && wSel.selectedIndex >= 0) {
+                wLab.textContent = wSel.options[wSel.selectedIndex].text;
+            }
+        }
+
+        try { window.updateTxButton?.(); } catch { /* ignore */ }
+
+        // No radial canvases — horizontal CSS bars are driven from site.js.
+        window.meterPanel = new MeterPanel({});
+        window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine);
+        window.sMeterHistory = new SMeterHistoryPanel('sMeterHistoryCanvas', {
+            colors: {
+                background: '#0b1220',
+                grid: 'rgba(180,200,220,0.12)',
+                gridLabel: '#8899aa',
+                history: '#4af09a',
+                peakHold: '#f0c040',
+                noiseFloor: 'rgba(255,120,120,0.7)'
+            }
+        });
+        if (!isSingleReceiver) {
+            window.sMeterHistoryB = new SMeterHistoryPanel('sMeterHistoryCanvasB', {
+                colors: {
+                    background: '#0b1220',
+                    grid: 'rgba(180,200,220,0.12)',
+                    gridLabel: '#8899aa',
+                    history: '#4af09a',
+                    peakHold: '#f0c040',
+                    noiseFloor: 'rgba(255,120,120,0.7)'
+                }
+            });
+        }
+
+        // Filter / IF band-scope (works without SDR)
+        window.filterScopePanelA = new FilterScopePanel('filterScopeCanvasA', '@Model.RadioModel', {
+            ifWidthCode:       '@Model.RadioState.IfWidthA',
+            ifShiftHz:          @Model.RadioState.IfShiftA,
+            roofingCode:       '@Model.RadioState.RoofingFilterA',
+            manualNotchOn:      @(Model.RadioState.ManualNotchA == "1" ? "true" : "false"),
+            manualNotchFreqHz:  @(Model.RadioState.ManualNotchFreqA),
+            contourOn:          false,
+            contourFreqHz:      0,
+            apfOn:              false,
+            apfFreqHz:          0,
+            mode:              '@Model.RadioState.ModeA'
+        });
+        if (!isSingleReceiver) {
+            window.filterScopePanelB = new FilterScopePanel('filterScopeCanvasB', '@Model.RadioModel', {
+                ifWidthCode:       '@Model.RadioState.IfWidthB',
+                ifShiftHz:          @Model.RadioState.IfShiftB,
+                roofingCode:       '@Model.RadioState.RoofingFilterB',
+                manualNotchOn:      @(Model.RadioState.ManualNotchB == "1" ? "true" : "false"),
+                manualNotchFreqHz:  @(Model.RadioState.ManualNotchFreqB),
+                contourOn:          false,
+                contourFreqHz:      0,
+                apfOn:              false,
+                apfFreqHz:          0,
+                mode:              '@Model.RadioState.ModeB'
+            });
+        }
+
+        initRemoteAudioUi();
+
+        const spectrumPanelA = new SpectrumPanel('spectrumCanvasA', 'spectrumContainerA', @Model.RadioState.FrequencyA, 'A');
+        const spectrumPanelB = isSingleReceiver
+            ? null
+            : new SpectrumPanel('spectrumCanvasB', 'spectrumContainerB', @Model.RadioState.FrequencyB, 'B');
+
+        const spectrumPipeline = new SdrSpectrumPipeline();
+        let aHasFrame = false, bHasFrame = false;
+
+        spectrumPipeline.onSpectrumUpdate('A', data => {
+            if (!aHasFrame) { aHasFrame = true; spectrumPanelA?.setStatus('streaming'); }
+            spectrumPanelA?.update(data);
+        });
+        spectrumPipeline.onSpectrumUpdate('B', data => {
+            if (!bHasFrame) { bHasFrame = true; spectrumPanelB?.setStatus('streaming'); }
+            spectrumPanelB?.update(data);
+        });
+        spectrumPipeline.onStatusChange('A', status => spectrumPanelA?.setStatus(status));
+        spectrumPipeline.onStatusChange('B', status => spectrumPanelB?.setStatus(status));
+        spectrumPipeline.onError('A', detail => spectrumPanelA?.setError(detail));
+        spectrumPipeline.onError('B', detail => spectrumPanelB?.setError(detail));
+        spectrumPipeline.onFrequencyA(hz => spectrumPanelA?.setVfoFrequency(hz));
+        spectrumPipeline.onFrequencyB(hz => spectrumPanelB?.setVfoFrequency(hz));
+
+        const formatSpeed = (d) => d === 1 ? 'Full' : `1/${d}`;
+        const formatBright = (db) => db <= 0 ? 'Off' : `+${db}`;
+        const initialSpanA = @(Model.SdrSampleRateHzA);
+        document.querySelectorAll('.span-btn[data-vfo="A"]').forEach(btn => {
+            btn.classList.toggle('u2-btn-active', btn.dataset.hz === String(initialSpanA));
+            btn.classList.toggle('active', btn.dataset.hz === String(initialSpanA));
+        });
+
+        ['A', 'B'].forEach(vfo => {
+            const panel = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+            const rangeSlider = document.querySelector(`.spectrum-range-slider[data-vfo="${vfo}"]`);
+            const rangeLabel  = document.querySelector(`.spectrum-range-label[data-vfo="${vfo}"]`);
+            if (rangeSlider && rangeLabel && panel) {
+                const r = Math.round(panel.getSpectrumRange());
+                rangeSlider.value = String(r);
+                rangeLabel.textContent = r + ' dB';
+                rangeSlider.addEventListener('input', () => {
+                    const v = parseInt(rangeSlider.value, 10);
+                    rangeLabel.textContent = v + ' dB';
+                    panel.setSpectrumRange(v);
+                });
+            }
+            const speedSlider = document.querySelector(`.spectrum-speed-slider[data-vfo="${vfo}"]`);
+            const speedLabel  = document.querySelector(`.spectrum-speed-label[data-vfo="${vfo}"]`);
+            if (speedSlider && speedLabel && panel) {
+                const speeds = SpectrumPanel.WATERFALL_SPEEDS;
+                const idx = Math.max(0, speeds.indexOf(panel.getWaterfallSpeed()));
+                speedSlider.value = String(idx);
+                speedLabel.textContent = formatSpeed(speeds[idx]);
+                speedSlider.addEventListener('input', () => {
+                    const divisor = speeds[parseInt(speedSlider.value, 10)];
+                    speedLabel.textContent = formatSpeed(divisor);
+                    panel.setWaterfallSpeed(divisor);
+                });
+            }
+            const brightSlider = document.querySelector(`.spectrum-bright-slider[data-vfo="${vfo}"]`);
+            const brightLabel  = document.querySelector(`.spectrum-bright-label[data-vfo="${vfo}"]`);
+            if (brightSlider && brightLabel && panel) {
+                const b = panel.getWaterfallBrightness();
+                brightSlider.value = String(b);
+                brightLabel.textContent = formatBright(b);
+                brightSlider.addEventListener('input', () => {
+                    const db = parseInt(brightSlider.value, 10);
+                    brightLabel.textContent = formatBright(db);
+                    panel.setWaterfallBrightness(db);
+                });
+            }
+        });
+
+        document.querySelectorAll('.spectrum-hold-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const vfo = btn.dataset.vfo;
+                const panel = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+                if (!panel) return;
+                const nowHeld = !panel.isHeld();
+                panel.setHold(nowHeld);
+                btn.classList.toggle('u2-btn-warn', nowHeld);
+                btn.classList.toggle('active', nowHeld);
+                const badge = document.getElementById('spectrumStatusBadge' + vfo);
+                if (badge) badge.textContent = nowHeld ? 'Hold' : 'Live';
+            });
+        });
+
+        document.querySelectorAll('.span-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const hz = btn.dataset.hz;
+                const vfo = btn.dataset.vfo || 'A';
+                try {
+                    const res = await fetch(`/api/sdr/span?hz=${hz}&sdrId=${vfo}`, { method: 'POST' });
+                    if (res.ok) {
+                        document.querySelectorAll(`.span-btn[data-vfo="${vfo}"]`).forEach(b => {
+                            b.classList.remove('u2-btn-active', 'active');
+                        });
+                        btn.classList.add('u2-btn-active', 'active');
+                    }
+                } catch { /* ignore */ }
+            });
+        });
+
+        spectrumPipeline.connect();
+        window.addEventListener('pagehide', () => {
+            try { spectrumPipeline.disconnect(); } catch { /* ignore */ }
+        });
+    </script>
+}

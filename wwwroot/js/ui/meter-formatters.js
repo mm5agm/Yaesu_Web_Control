@@ -38,7 +38,7 @@ export const MeterFormatters = {
 
     // Gauge overlay — calibrated volts display.
     alcVolts(volts) {
-        return `${Math.round(volts)}V`;
+        return `${Math.round(volts)} V`;
     },
 
     // ----------------------------------------------------------------
@@ -49,6 +49,11 @@ export const MeterFormatters = {
         return db.toFixed(1);
     },
 
+    // Freestanding / bar label (unit included).
+    compressionLabel(db) {
+        return `${Number(db).toFixed(1)} dB`;
+    },
+
     // ----------------------------------------------------------------
     // IDD — drain current  (IDDGauge appends 'A' as gaugeTitleSuffix)
     // ----------------------------------------------------------------
@@ -57,12 +62,20 @@ export const MeterFormatters = {
         return amps.toFixed(1);
     },
 
+    iddLabel(amps) {
+        return `${Number(amps).toFixed(1)} A`;
+    },
+
     // ----------------------------------------------------------------
     // VDD — supply voltage  (VDDGauge appends 'V' as gaugeTitleSuffix)
     // ----------------------------------------------------------------
 
     vddOverlay(volts) {
         return volts.toFixed(1);
+    },
+
+    vddLabel(volts) {
+        return `${Number(volts).toFixed(1)} V`;
     },
 
     // ----------------------------------------------------------------

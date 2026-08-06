@@ -309,11 +309,12 @@ window.setBand = async function (receiver, band) {
 };
 
 // Outer mode setter - called from Razor inline onchange on mode select
+const MODE_TO_CAT_CODE = {
+    "LSB": "1", "USB": "2", "CW-U": "3", "FM": "4", "AM": "5", "RTTY-L": "6", "CW-L": "7", "DATA-L": "8", "RTTY-U": "9", "DATA-FM": "A", "FM-N": "B", "DATA-U": "C", "AM-N": "D", "PSK": "E", "DATA-FM-N": "F"
+};
+
 window.setMode = async function (receiver, mode) {
-    const modeToCatCode = {
-        "LSB": "1", "USB": "2", "CW-U": "3", "FM": "4", "AM": "5", "RTTY-L": "6", "CW-L": "7", "DATA-L": "8", "RTTY-U": "9", "DATA-FM": "A", "FM-N": "B", "DATA-U": "C", "AM-N": "D", "PSK": "E", "DATA-FM-N": "F"
-    };
-    const catCode = modeToCatCode[mode];
+    const catCode = MODE_TO_CAT_CODE[mode];
     if (!catCode) {
         return;
     }
@@ -392,6 +393,10 @@ function updateTxIndicators(isTransmitting) {
     if (window.ftdx101Meters) {
         window.ftdx101Meters.setTransmitting(isTransmitting);
     }
+    const txInd = document.getElementById('txInd');
+    const rxInd = document.getElementById('rxInd');
+    if (txInd) txInd.classList.toggle('on', !!isTransmitting);
+    if (rxInd) rxInd.classList.toggle('on', !isTransmitting);
     if (!isTransmitting) {
         // Force gauges to zero immediately when TX stops
         if (window.meterPanel) {
@@ -400,6 +405,8 @@ function updateTxIndicators(isTransmitting) {
         }
         updateMeterDomLabel('PowerMeter', { skip: false, displayValue: { watts: 0, rawAvg: 0 } });
         updateMeterDomLabel('SWRMeter',   { skip: false, displayValue: { swr: 1.0 } });
+        updateMeterDomLabel('CompressionMeter', { skip: false, displayValue: { db: 0 } });
+        updateMeterDomLabel('ALCMeter', { skip: false, displayValue: { percent: 0, alcVolts: 0, rawValue: 0 } });
     }
 }
 
@@ -410,13 +417,22 @@ function updateMeterDomLabel(property, result) {
     const dv = result.displayValue;
     switch (property) {
         case 'PowerMeter': {
-            const formatted = window.MeterFormatters.powerOverlay(dv.watts);
+            // Canvas/gauge overlay stays unitless (gaugeTitleSuffix adds "W").
+            // UI v2 bar label includes the unit.
+            const overlay = window.MeterFormatters.powerOverlay(dv.watts);
             const el = document.getElementById('powerMeterValue');
-            if (el) el.textContent = formatted;
+            if (el) {
+                el.textContent = document.getElementById('powerMeterBar')
+                    ? window.MeterFormatters.powerLabel(dv.watts)
+                    : overlay;
+            }
             const rawEl = document.getElementById('raw-powerout-label');
             if (rawEl) rawEl.textContent = 'Raw Power Out: ' + Math.round(dv.rawAvg);
             const canvas = document.getElementById('powerMeterCanvas');
-            if (canvas) canvas.dataset.reading = formatted;
+            if (canvas) canvas.dataset.reading = overlay;
+            // UI v2 horizontal bar (0–200 W scale)
+            const bar = document.getElementById('powerMeterBar');
+            if (bar) bar.style.width = `${Math.max(0, Math.min(100, (dv.watts / 200) * 100))}%`;
             break;
         }
         case 'SWRMeter': {
@@ -425,14 +441,27 @@ function updateMeterDomLabel(property, result) {
             if (el) el.textContent = formatted;
             const canvas = document.getElementById('swrMeterCanvas');
             if (canvas) canvas.dataset.reading = formatted;
+            // UI v2 horizontal bar (1.0–3.0 mapped to 0–100%)
+            const bar = document.getElementById('swrMeterBar');
+            if (bar) {
+                const pct = Math.max(0, Math.min(100, ((dv.swr - 1) / 2) * 100));
+                bar.style.width = `${pct}%`;
+            }
             break;
         }
         case 'CompressionMeter': {
-            const formatted = window.MeterFormatters.compressionOverlay(dv.db);
+            const overlay = window.MeterFormatters.compressionOverlay(dv.db);
             const el = document.getElementById('compressionMeterValue');
-            if (el) el.textContent = formatted;
+            if (el) {
+                el.textContent = document.getElementById('compressionMeterBar')
+                    ? window.MeterFormatters.compressionLabel(dv.db)
+                    : overlay;
+            }
             const canvas = document.getElementById('compressionMeterCanvas');
-            if (canvas) canvas.dataset.reading = formatted;
+            if (canvas) canvas.dataset.reading = overlay;
+            // UI v2 horizontal bar (0–20 dB)
+            const bar = document.getElementById('compressionMeterBar');
+            if (bar) bar.style.width = `${Math.max(0, Math.min(100, (dv.db / 20) * 100))}%`;
             break;
         }
         case 'ALCMeter': {
@@ -452,22 +481,39 @@ function updateMeterDomLabel(property, result) {
             if (meterEl) meterEl.textContent = alcFormatted;
             const alcCanvas = document.getElementById('alcMeterCanvas');
             if (alcCanvas) alcCanvas.dataset.reading = alcFormatted;
+            // UI v2 horizontal ALC bar
+            const bar2 = document.getElementById('alcMeterBar');
+            if (bar2) bar2.style.width = `${Math.max(0, Math.min(100, dv.percent))}%`;
             break;
         }
         case 'IDDMeter': {
-            const formatted = window.MeterFormatters.iddOverlay(dv.amps);
+            const overlay = window.MeterFormatters.iddOverlay(dv.amps);
             const el = document.getElementById('iddMeterValue');
-            if (el) el.textContent = formatted;
+            if (el) {
+                el.textContent = document.getElementById('iddMeterBar')
+                    ? window.MeterFormatters.iddLabel(dv.amps)
+                    : overlay;
+            }
             const canvas = document.getElementById('iddMeterCanvas');
-            if (canvas) canvas.dataset.reading = formatted;
+            if (canvas) canvas.dataset.reading = overlay;
+            // UI v2 horizontal bar (0–25 A)
+            const bar = document.getElementById('iddMeterBar');
+            if (bar) bar.style.width = `${Math.max(0, Math.min(100, (dv.amps / 25) * 100))}%`;
             break;
         }
         case 'VDDMeter': {
-            const formatted = window.MeterFormatters.vddOverlay(dv.volts);
+            const overlay = window.MeterFormatters.vddOverlay(dv.volts);
             const el = document.getElementById('vddMeterValue');
-            if (el) el.textContent = formatted;
+            if (el) {
+                el.textContent = document.getElementById('vddMeterBar')
+                    ? window.MeterFormatters.vddLabel(dv.volts)
+                    : overlay;
+            }
             const canvas = document.getElementById('vddMeterCanvas');
-            if (canvas) canvas.dataset.reading = formatted;
+            if (canvas) canvas.dataset.reading = overlay;
+            // UI v2 horizontal bar (0–60 V)
+            const bar = document.getElementById('vddMeterBar');
+            if (bar) bar.style.width = `${Math.max(0, Math.min(100, (dv.volts / 60) * 100))}%`;
             break;
         }
         case 'Temperature': {
@@ -662,57 +708,67 @@ function applyVfoActiveStyling() {
         bSpec?.classList.remove('vfo-inactive');
         aCol.classList.toggle('vfo-active', activeVfo === 0);
         bCol.classList.toggle('vfo-active', activeVfo === 1);
-        return;
+    } else {
+        // Single-receiver uses greying (below), not the active highlight — clear
+        // any stale highlight in case the RadioModel was switched mid-session.
+        aCol.classList.remove('vfo-active');
+        bCol.classList.remove('vfo-active');
+
+        // Single-receiver: white = active VFO (the one currently RECEIVING),
+        // grey = the other one. This is true in BOTH normal and split mode:
+        //
+        //   Normal mode (R2): white = active VFO (RX), grey = the other.
+        //                     Pressing A/B on the radio swaps which is RX.
+        //
+        //   Split mode  (R7): white = active VFO (RX), grey = TX VFO.
+        //                     Radio receives on active VFO, transmits on the
+        //                     opposite VFO.
+        //
+        // In both cases, "inactive" (= grey) = whichever VFO is NOT the active
+        // RX one. We previously drove split-mode greying from txVfo (FT
+        // command) because the spec implied FT tracks the TX VFO — but the
+        // FTdx10 doesn't reliably move FT when split engages while VFO-B is
+        // the active VFO (Jacek SP3L 2026-06-21 #34 R7 fail). Using activeVfo
+        // (VS command) for both cases is deterministic and matches what the
+        // radio is actually doing.
+        //
+        // The TX button and SPLIT badge land on the inactive panel in split
+        // mode (R8) because updateTxButton / updateSplitButton derive the TX
+        // position as "opposite of active" on single-receiver radios. The
+        // card header is not greyed, so TX stays full-colour and clickable.
+        //
+        // The spectrum panel is NOT greyed — on single-receiver radios the
+        // single spectrum always shows the live receive signal. The second
+        // spectrum panel is hidden permanently by updateContainerVisibility().
+        const splitOn = splitMode > 0;
+        const inactiveCol = (activeVfo === 0) ? bCol : aCol;
+        const activeCol   = (activeVfo === 0) ? aCol : bCol;
+
+        activeCol.classList.remove('vfo-inactive', 'vfo-tx-editable');
+        inactiveCol.classList.add('vfo-inactive');
+        // R10/R11: in split mode the inactive panel IS the TX VFO — operators
+        // must still be able to set the TX frequency from YWC without
+        // un-splitting. .vfo-tx-editable re-enables the frequency field while
+        // leaving every other card-body control read-only.
+        inactiveCol.classList.toggle('vfo-tx-editable', splitOn);
+
+        // Make sure neither spectrum carries a stale inactive class from a
+        // previous render — in case the user switched RadioModel from
+        // dual-receiver to single-receiver mid-session.
+        aSpec?.classList.remove('vfo-inactive');
+        bSpec?.classList.remove('vfo-inactive');
     }
 
-    // Single-receiver uses greying (below), not the active highlight — clear
-    // any stale highlight in case the RadioModel was switched mid-session.
-    aCol.classList.remove('vfo-active');
-    bCol.classList.remove('vfo-active');
-
-    // Single-receiver: white = active VFO (the one currently RECEIVING),
-    // grey = the other one. This is true in BOTH normal and split mode:
-    //
-    //   Normal mode (R2): white = active VFO (RX), grey = the other.
-    //                     Pressing A/B on the radio swaps which is RX.
-    //
-    //   Split mode  (R7): white = active VFO (RX), grey = TX VFO.
-    //                     Radio receives on active VFO, transmits on the
-    //                     opposite VFO.
-    //
-    // In both cases, "inactive" (= grey) = whichever VFO is NOT the active
-    // RX one. We previously drove split-mode greying from txVfo (FT
-    // command) because the spec implied FT tracks the TX VFO — but the
-    // FTdx10 doesn't reliably move FT when split engages while VFO-B is
-    // the active VFO (Jacek SP3L 2026-06-21 #34 R7 fail). Using activeVfo
-    // (VS command) for both cases is deterministic and matches what the
-    // radio is actually doing.
-    //
-    // The TX button and SPLIT badge land on the inactive panel in split
-    // mode (R8) because updateTxButton / updateSplitButton derive the TX
-    // position as "opposite of active" on single-receiver radios. The
-    // card header is not greyed, so TX stays full-colour and clickable.
-    //
-    // The spectrum panel is NOT greyed — on single-receiver radios the
-    // single spectrum always shows the live receive signal. The second
-    // spectrum panel is hidden permanently by updateContainerVisibility().
-    const splitOn = splitMode > 0;
-    const inactiveCol = (activeVfo === 0) ? bCol : aCol;
-    const activeCol   = (activeVfo === 0) ? aCol : bCol;
-
-    activeCol.classList.remove('vfo-inactive', 'vfo-tx-editable');
-    inactiveCol.classList.add('vfo-inactive');
-    // R10/R11: in split mode the inactive panel IS the TX VFO — operators
-    // must still be able to set the TX frequency from YWC without
-    // un-splitting. .vfo-tx-editable re-enables the frequency field while
-    // leaving every other card-body control read-only.
-    inactiveCol.classList.toggle('vfo-tx-editable', splitOn);
-
-    // Make sure neither spectrum carries a stale inactive class from a
-    // previous render — in case the user switched RadioModel from
-    // dual-receiver to single-receiver mid-session.
-    aSpec?.classList.remove('vfo-inactive');
-    bSpec?.classList.remove('vfo-inactive');
+    if (typeof window.u2ApplyActiveVfo === 'function') {
+        try {
+            window.u2ApplyActiveVfo({
+                activeVfo,
+                txVfo,
+                splitMode,
+                singleReceiver
+            });
+        } catch (e) { /* UI v2 optional */ }
+    }
 }
 
 // Apply the styling at page-load time too, before any SignalR update has
@@ -1103,6 +1159,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeA', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('A', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('A', update.value);
+        if (typeof window.u2SyncModeChips === 'function') window.u2SyncModeChips('A', update.value);
     }
     if (update.property === "ModeB") {
         updateModeSelect('B', update.value);
@@ -1116,6 +1173,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeB', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('B', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('B', update.value);
+        if (typeof window.u2SyncModeChips === 'function') window.u2SyncModeChips('B', update.value);
     }
 
     // --- ANTENNA CHANGE ---
@@ -1346,11 +1404,18 @@ connection.on("RadioStateUpdate", function (update) {
     // --- NOISE REDUCTION ---
     if (update.property === "NrA") {
         const el = document.getElementById('nrSelectA');
-        if (el) el.value = update.value;
+        if (el) {
+            if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = String(update.value) !== '0';
+            else el.value = update.value;
+        }
+        if (typeof window.u2SyncDspChips === 'function') window.u2SyncDspChips();
     }
     if (update.property === "NrB") {
         const el = document.getElementById('nrSelectB');
-        if (el) el.value = update.value;
+        if (el) {
+            if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = String(update.value) !== '0';
+            else el.value = update.value;
+        }
     }
 
     // --- MANUAL NOTCH FREQUENCY ---
@@ -1368,21 +1433,34 @@ connection.on("RadioStateUpdate", function (update) {
     // --- NOISE BLANKER ---
     if (update.property === "NbA") {
         const el = document.getElementById('nbSelectA');
-        if (el) el.value = update.value;
+        if (el) {
+            if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = String(update.value) === '1';
+            else el.value = update.value;
+        }
+        if (typeof window.u2SyncDspChips === 'function') window.u2SyncDspChips();
     }
     if (update.property === "NbB") {
         const el = document.getElementById('nbSelectB');
-        if (el) el.value = update.value;
+        if (el) {
+            if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = String(update.value) === '1';
+            else el.value = update.value;
+        }
     }
 
     // --- AUTO NOTCH ---
     if (update.property === "AutoNotchA") {
         const el = document.getElementById('autoNotchSelectA');
-        if (el) el.value = update.value;
+        if (el) {
+            if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = String(update.value) === '1';
+            else el.value = update.value;
+        }
     }
     if (update.property === "AutoNotchB") {
         const el = document.getElementById('autoNotchSelectB');
-        if (el) el.value = update.value;
+        if (el) {
+            if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = String(update.value) === '1';
+            else el.value = update.value;
+        }
     }
 
     // --- IF WIDTH ---
@@ -1510,12 +1588,18 @@ connection.on("RadioStateUpdate", function (update) {
     // --- MANUAL NOTCH ---
     if (update.property === "ManualNotchA") {
         const el = document.getElementById('manualNotchSelectA');
-        if (el) el.value = update.value;
+        if (el) {
+            if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = String(update.value) === '1';
+            else el.value = update.value;
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ manualNotchOn: update.value === '1' });
     }
     if (update.property === "ManualNotchB") {
         const el = document.getElementById('manualNotchSelectB');
-        if (el) el.value = update.value;
+        if (el) {
+            if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = String(update.value) === '1';
+            else el.value = update.value;
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ manualNotchOn: update.value === '1' });
     }
 
@@ -2763,7 +2847,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function setMode(receiver, mode) {
-        const catCode = modeToCatCode[mode];
+        const catCode = MODE_TO_CAT_CODE[mode];
         if (!catCode) {
             return;
         }
@@ -3196,6 +3280,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // when gaugeTitleShow is true (set in gauge.js).
         const sLabel = document.getElementById(labelId);
         if (sLabel) sLabel.textContent = sUnit;
+        // UI v2 horizontal S-meter bar (VFO A only on the compact console)
+        if (receiver === 'A') {
+            const bar = document.getElementById('sMeterBar');
+            if (bar) {
+                const pct = Math.max(0, Math.min(100, (Number(gaugePos) / 255) * 100));
+                bar.style.width = `${pct}%`;
+            }
+        }
     }
 
     // Update MIC bar meter (0-255 raw value)

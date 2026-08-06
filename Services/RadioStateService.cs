@@ -88,6 +88,25 @@ namespace Yaesu_Web_Control.Services
 
         public RadioState InitialState => _initialState;
 
+        // Ephemeral telemetry — updates many times per second via MeterPollingService.
+        // Persisting them to radio_state.json on every change was saturating the disk
+        // and making S/power meters feel stuck (each Save is a full indented JSON rewrite
+        // under a global lock, plus an Information log).
+        private static readonly HashSet<string> EphemeralProperties = new(StringComparer.Ordinal)
+        {
+            nameof(SMeterA),
+            nameof(SMeterB),
+            nameof(PowerMeter),
+            nameof(CompressionMeter),
+            nameof(ALCMeter),
+            nameof(SWRMeter),
+            nameof(IDDMeter),
+            nameof(VDDMeter),
+            nameof(Temperature),
+            nameof(IsTransmitting),
+            nameof(IsConnected),
+        };
+
         private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {
             if (!EqualityComparer<T>.Default.Equals(field, value))
@@ -102,15 +121,11 @@ namespace Yaesu_Web_Control.Services
                 OnPropertyChanged(propertyName);
                 BroadcastUpdate(propertyName!, value!);
 
-                // Only save after initialization is complete
-                if (IsInitialized)
+                // Persist settings-like state only — never high-rate meters.
+                if (IsInitialized && propertyName is not null && !EphemeralProperties.Contains(propertyName))
                 {
                     _logger.LogDebug("[SetField] Persisting state (IsInitialized=true, {Property}={Value})", propertyName, value);
                     _statePersistence.Save(this.ToRadioState());
-                }
-                else
-                {
-                    _logger.LogDebug("[SetField] NOT persisting {Property} (IsInitialized=false)", propertyName);
                 }
             }
             else
@@ -153,10 +168,6 @@ namespace Yaesu_Web_Control.Services
         private void BroadcastUpdate(string property, object value)
         {
             _logger.LogDebug("[BroadcastUpdate] Broadcasting {Property} = {Value}", property, value);
-            if (property == "PowerMeter")
-            {
-                _logger.LogWarning("[DEBUG][PowerMeter] Broadcasting PowerMeter value: {@Value}", value);
-            }
             // Special case: PowerMeter should include isTransmitting for frontend sync
             if (property == "PowerMeter")
             {
