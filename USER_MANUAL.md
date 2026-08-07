@@ -1814,6 +1814,8 @@ The shipped default is measured on a specific FTdx101MP. Your individual radio m
 
 The power meter on YWC reads the radio's transmitted RF power. To calibrate it, you transmit at known power levels and record the raw values YWC sees.
 
+![The Power panel on the Meter Calibration page. The live Raw indicator (ringed) is the whole number you read while transmitting; the Raw Value column below it is where you type that number, with the known watts going in the Radio Value column alongside.](pictures/Calibration-Power-Annotated.png)
+
 **Before you start:**
 
 - Have a **dummy load** connected — not an antenna, since you'll be transmitting briefly at various power levels.
@@ -1821,13 +1823,17 @@ The power meter on YWC reads the radio's transmitted RF power. To calibrate it, 
 
 **The procedure:**
 
-1. Open the **Meter Calibration** page on YWC. The Power row's Raw indicator updates only during transmit.
+1. Open the **Meter Calibration** page on YWC. The Power row's **Raw** indicator (just above the Raw Value column) updates only during transmit, and is always a **whole number**.
 2. Set the radio's RF Power to a low value (e.g. 5 W) via the radio's RF POWER control or YWC's slider.
 3. Press the PTT or use YWC's TX button briefly — long enough for the meter to stabilise (about a second).
-4. Note the YWC Raw value at that power. Release PTT. Add or edit a row in the calibration table with `raw = <observed>, Radio = <known watts>`.
+4. Note the whole-number **Raw** value YWC shows. Release PTT. In the calibration table, type that number into the **Raw Value** box and the known power into the **Radio Value** box (for example `Raw Value = 78`, `Radio Value = 25`).
 5. Increase RF Power to the next test point (e.g. 25 W → 50 W → 100 W → max for your radio).
 6. Repeat brief transmits at each level and record the raw values.
 7. Click **Save Calibration**.
+
+> **Get the two columns the right way round.** The **Raw Value** is the whole number YWC reports; the **Radio Value** is the watts you set on the rig. Don't put watts in the Raw box.
+>
+> **Every higher power must give a higher Raw.** More output always drives the meter reading up, so your raw numbers must *increase* with the power. If 25 W ever shows a *lower* raw than 10 W, two readings have got crossed — redo that pair. This is the single most common power-calibration mistake, and it makes the gauge read backwards.
 
 For a quick sanity check after saving: transmit at a known power and watch YWC's power gauge — the needle should sit on the correct watts label.
 
