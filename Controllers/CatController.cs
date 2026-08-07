@@ -1807,6 +1807,53 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
+        // Quick Memory Bank store / recall / return-to-VFO. Mirrors the '101's
+        // front-panel keys (OM §"Quick Memory Bank"):
+        //   store  → QI;  = press-and-hold [QMB]: write MAIN band to the next slot.
+        //   recall → QR;  = short-press [QMB]: enter QMB mode; repeat steps slots.
+        //   vfo    → VM;  = press [V/M]: leave QMB mode, back to VFO.
+        // Recall is MODAL — QR; puts the radio *into* QMB mode, and VM; is the
+        // only way back — so the UI exposes all three, otherwise a web-only user
+        // is stranded in QMB (matters most for accessibility users who can't
+        // reach the radio's V/M key). All three are set-only opcodes with no
+        // read-back; a recall changes frequency/mode, which reaches the UI via
+        // the radio's auto-info (dual-receiver) or the FA/FB meter poll
+        // (single-receiver). Gated in the UI by RadioCapabilities.SupportsQmb.
+        // Route token is {op}, NOT {action}: "action" is a reserved ASP.NET Core
+        // routing token (like {controller}/{area}/{page}) and an attribute route
+        // that uses it silently fails to register — every request 404s. Cost me a
+        // real debugging session; leave it named {op}.
+        [HttpPost("qmb/{op}")]
+        public async Task<IActionResult> Qmb(string op)
+        {
+            var a = op.ToLowerInvariant();
+            string command = a switch
+            {
+                "store"  => "QI;",
+                "recall" => "QR;",
+                "vfo"    => "VM;",
+                _        => ""
+            };
+            if (command.Length == 0)
+                return BadRequest(new { error = "QMB action must be 'store', 'recall' or 'vfo'" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                await _catClient.SendCommandAsync(command, "WebUI", CancellationToken.None);
+                _logger.LogInformation("QMB {Action} ({Command})", a, command);
+                return Ok(new { qmb = a });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending QMB {Action}", a);
+                return StatusCode(500, new { error = "Failed to send QMB command" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
         // Set the active/operating band on dual-receiver radios (FTdx101).
         // VS selects which band the main tuning knob controls: 0 = MAIN (VFO A),
         // 1 = SUB (VFO B). The radio auto-broadcasts VS, so the UI highlight

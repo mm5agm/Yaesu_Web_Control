@@ -564,6 +564,14 @@ The last segment you used on each band is remembered, so when you return to a ba
 
 **60m — Japan:** No 60m secondary allocation; the 60m band does not appear for the Japan plan.
 
+**Quick Memory Bank (Store / Recall / V/M)** — next to the band buttons are three Quick Memory Bank (QMB) buttons. The QMB is the radio's own scratch memory stack, separate from the labelled memory channels in the Memory Panel (§5.15) — think of it as a quick "put this frequency somewhere I can jump back to" without naming or saving anything.
+
+- **Store** writes the current VFO frequency and mode to the next QMB slot (the same as pressing and holding the front-panel **[QMB]** key).
+- **Recall** steps into the QMB and moves to a stored slot; the radio's display shows **QMB**. Pressing Recall again steps to the next stored slot, exactly like short-pressing the front-panel **[QMB]** key.
+- **V/M** leaves QMB mode and returns to normal VFO tuning (the front-panel **[V/M]** key).
+
+Recall is *modal* — once the radio is in QMB mode it stays there until you press **V/M**, so the V/M button is how you get back out without touching the rig. This matters most if you operate entirely from the browser. The radio sends no confirmation back over CAT for these three actions, so the radio's own display (showing **QMB** or not) is the thing to watch. The QMB buttons only appear for radio models that support it.
+
 ---
 
 ### 5.10 Transmit Controls

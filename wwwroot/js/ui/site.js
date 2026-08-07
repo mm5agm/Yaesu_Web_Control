@@ -308,6 +308,36 @@ window.setBand = async function (receiver, band) {
     }
 };
 
+// Quick Memory Bank Store / Recall (Thomas OZ1JTE request). Global radio
+// function — the backend sends QI; (store) or QR; (recall). A recall changes
+// the radio's frequency/mode, which flows back to the UI via auto-info or the
+// FA/FB poll, so there's nothing to update here beyond an accessible status
+// announcement (Thomas is a screen-reader user).
+// Announce into the aria-live status span. Clearing first, then setting on the
+// next frame, forces a screen reader to re-read even when the message is
+// identical to last time — Recall sends the same text on every press as the user
+// steps through QMB slots, and without this they'd hear nothing after the first.
+function qmbAnnounce(status, message) {
+    if (!status) return;
+    status.textContent = '';
+    requestAnimationFrame(() => { status.textContent = message; });
+}
+async function qmbSend(action, announce) {
+    const status = document.getElementById('qmbStatus');
+    try {
+        const response = await fetch(`/api/cat/qmb/${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        qmbAnnounce(status, response.ok ? announce : 'QMB command failed');
+    } catch (error) {
+        qmbAnnounce(status, 'QMB command failed');
+    }
+}
+window.qmbStore  = function () { return qmbSend('store',  'Stored to Quick Memory Bank'); };
+window.qmbRecall = function () { return qmbSend('recall', 'Recalled from Quick Memory Bank'); };
+window.qmbVfo    = function () { return qmbSend('vfo',    'Returned to VFO mode'); };
+
 // Outer mode setter - called from Razor inline onchange on mode select
 window.setMode = async function (receiver, mode) {
     const modeToCatCode = {

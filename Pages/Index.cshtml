@@ -25,6 +25,9 @@
     // each VFO is its own physical receiver chain.
     bool isSingleReceiver  = Yaesu_Web_Control.Services.RadioCapabilities.IsSingleReceiver(Model.RadioModel);
     bool hasAntennaSelector = Yaesu_Web_Control.Services.RadioCapabilities.HasAntennaSelector(Model.RadioModel);
+    // Quick Memory Bank Store/Recall buttons (Thomas OZ1JTE request) — rendered
+    // once, next to VFO A's band buttons, since QMB is a radio-global function.
+    bool hasQmb = Yaesu_Web_Control.Services.RadioCapabilities.SupportsQmb(Model.RadioModel);
     // Render VC Tune controls only when both the model supports VC Tune (FTdx101MP)
     // AND the hardware ID is positively confirmed to support VT CAT commands.
     // Empty/unknown ID → hidden (user can reload once radio connects and ID; is received).
@@ -815,6 +818,41 @@
                         <!-- Middle: Band buttons + Mode/Antenna below + filter scope -->
                         <div class="flex-grow-1 d-flex flex-column gap-1">
                             @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", "A", Model.SelectedBandA))
+                            @if (hasQmb)
+                            {
+                                <!-- Quick Memory Bank (QMB) — global radio function, shown once.
+                                     Store (QI;) pushes the current VFO into the QMB stack; Recall
+                                     (QR;) recalls / cycles through the stored slots. Buttons only,
+                                     per Thomas OZ1JTE's request (no stack-contents display). -->
+                                <div class="d-flex align-items-center gap-2 mt-1" id="qmbControls">
+                                    <span class="vfo-control-label" aria-hidden="true">QMB</span>
+                                    <button id="qmbStoreBtn" type="button"
+                                            class="btn btn-outline-secondary btn-sm"
+                                            style="padding:1px 6px;"
+                                            onclick="qmbStore()"
+                                            aria-label="Store current VFO to Quick Memory Bank"
+                                            title="Store the current VFO frequency and mode into the radio's Quick Memory Bank">
+                                        Store
+                                    </button>
+                                    <button id="qmbRecallBtn" type="button"
+                                            class="btn btn-outline-secondary btn-sm"
+                                            style="padding:1px 6px;"
+                                            onclick="qmbRecall()"
+                                            aria-label="Recall from Quick Memory Bank"
+                                            title="Recall from the Quick Memory Bank — the display switches to QMB; repeated presses step through the stored slots. Use V/M to return to VFO.">
+                                        Recall
+                                    </button>
+                                    <button id="qmbVfoBtn" type="button"
+                                            class="btn btn-outline-secondary btn-sm"
+                                            style="padding:1px 6px;"
+                                            onclick="qmbVfo()"
+                                            aria-label="Return to VFO mode (V/M key)"
+                                            title="Return to VFO mode — leaves QMB (mirrors the radio's V/M key).">
+                                        V/M
+                                    </button>
+                                    <span id="qmbStatus" class="visually-hidden" role="status" aria-live="polite"></span>
+                                </div>
+                            }
                             <div class="d-flex align-items-center gap-2 mt-1">
                                 <label class="vfo-control-label" for="modeSelectA">Mode</label>
                                 <select class="form-select form-select-sm vfo-mode-select" id="modeSelectA"

@@ -61,6 +61,28 @@ public static class RadioCapabilities
     };
 
     /// <summary>
+    /// True when the radio has a Quick Memory Bank reachable over CAT via the
+    /// QI (store) / QR (recall) opcode pair, so YWC can expose Store/Recall
+    /// buttons next to the band selector. Every Yaesu model YWC supports has a
+    /// QMB, and QI/QR are common across the modern Yaesu CAT reference (both are
+    /// documented in the CAT manuals and are in scripts/probe's command sweep).
+    ///
+    /// NOTE (bench-gate): the exact store/recall behaviour — stack depth and
+    /// whether QR cycles through the slots — differs across the line, so QI/QR
+    /// should be confirmed against real hardware per model before we rely on it.
+    /// Confirmed on: FTdx101MP (Colin MM5AGM, 2026-08-07 — QI/QR reach the rig
+    /// and the display shows "QMB", with VM; returning to VFO). The rest remain
+    /// enabled on the strength of the shared Yaesu CAT set but are not yet
+    /// hardware-verified; narrow this list if any model rejects QI/QR.
+    /// </summary>
+    public static bool SupportsQmb(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" or "FT-710"
+            or "FTDX3000" or "FTDX5000MP" or "FTDX5000D" or "FT-991A" => true,
+        _ => false
+    };
+
+    /// <summary>
     /// True when the radio has a MAIN VC Tune preselector that can be
     /// controlled via the VT CAT command. Currently limited to the FTdx101
     /// family; all other supported models lack this hardware.
