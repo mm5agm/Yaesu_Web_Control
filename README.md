@@ -185,6 +185,12 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-08-07 - v2.4.3-pre5 (pre-release)
+
+*A small tester build adding Quick Memory Bank buttons to the main screen, aimed especially at operators working entirely from the browser. Highlights:*
+
+**Store and recall the radio's Quick Memory Bank from the screen.** Next to the band buttons there are now three small buttons — **Store**, **Recall** and **V/M**. Store drops the current frequency and mode into the radio's Quick Memory Bank — the same scratch stack you reach by holding the front-panel QMB key. Recall steps into it and moves through the stored slots, and V/M brings you back to normal VFO tuning. It's the quick "park this frequency somewhere I can jump straight back to" memory, separate from the named channels in the Mem panel. For screen-reader users the buttons speak each action, and re-announce on every Recall press so you can hear yourself stepping through the slots. Confirmed on the FTdx101MP — if you have another Yaesu, I'd like to know whether Store and Recall behave the same on yours.
+
 ## 2026-08-05 - v2.4.3-pre4 (pre-release)
 
 *YWC no longer needs an internet connection. If your shack PC is online, nothing you can see changes and you can safely ignore this one. If it is not, this is the release that makes YWC work at all.*
