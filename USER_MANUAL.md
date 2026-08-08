@@ -1769,6 +1769,13 @@ For example, the S-meter might have points like:
 
 The gauge interpolates between points to produce smooth readings.
 
+> **Important — where each number comes from.** The gauges and value badges on the calibration page (the needle, the **Power Out X.XW** badge, the S-unit label, and so on) are the app's *output*: it produces them by running the raw value through the **current** calibration curve. They are **not** the numbers you record. To make a calibration point you pair two things:
+>
+> - the **raw value** — read from the **`Raw:`** indicator on the page (the number the radio sends, before any calibration); and
+> - the **true value** — read from the **radio's own meter or display** (or an external reference, such as a wattmeter into a dummy load).
+>
+> Copying the page's own gauge reading back into the table calibrates the app against itself and achieves nothing. Always take the true value from the radio, never from YWC's gauge.
+
 **Editing calibration:**
 
 1. To add a point: click **Add Point**, then enter the raw and display values.
@@ -1814,7 +1821,7 @@ The shipped default is measured on a specific FTdx101MP. Your individual radio m
 
 The power meter on YWC reads the radio's transmitted RF power. To calibrate it, you transmit at known power levels and record the raw values YWC sees.
 
-![The Power panel on the Meter Calibration page. The live Raw indicator (ringed) is the whole number you read while transmitting; the Raw Value column below it is where you type that number, with the known watts going in the Radio Value column alongside.](pictures/Calibration-Power-Annotated.png)
+![The Power panel on the Meter Calibration page, annotated. The "Power Out" badge (ringed in red and struck through) is the app's computed result — do not read it. Read the green-ringed live Raw indicator instead — a whole number that only moves while transmitting — type it into the Raw Value column, and put the watts your radio's own meter shows in the Radio Value column.](pictures/Calibration-Power-Annotated.png)
 
 **Before you start:**
 
