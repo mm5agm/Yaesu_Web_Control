@@ -5,28 +5,28 @@
       "type": "numeric",
       "points": [
         {
-          "Radio": "5",
-          "raw": 30
+          "Radio": "10",
+          "raw": 54
         },
         {
           "Radio": "25",
-          "raw": 76
+          "raw": 75
         },
         {
           "Radio": "50",
-          "raw": 112
+          "raw": 114
         },
         {
           "Radio": "100",
-          "raw": 157
+          "raw": 160
         },
         {
           "Radio": "150",
-          "raw": 190
+          "raw": 192
         },
         {
           "Radio": "200",
-          "raw": 222
+          "raw": 224
         }
       ],
       "isGauge": true,

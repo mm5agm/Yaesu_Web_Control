@@ -30,13 +30,13 @@
     {
       "id": "e5a69908",
       "from": null,
-      "date": "2026-08-07",
+      "date": "2026-08-09",
       "appVersion": "2.4.3",
-      "note": null,
+      "note": "PWR re-measured from the Raw indicator (supersedes the reversed 2026-08-07 values)",
       "meters": {
         "PWR": {
-          "labels": ["25", "10", "50", "100", "150", "200"],
-          "raw": [49.5, 53.7, 107.7, 157.4, 181.2, 200]
+          "labels": ["10", "25", "50", "100", "150", "200"],
+          "raw": [54, 75, 114, 160, 192, 224]
         },
         "SWR": {
           "labels": ["1.0", "1.5", "2.0", "3.0", "5.0", "9.9"],
