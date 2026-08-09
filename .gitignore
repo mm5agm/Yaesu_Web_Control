@@ -158,6 +158,8 @@ docs/design/*
 !docs/design/*.md
 # …and the developer guide for adding a new radio.
 !docs/adding-a-radio.md
+# …and the Raspberry Pi Docker testing runbook.
+!docs/pi-docker-testing.md
 
 # Runtime logs
 *.log
