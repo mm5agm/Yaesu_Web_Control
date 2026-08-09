@@ -6,6 +6,11 @@
 # 3. docker compose up -d --build
 # 4. Open http://<host>:8080 and confirm Serial Port in Settings.
 #
+# Data volume: entrypoint chowns /data to the image `app` user on start, so a
+# host-created ./data/ywc (often root-owned) does not need a manual chmod.
+# Do not set `user:` here — entrypoint must start as root to fix ownership,
+# then drops to `app` (and keeps group_add GIDs for serial/audio).
+#
 # Multi-arch image build (push to a registry):
 #   docker buildx build --platform linux/amd64,linux/arm64 -t YOUR/ywc:latest --push .
 
@@ -19,6 +24,7 @@ services:
     restart: unless-stopped
     ports:
       - "${YWC_HTTP_PORT:-8080}:8080"
+      - "${YWC_HTTPS_PORT:-8443}:8443"
     environment:
       TZ: ${TZ:-UTC}
       # Official ASP.NET images set this; keep it explicit for custom bases.
@@ -37,5 +43,3 @@ services:
       - "${YWC_DIALOUT_GID:-20}"
       # Host "audio" is usually GID 29 on Debian/Raspberry Pi OS.
       - "${YWC_AUDIO_GID:-29}"
-    # Uncomment if serial or /dev/snd is still permission-denied after group_add:
-    # user: "0:0"

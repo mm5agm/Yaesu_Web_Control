@@ -54,7 +54,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Persist settings/logs under XDG_CONFIG_HOME (SpecialFolder.ApplicationData).
-# Official aspnet images already ship an `app` user (uid/gid 1000).
+# Official aspnet images ship a non-root `app` user (uid is image-defined).
 ENV DOTNET_RUNNING_IN_CONTAINER=true \
     ASPNETCORE_URLS= \
     XDG_CONFIG_HOME=/data \
@@ -72,7 +72,9 @@ COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh \
     && chown -R app:app /app
 
-USER app
+# Stay root for ENTRYPOINT so bind-mounted ./data can be chown'd, then
+# entrypoint drops to `app` via setpriv (see docker/entrypoint.sh).
+USER root
 EXPOSE 8080
 VOLUME ["/data"]
 ENTRYPOINT ["/entrypoint.sh"]
