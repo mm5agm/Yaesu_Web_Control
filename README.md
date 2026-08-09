@@ -62,10 +62,11 @@ dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
 
 # Linux Docker (x64 or arm64 / Raspberry Pi)
 export YWC_SERIAL_DEVICE=/dev/ttyUSB0
+# Optional Remote Audio: compose maps /dev/snd; override YWC_AUDIO_GID if needed
 docker compose up -d --build
 ```
 
-On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio.
+On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`.
 
 ## Main Page
 ![Yaesu Web Control Main Page](pictures/DevelopScreen.png)

@@ -1,8 +1,10 @@
 # CAT-only Yaesu Web Control on Linux (x64 PC or arm64 Raspberry Pi).
 #
 # 1. Set YWC_SERIAL_DEVICE to your USB-serial node (ls /dev/ttyUSB* /dev/ttyACM*).
-# 2. docker compose up -d --build
-# 3. Open http://<host>:8080 and confirm Serial Port in Settings.
+# 2. Optional Remote Audio: compose maps /dev/snd; set YWC_AUDIO_GID if needed
+#    (getent group audio). Pick the radio USB codec in Settings → Remote Audio.
+# 3. docker compose up -d --build
+# 4. Open http://<host>:8080 and confirm Serial Port in Settings.
 #
 # Multi-arch image build (push to a registry):
 #   docker buildx build --platform linux/amd64,linux/arm64 -t YOUR/ywc:latest --push .
@@ -27,8 +29,13 @@ services:
     devices:
       # Pass the radio's USB-serial adapter into the container (same path inside).
       - ${YWC_SERIAL_DEVICE:-/dev/ttyUSB0}:${YWC_SERIAL_DEVICE:-/dev/ttyUSB0}
+      # Host ALSA devices (radio USB audio codec for Remote Audio).
+      # To pin one card only, replace with e.g. /dev/snd/controlC1 + pcmC1D0c/p.
+      - /dev/snd:/dev/snd
     group_add:
       # Host "dialout" is usually GID 20 on Debian/Raspberry Pi OS.
       - "${YWC_DIALOUT_GID:-20}"
-    # Uncomment if the serial node is still permission-denied after group_add:
+      # Host "audio" is usually GID 29 on Debian/Raspberry Pi OS.
+      - "${YWC_AUDIO_GID:-29}"
+    # Uncomment if serial or /dev/snd is still permission-denied after group_add:
     # user: "0:0"

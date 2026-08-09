@@ -211,10 +211,17 @@ Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and
 ls /dev/ttyUSB* /dev/ttyACM*
 
 export YWC_SERIAL_DEVICE=/dev/ttyUSB0   # adjust to match
+
+# Optional — Remote Audio (radio USB codec via ALSA). Compose maps /dev/snd.
+# Confirm GIDs if permission-denied: getent group dialout audio
+# export YWC_DIALOUT_GID=20
+# export YWC_AUDIO_GID=29
+# arecord -l && aplay -l   # find the Yaesu USB audio card on the host
+
 docker compose up -d --build
 ```
 
-Open `http://<host>:8080`. Settings and logs persist under `./data/ywc` by default. Auto-exit and local browser-open are disabled in the container. If the serial port is permission-denied, set `YWC_DIALOUT_GID` to the host `dialout` GID (`getent group dialout`) or see comments in `docker-compose.yml`.
+Open `http://<host>:8080`. Settings and logs persist under `./data/ywc` by default. Auto-exit and local browser-open are disabled in the container. If the serial port is permission-denied, set `YWC_DIALOUT_GID` to the host `dialout` GID (`getent group dialout`). For Remote Audio, compose also maps `/dev/snd` and adds the host `audio` group (`YWC_AUDIO_GID`, often `29`); pick the radio USB codec in **Settings → Remote Audio**. See comments in `docker-compose.yml`.
 
 ### 2.4 USB serial driver (Windows / macOS / Linux)
 

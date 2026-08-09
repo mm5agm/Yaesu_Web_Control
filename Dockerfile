@@ -44,8 +44,13 @@ FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
 WORKDIR /app
 
 # System.IO.Ports on Linux talks to USB-serial via libudev.
+# Remote Audio (PortAudio) needs ALSA + libportaudio against /dev/snd.
+# aspnet:10.0 is Ubuntu 24.04 — ALSA ships as libasound2t64 (not libasound2).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libudev1 \
+    && apt-get install -y --no-install-recommends \
+         libudev1 \
+         libasound2t64 \
+         libportaudio2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Persist settings/logs under XDG_CONFIG_HOME (SpecialFolder.ApplicationData).
@@ -56,7 +61,9 @@ ENV DOTNET_RUNNING_IN_CONTAINER=true \
     HOME=/home/app \
     TZ=UTC
 
-RUN usermod -aG dialout app \
+# dialout/audio group names are for the image; compose also group_add's the
+# *host* dialout/audio GIDs so /dev/ttyUSB* and /dev/snd permissions match.
+RUN usermod -aG dialout,audio app \
     && mkdir -p /data \
     && chown -R app:app /data /home/app
 
