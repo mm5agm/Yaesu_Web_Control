@@ -175,16 +175,28 @@ jobs:
         run: |
           image="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           echo "image=${image}" >> "$GITHUB_OUTPUT"
+          # :latest only moves on full releases — never on pre-releases or smoke builds.
+          latest=false
           if [ "${{ github.event_name }}" = "release" ]; then
             echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
             echo "push=true" >> "$GITHUB_OUTPUT"
+            if [ "${{ github.event.release.prerelease }}" != "true" ]; then
+              latest=true
+            fi
           elif [ -n "${{ github.event.inputs.tag }}" ]; then
-            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+            version="${{ github.event.inputs.tag }}"
+            echo "version=${version}" >> "$GITHUB_OUTPUT"
             echo "push=true" >> "$GITHUB_OUTPUT"
+            # SemVer pre-release (e.g. v2.4.3-pre6) has a hyphen after the numeric version.
+            ver="${version#v}"
+            if [[ "$ver" != *-* ]]; then
+              latest=true
+            fi
           else
             echo "version=smoke" >> "$GITHUB_OUTPUT"
             echo "push=false" >> "$GITHUB_OUTPUT"
           fi
+          echo "latest=${latest}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         if: steps.prep.outputs.push == 'true'
@@ -202,7 +214,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}},value=${{ steps.prep.outputs.version }},enable=${{ steps.prep.outputs.push }}
             type=semver,pattern={{raw}},value=${{ steps.prep.outputs.version }},enable=${{ steps.prep.outputs.push }}
-            type=raw,value=latest,enable=${{ steps.prep.outputs.push }}
+            type=raw,value=latest,enable=${{ steps.prep.outputs.latest }}
             type=raw,value=smoke,enable=${{ steps.prep.outputs.push != 'true' }}
 
       - name: Build and push

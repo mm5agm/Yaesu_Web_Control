@@ -20,9 +20,15 @@
         .remote-audio-popout .card {
             background: #22262b;
             border-color: #444;
+            color: #e8e8e8;
         }
         .remote-audio-popout .form-check-label { color: #ddd; }
         .remote-audio-popout .text-muted { color: #9aa0a6 !important; }
+        .remote-audio-popout .remote-audio-meter-label {
+            color: #9aa0a6;
+            font-size: 0.7rem;
+            line-height: 1;
+        }
         #remoteAudioBar .remote-audio-icon-btn {
             width: 2rem;
             height: 2rem;
@@ -86,11 +92,11 @@
                           title="VFO that will transmit" aria-live="polite">VFO A</span>
                     <span class="small text-muted" id="remoteAudioStatus">Idle</span>
                     <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
-                        <span class="small" title="Radio → browser level">RX</span>
+                        <span class="remote-audio-meter-label" title="Radio → browser level">RX</span>
                         <div class="progress flex-grow-1" style="height:8px; width:80px;">
                             <div id="remoteAudioRxMeter" class="progress-bar bg-info" style="width:0%"></div>
                         </div>
-                        <span class="small" title="Browser mic → radio level">TX</span>
+                        <span class="remote-audio-meter-label" title="Browser mic → radio level">TX</span>
                         <div class="progress flex-grow-1" style="height:8px; width:80px;">
                             <div id="remoteAudioTxMeter" class="progress-bar bg-warning" style="width:0%"></div>
                         </div>
