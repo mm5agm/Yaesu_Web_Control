@@ -933,22 +933,20 @@ function updateSplitButton() {
 // Index TX button — because on FTdx10 / FT-710 the FT register often stays
 // at 0 when the operating VFO moves (front-panel A/B or RX selector), so
 // raw txVfo would leave TX stuck on A and falsely light split-red.
-// Selected RX is filled grey; selected TX is red when split is on, grey
-// when RX and TX are the same VFO.
+// Colours match Yaesu front-panel convention: green = receiving, red = transmitting.
 function updateRxTxSelectors() {
     const rxA = document.getElementById('rxVfoA');
     if (!rxA) return; // group only rendered on single-receiver radios
     const pick = (el, on, onClass) => {
         if (!el) return;
-        el.classList.remove('btn-secondary', 'btn-danger', 'btn-outline-secondary');
+        el.classList.remove('btn-secondary', 'btn-success', 'btn-danger', 'btn-outline-secondary');
         el.classList.add(on ? onClass : 'btn-outline-secondary');
     };
-    pick(rxA, activeVfo === 0, 'btn-secondary');
-    pick(document.getElementById('rxVfoB'), activeVfo === 1, 'btn-secondary');
+    pick(rxA, activeVfo === 0, 'btn-success');
+    pick(document.getElementById('rxVfoB'), activeVfo === 1, 'btn-success');
     const effTx = effectiveTxVfo();
-    const split = splitMode > 0 || effTx !== activeVfo;
-    pick(document.getElementById('txVfoA'), effTx === 0, split ? 'btn-danger' : 'btn-secondary');
-    pick(document.getElementById('txVfoB'), effTx === 1, split ? 'btn-danger' : 'btn-secondary');
+    pick(document.getElementById('txVfoA'), effTx === 0, 'btn-danger');
+    pick(document.getElementById('txVfoB'), effTx === 1, 'btn-danger');
 }
 
 async function setRxVfo(vfo) {

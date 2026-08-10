@@ -573,7 +573,7 @@ Both panels have identical controls — changing a control on either panel write
 | B | A | Reverse split — receive on B, transmit on A |
 | B | B | Normal — receive and transmit on VFO B |
 
-The currently selected **RX** button is filled in; the selected **TX** button turns **red** whenever you are in split (RX and TX on different VFOs) and is filled grey otherwise. The selectors follow the radio live, so if you change the receive or transmit VFO at the rig the buttons update to match.
+The currently selected **RX** button is filled **green** (receiving); the selected **TX** button is filled **red** (transmitting) — the same colour convention as the radio's front panel. Unselected buttons stay outlined. The selectors follow the radio live, so if you change the receive or transmit VFO at the rig the buttons update to match.
 
 These selectors are **not shown on the dual-receiver FtdX101MP / FtdX101D**, where VFO A and VFO B are two independent physical receivers. On those radios you choose the operating (receive) band by clicking a VFO panel's header, and the transmit VFO follows the **Split** button — see §5.5 above and §5.10 Transmit Controls.
 
