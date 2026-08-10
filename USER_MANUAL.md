@@ -108,7 +108,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 
 | | Windows (installer) | macOS (DMG) | Linux Docker / from source |
 |---|---|---|---|
-| How you get it | GitHub Releases installer | GitHub Releases DMG (unsigned; Apple Silicon or Intel) | `Dockerfile` / `docker compose`, or build with .NET 10 SDK |
+| How you get it | GitHub Releases installer | GitHub Releases DMG (unsigned; Apple Silicon or Intel) | GHCR image `ghcr.io/mm5agm/yaesu_web_control`, or build with .NET 10 SDK |
 | Host UI | System tray icon | Menu-bar status item | Console only (Docker / Linux from source) |
 | CAT + web UI | Yes | Yes | Yes |
 | SDR spectrum / waterfall | Yes | No | No |
@@ -215,9 +215,11 @@ Then open `http://localhost:8080` (or the port shown in the console / menu-bar t
 
 ### 2.3 Linux Docker (including Raspberry Pi)
 
-For an always-on CAT controller on an x64 PC or arm64 Pi, use the repo `Dockerfile` / `docker-compose.yml` (multi-arch `linux/amd64` and `linux/arm64`):
+For an always-on CAT controller on an x64 PC or arm64 Pi, use the published multi-arch image (`linux/amd64` and `linux/arm64`) from the GitHub Container Registry, or build locally from the repo `Dockerfile` / `docker-compose.yml`.
 
-Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on the **host** (not inside the container) and **reboot the host** before first use — see [§2.4](#24-usb-serial-driver-windows--macos--linux). Then:
+**Image:** `ghcr.io/mm5agm/yaesu_web_control` — tags `latest` and each release (e.g. `v2.4.2`).
+
+Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on the **host** (not inside the container) and **reboot the host** before first use — see [§2.4](#24-usb-serial-driver-windows--macos--linux). Then clone or copy `docker-compose.yml` from the repo and run:
 
 ```bash
 # Find the radio's USB-serial node on the host
@@ -231,7 +233,12 @@ export YWC_SERIAL_DEVICE=/dev/ttyUSB0   # adjust to match
 # export YWC_AUDIO_GID=29
 # arecord -l && aplay -l   # find the Yaesu USB audio card on the host
 
-docker compose up -d --build
+# Prefer the published image (pin a release tag instead of :latest if you like)
+docker compose pull
+docker compose up -d
+
+# Or rebuild from the Dockerfile on this machine:
+# docker compose up -d --build
 ```
 
 Open `http://<host>:8080`. Settings and logs persist under `./data/ywc` by default. The container entrypoint fixes ownership of that volume automatically (so a host-created `./data/ywc` does not need a manual `chown`). Auto-exit and local browser-open are disabled in the container. If the serial port is permission-denied, set `YWC_DIALOUT_GID` to the host `dialout` GID (`getent group dialout`). For Remote Audio, compose also maps `/dev/snd` and adds the host `audio` group (`YWC_AUDIO_GID`, often `29`); pick the radio USB codec in **Settings → Remote Audio**. See comments in `docker-compose.yml`.
@@ -2357,7 +2364,7 @@ As a safety backstop, YWC (v2.4.2 and later) will force the radio back to receiv
 
 | Topic | What to expect |
 |---|---|
-| Getting the app | Windows: unsigned installer from Releases. macOS: unsigned CAT-only DMG from Releases (Apple Silicon or Intel) — Gatekeeper needs **Open** / **Open Anyway** the first time ([§2.2](#22-macos-dmg)). Linux: build `net10.0` from source, or Docker (`Dockerfile` / `docker-compose.yml`, amd64 + arm64). |
+| Getting the app | Windows: unsigned installer from Releases. macOS: unsigned CAT-only DMG from Releases (Apple Silicon or Intel) — Gatekeeper needs **Open** / **Open Anyway** the first time ([§2.2](#22-macos-dmg)). Linux: build `net10.0` from source, or Docker (`ghcr.io/mm5agm/yaesu_web_control`, amd64 + arm64). |
 | Host chrome | Windows tray · macOS menu-bar item · Linux/Docker console only |
 | Serial port | `COMn` on Windows; `/dev/cu.*` on macOS; `/dev/ttyUSB*` / `/dev/ttyACM*` on Linux (pass through with `YWC_SERIAL_DEVICE` in Docker). Always use the **Enhanced** CAT port when two CP210x ports appear. |
 | USB serial driver | Same on all three: install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)) |

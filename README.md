@@ -35,7 +35,7 @@ I own and test on the **FTdx101MP**; the other supported models are built from Y
 
 | | **Windows** (shipped installer) | **macOS** (CAT-only DMG) | **Linux** (CAT-only host) |
 |---|---|---|---|
-| How to run | Download installer from [Releases](https://github.com/mm5agm/Yaesu_Web_Control/releases) | Download DMG from [Releases](https://github.com/mm5agm/Yaesu_Web_Control/releases) (unsigned; arm64 or x64), or `dotnet run --framework net10.0` | `dotnet run --framework net10.0`, or **Docker** (`Dockerfile` / `docker-compose.yml`, amd64 + arm64 / Pi) |
+| How to run | Download installer from [Releases](https://github.com/mm5agm/Yaesu_Web_Control/releases) | Download DMG from [Releases](https://github.com/mm5agm/Yaesu_Web_Control/releases) (unsigned; arm64 or x64), or `dotnet run --framework net10.0` | `dotnet run --framework net10.0`, or **Docker** (`ghcr.io/mm5agm/yaesu_web_control`, amd64 + arm64 / Pi) |
 | Host UI | System tray | Menu-bar status item | Console only (Docker / from source) |
 | CAT + browser UI | Yes | Yes | Yes |
 | SDR spectrum | Yes | No | No |
@@ -66,10 +66,11 @@ dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
 # make dmg            # this Mac's arch
 # make dmg-all        # arm64 + x64
 
-# Linux Docker (x64 or arm64 / Raspberry Pi)
+# Linux Docker (x64 or arm64 / Raspberry Pi) — published multi-arch image
 export YWC_SERIAL_DEVICE=/dev/ttyUSB0
 # Optional Remote Audio: compose maps /dev/snd; override YWC_AUDIO_GID if needed
-docker compose up -d --build
+docker compose pull && docker compose up -d
+# Local rebuild: docker compose up -d --build
 ```
 
 On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`.
