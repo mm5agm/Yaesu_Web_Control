@@ -2070,10 +2070,12 @@
                 <div class="col-md-6">
                     <label asp-for="Settings.AudioRxGain" class="form-label">RX gain</label>
                     <input asp-for="Settings.AudioRxGain" type="number" step="0.05" min="0.05" max="4" class="form-control" style="max-width: 8em;" />
+                    <div class="form-text">Also adjustable live via <strong>Mic &amp; Gain</strong> on the Index Remote Audio bar (or inline on the pop-out).</div>
                 </div>
                 <div class="col-md-6">
-                    <label asp-for="Settings.AudioTxGain" class="form-label">TX gain</label>
+                    <label asp-for="Settings.AudioTxGain" class="form-label">TX (mic) gain</label>
                     <input asp-for="Settings.AudioTxGain" type="number" step="0.05" min="0.05" max="4" class="form-control" style="max-width: 8em;" />
+                    <div class="form-text">Also adjustable live via <strong>Mic &amp; Gain</strong> on the Index Remote Audio bar (or inline on the pop-out).</div>
                 </div>
             </div>
             <div class="mt-3">

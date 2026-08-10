@@ -141,6 +141,15 @@ export class AudioSession {
     if (this._playback) this._playback.muted = muted;
   }
 
+  /** Live software gain on the host bridge (0.05–4). */
+  setGain({ rx, tx } = {}) {
+    if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
+    const body = { cmd: 'setGain' };
+    if (typeof rx === 'number') body.rx = rx;
+    if (typeof tx === 'number') body.tx = tx;
+    this._ws.send(frameMessage(MSG_CONTROL, 0, new TextEncoder().encode(JSON.stringify(body))));
+  }
+
   /** Live RX FFT for filter-scope, or null when not streaming / muted. */
   getSpectrum() {
     return this._playback?.getSpectrum() ?? null;

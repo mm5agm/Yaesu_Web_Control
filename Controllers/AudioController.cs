@@ -73,11 +73,31 @@ namespace Yaesu_Web_Control.Controllers
                 codec = _bridge.ActiveCodec,
                 rxLevel = _bridge.RxLevel,
                 txLevel = _bridge.TxLevel,
+                rxGain = s.AudioRxGain,
+                txGain = s.AudioTxGain,
                 httpsEnabled = s.HttpsEnabled,
                 httpsPort = s.HttpsPort,
                 certificatePresent = HttpsCertificateService.CertificateExists,
                 certificateInfo = HttpsCertificateService.DescribeCertificate()
             });
+        }
+
+        public sealed class GainRequest
+        {
+            public float? Rx { get; set; }
+            public float? Tx { get; set; }
+        }
+
+        /// <summary>Persist and apply RX/TX software gains (0.05–4).</summary>
+        [HttpPost("gain")]
+        public async Task<IActionResult> SetGain([FromBody] GainRequest? body)
+        {
+            var s = await _settings.GetSettingsAsync();
+            if (body?.Rx is float rx) s.AudioRxGain = Math.Clamp(rx, 0.05f, 4f);
+            if (body?.Tx is float tx) s.AudioTxGain = Math.Clamp(tx, 0.05f, 4f);
+            await _settings.SaveSettingsAsync(s);
+            _bridge.SetGains(s.AudioRxGain, s.AudioTxGain);
+            return Ok(new { rx = s.AudioRxGain, tx = s.AudioTxGain });
         }
 
         public sealed class GenerateCertRequest

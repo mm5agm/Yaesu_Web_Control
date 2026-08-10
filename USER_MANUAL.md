@@ -1368,7 +1368,7 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 | Enable remote audio | Opt-in. When off, no audio devices are opened and the Index bar is hidden. |
 | Radio RX device (capture) | PortAudio input used for what you **hear** in the browser (usually Yaesu USB recording). Empty = system default input. On Windows the list is limited to **WASAPI** endpoints so the same USB CODEC is not repeated under MME / DirectSound / WDM-KS. |
 | Radio TX device (playback) | PortAudio output used for browser **mic → radio** (usually Yaesu USB playback). Empty = system default output. Same WASAPI-only listing on Windows as RX. |
-| RX / TX gain | Software gain applied in the bridge (0.05–4). |
+| RX / TX gain | Software gain applied in the bridge (0.05–4). On Home, open **Mic & Gain** on the Remote Audio bar (browser mic picker + RX/TX gain). The pop-out shows the same controls inline. |
 
 Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
 
@@ -2880,7 +2880,7 @@ Local testing on the same PC can use `http://localhost:8080` without HTTPS.
 
 1. Open the Index page (over HTTPS if remote).
 2. Click **Start audio** on the Remote Audio bar. Grant microphone permission when asked.
-3. You should hear RX audio; speak into the mic (levels show on the bar). Use the **Mic** dropdown to pick which browser microphone is sent to the radio (saved in the browser).
+3. You should hear RX audio; speak into the mic (levels show on the bar). Use **Mic & Gain** to pick the browser microphone and adjust RX/TX software gain (saved automatically).
 4. Use **TX** / your TX toggle key to key the radio. Audio flows continuously (like Mumble); CAT controls PTT.
 5. **Mute mic** / **Mute RX** as needed. **Stop** ends the session and closes host audio devices.
 6. Only **one** audio session is allowed at a time; a second browser is rejected busy.
@@ -2907,7 +2907,7 @@ Audio on the Index page stops when you leave Home (for example to open **Setting
 | Audio dies when opening Settings | Use **Pop out** before leaving Home so the session lives in the separate window. |
 | Pop-out blocked | Allow pop-ups for the YWC origin; click **Pop out** / **Open pop-out** again. |
 | Devices missing from the list | Unplug/replug USB; Refresh device list; check OS privacy permissions for microphone (host process). |
-| Wrong browser mic | Use the **Mic** dropdown on the Remote Audio bar (Home or pop-out). Choice is remembered in the browser. |
+| Wrong browser mic | Open **Mic & Gain** on the Remote Audio bar (or use the pop-out controls) and pick the right browser microphone. Choice is remembered in the browser. |
 | Voice Control vs radio USB | Keep Voice Control’s mic on your headset; leave Remote Audio devices on the Yaesu USB endpoints. |
 
 ---

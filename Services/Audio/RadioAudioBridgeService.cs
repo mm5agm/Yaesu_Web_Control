@@ -59,6 +59,15 @@ namespace Yaesu_Web_Control.Services.Audio
         public float TxLevel => _txLevel;
         public bool DevicesOpen => _devicesOpen;
         public string ActiveCodec => _codecName;
+        public float RxGain => _rxGain;
+        public float TxGain => _txGain;
+
+        /// <summary>Update live gains (session or idle). Values are clamped.</summary>
+        public void SetGains(float? rx = null, float? tx = null)
+        {
+            if (rx.HasValue) _rxGain = Math.Clamp(rx.Value, 0.05f, 4f);
+            if (tx.HasValue) _txGain = Math.Clamp(tx.Value, 0.05f, 4f);
+        }
 
         public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 

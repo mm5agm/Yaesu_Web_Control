@@ -4,7 +4,7 @@ const CHANNEL_NAME = 'ywc-remote-audio';
 const POPOUT_STORAGE_KEY = 'ywc.remoteAudio.popout';
 const MIC_STORAGE_KEY = 'ywc.remoteAudio.browserMic';
 const POPOUT_WINDOW_NAME = 'ywc-remote-audio';
-const POPOUT_FEATURES = 'width=560,height=280,resizable=yes,scrollbars=no';
+const POPOUT_FEATURES = 'width=780,height=320,resizable=yes,scrollbars=no';
 const SPECTRUM_HZ = 15;
 const HEARTBEAT_MS = 2000;
 const HEARTBEAT_STALE_MS = 6000;
@@ -148,6 +148,12 @@ function bindRemoteAudioControls(role) {
   const rxMeter = document.getElementById('remoteAudioRxMeter');
   const txMeter = document.getElementById('remoteAudioTxMeter');
   const micSelect = document.getElementById('remoteAudioMicSelect');
+  const rxGainSlider = document.getElementById('remoteAudioRxGain');
+  const txGainSlider = document.getElementById('remoteAudioTxGain');
+  const rxGainVal = document.getElementById('remoteAudioRxGainVal');
+  const txGainVal = document.getElementById('remoteAudioTxGainVal');
+  const levelsBtn = document.getElementById('remoteAudioLevelsBtn');
+  const levelsDialog = document.getElementById('remoteAudioLevelsDialog');
 
   const channel = openChannel();
   let session = null;
@@ -159,9 +165,80 @@ function bindRemoteAudioControls(role) {
   let lastHeartbeat = remoteOwned ? Date.now() : 0;
   let streamStatus = 'idle';
   let streamCodec = null;
+  let gainSaveTimer = null;
+  let applyingRemoteGain = false;
 
   function selectedMicId() {
     return (micSelect?.value || getSavedMicId() || '').trim();
+  }
+
+  function clampGain(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return 1;
+    return Math.min(4, Math.max(0.05, n));
+  }
+
+  function formatGain(v) {
+    return clampGain(v).toFixed(2);
+  }
+
+  function readGainUi() {
+    return {
+      rx: clampGain(rxGainSlider?.value ?? 1),
+      tx: clampGain(txGainSlider?.value ?? 1)
+    };
+  }
+
+  function setGainUi(rx, tx, { silent } = {}) {
+    applyingRemoteGain = true;
+    try {
+      if (typeof rx === 'number' && rxGainSlider) {
+        rxGainSlider.value = String(clampGain(rx));
+        if (rxGainVal) rxGainVal.textContent = formatGain(rx);
+      }
+      if (typeof tx === 'number' && txGainSlider) {
+        txGainSlider.value = String(clampGain(tx));
+        if (txGainVal) txGainVal.textContent = formatGain(tx);
+      }
+    } finally {
+      applyingRemoteGain = false;
+    }
+    if (!silent) {
+      // no-op — callers decide whether to persist/broadcast
+    }
+  }
+
+  function applyGainLive(rx, tx) {
+    if (role === 'index' && remoteOwned && streamStatus === 'streaming') {
+      post({ type: 'setGain', rx, tx });
+      return;
+    }
+    session?.setGain({ rx, tx });
+  }
+
+  function persistGain(rx, tx) {
+    clearTimeout(gainSaveTimer);
+    gainSaveTimer = setTimeout(async () => {
+      try {
+        await fetch('/api/audio/gain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rx, tx })
+        });
+      } catch (e) {
+        console.warn('Failed to save audio gain', e);
+      }
+    }, 400);
+  }
+
+  function onGainInput() {
+    if (applyingRemoteGain) return;
+    const { rx, tx } = readGainUi();
+    if (rxGainVal) rxGainVal.textContent = formatGain(rx);
+    if (txGainVal) txGainVal.textContent = formatGain(tx);
+    applyGainLive(rx, tx);
+    persistGain(rx, tx);
+    post({ type: 'gain', rx, tx });
   }
 
   async function refreshMicList() {
@@ -448,6 +525,10 @@ function bindRemoteAudioControls(role) {
           if (typeof msg.rx === 'boolean') setRxMuteUi(rxMute, rxMuteIcon, rxMuteTip, msg.rx);
           return;
         }
+        if (msg.type === 'gain') {
+          setGainUi(msg.rx, msg.tx);
+          return;
+        }
         if (msg.type === 'spectrum') {
           if (!msg.data) {
             latestSpectrum = null;
@@ -475,6 +556,15 @@ function bindRemoteAudioControls(role) {
         }
         return;
       }
+      if (msg.type === 'setGain') {
+        setGainUi(msg.rx, msg.tx);
+        session?.setGain({ rx: msg.rx, tx: msg.tx });
+        return;
+      }
+      if (msg.type === 'gain') {
+        setGainUi(msg.rx, msg.tx);
+        return;
+      }
       if (msg.type === 'stop') {
         stopLocal();
         return;
@@ -486,6 +576,8 @@ function bindRemoteAudioControls(role) {
           mic: isTogglePressed(micMute),
           rx: isTogglePressed(rxMute)
         });
+        const g = readGainUi();
+        post({ type: 'gain', rx: g.rx, tx: g.tx });
       }
     };
   }
@@ -525,6 +617,15 @@ function bindRemoteAudioControls(role) {
 
   micSelect?.addEventListener('change', () => {
     saveMicId(micSelect.value || '');
+  });
+
+  rxGainSlider?.addEventListener('input', onGainInput);
+  txGainSlider?.addEventListener('input', onGainInput);
+
+  levelsBtn?.addEventListener('click', () => {
+    if (!levelsDialog) return;
+    if (typeof levelsDialog.show === 'function') levelsDialog.show();
+    else levelsDialog.setAttribute('open', '');
   });
 
   popoutBtn?.addEventListener('click', async () => {
@@ -608,10 +709,14 @@ export async function initRemoteAudioUi() {
   if (!bar) return;
 
   let enabled = false;
+  let rxGain = 1;
+  let txGain = 1;
   try {
     const res = await fetch('/api/audio/status');
     const data = await res.json();
     enabled = !!data.enabled;
+    if (typeof data.rxGain === 'number') rxGain = data.rxGain;
+    if (typeof data.txGain === 'number') txGain = data.txGain;
   } catch {
     enabled = false;
   }
@@ -623,6 +728,14 @@ export async function initRemoteAudioUi() {
 
   bar.style.display = '';
   bindRemoteAudioControls('index');
+  const rx = document.getElementById('remoteAudioRxGain');
+  const tx = document.getElementById('remoteAudioTxGain');
+  const rxV = document.getElementById('remoteAudioRxGainVal');
+  const txV = document.getElementById('remoteAudioTxGainVal');
+  if (rx) rx.value = String(rxGain);
+  if (tx) tx.value = String(txGain);
+  if (rxV) rxV.textContent = Number(rxGain).toFixed(2);
+  if (txV) txV.textContent = Number(txGain).toFixed(2);
 }
 
 /**
@@ -633,10 +746,14 @@ export async function initRemoteAudioPopout() {
   if (!bar) return;
 
   let enabled = false;
+  let rxGain = 1;
+  let txGain = 1;
   try {
     const res = await fetch('/api/audio/status');
     const data = await res.json();
     enabled = !!data.enabled;
+    if (typeof data.rxGain === 'number') rxGain = data.rxGain;
+    if (typeof data.txGain === 'number') txGain = data.txGain;
   } catch {
     enabled = false;
   }
@@ -650,4 +767,12 @@ export async function initRemoteAudioPopout() {
   }
 
   bindRemoteAudioControls('popout');
+  const rx = document.getElementById('remoteAudioRxGain');
+  const tx = document.getElementById('remoteAudioTxGain');
+  const rxV = document.getElementById('remoteAudioRxGainVal');
+  const txV = document.getElementById('remoteAudioTxGainVal');
+  if (rx) rx.value = String(rxGain);
+  if (tx) tx.value = String(txGain);
+  if (rxV) rxV.textContent = Number(rxGain).toFixed(2);
+  if (txV) txV.textContent = Number(txGain).toFixed(2);
 }

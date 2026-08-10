@@ -661,7 +661,7 @@
     </div>
 
     <!-- Remote Audio bar — visible when Settings → Remote Audio is enabled -->
-    <div id="remoteAudioBar" class="row mt-2" style="display:none;">
+    <div id="remoteAudioBar" class="row mt-2 mb-2" style="display:none;">
         <div class="col-12">
             <div class="card border-secondary">
                 <div class="card-body py-2 d-flex flex-wrap align-items-center gap-3">
@@ -704,20 +704,22 @@
                             <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
                         </button>
                     </span>
-                    <label class="small text-muted mb-0" for="remoteAudioMicSelect">Mic</label>
-                    <select id="remoteAudioMicSelect" class="form-select form-select-sm"
-                            style="width:auto; max-width:16rem;"
-                            title="Browser microphone sent to the radio"
-                            aria-label="Browser microphone for remote audio TX">
-                        <option value="">Default microphone</option>
-                    </select>
+                    <span class="d-inline-block remote-audio-tip" id="remoteAudioLevelsTip" data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          data-bs-title="Browser microphone and software gain"
+                          aria-label="Browser microphone and software gain">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="remoteAudioLevelsBtn"
+                                aria-label="Open mic and gain settings">
+                            <i class="bi bi-sliders remote-audio-btn-icon" aria-hidden="true"></i>&nbsp;Mic &amp; Gain
+                        </button>
+                    </span>
                     <span class="small text-muted" id="remoteAudioStatus">Idle</span>
                     <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
-                        <span class="small">RX</span>
+                        <span class="small" title="Radio → browser level">RX</span>
                         <div class="progress flex-grow-1" style="height:8px; width:80px;">
                             <div id="remoteAudioRxMeter" class="progress-bar bg-info" style="width:0%"></div>
                         </div>
-                        <span class="small">TX</span>
+                        <span class="small" title="Browser mic → radio level">TX</span>
                         <div class="progress flex-grow-1" style="height:8px; width:80px;">
                             <div id="remoteAudioTxMeter" class="progress-bar bg-warning" style="width:0%"></div>
                         </div>
@@ -2143,6 +2145,62 @@
     </div>
 </dialog>
 
+<!-- Remote Audio mic & gain — kept with other dialogs (late in DOM) and given a
+     high z-index so it is not painted under the spectrum / meter stacks. -->
+<dialog id="remoteAudioLevelsDialog"
+        style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:360px; max-width:460px;"
+        aria-labelledby="remoteAudioLevelsDialogTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="remoteAudioLevelsDialogTitle">Mic &amp; Gain</strong>
+        <button type="button" class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('remoteAudioLevelsDialog').close()"
+                aria-label="Close mic and gain settings">✕</button>
+    </div>
+    <div class="p-3 d-flex flex-column gap-3">
+        <div>
+            <label class="mb-0 fw-semibold" for="remoteAudioMicSelect">Browser microphone</label>
+            <select id="remoteAudioMicSelect" class="form-select form-select-sm mt-1"
+                    title="Browser microphone sent to the radio (TX)"
+                    aria-label="Browser microphone for remote audio TX">
+                <option value="">Default microphone</option>
+            </select>
+            <div class="form-text text-muted mt-1 mb-0">
+                Which mic on <strong>this computer/browser</strong> is sent to the radio over remote audio.
+                Device names appear after the first time you grant microphone permission.
+            </div>
+        </div>
+        <div>
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label class="mb-0 fw-semibold" for="remoteAudioRxGain">Receive (RX) gain</label>
+                <span id="remoteAudioRxGainVal" class="fw-semibold text-info">1.00</span>
+            </div>
+            <input type="range" class="w-100" id="remoteAudioRxGain"
+                   min="0.05" max="4" step="0.05" value="1"
+                   style="height:18px;"
+                   aria-label="Receive gain — radio to browser"
+                   title="How loud the radio sounds in your browser">
+            <div class="form-text text-muted mt-1 mb-0">
+                How loud the <strong>radio</strong> sounds in your <strong>browser speakers/headphones</strong>.
+            </div>
+        </div>
+        <div>
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label class="mb-0 fw-semibold" for="remoteAudioTxGain">Mic (TX) gain</label>
+                <span id="remoteAudioTxGainVal" class="fw-semibold text-warning">1.00</span>
+            </div>
+            <input type="range" class="w-100" id="remoteAudioTxGain"
+                   min="0.05" max="4" step="0.05" value="1"
+                   style="height:18px;"
+                   aria-label="Mic gain — browser microphone to radio"
+                   title="How loud your browser mic is sent to the radio">
+            <div class="form-text text-muted mt-1 mb-0">
+                How loud your <strong>browser microphone</strong> is sent into the <strong>radio</strong> (USB TX).
+            </div>
+        </div>
+        <p class="small text-muted mb-0">Gain range 0.05–4.00 (1.00 = unity). Changes apply live while streaming and are saved automatically.</p>
+    </div>
+</dialog>
+
 <!-- UTC clock info popover — opened by clicking the top-bar clock.
      Explains the clock source, what depends on it, and how to verify
      the PC's time-sync state. -->
@@ -2272,7 +2330,7 @@
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=14";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
-        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=12";
+        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=15";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -3442,7 +3500,7 @@
             }, { passive: true });
         }
 
-        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog'].forEach(id => {
+        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
             makeDraggable(dlg, dlg.querySelector('div'));
