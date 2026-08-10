@@ -260,10 +260,27 @@ namespace Yaesu_Web_Control.Controllers
         [HttpGet("tx")]
         public IActionResult GetTxStatus()
         {
-            return Ok(new { 
+            return Ok(new {
                 transmitting = _radioStateService.IsTransmitting,
-                txVfo = _radioStateService.TxVfo
+                txVfo = EffectiveTxVfo(),
+                // Raw FT value — kept for diagnostics; UI should use txVfo (effective).
+                ftVfo = _radioStateService.TxVfo
             });
+        }
+
+        /// <summary>
+        /// Same TX-VFO positioning rules as the Index TX button
+        /// (single-receiver uses ActiveVfo / SplitMode; dual-receiver uses FT).
+        /// </summary>
+        private int EffectiveTxVfo()
+        {
+            if (_radioStateService.IsSingleReceiver)
+            {
+                if (_radioStateService.SplitMode > 0)
+                    return _radioStateService.ActiveVfo == 0 ? 1 : 0;
+                return _radioStateService.ActiveVfo;
+            }
+            return _radioStateService.TxVfo;
         }
 
         // Static band frequency mapping (apply this at the top of your class)

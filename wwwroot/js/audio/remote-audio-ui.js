@@ -22,6 +22,9 @@ const TIP_MIC_ON = 'Mute microphone';
 const TIP_MIC_OFF = 'Unmute microphone';
 const TIP_RX_ON = 'Deafen — mute received audio';
 const TIP_RX_OFF = 'Undeafen — hear received audio';
+const TIP_TX_OFF = 'Toggle transmit (PTT)';
+const TIP_TX_ON = 'Click to stop transmitting';
+const TX_POLL_MS = 1500;
 
 function isTogglePressed(el) {
   return el?.getAttribute('aria-pressed') === 'true';
@@ -45,6 +48,20 @@ function setRxMuteUi(btn, icon, tipWrap, muted) {
   btn.classList.add(muted ? 'btn-warning' : 'btn-success');
   if (icon) icon.className = `bi ${muted ? 'bi-volume-mute-fill' : 'bi-headphones'} remote-audio-btn-icon`;
   const tip = muted ? TIP_RX_OFF : TIP_RX_ON;
+  btn.setAttribute('aria-label', tip);
+  setTipText(tipWrap, tip);
+}
+
+function setTxButtonUi(btn, tipWrap, transmitting) {
+  if (!btn) return;
+  const on = !!transmitting;
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.classList.remove('btn-warning', 'btn-danger');
+  btn.classList.add(on ? 'btn-danger' : 'btn-warning');
+  btn.innerHTML = on
+    ? '<i class="bi bi-broadcast" aria-hidden="true"></i> TX ON'
+    : '<i class="bi bi-broadcast" aria-hidden="true"></i> TX';
+  const tip = on ? TIP_TX_ON : TIP_TX_OFF;
   btn.setAttribute('aria-label', tip);
   setTipText(tipWrap, tip);
 }
@@ -166,6 +183,9 @@ function bindRemoteAudioControls(role) {
   const rxMuteIcon = rxMute?.querySelector('i');
   const micMuteTip = document.getElementById('remoteAudioMicMuteTip');
   const rxMuteTip = document.getElementById('remoteAudioRxMuteTip');
+  const txBtn = document.getElementById('remoteAudioTxBtn');
+  const txTip = document.getElementById('remoteAudioTxTip');
+  const txVfoBadge = document.getElementById('remoteAudioTxVfo');
   const statusEl = document.getElementById('remoteAudioStatus');
   const rxMeter = document.getElementById('remoteAudioRxMeter');
   const txMeter = document.getElementById('remoteAudioTxMeter');
@@ -186,12 +206,16 @@ function bindRemoteAudioControls(role) {
   let spectrumTimer = null;
   let heartbeatTimer = null;
   let staleTimer = null;
+  let txPollTimer = null;
   let lastHeartbeat = remoteOwned ? Date.now() : 0;
   let streamStatus = 'idle';
   let streamCodec = null;
   let gainSaveTimer = null;
   let applyingRemoteGain = false;
   let applyingRemoteCodec = false;
+  let transmitting = false;
+  let txVfo = 0; // 0 = A, 1 = B (effective TX VFO)
+  let txBusy = false;
 
   function selectedMicId() {
     return (micSelect?.value || getSavedMicId() || '').trim();
@@ -219,6 +243,88 @@ function bindRemoteAudioControls(role) {
   function selectedCodec() {
     if (codecSelect?.value === 'pcm16') return 'pcm16';
     return preferredCodecForSession();
+  }
+
+  function applyTxState(next, { broadcast, txVfo: nextVfo } = {}) {
+    transmitting = !!next;
+    if (typeof nextVfo === 'number' && (nextVfo === 0 || nextVfo === 1))
+      txVfo = nextVfo;
+    setTxButtonUi(txBtn, txTip, transmitting);
+    setTxVfoBadge(txVfoBadge, txVfo, transmitting);
+    if (broadcast) post({ type: 'txState', transmitting, txVfo });
+  }
+
+  function setTxVfoBadge(el, vfo, on) {
+    if (!el) return;
+    const letter = vfo === 1 ? 'B' : 'A';
+    el.textContent = `VFO ${letter}`;
+    el.classList.remove('text-bg-secondary', 'text-bg-warning', 'text-bg-danger');
+    el.classList.add(on ? 'text-bg-danger' : 'text-bg-secondary');
+    el.title = on
+      ? `Transmitting on VFO ${letter}`
+      : `Transmit VFO is ${letter}`;
+    el.setAttribute('aria-label', el.title);
+  }
+
+  async function fetchTxState() {
+    try {
+      const res = await fetch('/api/cat/tx');
+      if (!res.ok) return;
+      const data = await res.json();
+      const nextOn = typeof data.transmitting === 'boolean' ? data.transmitting : transmitting;
+      const nextVfo = (data.txVfo === 0 || data.txVfo === 1) ? data.txVfo : txVfo;
+      if (nextOn !== transmitting || nextVfo !== txVfo)
+        applyTxState(nextOn, { broadcast: role === 'popout', txVfo: nextVfo });
+    } catch { /* ignore */ }
+  }
+
+  async function toggleRemoteTx() {
+    if (txBusy) return;
+    txBusy = true;
+    if (txBtn) txBtn.disabled = true;
+    try {
+      const res = await fetch('/api/cat/tx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transmit: !transmitting })
+      });
+      if (!res.ok) throw new Error('TX toggle failed');
+      const data = await res.json();
+      applyTxState(!!data.transmitting, { broadcast: true });
+    } catch (e) {
+      console.warn('Remote audio TX toggle failed', e);
+      setStatusText(e.message || 'TX toggle failed');
+    } finally {
+      txBusy = false;
+      if (txBtn) txBtn.disabled = false;
+    }
+  }
+
+  function isTxShortcutBlocked() {
+    const active = document.activeElement;
+    if (!active || active === document.body || active === document.documentElement)
+      return false;
+    if (active.isContentEditable) return true;
+    const tag = active.tagName;
+    if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (tag === 'INPUT') {
+      const type = (active.getAttribute('type') || 'text').toLowerCase();
+      // Gain sliders are inputs — do not treat them as text entry.
+      if (['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'color', 'hidden'].includes(type))
+        return false;
+      return true;
+    }
+    return false;
+  }
+
+  function txShortcutMatches(e, configuredKey) {
+    if (configuredKey == null || configuredKey === '') return false;
+    const isSpaceShortcut = configuredKey === 'Space' || configuredKey === ' ';
+    if (isSpaceShortcut)
+      return e.key === ' ' || e.code === 'Space';
+    if (configuredKey.length === 1 && e.key.length === 1)
+      return e.key.toLowerCase() === configuredKey.toLowerCase();
+    return e.key === configuredKey || e.code === configuredKey;
   }
 
   function clampGain(v) {
@@ -529,6 +635,7 @@ function bindRemoteAudioControls(role) {
           setStatusText('In pop-out window');
           setPopoutHints(true);
           post({ type: 'requestStatus' });
+          window.publishTxState?.();
           updateLocalButtons();
           return;
         }
@@ -594,10 +701,27 @@ function bindRemoteAudioControls(role) {
           };
           return;
         }
+        if (msg.type === 'txState') {
+          if (typeof msg.transmitting === 'boolean')
+            window.applySharedTxState?.(msg.transmitting);
+          return;
+        }
+        if (msg.type === 'requestTxState') {
+          window.publishTxState?.();
+          return;
+        }
         return;
       }
 
       // popout role
+      if (msg.type === 'txState') {
+        if (typeof msg.transmitting === 'boolean' || typeof msg.txVfo === 'number')
+          applyTxState(
+            typeof msg.transmitting === 'boolean' ? msg.transmitting : transmitting,
+            { txVfo: msg.txVfo }
+          );
+        return;
+      }
       if (msg.type === 'setMute') {
         if (typeof msg.mic === 'boolean') {
           setMicMuteUi(micMute, micMuteIcon, micMuteTip, msg.mic);
@@ -645,6 +769,8 @@ function bindRemoteAudioControls(role) {
         const g = readGainUi();
         post({ type: 'gain', rx: g.rx, tx: g.tx });
         post({ type: 'codecPref', codec: selectedCodec() });
+        post({ type: 'txState', transmitting, txVfo });
+        post({ type: 'requestTxState' });
       }
     };
   }
@@ -681,6 +807,8 @@ function bindRemoteAudioControls(role) {
     }
     session?.setRxMuted(next);
   });
+
+  txBtn?.addEventListener('click', () => { toggleRemoteTx(); });
 
   micSelect?.addEventListener('change', () => {
     saveMicId(micSelect.value || '');
@@ -743,8 +871,32 @@ function bindRemoteAudioControls(role) {
       status: streamStatus,
       codec: streamCodec
     }), HEARTBEAT_MS);
+    fetchTxState();
+    txPollTimer = setInterval(fetchTxState, TX_POLL_MS);
+    post({ type: 'requestTxState' });
+
+    // Same TX toggle shortcut as Home (Settings → TX toggle key).
+    // Capture phase so we beat focused buttons (Space would otherwise
+    // activate the button and can double-toggle TX).
+    document.addEventListener('keydown', (e) => {
+      const configuredKey = window.ywcTxToggleKey;
+      if (configuredKey == null || configuredKey === '' || e.ctrlKey || e.metaKey || e.altKey || e.repeat)
+        return;
+      if (isTxShortcutBlocked()) return;
+      if (!txShortcutMatches(e, configuredKey)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      // Blur focused buttons so Space doesn't also synthesize a click.
+      const active = document.activeElement;
+      if (active && typeof active.blur === 'function' && active.tagName === 'BUTTON')
+        active.blur();
+      toggleRemoteTx();
+    }, true);
+
     window.addEventListener('beforeunload', () => {
       try { session?.stop(); } catch { /* ignore */ }
+      if (txPollTimer) clearInterval(txPollTimer);
       releasePopoutOwnership();
     });
 
@@ -759,6 +911,7 @@ function bindRemoteAudioControls(role) {
       setStatusText('In pop-out window');
       setPopoutHints(true);
       post({ type: 'requestStatus' });
+      window.publishTxState?.();
     }
     staleTimer = setInterval(() => {
       if (!remoteOwned) return;
@@ -771,6 +924,8 @@ function bindRemoteAudioControls(role) {
   if (stopBtn) stopBtn.disabled = true;
   setMicMuteUi(micMute, micMuteIcon, micMuteTip, false);
   setRxMuteUi(rxMute, rxMuteIcon, rxMuteTip, false);
+  setTxButtonUi(txBtn, txTip, false);
+  setTxVfoBadge(txVfoBadge, 0, false);
   initCodecSelect();
   updateLocalButtons();
   ensureRemoteAudioTooltips();

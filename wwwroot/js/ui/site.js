@@ -55,11 +55,17 @@ function showServerStoppedOverlay() {
 
 function isTypingIntoEditable() {
     const active = document.activeElement;
-    if (active && (
-        active.tagName === 'INPUT' ||
-        active.tagName === 'TEXTAREA' ||
-        active.isContentEditable
-    )) return true;
+    if (active) {
+        if (active.isContentEditable) return true;
+        if (active.tagName === 'TEXTAREA' || active.tagName === 'SELECT') return true;
+        if (active.tagName === 'INPUT') {
+            const type = (active.getAttribute('type') || 'text').toLowerCase();
+            // Range/checkbox/etc. are not text entry — allow TX shortcut.
+            if (['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'color', 'hidden'].includes(type))
+                return false;
+            return true;
+        }
+    }
     // The on-screen frequency keypad is a text-entry surface even though focus
     // sits on its buttons (a <dialog>, not an <input>). Treat it as "typing" so
     // global shortcuts (TX toggle, fullscreen) don't fire while a frequency is
@@ -103,15 +109,18 @@ document.addEventListener('keydown', function (e) {
     // Accept both the token and a legacy lone-space value.
     const isSpaceShortcut = configuredKey === 'Space' || configuredKey === ' ';
     const keyMatches = isSpaceShortcut
-        ? (e.key === ' ')
+        ? (e.key === ' ' || e.code === 'Space')
         : (configuredKey.length === 1 && e.key.length === 1
             ? e.key.toLowerCase() === configuredKey.toLowerCase()
-            : e.key === configuredKey);
+            : e.key === configuredKey || e.code === configuredKey);
     if (!keyMatches) return;
 
     e.preventDefault();
+    const active = document.activeElement;
+    if (active && typeof active.blur === 'function' && active.tagName === 'BUTTON')
+        active.blur();
     toggleTx();
-});
+}, true);
 
 // Add/remove fullscreen-mode class on body when entering/exiting fullscreen
 document.addEventListener('fullscreenchange', function () {
@@ -656,6 +665,61 @@ let txVfo = 0; // 0 = VFO A, 1 = VFO B (the TX VFO — only flips with split)
 // instead of activeVfo.
 let activeVfo = 0;
 
+// Sync TX PTT with the Remote Audio pop-out (same BroadcastChannel).
+const TX_SYNC_CHANNEL = 'ywc-remote-audio';
+let _txSyncChannel = null;
+function getTxSyncChannel() {
+    if (_txSyncChannel) return _txSyncChannel;
+    try {
+        if (typeof BroadcastChannel === 'undefined') return null;
+        _txSyncChannel = new BroadcastChannel(TX_SYNC_CHANNEL);
+        _txSyncChannel.onmessage = (ev) => {
+            const msg = ev.data;
+            if (!msg || typeof msg !== 'object') return;
+            if (msg.type === 'txState' && typeof msg.transmitting === 'boolean') {
+                if (!!msg.transmitting === isTransmitting) return;
+                applySharedTxState(msg.transmitting);
+                return;
+            }
+            if (msg.type === 'requestTxState')
+                publishTxState();
+        };
+    } catch {
+        _txSyncChannel = null;
+    }
+    return _txSyncChannel;
+}
+function effectiveTxVfo() {
+    const vfoRow = document.getElementById('vfoRow');
+    const isSingleReceiver = vfoRow?.dataset.singleReceiver === 'true';
+    if (isSingleReceiver) {
+        return (splitMode > 0)
+            ? (activeVfo === 0 ? 1 : 0)
+            : activeVfo;
+    }
+    return txVfo;
+}
+function publishTxState() {
+    try {
+        getTxSyncChannel()?.postMessage({
+            type: 'txState',
+            transmitting: isTransmitting,
+            txVfo: effectiveTxVfo()
+        });
+    } catch { /* ignore */ }
+}
+function applySharedTxState(transmitting, _sharedTxVfo) {
+    // Index owns VFO selection via SignalR; only PTT on/off syncs from pop-out.
+    isTransmitting = !!transmitting;
+    updateTxButton();
+    updateTxIndicators(isTransmitting);
+    if (typeof window.handleTxStateForTimeout === 'function')
+        window.handleTxStateForTimeout(isTransmitting);
+}
+window.publishTxState = publishTxState;
+window.applySharedTxState = applySharedTxState;
+document.addEventListener('DOMContentLoaded', () => { getTxSyncChannel(); });
+
 // Apply the .vfo-inactive class to whichever VFO panel is NOT the active
 // (RX) one — but only on single-receiver radios (FTdx10, FT-710, FTDX3000).
 // CSS greys only that panel's .card-body (header stays normal so TX looks
@@ -782,6 +846,7 @@ async function toggleTx() {
             isTransmitting = data.transmitting;
             updateTxButton();
             updateTxIndicators(isTransmitting);
+            publishTxState();
         } else {
 
         }
@@ -1273,6 +1338,7 @@ connection.on("RadioStateUpdate", function (update) {
         }
         updateTxButton();
         updateTxIndicators(update.value);
+        publishTxState();
         if (typeof window.handleTxStateForTimeout === 'function') {
             window.handleTxStateForTimeout(!!update.value);
         }
@@ -1283,6 +1349,7 @@ connection.on("RadioStateUpdate", function (update) {
         updateTxButton();
         applyVfoActiveStyling();
         updateRxTxSelectors();
+        publishTxState();
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('txVfo', update.value);
     }
     if (update.property === "ActiveVfo") {
@@ -1292,6 +1359,7 @@ connection.on("RadioStateUpdate", function (update) {
         // In normal mode on a single-receiver radio, the TX button position
         // follows activeVfo (the TX VFO IS the active VFO; FT doesn't move).
         updateTxButton();
+        publishTxState();
         // R8 (Jacek SP3L #34, 2026-06-21): in split mode the TX VFO is the
         // opposite of active, so the SPLIT TX badge and the red border have
         // to switch panels whenever the active VFO changes.
@@ -1310,6 +1378,7 @@ connection.on("RadioStateUpdate", function (update) {
         // on (becomes "opposite of activeVfo") but FT often doesn't move on
         // FTdx10 to trigger the TxVfo handler -- so do it here too.
         updateTxButton();
+        publishTxState();
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('split', update.value);
     }
 

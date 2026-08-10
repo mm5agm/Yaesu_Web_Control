@@ -2888,7 +2888,7 @@ Local testing on the same PC can use `http://localhost:8080` without HTTPS.
 1. Open the Index page (over HTTPS if remote).
 2. Click **Start audio** on the Remote Audio bar. Grant microphone permission when asked.
 3. You should hear RX audio; speak into the mic (levels show on the bar). Use **Mic & Gain** to pick the browser microphone, choose **Opus** or **PCM16**, and adjust RX/TX software gain (codec and mic choice are remembered in the browser; gain is saved on the host).
-4. Use **TX** / your TX toggle key to key the radio. Audio flows continuously (like Mumble); CAT controls PTT.
+4. Use **TX** / your TX toggle key to key the radio (on Home or on the Remote Audio pop-out). Audio flows continuously (like Mumble); CAT controls PTT.
 5. **Mute mic** / **Mute RX** as needed. **Stop** ends the session and closes host audio devices.
 6. Only **one** audio session is allowed at a time; a second browser is rejected busy.
 
@@ -2900,7 +2900,7 @@ Audio on the Index page stops when you leave Home (for example to open **Setting
 
 1. Click **Pop out** on the Remote Audio bar. A small **Remote Audio** window opens.
 2. If you were already streaming, YWC hands the session to that window (brief reconnect). Otherwise click **Start audio** in the pop-out.
-3. Leave the pop-out open while you use Settings or other pages. Home shows status such as *In pop-out window (streaming)*; mute switches on Home still control the pop-out session. Filter-scope on Home keeps receiving live RX spectrum from the pop-out.
+3. Leave the pop-out open while you use Settings or other pages. Home shows status such as *In pop-out window (streaming)*; mute switches on Home still control the pop-out session. Filter-scope on Home keeps receiving live RX spectrum from the pop-out. The pop-out has its own **TX** button (same PTT as Home) and a **VFO A / VFO B** badge for the current transmit VFO; it also honours the same **TX toggle key** from Settings when that window is focused. TX on/off stays in sync with the main window when Home is open.
 4. **Stop** on Home stops the pop-out session. **Close** in the pop-out (or closing the window) ends audio and returns control to Home.
 5. If the browser blocks the window, allow pop-ups for the YWC site and try again.
 

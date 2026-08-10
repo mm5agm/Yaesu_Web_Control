@@ -74,6 +74,16 @@
                             <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
                         </button>
                     </span>
+                    <span class="d-inline-block remote-audio-tip" id="remoteAudioTxTip" data-bs-toggle="tooltip"
+                          data-bs-placement="top" data-bs-title="Toggle transmit (PTT)"
+                          aria-label="Toggle transmit (PTT)">
+                        <button type="button" class="btn btn-sm btn-warning" id="remoteAudioTxBtn"
+                                aria-pressed="false" aria-label="Toggle transmit">
+                            <i class="bi bi-broadcast" aria-hidden="true"></i> TX
+                        </button>
+                    </span>
+                    <span class="badge text-bg-secondary" id="remoteAudioTxVfo"
+                          title="VFO that will transmit" aria-live="polite">VFO A</span>
                     <span class="small text-muted" id="remoteAudioStatus">Idle</span>
                     <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
                         <span class="small" title="Radio → browser level">RX</span>
@@ -139,8 +149,11 @@
         </div>
     </div>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
+    <script>
+        window.ywcTxToggleKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.TxToggleKey));
+    </script>
     <script type="module">
-        import { initRemoteAudioPopout } from "/js/audio/remote-audio-ui.js?v=17";
+        import { initRemoteAudioPopout } from "/js/audio/remote-audio-ui.js?v=21";
         initRemoteAudioPopout();
     </script>
 </body>
