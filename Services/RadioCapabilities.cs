@@ -1,18 +1,15 @@
 namespace Yaesu_Web_Control.Services;
 
-// Capability lookup for per-model behaviour differences. Currently used only
-// for the dual- vs single-receiver UI decision (active-VFO greying-out and
-// PTT placement on single-receiver radios), but the pattern scales: future
-// per-model variations (4 m band availability, max TX power, roofing-filter
-// availability) can hang off this same static class.
+// Capability lookup for per-model behaviour differences. Currently used for
+// the dual- vs single-receiver UI decision (RX/TX selectors, S-meter B,
+// dual-receiver active-band highlight, PTT placement), but the pattern
+// scales: future per-model variations (4 m band availability, max TX power,
+// roofing-filter availability) can hang off this same static class.
 //
 // See docs/decisions/0003-single-vs-dual-receiver-ui.md for the design
 // rationale and Jacek SP3L's #34 report that drove it.
 //
-// Single-receiver is the safe default for unknown models — it applies the
-// active/inactive UI restriction, which over-constrains an unfamiliar radio
-// rather than letting it edit both VFOs' controls simultaneously when
-// possibly only one set actually exists in the hardware.
+// Single-receiver is the safe default for unknown models.
 public static class RadioCapabilities
 {
     // Hardware revision IDs confirmed to reject VT CAT commands despite the

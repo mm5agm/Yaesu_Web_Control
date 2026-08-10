@@ -536,12 +536,7 @@ There are two VFO panels side by side:
 - **VFO A** (blue border) — the main receiver, present on all supported radios.
 - **VFO B** (green border) — on the FTdx101MP and FTdx101D this is a fully independent sub-receiver. On single-receiver radios (**FTdx10, FT-710, FTDX3000, FT-991A**) there is only one physical receiver chain inside the radio, so VFO B is a frequency / mode memory slot through which the single receiver is steered.
 
-**Greying behaviour on single-receiver radios** (FTdx10, FT-710, FTDX3000, FT-991A):
-
-- **Normal mode** (split off): the **active** VFO panel is fully usable; the **inactive** VFO's card body is greyed. Mode, IF Width, Notch, and the rest still display their stored values for reference, but cannot be edited — those values only apply when you swap that VFO to be active via the **A↔B** button. The card header (title, ZIN, TX when shown) stays normal colour.
-- **Split mode**: the **receive** VFO is fully usable; the **transmit** VFO's card body is greyed — opposite of normal mode for which panel is inactive. The TX panel's **frequency field is still editable** so you can set the TX frequency from YWC without un-splitting first — click a digit and scroll the mouse wheel, or use the keyboard icon next to MHz to type one in. Everything else in that card body stays read-only. The card header stays normal, so the TX button and SPLIT badge on the transmit panel remain full-colour and clearly active.
-
-On **dual-receiver radios** (FTdx101MP / FTdx101D) neither panel is greyed at any time — both VFOs are real physical receiver chains and are always independently usable.
+Both VFO panels stay full colour and fully editable on every supported radio — including single-receiver models (FTdx10, FT-710, FTDX3000, FT-991A). On those radios the toolbar **RX** / **TX** selectors show which VFO is receiving and transmitting; you can still set the other VFO's frequency, mode, and controls without swapping first. On **dual-receiver radios** (FTdx101MP / FTdx101D) an amber ring marks which band (MAIN / SUB) the main tuning knob currently controls.
 
 **S-meter location — not in the VFO panels.** From v2.3.9 the S-meter(s) and their 30-second history strips live in the **top meter row** (just below the toolbar), not inside the VFO A / VFO B panels.
 
@@ -549,7 +544,7 @@ On **dual-receiver radios** (FTdx101MP / FTdx101D) there are **two** S-meter gau
 
 **Antenna selector visibility:** the per-VFO antenna dropdown is hidden on radios with a single antenna jack (**FTdx10, FT-991A**) since there is nothing to select between. Radios with multiple antenna jacks (FTdx101MP, FTdx101D, FT-710, FTDX3000) keep the selector.
 
-Both panels have identical controls — changing a control on the active (fully usable) panel writes to the radio immediately; changing a control on the inactive panel's greyed body does nothing (apart from the TX frequency in split, as noted).
+Both panels have identical controls — changing a control on either panel writes to the radio.
 
 **VFO-B toggle** — the **VFO-B** button in the toolbar shows or hides the VFO B panel. The last state is remembered across sessions.
 

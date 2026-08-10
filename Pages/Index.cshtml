@@ -16,13 +16,8 @@
     bool isFtdx3000 = Model.RadioModel == "FTDX3000";
     bool isFtdx5000 = Model.RadioModel == "FTDX5000MP" || Model.RadioModel == "FTDX5000D";
 
-    // Single-receiver radios (FTdx10, FT-710, FTDX3000) store per-VFO RX
-    // settings but expose only the active VFO's state via CAT — see
-    // docs/decisions/0003-single-vs-dual-receiver-ui.md. The home page
-    // greys out the inactive VFO panel on these radios to reflect that
-    // editing it via CAT would silently swap the radio's active VFO.
-    // Dual-receiver radios (FTdx101MP/D) keep both panels active because
-    // each VFO is its own physical receiver chain.
+    // Single- vs dual-receiver layout gates (RX/TX selectors, S-meter B, etc.)
+    // — see docs/decisions/0003-single-vs-dual-receiver-ui.md.
     bool isSingleReceiver  = Yaesu_Web_Control.Services.RadioCapabilities.IsSingleReceiver(Model.RadioModel);
     bool hasAntennaSelector = Yaesu_Web_Control.Services.RadioCapabilities.HasAntennaSelector(Model.RadioModel);
     // Rated TX output. Server-rendered rather than derived in JavaScript so the
@@ -158,61 +153,6 @@
     .vfo-active > .card.receiver-card {
         box-shadow: 0 0 0 2px #ffc107, 0 0 10px rgba(255, 193, 7, 0.5);
         transition: box-shadow 0.2s ease;
-    }
-
-    /* Single-receiver radios (FTdx10, FT-710, FTDX3000): the inactive VFO
-       card BODY is greyed and made non-interactive. The card HEADER stays
-       normal so TX / ZIN / badges remain full-colour and clickable — dimming
-       the whole column (including the header) made the TX button look
-       disabled in split mode even though it was still active (CSS cannot
-       undo a parent's opacity/filter on a child).
-       Editing body controls on the inactive section via CAT would silently
-       swap the radio's active VFO; better to disable visually and require
-       an explicit A/B swap on the rig first.
-       See docs/decisions/0003-single-vs-dual-receiver-ui.md
-       Reported by Jacek SP3L on #34. */
-    .vfo-inactive > .card > .card-body {
-        pointer-events: none;
-    }
-    .vfo-inactive > .card > .card-body > * {
-        opacity: 0.55;
-        filter: grayscale(0.5);
-        transition: opacity 0.25s ease, filter 0.25s ease;
-    }
-    /* R10/R11 (Jacek SP3L #34): in split mode the inactive panel IS the TX
-       VFO and its frequency must remain interactive so operators can set
-       the TX frequency from YWC without un-splitting first. .vfo-tx-editable
-       is added by applyVfoActiveStyling() only when splitMode>0. The freq
-       row is undimmed as a unit (parent opacity cannot be undone on nested
-       children), then non-frequency siblings in that row (roofing, AF gain)
-       are re-dimmed. */
-    .vfo-inactive.vfo-tx-editable > .card > .card-body > .vfo-freq-row {
-        opacity: 1;
-        filter: none;
-    }
-    .vfo-inactive.vfo-tx-editable > .card > .card-body > .vfo-freq-row > *:not(.frequency-display):not(.freq-step-controls):not(.fkb-open-btn) {
-        opacity: 0.55;
-        filter: grayscale(0.5);
-        pointer-events: none;
-    }
-    .vfo-inactive.vfo-tx-editable .frequency-display,
-    .vfo-inactive.vfo-tx-editable .freq-step-controls,
-    .vfo-inactive.vfo-tx-editable .fkb-open-btn {
-        /* pointer-events:auto on a child overrides pointer-events:none on
-           an ancestor — that is the CSS exception that makes the carve-out
-           work. !important is needed on <button> (fkb-open / ▲▼). */
-        pointer-events: auto !important;
-    }
-
-    /* Hide live receive indicators on the inactive VFO panel — on a real
-       single-receiver radio there is no signal data for the inactive VFO,
-       so showing a moving S-meter and a scrolling history would be
-       misleading (suggests a signal is being received when nothing is).
-       Display:none rather than visibility:hidden so the panel shrinks
-       and the active panel's prominence is reinforced. */
-    .vfo-inactive .analog-meter-container,
-    .vfo-inactive .smeter-history-container {
-        display: none !important;
     }
 
     /* Grey the S-meters while transmitting.
