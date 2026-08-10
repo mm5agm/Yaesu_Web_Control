@@ -929,21 +929,26 @@ function updateSplitButton() {
 }
 
 // Independent RX / TX VFO selectors (single-receiver radios, #78). RX follows
-// activeVfo (VS / FR), TX follows txVfo (FT); split is derived (TX ≠ RX). The
-// selected RX button is filled grey; the selected TX button is red when split
-// is on and filled grey when TX and RX are the same VFO.
+// activeVfo (VS / FR). TX must use effectiveTxVfo() — the same rule as the
+// Index TX button — because on FTdx10 / FT-710 the FT register often stays
+// at 0 when the operating VFO moves (front-panel A/B or RX selector), so
+// raw txVfo would leave TX stuck on A and falsely light split-red.
+// Selected RX is filled grey; selected TX is red when split is on, grey
+// when RX and TX are the same VFO.
 function updateRxTxSelectors() {
     const rxA = document.getElementById('rxVfoA');
     if (!rxA) return; // group only rendered on single-receiver radios
     const pick = (el, on, onClass) => {
+        if (!el) return;
         el.classList.remove('btn-secondary', 'btn-danger', 'btn-outline-secondary');
         el.classList.add(on ? onClass : 'btn-outline-secondary');
     };
     pick(rxA, activeVfo === 0, 'btn-secondary');
     pick(document.getElementById('rxVfoB'), activeVfo === 1, 'btn-secondary');
-    const split = txVfo !== activeVfo;
-    pick(document.getElementById('txVfoA'), txVfo === 0, split ? 'btn-danger' : 'btn-secondary');
-    pick(document.getElementById('txVfoB'), txVfo === 1, split ? 'btn-danger' : 'btn-secondary');
+    const effTx = effectiveTxVfo();
+    const split = splitMode > 0 || effTx !== activeVfo;
+    pick(document.getElementById('txVfoA'), effTx === 0, split ? 'btn-danger' : 'btn-secondary');
+    pick(document.getElementById('txVfoB'), effTx === 1, split ? 'btn-danger' : 'btn-secondary');
 }
 
 async function setRxVfo(vfo) {
@@ -952,10 +957,12 @@ async function setRxVfo(vfo) {
         if (r.ok) {
             const d = await r.json();
             activeVfo = d.rxVfo;
+            if (typeof d.txVfo === 'number') txVfo = d.txVfo;
             if (typeof d.splitMode === 'number') splitMode = d.splitMode;
             updateRxTxSelectors();
             updateSplitButton();
             applyVfoActiveStyling();
+            updateTxButton();
         }
     } catch {}
 }
@@ -1448,6 +1455,7 @@ connection.on("RadioStateUpdate", function (update) {
         // on (becomes "opposite of activeVfo") but FT often doesn't move on
         // FTdx10 to trigger the TxVfo handler -- so do it here too.
         updateTxButton();
+        updateRxTxSelectors();
         publishTxState();
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('split', update.value);
     }

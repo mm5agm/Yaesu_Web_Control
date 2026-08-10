@@ -524,6 +524,16 @@
                         {
                             var previous = _stateService.ActiveVfo;
                             _stateService.ActiveVfo = activeVfo;
+                            // Single-receiver, not in split: front-panel A/B moves
+                            // the operating VFO for both RX and TX, but FT often
+                            // stays at 0. Mirror ActiveVfo into TxVfo so the RX/TX
+                            // selectors and any TxVfo readers stay coherent.
+                            if (_stateService.IsSingleReceiver
+                                && _stateService.SplitMode == 0
+                                && _stateService.TxVfo != activeVfo)
+                            {
+                                _stateService.TxVfo = activeVfo;
+                            }
                             if (_stateService.IsSingleReceiver
                                 && _stateService.IsInitialized
                                 && previous != activeVfo)
