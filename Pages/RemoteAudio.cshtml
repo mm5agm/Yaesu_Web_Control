@@ -101,14 +101,14 @@
                         <label class="mb-0 text-nowrap" for="remoteAudioCodecSelect" style="min-width:11rem;">Audio codec</label>
                         <select id="remoteAudioCodecSelect" class="form-select form-select-sm flex-grow-1"
                                 style="min-width:12rem; max-width:24rem;"
-                                title="Compression used for remote audio (applies on next Start)"
+                                title="Compression used for remote audio (stop and reconnect to apply)"
                                 aria-label="Remote audio codec">
                             <option value="opus">Opus (~32 kb/s) — recommended</option>
                             <option value="pcm16">PCM16 (~768 kb/s) — uncompressed</option>
                         </select>
                     </div>
                     <div class="small text-muted" id="remoteAudioCodecHint">
-                        Opus uses far less bandwidth than PCM16. Takes effect on the next Start.
+                        Opus uses far less bandwidth than PCM16. Stop and reconnect remote audio for a codec change to apply.
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <label class="mb-0 text-nowrap" for="remoteAudioRxGain" style="min-width:11rem;">

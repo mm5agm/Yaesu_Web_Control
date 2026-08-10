@@ -211,7 +211,7 @@ function bindRemoteAudioControls(role) {
     codecSelect.value = (saved === 'opus' && !opusOk) ? 'pcm16' : saved;
     if (codecHint) {
       codecHint.textContent = opusOk
-        ? 'Opus uses far less bandwidth than PCM16. Takes effect on the next Start.'
+        ? 'Opus uses far less bandwidth than PCM16. Stop and reconnect remote audio for a codec change to apply.'
         : 'This browser cannot encode Opus (WebCodecs); PCM16 will be used.';
     }
   }

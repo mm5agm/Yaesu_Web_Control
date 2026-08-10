@@ -2892,7 +2892,7 @@ Local testing on the same PC can use `http://localhost:8080` without HTTPS.
 5. **Mute mic** / **Mute RX** as needed. **Stop** ends the session and closes host audio devices.
 6. Only **one** audio session is allowed at a time; a second browser is rejected busy.
 
-The status line shows the active codec while streaming (for example `Streaming (opus)`). Change codec only while stopped — it applies on the next **Start**.
+The status line shows the active codec while streaming (for example `Streaming (opus)`). A codec change requires stopping and reconnecting remote audio — it does not apply to an active session.
 
 #### Pop-out window (keep audio while changing pages)
 
@@ -2935,7 +2935,7 @@ Remote Audio always samples at **48 kHz mono** on the host bridge. What changes 
 
 **Preference:** YWC offers **Opus first** whenever the browser supports it. Choose **PCM16** only if you need uncompressed audio on a fast LAN, or if Opus is greyed out in your browser.
 
-Both directions use the same codec for a session. Stop and Start again after changing the selector.
+Both directions use the same codec for a session. Stop remote audio and connect again after changing the selector.
 
 ---
 
