@@ -229,6 +229,18 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-08-10 - v2.4.3-pre6 (pre-release)
+
+*A tester build that lets YWC run on macOS and Linux for the first time — including a Raspberry Pi over Docker — as a lightweight CAT-and-browser host beside the radio. Windows is completely unchanged. My thanks to Fabio Valente (CR7CDC), whose [#90](https://github.com/mm5agm/Yaesu_Web_Control/pull/90) is the whole of this.*
+
+**YWC now runs outside Windows.** Until now YWC was a Windows-only program. This build adds two more ways to run it: an unsigned macOS app (both Apple-Silicon and Intel Macs), and a Linux container image that runs anywhere Docker does — a Raspberry Pi 3B is enough. The idea is a small always-on box sitting next to the radio, serving the same web control panel you already use and reachable from any browser in the house.
+
+**What the Mac and Linux builds do and don't do.** They give you the full CAT side — frequency, mode, band, PTT and everything else the browser panel drives — but not the SDR spectrum display or the voice control, which stay Windows-only. The macOS app is not yet signed by Apple, so the first time you open it macOS will warn you and you'll need to right-click it and choose Open (or allow it under Privacy & Security). Remote Audio — hearing the radio and talking back through the browser — is not in this build; it is coming separately.
+
+**Windows users see no change.** The Windows installer, the SDR, voice control and everything else are exactly as they were in pre5. There is nothing here you need to install.
+
+*This is mainly a build-pipeline test: it is the first release to publish a macOS `.dmg` and a multi-architecture Docker image alongside the Windows installer, and I want to confirm all three land correctly before building further on top of them.*
+
 ## 2026-08-07 - v2.4.3-pre5 (pre-release)
 
 *A small tester build adding Quick Memory Bank buttons to the main screen, aimed especially at operators working entirely from the browser. Highlights:*
