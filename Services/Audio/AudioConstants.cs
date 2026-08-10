@@ -5,12 +5,17 @@ namespace Yaesu_Web_Control.Services.Audio
     {
         public const int SampleRate = 48_000;
         public const int Channels = 1;
-        /// <summary>10 ms at 48 kHz — lower packetization delay than 20 ms.</summary>
+        /// <summary>10 ms at 48 kHz — PCM packetization / Opus encode frame.</summary>
         public const int FrameSamples = 480;
+        /// <summary>
+        /// WebCodecs Opus defaults to 20 ms; Concentus decode buffer must be at least
+        /// this large or Decode throws and the audio WebSocket dies.
+        /// </summary>
+        public const int OpusDecodeMaxSamples = 5760; // 120 ms @ 48 kHz (Opus max)
         public const int OpusBitrate = 32_000;
 
-        /// <summary>Max host TX ring depth (~40 ms) before dropping oldest samples.</summary>
-        public const int PlaybackRingMaxSamples = FrameSamples * 4;
+        /// <summary>Max host TX ring depth (~80 ms) before dropping oldest samples.</summary>
+        public const int PlaybackRingMaxSamples = FrameSamples * 8;
 
         public const byte MsgOpusRx = 0x01;
         public const byte MsgOpusTx = 0x02;

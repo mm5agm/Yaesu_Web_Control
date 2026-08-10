@@ -2170,6 +2170,18 @@
             </div>
         </div>
         <div>
+            <label class="mb-0 fw-semibold" for="remoteAudioCodecSelect">Audio codec</label>
+            <select id="remoteAudioCodecSelect" class="form-select form-select-sm mt-1"
+                    title="Compression used for remote audio (applies on next Start)"
+                    aria-label="Remote audio codec">
+                <option value="opus">Opus (~32 kb/s) — recommended</option>
+                <option value="pcm16">PCM16 (~768 kb/s) — uncompressed</option>
+            </select>
+            <div class="form-text text-muted mt-1 mb-0" id="remoteAudioCodecHint">
+                Opus uses far less bandwidth than PCM16. Takes effect on the next Start.
+            </div>
+        </div>
+        <div>
             <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
                 <label class="mb-0 fw-semibold" for="remoteAudioRxGain">Receive (RX) gain</label>
                 <span id="remoteAudioRxGainVal" class="fw-semibold text-info">1.00</span>
@@ -2330,7 +2342,7 @@
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=14";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
-        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=15";
+        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=17";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;

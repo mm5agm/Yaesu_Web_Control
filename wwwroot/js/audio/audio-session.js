@@ -1,6 +1,6 @@
 import {
   MSG_CONTROL, MSG_OPUS_RX, MSG_PCM_RX,
-  frameMessage, parseBody, supportsWebCodecsOpus
+  frameMessage, parseBody, buildCodecOfferList
 } from './audio-protocol.js';
 import { AudioCapture } from './audio-capture.js';
 import { AudioPlayback } from './audio-playback.js';
@@ -23,7 +23,7 @@ export class AudioSession {
   get running() { return this._running; }
 
   /**
-   * @param {{ deviceId?: string }} [opts]
+   * @param {{ deviceId?: string, preferredCodec?: 'opus'|'pcm16' }} [opts]
    */
   async start(opts = {}) {
     if (this._running) return;
@@ -42,8 +42,7 @@ export class AudioSession {
       this._ws.onerror = () => { clearTimeout(t); reject(new Error('WebSocket failed to connect')); };
     });
 
-    const codecs = ['pcm16'];
-    if (supportsWebCodecsOpus()) codecs.unshift('opus');
+    const codecs = buildCodecOfferList(opts.preferredCodec || 'opus');
 
     this._ws.send(frameMessage(MSG_CONTROL, 0, new TextEncoder().encode(JSON.stringify({
       cmd: 'hello',

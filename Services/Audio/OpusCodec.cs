@@ -3,7 +3,11 @@ using Concentus.Enums;
 
 namespace Yaesu_Web_Control.Services.Audio
 {
-    /// <summary>Thin Concentus wrapper fixed at 48 kHz mono / 20 ms frames.</summary>
+    /// <summary>
+    /// Thin Concentus wrapper at 48 kHz mono.
+    /// Encodes 10 ms frames; decode accepts up to Opus max packet duration
+    /// (WebCodecs defaults to 20 ms unless configured otherwise).
+    /// </summary>
     public sealed class OpusCodec : IDisposable
     {
         private readonly IOpusEncoder _encoder;
@@ -28,7 +32,7 @@ namespace Yaesu_Web_Control.Services.Audio
         public int Encode(ReadOnlySpan<float> pcm, Span<byte> output)
         {
             if (pcm.Length < AudioConstants.FrameSamples)
-                throw new ArgumentException("Need a full 20 ms frame.", nameof(pcm));
+                throw new ArgumentException("Need a full 10 ms frame.", nameof(pcm));
             return _encoder.Encode(pcm[..AudioConstants.FrameSamples], AudioConstants.FrameSamples, output, output.Length);
         }
 
@@ -40,9 +44,20 @@ namespace Yaesu_Web_Control.Services.Audio
             return packet;
         }
 
+        /// <summary>
+        /// Decodes one Opus packet. <paramref name="pcmOut"/> must hold at least 960
+        /// samples (20 ms); prefer <see cref="AudioConstants.OpusDecodeMaxSamples"/>.
+        /// Returns samples written.
+        /// </summary>
         public int Decode(ReadOnlySpan<byte> packet, Span<float> pcmOut, bool decodeFec = false)
         {
-            return _decoder.Decode(packet, pcmOut, AudioConstants.FrameSamples, decodeFec);
+            if (pcmOut.Length < 960)
+                throw new ArgumentException("Decode buffer must hold at least 20 ms (960 samples).", nameof(pcmOut));
+
+            // frame_size is available space — must cover the packet duration (WebCodecs Opus
+            // defaults to 20 ms / 960 samples). Using the Opus maximum keeps us safe.
+            int frameSize = Math.Min(pcmOut.Length, AudioConstants.OpusDecodeMaxSamples);
+            return _decoder.Decode(packet, pcmOut[..frameSize], frameSize, decodeFec);
         }
 
         public void Dispose()

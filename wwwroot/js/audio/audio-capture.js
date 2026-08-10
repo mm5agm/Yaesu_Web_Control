@@ -1,5 +1,5 @@
 import {
-  SAMPLE_RATE, FRAME_SAMPLES, MSG_OPUS_TX, MSG_PCM_TX,
+  SAMPLE_RATE, FRAME_SAMPLES, MSG_OPUS_TX, MSG_PCM_TX, OPUS_FRAME_DURATION_US,
   frameMessage, floatToPcm16, supportsWebCodecsOpus
 } from './audio-protocol.js';
 
@@ -99,10 +99,11 @@ export class AudioCapture {
     this._pendingChunks = [];
     this._encoder = new AudioEncoder({
       output: (chunk) => {
+        // Skip empty / config-only chunks — Concentus only wants Opus packets.
+        if (!chunk || chunk.byteLength < 1) return;
         const buf = new ArrayBuffer(chunk.byteLength);
         chunk.copyTo(buf);
-        const type = MSG_OPUS_TX;
-        const framed = frameMessage(type, this._seq++, buf);
+        const framed = frameMessage(MSG_OPUS_TX, this._seq++, buf);
         this._onFrame(framed);
       },
       error: (e) => console.warn('AudioEncoder error', e)
@@ -111,34 +112,43 @@ export class AudioCapture {
       codec: 'opus',
       sampleRate: SAMPLE_RATE,
       numberOfChannels: 1,
-      bitrate: 32000
+      bitrate: 32000,
+      opus: {
+        application: 'voip',
+        frameDuration: OPUS_FRAME_DURATION_US
+      }
     });
   }
 
   _onSamples(float32) {
     if (this._muted) return;
 
-    // Accumulate to 20 ms frames
+    // Accumulate to 10 ms frames
     const merged = new Float32Array(this._accum.length + float32.length);
     merged.set(this._accum);
     merged.set(float32, this._accum.length);
     this._accum = merged;
 
     while (this._accum.length >= FRAME_SAMPLES) {
-      const frame = this._accum.subarray(0, FRAME_SAMPLES);
+      // Own a contiguous copy — AudioEncoder may hold the buffer asynchronously.
+      const frame = this._accum.slice(0, FRAME_SAMPLES);
       this._accum = this._accum.slice(FRAME_SAMPLES);
 
       if (this._codec === 'opus' && this._encoder) {
-        const audioData = new AudioData({
-          format: 'f32-planar',
-          sampleRate: SAMPLE_RATE,
-          numberOfFrames: FRAME_SAMPLES,
-          numberOfChannels: 1,
-          timestamp: performance.now() * 1000,
-          data: frame
-        });
-        this._encoder.encode(audioData);
-        audioData.close();
+        try {
+          const audioData = new AudioData({
+            format: 'f32-planar',
+            sampleRate: SAMPLE_RATE,
+            numberOfFrames: FRAME_SAMPLES,
+            numberOfChannels: 1,
+            timestamp: performance.now() * 1000,
+            data: frame
+          });
+          this._encoder.encode(audioData);
+          audioData.close();
+        } catch (e) {
+          console.warn('Opus encode failed', e);
+        }
       } else {
         const pcm = floatToPcm16(frame);
         const framed = frameMessage(MSG_PCM_TX, this._seq++, pcm);

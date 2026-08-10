@@ -1,10 +1,12 @@
 import { createAudioSession } from './audio-session.js';
+import { supportsWebCodecsOpus } from './audio-protocol.js';
 
 const CHANNEL_NAME = 'ywc-remote-audio';
 const POPOUT_STORAGE_KEY = 'ywc.remoteAudio.popout';
 const MIC_STORAGE_KEY = 'ywc.remoteAudio.browserMic';
+const CODEC_STORAGE_KEY = 'ywc.remoteAudio.codec';
 const POPOUT_WINDOW_NAME = 'ywc-remote-audio';
-const POPOUT_FEATURES = 'width=780,height=320,resizable=yes,scrollbars=no';
+const POPOUT_FEATURES = 'width=780,height=380,resizable=yes,scrollbars=no';
 const SPECTRUM_HZ = 15;
 const HEARTBEAT_MS = 2000;
 const HEARTBEAT_STALE_MS = 6000;
@@ -123,6 +125,26 @@ function saveMicId(id) {
   } catch { /* ignore */ }
 }
 
+function getSavedCodec() {
+  try {
+    const v = localStorage.getItem(CODEC_STORAGE_KEY);
+    if (v === 'pcm16' || v === 'opus') return v;
+  } catch { /* ignore */ }
+  return 'opus';
+}
+
+function saveCodec(codec) {
+  try {
+    localStorage.setItem(CODEC_STORAGE_KEY, codec === 'pcm16' ? 'pcm16' : 'opus');
+  } catch { /* ignore */ }
+}
+
+function preferredCodecForSession() {
+  const saved = getSavedCodec();
+  if (saved === 'opus' && !supportsWebCodecsOpus()) return 'pcm16';
+  return saved;
+}
+
 function openPopoutWindow(autostart) {
   const q = autostart ? '?autostart=1' : '';
   return window.open(`/RemoteAudio${q}`, POPOUT_WINDOW_NAME, POPOUT_FEATURES);
@@ -148,6 +170,8 @@ function bindRemoteAudioControls(role) {
   const rxMeter = document.getElementById('remoteAudioRxMeter');
   const txMeter = document.getElementById('remoteAudioTxMeter');
   const micSelect = document.getElementById('remoteAudioMicSelect');
+  const codecSelect = document.getElementById('remoteAudioCodecSelect');
+  const codecHint = document.getElementById('remoteAudioCodecHint');
   const rxGainSlider = document.getElementById('remoteAudioRxGain');
   const txGainSlider = document.getElementById('remoteAudioTxGain');
   const rxGainVal = document.getElementById('remoteAudioRxGainVal');
@@ -167,9 +191,34 @@ function bindRemoteAudioControls(role) {
   let streamCodec = null;
   let gainSaveTimer = null;
   let applyingRemoteGain = false;
+  let applyingRemoteCodec = false;
 
   function selectedMicId() {
     return (micSelect?.value || getSavedMicId() || '').trim();
+  }
+
+  function initCodecSelect() {
+    if (!codecSelect) return;
+    const opusOk = supportsWebCodecsOpus();
+    const opusOpt = [...codecSelect.options].find(o => o.value === 'opus');
+    if (opusOpt) {
+      opusOpt.disabled = !opusOk;
+      opusOpt.textContent = opusOk
+        ? 'Opus (~32 kb/s) — recommended'
+        : 'Opus — not supported in this browser';
+    }
+    const saved = getSavedCodec();
+    codecSelect.value = (saved === 'opus' && !opusOk) ? 'pcm16' : saved;
+    if (codecHint) {
+      codecHint.textContent = opusOk
+        ? 'Opus uses far less bandwidth than PCM16. Takes effect on the next Start.'
+        : 'This browser cannot encode Opus (WebCodecs); PCM16 will be used.';
+    }
+  }
+
+  function selectedCodec() {
+    if (codecSelect?.value === 'pcm16') return 'pcm16';
+    return preferredCodecForSession();
   }
 
   function clampGain(v) {
@@ -290,6 +339,7 @@ function bindRemoteAudioControls(role) {
     if (rxMute) rxMute.disabled = !streaming;
     // Index locks the mic picker only while the popout is actively streaming.
     if (micSelect) micSelect.disabled = role === 'index' && remoteOwned && streaming;
+    if (codecSelect) codecSelect.disabled = streaming;
     if (!streaming) {
       setMicMuteUi(micMute, micMuteIcon, micMuteTip, false);
       setRxMuteUi(rxMute, rxMuteIcon, rxMuteTip, false);
@@ -402,7 +452,10 @@ function bindRemoteAudioControls(role) {
   async function startLocal() {
     try {
       setStatusText('Connecting…');
-      await ensureSession().start({ deviceId: selectedMicId() });
+      await ensureSession().start({
+        deviceId: selectedMicId(),
+        preferredCodec: selectedCodec()
+      });
       await refreshMicList(); // labels appear after permission grant
     } catch (e) {
       const msg = e.message || String(e);
@@ -565,6 +618,19 @@ function bindRemoteAudioControls(role) {
         setGainUi(msg.rx, msg.tx);
         return;
       }
+      if (msg.type === 'codecPref') {
+        if (!codecSelect || streamStatus === 'streaming') return;
+        applyingRemoteCodec = true;
+        try {
+          const next = msg.codec === 'pcm16' ? 'pcm16' : 'opus';
+          if (next === 'opus' && !supportsWebCodecsOpus()) return;
+          codecSelect.value = next;
+          saveCodec(next);
+        } finally {
+          applyingRemoteCodec = false;
+        }
+        return;
+      }
       if (msg.type === 'stop') {
         stopLocal();
         return;
@@ -578,6 +644,7 @@ function bindRemoteAudioControls(role) {
         });
         const g = readGainUi();
         post({ type: 'gain', rx: g.rx, tx: g.tx });
+        post({ type: 'codecPref', codec: selectedCodec() });
       }
     };
   }
@@ -617,6 +684,17 @@ function bindRemoteAudioControls(role) {
 
   micSelect?.addEventListener('change', () => {
     saveMicId(micSelect.value || '');
+  });
+
+  codecSelect?.addEventListener('change', () => {
+    if (applyingRemoteCodec) return;
+    const next = codecSelect.value === 'pcm16' ? 'pcm16' : 'opus';
+    if (next === 'opus' && !supportsWebCodecsOpus()) {
+      codecSelect.value = 'pcm16';
+      return;
+    }
+    saveCodec(next);
+    post({ type: 'codecPref', codec: next });
   });
 
   rxGainSlider?.addEventListener('input', onGainInput);
@@ -693,6 +771,7 @@ function bindRemoteAudioControls(role) {
   if (stopBtn) stopBtn.disabled = true;
   setMicMuteUi(micMute, micMuteIcon, micMuteTip, false);
   setRxMuteUi(rxMute, rxMuteIcon, rxMuteTip, false);
+  initCodecSelect();
   updateLocalButtons();
   ensureRemoteAudioTooltips();
   refreshMicList();

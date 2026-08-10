@@ -873,6 +873,13 @@ fieldset.calibration-card {
 #remoteAudioLevelsDialog > div:first-child:active {
     cursor: grabbing;
 }
+/* Bootstrap form-text / text-muted are dark-on-light; lighten for this dark dialog. */
+#remoteAudioLevelsDialog .form-text,
+#remoteAudioLevelsDialog .text-muted {
+    color: #9aa0a6 !important;
+    font-size: 0.75rem;
+    line-height: 1.35;
+}
 
 /* ── Frequency Keyboard Dialog ──────────────────────────────────────────── */
 

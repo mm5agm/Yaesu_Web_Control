@@ -160,18 +160,25 @@ namespace Yaesu_Web_Control.Services.Audio
                 return;
             }
 
+            // Client sends codecs in preference order; pick the first we support.
+            // Opus is preferred for bandwidth; PCM16 remains the fallback.
             _codecName = AudioConstants.CodecPcm16;
             if (root.TryGetProperty("codecs", out var codecs) && codecs.ValueKind == JsonValueKind.Array)
             {
-                bool wantsOpus = false, wantsPcm = false;
                 foreach (var el in codecs.EnumerateArray())
                 {
                     var s = el.GetString();
-                    if (s == AudioConstants.CodecOpus) wantsOpus = true;
-                    if (s == AudioConstants.CodecPcm16) wantsPcm = true;
+                    if (s == AudioConstants.CodecOpus)
+                    {
+                        _codecName = AudioConstants.CodecOpus;
+                        break;
+                    }
+                    if (s == AudioConstants.CodecPcm16)
+                    {
+                        _codecName = AudioConstants.CodecPcm16;
+                        break;
+                    }
                 }
-                if (wantsPcm) _codecName = AudioConstants.CodecPcm16;
-                else if (wantsOpus) _codecName = AudioConstants.CodecOpus;
             }
 
             string? openError = OpenDevices(settings);
@@ -249,22 +256,34 @@ namespace Yaesu_Web_Control.Services.Audio
 
         private void HandleTxAudio(byte msgType, ReadOnlySpan<byte> payload)
         {
-            Span<float> pcm = stackalloc float[AudioConstants.FrameSamples];
+            // Opus decode needs room for WebCodecs' default 20 ms packets (or longer).
+            Span<float> pcm = stackalloc float[AudioConstants.OpusDecodeMaxSamples];
             int n;
-            if (msgType == AudioConstants.MsgOpusTx)
+            try
             {
-                if (_codec == null) return;
-                n = _codec.Decode(payload, pcm);
-            }
-            else
-            {
-                n = Math.Min(AudioConstants.FrameSamples, payload.Length / 2);
-                for (int i = 0; i < n; i++)
+                if (msgType == AudioConstants.MsgOpusTx)
                 {
-                    short s = BinaryPrimitives.ReadInt16LittleEndian(payload.Slice(i * 2, 2));
-                    pcm[i] = s / 32768f;
+                    if (_codec == null) return;
+                    n = _codec.Decode(payload, pcm);
+                }
+                else
+                {
+                    n = Math.Min(AudioConstants.FrameSamples, payload.Length / 2);
+                    for (int i = 0; i < n; i++)
+                    {
+                        short s = BinaryPrimitives.ReadInt16LittleEndian(payload.Slice(i * 2, 2));
+                        pcm[i] = s / 32768f;
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                // A single bad Opus packet must not tear down the WebSocket session.
+                _logger.LogDebug(ex, "Dropping bad TX audio frame (type={Type}, {Bytes} bytes)", msgType, payload.Length);
+                return;
+            }
+
+            if (n <= 0) return;
 
             float peak = 0;
             for (int i = 0; i < n; i++)
@@ -535,8 +554,20 @@ namespace Yaesu_Web_Control.Services.Audio
                     byte msgType;
                     if (_codecName == AudioConstants.CodecOpus && _codec != null)
                     {
-                        packet = _codec.Encode(frame);
-                        msgType = AudioConstants.MsgOpusRx;
+                        try
+                        {
+                            packet = _codec.Encode(frame);
+                            msgType = AudioConstants.MsgOpusRx;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Opus RX encode failed — dropping frame");
+                            int remainErr = _captureAccumLen - AudioConstants.FrameSamples;
+                            if (remainErr > 0)
+                                Array.Copy(_captureAccum, AudioConstants.FrameSamples, _captureAccum, 0, remainErr);
+                            _captureAccumLen = remainErr;
+                            continue;
+                        }
                     }
                     else
                     {

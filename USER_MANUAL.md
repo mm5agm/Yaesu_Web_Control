@@ -93,6 +93,12 @@
     - 17.6 [Adding your own commands](#176-adding-your-own-commands)
     - 17.7 [More languages](#177-more-languages)
 18. [Remote Audio](#18-remote-audio)
+    - 18.1 [Radio setup](#181-radio-setup)
+    - 18.2 [YWC host setup](#182-ywc-host-setup)
+    - 18.3 [HTTPS for remote browsers](#183-https-for-remote-browsers)
+    - 18.4 [Operating](#184-operating)
+    - 18.5 [Troubleshooting](#185-troubleshooting)
+    - 18.6 [Audio codecs (Opus vs PCM16)](#186-audio-codecs-opus-vs-pcm16)
 
 ---
 
@@ -1369,6 +1375,7 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 | Radio RX device (capture) | PortAudio input used for what you **hear** in the browser (usually Yaesu USB recording). Empty = system default input. On Windows the list is limited to **WASAPI** endpoints so the same USB CODEC is not repeated under MME / DirectSound / WDM-KS. |
 | Radio TX device (playback) | PortAudio output used for browser **mic → radio** (usually Yaesu USB playback). Empty = system default output. Same WASAPI-only listing on Windows as RX. |
 | RX / TX gain | Software gain applied in the bridge (0.05–4). On Home, open **Mic & Gain** on the Remote Audio bar (browser mic picker + RX/TX gain). The pop-out shows the same controls inline. |
+| Audio codec | Chosen on the Index **Mic & Gain** dialog or the pop-out (not a host setting). **Opus** (default) compresses speech to ~32 kb/s per direction; **PCM16** is uncompressed ~768 kb/s. See [§18.6](#186-audio-codecs-opus-vs-pcm16). |
 
 Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
 
@@ -2880,10 +2887,12 @@ Local testing on the same PC can use `http://localhost:8080` without HTTPS.
 
 1. Open the Index page (over HTTPS if remote).
 2. Click **Start audio** on the Remote Audio bar. Grant microphone permission when asked.
-3. You should hear RX audio; speak into the mic (levels show on the bar). Use **Mic & Gain** to pick the browser microphone and adjust RX/TX software gain (saved automatically).
+3. You should hear RX audio; speak into the mic (levels show on the bar). Use **Mic & Gain** to pick the browser microphone, choose **Opus** or **PCM16**, and adjust RX/TX software gain (codec and mic choice are remembered in the browser; gain is saved on the host).
 4. Use **TX** / your TX toggle key to key the radio. Audio flows continuously (like Mumble); CAT controls PTT.
 5. **Mute mic** / **Mute RX** as needed. **Stop** ends the session and closes host audio devices.
 6. Only **one** audio session is allowed at a time; a second browser is rejected busy.
+
+The status line shows the active codec while streaming (for example `Streaming (opus)`). Change codec only while stopped — it applies on the next **Start**.
 
 #### Pop-out window (keep audio while changing pages)
 
@@ -2902,13 +2911,31 @@ Audio on the Index page stops when you leave Home (for example to open **Setting
 | Mic permission denied / “requires HTTPS” | Use the HTTPS URL; regenerate the cert with the IP you type in the address bar; restart after enabling HTTPS. |
 | No RX sound | Check Radio RX device; confirm radio AF gain / USB volume; look at the RX meter while Start audio is active. |
 | TX keys but no modulation | Confirm MOD SOURCE / USB; check Radio TX device; unmute mic; watch the TX meter while speaking. |
-| Choppy audio | Prefer wired Ethernet/VPN; reduce other load; stay on LAN/VPN (no TURN/WebRTC in v1). |
+| Choppy audio | Prefer wired Ethernet/VPN; reduce other load; stay on LAN/VPN (no TURN/WebRTC in v1). Use **Opus** instead of PCM16 on limited links (see [§18.6](#186-audio-codecs-opus-vs-pcm16)). |
 | “Audio session busy” | Stop audio in the other tab/browser (or pop-out window) first. |
 | Audio dies when opening Settings | Use **Pop out** before leaving Home so the session lives in the separate window. |
 | Pop-out blocked | Allow pop-ups for the YWC origin; click **Pop out** / **Open pop-out** again. |
 | Devices missing from the list | Unplug/replug USB; Refresh device list; check OS privacy permissions for microphone (host process). |
 | Wrong browser mic | Open **Mic & Gain** on the Remote Audio bar (or use the pop-out controls) and pick the right browser microphone. Choice is remembered in the browser. |
+| Opus unavailable / forced to PCM16 | The browser needs WebCodecs `AudioEncoder` / `AudioDecoder` (current Chrome, Edge, or Chromium). Older Safari/Firefox builds may only offer PCM16. |
 | Voice Control vs radio USB | Keep Voice Control’s mic on your headset; leave Remote Audio devices on the Yaesu USB endpoints. |
+
+### 18.6 Audio codecs (Opus vs PCM16)
+
+Remote Audio always samples at **48 kHz mono** on the host bridge. What changes is how those samples are packed on the WebSocket:
+
+| | **Opus** (default / recommended) | **PCM16** |
+|--|--|--|
+| What it is | Compressed speech (VOIP-style) | Uncompressed 16-bit samples |
+| Approx. payload per direction | **~32 kb/s** | **~768 kb/s** |
+| Duplex (RX + TX) | Roughly **~64 kb/s** (+ framing) | Roughly **~1.5 Mb/s** (+ framing) |
+| Audio quality | Good for SSB / voice; may soften noise floor slightly vs PCM | Bit-for-bit transparent (aside from gain / device resampling) |
+| Best for | Limited bandwidth, VPN, cellular, choppy links | Fast LAN when you want maximum fidelity or Opus is unavailable |
+| Browser requirement | WebCodecs Opus encode/decode | Any modern browser |
+
+**Preference:** YWC offers **Opus first** whenever the browser supports it. Choose **PCM16** only if you need uncompressed audio on a fast LAN, or if Opus is greyed out in your browser.
+
+Both directions use the same codec for a session. Stop and Start again after changing the selector.
 
 ---
 
