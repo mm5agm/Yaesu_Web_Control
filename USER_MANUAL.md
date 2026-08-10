@@ -7,7 +7,7 @@
 1. [Introduction](#1-introduction)
 2. [Installation](#2-installation)
    - 2.1 [Windows (installer)](#21-windows-installer)
-   - 2.2 [macOS / Linux (from source)](#22-macos--linux-from-source)
+   - 2.2 [macOS (DMG)](#22-macos-dmg)
    - 2.3 [Linux Docker (including Raspberry Pi)](#23-linux-docker-including-raspberry-pi)
    - 2.4 [USB serial driver (Windows / macOS / Linux)](#24-usb-serial-driver-windows--macos--linux)
 3. [First-Time Setup](#3-first-time-setup)
@@ -102,24 +102,24 @@
 
 Yaesu Web Control — **YWC** for short — is a web-based control panel for Yaesu HF transceivers.
 
-The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the full product: system-tray host, SDR spectrum, and Voice Control. A **CAT-only host** can also be built and run on **macOS** and **Linux** (including Docker on x64 PCs and arm64 Raspberry Pi). On those platforms the browser UI still talks to the radio over CAT; SDR spectrum and Windows Voice Control are not available. You can always open the browser UI from another device on your LAN (tablet, phone, another laptop) once the host is running.
+The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the full product: system-tray host, SDR spectrum, and Voice Control. **macOS** gets an unsigned CAT-only DMG from the same Releases page (menu-bar host; no SDR / Voice Control). **Linux** runs the same CAT-only host from source or via Docker (x64 PCs and arm64 Raspberry Pi). On those platforms the browser UI still talks to the radio over CAT. You can always open the browser UI from another device on your LAN (tablet, phone, another laptop) once the host is running.
 
 ### Platforms at a glance
 
-| | Windows (installer) | macOS / Linux (from source) | Linux Docker |
+| | Windows (installer) | macOS (DMG) | Linux Docker / from source |
 |---|---|---|---|
-| How you get it | GitHub Releases installer | Build with .NET 10 SDK | `Dockerfile` / `docker compose` |
-| Host UI | System tray icon | macOS: menu-bar status item; Linux: console only | Console in container (no tray) |
+| How you get it | GitHub Releases installer | GitHub Releases DMG (unsigned; Apple Silicon or Intel) | `Dockerfile` / `docker compose`, or build with .NET 10 SDK |
+| Host UI | System tray icon | Menu-bar status item | Console only (Docker / Linux from source) |
 | CAT + web UI | Yes | Yes | Yes |
 | SDR spectrum / waterfall | Yes | No | No |
 | Voice Control (SAPI mic) | Yes | No | No |
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
-| Serial port form | `COM3`, `COM4`, … | macOS: `/dev/cu.*` · Linux: `/dev/ttyUSB*` / `/dev/ttyACM*` | Same as Linux; pass device into the container |
+| Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
 | USB serial driver | [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) required on **Windows, macOS, and Linux** — **reboot the host after install** (see [§2.4](#24-usb-serial-driver-windows--macos--linux)) |
-| Settings / logs folder | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` | Volume `./data/ywc` → `/data/MM5AGM/Yaesu Web Control/` |
-| Auto-exit when no browser | Default **on** | Default **on** (turn **off** for a headless shack) | Forced **off** in containers |
-| Opens a local browser on start | Yes | Yes (desktop) | No |
+| Settings / logs folder | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` | Volume `./data/ywc` → `/data/MM5AGM/Yaesu Web Control/` (Docker); same `~/.config/…` path when run from source |
+| Auto-exit when no browser | Default **on** | Default **on** (turn **off** for a headless shack) | Forced **off** in containers; default **on** from source |
+| Opens a local browser on start | Yes | Yes | No (Docker); yes from source on a desktop |
 
 > **No internet connection needed.** YWC reaches the radio over a serial cable, reads its own SDR hardware locally, and serves its own web page from your own PC, so the whole of it works on a shack computer that has never been online. Only two things reach out to the internet, and neither is required: the **DX cluster** spot feed (Section 6.6), which is off until you switch it on, and the **update check** that tells you when a new version is available. With no connection the cluster badge simply reads *Disconnected* and the update banner never appears. Everything else — meters, spectrum, tuning, WSJT-X and the rest — is entirely local.
 >
@@ -181,12 +181,25 @@ The application was written for operators who want a large, clean, touchscreen-f
 
 This is the supported product build: tray icon, SDR spectrum, and Voice Control.
 
-### 2.2 macOS / Linux (from source)
+### 2.2 macOS (DMG)
 
-There is no signed desktop installer for macOS or Linux yet. Build the **CAT-only** target with the [.NET 10 SDK](https://dotnet.microsoft.com/download):
+macOS ships as an **unsigned CAT-only** app (menu-bar status item; no SDR spectrum or Windows Voice Control). There is no Apple Developer ID / notarization — this is an open-source project and that licence costs money every year. Gatekeeper will warn the first time you open a download from the internet, the same way Windows warns about the unsigned installer.
 
 1. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** (see [§2.4](#24-usb-serial-driver-windows--macos--linux)).
-2. Then:
+2. Download the DMG that matches your Mac from the [GitHub Releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases):
+   - Apple Silicon (M1 / M2 / M3 / …): `Yaesu_Web_Control_CAT_*_macos-arm64.dmg`
+   - Intel: `Yaesu_Web_Control_CAT_*_macos-x64.dmg`
+3. Open the DMG and drag **Yaesu Web Control** into **Applications**.
+4. The first time you launch it, macOS Gatekeeper will block an unsigned app. Do one of the following:
+   - **Right-click** (or Control-click) **Yaesu Web Control** in Applications → **Open** → **Open** again in the dialog, or
+   - Try to open it normally, then open **System Settings → Privacy & Security**, scroll to the message about YWC being blocked, and click **Open Anyway**.
+5. A menu-bar status item appears (Open / About / Open user data folder / Exit). The browser UI is at `http://localhost:8080` (or the port shown in the menu-bar tooltip). .NET is bundled — you do not need to install the SDK.
+
+Set **Serial Port** to a `/dev/cu.*` device (see §3). SDR and Voice Control sections are hidden on this host.
+
+#### Alternative: build from source (macOS / Linux)
+
+If you prefer not to use the DMG, or you are on Linux without Docker, build the **CAT-only** target with the [.NET 10 SDK](https://dotnet.microsoft.com/download):
 
 ```bash
 git clone https://github.com/mm5agm/Yaesu_Web_Control.git
@@ -196,7 +209,7 @@ dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
 
 Then open `http://localhost:8080` (or the port shown in the console / menu-bar tooltip on macOS).
 
-- **macOS:** a menu-bar status item mirrors the Windows tray (Open / About / Open user data folder / Exit).
+- **macOS:** a menu-bar status item mirrors the Windows tray (Open / About / Open user data folder / Exit). Developers can also run `make dmg` on a Mac to produce the same unsigned DMG locally.
 - **Linux:** the process runs as a console host — use Ctrl+C to stop, or disable auto-exit (Settings) and leave it running headless.
 - Set **Serial Port** to a USB-serial device path (see §3). SDR and Voice Control sections are hidden on this host.
 
@@ -308,7 +321,7 @@ A small **YWC tray icon** appears in the Windows system tray (down by the clock,
 
 ### macOS (CAT-only host)
 
-`dotnet run --framework net10.0` starts Kestrel and a **menu-bar status item** with the same Open / About / Open user data folder / Exit actions as the Windows tray. User data lives under `~/.config/MM5AGM/Yaesu Web Control/`. The browser may open automatically on a desktop Mac; if not, use the menu-bar **Open** item or browse to the URL yourself.
+Launch **Yaesu Web Control** from Applications (DMG install — [§2.2](#22-macos-dmg)), or run `dotnet run --framework net10.0` from a source checkout. Either way Kestrel starts and a **menu-bar status item** offers the same Open / About / Open user data folder / Exit actions as the Windows tray. User data lives under `~/.config/MM5AGM/Yaesu Web Control/`. The browser may open automatically on a desktop Mac; if not, use the menu-bar **Open** item or browse to the URL yourself.
 
 ### Linux (from source)
 
@@ -2344,7 +2357,7 @@ As a safety backstop, YWC (v2.4.2 and later) will force the radio back to receiv
 
 | Topic | What to expect |
 |---|---|
-| Getting the app | Windows: signed-ish installer from Releases. macOS/Linux: build `net10.0` from source, or run Linux via Docker (`Dockerfile` / `docker-compose.yml`, amd64 + arm64). |
+| Getting the app | Windows: unsigned installer from Releases. macOS: unsigned CAT-only DMG from Releases (Apple Silicon or Intel) — Gatekeeper needs **Open** / **Open Anyway** the first time ([§2.2](#22-macos-dmg)). Linux: build `net10.0` from source, or Docker (`Dockerfile` / `docker-compose.yml`, amd64 + arm64). |
 | Host chrome | Windows tray · macOS menu-bar item · Linux/Docker console only |
 | Serial port | `COMn` on Windows; `/dev/cu.*` on macOS; `/dev/ttyUSB*` / `/dev/ttyACM*` on Linux (pass through with `YWC_SERIAL_DEVICE` in Docker). Always use the **Enhanced** CAT port when two CP210x ports appear. |
 | USB serial driver | Same on all three: install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)) |

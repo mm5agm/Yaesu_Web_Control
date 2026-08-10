@@ -33,20 +33,22 @@ I own and test on the **FTdx101MP**; the other supported models are built from Y
 
 ### Platforms (Windows vs macOS / Linux)
 
-| | **Windows** (shipped installer) | **macOS / Linux** (CAT-only host) |
-|---|---|---|
-| How to run | Download installer from [Releases](https://github.com/mm5agm/Yaesu_Web_Control/releases) | `dotnet run --framework net10.0`, or **Linux Docker** (`Dockerfile` / `docker-compose.yml`, amd64 + arm64 / Pi) |
-| Host UI | System tray | macOS menu-bar status item · Linux/Docker: console only |
-| CAT + browser UI | Yes | Yes |
-| SDR spectrum | Yes | No |
-| Voice Control (SAPI) | Yes | No |
-| Voice announcements (browser TTS) | Yes | Yes |
-| Serial port | `COM3`, … | macOS `/dev/cu.*` · Linux `/dev/ttyUSB*` / `/dev/ttyACM*` |
+| | **Windows** (shipped installer) | **macOS** (CAT-only DMG) | **Linux** (CAT-only host) |
+|---|---|---|---|
+| How to run | Download installer from [Releases](https://github.com/mm5agm/Yaesu_Web_Control/releases) | Download DMG from [Releases](https://github.com/mm5agm/Yaesu_Web_Control/releases) (unsigned; arm64 or x64), or `dotnet run --framework net10.0` | `dotnet run --framework net10.0`, or **Docker** (`Dockerfile` / `docker-compose.yml`, amd64 + arm64 / Pi) |
+| Host UI | System tray | Menu-bar status item | Console only (Docker / from source) |
+| CAT + browser UI | Yes | Yes | Yes |
+| SDR spectrum | Yes | No | No |
+| Voice Control (SAPI) | Yes | No | No |
+| Voice announcements (browser TTS) | Yes | Yes | Yes |
+| Serial port | `COM3`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` |
 | USB serial driver | [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on **Windows, macOS, and Linux** — **reboot after install** |
-| User data | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` (Docker: `./data/ywc` volume) |
-| Auto-exit when no browser | Default on | Default on — turn **off** for headless; Docker forces off |
+| User data | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` | Same `~/.config/…` path; Docker uses `./data/ywc` volume |
+| Auto-exit when no browser | Default on | Default on — turn **off** for headless | Default on from source; Docker forces off |
 
-Full operational detail: [USER_MANUAL.md §1](USER_MANUAL.md#1-introduction), [§2.4 USB serial driver](USER_MANUAL.md#24-usb-serial-driver-windows--macos--linux), and [§15.10](USER_MANUAL.md#1510-whats-different-on-macos--linux-vs-windows).
+The macOS DMG is **not notarized** (no Apple Developer Program membership). Gatekeeper will warn on first open — right-click → **Open**, or use **Privacy & Security → Open Anyway**. Same class of warning as the unsigned Windows installer.
+
+Full operational detail: [USER_MANUAL.md §1](USER_MANUAL.md#1-introduction), [§2.2 macOS DMG](USER_MANUAL.md#22-macos-dmg), [§2.4 USB serial driver](USER_MANUAL.md#24-usb-serial-driver-windows--macos--linux), and [§15.10](USER_MANUAL.md#1510-whats-different-on-macos--linux-vs-windows).
 
 Before first CAT use on any OS: install the Silicon Labs driver from the link above and reboot the host.
 
@@ -59,6 +61,10 @@ dotnet run --project Yaesu_Web_Control.csproj --framework net10.0-windows
 # CAT-only host (macOS / Linux / Windows without WinForms features)
 dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
 # then open http://localhost:8080
+
+# macOS unsigned DMG (requires a Mac; self-contained .app)
+# make dmg            # this Mac's arch
+# make dmg-all        # arm64 + x64
 
 # Linux Docker (x64 or arm64 / Raspberry Pi)
 export YWC_SERIAL_DEVICE=/dev/ttyUSB0

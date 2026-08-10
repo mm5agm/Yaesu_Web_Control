@@ -6,6 +6,7 @@
 
 .PHONY: help restore build run publish \
 	publish-osx-arm64 publish-osx-x64 publish-linux-x64 publish-linux-arm64 \
+	dmg dmg-osx-arm64 dmg-osx-x64 dmg-all \
 	docker docker-load docker-multi compose-up compose-down clean
 
 PROJ            := Yaesu_Web_Control.csproj
@@ -15,6 +16,7 @@ IMAGE           ?= ywc:local
 REGISTRY_IMAGE  ?= ywc:latest
 PLATFORMS       ?= linux/amd64,linux/arm64
 PUBLISH_DIR     ?= publish
+DMG_SCRIPT      := scripts/macos/build-dmg.sh
 YWC_SERIAL_DEVICE ?= /dev/ttyUSB0
 
 # Host RID for `make publish` (override with RID=… if needed).
@@ -45,10 +47,16 @@ help:
 	@echo "  make build                Build CAT-only host ($(CONFIG))"
 	@echo "  make run                  Run CAT-only host → http://localhost:8080"
 	@echo "  make publish              Publish for this host (RID=$(HOST_RID))"
-	@echo "  make publish-osx-arm64    Publish osx-arm64"
-	@echo "  make publish-osx-x64      Publish osx-x64"
+	@echo "  make publish-osx-arm64    Publish osx-arm64 (framework-dependent)"
+	@echo "  make publish-osx-x64      Publish osx-x64 (framework-dependent)"
 	@echo "  make publish-linux-x64    Publish linux-x64"
 	@echo "  make publish-linux-arm64  Publish linux-arm64"
+	@echo ""
+	@echo "macOS DMG (unsigned, self-contained CAT-only .app)"
+	@echo "  make dmg                  DMG for this Mac (RID=$(HOST_RID))"
+	@echo "  make dmg-osx-arm64        DMG for Apple Silicon"
+	@echo "  make dmg-osx-x64          DMG for Intel Mac"
+	@echo "  make dmg-all              Both macOS DMGs"
 	@echo ""
 	@echo "Docker"
 	@echo "  make docker               Build image for current arch → $(IMAGE)"
@@ -83,6 +91,20 @@ publish-osx-arm64 publish-osx-x64 publish-linux-x64 publish-linux-arm64:
 		-o $(PUBLISH_DIR)/$(_RID) \
 		/p:UseAppHost=true
 	@echo "Published → $(PUBLISH_DIR)/$(_RID)"
+
+# Unsigned self-contained .app + DMG (requires macOS). See scripts/macos/build-dmg.sh.
+dmg:
+	@test "$(UNAME_S)" = "Darwin" || (echo "make dmg requires macOS"; exit 1)
+	CONFIG=$(CONFIG) $(DMG_SCRIPT) $(HOST_RID)
+
+dmg-osx-arm64 dmg-osx-x64:
+	@test "$(UNAME_S)" = "Darwin" || (echo "make $@ requires macOS"; exit 1)
+	$(eval _RID := $(patsubst dmg-%,%,$@))
+	CONFIG=$(CONFIG) $(DMG_SCRIPT) $(_RID)
+
+dmg-all:
+	@test "$(UNAME_S)" = "Darwin" || (echo "make dmg-all requires macOS"; exit 1)
+	CONFIG=$(CONFIG) $(DMG_SCRIPT) all
 
 # Plain docker build (daemon's native architecture).
 docker:

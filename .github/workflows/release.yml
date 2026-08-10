@@ -12,7 +12,7 @@ on:
         type: string
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     permissions:
       contents: write
@@ -106,3 +106,47 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
+
+  # Unsigned CAT-only .app DMGs (arm64 + x64). No Apple Developer ID / notarization.
+  # workflow_dispatch with empty tag → artifacts only (safe branch smoke test).
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build macOS DMGs (arm64 + x64)
+        run: |
+          chmod +x scripts/macos/build-dmg.sh
+          ./scripts/macos/build-dmg.sh all
+
+      - name: List DMG output
+        run: ls -lh publish/dmg/*.dmg
+
+      - name: Upload DMGs as workflow artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Yaesu_Web_Control_macOS_DMGs
+          path: publish/dmg/*.dmg
+
+      - name: Upload DMGs to GitHub Release
+        if: github.event_name == 'release' || github.event.inputs.tag != ''
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="${{ github.event.inputs.tag }}"
+          fi
+          echo "Uploading macOS DMGs to release: $tag"
+          gh release upload "$tag" publish/dmg/*.dmg --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

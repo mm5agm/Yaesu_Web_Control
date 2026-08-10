@@ -302,7 +302,25 @@ Log.Information("Yaesu Web Control starting (v{Version})", Yaesu_Web_Control.App
         targetWorker, minWorker, targetIo, minIo, Environment.ProcessorCount);
 }
 
-var builder = WebApplication.CreateBuilder(args);
+// ContentRoot defaults to Directory.GetCurrentDirectory(). That is wrong when
+// macOS launches the .app (cwd is "/" or ~) and can be wrong for a Windows
+// shortcut whose "Start in" folder is missing — wwwroot/pictures/USER_MANUAL.md
+// then resolve nowhere and the UI loads without CSS/JS. Prefer the process cwd
+// when it already contains wwwroot (`dotnet run` from the repo, published exe
+// started from its folder); otherwise fall back to the apphost directory.
+var contentRootBaseDir = AppContext.BaseDirectory;
+var contentRootCwd = Directory.GetCurrentDirectory();
+var contentRoot = Directory.Exists(Path.Combine(contentRootCwd, "wwwroot"))
+    ? contentRootCwd
+    : Directory.Exists(Path.Combine(contentRootBaseDir, "wwwroot"))
+        ? contentRootBaseDir
+        : contentRootCwd;
+
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = contentRoot,
+});
 
 // Cap the host's overall shutdown timeout. Default is 30 s (which we hit on
 // every tray Exit before adding this cap); 2 s is plenty for our user
