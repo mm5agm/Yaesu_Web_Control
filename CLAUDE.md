@@ -10,18 +10,44 @@ Before making any changes, read and follow all rules in `.claude/rules.md` and `
 
 ## Build & Run
 
-**Target:** .NET 10, x64 Windows only (`net10.0-windows`, `OutputType=WinExe`, `UseWindowsForms=true`).
+**Targets:** multi-TFM — Windows product (`net10.0-windows`, WinExe + WinForms tray/voice/SDR) and CAT-only host (`net10.0`, console; macOS/Linux).
 
 ```bash
-# Build
+# Build both TFMs (on Windows) or the portable TFM (on macOS/Linux)
 dotnet build Yaesu_Web_Control.csproj
 
-# Run (launches WinForms host + Kestrel on http://0.0.0.0:8080)
-dotnet run --project Yaesu_Web_Control.csproj
+# Windows product (tray + voice + SDR)
+dotnet build -f net10.0-windows
+dotnet run --project Yaesu_Web_Control.csproj --framework net10.0-windows
 
-# Publish self-contained
-dotnet publish -c Release -r win-x64 --self-contained
+# CAT-only host (macOS / Linux / Windows without WinForms features)
+dotnet build -f net10.0
+dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
+# then open http://localhost:8080 — on macOS a menu-bar status item provides
+# Open / About / Open user data folder / Exit (Ctrl+C also works)
+
+# Publish Windows self-contained installer input
+dotnet publish -c Release -f net10.0-windows -r win-x64 --self-contained
 ```
+
+On macOS, set **Serial Port** to a `/dev/cu.*` device. On Linux, use `/dev/ttyUSB*` or `/dev/ttyACM*`. SDR spectrum and Voice Control are Windows-only and are hidden on the CAT-only host.
+
+**USB CAT:** install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on Windows, macOS, and Linux, then **reboot the host** before first use (see USER_MANUAL §2.4).
+
+**Docker (linux/amd64 + linux/arm64):** `Dockerfile` + `docker-compose.yml` publish the `net10.0` CAT-only host. Data volume is `XDG_CONFIG_HOME=/data` → `MM5AGM/Yaesu Web Control/`. Entrypoint starts as root, `chown`s `/data` to `app`, then drops privileges (preserving compose `group_add` GIDs). Pass the serial device with `devices:` / `YWC_SERIAL_DEVICE`. For Remote Audio, compose maps `/dev/snd` and `group_add`s host `audio` (`YWC_AUDIO_GID`); the image installs `libasound2t64` + `libportaudio2`. Container runs with auto-shutdown and local browser-open disabled. Install the Silicon Labs driver on the **host** and reboot before mapping the device into the container.
+
+### Operational differences (Windows vs macOS/Linux)
+
+| Concern | `net10.0-windows` | `net10.0` (macOS/Linux/Docker) |
+|---|---|---|
+| Process chrome | WinForms `SystemTrayService` | macOS: Avalonia `MacSystemTrayService` on main thread after `StartAsync`; Linux/Docker: `app.Run()` console |
+| Compiled out | — | Tray WinForms, Voice SAPI/NAudio, `SdrController`, SDR worker ProjectReference |
+| Settings UI gates | `IsWindowsHost == true` | `IsWindowsHost == false` — hides SDR / Voice / Windows-only panels |
+| Serial validation | `COM*` | `/dev/…` |
+| AppData | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `$XDG_CONFIG_HOME` or `~/.config/MM5AGM/Yaesu Web Control/` |
+| `AutoShutdownWhenNoBrowsers` | Default true | Default true; `HostRuntime.IsContainer` forces keep-alive |
+| Browser auto-open | Yes | Skipped when `HostRuntime.IsContainer` |
+| Operator-facing docs | `USER_MANUAL.md` §§1–4, 6.2–6.3, 15.10, 17 | Same |
 
 There are no automated tests. Verification is manual via the browser at `http://localhost:8080`.
 
@@ -88,8 +114,8 @@ which is how the sibling repo (IWC) shipped v1.0.0's code as v1.0.3.
 **Do not use `.\scripts\create-release.ps1`.** It is an older route to the same
 place, it has none of those checks, and it generates release notes from git log.
 
-User settings persist to `%APPDATA%\MM5AGM\Yaesu Web Control\appsettings.user.json`.  
-Radio state persists to `%APPDATA%\MM5AGM\Yaesu Web Control\radio_state.json`.
+User settings persist to `%APPDATA%\MM5AGM\Yaesu Web Control\appsettings.user.json` on Windows, or `~/.config/MM5AGM/Yaesu Web Control/appsettings.user.json` on macOS/Linux (Docker: under the `/data` volume).  
+Radio state persists to the same folder as `radio_state.json`.
 
 ---
 

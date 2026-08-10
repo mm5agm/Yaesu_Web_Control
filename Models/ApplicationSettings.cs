@@ -13,6 +13,13 @@
         // know 8080 always clashes on their machine (e.g. Plex, Jenkins).
         public int HttpPort { get; set; } = 8080;
 
+        /// <summary>
+        /// When true (default), the host exits ~30s after the last heartbeating
+        /// browser tab disconnects. Set false to keep the process running with
+        /// no browser connected (useful on macOS console hosts and headless shacks).
+        /// </summary>
+        public bool AutoShutdownWhenNoBrowsers { get; set; } = true;
+
         public string RadioModel { get; set; } = "FTdx101MP"; // MP = dual receiver, D = single receiver
 
 

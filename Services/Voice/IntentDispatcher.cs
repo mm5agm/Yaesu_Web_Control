@@ -672,18 +672,4 @@ namespace Yaesu_Web_Control.Services.Voice
             _          => mode
         };
     }
-
-    /// <summary>
-    /// Result of dispatching a voice intent. <c>Success</c> drives the
-    /// spoken-confirmation status ("successful" vs "unsuccessful");
-    /// <c>ConfirmationPhrase</c> is the human-readable description of what
-    /// the command tried to do, with parameter values folded in
-    /// (e.g. "Move to fourteen point zero seven four megahertz", "Mode U S B").
-    /// </summary>
-    /// <summary>
-    /// <c>IsReadBack</c> = true for status queries and help — the phrase is spoken directly
-    /// without appending ", successful". Also bypasses the VoiceSpokenConfirmationEnabled
-    /// gate so status queries always get a spoken answer.
-    /// </summary>
-    public record DispatchResult(bool Success, string ConfirmationPhrase, bool IsReadBack = false);
 }

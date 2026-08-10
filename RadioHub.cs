@@ -10,6 +10,7 @@ namespace Yaesu_Web_Control.Hubs
         private readonly ILogger<RadioHub> _logger;
         private readonly IHostApplicationLifetime _lifetime;
         private readonly RadioStateService _radioState;
+        private readonly ISettingsService _settings;
 
         // All currently open SignalR connections
         private static readonly ConcurrentDictionary<string, byte> _connections = new();
@@ -23,11 +24,16 @@ namespace Yaesu_Web_Control.Hubs
         private static CancellationTokenSource? _shutdownCts;
         private static readonly object _shutdownLock = new();
 
-        public RadioHub(ILogger<RadioHub> logger, IHostApplicationLifetime lifetime, RadioStateService radioState)
+        public RadioHub(
+            ILogger<RadioHub> logger,
+            IHostApplicationLifetime lifetime,
+            RadioStateService radioState,
+            ISettingsService settings)
         {
             _logger   = logger;
             _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
             _radioState = radioState;
+            _settings = settings;
         }
 
         public override async Task OnConnectedAsync()
@@ -57,9 +63,20 @@ namespace Yaesu_Web_Control.Hubs
             await base.OnDisconnectedAsync(exception);
 
             // Only trigger shutdown countdown when a heartbeating client (main page tab)
-            // disconnects and no other heartbeating clients remain.
+            // disconnects and no other heartbeating clients remain — and only when the
+            // AutoShutdownWhenNoBrowsers setting is enabled (default true).
             if (wasHeartbeating && _heartbeats.IsEmpty)
             {
+                var settings = await _settings.GetSettingsAsync();
+                // Containers must stay up as a headless CAT controller even if
+                // the user left AutoShutdown enabled in a copied settings file.
+                if (!settings.AutoShutdownWhenNoBrowsers || HostRuntime.IsContainer)
+                {
+                    _logger.LogInformation(
+                        "All browser tabs closed — auto-shutdown disabled; host keeps running.");
+                    return;
+                }
+
                 _logger.LogInformation("All browser tabs closed. Shutting down in {s}s if none reconnect.",
                     ShutdownGrace.TotalSeconds);
                 ScheduleShutdown();

@@ -2176,6 +2176,7 @@
         window.ywcTxToggleKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.TxToggleKey));
         window.ywcVoiceNudgeStepHzA = @Model.VoiceNudgeStepHzA;
         window.ywcVoiceNudgeStepHzB = @Model.VoiceNudgeStepHzB;
+        window.ywcIsWindowsHost = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IsWindowsHost));
     </script>
     <script type="module">
         import { MeterPanel }           from "/js/guages/meter-panel.js?v=1";
@@ -2291,22 +2292,17 @@
             // ── Spectrum display (dual-VFO, v2.3.0+) ─────────────────────────
             // One SpectrumPanel per VFO. SdrSpectrumPipeline routes by sdrId.
             // SdrManager will only spawn worker(s) for VFO(s) actually configured.
-            const spectrumPanelA = new SpectrumPanel(
-                'spectrumCanvasA',
-                'spectrumContainerA',
-                @Model.RadioState.FrequencyA,
-                'A'
-            );
-            const spectrumPanelB = new SpectrumPanel(
-                'spectrumCanvasB',
-                'spectrumContainerB',
-                @Model.RadioState.FrequencyB,
-                'B'
-            );
+            // CAT-only hosts skip SpectrumPanel UI but keep the pipeline for DX.
+            const spectrumPanelA = window.ywcIsWindowsHost
+                ? new SpectrumPanel('spectrumCanvasA', 'spectrumContainerA', @Model.RadioState.FrequencyA, 'A')
+                : null;
+            const spectrumPanelB = window.ywcIsWindowsHost
+                ? new SpectrumPanel('spectrumCanvasB', 'spectrumContainerB', @Model.RadioState.FrequencyB, 'B')
+                : null;
 
             // Region-specific band plan for FT8/CW/SSB markers on both panels.
             const _ywcRegion = '@Model.BandPlan';
-            if (BAND_PLANS[_ywcRegion]) {
+            if (spectrumPanelA && spectrumPanelB && BAND_PLANS[_ywcRegion]) {
                 spectrumPanelA.setBandPlan(BAND_PLANS[_ywcRegion]);
                 spectrumPanelB.setBandPlan(BAND_PLANS[_ywcRegion]);
             }
@@ -2320,6 +2316,7 @@
             // we re-apply once the fetch resolves. Net effect: hardcoded
             // defaults always work; updated JSON applies as soon as it loads.
             loadBandPlanFromServer().then(loaded => {
+                if (!spectrumPanelA || !spectrumPanelB) return;
                 if (loaded && BAND_PLANS[_ywcRegion]) {
                     spectrumPanelA.setBandPlan(BAND_PLANS[_ywcRegion]);
                     spectrumPanelB.setBandPlan(BAND_PLANS[_ywcRegion]);
@@ -2329,7 +2326,7 @@
                     spectrumPanelB.setBandEdges(BAND_EDGES[_ywcRegion]);
                 }
             });
-            if (BAND_EDGES[_ywcRegion]) {
+            if (spectrumPanelA && spectrumPanelB && BAND_EDGES[_ywcRegion]) {
                 spectrumPanelA.setBandEdges(BAND_EDGES[_ywcRegion]);
                 spectrumPanelB.setBandEdges(BAND_EDGES[_ywcRegion]);
             }
@@ -2367,6 +2364,11 @@
             // outer spectrumContainer and the Mono/Multi toggle as appropriate.
             const sdrState = { A: 'unconfigured', B: 'unconfigured' };
             function updateContainerVisibility() {
+                if (!window.ywcIsWindowsHost) {
+                    const c = document.getElementById('spectrumContainer');
+                    if (c) c.style.display = 'none';
+                    return;
+                }
                 const aConfigured = sdrState.A !== 'unconfigured';
                 let bConfigured = sdrState.B !== 'unconfigured';
 
@@ -2482,18 +2484,18 @@
 
             spectrumPipeline.onStatusChange('A', status => {
                 sdrState.A = status;
-                spectrumPanelA.setStatus(status);
+                spectrumPanelA?.setStatus(status);
                 setStatusBadge('A', status);
                 updateContainerVisibility();
             });
             spectrumPipeline.onStatusChange('B', status => {
                 sdrState.B = status;
-                spectrumPanelB.setStatus(status);
+                spectrumPanelB?.setStatus(status);
                 setStatusBadge('B', status);
                 updateContainerVisibility();
             });
-            spectrumPipeline.onError('A', detail => spectrumPanelA.setError(detail));
-            spectrumPipeline.onError('B', detail => spectrumPanelB.setError(detail));
+            spectrumPipeline.onError('A', detail => spectrumPanelA?.setError(detail));
+            spectrumPipeline.onError('B', detail => spectrumPanelB?.setError(detail));
 
             // Stand up the DX Spots list panel BEFORE wiring the pipeline so its
             // handlers can dispatch to it. It works whether or not the SDR is
@@ -2503,37 +2505,37 @@
             window.dxSpotsPanel.setVfoFrequency(@Model.RadioState.FrequencyA);
 
             spectrumPipeline.onFrequencyA(hz => {
-                spectrumPanelA.setVfoFrequency(hz);
+                spectrumPanelA?.setVfoFrequency(hz);
                 window.dxSpotsPanel.setVfoFrequency(hz);
             });
             spectrumPipeline.onFrequencyB(hz => {
-                spectrumPanelB.setVfoFrequency(hz);
+                spectrumPanelB?.setVfoFrequency(hz);
             });
 
             // DX cluster spots — incoming SignalR pushes feed BOTH spectrum
             // overlays (when visible) plus the DX Spots list (always available).
             spectrumPipeline.onDxSpot(spot => {
-                spectrumPanelA.addSpot(spot);
-                spectrumPanelB.addSpot(spot);
+                spectrumPanelA?.addSpot(spot);
+                spectrumPanelB?.addSpot(spot);
                 window.dxSpotsPanel.addSpot(spot);
             });
             spectrumPipeline.onDxClusterStatus(s => {
-                spectrumPanelA.setDxStatus(s?.status, s?.detail);
-                spectrumPanelB.setDxStatus(s?.status, s?.detail);
+                spectrumPanelA?.setDxStatus(s?.status, s?.detail);
+                spectrumPanelB?.setDxStatus(s?.status, s?.detail);
             });
             spectrumPipeline.onDxAlert(spot => { if (window.handleDxAlert) window.handleDxAlert(spot); });
 
             // Repaint when "Show only watched callsigns" changes.
             window.addEventListener('dxWatchFilterChanged', () => {
-                try { spectrumPanelA.redraw(); } catch {}
-                try { spectrumPanelB.redraw(); } catch {}
+                try { spectrumPanelA?.redraw(); } catch {}
+                try { spectrumPanelB?.redraw(); } catch {}
                 try { window.dxSpotsPanel && window.dxSpotsPanel.redraw(); } catch {}
             });
             fetch('/api/dxcluster/spots')
                 .then(r => r.ok ? r.json() : [])
                 .then(arr => {
-                    spectrumPanelA.setSpots(arr);
-                    spectrumPanelB.setSpots(arr);
+                    spectrumPanelA?.setSpots(arr);
+                    spectrumPanelB?.setSpots(arr);
                     window.dxSpotsPanel.setSpots(arr);
                 })
                 .catch(() => { /* feature off or backend not ready — ignore */ });
@@ -2541,8 +2543,8 @@
                 .then(r => r.ok ? r.json() : null)
                 .then(s => {
                     if (s) {
-                        spectrumPanelA.setDxStatus(s.status, s.detail);
-                        spectrumPanelB.setDxStatus(s.status, s.detail);
+                        spectrumPanelA?.setDxStatus(s.status, s.detail);
+                        spectrumPanelB?.setDxStatus(s.status, s.detail);
                     }
                 })
                 .catch(() => { /* ignore */ });

@@ -1,4 +1,6 @@
+#if WINDOWS
 using System.Speech.Recognition;
+#endif
 using Microsoft.Extensions.Logging;
 
 namespace Yaesu_Web_Control.Services.Voice
@@ -109,9 +111,10 @@ namespace Yaesu_Web_Control.Services.Voice
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        // Grammar building
+        // Grammar building (Windows SAPI only)
         // ══════════════════════════════════════════════════════════════════════
 
+#if WINDOWS
         /// <summary>
         /// Returns all VC Tune <see cref="GrammarBuilder"/> variants for inclusion in the
         /// SAPI grammar. This method is static and pure — it does not consult radio state.
@@ -139,6 +142,7 @@ namespace Yaesu_Web_Control.Services.Voice
                 BuildVCTuneReadStatus_NoBand(),
                 BuildVCTuneReadStatus_WithBand(),
             };
+#endif
 
         /// <summary>
         /// Returns <see langword="true"/> when <paramref name="intent"/> is one of the
@@ -448,6 +452,7 @@ namespace Yaesu_Web_Control.Services.Voice
         /// <summary>Returns a failed <see cref="DispatchResult"/> with the given phrase.</summary>
         private static DispatchResult Fail(string phrase) => new(false, phrase);
 
+#if WINDOWS
         // ══════════════════════════════════════════════════════════════════════
         // Grammar builders (private static)
         // ══════════════════════════════════════════════════════════════════════
@@ -679,5 +684,6 @@ namespace Yaesu_Web_Control.Services.Voice
             c.Add(new SemanticResultValue("nine", 9));
             return c;
         }
+#endif
     }
 }

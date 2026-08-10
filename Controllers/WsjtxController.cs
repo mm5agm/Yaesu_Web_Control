@@ -56,26 +56,29 @@ namespace Yaesu_Web_Control.Controllers
             var existingProcesses = Process.GetProcessesByName("wsjtx");
             if (existingProcesses.Length > 0)
             {
-                // Bring existing window to front (no debug logging)
-                try
+                // Bring existing window to front (Windows only — no-op elsewhere)
+                if (OperatingSystem.IsWindows())
                 {
-                    foreach (var proc in existingProcesses)
+                    try
                     {
-                        if (!proc.HasExited && proc.MainWindowHandle != IntPtr.Zero)
+                        foreach (var proc in existingProcesses)
                         {
-                            var hwnd = proc.MainWindowHandle;
-                            NativeMethods.ShowWindow(hwnd, NativeMethods.SW_RESTORE);
-                            NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
-                                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_SHOWWINDOW);
-                            await Task.Delay(50);
-                            NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_NOTOPMOST, 0, 0, 0, 0,
-                                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_SHOWWINDOW);
-                            NativeMethods.BringWindowToTop(hwnd);
-                            NativeMethods.SetForegroundWindow(hwnd);
+                            if (!proc.HasExited && proc.MainWindowHandle != IntPtr.Zero)
+                            {
+                                var hwnd = proc.MainWindowHandle;
+                                NativeMethods.ShowWindow(hwnd, NativeMethods.SW_RESTORE);
+                                NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
+                                    NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_SHOWWINDOW);
+                                await Task.Delay(50);
+                                NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_NOTOPMOST, 0, 0, 0, 0,
+                                    NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_SHOWWINDOW);
+                                NativeMethods.BringWindowToTop(hwnd);
+                                NativeMethods.SetForegroundWindow(hwnd);
+                            }
                         }
                     }
+                    catch { /* Suppress diagnostics */ }
                 }
-                catch { /* Suppress diagnostics */ }
                 return Ok(new { launched = false, alreadyRunning = true });
             }
 
@@ -103,7 +106,7 @@ namespace Yaesu_Web_Control.Controllers
                 };
                 var process = Process.Start(startInfo);
                 // Wait a moment for the window to be created, then ensure it's visible
-                if (process != null)
+                if (process != null && OperatingSystem.IsWindows())
                 {
                     _ = Task.Run(async () =>
                     {

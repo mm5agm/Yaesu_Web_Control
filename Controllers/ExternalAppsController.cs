@@ -166,6 +166,8 @@ namespace Yaesu_Web_Control.Controllers
 
         private async void BringWindowToFront(IntPtr hwnd)
         {
+            if (!OperatingSystem.IsWindows()) return;
+
             // Multi-step approach to force window to foreground
             WindowNativeMethods.ShowWindow(hwnd, WindowNativeMethods.SW_RESTORE);
 

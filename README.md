@@ -31,6 +31,50 @@ I own and test on the **FTdx101MP**; the other supported models are built from Y
 
 **FTX-1:** a user has reported it working on HF (run with the model set to *FTdx10*) — frequency and mode track cleanly and quickly. Its 6m/2m/70cm memory handling still needs a little work, so a dedicated FTX-1 profile is on the way once someone can help confirm the VHF/UHF side. If you own an FTX-1, I'd love to hear from you.
 
+### Platforms (Windows vs macOS / Linux)
+
+| | **Windows** (shipped installer) | **macOS** (CAT-only DMG) | **Linux** (CAT-only host) |
+|---|---|---|---|
+| How to run | Download installer from [Releases](https://github.com/mm5agm/Yaesu_Web_Control/releases) | Download DMG from [Releases](https://github.com/mm5agm/Yaesu_Web_Control/releases) (unsigned; arm64 or x64), or `dotnet run --framework net10.0` | `dotnet run --framework net10.0`, or **Docker** (`ghcr.io/mm5agm/yaesu_web_control`, amd64 + arm64 / Pi) |
+| Host UI | System tray | Menu-bar status item | Console only (Docker / from source) |
+| CAT + browser UI | Yes | Yes | Yes |
+| SDR spectrum | Yes | No | No |
+| Voice Control (SAPI) | Yes | No | No |
+| Voice announcements (browser TTS) | Yes | Yes | Yes |
+| Serial port | `COM3`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` |
+| USB serial driver | [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on **Windows, macOS, and Linux** — **reboot after install** |
+| User data | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` | Same `~/.config/…` path; Docker uses `./data/ywc` volume |
+| Auto-exit when no browser | Default on | Default on — turn **off** for headless | Default on from source; Docker forces off |
+
+The macOS DMG is **not notarized** (no Apple Developer Program membership). Gatekeeper will warn on first open — right-click → **Open**, or use **Privacy & Security → Open Anyway**. Same class of warning as the unsigned Windows installer.
+
+Full operational detail: [USER_MANUAL.md §1](USER_MANUAL.md#1-introduction), [§2.2 macOS DMG](USER_MANUAL.md#22-macos-dmg), [§2.4 USB serial driver](USER_MANUAL.md#24-usb-serial-driver-windows--macos--linux), and [§15.10](USER_MANUAL.md#1510-whats-different-on-macos--linux-vs-windows).
+
+Before first CAT use on any OS: install the Silicon Labs driver from the link above and reboot the host.
+
+### Building from source (developers)
+
+```bash
+# Windows product (tray + voice + SDR)
+dotnet run --project Yaesu_Web_Control.csproj --framework net10.0-windows
+
+# CAT-only host (macOS / Linux / Windows without WinForms features)
+dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
+# then open http://localhost:8080
+
+# macOS unsigned DMG (requires a Mac; self-contained .app)
+# make dmg            # this Mac's arch
+# make dmg-all        # arm64 + x64
+
+# Linux Docker (x64 or arm64 / Raspberry Pi) — published multi-arch image
+export YWC_SERIAL_DEVICE=/dev/ttyUSB0
+# Optional Remote Audio: compose maps /dev/snd; override YWC_AUDIO_GID if needed
+docker compose pull && docker compose up -d
+# Local rebuild: docker compose up -d --build
+```
+
+On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`.
+
 ## Main Page
 ![Yaesu Web Control Main Page](pictures/DevelopScreen.png)
 

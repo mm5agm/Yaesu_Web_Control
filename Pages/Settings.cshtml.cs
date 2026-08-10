@@ -6,7 +6,9 @@ using System.Diagnostics;
 using Yaesu_Web_Control.Hubs;
 using Yaesu_Web_Control.Models;
 using Yaesu_Web_Control.Services;
+#if WINDOWS
 using Yaesu_Web_Control.Services.Sdr;
+#endif
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
@@ -20,7 +22,16 @@ namespace Yaesu_Web_Control.Pages
         private readonly IHostApplicationLifetime _lifetime;
         private readonly IHubContext<RadioHub> _hubContext;
         private readonly HttpPortInfo _portInfo;
+#if WINDOWS
         private readonly SdrManager _sdrManager;
+#endif
+
+        /// <summary>True when this host was built as the Windows product (tray/voice/SDR).</summary>
+#if WINDOWS
+        public bool IsWindowsHost { get; } = true;
+#else
+        public bool IsWindowsHost { get; } = false;
+#endif
 
         /// <summary>
         /// The port YWC is actually listening on right now. This is the port
@@ -65,8 +76,11 @@ namespace Yaesu_Web_Control.Pages
             RadioInitializationService radioInitializationService,
             IHostApplicationLifetime lifetime,
             IHubContext<RadioHub> hubContext,
-            HttpPortInfo portInfo,
-            SdrManager sdrManager)
+            HttpPortInfo portInfo
+#if WINDOWS
+            , SdrManager sdrManager
+#endif
+            )
         {
             _settingsService = settingsService;
             _logger = logger;
@@ -74,7 +88,9 @@ namespace Yaesu_Web_Control.Pages
             _lifetime = lifetime;
             _hubContext = hubContext;
             _portInfo = portInfo;
+#if WINDOWS
             _sdrManager = sdrManager;
+#endif
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -89,7 +105,9 @@ namespace Yaesu_Web_Control.Pages
             Settings.SdrSampleRateHz = Settings.SdrSampleRateHzA;
             // Auto-detect the SDRplay install dir so the page can show the
             // user where the resolver is finding it (or that it's not).
+#if WINDOWS
             DetectedSdrplayInstallPath = SdrplayDllResolver.DetectInstallDir();
+#endif
             NetworkAddresses = GetLocalIPAddresses();
             return Page();
         }
@@ -133,11 +151,13 @@ namespace Yaesu_Web_Control.Pages
                 return Page();
             }
 
-            // Validate Serial Port format
-            if (!Settings.SerialPort.StartsWith("COM", StringComparison.OrdinalIgnoreCase))
+            // Validate Serial Port format (Windows COM* vs Unix /dev/cu.*|/dev/tty.*)
+            if (!IsValidSerialPort(Settings.SerialPort))
             {
                 ModelState.AddModelError("Settings.SerialPort",
-                    "Serial port must start with 'COM' (e.g., COM3, COM4).");
+                    OperatingSystem.IsWindows()
+                        ? "Serial port must start with 'COM' (e.g., COM3, COM4)."
+                        : "Serial port must be a device path (e.g. /dev/cu.usbserial-…).");
                 NetworkAddresses = GetLocalIPAddresses();
                 return Page();
             }
@@ -181,6 +201,7 @@ namespace Yaesu_Web_Control.Pages
                 current.HttpPort          = (Settings.HttpPort >= 1 && Settings.HttpPort <= 65535)
                     ? Settings.HttpPort
                     : 8080;
+                current.AutoShutdownWhenNoBrowsers = Settings.AutoShutdownWhenNoBrowsers;
                 current.SerialPort        = Settings.SerialPort;
                 current.BaudRate          = Settings.BaudRate;
                 current.WebAddress        = Settings.WebAddress;
@@ -298,8 +319,12 @@ namespace Yaesu_Web_Control.Pages
                     || oldSdrFft    != current.SdrFftSize;
                 if (sdrChanged)
                 {
+#if WINDOWS
                     _logger.LogInformation("Settings: SDR settings changed — restarting SdrManager workers");
                     _sdrManager.RequestRestart();
+#else
+                    _logger.LogInformation("Settings: SDR settings changed — ignored on this host (SDR not available)");
+#endif
                 }
 
                 StatusMessage = "✓ Settings saved successfully.";
@@ -434,6 +459,17 @@ namespace Yaesu_Web_Control.Pages
             }
 
             return addresses;
+        }
+
+        /// <summary>
+        /// Windows: COM ports. Unix: serial device nodes under /dev (prefer cu.*).
+        /// </summary>
+        private static bool IsValidSerialPort(string? port)
+        {
+            if (string.IsNullOrWhiteSpace(port)) return false;
+            if (OperatingSystem.IsWindows())
+                return port.StartsWith("COM", StringComparison.OrdinalIgnoreCase);
+            return port.StartsWith("/dev/", StringComparison.Ordinal);
         }
 
         /// <summary>

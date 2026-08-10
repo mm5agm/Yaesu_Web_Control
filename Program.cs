@@ -9,7 +9,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+#if WINDOWS
 using System.Windows.Forms;
+#endif
 
 // ── Single-instance guard ────────────────────────────────────────────────────
 const string MutexName = "Global\\Yaesu_Web_Control_SingleInstance";
@@ -17,6 +19,7 @@ var mutex = new Mutex(initiallyOwned: true, name: MutexName, out bool createdNew
 
 if (!createdNew)
 {
+#if WINDOWS
     // An OK-only "already running" box is a dead end when the running copy is a
     // stuck one: the operator sees no window, closes nothing, and every relaunch
     // hits the same box with Task Manager the only way out. Offer the two useful
@@ -84,6 +87,11 @@ if (!createdNew)
         return;
     }
 #pragma warning restore CA1416
+#else
+    Console.Error.WriteLine("Yaesu Web Control is already running.");
+    mutex.Dispose();
+    return;
+#endif
 }
 
 // Keep the mutex alive for the lifetime of the process
@@ -185,6 +193,7 @@ static int LoadConfiguredHttpPort()
     return 8080;
 }
 
+#if WINDOWS
 // ── Suppress Windows critical-error dialogs during DLL load ─────────────────
 // When SoapySDR enumerates plugins (HackRF, RTL-SDR, Airspy, etc.), Windows
 // tries to resolve each plugin's import table. If a plugin's dependencies
@@ -235,6 +244,7 @@ NativeLibrary.SetDllImportResolver(
         }
         return IntPtr.Zero;   // fall back to default resolution for all other DLLs
     });
+#endif
 
 // ── Serilog file logging ────────────────────────────────────────────────────
 // YWC is a WinExe (no console window) so stdout-based loggers are invisible.
@@ -292,7 +302,25 @@ Log.Information("Yaesu Web Control starting (v{Version})", Yaesu_Web_Control.App
         targetWorker, minWorker, targetIo, minIo, Environment.ProcessorCount);
 }
 
-var builder = WebApplication.CreateBuilder(args);
+// ContentRoot defaults to Directory.GetCurrentDirectory(). That is wrong when
+// macOS launches the .app (cwd is "/" or ~) and can be wrong for a Windows
+// shortcut whose "Start in" folder is missing — wwwroot/pictures/USER_MANUAL.md
+// then resolve nowhere and the UI loads without CSS/JS. Prefer the process cwd
+// when it already contains wwwroot (`dotnet run` from the repo, published exe
+// started from its folder); otherwise fall back to the apphost directory.
+var contentRootBaseDir = AppContext.BaseDirectory;
+var contentRootCwd = Directory.GetCurrentDirectory();
+var contentRoot = Directory.Exists(Path.Combine(contentRootCwd, "wwwroot"))
+    ? contentRootCwd
+    : Directory.Exists(Path.Combine(contentRootBaseDir, "wwwroot"))
+        ? contentRootBaseDir
+        : contentRootCwd;
+
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = contentRoot,
+});
 
 // Cap the host's overall shutdown timeout. Default is 30 s (which we hit on
 // every tray Exit before adding this cap); 2 s is plenty for our user
@@ -350,10 +378,12 @@ builder.Services.AddSingleton<AudioFilterMapService>();
 // Add after existing service registrations
 builder.Services.AddHostedService<MeterPollingService>();
 
+#if WINDOWS
 // SDR spectrum display — reads IQ samples, computes FFT, broadcasts via SignalR
 // Registered as singleton so the span-change API endpoint can call RequestRestart().
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Sdr.SdrManager>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Sdr.SdrManager>());
+#endif
 
 // Register the radio state service — reuse the same singleton instance as RadioStateService
 builder.Services.AddSingleton<IRadioStateService>(sp => sp.GetRequiredService<RadioStateService>());
@@ -398,20 +428,20 @@ for (int candidate = basePort; candidate < basePort + 10 && candidate <= 65535; 
 }
 if (chosenPort < 0)
 {
-#pragma warning disable CA1416
     var diag = string.Join("\n",
-        triedPorts.Select(p => $"  {p,5} — {GetPortOwner(p) ?? "unknown / Windows-reserved"}"));
-    MessageBox.Show(
+        triedPorts.Select(p => $"  {p,5} — {GetPortOwner(p) ?? "unknown / reserved"}"));
+    var portMsg =
         $"Yaesu Web Control couldn't find a free TCP port to listen on.\n\n" +
         $"Tried ports {triedPorts.First()}–{triedPorts.Last()}:\n\n{diag}\n\n" +
-        $"Either close one of those programs, or open Yaesu Web Control's\n" +
-        $"Settings page on a working installation and change the HttpPort\n" +
-        $"value in %APPDATA%\\MM5AGM\\Yaesu Web Control\\appsettings.user.json\n" +
-        $"to a free port (e.g. 9080), then restart.",
-        "No free port available",
-        MessageBoxButtons.OK,
-        MessageBoxIcon.Error);
+        $"Either close one of those programs, or change HttpPort in the appsettings.user.json\n" +
+        $"under the MM5AGM/Yaesu Web Control application-data folder to a free port (e.g. 9080), then restart.";
+#if WINDOWS
+#pragma warning disable CA1416
+    MessageBox.Show(portMsg, "No free port available", MessageBoxButtons.OK, MessageBoxIcon.Error);
 #pragma warning restore CA1416
+#else
+    Console.Error.WriteLine(portMsg);
+#endif
     return;
 }
 
@@ -422,9 +452,15 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{chosenPort}");
 builder.Services.AddSingleton(new HttpPortInfo(chosenPort));
 
 builder.Services.AddSingleton<BrowserLauncher>();
+#if WINDOWS
 // System tray icon — gives operators a visible "YWC is running" indicator
 // and a clean Exit menu. Implemented as an STA-threaded hosted service.
 builder.Services.AddHostedService<SystemTrayService>();
+#else
+// macOS menu-bar status item (Avalonia TrayIcon). Driven from Program.cs on
+// the main thread after Kestrel StartAsync — AppKit forbids a background UI thread.
+builder.Services.AddSingleton<MacSystemTrayService>();
+#endif
 
 // Register WSJT-X UDP listener as a singleton so it can be injected into controllers
 builder.Services.AddSingleton<WsjtxUdpService>();
@@ -442,16 +478,20 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.MemoryBankService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.DxClusterService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.DxClusterService>());
 
+// VCTuneRecognizer is needed on all platforms (VCTuneModule notifies it of
+// P6 availability). The rest of the SAPI voice stack is Windows-only.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Voice.VCTuneRecognizer>();
+#if WINDOWS
 // Voice control (in-process SAPI). VoiceControlService is the IHostedService
 // that owns the SpeechRecognitionEngine; IntentDispatcher maps recognised
 // intents to CAT actions; VoiceTtsService speaks confirmation phrases;
 // VoiceController exposes /api/voice/*. See docs/VoiceControl/v1-plan.md.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Voice.IntentDispatcher>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Voice.VoiceTtsService>();
-builder.Services.AddSingleton<Yaesu_Web_Control.Services.Voice.VCTuneRecognizer>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Voice.VoicePhraseStore>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Voice.VoiceControlService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Voice.VoiceControlService>());
+#endif
 
 // Route everything through Serilog (file sink configured above). The previous
 // console + filter chain is gone — it was invisible in a WinExe anyway, and
@@ -533,6 +573,7 @@ try
         return Results.File(userPath, "application/json");
     });
 
+#if WINDOWS
     app.MapPost("/api/sdr/span", async (
         [Microsoft.AspNetCore.Mvc.FromQuery] double hz,
         [Microsoft.AspNetCore.Mvc.FromQuery] string? sdrId,
@@ -556,6 +597,7 @@ try
         sdr.RequestRestart();
         return Results.Ok();
     });
+#endif
 
     // Open browser automatically when app starts (but not when debugging in Visual Studio)
     var browserLauncher = app.Services.GetRequiredService<BrowserLauncher>();
@@ -574,7 +616,38 @@ try
         browserLauncher.OpenOnce(portInfo.RootUrl);
     });
 
+#if !WINDOWS
+    if (OperatingSystem.IsMacOS())
+    {
+        // AppKit/Avalonia must own the process main thread. Start Kestrel first,
+        // then block here on the menu-bar dispatcher until Exit / StopApplication.
+        await app.StartAsync();
+        Log.Information("[Lifecycle] Kestrel started; entering macOS tray main loop");
+        try
+        {
+            app.Services.GetRequiredService<MacSystemTrayService>()
+                .RunBlocking(lifetime.ApplicationStopping);
+        }
+        finally
+        {
+            Log.Information("[Lifecycle] macOS tray loop ended — stopping host");
+            // Avalonia's MainLoop installs AvaloniaSynchronizationContext on this
+            // thread. After MainLoop returns the dispatcher is no longer pumping,
+            // so awaiting StopAsync here posts its continuations onto a dead
+            // queue and hangs forever — Ctrl+C / tray Exit never finish (logs
+            // stop at "tray loop ended"; only kill works). Clear the context
+            // and run host shutdown on the thread pool.
+            SynchronizationContext.SetSynchronizationContext(null);
+            await Task.Run(() => app.StopAsync()).ConfigureAwait(false);
+        }
+    }
+    else
+    {
+        app.Run();
+    }
+#else
     app.Run();
+#endif
     Log.Information("app.Run() returned cleanly — flushing logs and exiting");
     Log.CloseAndFlush();
 }
@@ -586,7 +659,6 @@ catch (Exception ex)
     Log.Fatal(ex, "Application failed to start");
     Log.CloseAndFlush();
 
-#pragma warning disable CA1416
     if (IsPortInUseException(ex))
     {
         // We pre-probed the port before configuring Kestrel, so this catch is
@@ -597,21 +669,33 @@ catch (Exception ex)
         var portMsg = owner is not null
             ? $"Port {chosenPort} is already in use by {owner}.\n\nClose that application and try again."
             : $"Port {chosenPort} is already in use by another application.\n\nClose that application and try again.";
+#if WINDOWS
+#pragma warning disable CA1416
         MessageBox.Show(portMsg, "Port In Use", MessageBoxButtons.OK, MessageBoxIcon.Error);
+#pragma warning restore CA1416
+#else
+        Console.Error.WriteLine(portMsg);
+#endif
     }
     else
     {
+#if WINDOWS
+#pragma warning disable CA1416
         MessageBox.Show(
             $"Yaesu Web Control failed to start:\n\n{ex.Message}",
             "Startup Error",
             MessageBoxButtons.OK,
             MessageBoxIcon.Error);
-    }
 #pragma warning restore CA1416
+#else
+        Console.Error.WriteLine($"Yaesu Web Control failed to start:\n\n{ex.Message}");
+#endif
+    }
 
     throw;
 }
 
+#if WINDOWS
 // Win32 P/Invokes used during YWC startup. Kept at the end of Program.cs
 // rather than scattered through the top-level statements so the bootstrap
 // logic stays readable.
@@ -633,4 +717,5 @@ internal static class NativeWin32
     [DllImport("kernel32.dll")]
     public static extern uint SetErrorMode(uint uMode);
 }
+#endif
 

@@ -101,6 +101,13 @@ namespace Yaesu_Web_Control.Pages
         // Optional browser key that toggles TX. Empty = disabled.
         public string TxToggleKey { get; set; } = string.Empty;
 
+        /// <summary>True on the Windows product host (tray/voice/SDR available).</summary>
+#if WINDOWS
+        public bool IsWindowsHost { get; } = true;
+#else
+        public bool IsWindowsHost { get; } = false;
+#endif
+
         // Voice control nudge step defaults for each VFO's mic button
         // dropdown, server-rendered so voice-control.js has a starting
         // value before it can fetch/receive anything.
