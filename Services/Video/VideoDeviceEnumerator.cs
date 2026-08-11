@@ -3,14 +3,15 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using OpenCvSharp;
 
 namespace Yaesu_Web_Control.Services.Video
 {
     /// <summary>
     /// Lists USB webcams / HDMI capture dongles exposed to OpenCV.
-    /// Linux: V4L2 sysfs names. macOS: system_profiler camera names + probe.
-    /// Windows / fallback: probe OpenCV indices.
+    /// Uses the same backend for naming and probing that capture uses, so
+    /// dropdown labels stay aligned with the device that actually opens.
     /// </summary>
     public static class VideoDeviceEnumerator
     {
@@ -28,19 +29,21 @@ namespace Yaesu_Web_Control.Services.Video
                 }
 
                 if (OperatingSystem.IsMacOS())
-                {
-                    var mac = EnumerateMacOS();
-                    if (mac.Count > 0)
-                        return mac;
-                }
+                    return EnumerateMacOS();
 
-                return ProbeIndices(friendlyNames: null);
+                if (OperatingSystem.IsWindows())
+                    return ProbeIndices(VideoCaptureAPIs.DSHOW, ReadEmptyNames());
+
+                return ProbeIndices(VideoCaptureAPIs.ANY, ReadEmptyNames());
             }
             catch
             {
                 return Array.Empty<VideoDeviceInfo>();
             }
         }
+
+        private static IReadOnlyDictionary<int, string> ReadEmptyNames() =>
+            new Dictionary<int, string>();
 
         private static List<VideoDeviceInfo> EnumerateLinuxV4L2()
         {
@@ -78,16 +81,91 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         /// <summary>
-        /// OpenCV on macOS only exposes indices; pair them with names from
-        /// <c>system_profiler SPCameraDataType</c> (same AVFoundation order in practice).
+        /// macOS: name sources prefer ffmpeg AVFoundation (same index space as
+        /// OpenCV CAP_AVFOUNDATION), then system_profiler. Probe with AVFOUNDATION
+        /// only — never CAP_ANY — so labels match what <see cref="VideoCaptureService"/> opens.
         /// </summary>
         private static List<VideoDeviceInfo> EnumerateMacOS()
         {
-            var names = ReadMacCameraNames();
-            return ProbeIndices(names);
+            var names = ReadFfmpegAvFoundationNames();
+            if (names.Count == 0)
+                names = ReadMacSystemProfilerNames();
+            return ProbeIndices(VideoCaptureAPIs.AVFOUNDATION, names);
         }
 
-        private static IReadOnlyList<string> ReadMacCameraNames()
+        /// <summary>
+        /// Parse <c>ffmpeg -f avfoundation -list_devices</c> video lines:
+        /// <c>[0] FaceTime HD Camera</c>. Indices match OpenCV AVFoundation.
+        /// </summary>
+        private static IReadOnlyDictionary<int, string> ReadFfmpegAvFoundationNames()
+        {
+            var ffmpeg = FindOnPath("ffmpeg");
+            if (ffmpeg is null)
+                return ReadEmptyNames();
+
+            try
+            {
+                using var proc = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = ffmpeg,
+                        ArgumentList = { "-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", "" },
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                proc.Start();
+                // ffmpeg prints the device list to stderr
+                var stderr = proc.StandardError.ReadToEnd();
+                _ = proc.StandardOutput.ReadToEnd();
+                if (!proc.WaitForExit(6000))
+                {
+                    try { proc.Kill(entireProcessTree: true); } catch { /* ignore */ }
+                    return ReadEmptyNames();
+                }
+
+                var map = new Dictionary<int, string>();
+                var inVideo = false;
+                foreach (var raw in stderr.Split('\n'))
+                {
+                    var line = raw.Trim();
+                    if (line.Contains("AVFoundation video devices", StringComparison.OrdinalIgnoreCase))
+                    {
+                        inVideo = true;
+                        continue;
+                    }
+                    if (line.Contains("AVFoundation audio devices", StringComparison.OrdinalIgnoreCase))
+                        break;
+                    if (!inVideo)
+                        continue;
+
+                    // [AVFoundation …] [0] FaceTime HD Camera
+                    var m = Regex.Match(line, @"\[(\d+)\]\s+(.+?)\s*$");
+                    if (!m.Success)
+                        continue;
+                    if (!int.TryParse(m.Groups[1].Value, out var idx))
+                        continue;
+                    var name = m.Groups[2].Value.Trim();
+                    if (name.Length == 0)
+                        continue;
+                    // Skip screen-capture entries OpenCV usually cannot open as cameras
+                    if (name.Contains("Capture screen", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    map[idx] = name;
+                }
+
+                return map;
+            }
+            catch
+            {
+                return ReadEmptyNames();
+            }
+        }
+
+        private static IReadOnlyDictionary<int, string> ReadMacSystemProfilerNames()
         {
             try
             {
@@ -108,56 +186,60 @@ namespace Yaesu_Web_Control.Services.Video
                 if (!proc.WaitForExit(8000))
                 {
                     try { proc.Kill(entireProcessTree: true); } catch { /* ignore */ }
-                    return Array.Empty<string>();
+                    return ReadEmptyNames();
                 }
 
                 if (proc.ExitCode != 0 || string.IsNullOrWhiteSpace(json))
-                    return Array.Empty<string>();
+                    return ReadEmptyNames();
 
                 using var doc = JsonDocument.Parse(json);
                 if (!doc.RootElement.TryGetProperty("SPCameraDataType", out var cameras) ||
                     cameras.ValueKind != JsonValueKind.Array)
                 {
-                    return Array.Empty<string>();
+                    return ReadEmptyNames();
                 }
 
-                var names = new List<string>();
+                // system_profiler order is NOT guaranteed to match AVFoundation.
+                // Keep as ordinal fallback only; labels still include (#N).
+                var map = new Dictionary<int, string>();
+                var i = 0;
                 foreach (var cam in cameras.EnumerateArray())
                 {
                     var name = cam.TryGetProperty("_name", out var n) ? n.GetString() : null;
                     if (string.IsNullOrWhiteSpace(name))
                         continue;
-                    names.Add(name.Trim());
+                    map[i++] = name.Trim();
                 }
 
-                return names;
+                return map;
             }
             catch
             {
-                return Array.Empty<string>();
+                return ReadEmptyNames();
             }
         }
 
-        private static List<VideoDeviceInfo> ProbeIndices(IReadOnlyList<string>? friendlyNames)
+        private static List<VideoDeviceInfo> ProbeIndices(
+            VideoCaptureAPIs api,
+            IReadOnlyDictionary<int, string> friendlyNames)
         {
             var result = new List<VideoDeviceInfo>();
             for (var i = 0; i <= MaxProbeIndex; i++)
             {
                 try
                 {
-                    using var cap = new VideoCapture(i, VideoCaptureAPIs.ANY);
+                    using var cap = new VideoCapture(i, api);
                     if (!cap.IsOpened())
                         continue;
 
                     var w = (int)cap.Get(VideoCaptureProperties.FrameWidth);
                     var h = (int)cap.Get(VideoCaptureProperties.FrameHeight);
                     var size = (w > 0 && h > 0) ? $" {w}×{h}" : "";
-                    var friendly = (friendlyNames != null && i < friendlyNames.Count)
-                        ? friendlyNames[i]
-                        : null;
+                    friendlyNames.TryGetValue(i, out var friendly);
+                    // Always include the OpenCV index so a mismatched name is obvious.
                     var label = string.IsNullOrWhiteSpace(friendly)
                         ? $"Camera {i}{size}"
-                        : $"{friendly}{size}";
+                        : $"{friendly}{size}  (#{i})";
 
                     result.Add(new VideoDeviceInfo
                     {
@@ -173,6 +255,39 @@ namespace Yaesu_Web_Control.Services.Video
             }
 
             return result;
+        }
+
+        private static string? FindOnPath(string fileName)
+        {
+            if (File.Exists(fileName))
+                return fileName;
+            var path = Environment.GetEnvironmentVariable("PATH") ?? "";
+            foreach (var dir in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                try
+                {
+                    var candidate = Path.Combine(dir, fileName);
+                    if (File.Exists(candidate))
+                        return candidate;
+                }
+                catch
+                {
+                    // skip
+                }
+            }
+
+            // Common Homebrew locations when PATH is minimal (launchd / tray apps).
+            foreach (var candidate in new[]
+                     {
+                         "/opt/homebrew/bin/ffmpeg",
+                         "/usr/local/bin/ffmpeg"
+                     })
+            {
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
+            return null;
         }
     }
 }

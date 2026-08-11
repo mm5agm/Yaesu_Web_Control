@@ -736,15 +736,54 @@
                 <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center gap-2 py-2">
                     <strong class="me-1"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
                     <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
+                    <select id="radioDisplayDeviceSelect" class="form-select form-select-sm"
+                            style="max-width: min(18rem, 100%);"
+                            aria-label="Capture device">
+                        <option value="">(None)</option>
+                    </select>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Refresh capture device list" aria-label="Refresh capture device list">
+                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayRefreshDevicesBtn"
+                                aria-label="Refresh capture device list">
+                            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Stream frame rate" aria-label="Stream frame rate">
+                        <select id="radioDisplayFpsSelect" class="form-select form-select-sm"
+                                style="width:auto; min-width:5.5rem;" aria-label="Stream frame rate">
+                            <option value="15">15 fps</option>
+                            <option value="30">30 fps</option>
+                            <option value="40">40 fps</option>
+                            <option value="60">60 fps</option>
+                        </select>
+                    </span>
                     <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn" title="Toggle fit / fill">Fit</button>
-                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFullscreenBtn" title="Fullscreen">
-                            <i class="bi bi-fullscreen" aria-hidden="true"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayPopoutBtn" title="Pop out">
-                            <i class="bi bi-window-plus" aria-hidden="true"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayHideBtn" title="Hide panel">Hide</button>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn"
+                                    aria-label="Toggle fit / fill">Fit</button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Fullscreen" aria-label="Fullscreen">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFullscreenBtn"
+                                    aria-label="Fullscreen">
+                                <i class="bi bi-fullscreen" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Pop out Radio Display into a separate window"
+                              aria-label="Pop out Radio Display into a separate window">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayPopoutBtn"
+                                    aria-label="Pop out Radio Display into a separate window">
+                                <i class="bi bi-window-plus" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Close Radio Display panel" aria-label="Close Radio Display panel">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayCloseBtn"
+                                    aria-label="Close Radio Display panel">Close</button>
+                        </span>
                     </div>
                 </div>
                 <div class="card-body p-0 bg-black radio-display-body" style="text-align:center; overflow:hidden;">
@@ -757,9 +796,13 @@
     </div>
     <div class="row mb-1" id="radioDisplayShowRow" style="display:none;">
         <div class="col-12">
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="radioDisplayShowBtn">
-                <i class="bi bi-display" aria-hidden="true"></i> Show Radio Display
-            </button>
+            <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                  data-bs-title="Show Radio Display panel" aria-label="Show Radio Display panel">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="radioDisplayShowBtn"
+                        aria-label="Show Radio Display panel">
+                    <i class="bi bi-display" aria-hidden="true"></i> Show Radio Display
+                </button>
+            </span>
         </div>
     </div>
 
@@ -2377,8 +2420,7 @@
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=22";
-        import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=4";
-
+        import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=8";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
