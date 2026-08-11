@@ -69,11 +69,12 @@ dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
 # Linux Docker (x64 or arm64 / Raspberry Pi) — published multi-arch image
 export YWC_SERIAL_DEVICE=/dev/ttyUSB0
 # Optional Remote Audio: compose maps /dev/snd; override YWC_AUDIO_GID if needed
+# Optional Radio Display: map YWC_VIDEO_DEVICE (/dev/video*) + YWC_VIDEO_GID (video group)
 docker compose pull && docker compose up -d
 # Local rebuild: docker compose up -d --build
 ```
 
-On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`.
+On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`. Radio Display (optional USB webcam / HDMI capture → MJPEG) needs `/dev/video*` + the `video` group — see USER_MANUAL §19.
 
 ## Main Page
 ![Yaesu Web Control Main Page](pictures/DevelopScreen.png)

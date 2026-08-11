@@ -3,15 +3,18 @@
 # 1. Set YWC_SERIAL_DEVICE to your USB-serial node (ls /dev/ttyUSB* /dev/ttyACM*).
 # 2. Optional Remote Audio: compose maps /dev/snd; set YWC_AUDIO_GID if needed
 #    (getent group audio). Pick the radio USB codec in Settings → Remote Audio.
-# 3. docker compose pull && docker compose up -d
+# 3. Optional Radio Display: map a UVC capture node (ls /dev/video*) and set
+#    YWC_VIDEO_GID to the host `video` group (often 44). Pick the device in
+#    Settings → Radio Display. Keep Max width ≤ 800 on a Pi.
+# 4. docker compose pull && docker compose up -d
 #    (or pin a release: image: ghcr.io/mm5agm/yaesu_web_control:vX.Y.Z)
 #    Local rebuild: docker compose up -d --build
-# 4. Open http://<host>:8080 and confirm Serial Port in Settings.
+# 5. Open http://<host>:8080 and confirm Serial Port in Settings.
 #
 # Data volume: entrypoint chowns /data to the image `app` user on start, so a
 # host-created ./data/ywc (often root-owned) does not need a manual chmod.
 # Do not set `user:` here — entrypoint must start as root to fix ownership,
-# then drops to `app` (and keeps group_add GIDs for serial/audio).
+# then drops to `app` (and keeps group_add GIDs for serial/audio/video).
 #
 # Multi-arch image is published to GHCR on each GitHub Release (amd64 + arm64).
 # Local multi-arch build (push elsewhere):
@@ -41,8 +44,14 @@ services:
       # Host ALSA devices (radio USB audio codec for Remote Audio).
       # To pin one card only, replace with e.g. /dev/snd/controlC1 + pcmC1D0c/p.
       - /dev/snd:/dev/snd
+      # Optional USB webcam / HDMI capture dongle for Radio Display (UVC/V4L2).
+      # Comment out if unused. Some dongles expose several /dev/video* nodes —
+      # pick the capture node (often video0) via Settings after start.
+      - ${YWC_VIDEO_DEVICE:-/dev/video0}:${YWC_VIDEO_DEVICE:-/dev/video0}
     group_add:
       # Host "dialout" is usually GID 20 on Debian/Raspberry Pi OS.
       - "${YWC_DIALOUT_GID:-20}"
       # Host "audio" is usually GID 29 on Debian/Raspberry Pi OS.
       - "${YWC_AUDIO_GID:-29}"
+      # Host "video" is usually GID 44 on Debian/Raspberry Pi OS (Radio Display).
+      - "${YWC_VIDEO_GID:-44}"

@@ -393,6 +393,10 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioSessionManag
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>());
 
+// Radio Display (USB UVC / HDMI capture → MJPEG) — opt-in; capture opens while viewers connect.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoSessionManager>();
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoCaptureService>();
+
 // Audio filter EX address map — loaded once at startup from
 // wwwroot/data/audio-filter-ex-map.json; used by the Audio Filter popout
 // controller endpoints to translate per-radio menu addresses.

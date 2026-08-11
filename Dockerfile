@@ -52,6 +52,7 @@ WORKDIR /app
 
 # System.IO.Ports on Linux talks to USB-serial via libudev.
 # Remote Audio (PortAudio) needs ALSA + libportaudio against /dev/snd.
+# Radio Display (OpenCvSharp / V4L2) uses kernel UVC nodes under /dev/video*.
 # aspnet:10.0 is Ubuntu 24.04 — ALSA ships as libasound2t64 (not libasound2).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -68,9 +69,10 @@ ENV DOTNET_RUNNING_IN_CONTAINER=true \
     HOME=/home/app \
     TZ=UTC
 
-# dialout/audio group names are for the image; compose also group_add's the
-# *host* dialout/audio GIDs so /dev/ttyUSB* and /dev/snd permissions match.
-RUN usermod -aG dialout,audio app \
+# dialout/audio/video group names are for the image; compose also group_add's the
+# *host* dialout/audio/video GIDs so /dev/ttyUSB*, /dev/snd, and /dev/video*
+# permissions match.
+RUN usermod -aG dialout,audio,video app \
     && mkdir -p /data \
     && chown -R app:app /data /home/app
 

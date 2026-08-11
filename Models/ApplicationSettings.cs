@@ -288,6 +288,30 @@
         public float AudioRxGain { get; set; } = 1.0f;
         public float AudioTxGain { get; set; } = 1.0f;
 
+        // ── Radio Display (USB UVC / HDMI capture → MJPEG) ────────────────
+        // Opt-in panel that grabs frames from a USB webcam or HDMI capture
+        // dongle and serves them as MJPEG. Off by default. Tuned for Pi-class
+        // hosts and ~800×480/600 radio panels (see VideoMaxWidth / FPS / quality).
+        public bool VideoDisplayEnabled { get; set; } = false;
+
+        /// <summary>
+        /// Capture device key from <c>/api/video/devices</c> (typically
+        /// <c>index:N</c>). Empty = no device selected.
+        /// </summary>
+        public string? VideoCaptureDeviceKey { get; set; } = "";
+
+        /// <summary>
+        /// Downscale frames wider than this before JPEG encode. 0 = no downscale.
+        /// Default 800 matches FTDX-10-class panels and avoids 1080p encode cost on a Pi.
+        /// </summary>
+        public int VideoMaxWidth { get; set; } = 800;
+
+        /// <summary>Target encode rate (clamped 5–15). Radio UI is mostly static.</summary>
+        public int VideoTargetFps { get; set; } = 10;
+
+        /// <summary>JPEG quality 40–85. Default 65 balances text readability vs CPU/bandwidth.</summary>
+        public int VideoJpegQuality { get; set; } = 65;
+
         // ── Optional HTTPS (self-signed; restart to apply) ────────────────
         // Required for getUserMedia from a remote browser (secure context).
         public bool HttpsEnabled { get; set; } = false;

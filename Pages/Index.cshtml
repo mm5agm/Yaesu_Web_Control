@@ -743,6 +743,40 @@
         </div>
     </div>
 
+    <!-- Radio Display — USB UVC / HDMI capture MJPEG; visible when Settings enable it -->
+    <div id="radioDisplayContainer" class="row mt-3" style="display:none;">
+        <div class="col-12">
+            <div class="card border-dark">
+                <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center gap-2 py-2">
+                    <strong class="me-1"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
+                    <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
+                    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn" title="Toggle fit / fill">Fit</button>
+                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFullscreenBtn" title="Fullscreen">
+                            <i class="bi bi-fullscreen" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayPopoutBtn" title="Pop out">
+                            <i class="bi bi-window-plus" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayHideBtn" title="Hide panel">Hide</button>
+                    </div>
+                </div>
+                <div class="card-body p-0 bg-black radio-display-body" style="text-align:center; overflow:hidden;">
+                    <img id="radioDisplayImg" alt="Radio display" decoding="async"
+                         class="radio-display-img"
+                         style="max-width:100%; width:auto; height:auto; max-height:50vh; object-fit:contain; background:#000; vertical-align:middle;" />
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mb-1" id="radioDisplayShowRow" style="display:none;">
+        <div class="col-12">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="radioDisplayShowBtn">
+                <i class="bi bi-display" aria-hidden="true"></i> Show Radio Display
+            </button>
+        </div>
+    </div>
+
     <!-- Spectrum Display — dual-VFO layout (v2.3.0+).
          Each panel has its own canvas. Mono A / Mono B / Multi toggle below
          hides/shows individual panels. Outer container hides itself when no
@@ -2357,6 +2391,8 @@
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=22";
+        import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=4";
+
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -2382,6 +2418,7 @@
 
         loadLabels();
         initRemoteAudioUi();
+        initRadioDisplayUi('index');
         // loadLabels() rewrites every title from labels.json on each focus,
         // wiping the "out of band" title suffix; restore it once that has run.
         window.addEventListener('focus', async () => {
