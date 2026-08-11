@@ -112,6 +112,12 @@ function onReattachFromPopout() {
   }
 }
 
+function truncateLabel(text, maxLen) {
+  const s = String(text || '');
+  if (s.length <= maxLen) return s;
+  return s.slice(0, Math.max(0, maxLen - 1)) + '…';
+}
+
 async function loadDeviceSelect(selectedKey) {
   const sel = document.getElementById('radioDisplayDeviceSelect');
   if (!sel) return;
@@ -120,6 +126,7 @@ async function loadDeviceSelect(selectedKey) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const want = selectedKey || currentDeviceKey || '';
+    const maxLabel = uiMode === 'popout' ? 28 : 42;
     sel.innerHTML = '';
     const none = document.createElement('option');
     none.value = '';
@@ -128,9 +135,11 @@ async function loadDeviceSelect(selectedKey) {
     let matched = false;
     (data.devices || []).forEach(function (d) {
       const key = d.key || '';
+      const full = d.label || key;
       const opt = document.createElement('option');
       opt.value = key;
-      opt.textContent = d.label || key;
+      opt.textContent = truncateLabel(full, maxLabel);
+      opt.title = full;
       if (key && key === want) {
         opt.selected = true;
         matched = true;
@@ -140,7 +149,8 @@ async function loadDeviceSelect(selectedKey) {
     if (want && !matched) {
       const orphan = document.createElement('option');
       orphan.value = want;
-      orphan.textContent = want + ' (not present)';
+      orphan.textContent = truncateLabel(want + ' (not present)', maxLabel);
+      orphan.title = want + ' (not present)';
       orphan.selected = true;
       sel.appendChild(orphan);
     }
@@ -284,6 +294,10 @@ function bindControls() {
 
   document.getElementById('radioDisplayCloseBtn')?.addEventListener('click', () => {
     stopStream();
+    if (uiMode === 'popout') {
+      window.close();
+      return;
+    }
     panel.hide();
   });
 

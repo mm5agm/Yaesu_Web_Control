@@ -15,27 +15,61 @@
     <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <style>
-        html, body { height: 100%; margin: 0; background: #000; color: #e8e8e8; }
-        #radioDisplayContainer { height: 100%; margin: 0 !important; }
-        #radioDisplayContainer > .col-12 { height: 100%; padding: 0; }
-        #radioDisplayContainer .card { height: 100%; border-radius: 0; border: none; background: #000; }
+        html, body { height: 100%; margin: 0; background: #000; color: #e8e8e8; overflow: hidden; }
+        #radioDisplayContainer { height: 100%; margin: 0 !important; max-width: 100%; }
+        #radioDisplayContainer > .col-12 { height: 100%; padding: 0; max-width: 100%; }
+        #radioDisplayContainer .card { height: 100%; border-radius: 0; border: none; background: #000; max-width: 100%; }
+        #radioDisplayContainer .card-header {
+            flex-wrap: wrap;
+            max-width: 100%;
+            min-width: 0;
+            gap: 0.35rem !important;
+        }
         #radioDisplayContainer .card-body {
-            height: calc(100% - 48px);
+            height: calc(100% - 3.25rem);
             min-height: 0 !important;
             max-height: none !important;
         }
         #radioDisplayImg { width: 100%; height: 100%; object-fit: contain; background: #000; }
+        /* Cap intrinsic <select> width so long camera names don't grow the window. */
+        #radioDisplayDeviceSelect {
+            width: 11rem;
+            max-width: 11rem;
+            min-width: 0;
+            flex: 0 1 11rem;
+        }
+        #radioDisplayFpsSelect {
+            width: 5.25rem;
+            max-width: 5.25rem;
+            min-width: 0;
+            flex: 0 0 5.25rem;
+            padding-left: 0.4rem;
+            padding-right: 1.4rem;
+        }
+        #radioDisplayBadge {
+            max-width: 11rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .radio-display-actions {
+            flex: 0 0 auto;
+            margin-left: auto !important;
+        }
+        .radio-display-actions .btn {
+            padding-left: 0.45rem;
+            padding-right: 0.45rem;
+        }
     </style>
 </head>
 <body>
     <div id="radioDisplayContainer" class="row">
         <div class="col-12">
             <div class="card border-dark">
-                <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center gap-2 py-2">
-                    <strong class="me-1"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
+                <div class="card-header bg-dark text-white d-flex align-items-center py-2">
+                    <strong class="me-1 text-nowrap"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
                     <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
                     <select id="radioDisplayDeviceSelect" class="form-select form-select-sm"
-                            style="max-width: min(18rem, 100%);"
                             aria-label="Capture device">
                         <option value="">(None)</option>
                     </select>
@@ -49,14 +83,14 @@
                     <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                           data-bs-title="Stream frame rate" aria-label="Stream frame rate">
                         <select id="radioDisplayFpsSelect" class="form-select form-select-sm"
-                                style="width:auto; min-width:5.5rem;" aria-label="Stream frame rate">
+                                aria-label="Stream frame rate">
                             <option value="15">15 fps</option>
                             <option value="30">30 fps</option>
                             <option value="40">40 fps</option>
                             <option value="60">60 fps</option>
                         </select>
                     </span>
-                    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+                    <div class="radio-display-actions d-flex flex-nowrap align-items-center gap-1">
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                               data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
                             <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn"
@@ -74,7 +108,14 @@
                               aria-label="Return stream to the main Yaesu Web Control window and close this pop-out">
                             <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayReattachBtn"
                                     aria-label="Return stream to the main Yaesu Web Control window and close this pop-out">
-                                <i class="bi bi-box-arrow-in-down-left" aria-hidden="true"></i>&nbsp;Reattach
+                                <i class="bi bi-box-arrow-in-down-left" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Close this pop-out" aria-label="Close this pop-out">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayCloseBtn"
+                                    aria-label="Close this pop-out">
+                                <i class="bi bi-x-lg" aria-hidden="true"></i>
                             </button>
                         </span>
                     </div>
@@ -87,7 +128,7 @@
     </div>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
     <script type="module">
-        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=8";
+        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=9";
         initRadioDisplayUi('popout');
     </script>
 </body>
