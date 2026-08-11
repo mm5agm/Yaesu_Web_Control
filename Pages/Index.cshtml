@@ -737,7 +737,7 @@
                     <strong class="me-1"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
                     <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
                     <select id="radioDisplayDeviceSelect" class="form-select form-select-sm"
-                            style="max-width: min(18rem, 100%);"
+                            style="width:14rem; max-width:min(14rem, 40vw); min-width:0;"
                             aria-label="Capture device">
                         <option value="">(None)</option>
                     </select>
@@ -751,7 +751,7 @@
                     <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                           data-bs-title="Stream frame rate" aria-label="Stream frame rate">
                         <select id="radioDisplayFpsSelect" class="form-select form-select-sm"
-                                style="width:auto; min-width:5.5rem;" aria-label="Stream frame rate">
+                                style="width:5.5rem; max-width:5.5rem;" aria-label="Stream frame rate">
                             <option value="15">15 fps</option>
                             <option value="30">30 fps</option>
                             <option value="40">40 fps</option>
@@ -2420,7 +2420,7 @@
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=22";
-        import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=8";
+        import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=9";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
