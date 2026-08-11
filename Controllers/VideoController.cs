@@ -68,6 +68,50 @@ namespace Yaesu_Web_Control.Controllers
             });
         }
 
+        public sealed class DeviceRequest
+        {
+            public string? Key { get; set; }
+        }
+
+        /// <summary>
+        /// Persist the capture device key and reopen the stream if viewers are connected.
+        /// </summary>
+        [HttpPost("device")]
+        public async Task<IActionResult> SetDevice([FromBody] DeviceRequest? body)
+        {
+            var key = (body?.Key ?? "").Trim();
+            if (!string.IsNullOrEmpty(key) && !VideoDeviceKey.TryParseIndex(key, out _))
+                return BadRequest(new { error = "Invalid device key." });
+
+            var s = await _settings.GetSettingsAsync();
+            if (!s.VideoDisplayEnabled)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
+
+            s.VideoCaptureDeviceKey = key;
+            await _settings.SaveSettingsAsync(s);
+            _capture.RequestRestart();
+            _logger.LogInformation("Radio Display device set to {Key}", string.IsNullOrEmpty(key) ? "(none)" : key);
+            return Ok(new { deviceKey = s.VideoCaptureDeviceKey, status = _capture.Status });
+        }
+
+        public sealed class FpsRequest
+        {
+            public int? Fps { get; set; }
+        }
+
+        /// <summary>Persist encode FPS (15 / 30 / 40 / 60). Applied on the next frame cycle.</summary>
+        [HttpPost("fps")]
+        public async Task<IActionResult> SetFps([FromBody] FpsRequest? body)
+        {
+            var s = await _settings.GetSettingsAsync();
+            if (!s.VideoDisplayEnabled)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
+
+            s.VideoTargetFps = VideoFpsOptions.Normalize(body?.Fps ?? s.VideoTargetFps);
+            await _settings.SaveSettingsAsync(s);
+            return Ok(new { targetFps = s.VideoTargetFps });
+        }
+
         /// <summary>
         /// MJPEG multipart stream. Opens capture on first viewer; releases on disconnect.
         /// </summary>

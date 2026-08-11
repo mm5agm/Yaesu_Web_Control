@@ -34,11 +34,49 @@
                 <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center gap-2 py-2">
                     <strong class="me-1"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
                     <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
-                    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn" title="Toggle fit / fill">Fit</button>
-                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFullscreenBtn" title="Fullscreen">
-                            <i class="bi bi-fullscreen" aria-hidden="true"></i>
+                    <select id="radioDisplayDeviceSelect" class="form-select form-select-sm"
+                            style="max-width: min(18rem, 100%);"
+                            aria-label="Capture device">
+                        <option value="">(None)</option>
+                    </select>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Refresh capture device list" aria-label="Refresh capture device list">
+                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayRefreshDevicesBtn"
+                                aria-label="Refresh capture device list">
+                            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
                         </button>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Stream frame rate" aria-label="Stream frame rate">
+                        <select id="radioDisplayFpsSelect" class="form-select form-select-sm"
+                                style="width:auto; min-width:5.5rem;" aria-label="Stream frame rate">
+                            <option value="15">15 fps</option>
+                            <option value="30">30 fps</option>
+                            <option value="40">40 fps</option>
+                            <option value="60">60 fps</option>
+                        </select>
+                    </span>
+                    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn"
+                                    aria-label="Toggle fit / fill">Fit</button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Fullscreen" aria-label="Fullscreen">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFullscreenBtn"
+                                    aria-label="Fullscreen">
+                                <i class="bi bi-fullscreen" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Return stream to the main Yaesu Web Control window and close this pop-out"
+                              aria-label="Return stream to the main Yaesu Web Control window and close this pop-out">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayReattachBtn"
+                                    aria-label="Return stream to the main Yaesu Web Control window and close this pop-out">
+                                <i class="bi bi-box-arrow-in-down-left" aria-hidden="true"></i>&nbsp;Reattach
+                            </button>
+                        </span>
                     </div>
                 </div>
                 <div class="card-body p-0 bg-black">
@@ -47,8 +85,9 @@
             </div>
         </div>
     </div>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
     <script type="module">
-        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=4";
+        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=8";
         initRadioDisplayUi('popout');
     </script>
 </body>

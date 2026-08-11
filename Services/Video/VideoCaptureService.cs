@@ -77,6 +77,38 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         /// <summary>
+        /// Cancel and reopen the capture loop (e.g. after the device key changes).
+        /// No-op when no viewers are attached.
+        /// </summary>
+        public void RequestRestart()
+        {
+            lock (_lifecycleLock)
+            {
+                var hadLoop = _loopTask is { IsCompleted: false };
+                try { _loopCts?.Cancel(); } catch { /* ignore */ }
+                _loopCts = null;
+                _loopTask = null;
+
+                lock (_frameLock)
+                {
+                    _latestJpeg = null;
+                    _frameSeq = 0;
+                    _frameWidth = 0;
+                    _frameHeight = 0;
+                }
+
+                if (hadLoop && _sessions.ViewerCount > 0)
+                {
+                    SetStatus("connecting");
+                    _loopCts = new CancellationTokenSource();
+                    var token = _loopCts.Token;
+                    _loopTask = Task.Run(() => CaptureLoopAsync(token), CancellationToken.None);
+                    _logger.LogInformation("Radio Display capture restart requested");
+                }
+            }
+        }
+
+        /// <summary>
         /// Wait until a newer frame than <paramref name="afterSeq"/> is available.
         /// </summary>
         public async Task<(byte[] jpeg, long seq)?> WaitForFrameAsync(long afterSeq, CancellationToken ct)
@@ -158,7 +190,7 @@ namespace Yaesu_Web_Control.Services.Video
                 }
 
                 var maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
-                var targetFps = Math.Clamp(settings.VideoTargetFps, 5, 15);
+                var targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
                 var jpegQuality = Math.Clamp(settings.VideoJpegQuality, 40, 85);
                 var frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
 
@@ -197,7 +229,7 @@ namespace Yaesu_Web_Control.Services.Video
                         // Hot-reload quality knobs without reopening the device.
                         settings = await _settings.GetSettingsAsync().ConfigureAwait(false);
                         maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
-                        targetFps = Math.Clamp(settings.VideoTargetFps, 5, 15);
+                        targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
                         jpegQuality = Math.Clamp(settings.VideoJpegQuality, 40, 85);
                         frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
                         encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
