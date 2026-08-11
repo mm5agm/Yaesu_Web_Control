@@ -41,6 +41,7 @@
    - 6.6 [DX Cluster](#66-dx-cluster)
    - 6.7 [Backup &amp; Restore](#67-backup--restore)
    - 6.8 [Remote Audio](#68-remote-audio)
+   - 6.9 [Radio Display](#69-radio-display)
 7. [Application Setup](#7-application-setup)
    - 7.1 [External App Buttons](#71-external-app-buttons)
    - 7.2 [WSJT-X UDP Settings](#72-wsjt-x-udp-settings)
@@ -99,6 +100,12 @@
     - 18.4 [Operating](#184-operating)
     - 18.5 [Troubleshooting](#185-troubleshooting)
     - 18.6 [Audio codecs (Opus vs PCM16)](#186-audio-codecs-opus-vs-pcm16)
+19. [Radio Display](#19-radio-display)
+    - 19.1 [Hardware chain](#191-hardware-chain)
+    - 19.2 [Electrical safety](#192-electrical-safety)
+    - 19.3 [Settings and Index panel](#193-settings-and-index-panel)
+    - 19.4 [Raspberry Pi and Docker](#194-raspberry-pi-and-docker)
+    - 19.5 [Troubleshooting](#195-troubleshooting)
 
 ---
 
@@ -121,6 +128,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | CAT + web UI | Yes | Yes | Yes |
 | SDR spectrum / waterfall | Yes | No | No |
 | Voice Control (SAPI mic) | Yes | No | No |
+| Radio Display (USB capture → MJPEG) | Yes | Yes | Yes (map `/dev/video*` in Docker) |
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
@@ -238,10 +246,12 @@ ls /dev/ttyUSB* /dev/ttyACM*
 export YWC_SERIAL_DEVICE=/dev/ttyUSB0   # adjust to match
 
 # Optional — Remote Audio (radio USB codec via ALSA). Compose maps /dev/snd.
-# Confirm GIDs if permission-denied: getent group dialout audio
+# Confirm GIDs if permission-denied: getent group dialout audio video
 # export YWC_DIALOUT_GID=20
 # export YWC_AUDIO_GID=29
+# export YWC_VIDEO_GID=44   # Radio Display (UVC/V4L2); also set YWC_VIDEO_DEVICE=/dev/video0
 # arecord -l && aplay -l   # find the Yaesu USB audio card on the host
+# ls /dev/video*           # find HDMI capture / webcam nodes for Radio Display
 
 # Prefer the published image (pin a release tag instead of :latest if you like)
 docker compose pull
@@ -251,7 +261,7 @@ docker compose up -d
 # docker compose up -d --build
 ```
 
-Open `http://<host>:8080`. Settings and logs persist under `./data/ywc` by default. The container entrypoint fixes ownership of that volume automatically (so a host-created `./data/ywc` does not need a manual `chown`). Auto-exit and local browser-open are disabled in the container. If the serial port is permission-denied, set `YWC_DIALOUT_GID` to the host `dialout` GID (`getent group dialout`). For Remote Audio, compose also maps `/dev/snd` and adds the host `audio` group (`YWC_AUDIO_GID`, often `29`); pick the radio USB codec in **Settings → Remote Audio**. See comments in `docker-compose.yml`.
+Open `http://<host>:8080`. Settings and logs persist under `./data/ywc` by default. The container entrypoint fixes ownership of that volume automatically (so a host-created `./data/ywc` does not need a manual `chown`). Auto-exit and local browser-open are disabled in the container. If the serial port is permission-denied, set `YWC_DIALOUT_GID` to the host `dialout` GID (`getent group dialout`). For Remote Audio, compose also maps `/dev/snd` and adds the host `audio` group (`YWC_AUDIO_GID`, often `29`); pick the radio USB codec in **Settings → Remote Audio**. For Radio Display, map `/dev/video*` (`YWC_VIDEO_DEVICE`) and the host `video` group (`YWC_VIDEO_GID`, often `44`); see [§19](#19-radio-display) and comments in `docker-compose.yml`.
 
 ### 2.4 USB serial driver (Windows / macOS / Linux)
 
@@ -1380,6 +1390,20 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
 
 On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window that owns the audio session. Use this before opening Settings (or any other page) so RX/TX keep running — navigating away from Home otherwise closes the in-page session. While audio is in the pop-out, Home still shows status/levels/mutes, and the filter-scope FFT on Home stays live. Only one audio session is allowed at a time; handing off briefly reconnects.
+
+---
+
+### 6.9 Radio Display
+
+**Settings → Radio Display** shows the transceiver’s external video output in the browser via a USB webcam or HDMI/DVI capture dongle. Full setup, electrical-safety notes, and Pi/Docker tips are in [§19 Radio Display](#19-radio-display).
+
+| Setting | Description |
+|---------|-------------|
+| Enable radio display | Opt-in. When off, capture stays closed and the Index panel is hidden. |
+| Capture device | UVC / V4L2 / AVFoundation / Media Foundation device from **Refresh device list**. |
+| Max width | Downscale wider frames before JPEG encode (default **800**; **0** = no downscale). Keeps CPU/bandwidth low when a dongle forces 720p/1080p. |
+| FPS | Target encode rate **5–15** (default **10**). |
+| JPEG quality | **40–85** (default **65**). |
 
 ---
 
@@ -2939,6 +2963,86 @@ Remote Audio always samples at **48 kHz mono** on the host bridge. What changes 
 **Preference:** YWC offers **Opus first** whenever the browser supports it. Choose **PCM16** only if you need uncompressed audio on a fast LAN, or if Opus is greyed out in your browser.
 
 Both directions use the same codec for a session. Stop remote audio and connect again after changing the selector.
+
+---
+
+## 19. Radio Display
+
+Radio Display captures the radio’s **external video output** (or any USB UVC webcam) on the YWC host and streams it to the browser as **MJPEG**. It complements CAT control when you need to see menus, meters, or status that are not exposed over CAT. No OBS or separate streaming app is required.
+
+### 19.1 Hardware chain
+
+```text
+Radio DVI-D / HDMI video output
+            │
+            ▼
+    Suitable DVI-D→HDMI cable / adapter (model-specific — see §19.2)
+            │
+            ▼
+  HDMI→USB capture dongle (UVC)
+            │
+            ▼
+ Computer / Pi / Docker host running Yaesu Web Control
+            │
+            ▼
+        Web browser (Index panel or /RadioDisplay pop-out)
+```
+
+Typical radio panel resolutions are modest (e.g. FTDX-10 **800×480** or **800×600**). Many cheap capture sticks still open at **720p/1080p** with letterboxing — leave **Max width** at **800** so the host downscales before JPEG encode (important on a Raspberry Pi).
+
+### 19.2 Electrical safety
+
+Yaesu Web Control does **not** supply or electrically protect video adapters or capture hardware.
+
+- Verify that any **DVI-D→HDMI** cable or adapter is electrically suitable for **your** radio model before connecting.
+- Do **not** assume every passive DVI-D→HDMI adapter is safe on every Yaesu transceiver.
+- Follow the radio manufacturer’s guidance and published investigations of Yaesu video-output interfaces (for example community DVI-D→HDMI risk discussions on YouTube / forums).
+- Treat the capture chain as an external accessory under your responsibility.
+
+### 19.3 Settings and Index panel
+
+1. Open **Settings → Radio Display**.
+2. Enable **Radio display**, pick the capture device, leave defaults (max width 800 / 10 fps / JPEG 65) unless you have a reason to change them.
+3. Save Settings.
+4. On Home, the **Radio Display** card appears when the feature is enabled and a device is selected. Controls:
+   - **Fit / Fill** — `object-fit` contain vs cover
+   - **Fullscreen** — fullscreen the card
+   - **Pop out** — opens `/RadioDisplay` in a separate window
+   - **Hide** — hides the panel (Show button restores it); preference stored in the browser
+
+Capture opens only while at least one browser is viewing the stream. Closing all viewers releases the USB device so an idle Pi pays no capture CPU.
+
+### 19.4 Raspberry Pi and Docker
+
+**Bare metal (Linux / Pi):**
+
+- Plug in the capture dongle; confirm nodes with `ls /dev/video*` and names under `/sys/class/video4linux/*/name`.
+- Ensure the YWC process user can open the device (often membership of the **`video`** group).
+- Keep **Max width ≤ 800**, **FPS ≤ 10**, **JPEG quality ~65** on Pi-class CPUs. Raising max width to 1920 will increase encode load sharply.
+
+**Docker:** map the V4L2 device and the host **video** group GID, similar to serial/audio:
+
+```yaml
+devices:
+  - ${YWC_VIDEO_DEVICE:-/dev/video0}:${YWC_VIDEO_DEVICE:-/dev/video0}
+group_add:
+  - "${YWC_VIDEO_GID:-44}"   # host `getent group video`
+```
+
+See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial driver on the **host** as usual; video uses the kernel UVC/V4L2 stack.
+
+### 19.5 Troubleshooting
+
+| Symptom | What to try |
+|---------|-------------|
+| Panel hidden | Enable Radio Display + select a device in Settings; check Hide was not pressed (Show button). |
+| `/api/video/stream` → 403 | Feature disabled or no device key saved. |
+| Black / disconnected | Wrong device index; another app holding the UVC device exclusively; unplug/replug; Refresh device list. |
+| High CPU on Pi | Lower Max width / FPS / JPEG quality; confirm the dongle is not encoding full 1080p without downscale. |
+| Device list empty (Linux) | Check `/dev/video*`, `video` group, Docker `devices:` / `group_add`. |
+| Indexes changed after replug | Re-select the device in Settings and Save. |
+
+OCR, click-through of the captured UI, capture-device audio, and WebRTC are **not** in this version.
 
 ---
 

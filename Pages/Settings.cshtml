@@ -2094,6 +2094,62 @@
         </div>
     </details>
 
+    <!-- Radio Display (USB UVC / HDMI capture → MJPEG) -->
+    <details class="settings-section" id="radioDisplaySection">
+        <summary><i class="bi bi-display" aria-hidden="true"></i>&nbsp;Radio Display</summary>
+        <div class="section-body">
+            <p class="text-muted">
+                Show the transceiver’s external video output in the browser via a USB webcam or
+                HDMI/DVI capture dongle. Tuned for modest radio panel resolutions (e.g. FTDX-10
+                ~800×480 / 800×600) and Pi-class hosts. Off by default.
+            </p>
+            <div class="alert alert-warning" role="alert">
+                <strong>Electrical safety:</strong> verify that any DVI-D→HDMI cable or adapter is
+                suitable for your radio model before connecting. Unsuitable passive adapters can
+                damage the radio. Yaesu Web Control does not supply or electrically protect capture
+                hardware — see the user manual §19.
+            </div>
+            <div class="mb-3 form-check form-switch">
+                <input class="form-check-input" type="checkbox" asp-for="Settings.VideoDisplayEnabled" id="videoDisplayEnabled" />
+                <label class="form-check-label" asp-for="Settings.VideoDisplayEnabled">Enable radio display</label>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="videoCaptureDeviceKey">Capture device</label>
+                    <select class="form-select" id="videoCaptureDeviceKey" name="Settings.VideoCaptureDeviceKey"
+                            data-selected="@Model.Settings.VideoCaptureDeviceKey">
+                        <option value="">(None)</option>
+                    </select>
+                    <div class="form-text">USB capture dongle or webcam exposed by the OS (UVC / V4L2 / AVFoundation / Media Foundation).</div>
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="Settings.VideoMaxWidth" class="form-label">Max width</label>
+                    <input asp-for="Settings.VideoMaxWidth" type="number" min="0" max="1920" step="1" class="form-control" />
+                    <div class="form-text">0 = no downscale. Default 800.</div>
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="Settings.VideoTargetFps" class="form-label">FPS</label>
+                    <input asp-for="Settings.VideoTargetFps" type="number" min="5" max="15" step="1" class="form-control" />
+                    <div class="form-text">5–15. Default 10.</div>
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="Settings.VideoJpegQuality" class="form-label">JPEG quality</label>
+                    <input asp-for="Settings.VideoJpegQuality" type="number" min="40" max="85" step="1" class="form-control" />
+                    <div class="form-text">40–85. Default 65.</div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnRefreshVideoDevices">Refresh device list</button>
+            </div>
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
+        </div>
+    </details>
+
     @if (Model.IsWindowsHost)
     {
     <!-- SDR Spectrum Display -->
@@ -2837,6 +2893,7 @@
             }
 
             document.getElementById('btnRefreshAudioDevices')?.addEventListener('click', loadAudioDevices);
+
             document.getElementById('btnGenerateHttpsCert')?.addEventListener('click', async function () {
                 if (!confirm('Generate a new self-signed certificate? This overwrites any existing one. Restart YWC afterwards if HTTPS is enabled.'))
                     return;
@@ -2860,6 +2917,50 @@
 
             loadAudioDevices();
             refreshHttpsInfo();
+        })();
+    </script>
+    <script>
+        // Radio Display capture device list
+        (function () {
+            async function loadVideoDevices() {
+                const sel = document.getElementById('videoCaptureDeviceKey');
+                if (!sel) return;
+                try {
+                    const res = await fetch('/api/video/devices');
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    const selected = sel.getAttribute('data-selected') || '';
+                    sel.innerHTML = '';
+                    const none = document.createElement('option');
+                    none.value = '';
+                    none.textContent = '(None)';
+                    if (!selected) none.selected = true;
+                    sel.appendChild(none);
+                    let matched = false;
+                    (data.devices || []).forEach(function (d) {
+                        const key = d.key || '';
+                        const opt = document.createElement('option');
+                        opt.value = key;
+                        opt.textContent = d.label || key;
+                        if (key && key === selected) {
+                            opt.selected = true;
+                            matched = true;
+                        }
+                        sel.appendChild(opt);
+                    });
+                    if (selected && !matched) {
+                        const orphan = document.createElement('option');
+                        orphan.value = selected;
+                        orphan.textContent = selected + ' (not present)';
+                        orphan.selected = true;
+                        sel.appendChild(orphan);
+                    }
+                } catch (e) {
+                    console.warn('Video device list failed', e);
+                }
+            }
+            document.getElementById('btnRefreshVideoDevices')?.addEventListener('click', loadVideoDevices);
+            loadVideoDevices();
         })();
     </script>
     <script>
