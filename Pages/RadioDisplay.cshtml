@@ -1,0 +1,55 @@
+@page
+@model Yaesu_Web_Control.Pages.RadioDisplayModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Radio Display";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>Radio Display - Yaesu Web Control</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <style>
+        html, body { height: 100%; margin: 0; background: #000; color: #e8e8e8; }
+        #radioDisplayContainer { height: 100%; margin: 0 !important; }
+        #radioDisplayContainer > .col-12 { height: 100%; padding: 0; }
+        #radioDisplayContainer .card { height: 100%; border-radius: 0; border: none; background: #000; }
+        #radioDisplayContainer .card-body {
+            height: calc(100% - 48px);
+            min-height: 0 !important;
+            max-height: none !important;
+        }
+        #radioDisplayImg { width: 100%; height: 100%; object-fit: contain; background: #000; }
+    </style>
+</head>
+<body>
+    <div id="radioDisplayContainer" class="row">
+        <div class="col-12">
+            <div class="card border-dark">
+                <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center gap-2 py-2">
+                    <strong class="me-1"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
+                    <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
+                    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn" title="Toggle fit / fill">Fit</button>
+                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFullscreenBtn" title="Fullscreen">
+                            <i class="bi bi-fullscreen" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0 bg-black">
+                    <img id="radioDisplayImg" alt="Radio display" decoding="async" />
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="module">
+        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=4";
+        initRadioDisplayUi('popout');
+    </script>
+</body>
+</html>

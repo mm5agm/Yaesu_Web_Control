@@ -136,6 +136,8 @@ namespace Yaesu_Web_Control.Pages
             // When enabled we require explicit RX/TX picks (see check below).
             ModelState.Remove("Settings.AudioRadioRxDevice");
             ModelState.Remove("Settings.AudioRadioTxDevice");
+            // Radio Display device key may be empty (feature off / none selected).
+            ModelState.Remove("Settings.VideoCaptureDeviceKey");
             ModelState.Remove("Settings.HttpsSanHosts");
 
             if (!ModelState.IsValid)
@@ -312,6 +314,16 @@ namespace Yaesu_Web_Control.Pages
                 current.AudioRadioTxDevice = Settings.AudioRadioTxDevice ?? "";
                 // AudioRxGain / AudioTxGain are live-only (Mic & Gain / pop-out → /api/audio/gain).
                 // Do not overwrite them from this form — the inputs were removed from Settings.
+
+                // Radio Display (USB capture → MJPEG)
+                current.VideoDisplayEnabled = Settings.VideoDisplayEnabled;
+                current.VideoCaptureDeviceKey = Settings.VideoCaptureDeviceKey ?? "";
+                current.VideoMaxWidth = Settings.VideoMaxWidth < 0
+                    ? 0
+                    : Math.Clamp(Settings.VideoMaxWidth, 0, 1920);
+                current.VideoTargetFps = Math.Clamp(Settings.VideoTargetFps, 5, 15);
+                current.VideoJpegQuality = Math.Clamp(Settings.VideoJpegQuality, 40, 85);
+
                 current.HttpsEnabled = Settings.HttpsEnabled;
                 current.HttpsPort = (Settings.HttpsPort >= 1 && Settings.HttpsPort <= 65535)
                     ? Settings.HttpsPort
