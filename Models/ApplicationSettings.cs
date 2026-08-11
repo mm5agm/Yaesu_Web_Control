@@ -306,8 +306,10 @@
         /// </summary>
         public int VideoMaxWidth { get; set; } = 800;
 
-        /// <summary>Target encode rate (clamped 5–15). Radio UI is mostly static.</summary>
-        public int VideoTargetFps { get; set; } = 10;
+        /// <summary>
+        /// Target encode rate. Allowed: 15, 30, 40, 60 (chosen on the Radio Display panel).
+        /// </summary>
+        public int VideoTargetFps { get; set; } = 15;
 
         /// <summary>JPEG quality 40–85. Default 65 balances text readability vs CPU/bandwidth.</summary>
         public int VideoJpegQuality { get; set; } = 65;

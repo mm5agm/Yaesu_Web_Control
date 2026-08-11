@@ -1397,15 +1397,13 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 
 ### 6.9 Radio Display
 
-**Settings → Radio Display** shows the transceiver’s external video output in the browser via a USB webcam or HDMI/DVI capture dongle. Full setup, electrical-safety notes, and Pi/Docker tips are in [§19 Radio Display](#19-radio-display).
+**Settings → Radio Display** enables the feature. Capture device and frame rate are chosen on the Index **Radio Display** panel (or pop-out). Full setup and electrical-safety notes are in [§19 Radio Display](#19-radio-display).
 
 | Setting | Description |
 |---------|-------------|
 | Enable radio display | Opt-in. When off, capture stays closed and the Index panel is hidden. |
-| Capture device | UVC / V4L2 / AVFoundation / Media Foundation device from **Refresh device list**. |
-| Max width | Downscale wider frames before JPEG encode (default **800**; **0** = no downscale). Keeps CPU/bandwidth low when a dongle forces 720p/1080p. |
-| FPS | Target encode rate **5–15** (default **10**). |
-| JPEG quality | **40–85** (default **65**). |
+
+On the panel: pick a USB capture device, set **15 / 30 / 40 / 60 fps**, Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close.
 
 ---
 
@@ -3005,16 +3003,16 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
 
 ### 19.3 Settings and Index panel
 
-1. Open **Settings → Radio Display**.
-2. Enable **Radio display**, pick the capture device, leave defaults (max width 800 / 10 fps / JPEG 65) unless you have a reason to change them.
-3. Save Settings.
-4. On Home, the **Radio Display** card appears when the feature is enabled and a device is selected. Controls:
+1. Open **Settings → Radio Display** and enable **Radio display**, then Save.
+2. On Home, the **Radio Display** card appears. Pick the capture device and frame rate (**15 / 30 / 40 / 60 fps**; default **15**). Higher rates use more CPU — prefer **15** on a Raspberry Pi.
+3. Other controls:
    - **Fit / Fill** — `object-fit` contain vs cover
    - **Fullscreen** — fullscreen the card
-   - **Pop out** — opens `/RadioDisplay` in a separate window
-   - **Hide** — hides the panel (Show button restores it); preference stored in the browser
+   - **Pop out** — opens `/RadioDisplay` in a separate window (closes the Index panel)
+   - **Reattach** (pop-out) — returns the stream to the main window and closes the pop-out
+   - **Close** — closes the panel (Show button restores it); preference stored in the browser
 
-Capture opens only while at least one browser is viewing the stream. Closing all viewers releases the USB device so an idle Pi pays no capture CPU.
+Capture opens only while at least one browser is viewing the stream. Closing all viewers releases the USB device so an idle Pi pays no capture CPU. Max width (800) and JPEG quality (65) stay at host defaults tuned for modest radio panels.
 
 ### 19.4 Raspberry Pi and Docker
 
@@ -3022,7 +3020,7 @@ Capture opens only while at least one browser is viewing the stream. Closing all
 
 - Plug in the capture dongle; confirm nodes with `ls /dev/video*` and names under `/sys/class/video4linux/*/name`.
 - Ensure the YWC process user can open the device (often membership of the **`video`** group).
-- Keep **Max width ≤ 800**, **FPS ≤ 10**, **JPEG quality ~65** on Pi-class CPUs. Raising max width to 1920 will increase encode load sharply.
+- Keep **Max width ≤ 800** (host default) and prefer **15 fps** on Pi-class CPUs. Raising FPS to 30–60 increases encode load sharply.
 
 **Docker:** map the V4L2 device and the host **video** group GID, similar to serial/audio:
 
@@ -3039,7 +3037,7 @@ See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial
 
 | Symptom | What to try |
 |---------|-------------|
-| Panel hidden | Enable Radio Display + select a device in Settings; check Hide was not pressed (Show button). |
+| Panel hidden | Enable Radio Display + select a device in Settings; check Close was not pressed (Show button). |
 | `/api/video/stream` → 403 | Feature disabled or no device key saved. |
 | Black / disconnected | Wrong device index; another app holding the UVC device exclusively; unplug/replug; Refresh device list. |
 | High CPU on Pi | Lower Max width / FPS / JPEG quality; confirm the dongle is not encoding full 1080p without downscale. |
