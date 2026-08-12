@@ -1842,21 +1842,36 @@
                         </div>
                         <div class="mb-3">
                             <label asp-for="Settings.SerialPort" class="form-label">Serial Port</label>
+                            <div class="input-group">
+                                <select asp-for="Settings.SerialPort" class="form-select" id="Settings_SerialPort"
+                                        data-selected="@Model.Settings.SerialPort" required>
+                                    @if (!string.IsNullOrWhiteSpace(Model.Settings.SerialPort))
+                                    {
+                                        <option value="@Model.Settings.SerialPort" selected>@Model.Settings.SerialPort</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="">Loading ports…</option>
+                                    }
+                                </select>
+                                <button type="button" class="btn btn-outline-secondary" id="btnRefreshSerialPorts"
+                                        title="Refresh port list">
+                                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                                    <span class="visually-hidden">Refresh</span>
+                                </button>
+                            </div>
                             @if (Model.IsWindowsHost)
                             {
-                                <input asp-for="Settings.SerialPort" class="form-control" placeholder="COM3" required />
                                 <div class="form-text">
-                                    Enter the COM port where your radio is connected (e.g., COM3, COM4).
-                                    <br /><strong>Tip:</strong> Check Device Manager to find the correct port.
+                                    Choose the radio's <strong>Enhanced</strong> (CAT) COM port — not Standard / TX-control if two appear.
+                                    Use Refresh if you just plugged the radio in.
                                 </div>
                             }
                             else
                             {
-                                <input asp-for="Settings.SerialPort" class="form-control" placeholder="/dev/cu.usbserial-…" required />
                                 <div class="form-text">
-                                    Enter the serial device path (e.g. <code>/dev/cu.usbserial-XXXX</code> or <code>/dev/cu.usbmodem…</code>).
-                                    Prefer <code>cu.*</code> over <code>tty.*</code> on macOS.
-                                    <br /><strong>Tip:</strong> Run <code>ls /dev/cu.*</code> in Terminal, or check Diagnostics → Ports.
+                                    Choose the radio's CAT serial device. Prefer <code>cu.*</code> over <code>tty.*</code> on macOS.
+                                    Use Refresh if you just plugged the radio in.
                                 </div>
                             }
                             <span asp-validation-for="Settings.SerialPort" class="text-danger"></span>
@@ -1939,6 +1954,17 @@
                             <span asp-validation-for="Settings.HttpPort" class="text-danger"></span>
                         </div>
                         <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" asp-for="Settings.OpenBrowserOnStartup" />
+                            <label class="form-check-label" asp-for="Settings.OpenBrowserOnStartup">
+                                Open browser automatically on startup
+                            </label>
+                            <div class="form-text">
+                                When enabled (default), YWC opens your default browser to the control panel after
+                                the web server starts. Turn this off to start quietly — open the UI from the
+                                system tray / menu bar, or browse to the URL yourself. Docker never auto-opens.
+                            </div>
+                        </div>
+                        <div class="mb-3 form-check form-switch">
                             <input class="form-check-input" type="checkbox" asp-for="Settings.AutoShutdownWhenNoBrowsers" />
                             <label class="form-check-label" asp-for="Settings.AutoShutdownWhenNoBrowsers">
                                 Automatically exit when no browser is connected
@@ -1949,6 +1975,43 @@
                                 (quit via the system tray on Windows, or Ctrl+C in the console on macOS).
                             </div>
                         </div>
+
+                        <hr class="my-4" />
+                        <h5 class="mb-3">Optional HTTPS (for remote microphone)</h5>
+                        <p class="text-muted small">
+                            Browsers only allow microphone access on a <strong>secure context</strong> (HTTPS or localhost).
+                            Over WireGuard/LAN, enable HTTPS here, generate a self-signed certificate, save, and <strong>restart YWC</strong>.
+                            Then open the HTTPS URL (default port 8443) and accept the certificate warning once.
+                        </p>
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" asp-for="Settings.HttpsEnabled" id="httpsEnabled" />
+                            <label class="form-check-label" asp-for="Settings.HttpsEnabled">Enable HTTPS</label>
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="Settings.HttpsPort" class="form-label">HTTPS Port</label>
+                            <input asp-for="Settings.HttpsPort" type="number" min="1" max="65535" class="form-control" style="max-width: 12em;" />
+                            <div class="form-text">Default <strong>8443</strong>. HTTP continues on the HTTP port above (dual-listen).</div>
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="Settings.HttpsSanHosts" class="form-label">Certificate SAN hostnames / IPs</label>
+                            <textarea asp-for="Settings.HttpsSanHosts" class="form-control" rows="2"
+                                      placeholder="e.g. 10.0.0.2&#10;ywc.local"></textarea>
+                            <div class="form-text">
+                                Extra names/IPs embedded in the certificate (one per line). Always includes localhost.
+                                Use your WireGuard or LAN address so the browser warning matches the URL you type.
+                            </div>
+                        </div>
+                        <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+                            <button type="button" class="btn btn-outline-secondary" id="btnGenerateHttpsCert">
+                                Generate self-signed certificate
+                            </button>
+                            <span class="form-text" id="httpsCertInfo">Checking…</span>
+                        </div>
+                        <div class="alert alert-warning" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <strong>Restart required</strong> after enabling HTTPS or regenerating the certificate.
+                        </div>
+
                         <div class="alert alert-warning" role="alert">
                             <i class="bi bi-exclamation-triangle-fill"></i>
                             <strong>Important:</strong> Save Settings and Restart the application after changing web server settings.
@@ -1959,6 +2022,69 @@
                             <a asp-page="/ApplicationSetup" class="alert-link">Application Setup</a> page.
                         </div>
             <!-- Inline Save Settings so this section can be saved in place. -->
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
+        </div>
+    </details>
+
+    <!-- Remote Audio (browser ↔ radio USB) -->
+    <details class="settings-section" id="remoteAudioSection" @(ViewContext.ModelState.IsValid ? "" : "open")>
+        <summary><i class="bi bi-soundwave" aria-hidden="true"></i>&nbsp;Remote Audio</summary>
+        <div class="section-body">
+            <p class="text-muted">
+                Stream radio receive audio to the browser and send the browser microphone into the radio’s USB audio
+                (SCU-LAN10-style remote SSB without Mumble). PTT stays on the existing TX button / shortcut.
+                Designed for LAN or VPN (e.g. WireGuard). Off by default.
+                On the Index Remote Audio bar (or pop-out), choose <strong>Opus</strong> (default, low bandwidth)
+                or <strong>PCM16</strong> (uncompressed) — see the user manual §18.6.
+            </p>
+            <div class="alert alert-info" role="alert">
+                On the radio, set <strong>MOD SOURCE</strong> to USB / REAR (USB) so TX audio from the PC reaches the transmitter.
+                For remote mic access, enable <strong>HTTPS</strong> under Web / HTTP and open the HTTPS URL.
+                When enabled, you must pick <strong>both</strong> radio USB devices — leaving TX blank used to open the PC speakers and loop the browser mic into the room.
+            </div>
+            <div class="mb-3 form-check form-switch">
+                <input class="form-check-input" type="checkbox" asp-for="Settings.AudioStreamingEnabled" id="audioStreamingEnabled" />
+                <label class="form-check-label" asp-for="Settings.AudioStreamingEnabled">Enable remote audio</label>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="audioRadioRxDevice">Radio RX device (capture)</label>
+                    <select class="form-select" id="audioRadioRxDevice" name="Settings.AudioRadioRxDevice"
+                            data-selected="@Model.Settings.AudioRadioRxDevice">
+                        <option value="">(Select radio USB recording…)</option>
+                    </select>
+                    <span asp-validation-for="Settings.AudioRadioRxDevice" class="text-danger"></span>
+                    <div class="form-text">
+                        Radio USB <em>recording</em> endpoint — what you hear in the browser.
+                        Factory names are often <strong>Microphone (USB Audio CODEC)</strong> or <strong>Line (USB Audio CODEC)</strong>;
+                        if you renamed it in the OS (e.g. “FTDX101”), pick that. On Windows only <strong>WASAPI</strong> devices are listed.
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="audioRadioTxDevice">Radio TX device (playback)</label>
+                    <select class="form-select" id="audioRadioTxDevice" name="Settings.AudioRadioTxDevice"
+                            data-selected="@Model.Settings.AudioRadioTxDevice">
+                        <option value="">(Select radio USB playback…)</option>
+                    </select>
+                    <span asp-validation-for="Settings.AudioRadioTxDevice" class="text-danger"></span>
+                    <div class="form-text">
+                        Radio USB <em>playback</em> / Speakers endpoint — where browser mic audio is sent.
+                        Often <strong>Speakers (USB Audio CODEC)</strong>. Do <strong>not</strong> pick your PC speakers / headphones
+                        (that causes mic feedback). On Windows only <strong>WASAPI</strong> devices are listed.
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnRefreshAudioDevices">Refresh device list</button>
+                <div class="form-text mt-2">
+                    RX / TX software gain is adjusted live via <strong>Mic &amp; Gain</strong> on the Index Remote Audio bar (or inline on the pop-out), not here.
+                </div>
+            </div>
             <div class="mt-2 pt-3 border-top">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
@@ -2567,6 +2693,175 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Serial port dropdown — same /api/ports source as Diagnostics
+        (function () {
+            async function loadSerialPorts() {
+                const sel = document.getElementById('Settings_SerialPort');
+                if (!sel) return;
+                const selected = sel.getAttribute('data-selected') || sel.value || '';
+                const selectedKey = selected.toLowerCase();
+                try {
+                    const res = await fetch('/api/ports');
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    const ports = Array.isArray(data.ports) ? data.ports.slice() : [];
+                    ports.sort(function (a, b) {
+                        return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+                    });
+
+                    const found = ports.some(function (p) { return String(p).toLowerCase() === selectedKey; });
+
+                    sel.innerHTML = '';
+                    if (selected && !found) {
+                        const missing = document.createElement('option');
+                        missing.value = selected;
+                        missing.textContent = selected + ' (not currently detected)';
+                        missing.selected = true;
+                        sel.appendChild(missing);
+                    }
+
+                    if (ports.length === 0 && !selected) {
+                        const empty = document.createElement('option');
+                        empty.value = '';
+                        empty.textContent = 'No serial ports detected';
+                        sel.appendChild(empty);
+                    } else {
+                        ports.forEach(function (p) {
+                            const opt = document.createElement('option');
+                            opt.value = p;
+                            opt.textContent = p;
+                            if (String(p).toLowerCase() === selectedKey) opt.selected = true;
+                            sel.appendChild(opt);
+                        });
+                    }
+
+                    if (sel.value) sel.setAttribute('data-selected', sel.value);
+                } catch (e) {
+                    console.warn('Serial port list failed', e);
+                    if (!sel.options.length) {
+                        const err = document.createElement('option');
+                        err.value = selected || '';
+                        err.textContent = selected
+                            ? selected + ' (list unavailable)'
+                            : 'Could not load ports';
+                        err.selected = true;
+                        sel.appendChild(err);
+                    }
+                }
+            }
+
+            document.getElementById('btnRefreshSerialPorts')?.addEventListener('click', function () {
+                const sel = document.getElementById('Settings_SerialPort');
+                if (sel?.value) sel.setAttribute('data-selected', sel.value);
+                loadSerialPorts();
+            });
+            loadSerialPorts();
+        })();
+    </script>
+    <script>
+        // Remote audio device list + HTTPS certificate generation
+        (function () {
+            async function loadAudioDevices() {
+                const rxSel = document.getElementById('audioRadioRxDevice');
+                const txSel = document.getElementById('audioRadioTxDevice');
+                if (!rxSel || !txSel) return;
+                try {
+                    const res = await fetch('/api/audio/devices');
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    const rxSelected = rxSel.getAttribute('data-selected') || '';
+                    const txSelected = txSel.getAttribute('data-selected') || '';
+                    // Keys are "{name} [{hostApi}]" so Windows MME/WASAPI/DS/WDM-KS
+                    // duplicates stay distinct. Legacy bare-name settings still match.
+                    function pickSelectedKey(devices, selected) {
+                        if (!selected) return '';
+                        const list = devices || [];
+                        const exact = list.find(function (d) {
+                            return (d.key || d.displayName || d.name) === selected;
+                        });
+                        if (exact) return exact.key || exact.displayName || exact.name;
+                        // Legacy bare name — prefer WASAPI / Core Audio when several match.
+                        const byName = list.filter(function (d) { return d.name === selected; });
+                        const prefer = byName.find(function (d) { return /WASAPI/i.test(d.hostApiName || ''); })
+                            || byName.find(function (d) { return /Core Audio/i.test(d.hostApiName || ''); })
+                            || byName[0];
+                        return prefer ? (prefer.key || prefer.displayName || prefer.name) : '';
+                    }
+                    function fillAudioSelect(sel, devices, selected, defaultLabel) {
+                        const matchKey = pickSelectedKey(devices, selected);
+                        sel.innerHTML = '';
+                        const def = document.createElement('option');
+                        def.value = '';
+                        def.textContent = defaultLabel;
+                        if (!selected) def.selected = true;
+                        sel.appendChild(def);
+                        (devices || []).forEach(function (d) {
+                            const key = d.key || d.displayName || d.name;
+                            const opt = document.createElement('option');
+                            opt.value = key;
+                            // Server already sorts likely USB codec names first; mark them in the label.
+                            const base = d.displayName || key;
+                            opt.textContent = d.likelyRadio ? ('📻 ' + base) : base;
+                            if (key === matchKey) opt.selected = true;
+                            sel.appendChild(opt);
+                        });
+                        // Saved key not in the live list — keep it visible so Save doesn't wipe it.
+                        if (selected && !matchKey) {
+                            const orphan = document.createElement('option');
+                            orphan.value = selected;
+                            orphan.textContent = selected + ' (not present)';
+                            orphan.selected = true;
+                            sel.appendChild(orphan);
+                        }
+                    }
+                    fillAudioSelect(rxSel, data.inputs, rxSelected, '(Select radio USB recording…)');
+                    fillAudioSelect(txSel, data.outputs, txSelected, '(Select radio USB playback…)');
+                } catch (e) {
+                    console.warn('Audio device list failed', e);
+                }
+            }
+
+            async function refreshHttpsInfo() {
+                const el = document.getElementById('httpsCertInfo');
+                if (!el) return;
+                try {
+                    const res = await fetch('/api/audio/status');
+                    const data = await res.json();
+                    el.textContent = data.certificatePresent
+                        ? data.certificateInfo
+                        : 'No certificate generated yet.';
+                } catch (e) {
+                    el.textContent = 'Could not read certificate status.';
+                }
+            }
+
+            document.getElementById('btnRefreshAudioDevices')?.addEventListener('click', loadAudioDevices);
+            document.getElementById('btnGenerateHttpsCert')?.addEventListener('click', async function () {
+                if (!confirm('Generate a new self-signed certificate? This overwrites any existing one. Restart YWC afterwards if HTTPS is enabled.'))
+                    return;
+                const san = document.getElementById('Settings_HttpsSanHosts')?.value
+                    || document.querySelector('[name="Settings.HttpsSanHosts"]')?.value
+                    || '';
+                try {
+                    const res = await fetch('/api/audio/https/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sanHosts: san })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Generate failed');
+                    alert('Certificate generated.\n\n' + (data.info || '') + '\n\nSave Settings if you changed HTTPS options, then restart YWC.');
+                    refreshHttpsInfo();
+                } catch (e) {
+                    alert('Certificate generation failed: ' + e.message);
+                }
+            });
+
+            loadAudioDevices();
+            refreshHttpsInfo();
+        })();
+    </script>
     <script>
         // Must run AFTER _ValidationScriptsPartial so jQuery Validate is present.
         // "Saving…" only when the form will actually POST. Previously the spinner

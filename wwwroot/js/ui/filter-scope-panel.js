@@ -1,6 +1,7 @@
 // filter-scope-panel.js — Filter Function Display canvas renderer
 // Shows DSP filter passband shape, roofing filter outline, notch, contour, and APF markers.
-// Pure computation from CAT state — no actual signal content.
+// Passband geometry is computed from CAT state. Green bars inside the passband are
+// decorative (random) unless a live RX spectrum provider is attached (remote audio).
 
 // IF Width code → Hz per radio model (mirrors ifWidthOptions in Index.cshtml)
 const IF_WIDTH_TABLES = {
@@ -55,12 +56,24 @@ export class FilterScopePanel {
             ...initialState
         };
 
+        /** Optional () => { data, sampleRate, fftSize } | null from remote audio RX. */
+        this._spectrumProvider = null;
+
         this._init();
     }
 
     setState(updates) {
         Object.assign(this._state, updates);
         this._render();
+    }
+
+    /**
+     * Attach or clear a live RX spectrum source. When the provider returns null
+     * (no session / muted), bars fall back to the decorative random animation.
+     * @param {(() => ({ data: Uint8Array, sampleRate: number, fftSize: number } | null)) | null} provider
+     */
+    setSpectrumProvider(provider) {
+        this._spectrumProvider = typeof provider === 'function' ? provider : null;
     }
 
     _init() {
@@ -223,7 +236,7 @@ export class FilterScopePanel {
         ctx.fillStyle = 'rgba(74,138,191,0.10)';
         ctx.fill();
 
-        // Clip to trapezoid, then draw animated signal bars inside it
+        // Clip to trapezoid, then draw signal bars inside it (live FFT or random)
         ctx.save();
         trapPath();
         ctx.clip();
@@ -231,8 +244,21 @@ export class FilterScopePanel {
         const barW    = 2;
         const maxBarH = Math.floor((pbBot - pbTop) * 0.85);
         const barBase = pbBot - 1;
+        const spectrum = this._spectrumProvider ? this._spectrumProvider() : null;
+        const hzPerBin = spectrum
+            ? spectrum.sampleRate / spectrum.fftSize
+            : 0;
+        const binCount = spectrum ? spectrum.data.length : 0;
+
         for (let bx = pxLo; bx <= pxHi; bx += barW) {
-            const nh = Math.random();
+            let nh;
+            if (spectrum && binCount > 0) {
+                const hz = rangeLo + ((bx + barW * 0.5) / W) * rangeHz;
+                const bin = Math.max(0, Math.min(binCount - 1, Math.round(hz / hzPerBin)));
+                nh = spectrum.data[bin] / 255;
+            } else {
+                nh = Math.random();
+            }
             const bh = Math.max(2, Math.round(nh * maxBarH));
             ctx.fillStyle = `rgba(80,210,80,${(0.4 + nh * 0.5).toFixed(2)})`;
             ctx.fillRect(bx, barBase - bh, barW - 1, bh);

@@ -40,6 +40,7 @@
    - 6.5 [CW Memory Messages](#65-cw-memory-messages-m1m5)
    - 6.6 [DX Cluster](#66-dx-cluster)
    - 6.7 [Backup &amp; Restore](#67-backup--restore)
+   - 6.8 [Remote Audio](#68-remote-audio)
 7. [Application Setup](#7-application-setup)
    - 7.1 [External App Buttons](#71-external-app-buttons)
    - 7.2 [WSJT-X UDP Settings](#72-wsjt-x-udp-settings)
@@ -91,6 +92,13 @@
     - 17.5 [Privacy](#175-privacy)
     - 17.6 [Adding your own commands](#176-adding-your-own-commands)
     - 17.7 [More languages](#177-more-languages)
+18. [Remote Audio](#18-remote-audio)
+    - 18.1 [Radio setup](#181-radio-setup)
+    - 18.2 [YWC host setup](#182-ywc-host-setup)
+    - 18.3 [HTTPS for remote browsers](#183-https-for-remote-browsers)
+    - 18.4 [Operating](#184-operating)
+    - 18.5 [Troubleshooting](#185-troubleshooting)
+    - 18.6 [Audio codecs (Opus vs PCM16)](#186-audio-codecs-opus-vs-pcm16)
 
 ---
 
@@ -116,7 +124,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
-| USB serial driver | [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) required on **Windows, macOS, and Linux** — **reboot the host after install** (see [§2.4](#24-usb-serial-driver-windows--macos--linux)) |
+| USB serial driver | **Windows / macOS:** if the radio's COM / `/dev/cu.*` ports are missing or CAT never answers, install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** usually skip — the kernel already includes CP210x support. |
 | Settings / logs folder | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` | Volume `./data/ywc` → `/data/MM5AGM/Yaesu Web Control/` (Docker); same `~/.config/…` path when run from source |
 | Auto-exit when no browser | Default **on** | Default **on** (turn **off** for a headless shack) | Forced **off** in containers; default **on** from source |
 | Opens a local browser on start | Yes | Yes | No (Docker); yes from source on a desktop |
@@ -169,15 +177,16 @@ The application was written for operators who want a large, clean, touchscreen-f
 
 ## 2. Installation
 
-> **Before connecting the radio over USB:** install the Silicon Labs CP210x VCP driver and **reboot the computer**. Required on Windows, macOS, and Linux — see [§2.4](#24-usb-serial-driver-windows--macos--linux).
+> **USB CAT tip:** if the radio's serial ports never appear, or **Test Connection** fails with no reply from the radio, install the Silicon Labs CP210x VCP driver on **Windows or macOS** and reboot — see [§2.4](#24-usb-serial-driver-windows--macos--linux). **Linux** users can normally skip this (CP210x is in the kernel).
 
 ### 2.1 Windows (installer)
 
-1. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** (see [§2.4](#24-usb-serial-driver-windows--macos--linux)).
-2. Download the installer from the [GitHub Releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
-3. Run the installer. .NET 10 is bundled — you do not need to install it separately.
-4. A desktop shortcut and a Start Menu entry are created automatically.
-5. The first time you run the app, Windows may show a **Smart App Control** or **Unknown Publisher** warning. Click **More info → Run anyway** to proceed. This warning appears because the installer is not signed with a commercial certificate.
+1. Download the installer from the [GitHub Releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
+2. Run the installer. .NET 10 is bundled — you do not need to install it separately.
+3. A desktop shortcut and a Start Menu entry are created automatically.
+4. The first time you run the app, Windows may show a **Smart App Control** or **Unknown Publisher** warning. Click **More info → Run anyway** to proceed. This warning appears because the installer is not signed with a commercial certificate.
+
+If Device Manager never shows the radio's COM ports, or **Test Connection** fails later, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads), **reboot**, and try again ([§2.4](#24-usb-serial-driver-windows--macos--linux)).
 
 This is the supported product build: tray icon, SDR spectrum, and Voice Control.
 
@@ -185,15 +194,16 @@ This is the supported product build: tray icon, SDR spectrum, and Voice Control.
 
 macOS ships as an **unsigned CAT-only** app (menu-bar status item; no SDR spectrum or Windows Voice Control). There is no Apple Developer ID / notarization — this is an open-source project and that licence costs money every year. Gatekeeper will warn the first time you open a download from the internet, the same way Windows warns about the unsigned installer.
 
-1. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** (see [§2.4](#24-usb-serial-driver-windows--macos--linux)).
-2. Download the DMG that matches your Mac from the [GitHub Releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases):
+1. Download the DMG that matches your Mac from the [GitHub Releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases):
    - Apple Silicon (M1 / M2 / M3 / …): `Yaesu_Web_Control_CAT_*_macos-arm64.dmg`
    - Intel: `Yaesu_Web_Control_CAT_*_macos-x64.dmg`
-3. Open the DMG and drag **Yaesu Web Control** into **Applications**.
-4. The first time you launch it, macOS Gatekeeper will block an unsigned app. Do one of the following:
+2. Open the DMG and drag **Yaesu Web Control** into **Applications**.
+3. The first time you launch it, macOS Gatekeeper will block an unsigned app. Do one of the following:
    - **Right-click** (or Control-click) **Yaesu Web Control** in Applications → **Open** → **Open** again in the dialog, or
    - Try to open it normally, then open **System Settings → Privacy & Security**, scroll to the message about YWC being blocked, and click **Open Anyway**.
-5. A menu-bar status item appears (Open / About / Open user data folder / Exit). The browser UI is at `http://localhost:8080` (or the port shown in the menu-bar tooltip). .NET is bundled — you do not need to install the SDK.
+4. A menu-bar status item appears (Open / About / Open user data folder / Exit). The browser UI is at `http://localhost:8080` (or the port shown in the menu-bar tooltip). .NET is bundled — you do not need to install the SDK.
+
+If `/dev/cu.usbserial-…` devices never appear, or **Test Connection** fails later, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads), **reboot**, allow the Driver Extension if prompted, and try again ([§2.4](#24-usb-serial-driver-windows--macos--linux)).
 
 Set **Serial Port** to a `/dev/cu.*` device (see §3). SDR and Voice Control sections are hidden on this host.
 
@@ -217,9 +227,9 @@ Then open `http://localhost:8080` (or the port shown in the console / menu-bar t
 
 For an always-on CAT controller on an x64 PC or arm64 Pi, use the published multi-arch image (`linux/amd64` and `linux/arm64`) from the GitHub Container Registry, or build locally from the repo `Dockerfile` / `docker-compose.yml`.
 
-**Image:** `ghcr.io/mm5agm/yaesu_web_control` — tags `latest` and each release (e.g. `v2.4.2`).
+**Image:** `ghcr.io/mm5agm/yaesu_web_control` — each release is tagged (e.g. `v2.4.2`, `v2.4.3-pre6`); `latest` tracks the newest **full** release only (not pre-releases).
 
-Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on the **host** (not inside the container) and **reboot the host** before first use — see [§2.4](#24-usb-serial-driver-windows--macos--linux). Then clone or copy `docker-compose.yml` from the repo and run:
+On a **Linux** host you normally do **not** need Silicon Labs' CP210x package — support is already in the kernel. Plug the radio in, confirm a `/dev/ttyUSB*` or `/dev/ttyACM*` node appears, then clone or copy `docker-compose.yml` from the repo and run:
 
 ```bash
 # Find the radio's USB-serial node on the host
@@ -245,32 +255,30 @@ Open `http://<host>:8080`. Settings and logs persist under `./data/ywc` by defau
 
 ### 2.4 USB serial driver (Windows / macOS / Linux)
 
-Modern Yaesu HF radios (FTdx101, FTdx10, FT-710, and similar) talk CAT over USB through a built-in **Silicon Labs CP210x** USB-to-UART bridge. The host OS must have the official **CP210x Virtual COM Port (VCP)** driver installed:
+Modern Yaesu HF radios (FTdx101, FTdx10, FT-710, and similar) talk CAT over USB through a built-in **Silicon Labs CP210x** USB-to-UART bridge. You only need Silicon Labs' official **CP210x Virtual COM Port (VCP)** package when the OS does not already present working ports — most often on a fresh **Windows** or **macOS** install after CAT or port discovery fails. **Linux** already includes a CP210x kernel module, so skip the Silicon Labs download there unless something is clearly broken.
 
 **[CP210x USB to UART Bridge VCP Drivers (Silicon Labs downloads)](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads)**
 
 | OS | What to do |
 |---|---|
-| **Windows** | Download and install the Windows VCP package from that page, then **reboot**. |
-| **macOS** | Download and install the Macintosh VCP package from that page, then **reboot**. Allow the Driver Extension under System Settings if prompted. |
-| **Linux** | Install the matching Linux VCP package from that page when required for your distribution/kernel, then **reboot**. (Some kernels already include a CP210x module; if ports appear but CAT never answers, still install Silicon Labs' package and reboot.) |
+| **Windows** | If Device Manager never lists the radio's COM ports, or **Test Connection** opens the port but the radio never answers, download and install the Windows VCP package from that page, then **reboot**. |
+| **macOS** | If `/dev/cu.usbserial-…` devices never appear, or CAT never answers, install the Macintosh VCP package from that page, then **reboot**. Allow the Driver Extension under System Settings if prompted. |
+| **Linux** | **Skip the Silicon Labs package.** The in-kernel `cp210x` driver normally creates `/dev/ttyUSB*` (or similar) as soon as you plug the radio in. If ports are missing, check the cable, USB power, and that your user is in the `dialout` group — not a vendor VCP install. |
 
-**After installing, reboot the host.** Skipping the reboot is a common reason the port appears in the OS (or opens in YWC) but **Test Connection** fails with no reply from the radio.
+**After installing the Silicon Labs package (Windows / macOS), reboot the host.** Skipping the reboot is a common reason the port appears in the OS (or opens in YWC) but **Test Connection** fails with no reply from the radio.
 
 Many of these radios expose **two** virtual ports on one USB cable:
 
 - **Enhanced** — CAT (frequency, mode, meters). **This is the port YWC must use.**
 - **Standard** — TX controls (PTT, CW keying, digital). Not for CAT.
 
-On Windows, Device Manager labels them clearly. On macOS they show as two `/dev/cu.usbserial-…` devices — if Test Connection fails on one, try the other after the driver + reboot.
+On Windows, Device Manager labels them clearly. On macOS they show as two `/dev/cu.usbserial-…` devices — if Test Connection fails on one, try the other (and install the VCP driver + reboot only if neither works).
 
 ---
 
 ## 3. First-Time Setup
 
 Before the app can communicate with your radio you need to tell it which serial port the radio is connected to and what baud rate to use.
-
-Confirm the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) is installed and that you **rebooted** after installing it ([§2.4](#24-usb-serial-driver-windows--macos--linux)).
 
 **Required — radio connection:**
 
@@ -290,7 +298,7 @@ Confirm the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and
 8. On a headless macOS/Linux/Docker host, turn **off** **Automatically exit when no browser is connected** in Settings (Docker already forces this off) so closing the browser does not stop the CAT server.
 9. Click **Save Settings**, then **Test Connection**. A green tick means the app is talking to the radio.
 
-If you see a red cross, double-check the serial port (Enhanced vs Standard), baud rate, and that the Silicon Labs driver was installed with a reboot. On Linux, confirm your user (or the container's dialout group) can open the device. See [§15.11](#1511-test-connection-fails--cat-does-not-respond-over-usb).
+If you see a red cross, double-check the serial port (Enhanced vs Standard) and baud rate. On **Windows or macOS**, if the ports are missing or CAT still never answers, install the Silicon Labs CP210x VCP driver and reboot ([§2.4](#24-usb-serial-driver-windows--macos--linux)). On **Linux**, confirm your user (or the container's dialout group) can open the device — you normally do not need Silicon Labs' package. See [§15.11](#1511-test-connection-fails--cat-does-not-respond-over-usb).
 
 
 **Optional — extras you can set up later in Settings:**
@@ -309,7 +317,7 @@ None of these are required for basic operation. Get the radio connection working
 
 ### Windows
 
-Double-click the **Yaesu Web Control** shortcut on your desktop. The app starts in the background and your default browser opens automatically to whichever port YWC managed to bind (usually `http://localhost:8080`, but YWC will fall back to 8081–8089 if 8080 was already in use).
+Double-click the **Yaesu Web Control** shortcut on your desktop. The app starts in the background and — with **Open browser automatically on startup** enabled (the default) — your default browser opens to whichever port YWC managed to bind (usually `http://localhost:8080`, but YWC will fall back to 8081–8089 if 8080 was already in use). If you turned that setting off, use the tray icon’s **Open** action (or browse to the URL yourself).
 
 A small **YWC tray icon** appears in the Windows system tray (down by the clock, possibly under the **Show hidden icons ︿** arrow). The tray icon is your "the app is running" indicator and gives you a clean way to manage it without juggling Task Manager:
 
@@ -328,7 +336,7 @@ A small **YWC tray icon** appears in the Windows system tray (down by the clock,
 
 ### macOS (CAT-only host)
 
-Launch **Yaesu Web Control** from Applications (DMG install — [§2.2](#22-macos-dmg)), or run `dotnet run --framework net10.0` from a source checkout. Either way Kestrel starts and a **menu-bar status item** offers the same Open / About / Open user data folder / Exit actions as the Windows tray. User data lives under `~/.config/MM5AGM/Yaesu Web Control/`. The browser may open automatically on a desktop Mac; if not, use the menu-bar **Open** item or browse to the URL yourself.
+Launch **Yaesu Web Control** from Applications (DMG install — [§2.2](#22-macos-dmg)), or run `dotnet run --framework net10.0` from a source checkout. Either way Kestrel starts and a **menu-bar status item** offers the same Open / About / Open user data folder / Exit actions as the Windows tray. User data lives under `~/.config/MM5AGM/Yaesu Web Control/`. With **Open browser automatically on startup** enabled (default), the browser opens on a desktop Mac; if you turned it off (or it didn’t open), use the menu-bar **Open** item or browse to the URL yourself.
 
 ### Linux (from source)
 
@@ -1048,7 +1056,7 @@ Clicking **Restart Now** stops YWC and (when running as the installed exe) autom
 | Setting | Description |
 |---------|-------------|
 | Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), or **FT-710** (100 W, single RX) |
-| Serial Port | Path to the radio's **Enhanced** (CAT) USB/serial port. **Windows:** `COM3`, `COM4`, … (Device Manager: *Enhanced COM Port*). **macOS:** `/dev/cu.usbserial-…` (prefer `cu.*` over `tty.*`). **Linux / Docker:** `/dev/ttyUSB0`, `/dev/ttyACM0`, or `/dev/serial/by-id/…`. Requires the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and a **host reboot** after install — [§2.4](#24-usb-serial-driver-windows--macos--linux). |
+| Serial Port | Path to the radio's **Enhanced** (CAT) USB/serial port. **Windows:** `COM3`, `COM4`, … (Device Manager: *Enhanced COM Port*). **macOS:** `/dev/cu.usbserial-…` (prefer `cu.*` over `tty.*`). **Linux / Docker:** `/dev/ttyUSB0`, `/dev/ttyACM0`, or `/dev/serial/by-id/…`. If ports are missing or CAT never answers on Windows/macOS, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot — [§2.4](#24-usb-serial-driver-windows--macos--linux). Linux can normally skip that. |
 | Baud Rate | Must match the radio's CAT Rate setting. Default: 38400 |
 | Band Plan | **IARU Region 1** (Europe, Africa, Middle East — includes 4m), **IARU Region 2** (Americas), **IARU Region 3** (Asia-Pacific), or **Japan** (JARL). Affects which bands and segment frequencies are shown. UK is Region 1; USA, Canada, and South America are Region 2; Australia, New Zealand, and most of Asia (except Japan) are Region 3. |
 
@@ -1064,9 +1072,14 @@ After changing the serial port or baud rate, click **Test Connection** to verify
 |---------|-------------|
 | Network Interface | `localhost` (this PC only) or `0.0.0.0` (all interfaces, including LAN). Choose `0.0.0.0` to access the app from a tablet or phone |
 | HTTP port | Port Kestrel listens on (default **8080**; if busy, YWC tries 8081–8089 at startup). Changing this needs a restart. |
+| Open browser automatically on startup | When **on** (default), YWC opens your default browser to the control panel after the web server starts. Turn **off** to start quietly — open the UI from the system tray / menu bar, or browse to the URL yourself. Tray/menu **Open** still works when this is off. **Docker never auto-opens** a browser. |
 | Automatically exit when no browser is connected | When **on** (default on desktop hosts), YWC exits ~30 seconds after the last heartbeating browser tab closes. Turn **off** for a headless shack / always-on Pi so closing the browser does not stop CAT. **Docker always keeps the host running** regardless of this checkbox. |
+| Enable HTTPS | Optional TLS listener (default port **8443**) using a YWC-generated self-signed certificate. Required for **remote microphone** access (browsers block `getUserMedia` on plain `http://` except localhost). See [§18 Remote Audio](#18-remote-audio). |
+| HTTPS port | Port for the HTTPS listener when enabled (default **8443**). HTTP continues on the HTTP port (dual-listen). Restart required. |
+| Certificate SAN hostnames / IPs | Extra names/IPs embedded in the self-signed cert (e.g. WireGuard IP). Always includes `localhost`. |
+| Generate self-signed certificate | Writes `https.pfx` under the YWC user-data folder. Overwrites any existing cert. **Restart YWC** after generating if HTTPS is enabled. |
 
-> **Note:** After changing the network interface or HTTP port, save settings and restart the application.
+> **Note:** After changing the network interface, HTTP/HTTPS port, or HTTPS enable flag, save settings and restart the application.
 
 The Settings page also shows the full URL for each detected network interface so you can bookmark the correct address on your tablet.
 
@@ -1349,6 +1362,24 @@ Click **Import full backup…**, pick a previously exported zip, and confirm the
 - **Experimenting safely** — export before trying something risky; import the file to revert if it goes wrong.
 
 The files inside the zip are plain JSON; you can extract and inspect or hand-edit them if needed. They live at `%APPDATA%\MM5AGM\Yaesu Web Control\` and are also accessible directly without going through the export.
+
+---
+
+### 6.8 Remote Audio
+
+**Settings → Remote Audio** enables in-browser send/receive audio between a remote operator and the radio’s USB sound devices on the YWC host (an alternative to Mumble/SonoBus for remote SSB over LAN or VPN).
+
+| Setting | Description |
+|---------|-------------|
+| Enable remote audio | Opt-in. When off, no audio devices are opened and the Index bar is hidden. |
+| Radio RX device (capture) | PortAudio input used for what you **hear** in the browser — usually the Yaesu USB **recording** endpoint (`Microphone (USB Audio CODEC)` / `Line (USB Audio CODEC)`, or a name you gave it in the OS). **Required** when remote audio is enabled (no system-default fallback). On Windows the list is limited to **WASAPI** endpoints so the same USB CODEC is not repeated under MME / DirectSound / WDM-KS. Names that look like a USB codec are sorted to the top and marked with a radio icon (📻). |
+| Radio TX device (playback) | PortAudio output for browser **mic → radio** — usually Yaesu USB **Speakers** / playback (`Speakers (USB Audio CODEC)`). **Required** when enabled. Do **not** leave blank or pick PC speakers / headphones: that loops the browser mic into the room and never reaches the radio. Same WASAPI-only listing and radio-icon hint as RX. |
+| RX / TX gain | Software gain in the bridge (0.05–4). Adjusted live via **Mic & Gain** on the Index Remote Audio bar (or inline on the pop-out) — not on the Settings page. |
+| Audio codec | Chosen on the Index **Mic & Gain** dialog or the pop-out (not a host setting). **Opus** (default) compresses speech to ~32 kb/s per direction; **PCM16** is uncompressed ~768 kb/s. See [§18.6](#186-audio-codecs-opus-vs-pcm16). |
+
+Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
+
+On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window that owns the audio session. Use this before opening Settings (or any other page) so RX/TX keep running — navigating away from Home otherwise closes the in-page session. While audio is in the pop-out, Home still shows status/levels/mutes, and the filter-scope FFT on Home stays live. Only one audio session is allowed at a time; handing off briefly reconnects.
 
 ---
 
@@ -2147,7 +2178,7 @@ This matters most **after you change the Radio Model or other settings**: the pa
 **App shows "Initialising…" and never clears**
 
 - Check that the radio is powered on.
-- Confirm the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) is installed and that you **rebooted** afterwards ([§2.4](#24-usb-serial-driver-windows--macos--linux)).
+- On **Windows or macOS**, if ports are missing or CAT never answers, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)). On **Linux**, skip that package — check cable, permissions (`dialout`), and the `/dev/…` path instead.
 - Check the COM / `/dev/…` port in Settings — use the **Enhanced** (CAT) port, not Standard. Go to **Diagnostics → Ports** to see which ports are available.
 - Check the baud rate in Settings matches the radio's **Menu → CAT Rate** setting (default 38400).
 - Click **Test Connection** in Settings.
@@ -2165,7 +2196,7 @@ Up to and including v2.4.2 — and in the v2.4.3 pre-releases up to pre3 — the
 
 - The radio may not be responding to CAT commands. Test the connection from the Settings page.
 - Check that no other software (e.g., another instance of the app, Ham Radio Deluxe, WSJT-X in direct CAT mode, Omni-rig) is using the same COM port. If you use Log4OM with Omni-rig, see Section 9.3 — Omni-rig is not needed and will conflict with this app.
-- On a fresh Mac/PC, install the Silicon Labs VCP driver and reboot before blaming the cable ([§15.11](#1511-test-connection-fails--cat-does-not-respond-over-usb)).
+- On a fresh Mac or Windows PC, if CAT still fails after checking port and baud, install the Silicon Labs VCP driver and reboot before blaming the cable ([§15.11](#1511-test-connection-fails--cat-does-not-respond-over-usb)).
 
 **WSJT-X does not show as connected**
 
@@ -2341,21 +2372,21 @@ The Alexa code **isn't deleted** — it lives on a parked branch and can be revi
 
 ### 15.7 What is the TX button for? When I press it the radio goes into TX mode but there's no audio from my microphone.
 
-The TX button in YWC sends the `TX1;` CAT command, which puts the radio into transmit mode (PTT engaged) but **does not route any audio into the radio**. With nothing modulating the carrier, what actually goes on-air depends on the current mode:
+The TX button in YWC sends the `TX1;` CAT command, which puts the radio into transmit mode (PTT engaged) but **by itself does not create microphone audio**. With nothing modulating the carrier, what actually goes on-air depends on the current mode and how audio is fed:
 
 - **CW** — an unmodulated carrier (a steady tone). Useful for tune-up, SWR measurement, or driving an external tuner / amplifier into its tune cycle.
-- **SSB / AM / FM** — the TX path is open but no audio is being injected, so the on-air signal is effectively silent.
-- **DATA / digital modes** — the same as SSB until something else (WSJT-X via the rear DATA jack or USB audio) is feeding audio in.
+- **SSB / AM / FM** — the TX path is open; you need audio into the radio (front mic, or USB/REAR audio from the PC).
+- **DATA / digital modes** — typically USB audio from WSJT-X (or similar) into the rear DATA/USB path.
 
-In short, the TX button is "key the radio for testing", not "open the mic". The radio's microphone input is only routed to the TX path when the mic's own **PTT button** (or footswitch, or VOX) triggers TX. YWC doesn't intercept or route audio at all — that side is between your mic and the radio.
+**Local mic:** press the PTT on the hand mic / footswitch / VOX as usual.
 
-What people use it for in practice:
+**Remote browser mic:** enable [Remote Audio](#18-remote-audio), pick the radio’s USB devices in Settings, use HTTPS for non-localhost browsers, click **Start audio** on the Index page, then use the TX button (or TX toggle key) for PTT. On the radio, set **MOD SOURCE** to USB / REAR (USB).
+
+What people use the TX button for without remote audio:
 
 1. **Tune-up.** Switch to CW, click TX, watch your SWR or let your ATU find a match.
 2. **Driving an external amplifier or antenna tuner** into its auto-tune cycle.
-3. **Digital-mode keying tests.** When WSJT-X (or similar) is feeding audio into the rear DATA jack, the TX button gives you a CAT-driven way to verify the keying side of the path without starting a real QSO.
-
-To transmit voice from your microphone, press the PTT button on the mic itself.
+3. **Digital-mode keying tests.** When WSJT-X is feeding audio into USB, the TX button verifies CAT keying.
 
 ---
 
@@ -2388,7 +2419,7 @@ As a safety backstop, YWC (v2.4.2 and later) will force the radio back to receiv
 | Getting the app | Windows: unsigned installer from Releases. macOS: unsigned CAT-only DMG from Releases (Apple Silicon or Intel) — Gatekeeper needs **Open** / **Open Anyway** the first time ([§2.2](#22-macos-dmg)). Linux: build `net10.0` from source, or Docker (`ghcr.io/mm5agm/yaesu_web_control`, amd64 + arm64). |
 | Host chrome | Windows tray · macOS menu-bar item · Linux/Docker console only |
 | Serial port | `COMn` on Windows; `/dev/cu.*` on macOS; `/dev/ttyUSB*` / `/dev/ttyACM*` on Linux (pass through with `YWC_SERIAL_DEVICE` in Docker). Always use the **Enhanced** CAT port when two CP210x ports appear. |
-| USB serial driver | Same on all three: install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)) |
+| USB serial driver | **Windows / macOS:** install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** only if ports are missing or CAT never answers ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** skip — in-kernel CP210x is enough. |
 | Settings & logs | Windows `%APPDATA%\MM5AGM\Yaesu Web Control\` · Unix `~/.config/MM5AGM/Yaesu Web Control/` · Docker volume under `/data/…` |
 | Leaving the shack with no browser open | Turn **off** “Automatically exit when no browser is connected”. Docker already forces that behaviour. |
 | SDR / Voice Control | Not on macOS/Linux/Docker. Use a Windows host if you need those. |
@@ -2400,16 +2431,18 @@ The browser UI from a phone or tablet is the same regardless of which OS hosts Y
 
 ### 15.11 Test Connection fails / CAT does not respond over USB
 
-**Most common fix:** install the official [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) for your OS (**Windows, macOS, or Linux**) and **reboot the host**. Built-in or incomplete USB-serial stacks can make the port show up and even open in YWC while CAT commands (`ID;`, etc.) get no reply. After a proper install + reboot, Test Connection should start working once the baud rate and Enhanced port are correct.
+**Windows / macOS — if ports are missing or CAT never answers:** install the official [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot the host**. Incomplete or missing USB-serial stacks can make a port show up and even open in YWC while CAT commands (`ID;`, etc.) get no reply. After install + reboot, Test Connection should work once baud rate and the Enhanced port are correct.
+
+**Linux:** do **not** install Silicon Labs' VCP package first — CP210x support is already in the kernel. Check cable, power, `dialout` group membership, and that you picked the right `/dev/ttyUSB*` / `/dev/ttyACM*` node (Enhanced vs Standard when two appear).
 
 Checklist:
 
-1. Driver installed from the Silicon Labs downloads page above, then **reboot**.
-2. Radio powered on; rear-panel USB cable connected.
-3. Settings baud rate matches **Menu → CAT Rate** (usually **38400**).
-4. Serial Port is the **Enhanced** (CAT) virtual port, not Standard / TX-only. On macOS try the other `/dev/cu.usbserial-…` if the first fails.
-5. No other app is holding the same port.
-6. Prefer a direct USB port over a flaky hub when diagnosing.
+1. Radio powered on; rear-panel USB cable connected.
+2. Settings baud rate matches **Menu → CAT Rate** (usually **38400**).
+3. Serial Port is the **Enhanced** (CAT) virtual port, not Standard / TX-only. On macOS try the other `/dev/cu.usbserial-…` if the first fails.
+4. No other app is holding the same port.
+5. Prefer a direct USB port over a flaky hub when diagnosing.
+6. **Windows / macOS only:** if the steps above still fail, install the Silicon Labs VCP driver from the link above, then **reboot**.
 
 See also [§2.4](#24-usb-serial-driver-windows--macos--linux) and [§3](#3-first-time-setup).
 
@@ -2818,6 +2851,94 @@ Only **English (UK)** ships as the built-in default, but the language pack syste
 3. **Switching locale takes effect immediately** — no restart needed, unlike the initial enable toggle.
 
 The **Voice Phrases editor** itself currently only edits the **en-GB** pack in place; editing an *installed non-English pack* through the same in-app grid isn't wired up yet — for now, translate by hand-editing that culture's JSON file directly, or ask a fluent speaker to export their pack after editing it locally. If you'd like a particular language prioritised for a built-in default, or want the editor to support editing other locales directly, please open a GitHub discussion or issue and mention it.
+
+---
+
+## 18. Remote Audio
+
+Remote Audio streams **radio RX → browser speakers** and **browser microphone → radio TX** over a dedicated WebSocket on the YWC host. PTT remains the normal Index **TX** button (or optional TX toggle key). It is intended for **LAN or VPN** use (for example WireGuard) as a simpler alternative to running Mumble or SonoBus alongside YWC.
+
+> **Not supported in Docker for v1.** USB audio device access from containers is host-specific and unreliable; run the native host on Windows, macOS, or Linux instead.
+
+### 18.1 Radio setup
+
+1. Connect the radio’s USB cable so the PC sees both CAT and USB audio.
+2. In the radio menu, set **MOD SOURCE** to **REAR** with **REAR SELECT = USB**, or **MOD SOURCE = USB** on models that use that wording (e.g. FT-710). Same idea as FT-Control / digital-mode USB audio.
+3. Confirm the OS lists the radio’s USB audio endpoints. Factory names are usually variants of **USB Audio CODEC** (e.g. Microphone/Line for recording, Speakers for playback). Many operators rename them in the OS sound panel (e.g. to “FTDX101”) — that is fine; pick the renamed entry in YWC.
+
+### 18.2 YWC host setup
+
+1. Open **Settings → Remote Audio**.
+2. Enable **remote audio**.
+3. Pick **Radio RX device** (capture / what you hear) and **Radio TX device** (playback / where mic audio goes). Both are **required** when the feature is on — YWC will not fall back to the PC’s default mic/speakers (blank TX previously caused browser-mic feedback into the room). Use **Refresh device list** after plugging the radio in. On Windows only **WASAPI** devices are shown. Entries that look like a USB codec are sorted first and marked with a radio icon (📻); renamed devices stay in the full list without the icon.
+4. **Save Settings**. RX/TX software gain is adjusted later via **Mic & Gain** on Home (or the pop-out), not on this page.
+
+### 18.3 HTTPS for remote browsers
+
+Browsers only allow the microphone on a **secure context** (`https://` or `localhost`).
+
+1. Under **Settings → Web / HTTP**, enter any WireGuard/LAN IPs or hostnames under **Certificate SAN hostnames / IPs**.
+2. Click **Generate self-signed certificate**.
+3. Enable **HTTPS**, note the HTTPS port (default **8443**), **Save Settings**, and **restart YWC**.
+4. On the remote machine, open `https://<host>:8443` (not the HTTP port). Accept the certificate warning once (Advanced → Proceed), or trust the cert in the OS if you prefer.
+
+Local testing on the same PC can use `http://localhost:8080` without HTTPS.
+
+### 18.4 Operating
+
+1. Open the Index page (over HTTPS if remote).
+2. Click **Start audio** on the Remote Audio bar. Grant microphone permission when asked.
+3. You should hear RX audio; speak into the mic (levels show on the bar). Use **Mic & Gain** to pick the browser microphone, choose **Opus** or **PCM16**, and adjust RX/TX software gain (codec and mic choice are remembered in the browser; gain is saved on the host).
+4. Use **TX** / your TX toggle key to key the radio (on Home or on the Remote Audio pop-out). Audio flows continuously (like Mumble); CAT controls PTT.
+5. **Mute mic** / **Mute RX** as needed. **Stop** ends the session and closes host audio devices.
+6. Only **one** audio session is allowed at a time; a second browser is rejected busy.
+
+The status line shows the active codec while streaming (for example `Streaming (opus)`). A codec change requires stopping and reconnecting remote audio — it does not apply to an active session.
+
+#### Pop-out window (keep audio while changing pages)
+
+Audio on the Index page stops when you leave Home (for example to open **Settings**). To keep streaming:
+
+1. Click **Pop out** on the Remote Audio bar. A small **Remote Audio** window opens.
+2. If you were already streaming, YWC hands the session to that window (brief reconnect). Otherwise click **Start audio** in the pop-out.
+3. Leave the pop-out open while you use Settings or other pages. Home shows status such as *In pop-out window (streaming)*; mute switches on Home still control the pop-out session. Filter-scope on Home keeps receiving live RX spectrum from the pop-out. The pop-out has its own **TX** button (same PTT as Home) and a **VFO A / VFO B** badge for the current transmit VFO; it also honours the same **TX toggle key** from Settings when that window is focused. TX on/off stays in sync with the main window when Home is open.
+4. **Stop** on Home stops the pop-out session. **Close** in the pop-out (or closing the window) ends audio and returns control to Home.
+5. If the browser blocks the window, allow pop-ups for the YWC site and try again.
+
+### 18.5 Troubleshooting
+
+| Symptom | What to try |
+|---------|-------------|
+| Mic permission denied / “requires HTTPS” | Use the HTTPS URL; regenerate the cert with the IP you type in the address bar; restart after enabling HTTPS. |
+| No RX sound | Check Radio RX device; confirm radio AF gain / USB volume; look at the RX meter while Start audio is active. |
+| TX keys but no modulation | Confirm MOD SOURCE / USB; check Radio TX device is the radio USB **Speakers**/playback endpoint (not PC speakers); unmute mic; watch the TX meter while speaking. |
+| TX keys and you hear yourself in the PC speakers | Radio TX device is wrong (or was left blank on an older build). Set it to the radio USB playback / Speakers endpoint and Save. |
+| Choppy audio | Prefer wired Ethernet/VPN; reduce other load; stay on LAN/VPN (no TURN/WebRTC in v1). Use **Opus** instead of PCM16 on limited links (see [§18.6](#186-audio-codecs-opus-vs-pcm16)). |
+| “Audio session busy” | Stop audio in the other tab/browser (or pop-out window) first. |
+| Audio dies when opening Settings | Use **Pop out** before leaving Home so the session lives in the separate window. |
+| Pop-out blocked | Allow pop-ups for the YWC origin; click **Pop out** / **Open pop-out** again. |
+| Devices missing from the list | Unplug/replug USB; Refresh device list; check OS privacy permissions for microphone (host process). |
+| Session connects but no RX (RX meter stuck at 0) on macOS | macOS treats the radio USB **recording** endpoint as a microphone. Grant **System Settings → Privacy & Security → Microphone → Yaesu Web Control**. If the app was built without `NSMicrophoneUsageDescription`, macOS never prompts and PortAudio still “opens” the device but returns silence — rebuild/reinstall a DMG that includes that key (see `scripts/macos/build-dmg.sh`), then allow Microphone when prompted. |
+| Wrong browser mic | Open **Mic & Gain** on the Remote Audio bar (or use the pop-out controls) and pick the right browser microphone. Choice is remembered in the browser. |
+| Opus unavailable / forced to PCM16 | The browser needs WebCodecs `AudioEncoder` / `AudioDecoder` (current Chrome, Edge, or Chromium). Older Safari/Firefox builds may only offer PCM16. |
+| Voice Control vs radio USB | Keep Voice Control’s mic on your headset; leave Remote Audio devices on the Yaesu USB endpoints. |
+
+### 18.6 Audio codecs (Opus vs PCM16)
+
+Remote Audio always samples at **48 kHz mono** on the host bridge. What changes is how those samples are packed on the WebSocket:
+
+| | **Opus** (default / recommended) | **PCM16** |
+|--|--|--|
+| What it is | Compressed speech (VOIP-style) | Uncompressed 16-bit samples |
+| Approx. payload per direction | **~32 kb/s** | **~768 kb/s** |
+| Duplex (RX + TX) | Roughly **~64 kb/s** (+ framing) | Roughly **~1.5 Mb/s** (+ framing) |
+| Audio quality | Good for SSB / voice; may soften noise floor slightly vs PCM | Bit-for-bit transparent (aside from gain / device resampling) |
+| Best for | Limited bandwidth, VPN, cellular, choppy links | Fast LAN when you want maximum fidelity or Opus is unavailable |
+| Browser requirement | WebCodecs Opus encode/decode | Any modern browser |
+
+**Preference:** YWC offers **Opus first** whenever the browser supports it. Choose **PCM16** only if you need uncompressed audio on a fast LAN, or if Opus is greyed out in your browser.
+
+Both directions use the same codec for a session. Stop remote audio and connect again after changing the selector.
 
 ---
 

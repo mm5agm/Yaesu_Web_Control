@@ -106,6 +106,8 @@ write_info_plist() {
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Yaesu Web Control captures the radio USB audio codec (and optionally the Mac microphone) for Remote Audio in the browser.</string>
 EOF
   if [[ "$include_icon" == "1" ]]; then
     cat >>"$plist" <<EOF

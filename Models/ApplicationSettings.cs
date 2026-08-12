@@ -20,6 +20,14 @@
         /// </summary>
         public bool AutoShutdownWhenNoBrowsers { get; set; } = true;
 
+        /// <summary>
+        /// When true (default), the host opens the default browser to the control
+        /// panel URL once after Kestrel starts. Set false to start quietly —
+        /// open the UI from the system tray / menu bar, or browse to the URL
+        /// yourself. Docker / containers always skip auto-open regardless.
+        /// </summary>
+        public bool OpenBrowserOnStartup { get; set; } = true;
+
         public string RadioModel { get; set; } = "FTdx101MP"; // MP = dual receiver, D = single receiver
 
 
@@ -254,6 +262,42 @@
         // by name, so the chosen-device path renders the phrase to a WAV and
         // plays it via NAudio (see Services/Voice/AudioOutput.cs, VoiceTtsService).
         public string VoiceOutputDeviceName { get; set; } = "";
+
+        // ── Remote Audio (browser ↔ radio USB) ─────────────────────────────
+        // Opt-in Opus/PCM bridge so a remote browser can hear radio RX and send
+        // mic audio into radio TX over the existing LAN/VPN path. Off by default.
+        public bool AudioStreamingEnabled { get; set; } = false;
+
+        /// <summary>
+        /// PortAudio capture device for radio RX (USB recording). Required when
+        /// <see cref="AudioStreamingEnabled"/> — no OS-default fallback (wrong mic).
+        /// Stored as <c>{name} [{hostApi}]</c> (e.g. <c>Microphone (USB Audio CODEC) [Windows WASAPI]</c>)
+        /// so Windows duplicates across MME/WASAPI/DirectSound/WDM-KS stay distinct.
+        /// Legacy bare names still resolve.
+        /// </summary>
+        public string? AudioRadioRxDevice { get; set; } = "";
+
+        /// <summary>
+        /// PortAudio playback device for radio TX (USB playback). Required when
+        /// <see cref="AudioStreamingEnabled"/> — blank must not fall back to PC
+        /// speakers (browser mic feedback). Same <c>{name} [{hostApi}]</c> key
+        /// format as <see cref="AudioRadioRxDevice"/>.
+        /// </summary>
+        public string? AudioRadioTxDevice { get; set; } = "";
+
+        public float AudioRxGain { get; set; } = 1.0f;
+        public float AudioTxGain { get; set; } = 1.0f;
+
+        // ── Optional HTTPS (self-signed; restart to apply) ────────────────
+        // Required for getUserMedia from a remote browser (secure context).
+        public bool HttpsEnabled { get; set; } = false;
+        public int HttpsPort { get; set; } = 8443;
+
+        /// <summary>
+        /// Extra SAN hostnames/IPs (newline or comma separated) baked into the
+        /// self-signed cert — e.g. WireGuard IP or LAN hostname.
+        /// </summary>
+        public string? HttpsSanHosts { get; set; } = "";
     }
 
     public class RadioState

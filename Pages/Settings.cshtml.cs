@@ -132,6 +132,11 @@ namespace Yaesu_Web_Control.Pages
             ModelState.Remove("Settings.DxClusterPostLoginCommands");
             // Accessibility TX shortcut is optional — empty = disabled.
             ModelState.Remove("Settings.TxToggleKey");
+            // Remote audio device names may be empty when the feature is off.
+            // When enabled we require explicit RX/TX picks (see check below).
+            ModelState.Remove("Settings.AudioRadioRxDevice");
+            ModelState.Remove("Settings.AudioRadioTxDevice");
+            ModelState.Remove("Settings.HttpsSanHosts");
 
             if (!ModelState.IsValid)
             {
@@ -162,6 +167,28 @@ namespace Yaesu_Web_Control.Pages
                 return Page();
             }
 
+            // Remote Audio: refuse blank devices when enabled. Empty TX used to
+            // open the PC speakers → browser-mic feedback into the room.
+            if (Settings.AudioStreamingEnabled)
+            {
+                if (string.IsNullOrWhiteSpace(Settings.AudioRadioRxDevice))
+                {
+                    ModelState.AddModelError("Settings.AudioRadioRxDevice",
+                        "Pick the radio’s USB recording / capture device (often “Microphone (USB Audio CODEC)” or a name you gave it).");
+                }
+                if (string.IsNullOrWhiteSpace(Settings.AudioRadioTxDevice))
+                {
+                    ModelState.AddModelError("Settings.AudioRadioTxDevice",
+                        "Pick the radio’s USB Speakers / playback device — not your PC speakers. Blank TX causes mic feedback.");
+                }
+                if (!ModelState.IsValid)
+                {
+                    StatusMessage = "❌ Settings not saved — Remote Audio needs explicit radio RX and TX devices.";
+                    NetworkAddresses = GetLocalIPAddresses();
+                    return Page();
+                }
+            }
+
             try
             {
                 // Read-modify-write: load current settings so fields not on this form
@@ -174,6 +201,8 @@ namespace Yaesu_Web_Control.Pages
                 var oldRadioModel = current.RadioModel;
                 var oldWebAddress = current.WebAddress;
                 var oldHttpPort   = current.HttpPort;
+                var oldHttpsEnabled = current.HttpsEnabled;
+                var oldHttpsPort    = current.HttpsPort;
 
                 // Capture pre-change CAT connection values so the radio reconnect
                 // below only fires when something that actually affects the CAT
@@ -202,6 +231,7 @@ namespace Yaesu_Web_Control.Pages
                     ? Settings.HttpPort
                     : 8080;
                 current.AutoShutdownWhenNoBrowsers = Settings.AutoShutdownWhenNoBrowsers;
+                current.OpenBrowserOnStartup = Settings.OpenBrowserOnStartup;
                 current.SerialPort        = Settings.SerialPort;
                 current.BaudRate          = Settings.BaudRate;
                 current.WebAddress        = Settings.WebAddress;
@@ -276,6 +306,18 @@ namespace Yaesu_Web_Control.Pages
                 current.VoiceControlEnabled = Settings.VoiceControlEnabled;
                 current.VoiceSpokenConfirmationEnabled = Settings.VoiceSpokenConfirmationEnabled;
 
+                // Remote audio + optional HTTPS
+                current.AudioStreamingEnabled = Settings.AudioStreamingEnabled;
+                current.AudioRadioRxDevice = Settings.AudioRadioRxDevice ?? "";
+                current.AudioRadioTxDevice = Settings.AudioRadioTxDevice ?? "";
+                // AudioRxGain / AudioTxGain are live-only (Mic & Gain / pop-out → /api/audio/gain).
+                // Do not overwrite them from this form — the inputs were removed from Settings.
+                current.HttpsEnabled = Settings.HttpsEnabled;
+                current.HttpsPort = (Settings.HttpsPort >= 1 && Settings.HttpsPort <= 65535)
+                    ? Settings.HttpsPort
+                    : 8443;
+                current.HttpsSanHosts = Settings.HttpsSanHosts ?? "";
+
                 await _settingsService.SaveSettingsAsync(current);
 
                 // Only reconnect the radio if something that actually affects the
@@ -342,6 +384,8 @@ namespace Yaesu_Web_Control.Pages
                     reasons.Add($"web server address ({oldWebAddress} → {current.WebAddress})");
                 if (oldHttpPort != current.HttpPort)
                     reasons.Add($"HTTP port ({oldHttpPort} → {current.HttpPort})");
+                if (oldHttpsEnabled != current.HttpsEnabled || oldHttpsPort != current.HttpsPort)
+                    reasons.Add("HTTPS settings");
                 if (reasons.Count > 0)
                 {
                     RestartRequiredReason = string.Join(" and ", reasons);

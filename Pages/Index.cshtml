@@ -218,6 +218,20 @@
     #voiceHelpBody .vh-ex code { color: #ffd47a; background: #333; border-radius: 3px;
                                  padding: 1px 5px; margin-right: 4px; white-space: nowrap; }
 
+    #remoteAudioBar .remote-audio-icon-btn {
+        width: 2rem;
+        height: 2rem;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+    #remoteAudioBar .remote-audio-btn-icon {
+        font-size: 1rem;
+        line-height: 1;
+    }
+
     /* Voice PTT button — three visually distinct states so the operator can
        always tell whether it's listening:
          1. Rest / hover (armed, NOT listening) -> amber outline. Bootstrap
@@ -641,6 +655,75 @@
                                 onclick="document.getElementById('voiceDialog').show();">Voice</button>
                     </div>
 
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Remote Audio bar — visible when Settings → Remote Audio is enabled -->
+    <div id="remoteAudioBar" class="row mt-2 mb-2" style="display:none;">
+        <div class="col-12">
+            <div class="card border-secondary">
+                <div class="card-body py-2 d-flex flex-wrap align-items-center gap-3">
+                    <strong class="me-1"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
+                    <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Connect to transceiver audio" aria-label="Connect to transceiver audio">
+                        <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioStartBtn"
+                                aria-label="Connect to transceiver audio">
+                            <i class="bi bi-telephone-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Disconnect transceiver audio" aria-label="Disconnect transceiver audio">
+                        <button type="button" class="btn btn-sm btn-danger remote-audio-icon-btn" id="remoteAudioStopBtn" disabled
+                                aria-label="Disconnect transceiver audio">
+                            <i class="bi bi-telephone-x-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block remote-audio-tip" id="remoteAudioPopoutTip" data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          data-bs-title="Popout audio, useful to navigate YWC without interrupting the audio stream"
+                          aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
+                        <button type="button" class="btn btn-sm btn-outline-secondary remote-audio-icon-btn" id="remoteAudioPopoutBtn"
+                                aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
+                            <i class="bi bi-window-plus remote-audio-btn-icon" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block remote-audio-tip" id="remoteAudioMicMuteTip" data-bs-toggle="tooltip"
+                          data-bs-placement="top" data-bs-title="Mute microphone" aria-label="Mute microphone">
+                        <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioMicMute"
+                                aria-pressed="false" aria-label="Mute microphone" disabled>
+                            <i class="bi bi-mic-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block remote-audio-tip" id="remoteAudioRxMuteTip" data-bs-toggle="tooltip"
+                          data-bs-placement="top" data-bs-title="Deafen — mute received audio"
+                          aria-label="Deafen — mute received audio">
+                        <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioRxMute"
+                                aria-pressed="false" aria-label="Deafen — mute received audio" disabled>
+                            <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block remote-audio-tip" id="remoteAudioLevelsTip" data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          data-bs-title="Browser microphone and software gain"
+                          aria-label="Browser microphone and software gain">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="remoteAudioLevelsBtn"
+                                aria-label="Open mic and gain settings">
+                            <i class="bi bi-sliders remote-audio-btn-icon" aria-hidden="true"></i>&nbsp;Mic &amp; Gain
+                        </button>
+                    </span>
+                    <span class="small text-muted" id="remoteAudioStatus">Idle</span>
+                    <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
+                        <span class="small" title="Radio → browser level">RX</span>
+                        <div class="progress flex-grow-1" style="height:8px; width:80px;">
+                            <div id="remoteAudioRxMeter" class="progress-bar bg-info" style="width:0%"></div>
+                        </div>
+                        <span class="small" title="Browser mic → radio level">TX</span>
+                        <div class="progress flex-grow-1" style="height:8px; width:80px;">
+                            <div id="remoteAudioTxMeter" class="progress-bar bg-warning" style="width:0%"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2062,6 +2145,74 @@
     </div>
 </dialog>
 
+<!-- Remote Audio mic & gain — kept with other dialogs (late in DOM) and given a
+     high z-index so it is not painted under the spectrum / meter stacks. -->
+<dialog id="remoteAudioLevelsDialog"
+        style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:360px; max-width:460px;"
+        aria-labelledby="remoteAudioLevelsDialogTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="remoteAudioLevelsDialogTitle">Mic &amp; Gain</strong>
+        <button type="button" class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('remoteAudioLevelsDialog').close()"
+                aria-label="Close mic and gain settings">✕</button>
+    </div>
+    <div class="p-3 d-flex flex-column gap-3">
+        <div>
+            <label class="mb-0 fw-semibold" for="remoteAudioMicSelect">Browser microphone</label>
+            <select id="remoteAudioMicSelect" class="form-select form-select-sm mt-1"
+                    title="Browser microphone sent to the radio (TX)"
+                    aria-label="Browser microphone for remote audio TX">
+                <option value="">Default microphone</option>
+            </select>
+            <div class="form-text text-muted mt-1 mb-0">
+                Which mic on <strong>this computer/browser</strong> is sent to the radio over remote audio.
+                Device names appear after the first time you grant microphone permission.
+            </div>
+        </div>
+        <div>
+            <label class="mb-0 fw-semibold" for="remoteAudioCodecSelect">Audio codec</label>
+            <select id="remoteAudioCodecSelect" class="form-select form-select-sm mt-1"
+                    title="Compression used for remote audio (stop and reconnect to apply)"
+                    aria-label="Remote audio codec">
+                <option value="opus">Opus (~32 kb/s) — recommended</option>
+                <option value="pcm16">PCM16 (~768 kb/s) — uncompressed</option>
+            </select>
+            <div class="form-text text-muted mt-1 mb-0" id="remoteAudioCodecHint">
+                Opus uses far less bandwidth than PCM16. Stop and reconnect remote audio for a codec change to apply.
+            </div>
+        </div>
+        <div>
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label class="mb-0 fw-semibold" for="remoteAudioRxGain">Receive (RX) gain</label>
+                <span id="remoteAudioRxGainVal" class="fw-semibold text-info">1.00</span>
+            </div>
+            <input type="range" class="w-100" id="remoteAudioRxGain"
+                   min="0.05" max="4" step="0.05" value="1"
+                   style="height:18px;"
+                   aria-label="Receive gain — radio to browser"
+                   title="How loud the radio sounds in your browser">
+            <div class="form-text text-muted mt-1 mb-0">
+                How loud the <strong>radio</strong> sounds in your <strong>browser speakers/headphones</strong>.
+            </div>
+        </div>
+        <div>
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label class="mb-0 fw-semibold" for="remoteAudioTxGain">Mic (TX) gain</label>
+                <span id="remoteAudioTxGainVal" class="fw-semibold text-warning">1.00</span>
+            </div>
+            <input type="range" class="w-100" id="remoteAudioTxGain"
+                   min="0.05" max="4" step="0.05" value="1"
+                   style="height:18px;"
+                   aria-label="Mic gain — browser microphone to radio"
+                   title="How loud your browser mic is sent to the radio">
+            <div class="form-text text-muted mt-1 mb-0">
+                How loud your <strong>browser microphone</strong> is sent into the <strong>radio</strong> (USB TX).
+            </div>
+        </div>
+        <p class="small text-muted mb-0">Gain range 0.05–4.00 (1.00 = unity). Changes apply live while streaming and are saved automatically.</p>
+    </div>
+</dialog>
+
 <!-- UTC clock info popover — opened by clicking the top-bar clock.
      Explains the clock source, what depends on it, and how to verify
      the PC's time-sync state. -->
@@ -2184,13 +2335,14 @@
         import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=1";
         import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=4";
         import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=5";
-        import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=2";
+        import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=3";
         import "/js/ui/if-width-tables.js?v=3";
         import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=6";
         import { loadLabels }           from "/js/ui/a11y-labels.js?v=1";
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=14";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
+        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=22";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -2215,6 +2367,7 @@
         });
 
         loadLabels();
+        initRemoteAudioUi();
         // loadLabels() rewrites every title from labels.json on each focus,
         // wiping the "out of band" title suffix; restore it once that has run.
         window.addEventListener('focus', async () => {
@@ -3359,7 +3512,7 @@
             }, { passive: true });
         }
 
-        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog'].forEach(id => {
+        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
             makeDraggable(dlg, dlg.querySelector('div'));

@@ -857,6 +857,30 @@ fieldset.calibration-card {
     margin: 0;
 }
 
+/* Remote Audio Levels — must sit above spectrum / meter stacks (modeless show()). */
+#remoteAudioLevelsDialog {
+    position: fixed;
+    top: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9998;
+    margin: 0;
+}
+#remoteAudioLevelsDialog > div:first-child {
+    cursor: grab;
+    user-select: none;
+}
+#remoteAudioLevelsDialog > div:first-child:active {
+    cursor: grabbing;
+}
+/* Bootstrap form-text / text-muted are dark-on-light; lighten for this dark dialog. */
+#remoteAudioLevelsDialog .form-text,
+#remoteAudioLevelsDialog .text-muted {
+    color: #9aa0a6 !important;
+    font-size: 0.75rem;
+    line-height: 1.35;
+}
+
 /* ── Frequency Keyboard Dialog ──────────────────────────────────────────── */
 
 .fkb-dialog {
