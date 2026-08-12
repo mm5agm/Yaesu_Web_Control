@@ -1,0 +1,315 @@
+/* Yaesu Web Control — Dockview workspace (no Bootstrap) */
+
+:root {
+    --ywc-bg: #1e1e1e;
+    --ywc-surface: #252526;
+    --ywc-border: #3c3c3c;
+    --ywc-text: #cccccc;
+    --ywc-accent: #3794ff;
+    --ywc-danger: #f14c4c;
+    --ywc-success: #89d185;
+    --ywc-warning: #cca700;
+    --ywc-toolbar-h: 2.4rem;
+    --ywc-nav-h: 2rem;
+}
+
+html, body.ywc-dock-body {
+    margin: 0;
+    height: 100%;
+    background: var(--ywc-bg);
+    color: var(--ywc-text);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-size: 14px;
+}
+
+.ywc-dock-nav {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.25rem 0.75rem;
+    background: #2d2d2d;
+    border-bottom: 1px solid var(--ywc-border);
+    min-height: var(--ywc-nav-h);
+}
+
+.ywc-dock-brand {
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.ywc-dock-nav-links {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.ywc-dock-nav-links a {
+    color: var(--ywc-text);
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.ywc-dock-nav-links a[aria-current="page"] {
+    color: #fff;
+    font-weight: 600;
+}
+
+.ywc-dock-main {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - var(--ywc-nav-h));
+    overflow: hidden;
+}
+
+.ywc-dock-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.5rem;
+    background: #2a2a2a;
+    border-bottom: 1px solid var(--ywc-border);
+    min-height: var(--ywc-toolbar-h);
+}
+
+.ywc-toolbar-spacer { flex: 1 1 auto; }
+
+.ywc-toolbar-right {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.ywc-utc-clock {
+    font-family: ui-monospace, monospace;
+    font-weight: 700;
+    padding: 0.1rem 0.4rem;
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #ffe066;
+    cursor: help;
+}
+
+#ywcDockHost {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+}
+
+.ywc-group-popout-action {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 2px;
+}
+
+.ywc-group-popout-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.4rem;
+    height: 1.35rem;
+    padding: 0 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--ywc-text);
+    cursor: pointer;
+    opacity: 0.75;
+}
+
+.ywc-group-popout-btn:hover,
+.ywc-group-popout-btn:focus-visible {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--ywc-border);
+    outline: none;
+}
+
+.ywc-group-popout-btn[hidden] {
+    display: none;
+}
+
+.ywc-dock-panel-host {
+    height: 100%;
+    overflow: auto;
+    padding: 0.25rem;
+    box-sizing: border-box;
+    position: relative;
+}
+
+/* Native controls */
+.ywc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    border: 1px solid var(--ywc-border);
+    background: #333;
+    color: var(--ywc-text);
+    border-radius: 4px;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    line-height: 1.2;
+}
+
+.ywc-btn:hover { background: #3a3a3a; }
+.ywc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ywc-btn-sm { font-size: 0.75rem; padding: 0.1rem 0.35rem; }
+.ywc-btn-xs { font-size: 0.7rem; padding: 0.05rem 0.3rem; }
+.ywc-btn-secondary { background: #444; }
+.ywc-btn-danger { background: #8b2020; border-color: #a03030; color: #fff; }
+.ywc-btn-warning { background: #6b5a00; border-color: #8a7200; color: #fff; }
+.ywc-btn-success { background: #1e5a2a; border-color: #2a7040; color: #fff; }
+.ywc-btn-outline { background: transparent; }
+.ywc-btn.active, .ywc-btn.ywc-active { background: var(--ywc-accent); color: #fff; border-color: var(--ywc-accent); }
+
+.ywc-select {
+    background: #333;
+    color: var(--ywc-text);
+    border: 1px solid var(--ywc-border);
+    border-radius: 4px;
+    padding: 0.1rem 0.3rem;
+    font-size: 0.8rem;
+}
+
+.ywc-range {
+    accent-color: var(--ywc-accent);
+}
+
+.ywc-badge {
+    display: inline-block;
+    padding: 0.05rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+.ywc-badge-sm { font-size: 0.65rem; }
+.ywc-badge-danger { background: var(--ywc-danger); color: #fff; }
+.ywc-badge-secondary { background: #555; color: #eee; }
+.ywc-badge-success { background: #2d6a3e; color: #fff; }
+.ywc-badge-warning { background: #7a6200; color: #fff; }
+
+.ywc-progress {
+    height: 8px;
+    background: #333;
+    border-radius: 4px;
+    overflow: hidden;
+    flex: 1;
+    min-width: 60px;
+}
+.ywc-progress-bar {
+    height: 100%;
+    transition: width 0.1s linear;
+}
+.ywc-progress-bar.bg-info, .ywc-progress-bar.ywc-bar-info { background: #3794ff; }
+.ywc-progress-bar.bg-warning, .ywc-progress-bar.ywc-bar-warning { background: #cca700; }
+
+.ywc-flex { display: flex; }
+.ywc-flex-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+
+.ywc-panel-inner, .ywc-panel-body { background: transparent; }
+
+.ywc-spectrum-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 180px;
+    border: 1px solid var(--ywc-border);
+    border-radius: 4px;
+    background: #111;
+}
+
+.ywc-spectrum-header {
+    padding: 0.2rem 0.4rem;
+    background: #1a1a1a;
+    border-bottom: 1px solid var(--ywc-border);
+}
+
+.ywc-spectrum-canvas-wrap { flex: 1; min-height: 120px; }
+.ywc-spectrum-canvas-wrap canvas { display: block; width: 100%; height: 100%; min-height: 140px; }
+
+.ywc-vfo-card {
+    border: 1px solid var(--ywc-border);
+    border-radius: 4px;
+    background: var(--ywc-surface);
+}
+
+.ywc-vfo-header {
+    padding: 0.25rem 0.5rem;
+    background: #094771;
+    color: #fff;
+}
+
+.ywc-vfo-header-b { background: #1e5a3a; }
+
+.ywc-vfo-body { padding: 0.35rem; }
+
+.ywc-clarifier .ywc-panel-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ywc-rxtx-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+}
+
+/* Modal shim for site.js message box */
+.ywc-modal-open { display: block !important; }
+#messageBoxModal.ywc-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0,0,0,0.55);
+    align-items: center;
+    justify-content: center;
+}
+#messageBoxModal.ywc-modal-open { display: flex !important; }
+.ywc-modal-dialog {
+    background: #2d2d2d;
+    border: 1px solid var(--ywc-border);
+    border-radius: 6px;
+    max-width: 400px;
+    width: 90%;
+    color: var(--ywc-text);
+}
+.ywc-modal-header { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--ywc-border); }
+.ywc-modal-body { padding: 0.75rem; }
+.ywc-modal-footer { padding: 0.5rem 0.75rem; text-align: center; border-top: 1px solid var(--ywc-border); }
+
+.visually-hidden {
+    position: absolute !important;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Init overlay — reuse site.css classes but ensure visibility on dark dock */
+.init-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ywc-dock-popout body { background: var(--ywc-bg); }
+
+/* Dockview theme bridge */
+.dockview-theme-abyss .tabs-and-actions-container { background: #252526; }

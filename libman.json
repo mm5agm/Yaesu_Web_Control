@@ -44,6 +44,15 @@
         "font/fonts/bootstrap-icons.woff2",
         "font/fonts/bootstrap-icons.woff"
       ]
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "dockview@7.0.4",
+      "destination": "wwwroot/lib/dockview/",
+      "files": [
+        "dist/dockview.js",
+        "dist/styles/dockview.css"
+      ]
     }
   ]
 }

@@ -1,0 +1,67 @@
+﻿@page
+@model Yaesu_Web_Control.Pages.DockModel
+@{
+    Layout = "_DockLayout";
+    ViewData["Title"] = "Dock Workspace";
+    ViewData["BodyRole"]  = "application";
+    ViewData["BodyLabel"] = "Yaesu radio dock workspace";
+}
+
+<div id="initOverlay" class="init-overlay">
+    <div class="init-message">
+        <span id="initStatusText">Initializing radio, please wait...</span>
+    </div>
+</div>
+
+<div class="ywc-modal" id="messageBoxModal" tabindex="-1" aria-labelledby="messageBoxTitle" aria-hidden="true">
+    <div class="ywc-modal-dialog">
+        <div class="ywc-modal-content">
+            <div class="ywc-modal-header">
+                <h6 id="messageBoxTitle">Warning</h6>
+            </div>
+            <div class="ywc-modal-body">
+                <p id="messageBoxText"></p>
+            </div>
+            <div class="ywc-modal-footer">
+                <button type="button" class="ywc-btn ywc-btn-danger ywc-btn-sm" id="messageBoxOkBtn">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('messageBoxOkBtn')?.addEventListener('click', () => {
+    window.bootstrap?.Modal?.getInstance?.(document.getElementById('messageBoxModal'))?.hide()
+        || document.getElementById('messageBoxModal')?.classList.remove('ywc-modal-open');
+});
+</script>
+
+<div id="vfoRow" data-radio-model="@Model.RadioModel" data-single-receiver="@(Model.View.IsSingleReceiver ? "true" : "false")" hidden aria-hidden="true"></div>
+
+@await Html.PartialAsync("DockPartials/_DockToolbar")
+
+<div id="ywcDockHost" class="ywc-dock-host"></div>
+
+<div id="ywcPanelTemplates" hidden aria-hidden="true">
+    <template id="tpl-meters">@await Html.PartialAsync("DockPartials/_Meters")</template>
+    <template id="tpl-remote-audio">@await Html.PartialAsync("DockPartials/_RemoteAudio")</template>
+    <template id="tpl-spectrum-a">@await Html.PartialAsync("DockPartials/_SpectrumA")</template>
+    <template id="tpl-spectrum-b">@await Html.PartialAsync("DockPartials/_SpectrumB")</template>
+    <template id="tpl-vfo-a">@await Html.PartialAsync("DockPartials/_VfoA")</template>
+    <template id="tpl-vfo-b">@await Html.PartialAsync("DockPartials/_VfoB")</template>
+    <template id="tpl-clarifier">@await Html.PartialAsync("DockPartials/_Clarifier")</template>
+    <template id="tpl-empty"><div></div></template>
+</div>
+
+@await Html.PartialAsync("DockPartials/_DockDialogs")
+
+@section Scripts {
+<script>
+window.ywcDockFlags = {
+  remoteAudio: true,
+  spectrumA: @Model.IsWindowsHost.ToString().ToLower(),
+  spectrumB: @Model.IsWindowsHost.ToString().ToLower(),
+  vfoB: true
+};
+</script>
+@await Html.PartialAsync("DockPartials/_DockScripts")
+}

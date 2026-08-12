@@ -1,0 +1,412 @@
+        <div class="ywc-vfo-panel" id="vfoBCol">
+            <div class="ywc-vfo-card receiver-card">
+                <div class="ywc-vfo-header ywc-vfo-header-b">
+                    <div class="ywc-flex justify-content-between align-items-center flex-wrap gap-1">
+                        <h5 class="mb-0">
+                            <span id="receiverBHeading">VFO B</span>
+                        </h5>
+                        <div class="ywc-flex align-items-center gap-1 flex-wrap">
+                            <span id="splitTxBadgeB" class="ywc-badge bg-danger" style="display:none;" aria-live="polite">SPLIT TX</span>
+                            <button type="button" id="zinBtnB" class="ywc-btn btn-outline-light btn-sm"
+                                    onclick="cwZeroIn('B')"
+                                    aria-label="VFO B CW Auto Zero In"
+                                    title="CW Auto Zero In on VFO B — nudges the VFO so the received CW signal sits at your configured CW pitch">ZIN</button>
+                            @if (Model.View.HasVcTuneSub) {
+                            <button type="button" id="vcTuneToggleBtnB" class="ywc-btn btn-outline-light btn-sm"
+                                    style="display:none"
+                                    onclick="vcTuneToggle('b')"
+                                    aria-label="SUB VC Tune on/off"
+                                    title="Toggle SUB VC Tune preselector on/off">VC Tune</button>
+                            <span id="vcTuneRowB" class="d-inline-flex align-items-center gap-1" style="display:none !important;">
+                                <button id="vcTuneDefaultBtnB" class="ywc-btn btn-sm btn-outline-light"
+                                        onclick="vcTuneCommand('b','default')"
+                                        aria-label="SUB VC Tune default" title="SUB VC Tune auto-tune">Default</button>
+                                <button class="ywc-btn btn-sm btn-outline-light"
+                                        onclick="vcTuneStep('b','minus')"
+                                        aria-label="SUB VC Tune step down" title="Step SUB preselector capacitor down">−</button>
+                                <select id="vcTuneStepB" class="ywc-select form-select-sm"
+                                        style="width: 3.5rem; background-color: transparent; color: white; border-color: rgba(255,255,255,0.5);"
+                                        aria-label="SUB VC Tune step size" title="Step size (1–9)">
+                                    <option value="1" style="color:black;">1</option><option value="2" style="color:black;">2</option><option value="3" style="color:black;">3</option>
+                                    <option value="4" style="color:black;">4</option><option value="5" selected style="color:black;">5</option><option value="6" style="color:black;">6</option>
+                                    <option value="7" style="color:black;">7</option><option value="8" style="color:black;">8</option><option value="9" style="color:black;">9</option>
+                                </select>
+                                <button class="ywc-btn btn-sm btn-outline-light"
+                                        onclick="vcTuneStep('b','plus')"
+                                        aria-label="SUB VC Tune step up" title="Step SUB preselector capacitor up">+</button>
+                                <button id="vcTuneCenterBtnB" class="ywc-btn btn-sm btn-outline-light"
+                                        onclick="vcTuneCommand('b','center')"
+                                        aria-label="SUB VC Tune center" title="Center SUB preselector capacitor">Center</button>
+                                <span id="vcTuneMeterB" class="small text-white-50" style="font-size: 0.75rem; min-width: 44px;">P5: —</span>
+                                <span id="vcTuneWarnB" class="text-warning small" style="display:none; font-size: 0.75rem;"></span>
+                            </span>
+                            }
+                            <button id="txButtonB" class="ywc-btn btn-warning btn-sm" style="display:none;"
+                                    onclick="toggleTx()" title="Toggle Transmit">
+                                <i class="bi bi-broadcast" aria-hidden="true"></i> TX
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="ywc-vfo-body">
+                    <!-- Receiver Controls Group: Save-to-Mem, Band buttons, Mode select.
+                         S-meter moved to top meter row in v2.3.9 (see VFO A panel). -->
+                    <div class="receiver-controls-group d-flex flex-nowrap mb-0 gap-2 align-items-start">
+                        <!-- Left: Save-to-Mem button (S-meter moved to top row) -->
+                        <div class="flex-shrink-0">
+                            <button id="saveMemBtnB" type="button"
+                                    class="ywc-btn btn-outline-secondary btn-sm"
+                                    style="padding:1px 4px;"
+                                    onclick="saveVfoToMemory('B')"
+                                    aria-label="Save VFO B to memories"
+                                    title="Save VFO B frequency, mode and clarifier to app memories">
+                                Save to Mem
+                            </button>
+                            <span id="saveMemStatusB" class="visually-hidden" role="status" aria-live="polite"></span>
+                        </div>
+                        <!-- Middle: Band buttons + Mode/Antenna below -->
+                        <div class="flex-grow-1 band-buttons-shifted d-flex flex-column gap-1">
+                            @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", "B", Model.SelectedBandB))
+                            <div class="ywc-flex align-items-center gap-2 mt-1">
+                                <label class="vfo-control-label" for="modeSelectB">Mode</label>
+                                <select class="ywc-select form-select-sm vfo-mode-select" id="modeSelectB"
+                                        aria-label="VFO B mode"
+                                        title="VFO B mode"
+                                        onchange="setMode('B', this.value)">
+                                    @foreach (var mode in Model.View.AllModes)
+                                    {
+                                        @if (Model.RadioState.ModeB == mode)
+                                        {
+                                            <option value="@mode" selected>@DockViewState.ModeLabel(mode)</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@mode">@DockViewState.ModeLabel(mode)</option>
+                                        }
+                                    }
+                                </select>
+                                @if (Model.View.HasAntennaSelector)
+                                {
+                                    <select class="ywc-select form-select-sm vfo-ant-select" id="antennaSelectB"
+                                            aria-label="VFO B antenna"
+                                            title="VFO B antenna"
+                                            onchange="window.radioControl.setAntenna('B', this.value)">
+                                        @foreach (var ant in new[] { "1", "2", "3" })
+                                        {
+                                            @if (Model.RadioState.AntennaB == ant)
+                                            {
+                                                <option value="@ant" selected>ANT @ant</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@ant">ANT @ant</option>
+                                            }
+                                        }
+                                    </select>
+                                }
+                            </div>
+                        </div>
+                        @if (!Model.View.IsSingleReceiver)
+                        {
+                            <!-- Voice control mic button + step selector VFO B — step select left of the button, both enlarged per Colin's testing feedback. Single-receiver radios (FTdx10, FT-710, FTDX3000) have no independent VFO B receiver, so no mic button here at all. -->
+                            <div class="flex-shrink-0" id="voiceMicContainerB" style="display:none;">
+                                <div class="ywc-flex align-items-center gap-2">
+                                    <select id="voiceNudgeStepSelectB"
+                                            class="form-select"
+                                            style="width:auto; font-size:1.4rem; font-weight:600; padding:0.4rem 2.4rem 0.4rem 0.6rem;"
+                                            title="Voice nudge step size — how far 'tune up'/'tune down' moves VFO B"
+                                            aria-label="VFO B voice nudge step size">
+                                        <option value="10">10 Hz</option>
+                                        <option value="100">100 Hz</option>
+                                        <option value="1000">1 kHz</option>
+                                        <option value="10000">10 kHz</option>
+                                        <option value="100000">100 kHz</option>
+                                    </select>
+                                    <button id="voiceMicBtnB" type="button"
+                                            class="ywc-btn btn-outline-danger voice-mic-btn d-flex align-items-center justify-content-center"
+                                            style="width:140px; height:120px; padding:0;"
+                                            title="Hold to give a VFO B voice command (right-click for the command list)"
+                                            aria-label="Voice command VFO B — hold to speak">
+                                        <i class="bi bi-mic-fill" style="font-size:4.5rem; line-height:1;" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <div id="voiceLastHeardB"
+                                     style="font-size:1.1rem; font-weight:700; color:#000; margin-top:0.3rem; max-width:320px; overflow-wrap:break-word;"
+                                     aria-live="polite"></div>
+                            </div>
+                        }
+                        <!-- Filter scope display VFO B — sits between band buttons and AGC column -->
+                        <div class="flex-shrink-0" id="filterScopeContainerB" style="width:160px;">
+                            <canvas id="filterScopeCanvasB" role="img" aria-hidden="true"
+                                    aria-label="VFO B filter display" data-a11y-key="filter.scopeB"
+                                    style="display:block; height:80px; border-radius:4px;"></canvas>
+                        </div>
+                        <!-- Right: Controls column (2-column grid) -->
+                        <div class="vfo-controls-column">
+                            <div class="vfo-control-item">
+                                <label class="vfo-control-label">AGC</label>
+                                <select class="ywc-select form-select-sm" id="agcSelectB"
+                                        aria-label="VFO B AGC"
+                                        title="VFO B AGC"
+                                        onchange="window.radioControl.setAgc('B', this.value)">
+                                    <option value="0" selected="@(Model.RadioState.AgcB == "0" ? "selected" : null)">OFF</option>
+                                    <option value="1" selected="@(Model.RadioState.AgcB == "1" ? "selected" : null)">FAST</option>
+                                    <option value="2" selected="@(Model.RadioState.AgcB == "2" ? "selected" : null)">MID</option>
+                                    <option value="3" selected="@(Model.RadioState.AgcB == "3" ? "selected" : null)">SLOW</option>
+                                    <option value="4" selected="@(Model.RadioState.AgcB == "4" ? "selected" : null)">AUTO</option>
+                                </select>
+                            </div>
+                            <div class="vfo-control-item">
+                                <label class="vfo-control-label">IPO/AMP</label>
+                                <select class="ywc-select form-select-sm" id="ipoSelectB"
+                                        aria-label="VFO B IPO amp"
+                                        title="VFO B IPO / amplifier"
+                                        onchange="window.radioControl.setIpo('B', this.value)">
+                                    <option value="0" selected="@(Model.RadioState.IpoB == "0" ? "selected" : null)">IPO</option>
+                                    <option value="1" selected="@(Model.RadioState.IpoB == "1" ? "selected" : null)">AMP1</option>
+                                    <option value="2" selected="@(Model.RadioState.IpoB == "2" ? "selected" : null)">AMP2</option>
+                                </select>
+                            </div>
+                            <div class="vfo-control-item">
+                                <label class="vfo-control-label">ATT</label>
+                                <select class="ywc-select form-select-sm" id="attSelectB"
+                                        aria-label="VFO B attenuator"
+                                        title="VFO B attenuator"
+                                        onchange="window.radioControl.setAttenuator('B', this.value)">
+                                    <option value="00" selected="@(Model.RadioState.AttB == "00" ? "selected" : null)">OFF</option>
+                                    <option value="06" selected="@(Model.RadioState.AttB == "06" ? "selected" : null)">6 dB</option>
+                                    <option value="12" selected="@(Model.RadioState.AttB == "12" ? "selected" : null)">12 dB</option>
+                                    <option value="18" selected="@(Model.RadioState.AttB == "18" ? "selected" : null)">18 dB</option>
+                                </select>
+                            </div>
+                            <div class="vfo-control-item">
+                                <label class="vfo-control-label">@(Model.View.IsFtdx10 || Model.View.IsFt710 ? "DNR" : "NR")</label>
+                                <select class="ywc-select form-select-sm" id="nrSelectB"
+                                        aria-label="VFO B @(Model.View.IsFtdx10 || Model.View.IsFt710 ? "digital noise reduction" : "noise reduction")"
+                                        title="VFO B @(Model.View.IsFtdx10 || Model.View.IsFt710 ? "digital noise reduction" : "noise reduction")"
+                                        onchange="window.radioControl.setNr('B', this.value)">
+                                    <option value="0" selected="@(Model.RadioState.NrB == "0" ? "selected" : null)">OFF</option>
+                                    @if (Model.View.IsFtdx10 || Model.View.IsFt710)
+                                    {
+                                        <option value="1" selected="@(Model.RadioState.NrB == "1" ? "selected" : null)">ON</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="1" selected="@(Model.RadioState.NrB == "1" ? "selected" : null)">NR1</option>
+                                        <option value="2" selected="@(Model.RadioState.NrB == "2" ? "selected" : null)">NR2</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="vfo-control-item">
+                                <label class="vfo-control-label">@(Model.View.IsFtdx10 || Model.View.IsFt710 ? "DNR No." : "NR Lvl")</label>
+                                <select class="ywc-select form-select-sm" id="nrLevelSelectB"
+                                        aria-label="VFO B @(Model.View.IsFtdx10 || Model.View.IsFt710 ? "DNR algorithm" : "NR level") (1-15)"
+                                        title="VFO B @(Model.View.IsFtdx10 || Model.View.IsFt710 ? "DNR algorithm (1=lightest, 15=heaviest)" : "NR depth (1=light, 15=heavy)")"
+                                        onchange="setNrLevel('B', this.value)">
+                                    @for (int i = 1; i <= 15; i++) {
+                                        <option value="@i" selected="@(Model.RadioState.NrLevelB == i ? "selected" : null)">@i</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="vfo-control-item">
+                                <label class="vfo-control-label">NB</label>
+                                <select class="ywc-select form-select-sm" id="nbSelectB"
+                                        aria-label="VFO B noise blanker"
+                                        title="VFO B noise blanker"
+                                        onchange="window.radioControl.setNoiseBlanker('B', this.value)">
+                                    <option value="0" selected="@(Model.RadioState.NbB == "0" ? "selected" : null)">OFF</option>
+                                    <option value="1" selected="@(Model.RadioState.NbB == "1" ? "selected" : null)">ON</option>
+                                </select>
+                            </div>
+                            <div class="vfo-control-item">
+                                <label class="vfo-control-label">NB Level</label>
+                                <select class="ywc-select form-select-sm" id="nbLevelSelectB"
+                                        aria-label="VFO B noise blanker level"
+                                        title="VFO B noise blanker depth (1=min, 20=max)"
+                                        onchange="setNbLevel('B', this.value)">
+                                    @for (int i = 1; i <= 20; i++) {
+                                        <option value="@i" selected="@(Model.RadioState.NbLevelB == i ? "selected" : null)">@i</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="vfo-control-item">
+                                <label class="vfo-control-label">Auto Notch</label>
+                                <select class="ywc-select form-select-sm" id="autoNotchSelectB"
+                                        aria-label="VFO B auto notch"
+                                        title="VFO B auto notch"
+                                        onchange="window.radioControl.setAutoNotch('B', this.value)">
+                                    <option value="0" selected="@(Model.RadioState.AutoNotchB == "0" ? "selected" : null)">OFF</option>
+                                    <option value="1" selected="@(Model.RadioState.AutoNotchB == "1" ? "selected" : null)">ON</option>
+                                </select>
+                            </div>
+                            <div class="vfo-control-item">
+                                <label class="vfo-control-label">Man Notch</label>
+                                <select class="ywc-select form-select-sm" id="manualNotchSelectB"
+                                        aria-label="VFO B manual notch"
+                                        title="VFO B manual notch"
+                                        onchange="window.radioControl.setManualNotch('B', this.value)">
+                                    <option value="0" selected="@(Model.RadioState.ManualNotchB == "0" ? "selected" : null)">OFF</option>
+                                    <option value="1" selected="@(Model.RadioState.ManualNotchB == "1" ? "selected" : null)">ON</option>
+                                </select>
+                            </div>
+                            <div class="vfo-control-item" style="grid-column: 1 / -1;">
+                                <label class="vfo-control-label">Notch Hz</label>
+                                <input type="range" id="manualNotchFreqB" aria-label="VFO B manual notch frequency" title="VFO B manual notch frequency" min="10" max="3200" step="10" value="@Model.RadioState.ManualNotchFreqB"
+                                       style="flex: 1; height: 16px;"
+                                       oninput="document.getElementById('manualNotchFreqValueB').textContent = this.value + ' Hz'; window.radioControl.setManualNotchFreq('B', this.value)">
+                                <span id="manualNotchFreqValueB" class="vfo-control-label" style="min-width: 52px; text-align: right;">@Model.RadioState.ManualNotchFreqB Hz</span>
+                            </div>
+                            <div class="vfo-control-item" style="grid-column: 1 / -1;">
+                                <label class="vfo-control-label">RF Gain</label>
+                                <input type="range" id="rfGainSliderB" aria-label="VFO B RF gain" title="VFO B RF gain (0=min, 255=max)" min="0" max="255" step="1" value="@Model.RadioState.RfGainB"
+                                       style="flex: 1; height: 16px;"
+                                       oninput="document.getElementById('rfGainValueB').textContent = this.value"
+                                       onchange="setRfGain('B', this.value)">
+                                <span id="rfGainValueB" class="vfo-control-label" style="min-width: 36px; text-align: right;">@Model.RadioState.RfGainB</span>
+                            </div>
+                            <div class="vfo-control-item" id="squelchRowB" style="grid-column: 1 / -1; display:none;">
+                                <label class="vfo-control-label">Squelch</label>
+                                <input type="range" id="squelchSliderB" aria-label="VFO B squelch" title="VFO B squelch level (0=open, 255=max)" min="0" max="255" step="1" value="@Model.RadioState.SquelchB"
+                                       style="flex: 1; height: 16px;"
+                                       oninput="document.getElementById('squelchValueB').textContent = this.value"
+                                       onchange="setSquelch('B', this.value)">
+                                <span id="squelchValueB" class="vfo-control-label" style="min-width: 36px; text-align: right;">@Model.RadioState.SquelchB</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Segment selector + Contour/APF controls on one row -->
+                    <div class="ywc-flex align-items-center gap-1 mb-1 flex-wrap" style="margin-top: 2px;">
+                        <span class="fw-bold" style="font-size: 0.8rem; white-space: nowrap;">Segment</span>
+                        <select class="ywc-select form-select-sm segment-select" id="segmentSelectB"
+                                aria-label="VFO B band segment"
+                                title="VFO B band segment"
+                                onchange="window.onSegmentChange && window.onSegmentChange('B', this.value)">
+                            <option value="">--</option>
+                        </select>
+                        <button type="button" id="contourBtnB"
+                                class="ywc-btn btn-sm @(Model.RadioState.ContourOnB ? "btn-success" : "btn-outline-secondary") flex-shrink-0"
+                                style="color: black; font-weight: bold;"
+                                aria-label="VFO B Contour filter" title="Toggle Contour audio peak filter"
+                                onclick="toggleContour('B')">@(Model.RadioState.ContourOnB ? "Contour On" : "Contour Off")</button>
+                        <input type="range" id="contourFreqSliderB"
+                               min="100" max="@Model.View.ContourMaxFreq" step="@Model.View.ContourStep"
+                               value="@Model.RadioState.ContourFreqB"
+                               style="width: clamp(60px, 8vw, 110px); height: 16px;"
+                               oninput="document.getElementById('contourFreqValueB').textContent = this.value + ' Hz'"
+                               onchange="setContourFreq('B', parseInt(this.value))"
+                               aria-label="VFO B Contour frequency">
+                        <span id="contourFreqValueB" style="font-size: 0.8rem; white-space: nowrap; min-width: 46px;">@(Model.RadioState.ContourFreqB) Hz</span>
+                        <button type="button" id="apfBtnB"
+                                class="ywc-btn btn-sm @(Model.RadioState.ApfOnB ? "btn-success" : "btn-outline-secondary") flex-shrink-0"
+                                style="color: black; font-weight: bold;"
+                                aria-label="VFO B APF filter" title="Toggle APF audio peak filter (CW)"
+                                onclick="toggleApf('B')">@(Model.RadioState.ApfOnB ? "APF On" : "APF Off")</button>
+                        <input type="range" id="apfFreqSliderB"
+                               min="-250" max="250" step="@Model.View.ApfStep"
+                               value="@Model.RadioState.ApfFreqB"
+                               style="width: clamp(60px, 8vw, 110px); height: 16px;"
+                               oninput="document.getElementById('apfFreqValueB').textContent = this.value + ' Hz'"
+                               onchange="setApfFreq('B', parseInt(this.value))"
+                               aria-label="VFO B APF frequency">
+                        <span id="apfFreqValueB" style="font-size: 0.8rem; white-space: nowrap; min-width: 46px;">@(Model.RadioState.ApfFreqB) Hz</span>
+                    </div>
+
+                    <!-- Frequency + Roofing + AF Gain on one row -->
+                    <div class="vfo-freq-row d-flex align-items-center flex-wrap gap-2 mb-1" style="margin-top: -2px;">
+                        <span id="freqB" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO B frequency" title="VFO B frequency" data-a11y-key="vfo.b.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
+                        <span class="frequency-display digit-display">MHz</span>
+                        <div id="freqB-controls" class="freq-step-controls" style="display:@(Model.ShowFrequencyArrowButtons ? "inline-flex" : "none");">
+                            <button type="button" id="freqB-up" class="ywc-btn btn-secondary btn-sm" aria-label="Step VFO B selected digit up" title="Step VFO B selected digit up (↑)">▲</button>
+                            <button type="button" id="freqB-down" class="ywc-btn btn-secondary btn-sm" aria-label="Step VFO B selected digit down" title="Step VFO B selected digit down (↓)">▼</button>
+                        </div>
+                        <button class="ywc-btn btn-outline-secondary btn-sm fkb-open-btn"
+                                data-freq-keyboard="B"
+                                aria-label="Keyboard — enter VFO B frequency"
+                                data-a11y-key="keyboard.openB"
+                                title="Keyboard — enter VFO B frequency">
+                            <strong>123</strong>
+                        </button>
+                        @if (!Model.View.IsFt710)
+                        {
+                        <label class="mb-0 text-nowrap ms-1 fw-bold">Roofing:</label>
+                        <select class="ywc-select form-select-sm fw-bold flex-shrink-0" id="roofingFilterSelectB"
+                                aria-label="VFO B roofing filter"
+                                title="VFO B roofing filter"
+                                style="width: auto;"
+                                onchange="window.radioControl.setRoofingFilter('B', this.value)">
+                            @if (Model.View.IsFtdx10)
+                            {
+                                @foreach (var opt in Model.View.RoofingOptionsFtdx10)
+                                {
+                                    <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterB==opt.Value ? "selected" : null)">@opt.Label</option>
+                                }
+                            }
+                            else if (Model.View.IsFtdx3000)
+                            {
+                                @foreach (var opt in Model.View.RoofingOptions3000)
+                                {
+                                    <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterB==opt.Value ? "selected" : null)">@opt.Label</option>
+                                }
+                            }
+                            else
+                            {
+                                @foreach (var opt in Model.View.RoofingOptions)
+                                {
+                                    <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterB==opt.Value ? "selected" : null)">@opt.Label</option>
+                                }
+                            }
+                        </select>
+                        }
+                        <label class="mb-0 text-nowrap ms-1 fw-bold">AF Gain: <span id="afGainValueB" class="fw-bold">@Model.AfGainB</span></label>
+                        <input type="range" class="flex-shrink-0"
+                               id="afGainSliderB"
+                               aria-label="VFO B AF gain"
+                               title="VFO B AF gain"
+                               min="0" max="255" step="1" value="@Model.AfGainB"
+                               style="width: clamp(70px, 8vw, 120px); height: 18px;"
+                               oninput="document.getElementById('afGainValueB').innerText = this.value">
+                    </div>
+
+                    <!-- IF Width and IF Shift -->
+                    <div class="ywc-flex align-items-center gap-2 mb-0" style="flex-wrap: wrap;">
+                        <label class="mb-0 text-nowrap fw-bold">IF Width:</label>
+                        <select class="ywc-select form-select-sm fw-bold flex-shrink-0" id="ifWidthSelectB"
+                                aria-label="VFO B IF width"
+                                title="VFO B IF width"
+                                style="width: auto;"
+                                onchange="window.radioControl.setIfWidth('B', this.value)">
+                            @foreach (var opt in Model.View.IfWidthOptions)
+                            {
+                                bool isDefault = string.IsNullOrEmpty(Model.RadioState.IfWidthB) && opt.Value == Model.View.IfWidthDefaultB;
+                                <option value="@opt.Value" selected="@(Model.RadioState.IfWidthB==opt.Value||isDefault ? "selected" : null)">@opt.Label</option>
+                            }
+                        </select>
+                        <button type="button" class="ywc-btn btn-secondary btn-sm fw-bold flex-shrink-0 ms-2"
+                                id="audioFilterBtnB"
+                                aria-label="VFO B Audio Filter"
+                                title="Open the Audio Filter dialog for VFO B's current mode (LCUT FREQ, LCUT SLOPE, HCUT FREQ, HCUT SLOPE)"
+                                onclick="window.audioFilter && window.audioFilter.open('B')">
+                            Audio Filter
+                        </button>
+                        <label class="mb-0 text-nowrap ms-1 fw-bold">IF Shift: <span id="ifShiftValueB" class="fw-bold">@Model.RadioState.IfShiftB</span></label>
+                        <input type="range" class="ywc-range ifshift-slider flex-shrink-0"
+                               id="ifShiftSliderB"
+                               aria-label="VFO B IF shift"
+                               title="VFO B IF shift"
+                               min="-1000" max="1000" step="20" value="@Model.RadioState.IfShiftB"
+                               style="width: clamp(70px, 8vw, 120px); height: 18px;"
+                               oninput="document.getElementById('ifShiftValueB').textContent = this.value; if(window.filterScopePanelB) window.filterScopePanelB.setState({ifShiftHz: parseInt(this.value)||0})">
+                        <button type="button" class="ywc-btn btn-secondary btn-sm flex-shrink-0"
+                                onclick="resetIfShift('B')" title="Zero IF Shift">Zero</button>
+                    </div>
+
+                    <!-- VFO B status line — live band/mode/freq summary, banner-coloured -->
+                    <div id="vfoBStatusLine"
+                         class="bg-success text-white px-2 py-1 mt-1 font-monospace rounded"
+                         style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;"
+                         aria-live="polite" aria-atomic="true">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>

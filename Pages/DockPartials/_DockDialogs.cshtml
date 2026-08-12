@@ -1,0 +1,581 @@
+<!-- Memories Panel Dialog -->
+<dialog id="memoriesDialog" class="mem-dialog" aria-labelledby="memoriesTitle" aria-label="Radio memories panel">
+    <div class="mem-header" id="memoriesHeader">
+        <span class="mem-title" id="memoriesTitle">Memories</span>
+        <div class="d-flex align-items-center gap-2">
+            <button class="mem-refresh" id="memoriesRefresh" aria-label="Refresh memories list" title="Refresh list"><span aria-hidden="true">↻</span></button>
+            <a href="/Memories" class="mem-edit-link" title="Open full memories editor">
+                <i class="bi bi-pencil-square" aria-hidden="true"></i> Edit
+            </a>
+            <button class="mem-close" id="memoriesClose" aria-label="Close memories panel" title="Close">✕</button>
+        </div>
+    </div>
+    <div class="mem-toolbar" id="memoriesToolbar">
+        <button type="button" class="mem-tool-btn" id="memImportReplaceBtn"
+                onclick="window.importMemories('replace')" title="Read radio channels and replace all app memories"
+                aria-label="Load all memories from radio, replacing existing">
+            <i class="bi bi-cloud-download" aria-hidden="true"></i> Load from Rig (Replace all)
+        </button>
+        <button type="button" class="mem-tool-btn" id="memImportAddBtn"
+                onclick="window.importMemories('merge')" title="Read radio channels and add to existing app memories"
+                aria-label="Load new memories from radio, adding to existing">
+            <i class="bi bi-cloud-download" aria-hidden="true"></i> Load from Rig (Add new)
+        </button>
+        <button type="button" class="mem-tool-btn" id="memExportReplaceBtn"
+                onclick="window.exportMemories('replace')" title="Write app memories to radio, replacing all radio channels"
+                aria-label="Save all memories to radio, replacing existing radio channels">
+            <i class="bi bi-cloud-upload" aria-hidden="true"></i> Save to Rig (Replace all)
+        </button>
+        <button type="button" class="mem-tool-btn" id="memExportAddBtn"
+                onclick="window.exportMemories('add')" title="Write app memories only to empty radio channels"
+                aria-label="Save memories to radio, filling only empty radio channels">
+            <i class="bi bi-cloud-upload" aria-hidden="true"></i> Save to Rig (Add new)
+        </button>
+        <select id="memBankSelect" class="mem-bank-select" style="display:none"
+                aria-label="Switch memory bank" title="Switch memory bank">
+            <option value="">Banks…</option>
+        </select>
+        <span class="mem-tool-status" id="memToolbarStatus" role="status" aria-live="polite"></span>
+    </div>
+    <div class="mem-tiles" id="memoriesTiles" role="list" aria-label="Saved memories">
+        <div class="text-muted small p-2">Loading…</div>
+    </div>
+</dialog>
+
+<!-- VOX Dialog -->
+<dialog id="voxDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:280px;" aria-labelledby="voxDialogTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="voxDialogTitle">VOX Controls</strong>
+        <button class="btn btn-sm ywc-dialog-close" onclick="document.getElementById('voxDialog').close()" aria-label="Close VOX controls">✕</button>
+    </div>
+    <div class="p-3 d-flex flex-column gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <button id="voxOnBtn" class="btn btn-sm @(Model.VoxOn ? "btn-warning" : "btn-outline-secondary")"
+                    onclick="toggleVox()" aria-label="VOX on/off" title="Toggle VOX">
+                @(Model.VoxOn ? "VOX On" : "VOX Off")
+            </button>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:90px;">VOX Gain: <span id="voxGainValue">@Model.VoxGain</span></label>
+            <input type="range" id="voxGainSlider" min="0" max="100" step="1" value="@Model.VoxGain"
+                   style="flex:1; height:18px;"
+                   oninput="document.getElementById('voxGainValue').textContent = this.value"
+                   onchange="setVoxGain(this.value)"
+                   aria-label="VOX gain" title="VOX sensitivity">
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:90px;">Delay ms: <span id="voxDelayValue">@Model.VoxDelay</span></label>
+            <input type="range" id="voxDelaySlider" min="0" max="2500" step="50" value="@Model.VoxDelay"
+                   style="flex:1; height:18px;"
+                   oninput="document.getElementById('voxDelayValue').textContent = this.value"
+                   onchange="setVoxDelay(this.value)"
+                   aria-label="VOX delay" title="VOX drop delay in ms">
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:90px;">Anti-VOX: <span id="antiVoxValue">@Model.AntiVoxGain</span></label>
+            <input type="range" id="antiVoxSlider" min="0" max="100" step="1" value="@Model.AntiVoxGain"
+                   style="flex:1; height:18px;"
+                   oninput="document.getElementById('antiVoxValue').textContent = this.value"
+                   onchange="setAntiVoxGain(this.value)"
+                   aria-label="Anti-VOX gain" title="Anti-VOX sensitivity">
+        </div>
+    </div>
+</dialog>
+
+<!-- FM Repeater Dialog -->
+<dialog id="fmDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:300px;" aria-labelledby="fmDialogTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="fmDialogTitle">FM Repeater</strong>
+        <button class="btn btn-sm ywc-dialog-close" onclick="document.getElementById('fmDialog').close()" aria-label="Close FM repeater controls">✕</button>
+    </div>
+    <div class="p-3 d-flex flex-column gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:80px;">Shift:</label>
+            <select id="fmShiftSelect" class="form-select form-select-sm" style="width:auto;"
+                    aria-label="Repeater shift direction" title="Repeater shift direction"
+                    onchange="setFmShift(this.value)">
+                <option value="0" selected="@(Model.FmShiftDir=="0"?"selected":null)">None</option>
+                <option value="1" selected="@(Model.FmShiftDir=="1"?"selected":null)">Up (+)</option>
+                <option value="2" selected="@(Model.FmShiftDir=="2"?"selected":null)">Down (−)</option>
+                <option value="3" selected="@(Model.FmShiftDir=="3"?"selected":null)">Split</option>
+            </select>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:80px;">Offset kHz:</label>
+            <input type="number" id="fmOffsetInput" min="0" max="999999" step="100"
+                   value="@(Model.FmOffsetHz / 1000)"
+                   class="form-control form-control-sm" style="width:90px;"
+                   aria-label="Repeater offset in kHz" title="Repeater frequency offset in kHz"
+                   onchange="setFmOffset(parseInt(this.value) * 1000)">
+            <span>kHz</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:80px;">CTCSS:</label>
+            <select id="ctcssModeSelect" class="form-select form-select-sm" style="width:auto;"
+                    aria-label="CTCSS mode" title="CTCSS encode/decode mode"
+                    onchange="setCtcssMode(this.value)">
+                <option value="00" selected="@(Model.CtcssMode=="00"?"selected":null)">OFF</option>
+                <option value="01" selected="@(Model.CtcssMode=="01"?"selected":null)">Encode</option>
+                <option value="02" selected="@(Model.CtcssMode=="02"?"selected":null)">Decode</option>
+                <option value="03" selected="@(Model.CtcssMode=="03"?"selected":null)">Tone-Dec</option>
+            </select>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:80px;">Tone Hz:</label>
+            <select id="ctcssToneSelect" class="form-select form-select-sm" style="width:auto;"
+                    aria-label="CTCSS tone" title="CTCSS tone frequency"
+                    onchange="setCtcssTone(this.value)">
+                @foreach (var t in Model.View.CtcssTones)
+                {
+                    <option value="@t.Code" selected="@(Model.CtcssTone==t.Code?"selected":null)">@t.Label Hz</option>
+                }
+            </select>
+        </div>
+        <button class="btn btn-sm btn-primary mt-1" onclick="saveFmRepeater()" title="Apply FM repeater settings to radio" aria-label="Apply FM repeater settings to radio">Apply</button>
+    </div>
+</dialog>
+
+<!-- CW Keyer Dialog -->
+<dialog id="cwDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:320px;" aria-labelledby="cwDialogTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="cwDialogTitle">CW Keyer</strong>
+        <button class="btn btn-sm ywc-dialog-close" onclick="document.getElementById('cwDialog').close()" aria-label="Close CW keyer controls">✕</button>
+    </div>
+    <div class="p-3 d-flex flex-column gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:100px;">Speed WPM: <span id="cwSpeedValue">@Model.CwSpeed</span></label>
+            <input type="range" id="cwSpeedSlider" min="4" max="60" step="1" value="@Model.CwSpeed"
+                   style="flex:1; height:18px;"
+                   oninput="document.getElementById('cwSpeedValue').textContent = this.value"
+                   onchange="setCwSpeed(this.value)"
+                   aria-label="CW keyer speed" title="CW keyer speed in WPM">
+            <button type="button" class="btn btn-sm btn-outline-light flex-shrink-0"
+                    onclick="cwZeroIn()"
+                    title="CW Auto Zero In — nudges the active VFO so the received CW signal sits at your preferred pitch"
+                    aria-label="CW Auto Zero In">ZIN</button>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:100px;">Break-in:</label>
+            <select id="cwBreakInSelect" class="form-select form-select-sm" style="width:auto;"
+                    aria-label="CW break-in mode" title="CW break-in mode"
+                    onchange="setCwBreakIn(this.value)">
+                <option value="0" selected="@(Model.CwBreakIn=="0"?"selected":null)">Off</option>
+                <option value="1" selected="@(Model.CwBreakIn=="1"?"selected":null)">Semi BK-IN</option>
+                <option value="2" selected="@(Model.CwBreakIn=="2"?"selected":null)">Full BK-IN</option>
+            </select>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:100px;">BK-IN Delay: <span id="cwDelayValue">@Model.CwBreakInDelay</span> ms</label>
+            <input type="range" id="cwDelaySlider" min="0" max="2500" step="50" value="@Model.CwBreakInDelay"
+                   style="flex:1; height:18px;"
+                   oninput="document.getElementById('cwDelayValue').textContent = this.value"
+                   onchange="setCwBreakInDelay(this.value)"
+                   aria-label="CW break-in delay" title="Semi break-in delay in ms">
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:100px;">Pitch: <span id="cwPitchHz">@(300 + Model.CwPitch * 10)</span> Hz</label>
+            <input type="range" id="cwPitchSlider" min="0" max="75" step="1" value="@Model.CwPitch"
+                   style="flex:1; height:18px;"
+                   oninput="document.getElementById('cwPitchHz').textContent = (300 + parseInt(this.value) * 10) + ' Hz'"
+                   onchange="setCwPitch(this.value)"
+                   aria-label="CW pitch frequency" title="CW sidetone pitch (300–1050 Hz)">
+        </div>
+        <hr style="border-color:#444; margin:4px 0;">
+        <div class="fw-bold small" style="color:#aaa;">Memory Keyer</div>
+        @for (int mi = 0; mi < 5; mi++) {
+        <div class="d-flex align-items-center gap-1">
+            <button class="btn btn-sm btn-outline-info flex-shrink-0"
+                    onclick="sendCwMessage(@mi)"
+                    title="Send CW message M@(mi+1)"
+                    aria-label="Send CW memory @(mi+1)">M@(mi+1)</button>
+            <input type="text" id="cwMsg@(mi)" value="@(Model.CwMessages.Count > mi ? Model.CwMessages[mi] : "")"
+                   class="form-control form-control-sm" maxlength="24"
+                   placeholder="CW message @(mi+1)"
+                   aria-label="CW message @(mi+1)" title="CW memory @(mi+1) text">
+        </div>
+        }
+        <button class="btn btn-sm btn-primary mt-1" onclick="saveCwMessages()" title="Save CW message memories" aria-label="Save CW memory messages to settings">Save Messages</button>
+    </div>
+</dialog>
+
+<!-- Frequency Keyboard Dialog — shared for VFO A and VFO B -->
+<dialog id="freqKeyboardDialog" class="fkb-dialog" aria-labelledby="freqKeyboardTitle" aria-modal="true">
+    <div class="fkb-header" id="freqKeyboardHeader">
+        <span class="fkb-title" id="freqKeyboardTitle">VFO A Frequency</span>
+        <button class="fkb-close" id="freqKeyboardClose" aria-label="Close frequency keyboard" title="Close frequency keyboard" data-a11y-key="keyboard.close">✕</button>
+    </div>
+    <div class="fkb-display-row">
+        <div class="fkb-display" id="freqKeyboardDisplay" role="status" aria-live="polite" aria-label="Entered frequency"></div>
+        <span class="fkb-mhz-label" aria-hidden="true">MHz</span>
+    </div>
+    <div class="fkb-error" id="freqKeyboardError" role="alert" aria-live="assertive"></div>
+    <div class="fkb-pad">
+        <button class="fkb-key fkb-num" data-digit="7" aria-label="7" title="7" data-a11y-key="keyboard.digit7">7</button>
+        <button class="fkb-key fkb-num" data-digit="8" aria-label="8" title="8" data-a11y-key="keyboard.digit8">8</button>
+        <button class="fkb-key fkb-num" data-digit="9" aria-label="9" title="9" data-a11y-key="keyboard.digit9">9</button>
+        <button class="fkb-key fkb-nav" id="freqKbLeft"  aria-label="Move cursor left"  title="Move cursor left"  data-a11y-key="keyboard.cursorLeft">◀</button>
+        <button class="fkb-key fkb-num" data-digit="4" aria-label="4" title="4" data-a11y-key="keyboard.digit4">4</button>
+        <button class="fkb-key fkb-num" data-digit="5" aria-label="5" title="5" data-a11y-key="keyboard.digit5">5</button>
+        <button class="fkb-key fkb-num" data-digit="6" aria-label="6" title="6" data-a11y-key="keyboard.digit6">6</button>
+        <button class="fkb-key fkb-nav" id="freqKbRight" aria-label="Move cursor right" title="Move cursor right" data-a11y-key="keyboard.cursorRight">▶</button>
+        <button class="fkb-key fkb-num" data-digit="1" aria-label="1" title="1" data-a11y-key="keyboard.digit1">1</button>
+        <button class="fkb-key fkb-num" data-digit="2" aria-label="2" title="2" data-a11y-key="keyboard.digit2">2</button>
+        <button class="fkb-key fkb-num" data-digit="3" aria-label="3" title="3" data-a11y-key="keyboard.digit3">3</button>
+        <button class="fkb-key fkb-backspace" id="freqKbBackspace" aria-label="Backspace" title="Backspace" data-a11y-key="keyboard.backspace">⌫</button>
+        <button class="fkb-key fkb-num" data-digit="0" aria-label="0" title="0" data-a11y-key="keyboard.digit0">0</button>
+        <button class="fkb-key fkb-clear" id="freqKbClear" aria-label="Clear all digits"  title="Clear all digits"  data-a11y-key="keyboard.clear">CLR</button>
+        <button class="fkb-key fkb-enter" id="freqKbEnter" aria-label="Enter frequency"   title="Enter frequency"   data-a11y-key="keyboard.enter">↵ Enter</button>
+    </div>
+</dialog>
+
+<!-- DX Watch (watched-callsign alerts) Dialog -->
+<dialog id="dxWatchDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:320px; max-width:420px;" aria-labelledby="dxWatchTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
+        <strong id="dxWatchTitle">DX Watch</strong>
+        <button class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('dxWatchDialog').close()"
+                aria-label="Close DX watch panel">✕</button>
+    </div>
+    <div class="p-3 d-flex flex-column gap-2">
+        <p class="text-muted small mb-1" style="color:#bbb !important;">
+            Get notified when these callsigns are spotted on the DX cluster.
+            Use a trailing <code style="color:#ffd">*</code> for prefix match
+            (<code style="color:#ffd">G4*</code> matches G4ABC, G4XYZ).
+        </p>
+        <div class="d-flex align-items-center gap-2">
+            <input type="text" id="dxWatchNewInput" class="form-control form-control-sm font-monospace"
+                   placeholder="Callsign or prefix*"
+                   maxlength="16"
+                   style="text-transform:uppercase"
+                   aria-label="New watched callsign or prefix">
+            <button id="dxWatchAddBtn" class="btn btn-sm btn-success"
+                    aria-label="Add to watch list"
+                    onclick="window.dxWatchAdd && window.dxWatchAdd()">Add</button>
+        </div>
+        <hr style="border-color:#444; margin:4px 0;">
+        <div class="form-check form-switch mb-1">
+            <input class="form-check-input" type="checkbox" id="dxWatchFilterChk">
+            <label class="form-check-label small" for="dxWatchFilterChk" style="color:#ddd;">
+                Show only watched callsigns
+            </label>
+        </div>
+        <p class="text-muted small mb-2" style="color:#bbb !important; font-size:0.8rem;">
+            When ticked, the spectrum overlay and the DX Spots list hide every spot
+            except those that match a callsign or prefix in this list.
+        </p>
+        <div class="fw-bold small" style="color:#aaa;">Watched</div>
+        <ul id="dxWatchList" class="list-unstyled mb-0 small" style="max-height:240px; overflow-y:auto;"
+            aria-live="polite" aria-label="Watched callsigns list"></ul>
+        <div id="dxWatchEmpty" class="text-muted small" style="display:none;">
+            No callsigns watched yet. Add one above to get alerts.
+        </div>
+    </div>
+</dialog>
+
+<!-- Audio Filter Dialogs — LCUT FREQ / LCUT SLOPE / HCUT FREQ / HCUT SLOPE
+     for the current mode of each VFO. One dialog per VFO so the user can
+     view/adjust both at once on FTdx101-family dual-receiver radios.
+     Uses EX menu commands per AudioFilterMapService; replaces the broken
+     SL-based "IF Low Cut" dropdown. -->
+@foreach (var vfo in new[] { "A", "B" })
+{
+    <dialog id="audioFilterDialog@(vfo)" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:380px; max-width:520px; position:fixed; margin:0;" aria-labelledby="audioFilterDialogTitle@(vfo)">
+        <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
+            <strong id="audioFilterDialogTitle@(vfo)">Audio Filter — VFO @vfo <span id="audioFilterModeLabel@(vfo)" class="text-info ms-1"></span></strong>
+            <button class="btn btn-sm ywc-dialog-close" onclick="document.getElementById('audioFilterDialog@(vfo)').close()" aria-label="Close VFO @vfo Audio Filter dialog">✕</button>
+        </div>
+        <div class="p-3 d-flex flex-column gap-3">
+            <div id="audioFilterStatus@(vfo)" class="small text-warning" style="min-height:1.2em;"></div>
+            <div id="audioFilterUnsupported@(vfo)" class="alert alert-secondary mb-0" style="display:none;">
+                Audio Filter is not available for this mode on this radio model.
+            </div>
+            <div id="audioFilterControls@(vfo)">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <label class="mb-0 fw-bold" style="min-width:90px;">LCUT FREQ:</label>
+                    <input type="checkbox" id="audioFilterLcutFreqOff@(vfo)" class="form-check-input"
+                           title="Disable low-cut filter (OFF)" aria-label="LCUT FREQ off">
+                    <label class="mb-0 small" for="audioFilterLcutFreqOff@(vfo)">Off</label>
+                    <input type="range" id="audioFilterLcutFreqSlider@(vfo)"
+                           min="100" max="1000" step="50" value="100"
+                           style="flex:1; height:18px;"
+                           aria-label="LCUT FREQ Hz">
+                    <span id="audioFilterLcutFreqLabel@(vfo)" class="text-end" style="min-width:64px;">—</span>
+                </div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <label class="mb-0 fw-bold" style="min-width:90px;">LCUT SLOPE:</label>
+                    <button type="button" class="btn btn-sm btn-outline-light audio-filter-slope-btn"
+                            id="audioFilterLcutSlopeBtn@(vfo)" data-slope-code="0"
+                            title="Toggle LCUT slope between 6 dB/oct and 18 dB/oct"
+                            aria-label="LCUT slope">— dB/oct</button>
+                </div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <label class="mb-0 fw-bold" style="min-width:90px;">HCUT FREQ:</label>
+                    <input type="checkbox" id="audioFilterHcutFreqOff@(vfo)" class="form-check-input"
+                           title="Disable high-cut filter (OFF)" aria-label="HCUT FREQ off">
+                    <label class="mb-0 small" for="audioFilterHcutFreqOff@(vfo)">Off</label>
+                    <input type="range" id="audioFilterHcutFreqSlider@(vfo)"
+                           min="700" max="4000" step="50" value="3000"
+                           style="flex:1; height:18px;"
+                           aria-label="HCUT FREQ Hz">
+                    <span id="audioFilterHcutFreqLabel@(vfo)" class="text-end" style="min-width:64px;">—</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="mb-0 fw-bold" style="min-width:90px;">HCUT SLOPE:</label>
+                    <button type="button" class="btn btn-sm btn-outline-light audio-filter-slope-btn"
+                            id="audioFilterHcutSlopeBtn@(vfo)" data-slope-code="0"
+                            title="Toggle HCUT slope between 6 dB/oct and 18 dB/oct"
+                            aria-label="HCUT slope">— dB/oct</button>
+                </div>
+            </div>
+        </div>
+    </dialog>
+}
+
+<!-- Voice Announcements Dialog -->
+<dialog id="voiceDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:340px; max-width:480px;" aria-labelledby="voiceDialogTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
+        <strong id="voiceDialogTitle">Voice Announcements</strong>
+        <button class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('voiceDialog').close()"
+                aria-label="Close voice announcements panel">✕</button>
+    </div>
+    <div class="p-3 d-flex flex-column gap-2">
+        <p class="text-muted small mb-1" style="color:#bbb !important;">
+            Spoken announcements via your browser's text-to-speech engine.
+            Useful for partially sighted operators or anyone who wants to
+            be told when a setting changes without looking at the screen.
+            <br><strong>Note:</strong> If you use a screen reader (NVDA / JAWS),
+            leave this off to avoid double announcements.
+        </p>
+
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="voiceEnabledChk">
+            <label class="form-check-label" for="voiceEnabledChk"><strong>Enable voice announcements</strong></label>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:64px;">Voice:</label>
+            <select id="voicePickerSelect" class="form-select form-select-sm" style="flex:1;"
+                    aria-label="Text-to-speech voice"></select>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:64px;">Rate:</label>
+            <input type="range" id="voiceRateSlider" min="0.5" max="2.0" step="0.1" value="1.0"
+                   style="flex:1;" aria-label="Speech rate">
+            <span id="voiceRateValue" class="font-monospace" style="min-width:34px; text-align:right;">1.0×</span>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" style="min-width:64px;">Volume:</label>
+            <input type="range" id="voiceVolumeSlider" min="0" max="1.0" step="0.1" value="1.0"
+                   style="flex:1;" aria-label="Speech volume">
+            <span id="voiceVolumeValue" class="font-monospace" style="min-width:34px; text-align:right;">100%</span>
+        </div>
+
+        <hr style="border-color:#444; margin:4px 0;">
+        <div class="fw-bold small" style="color:#aaa;">Announce</div>
+
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="voiceBandChk"><label class="form-check-label" for="voiceBandChk">Band changes ("forty metres")</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="voiceModeChk"><label class="form-check-label" for="voiceModeChk">Mode changes ("upper sideband")</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="voiceTxChk"><label class="form-check-label" for="voiceTxChk">TX / RX state ("transmit" / "receive")</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="voiceFreqChk"><label class="form-check-label" for="voiceFreqChk">Manual frequency entry confirmation</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="voiceDxAlertChk"><label class="form-check-label" for="voiceDxAlertChk">DX watched-callsign alerts</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="voiceTxTimeoutChk"><label class="form-check-label" for="voiceTxTimeoutChk">TX timeout warning</label></div>
+
+        <div class="d-flex gap-2 mt-2">
+            <button id="voiceTestBtn" class="btn btn-sm btn-primary">Test voice</button>
+            <button id="voiceStopBtn" class="btn btn-sm btn-outline-secondary">Stop talking</button>
+        </div>
+    </div>
+</dialog>
+
+<!-- Voice command list — opened by right-clicking either mic button.
+     Body is generated from the live phrase config via GET /api/voice/help,
+     so it always matches what recognition actually accepts (voice-control.js). -->
+<dialog id="voiceHelpDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:360px; max-width:560px;" aria-labelledby="voiceHelpTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="voiceHelpTitle">Voice commands</strong>
+        <button class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('voiceHelpDialog').close()"
+                aria-label="Close voice command help">✕</button>
+    </div>
+    <div id="voiceHelpBody" class="p-3" style="max-height:70vh; overflow-y:auto;">
+        <div class="text-muted small">Loading…</div>
+    </div>
+</dialog>
+
+<!-- Remote Audio mic & gain — kept with other dialogs (late in DOM) and given a
+     high z-index so it is not painted under the spectrum / meter stacks. -->
+<dialog id="remoteAudioLevelsDialog"
+        style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:360px; max-width:460px;"
+        aria-labelledby="remoteAudioLevelsDialogTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="remoteAudioLevelsDialogTitle">Mic &amp; Gain</strong>
+        <button type="button" class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('remoteAudioLevelsDialog').close()"
+                aria-label="Close mic and gain settings">✕</button>
+    </div>
+    <div class="p-3 d-flex flex-column gap-3">
+        <div>
+            <label class="mb-0 fw-semibold" for="remoteAudioMicSelect">Browser microphone</label>
+            <select id="remoteAudioMicSelect" class="form-select form-select-sm mt-1"
+                    title="Browser microphone sent to the radio (TX)"
+                    aria-label="Browser microphone for remote audio TX">
+                <option value="">Default microphone</option>
+            </select>
+            <div class="form-text text-muted mt-1 mb-0">
+                Which mic on <strong>this computer/browser</strong> is sent to the radio over remote audio.
+                Device names appear after the first time you grant microphone permission.
+            </div>
+        </div>
+        <div>
+            <label class="mb-0 fw-semibold" for="remoteAudioCodecSelect">Audio codec</label>
+            <select id="remoteAudioCodecSelect" class="form-select form-select-sm mt-1"
+                    title="Compression used for remote audio (stop and reconnect to apply)"
+                    aria-label="Remote audio codec">
+                <option value="opus">Opus (~32 kb/s) — recommended</option>
+                <option value="pcm16">PCM16 (~768 kb/s) — uncompressed</option>
+            </select>
+            <div class="form-text text-muted mt-1 mb-0" id="remoteAudioCodecHint">
+                Opus uses far less bandwidth than PCM16. Stop and reconnect remote audio for a codec change to apply.
+            </div>
+        </div>
+        <div>
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label class="mb-0 fw-semibold" for="remoteAudioRxGain">Receive (RX) gain</label>
+                <span id="remoteAudioRxGainVal" class="fw-semibold text-info">1.00</span>
+            </div>
+            <input type="range" class="w-100" id="remoteAudioRxGain"
+                   min="0.05" max="4" step="0.05" value="1"
+                   style="height:18px;"
+                   aria-label="Receive gain — radio to browser"
+                   title="How loud the radio sounds in your browser">
+            <div class="form-text text-muted mt-1 mb-0">
+                How loud the <strong>radio</strong> sounds in your <strong>browser speakers/headphones</strong>.
+            </div>
+        </div>
+        <div>
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label class="mb-0 fw-semibold" for="remoteAudioTxGain">Mic (TX) gain</label>
+                <span id="remoteAudioTxGainVal" class="fw-semibold text-warning">1.00</span>
+            </div>
+            <input type="range" class="w-100" id="remoteAudioTxGain"
+                   min="0.05" max="4" step="0.05" value="1"
+                   style="height:18px;"
+                   aria-label="Mic gain — browser microphone to radio"
+                   title="How loud your browser mic is sent to the radio">
+            <div class="form-text text-muted mt-1 mb-0">
+                How loud your <strong>browser microphone</strong> is sent into the <strong>radio</strong> (USB TX).
+            </div>
+        </div>
+        <p class="small text-muted mb-0">Gain range 0.05–4.00 (1.00 = unity). Changes apply live while streaming and are saved automatically.</p>
+    </div>
+</dialog>
+
+<!-- UTC clock info popover — opened by clicking the top-bar clock.
+     Explains the clock source, what depends on it, and how to verify
+     the PC's time-sync state. -->
+<dialog id="utcClockInfoDialog"
+        style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:380px; max-width:520px;"
+        aria-labelledby="utcClockInfoTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
+        <strong id="utcClockInfoTitle">UTC clock — where does the time come from?</strong>
+        <button class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('utcClockInfoDialog').close()"
+                aria-label="Close UTC clock info">✕</button>
+    </div>
+    <div class="p-3 small" style="line-height:1.5;">
+        <p class="mb-2">The clock reads <strong>your PC's system clock</strong>, converted to UTC. There is no separate network time source.</p>
+        <p class="mb-2"><strong>What depends on accurate time:</strong></p>
+        <ul class="mb-2 ps-3">
+            <li>DX Spots <em>Age</em> and <em>Time UTC</em> columns</li>
+            <li>The 15-minute spot age-out</li>
+            <li>The TX timeout warning countdown</li>
+            <li>QSO timestamps in any external logger you're using</li>
+        </ul>
+        <p class="mb-2"><strong>How to verify your PC time is correct:</strong></p>
+        <ol class="mb-2 ps-3">
+            <li>Open Windows <strong>Settings → Time &amp; Language → Date &amp; time</strong>.</li>
+            <li>Confirm <strong>Set time automatically</strong> is on.</li>
+            <li>Under <strong>Additional settings</strong>, click <strong>Sync now</strong> and check the &quot;Last successful time synchronisation&quot; date. If it&#39;s more than a few days ago and you have no continual internet, your clock may have drifted.</li>
+        </ol>
+        <p class="mb-2"><strong>If you operate offline a lot:</strong> rough rule of thumb is a typical PC clock drifts seconds-to-minutes per week without sync. Fine for SSB casual logging, problematic for FT8 and contests. Re-sync whenever you reconnect to the internet.</p>
+        <p class="mb-0 text-muted">The clock cannot detect drift on its own — your PC&#39;s clock is the only reference YWC has.</p>
+    </div>
+</dialog>
+
+<!-- DX Spots list panel — filtered list of cluster spots on the current band.
+     Works regardless of whether an SDR is configured; data flows over the
+     same SignalR DxSpot stream the spectrum overlay uses. -->
+<style>
+    .dxs-call     { font-weight:600; }
+    .dxs-watched  { color:#ff5050; font-weight:bold; }
+    .dxs-num      { font-family:monospace; text-align:right; }
+    .dxs-mode     { font-family:monospace; }
+    .dxs-comment  { color:#bbb; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #dxSpotsTbody tr        { cursor:pointer; }
+    #dxSpotsTbody tr:hover td { background:#333; }
+    #dxSpotsDialog th[data-sort]:hover { background:#444; }
+</style>
+<dialog id="dxSpotsDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:720px; max-width:95vw;" aria-labelledby="dxSpotsTitle">
+    <div class="dxs-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
+        <strong id="dxSpotsTitle">DX Spots</strong>
+        <div class="d-flex align-items-center gap-3">
+            <small id="dxSpotsCount" class="text-muted">0 shown / 0 total</small>
+            <div class="form-check form-switch mb-0" style="cursor:default;">
+                <input class="form-check-input" type="checkbox" id="dxSpotsAllBandsChk">
+                <label class="form-check-label small" for="dxSpotsAllBandsChk">All bands</label>
+            </div>
+            <button class="btn btn-sm ywc-dialog-close"
+                    onclick="document.getElementById('dxSpotsDialog').close()"
+                    aria-label="Close DX spots panel">✕</button>
+        </div>
+    </div>
+    <div class="p-2" style="max-height:60vh; overflow-y:auto;">
+        <table class="table table-sm table-dark table-hover mb-0" style="font-size:0.85rem;">
+            <thead style="position:sticky; top:0; background:#222; z-index:1;">
+                <tr>
+                    <th data-sort="callsign" style="cursor:pointer;">Callsign</th>
+                    <th data-sort="freq"     style="cursor:pointer;">Freq kHz</th>
+                    <th data-sort="mode"     style="cursor:pointer;">Mode</th>
+                    <th data-sort="time"     style="cursor:pointer;">Time UTC</th>
+                    <th data-sort="age"      style="cursor:pointer;">Age</th>
+                    <th data-sort="spotter"  style="cursor:pointer;">Spotter</th>
+                    <th>Comment</th>
+                </tr>
+            </thead>
+            <tbody id="dxSpotsTbody"></tbody>
+        </table>
+        <div id="dxSpotsEmpty" class="text-muted small p-3" style="display:none;">
+            No spots on this band. Configure DX cluster in Settings (§6.6) if not already done,
+            or tick <strong>All bands</strong> above to see spots from elsewhere.
+        </div>
+    </div>
+</dialog>
+
+<!-- DX Watch alert toast container — populated by site.js when a watched spot arrives.
+     Position is user-draggable; saved in localStorage as dxAlertPos. Defaults to
+     bottom-right of the viewport on first run. -->
+<div id="dxAlertToastHost" aria-live="assertive" aria-atomic="true"
+     style="position:fixed; right:16px; bottom:16px; z-index:9999;
+            display:flex; flex-direction:column; gap:8px;"></div>
+
+<!-- TX timeout warning banner — shown when transmit has been on longer than the threshold -->
+<div id="txTimeoutBanner"
+     role="alert"
+     aria-live="assertive"
+     style="display:none; position:fixed; top:0; left:0; right:0; z-index:10000;
+            background:#a02020; color:#fff; padding:10px 16px;
+            font-family:sans-serif; font-weight:bold; font-size:1.05em;
+            box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+    <span id="txTimeoutBannerText">TX has been on for too long</span>
+    <button type="button" id="txTimeoutDismissBtn"
+            style="float:right; background:#fff; color:#a02020; border:none;
+                   padding:2px 10px; border-radius:4px; font-weight:bold; cursor:pointer;"
+            aria-label="Dismiss TX timeout warning">Dismiss</button>
+    <button type="button" id="txTimeoutSetBtn"
+            style="float:right; background:#7a1818; color:#fff; border:1px solid #fff;
+                   padding:2px 10px; border-radius:4px; margin-right:8px; cursor:pointer;"
+            aria-label="Change TX timeout threshold">Change timeout…</button>
+</div>

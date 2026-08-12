@@ -1,0 +1,189 @@
+                    <!-- Gauges row -->
+                    <div class="d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
+                        <!-- S-Meter rolling history strip — leftmost so the live trace
+                             reads left-to-right toward the S-meter needle. Hidden
+                             until the toolbar's S-hist toggle is on. Sized to match
+                             the meter cells alongside it. Moved from inside the VFO
+                             panels in v2.3.9 (Jacek SP3L #34 / Colin's design call).
+                             v2.4.0: restored as a VFO A / VFO B pair — dual-receiver
+                             radios (FTdx101MP/D) have an independently calibrated
+                             S-meter per receiver (SM0;/SM1;); single-receiver radios
+                             only get the VFO A pair since there's no SUB receiver. -->
+                        <div id="sMeterHistoryContainer"
+                             class="text-center smeter-history-container"
+                             style="display:none; position: relative; height: 135px; width: 260px; flex-shrink: 0; margin: 0; padding: 0;">
+                            <canvas id="sMeterHistoryCanvas"
+                                    role="img" aria-hidden="true"
+                                    aria-label="S-meter 30-second history — VFO A"
+                                    data-a11y-key="meters.smeterHistoryA"
+                                    style="display:block; width:100%; height:100%; border-radius:3px;"></canvas>
+                        </div>
+                        <!-- S-Meter A (MAIN) — moved from per-VFO panels to the top
+                             row in v2.3.9. Always live (unlike SWR/Power/etc which
+                             are TX-only). -->
+                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="analog-meter-container">
+                                <canvas id="sMeterCanvas" role="img" aria-hidden="true" aria-label="S meter A" data-a11y-key="meters.smeterA"></canvas>
+                            </div>
+                        </div>
+                        @if (!Model.View.IsSingleReceiver)
+                        {
+                            <!-- S-Meter B (SUB) — dual-receiver radios only. -->
+                            <div id="sMeterHistoryContainerB"
+                                 class="text-center smeter-history-container"
+                                 style="display:none; position: relative; height: 135px; width: 260px; flex-shrink: 0; margin: 0; padding: 0;">
+                                <canvas id="sMeterHistoryCanvasB"
+                                        role="img" aria-hidden="true"
+                                        aria-label="S-meter 30-second history — VFO B"
+                                        data-a11y-key="meters.smeterHistoryB"
+                                        style="display:block; width:100%; height:100%; border-radius:3px;"></canvas>
+                            </div>
+                            <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                                <div class="analog-meter-container">
+                                    <canvas id="sMeterCanvasB" role="img" aria-hidden="true" aria-label="S meter B" data-a11y-key="meters.smeterB"></canvas>
+                                </div>
+                            </div>
+                        }
+                        <!-- SWR Meter -->
+                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="analog-meter-container">
+                                <canvas id="swrMeterCanvas" role="img" aria-hidden="true" aria-label="SWR meter" data-a11y-key="meters.swr"></canvas>
+                            </div>
+                        </div>
+                        <!-- Power Meter -->
+                        <div class="text-center power-meter-container" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="analog-meter-container">
+                                <canvas id="powerMeterCanvas" role="img" aria-hidden="true" aria-label="Power output meter" data-a11y-key="meters.power"></canvas>
+                            </div>
+                        </div>
+                        <!-- Compression Meter -->
+                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="analog-meter-container">
+                                <canvas id="compressionMeterCanvas" role="img" aria-hidden="true" aria-label="Compression meter" data-a11y-key="meters.compression"></canvas>
+                            </div>
+                        </div>
+                        <!-- ALC Meter -->
+                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="analog-meter-container">
+                                <canvas id="alcMeterCanvas" role="img" aria-hidden="true" aria-label="ALC meter" data-a11y-key="meters.alc"></canvas>
+                            </div>
+                        </div>
+                        @if (!Model.View.IsFtdx10 && !Model.View.IsFt710 && !Model.View.IsFtdx5000) {
+                        <!-- PA Temperature Meter — FTdx101/FTDX3000 only (high-voltage PA board).
+                             FTDX5000 excluded: no temperature read-code in its RM meter set. -->
+                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="analog-meter-container">
+                                <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
+                            </div>
+                        </div>
+                        <!-- IDD Meter — FTdx101/FTDX3000 only -->
+                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="analog-meter-container">
+                                <canvas id="iddMeterCanvas" role="img" aria-hidden="true" aria-label="Drain current meter" data-a11y-key="meters.idd"></canvas>
+                            </div>
+                        </div>
+                        <!-- VDD Meter — FTdx101/FTDX3000 only -->
+                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="analog-meter-container">
+                                <canvas id="vddMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier supply voltage meter" data-a11y-key="meters.vdd"></canvas>
+                            </div>
+                        </div>
+                        }
+                    </div>
+                    <!-- Power and MIC Gain on one row.
+                         padding-left: 260px reserves the same width as the
+                         S-meter history strip in the meter row above (whether
+                         the strip is currently visible or not), so the Power
+                         label always sits directly under the S-meter gauge
+                         rather than under the (sometimes-hidden) history
+                         strip. v2.3.9 layout change.
+                         Padding on the flex container itself rather than a
+                         spacer child -- a child element would have its own
+                         flex slot and (with flex-wrap on) the spillover items
+                         would wrap to a new line at x=0, defeating the point. -->
+                    <div class="d-flex align-items-center gap-2 mb-2 closer-to-raw-power" style="margin-top: -18px !important; flex-wrap: wrap; padding-left: 280px;">
+                        <label class="mb-0 text-nowrap">Power: <span id="powerValue" class="fw-bold">@Model.RadioState.Power W</span></label>
+                        <input type="range" class="flex-shrink-0" id="powerSlider"
+                               aria-label="Transmit power"
+                               title="Transmit power"
+                               min="5" max="200" step="5"
+                               value="@Model.RadioState.Power"
+                               style="width: clamp(80px, 10vw, 150px); height: 18px;"
+                               oninput="window.radioControl.updatePowerDisplay(window.txVfo === 1 ? 'B' : 'A', this.value)"
+                               onchange="window.radioControl.setPower(window.txVfo === 1 ? 'B' : 'A', this.value)">
+                        <label class="mb-0 text-nowrap ms-2"><span id="micGainLabel">MIC Gain</span>: <span id="micGainValue" class="fw-bold">@Model.MicGain</span></label>
+                        <input type="range" class="flex-shrink-0"
+                               id="micGainSlider"
+                               aria-label="Microphone gain"
+                               title="Microphone gain"
+                               min="0" max="100" step="1"
+                               value="@Model.MicGain"
+                               style="width: clamp(80px, 10vw, 150px); height: 18px;"
+                               oninput="document.getElementById('micGainValue').innerText = this.value;"
+                               onchange="setMicGain(this.value);">
+                        <button id="procBtn"
+                                class="ywc-btn btn-sm ms-2 @(Model.ProcEnabled ? "btn-success" : "btn-outline-secondary")"
+                                aria-label="Speech processor"
+                                title="Speech processor on/off"
+                                onclick="toggleProc()">@(Model.ProcEnabled ? "Proc On" : "Proc Off")</button>
+                        <label class="mb-0 text-nowrap ms-2">PROC Level: <span id="procLevelValue" class="fw-bold">@Model.ProcLevel</span></label>
+                        <input type="range" class="flex-shrink-0"
+                               id="procLevelSlider"
+                               aria-label="Speech processor level"
+                               title="Speech processor level"
+                               min="0" max="100" step="1"
+                               value="@Model.ProcLevel"
+                               style="width: clamp(80px, 10vw, 150px); height: 18px;"
+                               oninput="document.getElementById('procLevelValue').innerText = this.value;"
+                               onchange="setProcLevel(this.value);">
+                        <button id="atuBtn"
+                                class="ywc-btn btn-sm ms-2 @(Model.AtuEnabled ? "btn-success" : "btn-outline-secondary")"
+                                aria-label="Antenna tuner — short tap toggles on/off, long press starts auto-tune"
+                                title="Tap to toggle ATU on/off; press and hold to start auto-tune"
+                                style="touch-action: manipulation; user-select: none;">@(Model.AtuEnabled ? "ATU On" : "ATU Off")</button>
+                        <button id="monitorOnBtn"
+                                class="ywc-btn btn-sm ms-2 @(Model.MonitorOn ? "btn-warning" : "btn-outline-secondary")"
+                                aria-label="TX monitor — currently @(Model.MonitorOn ? "on" : "off")"
+                                title="Toggle TX monitor / sidetone on/off"
+                                onclick="toggleMonitor()">Mon</button>
+                        <label class="mb-0 text-nowrap ms-1"><span id="monLevelValue" class="fw-bold">@Model.MonitorLevelA</span></label>
+                        <input type="range" class="flex-shrink-0"
+                               id="monLevelSlider"
+                               aria-label="TX monitor / sidetone level"
+                               title="TX monitor / sidetone level"
+                               min="0" max="100" step="1"
+                               value="@Model.MonitorLevelA"
+                               style="width: clamp(60px, 8vw, 110px); height: 18px;"
+                               oninput="document.getElementById('monLevelValue').innerText = this.value;"
+                               onchange="setMonitorLevel(this.value);">
+                        <button id="voxBtn"
+                                class="ywc-btn btn-sm ms-2 @(Model.VoxOn ? "btn-warning" : "btn-outline-secondary")"
+                                aria-label="VOX controls"
+                                title="Open VOX controls panel"
+                                onclick="document.getElementById('voxDialog').show()">VOX</button>
+                        <button class="ywc-btn btn-sm ms-1 btn-outline-secondary"
+                                aria-label="CW keyer controls"
+                                title="Open CW keyer controls panel"
+                                onclick="document.getElementById('cwDialog').show()">CW</button>
+                        <button class="ywc-btn btn-sm ms-1 btn-outline-secondary"
+                                aria-label="FM repeater controls"
+                                title="Open FM repeater controls panel"
+                                onclick="document.getElementById('fmDialog').show()">FM Rep</button>
+                        <button class="ywc-btn btn-sm ms-1 btn-outline-secondary"
+                                aria-label="DX watch — alerts for spotted callsigns"
+                                title="Open DX watch list — get alerts when watched callsigns are spotted"
+                                onclick="document.getElementById('dxWatchDialog').show(); window.refreshDxWatchList && window.refreshDxWatchList();">DX Watch</button>
+                        <button class="ywc-btn btn-sm ms-1 btn-outline-secondary"
+                                aria-label="DX spots — list of cluster spots on current band"
+                                title="Open DX spots list — see callsigns spotted on the current band"
+                                onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">DX Spots</button>
+                        <button id="voiceBtn"
+                                class="ywc-btn btn-sm ms-1 btn-outline-secondary"
+                                aria-label="Voice announcements settings"
+                                title="Voice announcements for band, mode, TX state etc. — useful for partially sighted operators"
+                                onclick="document.getElementById('voiceDialog').show();">Voice</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
