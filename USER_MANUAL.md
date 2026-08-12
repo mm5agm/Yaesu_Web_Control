@@ -1372,9 +1372,9 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 | Setting | Description |
 |---------|-------------|
 | Enable remote audio | Opt-in. When off, no audio devices are opened and the Index bar is hidden. |
-| Radio RX device (capture) | PortAudio input used for what you **hear** in the browser — usually the Yaesu USB **recording** endpoint (`Microphone (USB Audio CODEC)` / `Line (USB Audio CODEC)`, or a name you gave it in the OS). **Required** when remote audio is enabled (no system-default fallback). On Windows the list is limited to **WASAPI** endpoints so the same USB CODEC is not repeated under MME / DirectSound / WDM-KS. Names that look like a USB codec are sorted to the top and marked with ★. |
-| Radio TX device (playback) | PortAudio output for browser **mic → radio** — usually Yaesu USB **Speakers** / playback (`Speakers (USB Audio CODEC)`). **Required** when enabled. Do **not** leave blank or pick PC speakers / headphones: that loops the browser mic into the room and never reaches the radio. Same WASAPI-only listing and ★ hint as RX. |
-| RX / TX gain | Software gain applied in the bridge (0.05–4). On Home, open **Mic & Gain** on the Remote Audio bar (browser mic picker + RX/TX gain). The pop-out shows the same controls inline. |
+| Radio RX device (capture) | PortAudio input used for what you **hear** in the browser — usually the Yaesu USB **recording** endpoint (`Microphone (USB Audio CODEC)` / `Line (USB Audio CODEC)`, or a name you gave it in the OS). **Required** when remote audio is enabled (no system-default fallback). On Windows the list is limited to **WASAPI** endpoints so the same USB CODEC is not repeated under MME / DirectSound / WDM-KS. Names that look like a USB codec are sorted to the top and marked with a radio icon (📻). |
+| Radio TX device (playback) | PortAudio output for browser **mic → radio** — usually Yaesu USB **Speakers** / playback (`Speakers (USB Audio CODEC)`). **Required** when enabled. Do **not** leave blank or pick PC speakers / headphones: that loops the browser mic into the room and never reaches the radio. Same WASAPI-only listing and radio-icon hint as RX. |
+| RX / TX gain | Software gain in the bridge (0.05–4). Adjusted live via **Mic & Gain** on the Index Remote Audio bar (or inline on the pop-out) — not on the Settings page. |
 | Audio codec | Chosen on the Index **Mic & Gain** dialog or the pop-out (not a host setting). **Opus** (default) compresses speech to ~32 kb/s per direction; **PCM16** is uncompressed ~768 kb/s. See [§18.6](#186-audio-codecs-opus-vs-pcm16). |
 
 Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
@@ -2870,9 +2870,8 @@ Remote Audio streams **radio RX → browser speakers** and **browser microphone 
 
 1. Open **Settings → Remote Audio**.
 2. Enable **remote audio**.
-3. Pick **Radio RX device** (capture / what you hear) and **Radio TX device** (playback / where mic audio goes). Both are **required** when the feature is on — YWC will not fall back to the PC’s default mic/speakers (blank TX previously caused browser-mic feedback into the room). Use **Refresh device list** after plugging the radio in. On Windows only **WASAPI** devices are shown. Entries that look like a USB codec are sorted first and marked with ★; renamed devices stay in the full list without a star.
-4. Optionally adjust RX/TX gain.
-5. **Save Settings**.
+3. Pick **Radio RX device** (capture / what you hear) and **Radio TX device** (playback / where mic audio goes). Both are **required** when the feature is on — YWC will not fall back to the PC’s default mic/speakers (blank TX previously caused browser-mic feedback into the room). Use **Refresh device list** after plugging the radio in. On Windows only **WASAPI** devices are shown. Entries that look like a USB codec are sorted first and marked with a radio icon (📻); renamed devices stay in the full list without the icon.
+4. **Save Settings**. RX/TX software gain is adjusted later via **Mic & Gain** on Home (or the pop-out), not on this page.
 
 ### 18.3 HTTPS for remote browsers
 

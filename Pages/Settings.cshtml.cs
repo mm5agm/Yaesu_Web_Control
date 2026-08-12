@@ -310,8 +310,8 @@ namespace Yaesu_Web_Control.Pages
                 current.AudioStreamingEnabled = Settings.AudioStreamingEnabled;
                 current.AudioRadioRxDevice = Settings.AudioRadioRxDevice ?? "";
                 current.AudioRadioTxDevice = Settings.AudioRadioTxDevice ?? "";
-                current.AudioRxGain = Math.Clamp(Settings.AudioRxGain, 0.05f, 4f);
-                current.AudioTxGain = Math.Clamp(Settings.AudioTxGain, 0.05f, 4f);
+                // AudioRxGain / AudioTxGain are live-only (Mic & Gain / pop-out → /api/audio/gain).
+                // Do not overwrite them from this form — the inputs were removed from Settings.
                 current.HttpsEnabled = Settings.HttpsEnabled;
                 current.HttpsPort = (Settings.HttpsPort >= 1 && Settings.HttpsPort <= 65535)
                     ? Settings.HttpsPort
