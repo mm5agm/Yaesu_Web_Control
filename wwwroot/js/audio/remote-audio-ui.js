@@ -97,9 +97,12 @@ function ensureRemoteAudioTooltips() {
   window.addEventListener('load', () => initRemoteAudioTooltips(), { once: true });
 }
 
+// Live FFT is MAIN/USB mono only today — attach to VFO A alone. VFO B keeps
+// the decorative random bars until stereo L→A / R→B lands (see
+// .cursor/plans/remote-audio-stereo-filter-scopes.plan.md).
 function attachFilterScopeSpectrum(provider) {
   window.filterScopePanelA?.setSpectrumProvider?.(provider);
-  window.filterScopePanelB?.setSpectrumProvider?.(provider);
+  window.filterScopePanelB?.setSpectrumProvider?.(null);
 }
 
 function clearFilterScopeSpectrum() {
