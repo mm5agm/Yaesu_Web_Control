@@ -339,13 +339,16 @@ namespace Yaesu_Web_Control.Services.Audio
                 {
                     AudioDeviceEnumerator.EnsureInitialized();
 
+                    // Never fall back to the OS default I/O devices. Blank TX in
+                    // particular opens the PC speakers and loops the browser mic
+                    // into the room (and never reaches the radio USB codec).
+                    if (string.IsNullOrWhiteSpace(settings.AudioRadioRxDevice))
+                        return "Radio RX (capture) device is not set. Pick the radio USB recording endpoint in Settings → Remote Audio.";
+                    if (string.IsNullOrWhiteSpace(settings.AudioRadioTxDevice))
+                        return "Radio TX (playback) device is not set. Pick the radio USB Speakers/playback endpoint in Settings → Remote Audio (blank would use PC speakers and cause mic feedback).";
+
                     int rxIndex = AudioDeviceEnumerator.FindDeviceIndex(settings.AudioRadioRxDevice, requireInput: true, requireOutput: false);
                     int txIndex = AudioDeviceEnumerator.FindDeviceIndex(settings.AudioRadioTxDevice, requireInput: false, requireOutput: true);
-
-                    if (rxIndex < 0 && string.IsNullOrWhiteSpace(settings.AudioRadioRxDevice))
-                        rxIndex = PortAudio.DefaultInputDevice;
-                    if (txIndex < 0 && string.IsNullOrWhiteSpace(settings.AudioRadioTxDevice))
-                        txIndex = PortAudio.DefaultOutputDevice;
 
                     if (rxIndex < 0)
                         return "Radio RX (capture) device not found. Pick it in Settings → Remote Audio.";

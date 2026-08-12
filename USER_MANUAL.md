@@ -1372,8 +1372,8 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 | Setting | Description |
 |---------|-------------|
 | Enable remote audio | Opt-in. When off, no audio devices are opened and the Index bar is hidden. |
-| Radio RX device (capture) | PortAudio input used for what you **hear** in the browser (usually Yaesu USB recording). Empty = system default input. On Windows the list is limited to **WASAPI** endpoints so the same USB CODEC is not repeated under MME / DirectSound / WDM-KS. |
-| Radio TX device (playback) | PortAudio output used for browser **mic → radio** (usually Yaesu USB playback). Empty = system default output. Same WASAPI-only listing on Windows as RX. |
+| Radio RX device (capture) | PortAudio input used for what you **hear** in the browser — usually the Yaesu USB **recording** endpoint (`Microphone (USB Audio CODEC)` / `Line (USB Audio CODEC)`, or a name you gave it in the OS). **Required** when remote audio is enabled (no system-default fallback). On Windows the list is limited to **WASAPI** endpoints so the same USB CODEC is not repeated under MME / DirectSound / WDM-KS. Names that look like a USB codec are sorted to the top and marked with ★. |
+| Radio TX device (playback) | PortAudio output for browser **mic → radio** — usually Yaesu USB **Speakers** / playback (`Speakers (USB Audio CODEC)`). **Required** when enabled. Do **not** leave blank or pick PC speakers / headphones: that loops the browser mic into the room and never reaches the radio. Same WASAPI-only listing and ★ hint as RX. |
 | RX / TX gain | Software gain applied in the bridge (0.05–4). On Home, open **Mic & Gain** on the Remote Audio bar (browser mic picker + RX/TX gain). The pop-out shows the same controls inline. |
 | Audio codec | Chosen on the Index **Mic & Gain** dialog or the pop-out (not a host setting). **Opus** (default) compresses speech to ~32 kb/s per direction; **PCM16** is uncompressed ~768 kb/s. See [§18.6](#186-audio-codecs-opus-vs-pcm16). |
 
@@ -2864,13 +2864,13 @@ Remote Audio streams **radio RX → browser speakers** and **browser microphone 
 
 1. Connect the radio’s USB cable so the PC sees both CAT and USB audio.
 2. In the radio menu, set **MOD SOURCE** to **REAR** with **REAR SELECT = USB**, or **MOD SOURCE = USB** on models that use that wording (e.g. FT-710). Same idea as FT-Control / digital-mode USB audio.
-3. Confirm the OS lists Yaesu (or “USB Audio”) playback and recording devices.
+3. Confirm the OS lists the radio’s USB audio endpoints. Factory names are usually variants of **USB Audio CODEC** (e.g. Microphone/Line for recording, Speakers for playback). Many operators rename them in the OS sound panel (e.g. to “FTDX101”) — that is fine; pick the renamed entry in YWC.
 
 ### 18.2 YWC host setup
 
 1. Open **Settings → Remote Audio**.
 2. Enable **remote audio**.
-3. Pick **Radio RX device** (capture / what you hear) and **Radio TX device** (playback / where mic audio goes). Use **Refresh device list** after plugging the radio in. On Windows only **WASAPI** devices are shown.
+3. Pick **Radio RX device** (capture / what you hear) and **Radio TX device** (playback / where mic audio goes). Both are **required** when the feature is on — YWC will not fall back to the PC’s default mic/speakers (blank TX previously caused browser-mic feedback into the room). Use **Refresh device list** after plugging the radio in. On Windows only **WASAPI** devices are shown. Entries that look like a USB codec are sorted first and marked with ★; renamed devices stay in the full list without a star.
 4. Optionally adjust RX/TX gain.
 5. **Save Settings**.
 
@@ -2912,7 +2912,8 @@ Audio on the Index page stops when you leave Home (for example to open **Setting
 |---------|-------------|
 | Mic permission denied / “requires HTTPS” | Use the HTTPS URL; regenerate the cert with the IP you type in the address bar; restart after enabling HTTPS. |
 | No RX sound | Check Radio RX device; confirm radio AF gain / USB volume; look at the RX meter while Start audio is active. |
-| TX keys but no modulation | Confirm MOD SOURCE / USB; check Radio TX device; unmute mic; watch the TX meter while speaking. |
+| TX keys but no modulation | Confirm MOD SOURCE / USB; check Radio TX device is the radio USB **Speakers**/playback endpoint (not PC speakers); unmute mic; watch the TX meter while speaking. |
+| TX keys and you hear yourself in the PC speakers | Radio TX device is wrong (or was left blank on an older build). Set it to the radio USB playback / Speakers endpoint and Save. |
 | Choppy audio | Prefer wired Ethernet/VPN; reduce other load; stay on LAN/VPN (no TURN/WebRTC in v1). Use **Opus** instead of PCM16 on limited links (see [§18.6](#186-audio-codecs-opus-vs-pcm16)). |
 | “Audio session busy” | Stop audio in the other tab/browser (or pop-out window) first. |
 | Audio dies when opening Settings | Use **Pop out** before leaving Home so the session lives in the separate window. |

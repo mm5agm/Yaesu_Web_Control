@@ -269,7 +269,8 @@
         public bool AudioStreamingEnabled { get; set; } = false;
 
         /// <summary>
-        /// PortAudio capture device for radio RX (USB recording). Empty = default input.
+        /// PortAudio capture device for radio RX (USB recording). Required when
+        /// <see cref="AudioStreamingEnabled"/> — no OS-default fallback (wrong mic).
         /// Stored as <c>{name} [{hostApi}]</c> (e.g. <c>Microphone (USB Audio CODEC) [Windows WASAPI]</c>)
         /// so Windows duplicates across MME/WASAPI/DirectSound/WDM-KS stay distinct.
         /// Legacy bare names still resolve.
@@ -277,8 +278,10 @@
         public string? AudioRadioRxDevice { get; set; } = "";
 
         /// <summary>
-        /// PortAudio playback device for radio TX (USB playback). Empty = default output.
-        /// Same <c>{name} [{hostApi}]</c> key format as <see cref="AudioRadioRxDevice"/>.
+        /// PortAudio playback device for radio TX (USB playback). Required when
+        /// <see cref="AudioStreamingEnabled"/> — blank must not fall back to PC
+        /// speakers (browser mic feedback). Same <c>{name} [{hostApi}]</c> key
+        /// format as <see cref="AudioRadioRxDevice"/>.
         /// </summary>
         public string? AudioRadioTxDevice { get; set; } = "";
 

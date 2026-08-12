@@ -39,7 +39,8 @@ namespace Yaesu_Web_Control.Controllers
                         d.HostApiIndex,
                         displayName = d.DisplayName,
                         key = d.PersistenceKey,
-                        d.DefaultSampleRate
+                        d.DefaultSampleRate,
+                        likelyRadio = AudioDeviceEnumerator.LooksLikeRadioUsbCodec(d.Name)
                     });
                 var outputs = AudioDeviceEnumerator.ListOutputs()
                     .Select(d => new
@@ -50,7 +51,8 @@ namespace Yaesu_Web_Control.Controllers
                         d.HostApiIndex,
                         displayName = d.DisplayName,
                         key = d.PersistenceKey,
-                        d.DefaultSampleRate
+                        d.DefaultSampleRate,
+                        likelyRadio = AudioDeviceEnumerator.LooksLikeRadioUsbCodec(d.Name)
                     });
                 return Ok(new { inputs, outputs });
             }

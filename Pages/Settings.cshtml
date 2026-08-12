@@ -2032,7 +2032,7 @@
     </details>
 
     <!-- Remote Audio (browser ↔ radio USB) -->
-    <details class="settings-section" id="remoteAudioSection">
+    <details class="settings-section" id="remoteAudioSection" @(ViewContext.ModelState.IsValid ? "" : "open")>
         <summary><i class="bi bi-soundwave" aria-hidden="true"></i>&nbsp;Remote Audio</summary>
         <div class="section-body">
             <p class="text-muted">
@@ -2045,6 +2045,7 @@
             <div class="alert alert-info" role="alert">
                 On the radio, set <strong>MOD SOURCE</strong> to USB / REAR (USB) so TX audio from the PC reaches the transmitter.
                 For remote mic access, enable <strong>HTTPS</strong> under Web / HTTP and open the HTTPS URL.
+                When enabled, you must pick <strong>both</strong> radio USB devices — leaving TX blank used to open the PC speakers and loop the browser mic into the room.
             </div>
             <div class="mb-3 form-check form-switch">
                 <input class="form-check-input" type="checkbox" asp-for="Settings.AudioStreamingEnabled" id="audioStreamingEnabled" />
@@ -2055,17 +2056,27 @@
                     <label class="form-label" for="audioRadioRxDevice">Radio RX device (capture)</label>
                     <select class="form-select" id="audioRadioRxDevice" name="Settings.AudioRadioRxDevice"
                             data-selected="@Model.Settings.AudioRadioRxDevice">
-                        <option value="">(Default input)</option>
+                        <option value="">(Select radio USB recording…)</option>
                     </select>
-                    <div class="form-text">Usually the Yaesu USB <em>recording</em> endpoint — what you hear in the browser. On Windows only <strong>WASAPI</strong> devices are listed.</div>
+                    <span asp-validation-for="Settings.AudioRadioRxDevice" class="text-danger"></span>
+                    <div class="form-text">
+                        Radio USB <em>recording</em> endpoint — what you hear in the browser.
+                        Factory names are often <strong>Microphone (USB Audio CODEC)</strong> or <strong>Line (USB Audio CODEC)</strong>;
+                        if you renamed it in the OS (e.g. “FTDX101”), pick that. On Windows only <strong>WASAPI</strong> devices are listed.
+                    </div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label" for="audioRadioTxDevice">Radio TX device (playback)</label>
                     <select class="form-select" id="audioRadioTxDevice" name="Settings.AudioRadioTxDevice"
                             data-selected="@Model.Settings.AudioRadioTxDevice">
-                        <option value="">(Default output)</option>
+                        <option value="">(Select radio USB playback…)</option>
                     </select>
-                    <div class="form-text">Usually the Yaesu USB <em>playback</em> endpoint — where browser mic audio is sent. On Windows only <strong>WASAPI</strong> devices are listed.</div>
+                    <span asp-validation-for="Settings.AudioRadioTxDevice" class="text-danger"></span>
+                    <div class="form-text">
+                        Radio USB <em>playback</em> / Speakers endpoint — where browser mic audio is sent.
+                        Often <strong>Speakers (USB Audio CODEC)</strong>. Do <strong>not</strong> pick your PC speakers / headphones
+                        (that causes mic feedback). On Windows only <strong>WASAPI</strong> devices are listed.
+                    </div>
                 </div>
             </div>
             <div class="row g-3 mt-1">
@@ -2798,7 +2809,9 @@
                             const key = d.key || d.displayName || d.name;
                             const opt = document.createElement('option');
                             opt.value = key;
-                            opt.textContent = d.displayName || key;
+                            // Server already sorts likely USB codec names first; mark them in the label.
+                            const base = d.displayName || key;
+                            opt.textContent = d.likelyRadio ? ('★ ' + base) : base;
                             if (key === matchKey) opt.selected = true;
                             sel.appendChild(opt);
                         });
@@ -2811,8 +2824,8 @@
                             sel.appendChild(orphan);
                         }
                     }
-                    fillAudioSelect(rxSel, data.inputs, rxSelected, '(Default input)');
-                    fillAudioSelect(txSel, data.outputs, txSelected, '(Default output)');
+                    fillAudioSelect(rxSel, data.inputs, rxSelected, '(Select radio USB recording…)');
+                    fillAudioSelect(txSel, data.outputs, txSelected, '(Select radio USB playback…)');
                 } catch (e) {
                     console.warn('Audio device list failed', e);
                 }

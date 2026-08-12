@@ -132,7 +132,8 @@ namespace Yaesu_Web_Control.Pages
             ModelState.Remove("Settings.DxClusterPostLoginCommands");
             // Accessibility TX shortcut is optional — empty = disabled.
             ModelState.Remove("Settings.TxToggleKey");
-            // Remote audio device names may be empty (use PortAudio defaults).
+            // Remote audio device names may be empty when the feature is off.
+            // When enabled we require explicit RX/TX picks (see check below).
             ModelState.Remove("Settings.AudioRadioRxDevice");
             ModelState.Remove("Settings.AudioRadioTxDevice");
             ModelState.Remove("Settings.HttpsSanHosts");
@@ -164,6 +165,28 @@ namespace Yaesu_Web_Control.Pages
                         : "Serial port must be a device path (e.g. /dev/cu.usbserial-…).");
                 NetworkAddresses = GetLocalIPAddresses();
                 return Page();
+            }
+
+            // Remote Audio: refuse blank devices when enabled. Empty TX used to
+            // open the PC speakers → browser-mic feedback into the room.
+            if (Settings.AudioStreamingEnabled)
+            {
+                if (string.IsNullOrWhiteSpace(Settings.AudioRadioRxDevice))
+                {
+                    ModelState.AddModelError("Settings.AudioRadioRxDevice",
+                        "Pick the radio’s USB recording / capture device (often “Microphone (USB Audio CODEC)” or a name you gave it).");
+                }
+                if (string.IsNullOrWhiteSpace(Settings.AudioRadioTxDevice))
+                {
+                    ModelState.AddModelError("Settings.AudioRadioTxDevice",
+                        "Pick the radio’s USB Speakers / playback device — not your PC speakers. Blank TX causes mic feedback.");
+                }
+                if (!ModelState.IsValid)
+                {
+                    StatusMessage = "❌ Settings not saved — Remote Audio needs explicit radio RX and TX devices.";
+                    NetworkAddresses = GetLocalIPAddresses();
+                    return Page();
+                }
             }
 
             try

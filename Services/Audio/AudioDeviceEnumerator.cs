@@ -72,10 +72,28 @@ namespace Yaesu_Web_Control.Services.Audio
         }
 
         public static IReadOnlyList<AudioDeviceInfo> ListInputs() =>
-            ListDevices().Where(d => d.IsInput).ToList();
+            PreferLikelyRadioUsb(ListDevices().Where(d => d.IsInput));
 
         public static IReadOnlyList<AudioDeviceInfo> ListOutputs() =>
-            ListDevices().Where(d => d.IsOutput).ToList();
+            PreferLikelyRadioUsb(ListDevices().Where(d => d.IsOutput));
+
+        /// <summary>
+        /// Soft hint only: put names that look like a Yaesu USB codec first.
+        /// Does <strong>not</strong> hide other devices — operators often rename
+        /// the endpoint (e.g. to "FTDX101"), and OS strings vary.
+        /// </summary>
+        public static bool LooksLikeRadioUsbCodec(string? deviceName)
+        {
+            if (string.IsNullOrWhiteSpace(deviceName)) return false;
+            return deviceName.Contains("USB Audio", StringComparison.OrdinalIgnoreCase)
+                || deviceName.Contains("Yaesu", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static IReadOnlyList<AudioDeviceInfo> PreferLikelyRadioUsb(IEnumerable<AudioDeviceInfo> devices) =>
+            devices
+                .OrderByDescending(d => LooksLikeRadioUsbCodec(d.Name))
+                .ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
         /// <summary>
         /// Resolve a saved device key to a PortAudio index, or -1.
