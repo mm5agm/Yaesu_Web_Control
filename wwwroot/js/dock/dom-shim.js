@@ -41,4 +41,5 @@ export function dispatchPanelResize() {
             doc.defaultView?.dispatchEvent(new Event('resize'));
         } catch { /* ignore */ }
     }
+    try { window.ywcMetersFit?.refit(); } catch { /* ignore */ }
 }

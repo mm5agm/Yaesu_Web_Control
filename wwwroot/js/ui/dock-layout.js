@@ -1,8 +1,8 @@
-import { TemplatePanel } from '/js/dock/template-panel.js?v=3';
+import { TemplatePanel } from '/js/dock/template-panel.js?v=4';
 import { GroupPopoutAction } from '/js/dock/group-popout-action.js?v=1';
 import { installDomShim, dispatchPanelResize } from '/js/dock/dom-shim.js';
 
-const LAYOUT_KEY = 'ywc.dockLayout.v3';
+const LAYOUT_KEY = 'ywc.dockLayout.v4';
 
 /** @typedef {import('dockview').DockviewApi} DockviewApi */
 
@@ -87,6 +87,8 @@ export function initDockWorkspace(host, flags) {
                 opts.position = { referencePanel: 'spectrumA', direction: 'right' };
             } else if (id === 'vfoB') {
                 opts.position = { referencePanel: 'vfoA', direction: 'right' };
+            } else if (id === 'controls' && api.getPanel('meters')) {
+                opts.position = { referencePanel: 'meters', direction: 'right' };
             } else if (id === 'clarifier' && api.getPanel('remoteAudio')) {
                 opts.position = { referencePanel: 'remoteAudio', direction: 'within' };
             }
@@ -116,6 +118,7 @@ function layoutDock(api, host) {
 function buildPanelDefs(flags) {
     const defs = [
         panelDef('meters', 'Meters', 'tpl-meters'),
+        panelDef('controls', 'Controls', 'tpl-controls'),
     ];
     if (flags.remoteAudio) defs.push(panelDef('remoteAudio', 'Remote Audio', 'tpl-remote-audio'));
     if (flags.spectrumA) defs.push(panelDef('spectrumA', 'Spectrum A', 'tpl-spectrum-a'));
@@ -147,16 +150,18 @@ function buildDefaultLayout(api, defs) {
         api.addPanel(opts);
     };
 
+    // Meters | Controls side by side across the top row.
     add('meters');
+    add('controls', { referencePanel: 'meters', direction: 'right' });
 
-    // VFO A | VFO B directly under meters (50/50). When Remote Audio exists,
-    // add it below meters first then stack VFOs above it so later panels can
-    // sit full-width under the VFO row instead of in one column only.
+    // Everything under that row must use the dock edge (`direction: 'below'`
+    // with no reference) so it spans the full width of meters|controls,
+    // not only one column.
     if (map.has('remoteAudio')) {
-        add('remoteAudio', { referencePanel: 'meters', direction: 'below' });
+        add('remoteAudio', { direction: 'below' });
         add('vfoA', { referencePanel: 'remoteAudio', direction: 'above' });
     } else {
-        add('vfoA', { referencePanel: 'meters', direction: 'below' });
+        add('vfoA', { direction: 'below' });
     }
     add('vfoB', { referencePanel: 'vfoA', direction: 'right' });
 

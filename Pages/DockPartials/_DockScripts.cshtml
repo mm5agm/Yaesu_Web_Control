@@ -20,7 +20,8 @@
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
         import { initRemoteAudioDock }    from "/js/audio/remote-audio-dock-ui.js?v=1";
-        import { initDockWorkspace, installBootstrapShim } from "/js/ui/dock-layout.js?v=5";
+        import { initDockWorkspace, installBootstrapShim } from "/js/ui/dock-layout.js?v=6";
+        import { initMetersFit } from "/js/dock/meters-fit.js?v=3";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -90,6 +91,18 @@
                 vdd:         { canvasId: 'vddMeterCanvas' }
             });
             window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine);
+            window.ywcMetersFit = initMetersFit();
+            if (!window.ywcMetersFit) {
+                // Dock panel content can lag one frame behind DOMContentLoaded.
+                requestAnimationFrame(() => {
+                    window.ywcMetersFit = initMetersFit();
+                    window.ywcMetersFit?.refit();
+                });
+            } else {
+                // Refit after gauges finish their first canvas layout.
+                setTimeout(() => window.ywcMetersFit?.refit(), 0);
+                setTimeout(() => window.ywcMetersFit?.refit(), 100);
+            }
 
             // ── S-meter history strips ───────────────────────────────────────
             // Hidden by default. Toggle via the "S-hist" button in the top
@@ -111,6 +124,7 @@
                     if (conB) conB.style.display = visible ? '' : 'none';
                     btn.classList.toggle('active', visible);
                     btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    window.ywcMetersFit?.refit();
                 };
                 let visible = false;
                 try { visible = localStorage.getItem(KEY) === '1'; } catch {}
@@ -799,7 +813,7 @@
 
         async function toggleProc() {
             const btn = document.getElementById('procBtn');
-            const enabled = btn.classList.contains('btn-success');
+            const enabled = btn.classList.contains('ywc-btn-success') || btn.classList.contains('btn-success');
             try {
                 const response = await fetch('/api/cat/proc', {
                     method: 'POST',
@@ -829,8 +843,8 @@
         function updateProcButton(enabled) {
             const btn = document.getElementById('procBtn');
             if (!btn) return;
-            btn.classList.toggle('btn-success', enabled);
-            btn.classList.toggle('btn-outline-secondary', !enabled);
+            btn.classList.remove('ywc-btn-success', 'ywc-btn-outline', 'btn-success', 'btn-outline-secondary');
+            btn.classList.add(enabled ? 'ywc-btn-success' : 'ywc-btn-outline');
             btn.textContent = enabled ? 'Proc On' : 'Proc Off';
         }
 
@@ -850,7 +864,7 @@
 
         async function toggleAtu() {
             const btn = document.getElementById('atuBtn');
-            const enabled = btn.classList.contains('btn-success');
+            const enabled = btn.classList.contains('ywc-btn-success') || btn.classList.contains('btn-success');
             try {
                 await fetch('/api/cat/atu', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -917,8 +931,9 @@
             // Only restyle the on/off appearance if we're not mid-tune; the
             // tuning state owns the button look while it's running.
             if (btn.dataset.tuning === 'true') return;
-            btn.classList.toggle('btn-success', enabled);
-            btn.classList.toggle('btn-outline-secondary', !enabled);
+            btn.classList.remove('ywc-btn-success', 'ywc-btn-outline', 'ywc-btn-danger',
+                'btn-success', 'btn-outline-secondary', 'btn-danger');
+            btn.classList.add(enabled ? 'ywc-btn-success' : 'ywc-btn-outline');
             btn.textContent = enabled ? 'ATU On' : 'ATU Off';
         }
         // Drives the "Tuning..." visual when the radio reports an auto-tune
@@ -929,12 +944,13 @@
             if (!btn) return;
             if (tuning) {
                 btn.dataset.tuning = 'true';
-                btn.classList.remove('btn-success', 'btn-outline-secondary');
-                btn.classList.add('btn-danger');   // red while tuning
+                btn.classList.remove('ywc-btn-success', 'ywc-btn-outline',
+                    'btn-success', 'btn-outline-secondary');
+                btn.classList.add('ywc-btn-danger');
                 btn.textContent = 'Tuning…';
             } else {
                 btn.dataset.tuning = 'false';
-                btn.classList.remove('btn-danger');
+                btn.classList.remove('ywc-btn-danger', 'btn-danger');
                 // Restore on/off styling from current state.
                 const onNow = btn.dataset.atuEnabled === 'true';
                 updateAtuButton(onNow);
@@ -979,8 +995,8 @@
         function _updateMonitorBtn(on) {
             const btn = document.getElementById('monitorOnBtn');
             if (!btn) return;
-            btn.classList.toggle('btn-warning', on);
-            btn.classList.toggle('btn-outline-secondary', !on);
+            btn.classList.remove('ywc-btn-warning', 'ywc-btn-outline', 'btn-warning', 'btn-outline-secondary');
+            btn.classList.add(on ? 'ywc-btn-warning' : 'ywc-btn-outline');
             btn.setAttribute('aria-label', `TX monitor — currently ${on ? 'on' : 'off'}`);
         }
         async function toggleMonitor() {
@@ -1054,14 +1070,15 @@
         function _applyConnectBtnState(connected) {
             const btn = document.getElementById('connectBtn');
             if (!btn) return;
-            btn.classList.remove('btn-success', 'btn-danger', 'btn-secondary');
+            btn.classList.remove('ywc-btn-success', 'ywc-btn-danger', 'ywc-btn-secondary',
+                'btn-success', 'btn-danger', 'btn-secondary');
             if (connected) {
-                btn.classList.add('btn-success');
-                btn.innerHTML = '<i class="bi bi-plug-fill" aria-hidden="true"></i> Connected';
+                btn.classList.add('ywc-btn-success');
+                btn.textContent = 'Connected';
                 btn.setAttribute('aria-label', 'CAT serial connection — currently connected');
             } else {
-                btn.classList.add('btn-danger');
-                btn.innerHTML = '<i class="bi bi-plug" aria-hidden="true"></i> Disconnected';
+                btn.classList.add('ywc-btn-danger');
+                btn.textContent = 'Disconnected';
                 btn.setAttribute('aria-label', 'CAT serial connection — currently disconnected');
             }
             _catConnected = connected;
@@ -1075,9 +1092,9 @@
                     const r = await fetch('/api/cat/disconnect', { method: 'POST' });
                     if ((await r.json()).success) _applyConnectBtnState(false);
                 } else {
-                    btn.classList.remove('btn-danger');
-                    btn.classList.add('btn-secondary');
-                    btn.innerHTML = '<i class="bi bi-plug" aria-hidden="true"></i> Connecting…';
+                    btn.classList.remove('ywc-btn-danger', 'btn-danger');
+                    btn.classList.add('ywc-btn-secondary');
+                    btn.textContent = 'Connecting…';
                     const r = await fetch('/api/cat/connect', { method: 'POST' });
                     _applyConnectBtnState((await r.json()).success);
                 }
@@ -1850,7 +1867,7 @@
         // --- VOX ---
         async function toggleVox() {
             const btn = document.getElementById('voxOnBtn');
-            const on = btn.classList.contains('btn-warning');
+            const on = btn?.classList.contains('ywc-btn-warning') || btn?.classList.contains('btn-warning');
             try {
                 await fetch('/api/cat/vox', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1862,8 +1879,15 @@
         function updateVoxButton(on) {
             const btn = document.getElementById('voxOnBtn');
             const mainBtn = document.getElementById('voxBtn');
-            if (btn) { btn.classList.toggle('btn-warning', on); btn.classList.toggle('btn-outline-secondary', !on); btn.textContent = on ? 'VOX On' : 'VOX Off'; }
-            if (mainBtn) { mainBtn.classList.toggle('btn-warning', on); mainBtn.classList.toggle('btn-outline-secondary', !on); }
+            if (btn) {
+                btn.classList.remove('ywc-btn-warning', 'ywc-btn-outline', 'btn-warning', 'btn-outline-secondary');
+                btn.classList.add(on ? 'ywc-btn-warning' : 'ywc-btn-outline');
+                btn.textContent = on ? 'VOX On' : 'VOX Off';
+            }
+            if (mainBtn) {
+                mainBtn.classList.remove('ywc-btn-warning', 'ywc-btn-outline', 'btn-warning', 'btn-outline-secondary');
+                mainBtn.classList.add(on ? 'ywc-btn-warning' : 'ywc-btn-outline');
+            }
         }
         async function setVoxGain(v) {
             try { await fetch('/api/cat/vox/gain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gain: parseInt(v) }) }); }

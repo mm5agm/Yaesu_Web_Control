@@ -43,6 +43,7 @@ document.getElementById('messageBoxOkBtn')?.addEventListener('click', () => {
 
 <div id="ywcPanelTemplates" hidden aria-hidden="true">
     <template id="tpl-meters">@await Html.PartialAsync("DockPartials/_Meters")</template>
+    <template id="tpl-controls">@await Html.PartialAsync("DockPartials/_Controls")</template>
     <template id="tpl-remote-audio">@await Html.PartialAsync("DockPartials/_RemoteAudio")</template>
     <template id="tpl-spectrum-a">@await Html.PartialAsync("DockPartials/_SpectrumA")</template>
     <template id="tpl-spectrum-b">@await Html.PartialAsync("DockPartials/_SpectrumB")</template>

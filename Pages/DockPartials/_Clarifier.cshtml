@@ -1,48 +1,44 @@
-<div class="row mt-2" class="ywc-clarifier">
-    <div class="col-12">
-        <div class="ywc-panel-inner">
-            <div class="ywc-panel-body">
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span class="fw-bold text-nowrap">Clarifier</span>
-                    <div class="btn-group btn-group-sm" id="clarVfoGroup" role="group" aria-label="Clarifier VFO selection">
-                        <button type="button" class="ywc-btn btn-outline-primary active" id="clarVfoABtn"
-                                onclick="selectClarVfo('A')" title="Apply clarifier to VFO A"
-                                aria-label="Apply clarifier to VFO A">VFO A</button>
-                        <button type="button" class="ywc-btn btn-outline-primary" id="clarVfoBBtn"
-                                onclick="selectClarVfo('B')" title="Apply clarifier to VFO B"
-                                aria-label="Apply clarifier to VFO B">VFO B</button>
-                    </div>
-                    <label class="mb-0 fw-bold text-nowrap ms-1" id="clarModeLabel">Mode:</label>
-                    <select class="ywc-select form-select-sm fw-bold flex-shrink-0" id="clarModeSelect"
-                            style="width:auto;" onchange="setClarifierMode(this.value)"
-                            aria-labelledby="clarModeLabel" aria-label="Clarifier mode">
-                        <option value="off"  selected="@(Model.View.ClarModeInit=="off"  ? "selected" : null)">OFF</option>
-                        <option value="rx"   selected="@(Model.View.ClarModeInit=="rx"   ? "selected" : null)">RX</option>
-                        <option value="tx"   selected="@(Model.View.ClarModeInit=="tx"   ? "selected" : null)">TX</option>
-                        <option value="rxtx" selected="@(Model.View.ClarModeInit=="rxtx" ? "selected" : null)">RX+TX</option>
-                    </select>
-                    <label class="mb-0 fw-bold text-nowrap ms-1">Offset:
-                        <span id="clarOffsetValue">@Model.RadioState.ClarifierOffsetA</span> Hz
-                    </label>
-                    <button type="button" class="ywc-btn btn-outline-secondary btn-sm flex-shrink-0 px-2"
-                            onclick="nudgeClarifier(-10)" title="−10 Hz"
-                            aria-label="Decrease clarifier offset by 10 Hz">−</button>
-                    <input type="range" id="clarOffsetSlider"
-                           min="-9990" max="9990" step="10"
-                           value="@Model.RadioState.ClarifierOffsetA"
-                           style="width: clamp(80px,12vw,180px); height:18px;"
-                           oninput="document.getElementById('clarOffsetValue').textContent = this.value"
-                           onchange="setClarifierOffset(parseInt(this.value))"
-                           aria-label="Clarifier offset in Hz" aria-valuemin="-9990" aria-valuemax="9990">
-                    <button type="button" class="ywc-btn btn-outline-secondary btn-sm flex-shrink-0 px-2"
-                            onclick="nudgeClarifier(10)" title="+10 Hz"
-                            aria-label="Increase clarifier offset by 10 Hz">+</button>
-                    <button type="button" class="ywc-btn btn-secondary btn-sm flex-shrink-0"
-                            onclick="resetClarifier()"
-                            title="Reset offset to 0 Hz (mode unchanged)"
-                            aria-label="Reset clarifier offset to zero">Reset</button>
-                </div>
+<div id="clarifierBar" class="ywc-clarifier" data-ywc-clar-ui="dock">
+    <div class="ywc-clarifier-inner">
+        <div class="ywc-clarifier-toolbar ywc-flex-wrap">
+            <strong class="ywc-clarifier-title">Clarifier</strong>
+            <div class="ywc-btn-group" id="clarVfoGroup" role="group" aria-label="Clarifier VFO selection">
+                <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-outline active" id="clarVfoABtn"
+                        onclick="selectClarVfo('A')" title="Apply clarifier to VFO A"
+                        aria-label="Apply clarifier to VFO A" aria-pressed="true">VFO A</button>
+                <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-outline" id="clarVfoBBtn"
+                        onclick="selectClarVfo('B')" title="Apply clarifier to VFO B"
+                        aria-label="Apply clarifier to VFO B" aria-pressed="false">VFO B</button>
             </div>
+            <label class="ywc-clarifier-label" id="clarModeLabel" for="clarModeSelect">Mode</label>
+            <select class="ywc-select ywc-clarifier-mode" id="clarModeSelect"
+                    onchange="setClarifierMode(this.value)"
+                    aria-labelledby="clarModeLabel" aria-label="Clarifier mode">
+                <option value="off"  selected="@(Model.View.ClarModeInit=="off"  ? "selected" : null)">OFF</option>
+                <option value="rx"   selected="@(Model.View.ClarModeInit=="rx"   ? "selected" : null)">RX</option>
+                <option value="tx"   selected="@(Model.View.ClarModeInit=="tx"   ? "selected" : null)">TX</option>
+                <option value="rxtx" selected="@(Model.View.ClarModeInit=="rxtx" ? "selected" : null)">RX+TX</option>
+            </select>
+            <label class="ywc-clarifier-label" for="clarOffsetSlider">
+                Offset
+                <span id="clarOffsetValue" class="ywc-clarifier-offset-val">@Model.RadioState.ClarifierOffsetA</span> Hz
+            </label>
+            <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-outline ywc-clarifier-nudge"
+                    onclick="nudgeClarifier(-10)" title="−10 Hz"
+                    aria-label="Decrease clarifier offset by 10 Hz">−</button>
+            <input type="range" class="ywc-range ywc-clarifier-slider" id="clarOffsetSlider"
+                   min="-9990" max="9990" step="10"
+                   value="@Model.RadioState.ClarifierOffsetA"
+                   oninput="document.getElementById('clarOffsetValue').textContent = this.value"
+                   onchange="setClarifierOffset(parseInt(this.value))"
+                   aria-label="Clarifier offset in Hz" aria-valuemin="-9990" aria-valuemax="9990">
+            <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-outline ywc-clarifier-nudge"
+                    onclick="nudgeClarifier(10)" title="+10 Hz"
+                    aria-label="Increase clarifier offset by 10 Hz">+</button>
+            <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-secondary"
+                    onclick="resetClarifier()"
+                    title="Reset offset to 0 Hz (mode unchanged)"
+                    aria-label="Reset clarifier offset to zero">Reset</button>
         </div>
     </div>
 </div>

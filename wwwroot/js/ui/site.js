@@ -2194,8 +2194,12 @@ window.resetIfShift = resetIfShift;
 
 function selectClarVfo(vfo) {
     clarVfo = vfo;
-    document.getElementById('clarVfoABtn')?.classList.toggle('active', vfo === 'A');
-    document.getElementById('clarVfoBBtn')?.classList.toggle('active', vfo === 'B');
+    const btnA = document.getElementById('clarVfoABtn');
+    const btnB = document.getElementById('clarVfoBBtn');
+    btnA?.classList.toggle('active', vfo === 'A');
+    btnB?.classList.toggle('active', vfo === 'B');
+    btnA?.setAttribute('aria-pressed', vfo === 'A' ? 'true' : 'false');
+    btnB?.setAttribute('aria-pressed', vfo === 'B' ? 'true' : 'false');
     const offset = clarOffsets[vfo];
     const slider = document.getElementById('clarOffsetSlider');
     const label  = document.getElementById('clarOffsetValue');

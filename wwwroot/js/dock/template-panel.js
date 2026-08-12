@@ -3,6 +3,7 @@
  */
 const TEMPLATE_BY_PANEL = {
     meters: 'tpl-meters',
+    controls: 'tpl-controls',
     remoteAudio: 'tpl-remote-audio',
     spectrumA: 'tpl-spectrum-a',
     spectrumB: 'tpl-spectrum-b',

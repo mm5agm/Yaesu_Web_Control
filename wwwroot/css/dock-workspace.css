@@ -136,10 +136,19 @@ html, body.ywc-dock-body {
 
 .ywc-dock-panel-host {
     height: 100%;
-    overflow: auto;
+    overflow: hidden;
     padding: 0.25rem;
     box-sizing: border-box;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.ywc-dock-panel-host > * {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
 }
 
 /* Native controls */
@@ -168,6 +177,23 @@ html, body.ywc-dock-body {
 .ywc-btn-success { background: #1e5a2a; border-color: #2a7040; color: #fff; }
 .ywc-btn-outline { background: transparent; }
 .ywc-btn.active, .ywc-btn.ywc-active { background: var(--ywc-accent); color: #fff; border-color: var(--ywc-accent); }
+
+.ywc-btn-group {
+    display: inline-flex;
+    align-items: stretch;
+}
+.ywc-btn-group > .ywc-btn {
+    border-radius: 0;
+}
+.ywc-btn-group > .ywc-btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+.ywc-btn-group > .ywc-btn:last-child {
+    border-radius: 0 4px 4px 0;
+}
+.ywc-btn-group > .ywc-btn + .ywc-btn {
+    margin-left: -1px;
+}
 
 .ywc-select {
     background: #333;
@@ -218,43 +244,223 @@ html, body.ywc-dock-body {
 .ywc-spectrum-panel {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
     height: 100%;
-    min-height: 180px;
+    min-height: 0;
+    min-width: 0;
     border: 1px solid var(--ywc-border);
     border-radius: 4px;
     background: #111;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .ywc-spectrum-header {
     padding: 0.2rem 0.4rem;
     background: #1a1a1a;
     border-bottom: 1px solid var(--ywc-border);
+    flex: 0 0 auto;
 }
 
-.ywc-spectrum-canvas-wrap { flex: 1; min-height: 120px; }
-.ywc-spectrum-canvas-wrap canvas { display: block; width: 100%; height: 100%; min-height: 140px; }
+.ywc-spectrum-canvas-wrap { flex: 1 1 auto; min-height: 0; }
+.ywc-spectrum-canvas-wrap canvas { display: block; width: 100%; height: 100%; }
 
 .ywc-vfo-card {
     border: 1px solid var(--ywc-border);
     border-radius: 4px;
     background: var(--ywc-surface);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
 }
 
 .ywc-vfo-header {
     padding: 0.25rem 0.5rem;
     background: #094771;
     color: #fff;
+    flex: 0 0 auto;
 }
 
 .ywc-vfo-header-b { background: #1e5a3a; }
 
-.ywc-vfo-body { padding: 0.35rem; }
+.ywc-vfo-body {
+    padding: 0.35rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
 
-.ywc-clarifier .ywc-panel-body {
+/* Meters panel (Dock tab) — gauges only */
+.ywc-meters {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.ywc-meters-inner {
+    /* Extra top padding: gauge arc labels sit near/above the canvas top edge. */
+    padding: 0.85rem 0.35rem 0.35rem;
+    box-sizing: content-box;
+    transform-origin: top left;
+    will-change: transform;
+}
+
+.ywc-meters-row {
     display: flex;
     flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0;
+}
+
+.ywc-meter-cell {
+    position: relative;
+    height: 135px;
+    width: 220px;
+    min-width: 165px;
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+    text-align: center;
+    overflow: visible;
+}
+
+.ywc-meter-cell.ywc-smeter-history {
+    width: 260px;
+    min-width: 260px;
+}
+
+.ywc-meter-cell.ywc-smeter-history canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 3px;
+}
+
+/* Controls / clarifier / remote audio fill the host without scrolling */
+.ywc-controls,
+.ywc-clarifier,
+.ywc-remote-audio {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Controls panel (Dock tab) — power / mic / ATU / dialogs */
+.ywc-controls-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.35rem 0.25rem;
+    min-height: 0;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.ywc-controls-toolbar {
+    gap: 0.4rem;
     align-items: center;
-    gap: 0.5rem;
+}
+
+.ywc-controls-title {
+    font-weight: 600;
+    margin-right: 0.15rem;
+}
+
+.ywc-controls-label {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ywc-text);
+    white-space: nowrap;
+}
+
+.ywc-controls-label-compact {
+    min-width: 2ch;
+}
+
+.ywc-controls-val {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.ywc-controls-slider {
+    flex: 0 1 120px;
+    min-width: 80px;
+    max-width: 150px;
+    height: 18px;
+}
+
+.ywc-controls-slider-sm {
+    min-width: 60px;
+    max-width: 110px;
+}
+
+/* Clarifier panel (Dock tab) */
+.ywc-clarifier-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.35rem 0.25rem;
+    min-height: 0;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.ywc-clarifier-toolbar {
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.ywc-clarifier-title {
+    font-weight: 600;
+    margin-right: 0.15rem;
+}
+
+.ywc-clarifier-label {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ywc-text);
+    white-space: nowrap;
+}
+
+.ywc-clarifier-mode {
+    width: auto;
+    font-weight: 600;
+}
+
+.ywc-clarifier-offset-val {
+    font-variant-numeric: tabular-nums;
+    min-width: 3.25ch;
+    display: inline-block;
+    text-align: right;
+}
+
+.ywc-clarifier-nudge {
+    min-width: 1.75rem;
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+}
+
+.ywc-clarifier-slider {
+    flex: 1 1 120px;
+    min-width: 80px;
+    max-width: 180px;
+    height: 18px;
 }
 
 .ywc-rxtx-group {
@@ -312,17 +518,15 @@ html, body.ywc-dock-body {
 .ywc-dock-popout body { background: var(--ywc-bg); }
 
 /* Remote Audio panel (Dock tab) */
-.ywc-remote-audio {
-    height: 100%;
-    box-sizing: border-box;
-}
-
 .ywc-remote-audio-inner {
     display: flex;
     flex-direction: column;
     gap: 0.65rem;
     padding: 0.35rem 0.25rem;
-    min-height: min-content;
+    min-height: 0;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .ywc-remote-audio-toolbar {
