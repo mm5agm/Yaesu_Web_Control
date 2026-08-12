@@ -47,8 +47,8 @@ document.getElementById('messageBoxOkBtn')?.addEventListener('click', () => {
     <template id="tpl-remote-audio">@await Html.PartialAsync("DockPartials/_RemoteAudio")</template>
     <template id="tpl-spectrum-a">@await Html.PartialAsync("DockPartials/_SpectrumA")</template>
     <template id="tpl-spectrum-b">@await Html.PartialAsync("DockPartials/_SpectrumB")</template>
-    <template id="tpl-vfo-a">@await Html.PartialAsync("DockPartials/_VfoA")</template>
-    <template id="tpl-vfo-b">@await Html.PartialAsync("DockPartials/_VfoB")</template>
+    <template id="tpl-vfo-a">@await Html.PartialAsync("DockPartials/_Vfo", DockVfoPanelModel.A(Model))</template>
+    <template id="tpl-vfo-b">@await Html.PartialAsync("DockPartials/_Vfo", DockVfoPanelModel.B(Model))</template>
     <template id="tpl-clarifier">@await Html.PartialAsync("DockPartials/_Clarifier")</template>
     <template id="tpl-empty"><div></div></template>
 </div>

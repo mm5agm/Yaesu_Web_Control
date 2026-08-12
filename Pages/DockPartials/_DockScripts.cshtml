@@ -35,6 +35,10 @@
 
         installBootstrapShim();
         initDockWorkspace(document.getElementById('ywcDockHost'), window.ywcDockFlags);
+        // TX / split chrome targets VFO panel DOM — refresh after templates mount.
+        if (typeof window.updateTxButton === 'function') window.updateTxButton();
+        if (typeof window.updateSplitButton === 'function') window.updateSplitButton();
+        if (typeof window.applyVfoActiveStyling === 'function') window.applyVfoActiveStyling();
 
         // bfcache guard.
         // back/forward cache (e.g. returning from Meter Calibration via the

@@ -284,32 +284,6 @@ html, body.ywc-dock-body {
     overflow: hidden;
 }
 
-.ywc-vfo-toolbar {
-    flex: 0 0 auto;
-    gap: 0.35rem;
-    align-items: center;
-    padding: 0.3rem 0.45rem;
-    background: #094771;
-    color: #fff;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.ywc-vfo-toolbar-b { background: #1e5a3a; }
-
-.ywc-vfo-toolbar .ywc-btn-outline {
-    border-color: rgba(255, 255, 255, 0.45);
-    color: #fff;
-}
-
-.ywc-vfo-toolbar .ywc-btn-outline:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.ywc-vfo-title {
-    font-weight: 600;
-    margin-right: 0.15rem;
-}
-
 .ywc-vfo-body {
     display: flex;
     flex-direction: column;
@@ -318,6 +292,23 @@ html, body.ywc-dock-body {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
+}
+
+.ywc-vfo-a.vfo-active,
+.ywc-vfo-b.vfo-active {
+    box-shadow: inset 0 0 0 2px var(--ywc-accent);
+}
+
+.ywc-vfo.border-danger {
+    box-shadow: inset 0 0 0 2px var(--ywc-danger);
+}
+
+.ywc-vfo.border-success {
+    box-shadow: inset 0 0 0 2px var(--ywc-success);
+}
+
+.ywc-vfo.vfo-inactive {
+    opacity: 0.55;
 }
 
 .ywc-vfo-controls-group {
@@ -364,7 +355,7 @@ html, body.ywc-dock-body {
 
 .ywc-vfo-muted {
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.65);
+    color: #9aa0a6;
     min-width: 44px;
 }
 

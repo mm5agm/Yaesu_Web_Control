@@ -891,15 +891,23 @@ function updateTxButton() {
     // Update button state
     const activeBtn = (positionVfo === 0) ? btnA : btnB;
     if (activeBtn) {
-        if (isTransmitting) {
-            activeBtn.className = 'btn btn-danger btn-sm';
-            activeBtn.innerHTML = '<i class="bi bi-broadcast" aria-hidden="true"></i> TX ON';
-            activeBtn.title = 'Click to stop transmitting';
+        const isYwc = activeBtn.classList.contains('ywc-btn');
+        if (isYwc) {
+            activeBtn.classList.remove('ywc-btn-danger', 'ywc-btn-warning',
+                'btn-danger', 'btn-warning', 'btn-sm');
+            activeBtn.classList.add(isTransmitting ? 'ywc-btn-danger' : 'ywc-btn-warning');
+            activeBtn.textContent = isTransmitting ? 'TX ON' : 'TX';
         } else {
-            activeBtn.className = 'btn btn-warning btn-sm';
-            activeBtn.innerHTML = '<i class="bi bi-broadcast" aria-hidden="true"></i> TX';
-            activeBtn.title = 'Click to transmit';
+            activeBtn.className = isTransmitting
+                ? 'btn btn-danger btn-sm'
+                : 'btn btn-warning btn-sm';
+            activeBtn.innerHTML = isTransmitting
+                ? '<i class="bi bi-broadcast" aria-hidden="true"></i> TX ON'
+                : '<i class="bi bi-broadcast" aria-hidden="true"></i> TX';
         }
+        activeBtn.title = isTransmitting
+            ? 'Click to stop transmitting'
+            : 'Click to transmit';
     }
 }
 
@@ -907,16 +915,23 @@ function updateSplitButton() {
     const btn        = document.getElementById('splitBtn');
     const badgeA     = document.getElementById('splitTxBadgeA');
     const badgeB     = document.getElementById('splitTxBadgeB');
-    const vfoACard   = document.querySelector('#vfoACol .card');
-    const vfoBCard   = document.querySelector('#vfoBCol .card');
+    // Index uses Bootstrap .card; Dock uses .ywc-vfo on the column root.
+    const vfoACard   = document.querySelector('#vfoACol .card') || document.getElementById('vfoACol');
+    const vfoBCard   = document.querySelector('#vfoBCol .card') || document.getElementById('vfoBCol');
     const vfoRow     = document.getElementById('vfoRow');
     const isSingleReceiver = vfoRow?.dataset.singleReceiver === 'true';
     const active     = splitMode > 0;
 
     if (btn) {
-        btn.className = active ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-outline-secondary';
-        btn.style.paddingTop    = '1px';
-        btn.style.paddingBottom = '1px';
+        if (btn.classList.contains('ywc-btn')) {
+            btn.classList.remove('ywc-btn-danger', 'ywc-btn-outline',
+                'btn-danger', 'btn-outline-secondary', 'btn-sm');
+            btn.classList.add(active ? 'ywc-btn-danger' : 'ywc-btn-outline');
+        } else {
+            btn.className = active ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-outline-secondary';
+            btn.style.paddingTop    = '1px';
+            btn.style.paddingBottom = '1px';
+        }
         btn.textContent = active ? 'Split ON' : 'Split';
     }
 
@@ -950,6 +965,9 @@ function updateSplitButton() {
         otherCard.classList.toggle('border-success', !active);
     }
 }
+window.updateTxButton = updateTxButton;
+window.updateSplitButton = updateSplitButton;
+window.applyVfoActiveStyling = applyVfoActiveStyling;
 
 // Independent RX / TX VFO selectors (single-receiver radios, #78). RX follows
 // activeVfo (VS / FR), TX follows txVfo (FT); split is derived (TX ≠ RX). The
@@ -2039,12 +2057,14 @@ window.addEventListener('DOMContentLoaded', () => {
         const vfoRow = document.getElementById('vfoRow');
         if (!vfoRow || vfoRow.dataset.singleReceiver === 'true') return;
         const wire = (colId, vfo) => {
-            const header = document.querySelector(`#${colId} .card-header`);
+            const header = document.querySelector(`#${colId} .card-header`)
+                || document.querySelector(`#${colId} .ywc-vfo-actions`)
+                || document.getElementById(colId);
             if (!header) return;
             header.style.cursor = 'pointer';
             header.title = `Click to make VFO ${vfo} the active (MAIN/SUB) band`;
             header.addEventListener('click', (e) => {
-                if (e.target.closest('button, input, select, a, [role="button"], .badge')) return;
+                if (e.target.closest('button, input, select, a, [role="button"], .badge, .ywc-badge')) return;
                 setActiveVfo(vfo);
             });
         };
