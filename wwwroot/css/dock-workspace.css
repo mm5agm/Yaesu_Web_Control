@@ -302,6 +302,9 @@ html, body.ywc-dock-body {
     height: 100%;
     box-sizing: border-box;
     overflow: hidden;
+    /* Light plate behind analog gauges (labels/ticks assume a bright ground). */
+    background: #f2f2f2;
+    border-radius: 4px;
 }
 
 .ywc-meters-inner {
