@@ -254,7 +254,7 @@ namespace Yaesu_Web_Control.Services.Video
                         {
                             var scale = (double)maxWidth / frame.Width;
                             var newH = Math.Max(1, (int)Math.Round(frame.Height * scale));
-                            Cv2.Resize(frame, resized, new Size(maxWidth, newH), 0, 0, InterpolationFlags.Area);
+                            Cv2.Resize(frame, resized, new OpenCvSharp.Size(maxWidth, newH), 0, 0, InterpolationFlags.Area);
                             source = resized;
                         }
 
