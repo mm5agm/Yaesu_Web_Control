@@ -311,5 +311,118 @@ html, body.ywc-dock-body {
 
 .ywc-dock-popout body { background: var(--ywc-bg); }
 
+/* Remote Audio panel (Dock tab) */
+.ywc-remote-audio {
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.ywc-remote-audio-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.35rem 0.25rem;
+    min-height: min-content;
+}
+
+.ywc-remote-audio-toolbar {
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.ywc-remote-audio-title {
+    font-weight: 600;
+    margin-right: 0.15rem;
+}
+
+.ywc-remote-audio-status {
+    font-size: 0.75rem;
+    color: #9aa0a6;
+}
+
+.ywc-remote-audio-meters {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: auto;
+    min-width: 180px;
+}
+
+.ywc-remote-audio-meter-label {
+    font-size: 0.7rem;
+    color: #9aa0a6;
+    line-height: 1;
+}
+
+#remoteAudioBar .remote-audio-icon-btn {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    line-height: 1;
+}
+
+#remoteAudioBar .remote-audio-btn-icon {
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.ywc-remote-audio-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid var(--ywc-border);
+}
+
+.ywc-remote-audio-field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+}
+
+.ywc-remote-audio-field-range {
+    align-items: center;
+}
+
+.ywc-remote-audio-label {
+    flex: 0 0 auto;
+    min-width: 11rem;
+    font-size: 0.8rem;
+    color: var(--ywc-text);
+}
+
+.ywc-remote-audio-select {
+    flex: 1 1 12rem;
+    max-width: 24rem;
+    min-width: 12rem;
+}
+
+.ywc-remote-audio-hint {
+    margin: 0;
+    font-size: 0.72rem;
+    color: #9aa0a6;
+}
+
+.ywc-remote-audio-hint-inline {
+    font-size: 0.72rem;
+    color: #9aa0a6;
+    white-space: nowrap;
+}
+
+.ywc-remote-audio-gain-val {
+    font-weight: 600;
+    margin-left: 0.35rem;
+}
+
+.ywc-gain-rx { color: #3794ff; }
+.ywc-gain-tx { color: #cca700; }
+
+.ywc-remote-audio-field-range .ywc-range {
+    flex: 1 1 120px;
+    min-width: 120px;
+    height: 18px;
+}
+
 /* Dockview theme bridge */
 .dockview-theme-abyss .tabs-and-actions-container { background: #252526; }

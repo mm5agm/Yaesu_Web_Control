@@ -19,8 +19,8 @@
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=14";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
-        import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=22";
-        import { initDockWorkspace, installBootstrapShim } from "/js/ui/dock-layout.js?v=3";
+        import { initRemoteAudioDock }    from "/js/audio/remote-audio-dock-ui.js?v=1";
+        import { initDockWorkspace, installBootstrapShim } from "/js/ui/dock-layout.js?v=5";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -48,7 +48,7 @@
         });
 
         loadLabels();
-        initRemoteAudioUi();
+        initRemoteAudioDock();
         // loadLabels() rewrites every title from labels.json on each focus,
         // wiping the "out of band" title suffix; restore it once that has run.
         window.addEventListener('focus', async () => {
@@ -1139,7 +1139,7 @@
             }, { passive: true });
         }
 
-        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog'].forEach(id => {
+        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
             makeDraggable(dlg, dlg.querySelector('div'));

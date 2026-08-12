@@ -1,67 +1,95 @@
-    <div id="remoteAudioBar" class="ywc-remote-audio" style="display:none;">
-        <div class="col-12">
-            <div class="ywc-panel-inner">
-                <div class="ywc-panel-body ywc-flex-wrap">
-                    <strong class="me-1"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
-                    <span data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Connect to transceiver audio" aria-label="Connect to transceiver audio">
-                        <button type="button" class="ywc-btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioStartBtn"
-                                aria-label="Connect to transceiver audio">
-                            <i class="bi bi-telephone-fill remote-audio-btn-icon" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Disconnect transceiver audio" aria-label="Disconnect transceiver audio">
-                        <button type="button" class="ywc-btn btn-sm btn-danger remote-audio-icon-btn" id="remoteAudioStopBtn" disabled
-                                aria-label="Disconnect transceiver audio">
-                            <i class="bi bi-telephone-x-fill remote-audio-btn-icon" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span id="remoteAudioPopoutTip" data-bs-toggle="tooltip"
-                          data-bs-placement="top"
-                          data-bs-title="Popout audio, useful to navigate YWC without interrupting the audio stream"
-                          aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
-                        <button type="button" class="ywc-btn btn-sm btn-outline-secondary remote-audio-icon-btn" id="remoteAudioPopoutBtn"
-                                aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
-                            <i class="bi bi-window-plus remote-audio-btn-icon" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span id="remoteAudioMicMuteTip" data-bs-toggle="tooltip"
-                          data-bs-placement="top" data-bs-title="Mute microphone" aria-label="Mute microphone">
-                        <button type="button" class="ywc-btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioMicMute"
-                                aria-pressed="false" aria-label="Mute microphone" disabled>
-                            <i class="bi bi-mic-fill remote-audio-btn-icon" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span id="remoteAudioRxMuteTip" data-bs-toggle="tooltip"
-                          data-bs-placement="top" data-bs-title="Deafen — mute received audio"
-                          aria-label="Deafen — mute received audio">
-                        <button type="button" class="ywc-btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioRxMute"
-                                aria-pressed="false" aria-label="Deafen — mute received audio" disabled>
-                            <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span id="remoteAudioLevelsTip" data-bs-toggle="tooltip"
-                          data-bs-placement="top"
-                          data-bs-title="Browser microphone and software gain"
-                          aria-label="Browser microphone and software gain">
-                        <button type="button" class="ywc-btn btn-sm btn-outline-secondary" id="remoteAudioLevelsBtn"
-                                aria-label="Open mic and gain settings">
-                            <i class="bi bi-sliders remote-audio-btn-icon" aria-hidden="true"></i>&nbsp;Mic &amp; Gain
-                        </button>
-                    </span>
-                    <span class="small text-muted" id="remoteAudioStatus">Idle</span>
-                    <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
-                        <span class="small" title="Radio → browser level">RX</span>
-                        <div class="ywc-progress flex-grow-1" style="height:8px; width:80px;">
-                            <div id="remoteAudioRxMeter" class="ywc-progress-bar bg-info" style="width:0%"></div>
-                        </div>
-                        <span class="small" title="Browser mic → radio level">TX</span>
-                        <div class="ywc-progress flex-grow-1" style="height:8px; width:80px;">
-                            <div id="remoteAudioTxMeter" class="ywc-progress-bar bg-warning" style="width:0%"></div>
-                        </div>
-                    </div>
+<div id="remoteAudioBar" class="ywc-remote-audio" data-ywc-audio-ui="dock">
+    <div class="ywc-remote-audio-inner">
+        <div class="ywc-remote-audio-toolbar ywc-flex-wrap">
+            <strong class="ywc-remote-audio-title">Remote Audio</strong>
+            <span class="ywc-remote-audio-tip" title="Connect to transceiver audio" aria-label="Connect to transceiver audio">
+                <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-success remote-audio-icon-btn" id="remoteAudioStartBtn"
+                        aria-label="Connect to transceiver audio">
+                    <span class="remote-audio-btn-icon" aria-hidden="true">▶</span>
+                </button>
+            </span>
+            <span class="ywc-remote-audio-tip" title="Disconnect transceiver audio" aria-label="Disconnect transceiver audio">
+                <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-danger remote-audio-icon-btn" id="remoteAudioStopBtn" disabled
+                        aria-label="Disconnect transceiver audio">
+                    <span class="remote-audio-btn-icon" aria-hidden="true">■</span>
+                </button>
+            </span>
+            <span class="ywc-remote-audio-tip" id="remoteAudioMicMuteTip" title="Mute microphone" aria-label="Mute microphone">
+                <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-success remote-audio-icon-btn" id="remoteAudioMicMute"
+                        aria-pressed="false" aria-label="Mute microphone" disabled>
+                    <span class="remote-audio-btn-icon" aria-hidden="true">🎤</span>
+                </button>
+            </span>
+            <span class="ywc-remote-audio-tip" id="remoteAudioRxMuteTip" title="Deafen — mute received audio"
+                  aria-label="Deafen — mute received audio">
+                <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-success remote-audio-icon-btn" id="remoteAudioRxMute"
+                        aria-pressed="false" aria-label="Deafen — mute received audio" disabled>
+                    <span class="remote-audio-btn-icon" aria-hidden="true">🎧</span>
+                </button>
+            </span>
+            <span class="ywc-remote-audio-tip" id="remoteAudioTxTip" title="Toggle transmit (PTT)" aria-label="Toggle transmit (PTT)">
+                <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-warning" id="remoteAudioTxBtn"
+                        aria-pressed="false" aria-label="Toggle transmit">
+                    <span class="remote-audio-btn-icon" aria-hidden="true">📻</span> TX
+                </button>
+            </span>
+            <span class="ywc-badge ywc-badge-secondary" id="remoteAudioTxVfo"
+                  title="VFO that will transmit" aria-live="polite">VFO A</span>
+            <span class="ywc-remote-audio-status" id="remoteAudioStatus">Idle</span>
+            <div class="ywc-remote-audio-meters">
+                <span class="ywc-remote-audio-meter-label" title="Radio → browser level">RX</span>
+                <div class="ywc-progress" style="width:80px;">
+                    <div id="remoteAudioRxMeter" class="ywc-progress-bar ywc-bar-info" style="width:0%"></div>
+                </div>
+                <span class="ywc-remote-audio-meter-label" title="Browser mic → radio level">TX</span>
+                <div class="ywc-progress" style="width:80px;">
+                    <div id="remoteAudioTxMeter" class="ywc-progress-bar ywc-bar-warning" style="width:0%"></div>
                 </div>
             </div>
         </div>
+        <div class="ywc-remote-audio-settings">
+            <div class="ywc-remote-audio-field">
+                <label class="ywc-remote-audio-label" for="remoteAudioMicSelect">Browser microphone</label>
+                <select id="remoteAudioMicSelect" class="ywc-select ywc-remote-audio-select"
+                        title="Browser microphone sent to the radio (TX)"
+                        aria-label="Browser microphone for remote audio TX">
+                    <option value="">Default microphone</option>
+                </select>
+            </div>
+            <div class="ywc-remote-audio-field">
+                <label class="ywc-remote-audio-label" for="remoteAudioCodecSelect">Audio codec</label>
+                <select id="remoteAudioCodecSelect" class="ywc-select ywc-remote-audio-select"
+                        title="Compression used for remote audio (stop and reconnect to apply)"
+                        aria-label="Remote audio codec">
+                    <option value="opus">Opus (~32 kb/s) — recommended</option>
+                    <option value="pcm16">PCM16 (~768 kb/s) — uncompressed</option>
+                </select>
+            </div>
+            <p class="ywc-remote-audio-hint" id="remoteAudioCodecHint">
+                Opus uses far less bandwidth than PCM16. Stop and reconnect remote audio for a codec change to apply.
+            </p>
+            <div class="ywc-remote-audio-field ywc-remote-audio-field-range">
+                <label class="ywc-remote-audio-label" for="remoteAudioRxGain">
+                    Receive (RX) gain
+                    <span id="remoteAudioRxGainVal" class="ywc-remote-audio-gain-val ywc-gain-rx">1.00</span>
+                </label>
+                <input type="range" class="ywc-range" id="remoteAudioRxGain"
+                       min="0.05" max="4" step="0.05" value="1"
+                       aria-label="Receive gain — radio to browser"
+                       title="How loud the radio sounds in your browser">
+                <span class="ywc-remote-audio-hint-inline">Radio → browser</span>
+            </div>
+            <div class="ywc-remote-audio-field ywc-remote-audio-field-range">
+                <label class="ywc-remote-audio-label" for="remoteAudioTxGain">
+                    Mic (TX) gain
+                    <span id="remoteAudioTxGainVal" class="ywc-remote-audio-gain-val ywc-gain-tx">1.00</span>
+                </label>
+                <input type="range" class="ywc-range" id="remoteAudioTxGain"
+                       min="0.05" max="4" step="0.05" value="1"
+                       aria-label="Mic gain — browser microphone to radio"
+                       title="How loud your browser mic is sent to the radio">
+                <span class="ywc-remote-audio-hint-inline">Browser mic → radio</span>
+            </div>
+        </div>
     </div>
+</div>

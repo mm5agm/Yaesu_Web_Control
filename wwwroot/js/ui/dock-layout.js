@@ -2,7 +2,7 @@ import { TemplatePanel } from '/js/dock/template-panel.js?v=3';
 import { GroupPopoutAction } from '/js/dock/group-popout-action.js?v=1';
 import { installDomShim, dispatchPanelResize } from '/js/dock/dom-shim.js';
 
-const LAYOUT_KEY = 'ywc.dockLayout.v1';
+const LAYOUT_KEY = 'ywc.dockLayout.v3';
 
 /** @typedef {import('dockview').DockviewApi} DockviewApi */
 
@@ -87,6 +87,8 @@ export function initDockWorkspace(host, flags) {
                 opts.position = { referencePanel: 'spectrumA', direction: 'right' };
             } else if (id === 'vfoB') {
                 opts.position = { referencePanel: 'vfoA', direction: 'right' };
+            } else if (id === 'clarifier' && api.getPanel('remoteAudio')) {
+                opts.position = { referencePanel: 'remoteAudio', direction: 'within' };
             }
             api.addPanel(opts);
             dispatchPanelResize();
@@ -137,19 +139,44 @@ function panelDef(id, title, templateId) {
 }
 
 function buildDefaultLayout(api, defs) {
-    if (!defs.length) return;
-    let lastId = null;
-    for (const def of defs) {
-        const opts = { ...def.options };
-        if (def.id === 'spectrumB') {
-            opts.position = { referencePanel: 'spectrumA', direction: 'right' };
-        } else if (def.id === 'vfoB') {
-            opts.position = { referencePanel: 'vfoA', direction: 'right' };
-        } else if (lastId) {
-            opts.position = { referencePanel: lastId, direction: 'below' };
-        }
+    const map = new Map(defs.map((d) => [d.id, d]));
+    const add = (id, position) => {
+        if (!map.has(id)) return;
+        const opts = { ...map.get(id).options };
+        if (position) opts.position = position;
         api.addPanel(opts);
-        lastId = def.id;
+    };
+
+    add('meters');
+
+    // VFO A | VFO B directly under meters (50/50). When Remote Audio exists,
+    // add it below meters first then stack VFOs above it so later panels can
+    // sit full-width under the VFO row instead of in one column only.
+    if (map.has('remoteAudio')) {
+        add('remoteAudio', { referencePanel: 'meters', direction: 'below' });
+        add('vfoA', { referencePanel: 'remoteAudio', direction: 'above' });
+    } else {
+        add('vfoA', { referencePanel: 'meters', direction: 'below' });
+    }
+    add('vfoB', { referencePanel: 'vfoA', direction: 'right' });
+
+    if (map.has('remoteAudio') && map.has('clarifier')) {
+        add('clarifier', { referencePanel: 'remoteAudio', direction: 'within' });
+    } else if (map.has('clarifier')) {
+        add('clarifier', {
+            referencePanel: map.has('vfoB') ? 'vfoB' : 'vfoA',
+            direction: 'below',
+        });
+    }
+
+    let below = map.has('remoteAudio') ? 'remoteAudio' : (map.has('vfoB') ? 'vfoB' : 'vfoA');
+
+    if (map.has('spectrumA')) {
+        add('spectrumA', { referencePanel: below, direction: 'below' });
+        below = 'spectrumA';
+    }
+    if (map.has('spectrumB')) {
+        add('spectrumB', { referencePanel: 'spectrumA', direction: 'right' });
     }
 }
 
