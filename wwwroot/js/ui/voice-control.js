@@ -108,11 +108,23 @@
         // ---- Visual state --------------------------------------------
 
         // Only the colour variant is swapped; the button's layout classes
-        // (voice-mic-btn/d-flex/centering) and its fixed size stay put.
+        // (voice-mic-btn / ywc sizing) and its fixed size stay put.
         // Rebuilding className wholesale used to drop those and reflow the icon.
-        const COLOUR_CLASSES = ['btn-outline-danger', 'btn-danger', 'btn-success', 'btn-warning'];
+        const isYwc = btn.classList.contains('ywc-btn');
+        const COLOUR_CLASSES = isYwc
+            ? ['ywc-btn-outline', 'ywc-btn-danger', 'ywc-btn-success', 'ywc-btn-warning',
+               'btn-outline-danger', 'btn-danger', 'btn-success', 'btn-warning']
+            : ['btn-outline-danger', 'btn-danger', 'btn-success', 'btn-warning'];
         function setButtonClass(styleSuffix) {
             btn.classList.remove(...COLOUR_CLASSES);
+            if (isYwc) {
+                if (styleSuffix === 'outline-danger') {
+                    btn.classList.add('ywc-btn-outline', 'ywc-btn-danger');
+                } else {
+                    btn.classList.add('ywc-btn-' + styleSuffix);
+                }
+                return;
+            }
             btn.classList.add('btn-' + styleSuffix);
         }
         // Only setIdleVisual clears the listening class: the pulsing red is

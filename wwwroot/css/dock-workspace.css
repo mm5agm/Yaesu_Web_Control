@@ -176,6 +176,8 @@ html, body.ywc-dock-body {
 .ywc-btn-warning { background: #6b5a00; border-color: #8a7200; color: #fff; }
 .ywc-btn-success { background: #1e5a2a; border-color: #2a7040; color: #fff; }
 .ywc-btn-outline { background: transparent; }
+.ywc-btn-outline.ywc-btn-danger { color: #f14c4c; border-color: #a03030; background: transparent; }
+.ywc-btn-outline.ywc-btn-danger:hover { background: rgba(241, 76, 76, 0.15); }
 .ywc-btn.active, .ywc-btn.ywc-active { background: var(--ywc-accent); color: #fff; border-color: var(--ywc-accent); }
 
 .ywc-btn-group {
@@ -265,32 +267,265 @@ html, body.ywc-dock-body {
 .ywc-spectrum-canvas-wrap { flex: 1 1 auto; min-height: 0; }
 .ywc-spectrum-canvas-wrap canvas { display: block; width: 100%; height: 100%; }
 
-.ywc-vfo-card {
+/* VFO panels (Dock tabs) */
+.ywc-vfo {
     border: 1px solid var(--ywc-border);
     border-radius: 4px;
     background: var(--ywc-surface);
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
+}
+
+.ywc-vfo-inner {
     display: flex;
     flex-direction: column;
+    gap: 0;
+    min-height: 0;
+    height: 100%;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
-.ywc-vfo-header {
-    padding: 0.25rem 0.5rem;
+.ywc-vfo-toolbar {
+    flex: 0 0 auto;
+    gap: 0.35rem;
+    align-items: center;
+    padding: 0.3rem 0.45rem;
     background: #094771;
     color: #fff;
-    flex: 0 0 auto;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.ywc-vfo-header-b { background: #1e5a3a; }
+.ywc-vfo-toolbar-b { background: #1e5a3a; }
+
+.ywc-vfo-toolbar .ywc-btn-outline {
+    border-color: rgba(255, 255, 255, 0.45);
+    color: #fff;
+}
+
+.ywc-vfo-toolbar .ywc-btn-outline:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.ywc-vfo-title {
+    font-weight: 600;
+    margin-right: 0.15rem;
+}
 
 .ywc-vfo-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
     padding: 0.35rem;
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
+}
+
+.ywc-vfo-controls-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.ywc-vfo-mem { flex: 0 0 auto; }
+
+.ywc-vfo-bands {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex: 1 1 12rem;
+    min-width: 0;
+}
+
+.ywc-vfo-qmb,
+.ywc-vfo-mode-row,
+.ywc-vfo-vctune {
+    gap: 0.35rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.ywc-vfo-label {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--ywc-text);
+    white-space: nowrap;
+}
+
+.ywc-vfo-val {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 0.8rem;
+    min-width: 2.5ch;
+    text-align: right;
+}
+
+.ywc-vfo-muted {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.65);
+    min-width: 44px;
+}
+
+.ywc-vfo-warn {
+    font-size: 0.75rem;
+    color: var(--ywc-warning);
+}
+
+.ywc-vfo-vctune-step { width: 3.5rem; }
+
+.ywc-vfo-scope {
+    flex: 0 0 auto;
+    width: 160px;
+}
+
+.ywc-vfo-scope canvas {
+    display: block;
+    width: 100%;
+    height: 80px;
+    border-radius: 4px;
+    background: #111;
+}
+
+.ywc-vfo-grid {
+    margin-left: 0;
+}
+
+.ywc-vfo .vfo-control-item {
+    gap: 0.3rem;
+}
+
+.ywc-vfo .vfo-control-label {
+    color: var(--ywc-text);
+}
+
+.ywc-vfo .vfo-control-item select {
+    color: var(--ywc-text);
+    background: #333;
+    border: 1px solid var(--ywc-border);
+}
+
+.ywc-vfo-span {
+    grid-column: 1 / -1;
+}
+
+.ywc-vfo-span .ywc-range {
+    flex: 1 1 auto;
+    min-width: 60px;
+    height: 16px;
+}
+
+.ywc-vfo-row,
+.ywc-vfo-freq-row,
+.ywc-vfo-if-row {
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.ywc-vfo-slider-sm {
+    width: clamp(60px, 8vw, 120px);
+    height: 16px;
+    flex: 0 0 auto;
+}
+
+.ywc-vfo-freq {
+    font-weight: 700;
+    color: #fff;
+}
+
+.ywc-vfo-freq-unit {
+    font-weight: 600;
+    color: var(--ywc-text);
+}
+
+.ywc-vfo-freq-steps {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.ywc-vfo-status {
+    flex: 0 0 auto;
+    padding: 0.2rem 0.45rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.85rem;
+    line-height: 1.25;
+    overflow-x: auto;
+    white-space: nowrap;
+    border-radius: 3px;
+    color: #fff;
+}
+
+.ywc-vfo-status-a { background: #0d6efd; }
+.ywc-vfo-status-b { background: #198754; }
+
+.ywc-vfo-voice { flex: 0 0 auto; }
+.ywc-vfo-voice .ywc-flex { gap: 0.4rem; align-items: center; }
+
+.ywc-vfo-voice-step {
+    width: auto;
+    font-size: 1.1rem;
+    font-weight: 600;
+    padding: 0.35rem 0.5rem;
+}
+
+.ywc-vfo .voice-mic-btn {
+    width: 140px;
+    height: 120px;
+    padding: 0;
+}
+
+.ywc-vfo-mic-icon {
+    font-size: 3.5rem;
+    line-height: 1;
+}
+
+.ywc-vfo-voice-heard {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--ywc-text);
+    margin-top: 0.25rem;
+    max-width: 320px;
+    overflow-wrap: break-word;
+}
+
+/* Band buttons on dark VFO panels */
+.ywc-vfo .band-buttons-container .vfo-control-label,
+.ywc-vfo .band-buttons-container .ywc-vfo-label {
+    color: var(--ywc-text);
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.ywc-vfo .band-radio-label {
+    background-color: #333;
+    border-color: var(--ywc-border);
+    color: var(--ywc-text);
+}
+
+.ywc-vfo .band-radio-label:hover {
+    background-color: #3a3a3a;
+    border-color: var(--ywc-accent);
+}
+
+.ywc-vfo-a .band-radio-label:has(input:checked) {
+    background-color: #094771;
+    border-color: #3794ff;
+    color: #fff;
+}
+
+.ywc-vfo-b .band-radio-label:has(input:checked) {
+    background-color: #1e5a3a;
+    border-color: #89d185;
+    color: #fff;
+}
+
+.ywc-vfo .band-radio-label.band-oob,
+.ywc-vfo .band-radio-label.band-oob:hover {
+    background-color: #8b2020;
+    border-color: #f14c4c;
+    color: #fff;
 }
 
 /* Meters panel (Dock tab) — gauges only */
@@ -347,10 +582,11 @@ html, body.ywc-dock-body {
     border-radius: 3px;
 }
 
-/* Controls / clarifier / remote audio fill the host without scrolling */
+/* Controls / clarifier / remote audio / VFO fill the host without scrolling */
 .ywc-controls,
 .ywc-clarifier,
-.ywc-remote-audio {
+.ywc-remote-audio,
+.ywc-vfo {
     flex: 1 1 auto;
     min-height: 0;
     min-width: 0;

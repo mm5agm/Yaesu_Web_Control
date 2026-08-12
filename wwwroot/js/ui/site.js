@@ -2065,11 +2065,17 @@ window.addEventListener('DOMContentLoaded', () => {
     // Contour/APF: seed JS state from server-rendered HTML values
     for (const vfo of ['A', 'B']) {
         const cBtn = document.getElementById(`contourBtn${vfo}`);
-        if (cBtn) contourState[vfo].on = cBtn.classList.contains('btn-success');
+        if (cBtn) {
+            contourState[vfo].on = cBtn.classList.contains('ywc-btn-success')
+                || cBtn.classList.contains('btn-success');
+        }
         const cSlider = document.getElementById(`contourFreqSlider${vfo}`);
         if (cSlider) contourState[vfo].freqHz = parseInt(cSlider.value) || 800;
         const aBtn = document.getElementById(`apfBtn${vfo}`);
-        if (aBtn) apfState[vfo].on = aBtn.classList.contains('btn-success');
+        if (aBtn) {
+            apfState[vfo].on = aBtn.classList.contains('ywc-btn-success')
+                || aBtn.classList.contains('btn-success');
+        }
         const aSlider = document.getElementById(`apfFreqSlider${vfo}`);
         if (aSlider) apfState[vfo].freqHz = parseInt(aSlider.value) || 0;
     }
@@ -2314,13 +2320,24 @@ function resetIfWidth(receiver) {
 }
 window.resetIfWidth = resetIfWidth;
 
+function _setOnOffBtnClasses(btn, on) {
+    const isYwc = btn.classList.contains('ywc-btn');
+    if (isYwc) {
+        btn.classList.remove('ywc-btn-success', 'ywc-btn-outline',
+            'btn-success', 'btn-outline-secondary');
+        btn.classList.add(on ? 'ywc-btn-success' : 'ywc-btn-outline');
+        return;
+    }
+    btn.className = btn.className.replace(/btn-success|btn-outline-secondary/g, '').trim();
+    btn.classList.add(on ? 'btn-success' : 'btn-outline-secondary');
+}
+
 function _updateContourBtn(vfo) {
     const btn = document.getElementById(`contourBtn${vfo}`);
     if (!btn) return;
     const on = contourState[vfo].on;
     btn.textContent = on ? 'Contour On' : 'Contour Off';
-    btn.className = btn.className.replace(/btn-success|btn-outline-secondary/g, '').trim();
-    btn.classList.add(on ? 'btn-success' : 'btn-outline-secondary');
+    _setOnOffBtnClasses(btn, on);
 }
 
 function _updateApfBtn(vfo) {
@@ -2328,8 +2345,7 @@ function _updateApfBtn(vfo) {
     if (!btn) return;
     const on = apfState[vfo].on;
     btn.textContent = on ? 'APF On' : 'APF Off';
-    btn.className = btn.className.replace(/btn-success|btn-outline-secondary/g, '').trim();
-    btn.classList.add(on ? 'btn-success' : 'btn-outline-secondary');
+    _setOnOffBtnClasses(btn, on);
 }
 
 async function toggleContour(vfo) {
@@ -3940,8 +3956,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (toggleBtn) {
             var isActive = (state === 'On' || state === 'Stepping' || state === 'Centering');
-            toggleBtn.classList.remove('btn-outline-light', 'btn-warning');
-            toggleBtn.classList.add(isActive ? 'btn-warning' : 'btn-outline-light');
+            if (toggleBtn.classList.contains('ywc-btn')) {
+                toggleBtn.classList.remove('ywc-btn-outline', 'ywc-btn-warning',
+                    'btn-outline-light', 'btn-warning');
+                toggleBtn.classList.add(isActive ? 'ywc-btn-warning' : 'ywc-btn-outline');
+            } else {
+                toggleBtn.classList.remove('btn-outline-light', 'btn-warning');
+                toggleBtn.classList.add(isActive ? 'btn-warning' : 'btn-outline-light');
+            }
             toggleBtn.disabled = notInstalled;
             if (band === 'b') toggleBtn.style.display = avail > 0 ? '' : 'none';
         }
