@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net10.0, deliberately, NOT net10.0-windows. Yaesu Web Control
+         multi-targets net10.0-windows and net10.0 (its macOS/Linux CAT-only
+         host), so anything in here has to be loadable by both. A Windows-only
+         target framework would build fine against Icom Web Control and then
+         break YWC's second TFM, which nobody on Windows would notice. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>RadioWebControl.Core</RootNamespace>
+    <AssemblyName>RadioWebControl.Core</AssemblyName>
+
+    <!-- Consumed as a git subtree and referenced by path, not packed. If this
+         ever becomes a NuGet package the version lives here; until then the
+         consuming app's version is the only one that means anything. -->
+    <Version>0.1.0</Version>
+    <Company>MM5AGM</Company>
+    <Product>Radio Web Control Core</Product>
+    <Description>Radio-agnostic code shared by Icom Web Control and Yaesu Web Control</Description>
+    <Copyright>© 2026 MM5AGM</Copyright>
+
+    <!-- No dependencies on purpose. Everything in here is meant to be
+         radio-agnostic and host-agnostic; a PackageReference added casually is
+         a cost paid by both applications and both installers. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- js/ is browser code consumed by copying, not by compiling. Keep MSBuild
+         out of it entirely so a .js file can never end up in the assembly or
+         the publish output by accident. -->
+    <None Remove="js\**" />
+  </ItemGroup>
+
+</Project>
