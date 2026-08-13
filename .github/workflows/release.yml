@@ -127,15 +127,29 @@ jobs:
   # workflow_dispatch with empty tag → artifacts only (safe branch smoke test).
   #
   # Skipped on pull requests, on wall-clock grounds rather than cost — both
-  # repos are public, so Actions minutes are free. This job builds two DMGs and
-  # routinely runs well over twenty minutes, which would leave every PR sitting
-  # "in progress" long after the answer was known. build-windows and
-  # build-docker cover the same compile in a fraction of the time, and macOS
-  # still runs on dispatch and on release. If a change is macOS-specific, hit
-  # "Run workflow" on the branch.
+  # repos are public, so Actions minutes are free. build-windows and
+  # build-docker cover the same compile, and macOS still runs on dispatch and
+  # on release. If a change is macOS-specific, hit "Run workflow" on the branch.
+  #
+  # timeout-minutes exists because this job can stall indefinitely. Observed
+  # three times on 2026-08-13: build-dmg.sh runs two sequential publishes, and
+  # the FIRST RID finished in under a minute while the SECOND stopped dead
+  # straight after restore and never recovered — 36, 38 and 54 minutes before
+  # being cancelled, with an orphaned dotnet/VBCSCompiler killed at cleanup.
+  # Not our code: it reproduced on tag v2.4.3-pre6, which has no core/ subtree
+  # in it at all and had built both DMGs in 1m50s three days earlier. Hosted
+  # arm64 macOS runners, nothing in this repo.
+  #
+  # Why a timeout and not a retry: these jobs are independent — no `needs:` —
+  # so a stalled macOS job does not hold up build-windows or build-docker, and
+  # on a release that is the trap. The tag ships with the Windows installer and
+  # the Docker image while the DMGs never upload, and the release looks
+  # finished. Failing at 20 minutes (~10x the 1m50s normal, so a merely slow
+  # runner won't trip it) makes that visible instead of silent.
   build-macos:
     if: github.event_name != 'pull_request'
     runs-on: macos-latest
+    timeout-minutes: 20
     permissions:
       contents: write
 
