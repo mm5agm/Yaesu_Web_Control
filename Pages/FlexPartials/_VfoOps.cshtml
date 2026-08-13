@@ -1,0 +1,36 @@
+<div id="vfoOpsBar" class="ywc-vfo-ops" data-ywc-vfo-ops-ui="dock">
+    <div class="ywc-vfo-ops-inner">
+        <strong class="ywc-vfo-ops-title">VFO Ops</strong>
+        <div class="ywc-vfo-ops-buttons" role="group" aria-label="VFO operations">
+            <button id="memBtn" type="button" class="ywc-btn ywc-btn-outline ywc-btn-sm"
+                    title="Open memories panel" aria-label="Open memories panel">Mem</button>
+            <button id="vfoBToggleBtn" type="button" class="ywc-btn ywc-btn-outline ywc-btn-sm"
+                    title="Show/Hide VFO-B" aria-label="Show or hide VFO B panel">Hide B</button>
+            <button id="swapVfoBtn" type="button" class="ywc-btn ywc-btn-outline ywc-btn-sm"
+                    title="Swap VFO A and VFO B" aria-label="Swap VFO A and VFO B">A&#8596;B</button>
+            <button id="copyBtoABtn" type="button" class="ywc-btn ywc-btn-outline ywc-btn-sm"
+                    aria-label="Copy VFO B to VFO A">B&rarr;A</button>
+            <button id="copyAtoBBtn" type="button" class="ywc-btn ywc-btn-outline ywc-btn-sm"
+                    aria-label="Copy VFO A to VFO B">A&rarr;B</button>
+            <button id="splitBtn" type="button" class="ywc-btn ywc-btn-outline ywc-btn-sm"
+                    aria-label="Toggle split mode">Split</button>
+            <button id="quickSplitBtn" type="button" class="ywc-btn ywc-btn-outline ywc-btn-sm"
+                    aria-label="Quick split plus 5 kHz">+5k</button>
+            @if (Model.View.IsSingleReceiver)
+            {
+                <span id="rxTxSplitGroup" class="ywc-rxtx-group ywc-vfo-ops-rxtx" title="Independent RX / TX VFO selection">
+                    <span class="ywc-vfo-ops-rxtx-row">
+                        <span>RX</span>
+                        <button type="button" id="rxVfoA" class="ywc-btn ywc-btn-outline ywc-btn-xs" data-rx="A">A</button>
+                        <button type="button" id="rxVfoB" class="ywc-btn ywc-btn-outline ywc-btn-xs" data-rx="B">B</button>
+                    </span>
+                    <span class="ywc-vfo-ops-rxtx-row">
+                        <span>TX</span>
+                        <button type="button" id="txVfoA" class="ywc-btn ywc-btn-outline ywc-btn-xs" data-tx="A">A</button>
+                        <button type="button" id="txVfoB" class="ywc-btn ywc-btn-outline ywc-btn-xs" data-tx="B">B</button>
+                    </span>
+                </span>
+            }
+        </div>
+    </div>
+</div>

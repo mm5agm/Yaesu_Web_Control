@@ -617,6 +617,7 @@ html, body.ywc-flex-body {
 .ywc-controls,
 .ywc-clarifier,
 .ywc-remote-audio,
+.ywc-vfo-ops,
 .ywc-vfo {
     display: flex;
     flex-direction: column;
@@ -751,6 +752,60 @@ html, body.ywc-flex-body {
     align-items: center;
     gap: 0.25rem;
     font-size: 0.75rem;
+}
+
+/* Slim column of VFO A/B operations between the two VFO panels */
+.ywc-vfo-ops-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.35rem 0.3rem;
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: 5.5rem;
+    height: auto;
+    min-height: 0;
+    box-sizing: border-box;
+    overflow: visible;
+    transform-origin: top left;
+    will-change: transform;
+    align-self: flex-start;
+}
+
+.ywc-vfo-ops-title {
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.ywc-vfo-ops-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    align-items: stretch;
+}
+
+.ywc-vfo-ops-buttons > .ywc-btn {
+    width: 100%;
+}
+
+.ywc-vfo-ops-rxtx {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding-top: 0.15rem;
+}
+
+.ywc-vfo-ops-rxtx-row {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.ywc-vfo-ops-rxtx-row > span:first-child {
+    min-width: 1.6rem;
+    font-size: 0.7rem;
+    font-weight: 600;
 }
 
 /* Modal shim for site.js message box */

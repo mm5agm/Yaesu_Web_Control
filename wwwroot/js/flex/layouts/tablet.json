@@ -51,7 +51,7 @@
           },
           {
             "type": "tabset",
-            "weight": 39,
+            "weight": 36,
             "children": [
               {
                 "type": "tab",
@@ -63,7 +63,19 @@
           },
           {
             "type": "tabset",
-            "weight": 39,
+            "weight": 12,
+            "children": [
+              {
+                "type": "tab",
+                "id": "vfoOps",
+                "name": "VFO Ops",
+                "component": "vfoOps"
+              }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 36,
             "children": [
               {
                 "type": "tab",

@@ -1,5 +1,5 @@
 /**
- * Fit Flex toolbar-style panels (controls, clarifier, remote audio)
+ * Fit Flex toolbar-style panels (controls, clarifier, remote audio, VFO ops)
  * the same way VFOs scale into their clip box.
  */
 import { createHostWatcher, createUniformScaleFitter, findHostById } from '/js/flex/panel-fit.js?v=1';
@@ -28,6 +28,14 @@ const PANELS = [
         minW: 280,
         cssVar: '--ywc-audio-scale',
         dataAttr: 'audioScale',
+    },
+    {
+        id: 'vfoOpsBar',
+        hostClass: 'ywc-vfo-ops',
+        innerSelector: '.ywc-vfo-ops-inner',
+        minW: 72,
+        cssVar: '--ywc-vfo-ops-scale',
+        dataAttr: 'vfoOpsScale',
     },
 ];
 

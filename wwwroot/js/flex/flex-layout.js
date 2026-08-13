@@ -1,11 +1,11 @@
-import { createTemplateElement } from '/js/flex/template-panel.js?v=4';
+import { createTemplateElement } from '/js/flex/template-panel.js?v=5';
 import { installDomShim, dispatchPanelResize } from '/js/flex/dom-shim.js?v=3';
 import { installBootstrapShim } from '/js/flex/bootstrap-shim.js?v=1';
 
 export { installBootstrapShim };
 
 const PRESET_KEY = 'ywc.flexLayout.preset';
-const LAYOUT_VERSION = 'v1';
+const LAYOUT_VERSION = 'v2';
 const LAYOUT_URLS = {
     desktop: '/js/flex/layouts/desktop.json',
     tablet: '/js/flex/layouts/tablet.json',
@@ -238,6 +238,7 @@ export function initFlexWorkspace(host, flags) {
             spectrumA: { type: 'tab', id: 'spectrumA', name: 'Spectrum A', component: 'spectrumA', enableWindowReMount: true },
             spectrumB: { type: 'tab', id: 'spectrumB', name: 'Spectrum B', component: 'spectrumB', enableWindowReMount: true },
             vfoA: { type: 'tab', id: 'vfoA', name: 'VFO A', component: 'vfoA' },
+            vfoOps: { type: 'tab', id: 'vfoOps', name: 'VFO Ops', component: 'vfoOps' },
             vfoB: { type: 'tab', id: 'vfoB', name: 'VFO B', component: 'vfoB' },
             clarifier: { type: 'tab', id: 'clarifier', name: 'Clarifier', component: 'clarifier' },
         };
@@ -336,20 +337,33 @@ function wireToolbar() {
         });
     });
 
-    document.getElementById('vfoBToggleBtn')?.addEventListener('click', () => {
+    function syncVfoBToggleLabel() {
+        const btn = document.getElementById('vfoBToggleBtn');
+        if (!btn) return;
+        const visible = !!window.ywcFlex?.model?.getNodeById('vfoB');
+        btn.textContent = visible ? 'Hide B' : 'Show B';
+    }
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#vfoBToggleBtn')) return;
         const visible = !!window.ywcFlex?.model?.getNodeById('vfoB');
         if (visible) {
             window.ywcFlex.hidePanel('vfoB');
             try { localStorage.setItem('vfoBVisible', 'false'); } catch { /* ignore */ }
-            const btn = document.getElementById('vfoBToggleBtn');
-            if (btn) btn.textContent = 'Show B';
         } else {
             window.ywcFlex.showPanel('vfoB');
             try { localStorage.setItem('vfoBVisible', 'true'); } catch { /* ignore */ }
-            const btn = document.getElementById('vfoBToggleBtn');
-            if (btn) btn.textContent = 'Hide B';
         }
+        syncVfoBToggleLabel();
         dispatchPanelResize();
+    });
+
+    window.addEventListener('ywc-flex-template-mounted', (e) => {
+        if (e.detail?.component === 'vfoOps') {
+            queueMicrotask(syncVfoBToggleLabel);
+            if (typeof window.updateSplitButton === 'function') window.updateSplitButton();
+            if (typeof window.updateRxTxSelectors === 'function') window.updateRxTxSelectors();
+        }
     });
 
     const vfoBStored = (() => {

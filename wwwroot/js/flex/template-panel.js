@@ -10,6 +10,7 @@ const TEMPLATE_BY_COMPONENT = {
     spectrumA: 'tpl-spectrum-a',
     spectrumB: 'tpl-spectrum-b',
     vfoA: 'tpl-vfo-a',
+    vfoOps: 'tpl-vfo-ops',
     vfoB: 'tpl-vfo-b',
     clarifier: 'tpl-clarifier',
 };
