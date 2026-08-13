@@ -1,7 +1,7 @@
 /**
  * Clones Razor <template> content into a FlexLayout tab host via React.createElement.
  */
-import { registerFlexPopoutWindow } from '/js/flex/dom-shim.js?v=1';
+import { registerFlexPopoutWindow } from '/js/flex/dom-shim.js?v=2';
 
 const TEMPLATE_BY_COMPONENT = {
     meters: 'tpl-meters',
@@ -36,10 +36,11 @@ export function createTemplateElement(node) {
         templateId,
         component,
         nodeId: node.getId(),
+        node,
     });
 }
 
-function TemplatePanel({ templateId, component, nodeId }) {
+function TemplatePanel({ templateId, component, nodeId, node }) {
     const React = window.React;
     const ref = React.useRef(null);
 
@@ -61,20 +62,35 @@ function TemplatePanel({ templateId, component, nodeId }) {
         }
         host.appendChild(tpl.content.cloneNode(true));
 
+        const notifyFit = () => {
+            window.dispatchEvent(new Event('ywc-flex-panel-resize'));
+            try { window.ywcMetersFit?.refit(); } catch { /* ignore */ }
+            try { window.ywcVfoFit?.refit(); } catch { /* ignore */ }
+        };
+
+        let listenerId = null;
+        if (node?.setEventListener) {
+            try {
+                listenerId = node.setEventListener('resize', notifyFit);
+            } catch { /* older FlexLayout builds */ }
+        }
+
         // Canvas remount after popout / dock-back
         requestAnimationFrame(() => {
             window.dispatchEvent(new Event('resize'));
-            try { window.ywcMetersFit?.refit(); } catch { /* ignore */ }
-            try { window.ywcVfoFit?.refit(); } catch { /* ignore */ }
+            notifyFit();
             if (typeof window.updateTxButton === 'function') window.updateTxButton();
             if (typeof window.updateSplitButton === 'function') window.updateSplitButton();
             if (typeof window.applyVfoActiveStyling === 'function') window.applyVfoActiveStyling();
         });
 
         return () => {
+            if (listenerId != null && node?.removeEventListener) {
+                try { node.removeEventListener(listenerId); } catch { /* ignore */ }
+            }
             host.replaceChildren();
         };
-    }, [templateId, component, nodeId]);
+    }, [templateId, component, nodeId, node]);
 
     return React.createElement('div', {
         ref,
