@@ -26,12 +26,9 @@ export class SMeterHistoryPanel {
      * @param {object} [options]  windowMs (default 30000), gridColor, etc.
      */
     constructor(canvasId, options = {}) {
-        this.canvas  = document.getElementById(canvasId);
-        if (!this.canvas) {
-            console.warn(`SMeterHistoryPanel: canvas "${canvasId}" not found`);
-            return;
-        }
-        this.ctx      = this.canvas.getContext('2d');
+        this.canvasId = canvasId;
+        this.canvas   = null;
+        this.ctx      = null;
         this.windowMs = options.windowMs ?? 30000;
         this.colors   = Object.assign({
             background:  '#1e2a38',
@@ -55,10 +52,32 @@ export class SMeterHistoryPanel {
         // ratio grid.
         this._lastCssWidth  = 0;
         this._lastCssHeight = 0;
+        this._ro = null;
+        this.reattach();
+    }
+
+    /**
+     * Bind to the live canvas (Flex clones meters after first construction).
+     */
+    reattach() {
+        const canvas = document.getElementById(this.canvasId);
+        if (!canvas) {
+            this.canvas = null;
+            this.ctx = null;
+            return;
+        }
+        if (canvas === this.canvas && canvas.isConnected) return;
+
+        this._ro?.disconnect();
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this._lastCssWidth = 0;
+        this._lastCssHeight = 0;
         if (typeof ResizeObserver !== 'undefined') {
             this._ro = new ResizeObserver(() => this._scheduleRender());
             this._ro.observe(this.canvas);
         }
+        this._scheduleRender();
     }
 
     /**

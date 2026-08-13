@@ -558,7 +558,7 @@ html, body.ywc-flex-body {
 
 .ywc-meters-inner {
     /* Extra top padding: gauge arc labels sit near/above the canvas top edge. */
-    padding: 0.85rem 0.35rem 0.35rem;
+    padding: 0.85rem 0.35rem 0;
     box-sizing: content-box;
     flex: 0 0 auto;
     align-self: flex-start;
@@ -577,9 +577,12 @@ html, body.ywc-flex-body {
 
 .ywc-meter-cell {
     position: relative;
-    height: 135px;
+    /* Optical height: semicircle + title chip. The RadialGauge canvas is
+       135px and the unused plate below the chip must not participate in fit. */
+    height: 108px;
     width: 220px;
     min-width: 165px;
+    min-height: 0;
     margin: 0;
     padding: 0;
     flex-shrink: 0;
@@ -587,9 +590,20 @@ html, body.ywc-flex-body {
     overflow: visible;
 }
 
+.ywc-meter-cell canvas {
+    display: block;
+}
+
+.ywc-meter-cell .analog-meter-container {
+    /* Allow S0/+60 labels to overflow upward into inner padding; clip the
+       empty canvas plate under the title chip (135px − 108px). */
+    clip-path: inset(-14px 0 27px 0);
+}
+
 .ywc-meter-cell.ywc-smeter-history {
     width: 260px;
     min-width: 260px;
+    height: 135px;
 }
 
 .ywc-meter-cell.ywc-smeter-history canvas {

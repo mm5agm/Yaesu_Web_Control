@@ -5,9 +5,10 @@
 import { createHostWatcher, findHostById } from '/js/flex/panel-fit.js?v=1';
 
 const MAX_SCALE = 4.0;
-const CELL_H = 135;
+const CELL_H = 108;
 const CELL_W = 220;
 const HISTORY_W = 260;
+const HISTORY_H = 135;
 
 /**
  * @param {HTMLElement} host
@@ -32,8 +33,11 @@ function createMetersFitter(host) {
         [...row.querySelectorAll(':scope > .ywc-meter-cell')]
             .filter((el) => getComputedStyle(el).display !== 'none');
 
-    const cellWidth = (el) =>
-        el.classList.contains('ywc-smeter-history') ? HISTORY_W : CELL_W;
+    const isHistory = (el) => el.classList.contains('ywc-smeter-history');
+
+    const cellWidth = (el) => (isHistory(el) ? HISTORY_W : CELL_W);
+
+    const cellHeight = (el) => (isHistory(el) ? HISTORY_H : CELL_H);
 
     /** Widest row width when packing cells left-to-right with `cols` per row. */
     const packWidth = (widths, cols) => {
@@ -62,6 +66,7 @@ function createMetersFitter(host) {
         if (!n) return;
 
         const widths = cells.map(cellWidth);
+        const rowH = Math.max(...cells.map(cellHeight));
 
         const style = getComputedStyle(inner);
         const padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
@@ -80,7 +85,7 @@ function createMetersFitter(host) {
             for (let cols = 1; cols <= n; cols++) {
                 const rowsCount = Math.ceil(n / cols);
                 const contentW = packWidth(widths, cols);
-                const contentH = rowsCount * CELL_H;
+                const contentH = rowsCount * rowH;
                 const scale = Math.min(
                     availW / (contentW + padX),
                     availH / (contentH + padY),

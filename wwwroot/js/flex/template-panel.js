@@ -61,6 +61,11 @@ function TemplatePanel({ templateId, component, nodeId, node }) {
             return undefined;
         }
         host.appendChild(tpl.content.cloneNode(true));
+        try {
+            window.dispatchEvent(new CustomEvent('ywc-flex-template-mounted', {
+                detail: { component },
+            }));
+        } catch { /* ignore */ }
 
         const notifyFit = () => {
             window.dispatchEvent(new Event('ywc-flex-panel-resize'));

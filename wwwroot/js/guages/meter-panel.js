@@ -30,7 +30,25 @@ export class MeterPanel {
     constructor(config = {}) {
         this.config = config;
         this.gauges = {};
+        /** @type {HTMLElement | null} */
+        this._boundCanvas = null;
         this._createGauges();
+    }
+
+    _firstCanvas() {
+        for (const entry of Object.values(this.config)) {
+            const el = document.getElementById(entry.canvasId);
+            if (el) return el;
+        }
+        return null;
+    }
+
+    _destroyGauges() {
+        for (const gauge of Object.values(this.gauges)) {
+            try { gauge.gauge?.destroy?.(); } catch { /* ignore */ }
+        }
+        this.gauges = {};
+        this._boundCanvas = null;
     }
 
     _createGauges() {
@@ -48,6 +66,22 @@ export class MeterPanel {
                 console.warn(`MeterPanel: Failed to create gauge "${key}" (type "${gaugeType}")`);
             }
         }
+        this._boundCanvas = this._firstCanvas();
+    }
+
+    /**
+     * Recreate gauges when FlexLayout clones a fresh meters template
+     * (initial async mount, popout, dock-back). No-op if already bound
+     * to the live canvas.
+     */
+    remount() {
+        const canvas = this._firstCanvas();
+        if (!canvas) return;
+        if (this._boundCanvas === canvas && canvas.isConnected && Object.keys(this.gauges).length) {
+            return;
+        }
+        this._destroyGauges();
+        this._createGauges();
     }
 
     /**
