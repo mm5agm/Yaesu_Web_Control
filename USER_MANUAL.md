@@ -3008,7 +3008,7 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
    - **Reattach** (pop-out) — returns the stream to the main window and closes the pop-out
    - **Close** — closes the panel (Show button restores it); preference stored in the browser
 
-Capture opens only while at least one browser is viewing the stream. Closing all viewers releases the USB device so an idle Pi pays no capture CPU. Max width (800) and JPEG quality (65) stay at host defaults tuned for modest radio panels.
+Capture opens while at least one browser is viewing the stream, and stays open for a couple of seconds after the last viewer disconnects so **Pop out** / **Close** does not tear down the USB capture device mid-handoff. After that idle window the host releases the dongle so an idle Pi pays no capture CPU. Max width (800) and JPEG quality (65) stay at host defaults tuned for modest radio panels.
 
 ### 19.4 Raspberry Pi and Docker
 
@@ -3038,7 +3038,7 @@ See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial
 | Black / disconnected | Wrong device index; another app holding the UVC device exclusively; unplug/replug; Refresh device list. |
 | High CPU on Pi | Lower Max width / FPS / JPEG quality; confirm the dongle is not encoding full 1080p without downscale. |
 | Device list empty (Linux) | Check `/dev/video*`, `video` group, Docker `devices:` / `group_add`. |
-| Indexes changed after replug | Re-select the device in Settings and Save. |
+| Host app exits when stopping / popping out the stream | USB HDMI dongles crash if the capture graph is closed and immediately reopened. Use a current build — pop-out hands off the live device; Close waits ~2 s before release. |
 
 OCR, click-through of the captured UI, capture-device audio, and WebRTC are **not** in this version.
 

@@ -34,12 +34,25 @@ namespace Yaesu_Web_Control.Controllers
         {
             try
             {
-                var devices = VideoDeviceEnumerator.ListDevices()
-                    .Select(d => new { key = d.Key, label = d.Label, index = d.Index });
+                // Never probe-open cameras while the capture loop holds the
+                // dongle — that second Open is what kills the host on stop/pop-out.
+                var devices = VideoDeviceEnumerator.ListDevices(allowProbe: !_capture.IsCapturing)
+                    .ToList();
+                if (devices.Count == 0 && _capture.OpenDeviceIndex is int idx)
+                {
+                    devices.Add(new VideoDeviceInfo
+                    {
+                        Index = idx,
+                        Key = VideoDeviceKey.FromIndex(idx),
+                        Label = $"Camera {idx} (in use)"
+                    });
+                }
+
+                var payload = devices.Select(d => new { key = d.Key, label = d.Label, index = d.Index });
                 var notes = OperatingSystem.IsLinux()
                     ? "Linux: devices from /sys/class/video4linux. Map /dev/video* into Docker and add the video group."
                     : "Select a USB webcam or HDMI capture dongle. Indexes can shift when devices are replugged.";
-                return Ok(new { devices, notes });
+                return Ok(new { devices = payload, notes });
             }
             catch (Exception ex)
             {
