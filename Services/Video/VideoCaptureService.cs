@@ -22,11 +22,17 @@ namespace Yaesu_Web_Control.Services.Video
         private const int IdleReleaseDelayMs = 2000;
 
         /// <summary>Settle time after Release before the next Open.</summary>
-        private const int ReopenSettleMs = 500;
+        private static int ReopenSettleMs => OperatingSystem.IsMacOS() ? 1500 : 500;
 
         private const int StopWaitMs = 8000;
         private const int SettingsRefreshMs = 500;
         private const int EmptyFrameGiveUp = 45;
+
+        /// <summary>
+        /// Bumped when a capture loop is cancelled/orphaned so a stuck worker
+        /// exits instead of racing a newly started loop (device switch on macOS).
+        /// </summary>
+        private int _captureEpoch;
 
         /// <summary>
         /// Default Windows timer quantum. <see cref="Thread.Sleep(int)"/> of 1 ms
@@ -64,6 +70,7 @@ namespace Yaesu_Web_Control.Services.Video
         private int _openDeviceIndex = -1;
         private int _deviceOpenFlag;
         private bool _mfUnavailable;
+        private VideoCapture? _liveCapture;
         private TaskCompletionSource<bool> _framePulse = NewFramePulse();
 
         public VideoCaptureService(
@@ -133,10 +140,34 @@ namespace Yaesu_Web_Control.Services.Video
         /// <summary>
         /// Cancel and reopen the capture loop (e.g. after the device key changes).
         /// No-op when no viewers are attached.
+        /// On macOS the running loop applies the new device itself — a hard
+        /// stop would Release the AVFoundation session from another thread
+        /// while Read is on the UI thread (SIGSEGV in CaptureDelegate).
         /// </summary>
         public void RequestRestart()
         {
             CancelIdleRelease();
+#if !WINDOWS
+            if (OperatingSystem.IsMacOS())
+            {
+                bool start;
+                lock (_lifecycleLock)
+                {
+                    if (_loopTask is { IsCompleted: false })
+                    {
+                        _logger.LogInformation(
+                            "Radio Display: device change will be applied by the running capture loop");
+                        return;
+                    }
+
+                    start = _sessions.ViewerCount > 0;
+                }
+
+                if (start)
+                    EnsureLoopStarted();
+                return;
+            }
+#endif
             StopLoopAndWait();
             if (_sessions.ViewerCount > 0)
                 EnsureLoopStarted();
@@ -186,12 +217,13 @@ namespace Yaesu_Web_Control.Services.Video
 
                 _loopCts = new CancellationTokenSource();
                 var token = _loopCts.Token;
+                var epoch = Volatile.Read(ref _captureEpoch);
                 var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 var thread = new Thread(() =>
                 {
                     try
                     {
-                        RunCaptureLoop(token);
+                        RunCaptureLoop(token, epoch);
                         tcs.TrySetResult();
                     }
                     catch (Exception ex)
@@ -251,9 +283,15 @@ namespace Yaesu_Web_Control.Services.Video
             lock (_lifecycleLock)
             {
                 try { _loopCts?.Cancel(); } catch { /* ignore */ }
+                // Invalidate any loop that may be orphaned after a stuck Read so
+                // it stops encoding and cannot race a replacement loop.
+                Interlocked.Increment(ref _captureEpoch);
                 running = _loopTask;
             }
 
+            // Let the in-flight UI-thread Read finish, then the loop's finally
+            // releases on the UI thread. Force-closing under that Read is what
+            // SIGSEGVs CaptureDelegate on device switch.
             var finished = running == null;
             if (running != null)
             {
@@ -261,14 +299,22 @@ namespace Yaesu_Web_Control.Services.Video
                 catch (AggregateException) { finished = true; }
             }
 
+            if (!finished)
+            {
+                _logger.LogWarning(
+                    "Radio Display capture loop did not stop within {Ms} ms; forcing release",
+                    StopWaitMs);
+                ForceCloseLiveCapture();
+                try { running?.Wait(1000); } catch { /* ignore */ }
+            }
+
             lock (_lifecycleLock)
             {
                 if (!finished && _loopTask is { IsCompleted: false })
                 {
                     _logger.LogWarning(
-                        "Radio Display capture loop did not stop within {Ms} ms; not opening another graph",
+                        "Radio Display capture loop did not stop within {Ms} ms; orphaning it so a new graph can open",
                         StopWaitMs);
-                    return;
                 }
 
                 _loopCts = null;
@@ -293,14 +339,35 @@ namespace Yaesu_Web_Control.Services.Video
             _logger.LogInformation("Radio Display capture stopped");
         }
 
-        private void RunCaptureLoop(CancellationToken ct)
+        private void ForceCloseLiveCapture()
+        {
+            var cap = Interlocked.Exchange(ref _liveCapture, null);
+            if (cap is null)
+                return;
+#if !WINDOWS
+            if (OperatingSystem.IsMacOS())
+            {
+                try { MacAvFoundationCapture.ForceUnblockAndRelease(cap); }
+                catch
+                {
+                    try { cap.Release(); } catch { /* ignore */ }
+                    try { cap.Dispose(); } catch { /* ignore */ }
+                }
+                return;
+            }
+#endif
+            try { cap.Release(); } catch { /* ignore */ }
+            try { cap.Dispose(); } catch { /* ignore */ }
+        }
+
+        private void RunCaptureLoop(CancellationToken ct, int epoch)
         {
             SetStatus("connecting");
             _lastError = null;
             BeginPreciseTimer();
             try
             {
-                RunCaptureLoopCore(ct);
+                RunCaptureLoopCore(ct, epoch);
             }
             finally
             {
@@ -308,11 +375,11 @@ namespace Yaesu_Web_Control.Services.Video
             }
         }
 
-        private void RunCaptureLoopCore(CancellationToken ct)
+        private void RunCaptureLoopCore(CancellationToken ct, int epoch)
         {
             // Stay running across a brief zero-viewer gap (pop-out / Hide).
             // StopLoopAndWait cancels after IdleReleaseDelayMs.
-            while (!ct.IsCancellationRequested)
+            while (!ct.IsCancellationRequested && Volatile.Read(ref _captureEpoch) == epoch)
             {
                 var settings = ReadSettings();
                 if (!settings.VideoDisplayEnabled ||
@@ -343,18 +410,21 @@ namespace Yaesu_Web_Control.Services.Video
                         continue;
                     }
 
-                    cap = OpenCapture(index, maxWidth, targetFps, out var jpegPassthrough, out var openError);
+                    cap = OpenCaptureForHost(index, maxWidth, targetFps, out var jpegPassthrough, out var openError);
                     if (cap is null || !cap.IsOpened())
                     {
                         var detail = OperatingSystem.IsLinux()
                             ? LinuxV4l2Devices.DescribeOpenFailure(index, openError)
-                            : (openError ?? $"Could not open capture device index {index}.");
+                            : string.IsNullOrWhiteSpace(openError)
+                                ? $"Could not open capture device index {index}."
+                                : $"Could not open capture device index {index}. {openError}";
                         MarkDisconnected(detail);
                         _logger.LogWarning("Radio Display: failed to open device index {Index}: {Detail}", index, detail);
                         SleepOrCancel(2000, ct);
                         continue;
                     }
 
+                    Interlocked.Exchange(ref _liveCapture, cap);
                     Volatile.Write(ref _openDeviceIndex, index);
                     Volatile.Write(ref _deviceOpenFlag, 1);
 
@@ -375,7 +445,7 @@ namespace Yaesu_Web_Control.Services.Video
                     var fpsCollapseStreak = 0;
                     var loggedFormat = false;
 
-                    while (!ct.IsCancellationRequested)
+                    while (!ct.IsCancellationRequested && Volatile.Read(ref _captureEpoch) == epoch)
                     {
                         if (settingsAge.ElapsedMilliseconds >= SettingsRefreshMs)
                         {
@@ -397,15 +467,36 @@ namespace Yaesu_Web_Control.Services.Video
                             !VideoDeviceKey.TryParseIndex(settings.VideoCaptureDeviceKey, out var newIndex) ||
                             newIndex != index)
                         {
+                            _logger.LogInformation(
+                                "Radio Display switching capture device {From} → {To}",
+                                index,
+                                settings.VideoDisplayEnabled &&
+                                VideoDeviceKey.TryParseIndex(settings.VideoCaptureDeviceKey, out var logged)
+                                    ? logged
+                                    : -1);
                             break; // reopen with new device / disabled
                         }
 
                         var tick = Stopwatch.StartNew();
-                        var readOk = cap.Read(frame);
+                        bool readOk;
+#if !WINDOWS
+                        if (OperatingSystem.IsMacOS())
+                            readOk = MacAvFoundationCapture.ReadOnUiThread(cap, frame);
+                        else
+                            readOk = cap.Read(frame);
+#else
+                        readOk = cap.Read(frame);
+#endif
                         var readMs = tick.ElapsedMilliseconds;
                         if (!readOk || frame.Empty())
                         {
                             emptyStreak++;
+                            if (emptyStreak == 1 || emptyStreak % 15 == 0)
+                            {
+                                _logger.LogDebug(
+                                    "Radio Display: empty/failed Read streak={Streak} readMs={Ms}",
+                                    emptyStreak, readMs);
+                            }
                             if (emptyStreak >= EmptyFrameGiveUp)
                             {
                                 MarkDisconnected("Capture device stopped delivering frames.");
@@ -418,10 +509,23 @@ namespace Yaesu_Web_Control.Services.Video
 
                         emptyStreak = 0;
 
-                        var reportW = (int)cap.Get(VideoCaptureProperties.FrameWidth);
-                        var reportH = (int)cap.Get(VideoCaptureProperties.FrameHeight);
+                        // Prefer the Mat size from the UI-thread Read — property
+                        // Gets from another thread are unreliable on AVFoundation.
+                        var reportW = frame.Width > 1 ? frame.Width : (int)cap.Get(VideoCaptureProperties.FrameWidth);
+                        var reportH = frame.Height > 1 ? frame.Height : (int)cap.Get(VideoCaptureProperties.FrameHeight);
                         if (reportW <= 1) reportW = frame.Width;
                         if (reportH <= 1) reportH = frame.Height;
+
+                        // Surface size even before the first JPEG so the UI is
+                        // not stuck at 0×0 / 0 fps while encode catches up.
+                        lock (_frameLock)
+                        {
+                            if (_frameWidth == 0 && reportW > 0)
+                            {
+                                _frameWidth = reportW;
+                                _frameHeight = reportH;
+                            }
+                        }
 
                         if (!loggedFormat)
                         {
@@ -478,27 +582,34 @@ namespace Yaesu_Web_Control.Services.Video
                             }
                             else
                             {
-                                Mat source = frame;
-                                if (maxWidth > 0 && frame.Width > maxWidth && frame.Channels() >= 3)
+                                // Prefer already-compressed MJPEG payloads when present
+                                // (PreferMjpegFourCc on macOS / some UVC dongles).
+                                if (TryCopyJpeg(frame, out jpegBytes))
                                 {
-                                    var scale = (double)maxWidth / frame.Width;
-                                    var newH = Math.Max(1, (int)Math.Round(frame.Height * scale));
-                                    Cv2.Resize(frame, resized, new OpenCvSharp.Size(maxWidth, newH), 0, 0, InterpolationFlags.Linear);
-                                    source = resized;
+                                    outW = reportW;
+                                    outH = reportH;
                                 }
-
-                                try
+#if !WINDOWS
+                                else if (OperatingSystem.IsMacOS())
                                 {
-                                    jpegBytes = source.ImEncode(".jpg", encodeParams);
+                                    // OpenCvSharp ImEncode can native-crash (libjpeg
+                                    // longjmp) on AVFoundation frames — use Skia.
+                                    if (!MacJpegEncoder.TryEncode(frame, maxWidth, jpegQuality, out jpegBytes, out outW, out outH, out var encodeSkip))
+                                    {
+                                        if (encodeSkip != null)
+                                            _logger.LogWarning("Radio Display: skip JPEG encode — {Reason}", encodeSkip);
+                                        SleepOrCancel(50, ct);
+                                        continue;
+                                    }
                                 }
-                                catch
+#endif
+                                else if (!TryEncodeFrameJpeg(frame, resized, maxWidth, encodeParams, out jpegBytes, out outW, out outH, out var encodeSkipCv))
                                 {
+                                    if (encodeSkipCv != null)
+                                        _logger.LogWarning("Radio Display: skip JPEG encode — {Reason}", encodeSkipCv);
                                     SleepOrCancel(50, ct);
                                     continue;
                                 }
-
-                                outW = source.Width;
-                                outH = source.Height;
                             }
 
                             if (jpegBytes is null || jpegBytes.Length == 0)
@@ -507,15 +618,23 @@ namespace Yaesu_Web_Control.Services.Video
                                 continue;
                             }
 
+                            long publishedSeq;
                             lock (_frameLock)
                             {
                                 _latestJpeg = jpegBytes;
-                                _frameSeq++;
+                                publishedSeq = ++_frameSeq;
                                 _frameWidth = outW;
                                 _frameHeight = outH;
                             }
 
                             PulseFrame();
+
+                            if (publishedSeq == 1)
+                            {
+                                _logger.LogInformation(
+                                    "Radio Display first JPEG published ({Bytes} bytes, {W}x{H})",
+                                    jpegBytes.Length, outW, outH);
+                            }
 
                             framesInWindow++;
                             if (fpsWindow.ElapsedMilliseconds >= 1000)
@@ -570,15 +689,36 @@ namespace Yaesu_Web_Control.Services.Video
                 {
                     Volatile.Write(ref _deviceOpenFlag, 0);
                     Volatile.Write(ref _openDeviceIndex, -1);
-                    try { cap?.Release(); } catch { /* ignore */ }
-                    try { cap?.Dispose(); } catch { /* ignore */ }
+                    // StopLoopAndWait may already have released this instance to
+                    // unblock a stuck Read — only dispose if we still own it.
+                    var owned = Interlocked.CompareExchange(ref _liveCapture, null, cap);
+                    if (owned is not null)
+                    {
+#if !WINDOWS
+                        if (OperatingSystem.IsMacOS())
+                        {
+                            // Read has returned; safe to serialize Release on the UI thread.
+                            try { MacAvFoundationCapture.ReleaseOnUiThread(owned); }
+                            catch
+                            {
+                                try { owned.Release(); } catch { /* ignore */ }
+                                try { owned.Dispose(); } catch { /* ignore */ }
+                            }
+                        }
+                        else
+#endif
+                        {
+                            try { owned.Release(); } catch { /* ignore */ }
+                            try { owned.Dispose(); } catch { /* ignore */ }
+                        }
+                    }
                 }
 
                 if (ct.IsCancellationRequested)
                     break;
 
                 SetStatus("connecting");
-                SleepOrCancel(1000, ct);
+                SleepOrCancel(ReopenSettleMs > 0 ? ReopenSettleMs : 1000, ct);
             }
 
             if (_sessions.ViewerCount == 0)
@@ -813,15 +953,51 @@ namespace Yaesu_Web_Control.Services.Video
             return (320, 240);
         }
 
+        /// <summary>
+        /// On macOS, open the AVFoundation device on Avalonia's UI thread so
+        /// AppKit/TCC complete; reading stays on the capture thread afterward.
+        /// </summary>
+        private VideoCapture? OpenCaptureForHost(
+            int index,
+            int maxWidth,
+            int targetFps,
+            out bool jpegPassthrough,
+            out string? failureDetail)
+        {
+#if !WINDOWS
+            if (OperatingSystem.IsMacOS())
+            {
+                bool jpeg = false;
+                string? detail = null;
+                VideoCapture? opened = null;
+                try
+                {
+                    opened = MacAvFoundationCapture.OpenOnUiThread(() =>
+                        OpenCapture(index, maxWidth, targetFps, out jpeg, out detail));
+                }
+                catch (Exception ex)
+                {
+                    detail = FlattenException(ex);
+                    _logger.LogWarning(ex, "Radio Display: macOS UI-thread open failed");
+                }
+
+                jpegPassthrough = jpeg;
+                failureDetail = detail;
+                return opened;
+            }
+#endif
+            return OpenCapture(index, maxWidth, targetFps, out jpegPassthrough, out failureDetail);
+        }
+
         private static VideoCapture? OpenCapture(
             int index,
             int maxWidth,
             int targetFps,
             out bool jpegPassthrough,
-            out string? openError)
+            out string? failureDetail)
         {
             jpegPassthrough = false;
-            openError = null;
+            failureDetail = null;
             VideoCaptureAPIs[] backends;
             if (OperatingSystem.IsWindows())
                 backends = [VideoCaptureAPIs.DSHOW, VideoCaptureAPIs.MSMF, VideoCaptureAPIs.ANY];
@@ -831,6 +1007,34 @@ namespace Yaesu_Web_Control.Services.Video
                 backends = [VideoCaptureAPIs.AVFOUNDATION, VideoCaptureAPIs.ANY];
             else
                 backends = [VideoCaptureAPIs.ANY];
+
+            string? lastError = null;
+
+            // macOS: prefer the device's native mode (often MJPEG). Forcing the
+            // Windows USB2 YUY2 panel size opens Macrosilicon dongles in a mode
+            // that reports IsOpened() but delivers black / stalled frames.
+            if (OperatingSystem.IsMacOS())
+            {
+                foreach (var api in backends)
+                {
+                    var cap = TryOpen(index, api, paramsArray: null, out lastError);
+                    if (cap is not null)
+                    {
+                        PreferMjpegFourCc(cap);
+                        return cap;
+                    }
+
+                    if (api == VideoCaptureAPIs.AVFOUNDATION)
+                    {
+                        cap = TryOpenPath($"{index}:none", api, out lastError);
+                        if (cap is not null)
+                        {
+                            PreferMjpegFourCc(cap);
+                            return cap;
+                        }
+                    }
+                }
+            }
 
             // OpenCV DirectShow always decodes to BGR — MJPEG passthrough is
             // handled by WindowsMfMjpegSession. Stay on the USB2-safe YUY2
@@ -844,11 +1048,12 @@ namespace Yaesu_Web_Control.Services.Video
                 (int)VideoCaptureProperties.Fps, targetFps,
                 (int)VideoCaptureProperties.BufferSize, 3
             };
+
             foreach (var api in backends)
             {
                 if (OperatingSystem.IsLinux())
                 {
-                    var byPath = TryOpenPath(LinuxV4l2Devices.DevicePath(index), api, bgrParams, ref openError);
+                    var byPath = TryOpenPath(LinuxV4l2Devices.DevicePath(index), api, bgrParams, out lastError);
                     if (byPath is not null)
                     {
                         ApplyPreferredCaptureFormat(byPath, maxWidth, targetFps);
@@ -856,22 +1061,226 @@ namespace Yaesu_Web_Control.Services.Video
                     }
                 }
 
-                var cap = TryOpen(index, api, bgrParams, ref openError);
+                var cap = TryOpen(index, api, bgrParams, out lastError);
                 if (cap is not null)
                 {
                     ApplyPreferredCaptureFormat(cap, maxWidth, targetFps);
                     return cap;
                 }
 
-                cap = TryOpen(index, api, paramsArray: null, ref openError);
+                cap = TryOpen(index, api, paramsArray: null, out lastError);
                 if (cap is not null)
                 {
                     ApplyPreferredCaptureFormat(cap, maxWidth, targetFps);
                     return cap;
+                }
+
+                // macOS AVFoundation also accepts "N:none" (video only, no audio).
+                if (OperatingSystem.IsMacOS() && api == VideoCaptureAPIs.AVFOUNDATION)
+                {
+                    cap = TryOpenPath($"{index}:none", api, out lastError);
+                    if (cap is not null)
+                    {
+                        ApplyPreferredCaptureFormat(cap, maxWidth, targetFps);
+                        return cap;
+                    }
                 }
             }
 
+            failureDetail = OperatingSystem.IsMacOS()
+                ? DescribeOpenFailure(lastError)
+                : lastError;
             return null;
+        }
+
+        private static void PreferMjpegFourCc(VideoCapture cap)
+        {
+            try
+            {
+                cap.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC('M', 'J', 'P', 'G'));
+            }
+            catch
+            {
+                // Device may ignore; native mode still preferred over forced YUY2.
+            }
+        }
+
+        private static string DescribeOpenFailure(string? lastError)
+        {
+            if (string.IsNullOrWhiteSpace(lastError))
+            {
+                return OperatingSystem.IsMacOS()
+                    ? "OpenCV returned IsOpened=false (device busy, index changed, or still releasing after a prior session). Retry in a few seconds; confirm Camera is allowed for Yaesu Web Control in System Settings."
+                    : "OpenCV could not open the device.";
+            }
+
+            if (lastError.Contains("libavif", StringComparison.OrdinalIgnoreCase) ||
+                lastError.Contains("OpenCvSharpExtern", StringComparison.OrdinalIgnoreCase) ||
+                lastError.Contains("DllNotFound", StringComparison.OrdinalIgnoreCase))
+            {
+                if (OperatingSystem.IsMacOS() &&
+                    RuntimeInformation.OSArchitecture == Architecture.X64)
+                {
+                    return "OpenCvSharp native library failed to load (missing Homebrew libavif on Intel Mac). " +
+                           "Run: brew install libavif — then restart Yaesu Web Control.";
+                }
+
+                return "OpenCvSharp native library failed to load: " + TruncateForUi(lastError, 180);
+            }
+
+            if (lastError.Contains("not authorized", StringComparison.OrdinalIgnoreCase) ||
+                lastError.Contains("denied", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Camera access denied. System Settings → Privacy & Security → Camera → enable Yaesu Web Control, then relaunch.";
+            }
+
+            return TruncateForUi(lastError, 180);
+        }
+
+        /// <summary>
+        /// Build a continuous 8UC3 BGR Mat and JPEG-encode it. OpenCvSharp's
+        /// libjpeg path can SIGSEGV (longjmp to nowhere) on bad/non-continuous
+        /// frames — seen on macOS AVFoundation after UI-thread Read. Validate
+        /// and copy before ImEncode; never encode in-place capture buffers.
+        /// </summary>
+        private static bool TryEncodeFrameJpeg(
+            Mat frame,
+            Mat resizedScratch,
+            int maxWidth,
+            ImageEncodingParam[] encodeParams,
+            out byte[]? jpegBytes,
+            out int outW,
+            out int outH,
+            out string? skipReason)
+        {
+            jpegBytes = null;
+            outW = 0;
+            outH = 0;
+            skipReason = null;
+
+            if (frame.Empty() || frame.Width < 2 || frame.Height < 2)
+            {
+                skipReason = "empty or tiny frame";
+                return false;
+            }
+
+            var ch = frame.Channels();
+            if (ch is not (1 or 3 or 4))
+            {
+                skipReason = $"unsupported channel count {ch}";
+                return false;
+            }
+
+            // Deep-copy off the capture buffer (AVFoundation may recycle it).
+            using var owned = frame.Clone();
+            if (owned.Empty() || !owned.IsContinuous())
+            {
+                // Clone should be continuous; if not, force one more copy.
+                using var cont = owned.Clone();
+                return EncodePrepared(cont, resizedScratch, maxWidth, encodeParams, out jpegBytes, out outW, out outH, out skipReason);
+            }
+
+            return EncodePrepared(owned, resizedScratch, maxWidth, encodeParams, out jpegBytes, out outW, out outH, out skipReason);
+        }
+
+        private static bool EncodePrepared(
+            Mat owned,
+            Mat resizedScratch,
+            int maxWidth,
+            ImageEncodingParam[] encodeParams,
+            out byte[]? jpegBytes,
+            out int outW,
+            out int outH,
+            out string? skipReason)
+        {
+            jpegBytes = null;
+            outW = 0;
+            outH = 0;
+            skipReason = null;
+
+            Mat bgr;
+            Mat? converted = null;
+            try
+            {
+                var ch = owned.Channels();
+                if (ch == 4)
+                {
+                    converted = new Mat();
+                    Cv2.CvtColor(owned, converted, ColorConversionCodes.BGRA2BGR);
+                    bgr = converted;
+                }
+                else if (ch == 1)
+                {
+                    converted = new Mat();
+                    Cv2.CvtColor(owned, converted, ColorConversionCodes.GRAY2BGR);
+                    bgr = converted;
+                }
+                else
+                {
+                    bgr = owned;
+                }
+
+                Mat source = bgr;
+                if (maxWidth > 0 && bgr.Width > maxWidth)
+                {
+                    var scale = (double)maxWidth / bgr.Width;
+                    var newH = Math.Max(1, (int)Math.Round(bgr.Height * scale));
+                    if (newH < 1 || maxWidth < 2)
+                    {
+                        skipReason = "invalid resize target";
+                        return false;
+                    }
+
+                    Cv2.Resize(bgr, resizedScratch, new OpenCvSharp.Size(maxWidth, newH), 0, 0, InterpolationFlags.Area);
+                    source = resizedScratch;
+                }
+
+                if (source.Empty() || source.Channels() != 3 || source.Type() != MatType.CV_8UC3)
+                {
+                    skipReason = $"bad encode source type={source.Type()} ch={source.Channels()}";
+                    return false;
+                }
+
+                // ImEncode can native-crash on bad input; keep the smallest
+                // surface area possible and avoid encoding the live capture Mat.
+                using var continuous = source.IsContinuous() ? null : source.Clone();
+                var toEncode = continuous ?? source;
+                jpegBytes = toEncode.ImEncode(".jpg", encodeParams);
+                if (jpegBytes is null || jpegBytes.Length < 100)
+                {
+                    skipReason = "ImEncode returned empty buffer";
+                    jpegBytes = null;
+                    return false;
+                }
+
+                // Sanity: JPEG SOI
+                if (jpegBytes[0] != 0xFF || jpegBytes[1] != 0xD8)
+                {
+                    skipReason = "ImEncode output missing JPEG SOI";
+                    jpegBytes = null;
+                    return false;
+                }
+
+                outW = source.Width;
+                outH = source.Height;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                skipReason = ex.GetType().Name + ": " + ex.Message;
+                jpegBytes = null;
+                return false;
+            }
+            finally
+            {
+                converted?.Dispose();
+            }
+        }
+
+        private static string TruncateForUi(string text, int max)
+        {
+            var oneLine = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            return oneLine.Length <= max ? oneLine : oneLine[..(max - 1)] + "…";
         }
 
         /// <summary>
@@ -887,8 +1296,13 @@ namespace Yaesu_Web_Control.Services.Video
             try { cap.Set(VideoCaptureProperties.BufferSize, 3); } catch { /* not all backends */ }
         }
 
-        private static VideoCapture? TryOpen(int index, VideoCaptureAPIs api, int[]? paramsArray, ref string? openError)
+        private static VideoCapture? TryOpen(
+            int index,
+            VideoCaptureAPIs api,
+            int[]? paramsArray,
+            out string? error)
         {
+            error = null;
             try
             {
                 var cap = paramsArray is null
@@ -900,14 +1314,18 @@ namespace Yaesu_Web_Control.Services.Video
             }
             catch (Exception ex)
             {
-                openError = FlattenException(ex);
+                error = FlattenException(ex);
             }
 
             return null;
         }
 
-        private static VideoCapture? TryOpenPath(string path, VideoCaptureAPIs api, int[]? paramsArray, ref string? openError)
+        private static VideoCapture? TryOpenPath(string path, VideoCaptureAPIs api, out string? error) =>
+            TryOpenPath(path, api, paramsArray: null, out error);
+
+        private static VideoCapture? TryOpenPath(string path, VideoCaptureAPIs api, int[]? paramsArray, out string? error)
         {
+            error = null;
             try
             {
                 var cap = paramsArray is null
@@ -919,7 +1337,7 @@ namespace Yaesu_Web_Control.Services.Video
             }
             catch (Exception ex)
             {
-                openError = FlattenException(ex);
+                error = FlattenException(ex);
             }
 
             return null;
@@ -928,7 +1346,7 @@ namespace Yaesu_Web_Control.Services.Video
         private static string FlattenException(Exception ex)
         {
             var parts = new List<string>();
-            for (var e = ex; e != null; e = e.InnerException)
+            for (var e = ex; e is not null; e = e.InnerException)
             {
                 if (!string.IsNullOrWhiteSpace(e.Message) && !parts.Contains(e.Message))
                     parts.Add(e.Message);

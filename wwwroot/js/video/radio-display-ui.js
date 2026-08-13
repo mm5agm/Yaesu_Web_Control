@@ -196,6 +196,9 @@ async function loadDeviceSelect(selectedKey) {
       sel.appendChild(orphan);
     }
     if (!want) none.selected = true;
+    if ((data.devices || []).length === 0 && data.notes && panel) {
+      panel.setStatus('idle', String(data.notes));
+    }
   } catch (e) {
     console.warn('Radio Display device list failed', e);
   }
