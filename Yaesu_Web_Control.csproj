@@ -55,6 +55,26 @@
     <Content Remove="scripts\probe\**" />
     <EmbeddedResource Remove="scripts\probe\**" />
     <None Remove="scripts\probe\**" />
+    <!-- core/ is the Radio_Web_Control_Core git subtree and is its own .csproj
+         (ProjectReference below), the same arrangement as Workers/ above. The
+         Web SDK globs **/*.cs, so without this removal every file in there is
+         compiled TWICE — once into RadioWebControl.Core.dll and once straight
+         into this assembly — which surfaces as duplicate-type errors rather
+         than as anything naming the real cause. -->
+    <Compile Remove="core\**" />
+    <Content Remove="core\**" />
+    <EmbeddedResource Remove="core\**" />
+    <None Remove="core\**" />
+  </ItemGroup>
+
+  <!-- Radio-agnostic code shared with Icom Web Control. Pulled in as a git
+       subtree, NOT a submodule, so a plain `git clone` of this repository still
+       builds with no extra steps. Deliberately NOT conditioned on
+       TargetFramework: the core targets net10.0, which both this project's
+       Windows TFM and its macOS/Linux CAT-only TFM can load. See core/README.md
+       for the subtree commands. -->
+  <ItemGroup>
+    <ProjectReference Include="core\RadioWebControl.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
