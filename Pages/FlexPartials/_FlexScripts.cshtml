@@ -12,7 +12,7 @@
         import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=1";
         import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=4";
         import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=5";
-        import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=3";
+        import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=4";
         import "/js/ui/if-width-tables.js?v=3";
         import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=6";
         import { loadLabels }           from "/js/ui/a11y-labels.js?v=1";
@@ -106,8 +106,54 @@
             window.ywcMetersFit?.refit();
         }
 
+        const filterScopeStateA = {
+            ifWidthCode:       '@Model.RadioState.IfWidthA',
+            ifShiftHz:          @Model.RadioState.IfShiftA,
+            roofingCode:       '@Model.RadioState.RoofingFilterA',
+            manualNotchOn:      @(Model.RadioState.ManualNotchA == "1" ? "true" : "false"),
+            manualNotchFreqHz:  800,
+            contourOn:          @(Model.RadioState.ContourOnA ? "true" : "false"),
+            contourFreqHz:      @Model.RadioState.ContourFreqA,
+            apfOn:              @(Model.RadioState.ApfOnA ? "true" : "false"),
+            apfFreqHz:          @Model.RadioState.ApfFreqA,
+            mode:              '@Model.RadioState.ModeA'
+        };
+        const filterScopeStateB = {
+            ifWidthCode:       '@Model.RadioState.IfWidthB',
+            ifShiftHz:          @Model.RadioState.IfShiftB,
+            roofingCode:       '@Model.RadioState.RoofingFilterB',
+            manualNotchOn:      @(Model.RadioState.ManualNotchB == "1" ? "true" : "false"),
+            manualNotchFreqHz:  800,
+            contourOn:          @(Model.RadioState.ContourOnB ? "true" : "false"),
+            contourFreqHz:      @Model.RadioState.ContourFreqB,
+            apfOn:              @(Model.RadioState.ApfOnB ? "true" : "false"),
+            apfFreqHz:          @Model.RadioState.ApfFreqB,
+            mode:              '@Model.RadioState.ModeB'
+        };
+
+        function mountFlexFilterScopes() {
+            const radioModel = '@Model.RadioModel';
+            if (!window.filterScopePanelA) {
+                window.filterScopePanelA = new FilterScopePanel('filterScopeCanvasA', radioModel, filterScopeStateA);
+            } else {
+                window.filterScopePanelA.reattach();
+            }
+            if (!window.filterScopePanelB) {
+                window.filterScopePanelB = new FilterScopePanel('filterScopeCanvasB', radioModel, filterScopeStateB);
+            } else {
+                window.filterScopePanelB.reattach();
+            }
+            if (typeof window.updateContourSliderBounds === 'function') {
+                window.updateContourSliderBounds('A');
+                window.updateContourSliderBounds('B');
+            }
+            window.ywcVfoFit?.refit();
+        }
+
         window.addEventListener('ywc-flex-template-mounted', (e) => {
             if (e.detail?.component === 'meters') mountFlexMeters();
+            if (e.detail?.component === 'vfoA' || e.detail?.component === 'vfoB')
+                mountFlexFilterScopes();
         });
 
         window.ywcVfoFit = initVfoFit();
@@ -401,39 +447,8 @@
             window.spectrumPanelB = spectrumPanelB;
             window.spectrumPanel  = spectrumPanelA;
 
-            // ── Filter scope panels ──────────────────────────────────────────
-            window.filterScopePanelA = new FilterScopePanel('filterScopeCanvasA', '@Model.RadioModel', {
-                ifWidthCode:       '@Model.RadioState.IfWidthA',
-                ifShiftHz:          @Model.RadioState.IfShiftA,
-                roofingCode:       '@Model.RadioState.RoofingFilterA',
-                manualNotchOn:      @(Model.RadioState.ManualNotchA == "1" ? "true" : "false"),
-                manualNotchFreqHz:  800,
-                contourOn:          @(Model.RadioState.ContourOnA ? "true" : "false"),
-                contourFreqHz:      @Model.RadioState.ContourFreqA,
-                apfOn:              @(Model.RadioState.ApfOnA ? "true" : "false"),
-                apfFreqHz:          @Model.RadioState.ApfFreqA,
-                mode:              '@Model.RadioState.ModeA'
-            });
-            window.filterScopePanelB = new FilterScopePanel('filterScopeCanvasB', '@Model.RadioModel', {
-                ifWidthCode:       '@Model.RadioState.IfWidthB',
-                ifShiftHz:          @Model.RadioState.IfShiftB,
-                roofingCode:       '@Model.RadioState.RoofingFilterB',
-                manualNotchOn:      @(Model.RadioState.ManualNotchB == "1" ? "true" : "false"),
-                manualNotchFreqHz:  800,
-                contourOn:          @(Model.RadioState.ContourOnB ? "true" : "false"),
-                contourFreqHz:      @Model.RadioState.ContourFreqB,
-                apfOn:              @(Model.RadioState.ApfOnB ? "true" : "false"),
-                apfFreqHz:          @Model.RadioState.ApfFreqB,
-                mode:              '@Model.RadioState.ModeB'
-            });
-
-            // Tighten the contour sliders' ranges to the current passband
-            // now that the panels (which compute the passband) are ready.
-            // Subsequent recomputes happen on mode / IF Width / roofing changes.
-            if (typeof window.updateContourSliderBounds === 'function') {
-                window.updateContourSliderBounds('A');
-                window.updateContourSliderBounds('B');
-            }
+            // ── Filter scope panels (Flex clones VFO canvases on mount) ──
+            mountFlexFilterScopes();
 
             // ── Mode-aware IF Width dropdown ─────────────────────────────────
             // Populate the IF Width dropdowns based on the current mode. The
