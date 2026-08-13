@@ -52,6 +52,18 @@ namespace Yaesu_Web_Control.Services.Video
                     }
                 }
 
+                if (OperatingSystem.IsMacOS())
+                {
+                    var names = ReadMacFriendlyNames();
+                    if (names.Count > 0)
+                    {
+                        var named = FromFriendlyNames(names);
+                        lock (CacheLock)
+                            _cache = named;
+                        return named;
+                    }
+                }
+
                 lock (CacheLock)
                     return _cache;
             }
@@ -294,15 +306,27 @@ namespace Yaesu_Web_Control.Services.Video
 
         /// <summary>
         /// macOS: name sources prefer ffmpeg AVFoundation (same index space as
-        /// OpenCV CAP_AVFOUNDATION), then system_profiler. Probe with AVFOUNDATION
-        /// only — never CAP_ANY — so labels match what <see cref="VideoCaptureService"/> opens.
+        /// OpenCV CAP_AVFOUNDATION), then system_profiler. Do <strong>not</strong>
+        /// probe-open here — AVFoundation Open/Read from a request thread hangs
+        /// without an AppKit run loop and races the capture service. Opening is
+        /// done once on the UI thread inside <see cref="VideoCaptureService"/>.
         /// </summary>
         private static List<VideoDeviceInfo> EnumerateMacOS()
         {
-            var names = ReadFfmpegAvFoundationNames();
-            if (names.Count == 0)
-                names = ReadMacSystemProfilerNames();
+            var names = ReadMacFriendlyNames();
+            if (names.Count > 0)
+                return FromFriendlyNames(names);
+
+            // No names available — last resort probe (may be empty under TCC).
             return ProbeIndices(VideoCaptureAPIs.AVFOUNDATION, names);
+        }
+
+        private static IReadOnlyDictionary<int, string> ReadMacFriendlyNames()
+        {
+            var names = ReadFfmpegAvFoundationNames();
+            if (names.Count > 0)
+                return names;
+            return ReadMacSystemProfilerNames();
         }
 
         /// <summary>
