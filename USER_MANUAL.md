@@ -3039,7 +3039,8 @@ See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial
 |---------|-------------|
 | Panel hidden | Enable Radio Display + select a device in Settings; check Close was not pressed (Show button). |
 | `/api/video/stream` → 403 | Feature disabled or no device key saved. |
-| Black / disconnected | Wrong device index; another app holding the UVC device exclusively; unplug/replug; Refresh device list. |
+| Black / disconnected | Wrong device index; another app holding the UVC device exclusively; unplug/replug; Refresh device list. Unplug is reported as **Disconnected**; after replug the host reopens and the panel re-attaches the stream without a page reload. |
+| Panel blank while badge says Streaming | The MJPEG `<img>` connection dropped; it should reconnect on its own within a few seconds. Hard-reload if it does not. |
 | High CPU on Pi | Lower Max width / FPS / JPEG quality; confirm the dongle is not encoding full 1080p without downscale. |
 | Device list empty (Linux) | Check `/dev/video*`, `video` group, Docker `devices:` / `group_add`. |
 | Host app exits when stopping / popping out the stream | USB HDMI dongles crash if the capture graph is closed and immediately reopened. Use a current build — pop-out hands off the live device; Close waits ~2 s before release. |
