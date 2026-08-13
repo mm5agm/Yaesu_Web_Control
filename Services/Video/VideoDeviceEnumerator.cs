@@ -16,34 +16,166 @@ namespace Yaesu_Web_Control.Services.Video
     public static class VideoDeviceEnumerator
     {
         private const int MaxProbeIndex = 15;
+        private static readonly object CacheLock = new();
+        private static IReadOnlyList<VideoDeviceInfo> _cache = Array.Empty<VideoDeviceInfo>();
 
-        public static IReadOnlyList<VideoDeviceInfo> ListDevices()
+        /// <summary>
+        /// List capture devices. When <paramref name="allowProbe"/> is false
+        /// (capture loop already holds a UVC device), return the last probe
+        /// result instead of opening cameras — a second Open on the live
+        /// HDMI dongle native-crashes the host process.
+        /// </summary>
+        public static IReadOnlyList<VideoDeviceInfo> ListDevices(bool allowProbe = true)
         {
-            try
+            if (!allowProbe)
             {
+                // These paths do not Open() the live capture graph.
                 if (OperatingSystem.IsLinux())
                 {
                     var linux = EnumerateLinuxV4L2();
                     if (linux.Count > 0)
+                    {
+                        lock (CacheLock)
+                            _cache = linux;
                         return linux;
+                    }
                 }
 
-                if (OperatingSystem.IsMacOS())
-                    return EnumerateMacOS();
-
                 if (OperatingSystem.IsWindows())
-                    return ProbeIndices(VideoCaptureAPIs.DSHOW, ReadEmptyNames());
+                {
+                    var named = FromFriendlyNames(WindowsDshowDevices.ListFriendlyNames());
+                    if (named.Count > 0)
+                    {
+                        lock (CacheLock)
+                            _cache = named;
+                        return named;
+                    }
+                }
 
-                return ProbeIndices(VideoCaptureAPIs.ANY, ReadEmptyNames());
+                lock (CacheLock)
+                    return _cache;
+            }
+
+            try
+            {
+                IReadOnlyList<VideoDeviceInfo> list;
+                if (OperatingSystem.IsLinux())
+                {
+                    var linux = EnumerateLinuxV4L2();
+                    list = linux.Count > 0 ? linux : ProbeIndices(VideoCaptureAPIs.ANY, ReadEmptyNames());
+                }
+                else if (OperatingSystem.IsMacOS())
+                {
+                    list = EnumerateMacOS();
+                }
+                else if (OperatingSystem.IsWindows())
+                {
+                    list = EnumerateWindows();
+                }
+                else
+                {
+                    list = ProbeIndices(VideoCaptureAPIs.ANY, ReadEmptyNames());
+                }
+
+                lock (CacheLock)
+                    _cache = list;
+                return list;
             }
             catch
             {
-                return Array.Empty<VideoDeviceInfo>();
+                lock (CacheLock)
+                    return _cache;
             }
         }
 
         private static IReadOnlyDictionary<int, string> ReadEmptyNames() =>
             new Dictionary<int, string>();
+
+        /// <summary>
+        /// DirectShow names are the OpenCV CAP_DSHOW index space. Probe only
+        /// those indexes for a resolution suffix; if probe fails, still list
+        /// the named device so HDMI dongles are not shown as "Camera 0".
+        /// </summary>
+        private static List<VideoDeviceInfo> EnumerateWindows()
+        {
+            var names = WindowsDshowDevices.ListFriendlyNames();
+            if (names.Count == 0)
+                return ProbeIndices(VideoCaptureAPIs.DSHOW, ReadEmptyNames());
+
+            var probed = ProbeNamedIndices(VideoCaptureAPIs.DSHOW, names);
+            return MergeUnprobedNames(probed, names);
+        }
+
+        private static List<VideoDeviceInfo> FromFriendlyNames(IReadOnlyDictionary<int, string> names)
+        {
+            var collisions = CollidingNames(names);
+            var result = new List<VideoDeviceInfo>();
+            foreach (var kv in names.OrderBy(k => k.Key))
+            {
+                if (string.IsNullOrWhiteSpace(kv.Value))
+                    continue;
+                result.Add(new VideoDeviceInfo
+                {
+                    Index = kv.Key,
+                    Key = VideoDeviceKey.FromIndex(kv.Key),
+                    Label = FormatLabel(kv.Key, kv.Value, 0, 0, collisions.Contains(kv.Value.Trim()))
+                });
+            }
+            return result;
+        }
+
+        private static List<VideoDeviceInfo> MergeUnprobedNames(
+            IReadOnlyList<VideoDeviceInfo> probed,
+            IReadOnlyDictionary<int, string> names)
+        {
+            var byIndex = probed.ToDictionary(d => d.Index);
+            var collisions = CollidingNames(names);
+            var result = new List<VideoDeviceInfo>();
+            var max = -1;
+            if (byIndex.Count > 0)
+                max = Math.Max(max, byIndex.Keys.Max());
+            if (names.Count > 0)
+                max = Math.Max(max, names.Keys.Max());
+
+            for (var i = 0; i <= max; i++)
+            {
+                if (byIndex.TryGetValue(i, out var existing))
+                {
+                    result.Add(existing);
+                    continue;
+                }
+
+                if (!names.TryGetValue(i, out var friendly) || string.IsNullOrWhiteSpace(friendly))
+                    continue;
+
+                result.Add(new VideoDeviceInfo
+                {
+                    Index = i,
+                    Key = VideoDeviceKey.FromIndex(i),
+                    Label = FormatLabel(i, friendly, 0, 0, collisions.Contains(friendly.Trim()))
+                });
+            }
+
+            return result;
+        }
+
+        private static HashSet<string> CollidingNames(IReadOnlyDictionary<int, string> names) =>
+            names.Values
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .GroupBy(v => v.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        private static string FormatLabel(int index, string? friendly, int width, int height, bool nameCollision)
+        {
+            var name = string.IsNullOrWhiteSpace(friendly) ? $"Camera {index}" : friendly.Trim();
+            if (nameCollision)
+                name = $"{name} (#{index})";
+            if (width > 0 && height > 0)
+                return $"{name}  {width}×{height}";
+            return name;
+        }
 
         private static List<VideoDeviceInfo> EnumerateLinuxV4L2()
         {
@@ -219,42 +351,62 @@ namespace Yaesu_Web_Control.Services.Video
             }
         }
 
+        private static List<VideoDeviceInfo> ProbeNamedIndices(
+            VideoCaptureAPIs api,
+            IReadOnlyDictionary<int, string> friendlyNames)
+        {
+            var collisions = CollidingNames(friendlyNames);
+            var result = new List<VideoDeviceInfo>();
+            foreach (var index in friendlyNames.Keys.OrderBy(k => k))
+            {
+                if (index < 0 || index > MaxProbeIndex)
+                    continue;
+                TryProbeOne(api, index, friendlyNames, collisions, result);
+            }
+
+            return result;
+        }
+
         private static List<VideoDeviceInfo> ProbeIndices(
             VideoCaptureAPIs api,
             IReadOnlyDictionary<int, string> friendlyNames)
         {
+            var collisions = CollidingNames(friendlyNames);
             var result = new List<VideoDeviceInfo>();
             for (var i = 0; i <= MaxProbeIndex; i++)
-            {
-                try
-                {
-                    using var cap = new VideoCapture(i, api);
-                    if (!cap.IsOpened())
-                        continue;
-
-                    var w = (int)cap.Get(VideoCaptureProperties.FrameWidth);
-                    var h = (int)cap.Get(VideoCaptureProperties.FrameHeight);
-                    var size = (w > 0 && h > 0) ? $" {w}×{h}" : "";
-                    friendlyNames.TryGetValue(i, out var friendly);
-                    // Always include the OpenCV index so a mismatched name is obvious.
-                    var label = string.IsNullOrWhiteSpace(friendly)
-                        ? $"Camera {i}{size}"
-                        : $"{friendly}{size}  (#{i})";
-
-                    result.Add(new VideoDeviceInfo
-                    {
-                        Index = i,
-                        Key = VideoDeviceKey.FromIndex(i),
-                        Label = label
-                    });
-                }
-                catch
-                {
-                    // skip
-                }
-            }
-
+                TryProbeOne(api, i, friendlyNames, collisions, result);
             return result;
+        }
+
+        private static void TryProbeOne(
+            VideoCaptureAPIs api,
+            int index,
+            IReadOnlyDictionary<int, string> friendlyNames,
+            HashSet<string> collisions,
+            List<VideoDeviceInfo> result)
+        {
+            try
+            {
+                using var cap = new VideoCapture(index, api);
+                if (!cap.IsOpened())
+                    return;
+
+                var w = (int)cap.Get(VideoCaptureProperties.FrameWidth);
+                var h = (int)cap.Get(VideoCaptureProperties.FrameHeight);
+                friendlyNames.TryGetValue(index, out var friendly);
+                var collision = !string.IsNullOrWhiteSpace(friendly) && collisions.Contains(friendly.Trim());
+
+                result.Add(new VideoDeviceInfo
+                {
+                    Index = index,
+                    Key = VideoDeviceKey.FromIndex(index),
+                    Label = FormatLabel(index, friendly, w, h, collision)
+                });
+            }
+            catch
+            {
+                // skip
+            }
         }
 
         private static string? FindOnPath(string fileName)
