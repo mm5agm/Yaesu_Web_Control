@@ -71,8 +71,8 @@
        subtree, NOT a submodule, so a plain `git clone` of this repository still
        builds with no extra steps. Deliberately NOT conditioned on
        TargetFramework: the core targets net10.0, which both this project's
-       Windows TFM and its macOS/Linux CAT-only TFM can load. See core/README.md
-       for the subtree commands. -->
+       Windows TFM and its macOS/Linux CAT-only TFM can load. To refresh core/
+       later: scripts/update-core.sh (or .ps1) / make update-core. -->
   <ItemGroup>
     <ProjectReference Include="core\RadioWebControl.Core.csproj" />
   </ItemGroup>

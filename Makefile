@@ -7,7 +7,8 @@
 .PHONY: help restore build run publish \
 	publish-osx-arm64 publish-osx-x64 publish-linux-x64 publish-linux-arm64 \
 	dmg dmg-osx-arm64 dmg-osx-x64 dmg-all \
-	docker docker-load docker-multi compose-up compose-down clean
+	docker docker-load docker-multi compose-up compose-down clean \
+	update-core push-core
 
 PROJ            := Yaesu_Web_Control.csproj
 TFM             := net10.0
@@ -64,6 +65,10 @@ help:
 	@echo "  make docker-multi         Multi-arch build+push (REGISTRY_IMAGE=…)"
 	@echo "  make compose-up           docker compose up -d --build"
 	@echo "  make compose-down         docker compose down"
+	@echo ""
+	@echo "Shared core (git subtree at core/; not part of a normal build)"
+	@echo "  make update-core          Pull Radio_Web_Control_Core main into core/ (squash commit)"
+	@echo "  make push-core            Push local core/ changes back to Radio_Web_Control_Core"
 	@echo ""
 	@echo "Other"
 	@echo "  make clean                Remove bin/obj and $(PUBLISH_DIR)/"
@@ -129,6 +134,13 @@ compose-up:
 
 compose-down:
 	docker compose down
+
+# Deliberately not a dependency of build/run: clone already contains core/.
+update-core:
+	./scripts/update-core.sh pull
+
+push-core:
+	./scripts/update-core.sh push
 
 clean:
 	dotnet clean $(PROJ) -c $(CONFIG) -f $(TFM) || true

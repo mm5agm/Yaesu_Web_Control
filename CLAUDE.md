@@ -30,6 +30,14 @@ dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
 dotnet publish -c Release -f net10.0-windows -r win-x64 --self-contained
 ```
 
+`core/` is the `Radio_Web_Control_Core` git subtree. A clone already contains it; do **not** run a subtree pull from `dotnet build`. To refresh it from a clean working tree:
+
+```bash
+./scripts/update-core.sh          # or: make update-core
+.\scripts\update-core.ps1         # Windows
+./scripts/update-core.sh push     # or: make push-core / .\scripts\update-core.ps1 -Push
+```
+
 On macOS, set **Serial Port** to a `/dev/cu.*` device. On Linux, use `/dev/ttyUSB*` or `/dev/ttyACM*`. SDR spectrum and Voice Control are Windows-only and are hidden on the CAT-only host.
 
 **USB CAT:** install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on Windows, macOS, and Linux, then **reboot the host** before first use (see USER_MANUAL §2.4).

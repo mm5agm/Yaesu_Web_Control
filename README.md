@@ -73,6 +73,15 @@ docker compose pull && docker compose up -d
 # Local rebuild: docker compose up -d --build
 ```
 
+A clone already includes `core/` (the [Radio Web Control Core](https://github.com/mm5agm/Radio_Web_Control_Core) git subtree) and builds with no extra git steps. To pull later changes from that repo:
+
+```bash
+./scripts/update-core.sh          # macOS / Linux  (or: make update-core)
+.\scripts\update-core.ps1         # Windows
+```
+
+That creates a squash commit in this repository. It is not part of `dotnet build` / `make build` — those must keep working offline from a plain clone.
+
 On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`.
 
 ## Main Page
