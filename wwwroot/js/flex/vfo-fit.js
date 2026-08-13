@@ -1,9 +1,13 @@
 /**
  * Fit Flex VFO panels by scaling their natural size into the clip box.
  * Same mechanism as meters-fit: lay out at intrinsic px size, then uniform-scale.
+ *
+ * FlexLayout mounts templates asynchronously (and again on popout), so this
+ * module keeps watching for VFO hosts rather than giving up on first miss.
  */
 const MAX_SCALE = 4.0;
 const MIN_W = 360;
+const VFO_IDS = ['vfoACol', 'vfoBCol'];
 
 /**
  * @param {HTMLElement} host  `.ywc-vfo` root
@@ -14,11 +18,15 @@ function createFitter(host) {
     const body = host.querySelector('.ywc-vfo-body');
     if (!inner || !body) return null;
 
-    const viewport = host.closest('.ywc-flex-panel-host') || host;
+    const viewport =
+        host.closest('.ywc-flex-panel-host')
+        || host.closest('.flexlayout__tab')
+        || host;
 
     let raf = 0;
-    let lastKey = '';
     let applying = false;
+    let pending = false;
+    let lastKey = '';
 
     const measure = () => ({
         w: Math.max(1, Math.ceil(inner.scrollWidth), Math.ceil(body.scrollWidth)),
@@ -27,6 +35,7 @@ function createFitter(host) {
 
     const fit = () => {
         raf = 0;
+        pending = false;
         if (!host.isConnected) return;
 
         const vpStyle = getComputedStyle(viewport);
@@ -53,16 +62,18 @@ function createFitter(host) {
             body.style.minHeight = '0';
             body.style.overflow = 'visible';
 
-            // Intrinsic width (no wrap-to-panel), then a few wider widths in case
-            // undoing wraps shortens the block and raises the uniform scale.
+            // Intrinsic width (no wrap-to-panel), then a few candidate widths
+            // so wrapping can raise the uniform scale in a tall/narrow panel.
             inner.style.width = 'max-content';
             inner.style.transform = 'none';
             inner.style.marginRight = '0';
             inner.style.marginBottom = '0';
+            inner.style.marginLeft = '0';
+            inner.style.marginTop = '0';
             void inner.offsetHeight;
 
             const intrinsic = measure();
-            const minW = Math.max(MIN_W, intrinsic.w);
+            const minW = Math.max(MIN_W, Math.min(intrinsic.w, availW));
 
             /** @type {{ scale: number, contentW: number, contentH: number }} */
             let best = {
@@ -71,11 +82,11 @@ function createFitter(host) {
                 contentH: intrinsic.h,
             };
 
-            const maxLayoutW = Math.max(minW, availW);
-            const steps = 6;
-            for (let i = 1; i <= steps; i++) {
+            const maxLayoutW = Math.max(minW, availW, intrinsic.w);
+            const steps = 8;
+            for (let i = 0; i <= steps; i++) {
                 const w = Math.round(minW + (maxLayoutW - minW) * (i / steps));
-                if (w <= minW + 8) continue;
+                if (w < 32) continue;
                 inner.style.width = `${w}px`;
                 void inner.offsetHeight;
                 const m = measure();
@@ -90,32 +101,50 @@ function createFitter(host) {
             if (!Number.isFinite(best.scale) || best.scale <= 0) return;
 
             const key = `${best.contentW}x${best.contentH}@${availW}x${availH}:${best.scale.toFixed(4)}`;
+            if (key === lastKey) return;
             lastKey = key;
 
             inner.style.width = `${best.contentW}px`;
             inner.style.height = `${best.contentH}px`;
             inner.style.transform = `scale(${best.scale})`;
-            inner.style.marginRight = `${best.contentW * (best.scale - 1)}px`;
-            inner.style.marginBottom = `${best.contentH * (best.scale - 1)}px`;
+
+            const visualW = best.contentW * best.scale;
+            const visualH = best.contentH * best.scale;
+            const padX = Math.max(0, (availW - visualW) / 2);
+            const padY = Math.max(0, (availH - visualH) / 2);
+            inner.style.marginLeft = `${padX}px`;
+            inner.style.marginTop = `${padY}px`;
+            inner.style.marginRight = `${best.contentW * (best.scale - 1) + padX}px`;
+            inner.style.marginBottom = `${best.contentH * (best.scale - 1) + padY}px`;
 
             host.style.setProperty('--ywc-vfo-scale', String(best.scale));
             host.dataset.vfoScale = best.scale.toFixed(3);
         } finally {
             applying = false;
+            if (pending) schedule();
         }
     };
 
     const schedule = () => {
-        if (raf || applying) return;
+        if (applying) {
+            pending = true;
+            return;
+        }
+        if (raf) return;
         raf = requestAnimationFrame(fit);
     };
 
     const ro = new ResizeObserver(schedule);
     ro.observe(viewport);
     if (viewport !== host) ro.observe(host);
+    const tab = host.closest('.flexlayout__tab');
+    if (tab && tab !== viewport) ro.observe(tab);
 
     const mo = new MutationObserver(() => {
-        if (!applying) schedule();
+        if (!applying) {
+            lastKey = '';
+            schedule();
+        }
     });
     mo.observe(host, {
         attributes: true,
@@ -139,19 +168,24 @@ function createFitter(host) {
     };
 }
 
+function findVfoHost(id) {
+    if (typeof window.ywcGetElementById === 'function') {
+        const el = window.ywcGetElementById(id);
+        if (el?.classList?.contains('ywc-vfo')) return el;
+    }
+    const el = document.getElementById(id);
+    return el?.classList?.contains('ywc-vfo') ? el : null;
+}
+
 /**
- * @param {Document} [doc]
- * @returns {{ refit: () => void, dispose: () => void } | null}
+ * @returns {{ refit: () => void, dispose: () => void }}
  */
-export function initVfoFit(doc = document) {
+export function initVfoFit() {
     /** @type {Map<HTMLElement, { refit: () => void, dispose: () => void }>} */
     const byHost = new Map();
 
     const sync = () => {
-        const hosts = ['vfoACol', 'vfoBCol']
-            .map((id) => doc.getElementById(id))
-            .filter((el) => el?.classList?.contains('ywc-vfo'));
-
+        const hosts = VFO_IDS.map(findVfoHost).filter(Boolean);
         const live = new Set(hosts);
         for (const [el, fitter] of [...byHost]) {
             if (!live.has(el) || !el.isConnected) {
@@ -164,17 +198,37 @@ export function initVfoFit(doc = document) {
             const fitter = createFitter(el);
             if (fitter) byHost.set(el, fitter);
         }
-        return byHost.size > 0;
+        return byHost.size;
     };
 
-    if (!sync()) return null;
+    const refitAll = () => {
+        sync();
+        for (const f of byHost.values()) f.refit();
+    };
+
+    const workspace = document.getElementById('ywcFlexHost') || document.body;
+    const hostMo = new MutationObserver(() => {
+        // Attach/dispose only — per-host ResizeObserver handles size changes.
+        // Refitting on every childList mutation (freq digits, button classes)
+        // would jank the live VFO.
+        sync();
+    });
+    hostMo.observe(workspace, { childList: true, subtree: true });
+
+    window.addEventListener('resize', refitAll);
+    window.addEventListener('ywc-flex-panel-resize', refitAll);
+
+    sync();
+    requestAnimationFrame(refitAll);
+    setTimeout(refitAll, 0);
+    setTimeout(refitAll, 120);
 
     return {
-        refit() {
-            sync();
-            for (const f of byHost.values()) f.refit();
-        },
+        refit: refitAll,
         dispose() {
+            window.removeEventListener('resize', refitAll);
+            window.removeEventListener('ywc-flex-panel-resize', refitAll);
+            hostMo.disconnect();
             for (const f of byHost.values()) f.dispose();
             byHost.clear();
         },

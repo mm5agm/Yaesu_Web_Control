@@ -20,9 +20,9 @@
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
         import { initRemoteAudioFlex }    from "/js/audio/remote-audio-flex-ui.js?v=2";
-        import { initFlexWorkspace, installBootstrapShim } from "/js/flex/flex-layout.js?v=1";
+        import { initFlexWorkspace, installBootstrapShim } from "/js/flex/flex-layout.js?v=2";
         import { initMetersFit } from "/js/flex/meters-fit.js?v=1";
-        import { initVfoFit } from "/js/flex/vfo-fit.js?v=1";
+        import { initVfoFit } from "/js/flex/vfo-fit.js?v=2";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -35,12 +35,12 @@
             nearestBandForHz(hz, BAND_EDGES[_ywcRegion0] || BAND_EDGES.Region1);
 
         installBootstrapShim();
+        window.ywcVfoFit = initVfoFit();
         initFlexWorkspace(document.getElementById('ywcFlexHost'), window.ywcFlexFlags);
         // TX / split chrome targets VFO panel DOM — refresh after templates mount.
         if (typeof window.updateTxButton === 'function') window.updateTxButton();
         if (typeof window.updateSplitButton === 'function') window.updateSplitButton();
         if (typeof window.applyVfoActiveStyling === 'function') window.applyVfoActiveStyling();
-        window.ywcVfoFit = initVfoFit();
         requestAnimationFrame(() => window.ywcVfoFit?.refit());
 
         // bfcache guard.

@@ -62,6 +62,7 @@ export function installDomShim() {
 
 export function dispatchPanelResize() {
     window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new Event('ywc-flex-panel-resize'));
     for (const doc of collectDocuments()) {
         try {
             doc.defaultView?.dispatchEvent(new Event('resize'));
