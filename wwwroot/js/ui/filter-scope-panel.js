@@ -58,8 +58,10 @@ export class FilterScopePanel {
 
         /** Optional () => { data, sampleRate, fftSize } | null from remote audio RX. */
         this._spectrumProvider = null;
+        this._stopped = false;
+        this._animFrame = null;
 
-        this._init();
+        this.reattach();
     }
 
     setState(updates) {
@@ -76,15 +78,27 @@ export class FilterScopePanel {
         this._spectrumProvider = typeof provider === 'function' ? provider : null;
     }
 
-    _init() {
+    /**
+     * Bind to the live canvas. FlexLayout clones VFO templates after first
+     * construction, so the canvas id is the same but the node is new.
+     */
+    reattach() {
+        if (this._stopped) return;
         const canvas = document.getElementById(this._canvasId);
-        if (!canvas) return;
+        if (this._resizeObserver) {
+            try { this._resizeObserver.disconnect(); } catch { /* ignore */ }
+            this._resizeObserver = null;
+        }
+        if (!canvas || !canvas.isConnected) return;
         this._sizeCanvas(canvas);
         this._resizeObserver = new ResizeObserver(() => {
-            this._sizeCanvas(canvas);
+            const live = document.getElementById(this._canvasId);
+            if (live && live.isConnected) this._sizeCanvas(live);
+            this._render();
         });
         this._resizeObserver.observe(canvas.parentElement ?? canvas);
-        this._startAnimation();
+        if (!this._animFrame) this._startAnimation();
+        this._render();
     }
 
     _startAnimation() {
@@ -103,6 +117,7 @@ export class FilterScopePanel {
      * to call multiple times.
      */
     stop() {
+        this._stopped = true;
         if (this._animFrame) {
             try { cancelAnimationFrame(this._animFrame); } catch { /* ignore */ }
             this._animFrame = null;
