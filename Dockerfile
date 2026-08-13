@@ -21,7 +21,14 @@ FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS
 ARG TARGETARCH
 WORKDIR /src
 
+# Only the project files, so the restore layer stays cached across source edits.
+# core/ is the Radio_Web_Control_Core git subtree and is a ProjectReference from
+# the csproj above, so its .csproj has to be here too — restore does NOT fail on
+# a missing referenced project, it prints "Skipping project ... because it was
+# not found" and carries on, and the damage only surfaces at the publish below
+# as "NETSDK1004: Assets file '/src/core/obj/project.assets.json' not found".
 COPY Yaesu_Web_Control.csproj ./
+COPY core/RadioWebControl.Core.csproj core/
 RUN arch="$TARGETARCH"; \
     if [ "$arch" = "amd64" ]; then arch=x64; fi; \
     dotnet restore Yaesu_Web_Control.csproj -r "linux-$arch"
