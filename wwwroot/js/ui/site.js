@@ -914,9 +914,14 @@ function updateSplitButton() {
     const active     = splitMode > 0;
 
     if (btn) {
-        btn.className = active ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-outline-secondary';
-        btn.style.paddingTop    = '1px';
-        btn.style.paddingBottom = '1px';
+        if (btn.classList.contains('ywc-btn')) {
+            btn.classList.toggle('ywc-btn-danger', active);
+            btn.classList.toggle('ywc-btn-outline', !active);
+        } else {
+            btn.className = active ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-outline-secondary';
+            btn.style.paddingTop    = '1px';
+            btn.style.paddingBottom = '1px';
+        }
         btn.textContent = active ? 'Split ON' : 'Split';
     }
 
@@ -959,6 +964,14 @@ function updateRxTxSelectors() {
     const rxA = document.getElementById('rxVfoA');
     if (!rxA) return; // group only rendered on single-receiver radios
     const pick = (el, on, onClass) => {
+        if (!el) return;
+        if (el.classList.contains('ywc-btn')) {
+            const danger = on && onClass === 'btn-danger';
+            el.classList.toggle('ywc-btn-danger', danger);
+            el.classList.toggle('ywc-active', on && !danger);
+            el.classList.toggle('ywc-btn-outline', !on);
+            return;
+        }
         el.classList.remove('btn-secondary', 'btn-danger', 'btn-outline-secondary');
         el.classList.add(on ? onClass : 'btn-outline-secondary');
     };
@@ -2002,35 +2015,49 @@ window.addEventListener('DOMContentLoaded', () => {
     pollInitStatus();
         updateBandButtonsFromBackend();
 
-    // VFO-B show/hide toggle — click handler is in Index.cshtml (applyVisibility).
+    // VFO-B show/hide toggle — click handler is in Index.cshtml / flex-layout.js.
     // Only set the aria-label here; do not add a second click listener.
     document.getElementById('vfoBToggleBtn')
         ?.setAttribute('aria-label', 'Show or hide VFO B panel');
 
-    // Split / Swap VFO button handlers
-    document.getElementById('splitBtn')?.addEventListener('click', () => setSplit(splitMode > 0 ? 0 : 1));
-    // Quick Split (+5k) is a one-shot action, not a persistent mode — the
-    // Split button (red) shows the resulting split state. Give a brief "fired"
-    // flash so the press registers visually, then return to the resting style.
-    const quickSplitBtn = document.getElementById('quickSplitBtn');
-    quickSplitBtn?.addEventListener('click', () => {
-        quickSplitBtn.classList.replace('btn-outline-secondary', 'btn-danger');
-        clearTimeout(quickSplitBtn._flashTimer);
-        quickSplitBtn._flashTimer = setTimeout(() => {
-            quickSplitBtn.classList.replace('btn-danger', 'btn-outline-secondary');
-        }, 250);
-        setSplit(2);
+    // Delegated so FlexLayout can clone these buttons after DOMContentLoaded.
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('#splitBtn, #quickSplitBtn, #rxVfoA, #rxVfoB, #txVfoA, #txVfoB, #swapVfoBtn, #copyBtoABtn, #copyAtoBBtn');
+        if (!btn) return;
+        switch (btn.id) {
+            case 'splitBtn':
+                setSplit(splitMode > 0 ? 0 : 1);
+                break;
+            case 'quickSplitBtn': {
+                // One-shot action — Split button shows the resulting state.
+                if (btn.classList.contains('ywc-btn')) {
+                    btn.classList.add('ywc-btn-danger');
+                    btn.classList.remove('ywc-btn-outline');
+                    clearTimeout(btn._flashTimer);
+                    btn._flashTimer = setTimeout(() => {
+                        btn.classList.remove('ywc-btn-danger');
+                        btn.classList.add('ywc-btn-outline');
+                    }, 250);
+                } else {
+                    btn.classList.replace('btn-outline-secondary', 'btn-danger');
+                    clearTimeout(btn._flashTimer);
+                    btn._flashTimer = setTimeout(() => {
+                        btn.classList.replace('btn-danger', 'btn-outline-secondary');
+                    }, 250);
+                }
+                setSplit(2);
+                break;
+            }
+            case 'rxVfoA': setRxVfo('A'); break;
+            case 'rxVfoB': setRxVfo('B'); break;
+            case 'txVfoA': setTxVfo('A'); break;
+            case 'txVfoB': setTxVfo('B'); break;
+            case 'swapVfoBtn': swapVfo(); break;
+            case 'copyBtoABtn': copyVfo('ba'); break;
+            case 'copyAtoBBtn': copyVfo('ab'); break;
+        }
     });
-    // Independent RX / TX VFO selectors (single-receiver radios only; the group
-    // is not rendered otherwise, so these no-op on dual-receiver radios).
-    document.getElementById('rxVfoA')?.addEventListener('click', () => setRxVfo('A'));
-    document.getElementById('rxVfoB')?.addEventListener('click', () => setRxVfo('B'));
-    document.getElementById('txVfoA')?.addEventListener('click', () => setTxVfo('A'));
-    document.getElementById('txVfoB')?.addEventListener('click', () => setTxVfo('B'));
     updateRxTxSelectors();
-    document.getElementById('swapVfoBtn')?.addEventListener('click', swapVfo);
-    document.getElementById('copyBtoABtn')?.addEventListener('click', () => copyVfo('ba'));
-    document.getElementById('copyAtoBBtn')?.addEventListener('click', () => copyVfo('ab'));
 
     // Dual-receiver only: click a VFO panel's header to make it the active
     // (MAIN/SUB) band. Ignored on single-receiver (greying already shows the

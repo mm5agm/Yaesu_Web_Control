@@ -64,6 +64,12 @@
           },
           {
             "type": "tab",
+            "id": "vfoOps",
+            "name": "VFO Ops",
+            "component": "vfoOps"
+          },
+          {
+            "type": "tab",
             "id": "vfoB",
             "name": "VFO B",
             "component": "vfoB"

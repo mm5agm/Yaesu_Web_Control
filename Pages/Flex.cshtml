@@ -48,6 +48,7 @@ document.getElementById('messageBoxOkBtn')?.addEventListener('click', () => {
     <template id="tpl-spectrum-a">@await Html.PartialAsync("FlexPartials/_SpectrumA")</template>
     <template id="tpl-spectrum-b">@await Html.PartialAsync("FlexPartials/_SpectrumB")</template>
     <template id="tpl-vfo-a">@await Html.PartialAsync("FlexPartials/_Vfo", FlexVfoPanelModel.A(Model))</template>
+    <template id="tpl-vfo-ops">@await Html.PartialAsync("FlexPartials/_VfoOps")</template>
     <template id="tpl-vfo-b">@await Html.PartialAsync("FlexPartials/_Vfo", FlexVfoPanelModel.B(Model))</template>
     <template id="tpl-clarifier">@await Html.PartialAsync("FlexPartials/_Clarifier")</template>
     <template id="tpl-empty"><div></div></template>

@@ -115,8 +115,14 @@ export function initMemoriesPanel() {
     // Refresh button
     document.getElementById('memoriesRefresh')?.addEventListener('click', _loadAndRender);
 
-    // Open button (toolbar)
-    document.getElementById('memBtn')?.addEventListener('click', openMemoriesPanel);
+    window.openMemoriesPanel = openMemoriesPanel;
+    // Delegated: Flex clones #memBtn into a panel after this init runs.
+    if (!document.documentElement.dataset.ywcMemBtnDelegated) {
+        document.documentElement.dataset.ywcMemBtnDelegated = '1';
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#memBtn')) openMemoriesPanel();
+        });
+    }
 
     // Bank switcher
     document.getElementById('memBankSelect')?.addEventListener('change', e => _switchBank(e.target.value));
