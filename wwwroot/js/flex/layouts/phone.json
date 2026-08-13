@@ -1,0 +1,89 @@
+{
+  "global": {
+    "tabEnableClose": false,
+    "tabEnablePopout": false,
+    "tabEnablePopoutIcon": false,
+    "tabSetEnableMaximize": true,
+    "rootOrientationVertical": true,
+    "splitterSize": 12
+  },
+  "borders": [
+    {
+      "type": "border",
+      "location": "bottom",
+      "size": 160,
+      "children": [
+        {
+          "type": "tab",
+          "id": "meters",
+          "name": "Meters",
+          "component": "meters",
+          "enableWindowReMount": true
+        },
+        {
+          "type": "tab",
+          "id": "remoteAudio",
+          "name": "Remote Audio",
+          "component": "remoteAudio"
+        }
+      ]
+    },
+    {
+      "type": "border",
+      "location": "left",
+      "size": 72,
+      "children": [
+        {
+          "type": "tab",
+          "id": "controls",
+          "name": "Controls",
+          "component": "controls"
+        },
+        {
+          "type": "tab",
+          "id": "clarifier",
+          "name": "Clarifier",
+          "component": "clarifier"
+        }
+      ]
+    }
+  ],
+  "layout": {
+    "type": "row",
+    "weight": 100,
+    "children": [
+      {
+        "type": "tabset",
+        "weight": 100,
+        "children": [
+          {
+            "type": "tab",
+            "id": "vfoA",
+            "name": "VFO A",
+            "component": "vfoA"
+          },
+          {
+            "type": "tab",
+            "id": "vfoB",
+            "name": "VFO B",
+            "component": "vfoB"
+          },
+          {
+            "type": "tab",
+            "id": "spectrumA",
+            "name": "Spectrum A",
+            "component": "spectrumA",
+            "enableWindowReMount": true
+          },
+          {
+            "type": "tab",
+            "id": "spectrumB",
+            "name": "Spectrum B",
+            "component": "spectrumB",
+            "enableWindowReMount": true
+          }
+        ]
+      }
+    ]
+  }
+}

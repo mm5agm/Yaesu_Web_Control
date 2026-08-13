@@ -1,0 +1,31 @@
+                <div id="spectrumContainerA" class="ywc-spectrum-panel" style="flex: 1 1 0; min-width:0;">
+                    <div class="ywc-spectrum-header ywc-flex justify-content-between align-items-center py-1">
+                        <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
+                        <div class="ywc-flex align-items-center gap-2">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="VFO A spectrum span">
+                                <button type="button" class="ywc-btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzA == 62_500 ? "active" : "")" data-hz="62500" data-vfo="A" data-a11y-key="spectrum.spanA62k" aria-label="VFO A span 62.5 kHz" title="VFO A span 62.5 kHz — narrowest available, best for a single QSO">62.5k</button>
+                                <button type="button" class="ywc-btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzA == 125_000 ? "active" : "")" data-hz="125000" data-vfo="A" data-a11y-key="spectrum.spanA125k" aria-label="VFO A span 125 kHz" title="VFO A span 125 kHz — best for narrow bands like 30m / 60m">125k</button>
+                                <button type="button" class="ywc-btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzA == 250_000 ? "active" : "")" data-hz="250000" data-vfo="A" data-a11y-key="spectrum.spanA250k" aria-label="VFO A span 250 kHz" title="VFO A span 250 kHz">250k</button>
+                                <button type="button" class="ywc-btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzA == 500_000 ? "active" : "")" data-hz="500000" data-vfo="A" data-a11y-key="spectrum.spanA500k" aria-label="VFO A span 500 kHz" title="VFO A span 500 kHz">500k</button>
+                                <button type="button" class="ywc-btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzA == 1_024_000 ? "active" : "")" data-hz="1024000" data-vfo="A" data-a11y-key="spectrum.spanA1m" aria-label="VFO A span 1 MHz" title="VFO A span 1 MHz">1M</button>
+                                <button type="button" class="ywc-btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzA == 2_048_000 ? "active" : "")" data-hz="2048000" data-vfo="A" data-a11y-key="spectrum.spanA2m" aria-label="VFO A span 2 MHz" title="VFO A span 2 MHz">2M</button>
+                            </div>
+                            <button type="button" class="ywc-btn btn-outline-light btn-sm spectrum-hold-btn" data-vfo="A" title="Freeze this spectrum at the current frame so you can study it. Click again to resume live streaming.">Hold</button>
+                            <span id="spectrumStatusBadgeA" class="ywc-badge bg-secondary small">—</span>
+                        </div>
+                    </div>
+                    <div class="spectrum-dsp-bar d-flex align-items-center gap-2 px-2 py-1 small" data-vfo="A">
+                        <label class="text-nowrap mb-0" title="Vertical scale — dB of headroom above the auto-tracked noise floor. Smaller = taller peaks (zoom in on weak signals); larger = flatter. The noise floor stays pinned near the bottom automatically, so there's no floor slider to chase.">Range</label>
+                        <input type="range" class="ywc-range spectrum-range-slider" data-vfo="A" min="5" max="160" step="1" value="60" aria-label="VFO A spectrum vertical range (dB above the noise floor)" style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-range-label" data-vfo="A" style="min-width:3.5em; text-align:right;">60 dB</span>
+                        <label class="text-nowrap mb-0 ms-2" title="How fast the waterfall scrolls, from full speed down to 1/128. Does not affect the spectrum trace above it.">Speed</label>
+                        <input type="range" class="ywc-range spectrum-speed-slider" data-vfo="A" min="0" max="7" step="1" value="0" aria-label="VFO A waterfall scroll speed" style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-speed-label" data-vfo="A" style="min-width:3.5em; text-align:right;">Full</span>
+                        <label class="text-nowrap mb-0 ms-2" title="Waterfall brightness — lifts weak signals up the waterfall colour scale. The spectrum trace auto-ranges, so this brightens the waterfall only, leaving the trace unchanged.">Bright</label>
+                        <input type="range" class="ywc-range spectrum-bright-slider" data-vfo="A" min="0" max="60" step="1" value="0" aria-label="VFO A waterfall brightness" style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-bright-label" data-vfo="A" style="min-width:3.5em; text-align:right;">Off</span>
+                    </div>
+                    <div class="ywc-spectrum-canvas-wrap">
+                        <canvas id="spectrumCanvasA" role="img" aria-hidden="true" aria-label="RF spectrum display VFO A" style="display:block; width:100%;"></canvas>
+                    </div>
+                </div>
