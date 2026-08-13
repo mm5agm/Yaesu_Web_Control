@@ -88,6 +88,7 @@ function TemplatePanel({ templateId, component, nodeId, node }) {
             notifyFit();
             if (typeof window.updateTxButton === 'function') window.updateTxButton();
             if (typeof window.updateSplitButton === 'function') window.updateSplitButton();
+            if (typeof window.updateRxTxSelectors === 'function') window.updateRxTxSelectors();
             if (typeof window.applyVfoActiveStyling === 'function') window.applyVfoActiveStyling();
         });
 

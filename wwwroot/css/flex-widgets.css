@@ -303,6 +303,37 @@ html, body.ywc-flex-body {
     overflow: visible;
 }
 
+.ywc-vfo-actions {
+    align-items: center;
+}
+
+.ywc-vfo-rxtx {
+    display: inline-flex;
+    align-items: stretch;
+    gap: 0.15rem;
+}
+
+.ywc-vfo-rx,
+.ywc-vfo-tx {
+    min-width: 2.4rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.ywc-vfo-rx.ywc-rxtx-on {
+    background: #1e5a2a;
+    border-color: #3d9a55;
+    color: #b6f0c0;
+    box-shadow: 0 0 8px rgba(137, 209, 133, 0.45);
+}
+
+.ywc-vfo-tx.ywc-rxtx-on {
+    background: #8b2020;
+    border-color: #d05050;
+    color: #fff;
+    box-shadow: 0 0 8px rgba(241, 76, 76, 0.5);
+}
+
 .ywc-vfo-a.vfo-active,
 .ywc-vfo-b.vfo-active {
     box-shadow: inset 0 0 0 2px var(--ywc-accent);
@@ -787,25 +818,6 @@ html, body.ywc-flex-body {
 
 .ywc-vfo-ops-buttons > .ywc-btn {
     width: 100%;
-}
-
-.ywc-vfo-ops-rxtx {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding-top: 0.15rem;
-}
-
-.ywc-vfo-ops-rxtx-row {
-    display: flex;
-    align-items: center;
-    gap: 0.2rem;
-}
-
-.ywc-vfo-ops-rxtx-row > span:first-child {
-    min-width: 1.6rem;
-    font-size: 0.7rem;
-    font-weight: 600;
 }
 
 /* Modal shim for site.js message box */

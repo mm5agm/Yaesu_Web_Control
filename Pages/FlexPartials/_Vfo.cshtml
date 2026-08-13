@@ -15,6 +15,16 @@
 
         <div class="ywc-vfo-body">
             <div class="ywc-vfo-actions ywc-flex-wrap">
+                <span class="ywc-vfo-rxtx" role="group" aria-label="@label receive and transmit">
+                    <button type="button" id="vfoRx@(id)" class="ywc-btn ywc-btn-sm ywc-btn-outline ywc-vfo-rx"
+                            data-rxtx-vfo="@id" data-rxtx="rx"
+                            aria-pressed="false" aria-label="@label receive"
+                            title="Listen on @label. Combining RX here with TX on the other VFO is split; RX+TX on the same VFO is simplex. Only one VFO receives at a time on single-receiver radios.">RX</button>
+                    <button type="button" id="vfoTx@(id)" class="ywc-btn ywc-btn-sm ywc-btn-outline ywc-vfo-tx"
+                            data-rxtx-vfo="@id" data-rxtx="tx"
+                            aria-pressed="false" aria-label="@label transmit"
+                            title="Transmit on @label. Only one VFO transmits at a time. RX+TX on this VFO is simplex; TX here and RX on the other is split.">TX</button>
+                </span>
                 <span id="splitTxBadge@(id)" class="ywc-badge ywc-badge-danger" style="display:none;" aria-live="polite">SPLIT TX</span>
                 <button type="button" id="zinBtn@(id)" class="ywc-btn ywc-btn-sm ywc-btn-outline"
                         onclick="cwZeroIn('@id')"
