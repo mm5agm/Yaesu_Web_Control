@@ -4,6 +4,22 @@ on:
   release:
     types: [created]
 
+  # Build every pull request into develop, so a PR arrives with a real signal
+  # instead of "no checks". Added after shared-core phase 1 (#99) merged clean
+  # and broke build-docker: nothing had run, because until now the only ways in
+  # were a release and a manual dispatch, and the manual one happened after the
+  # merge. build-docker is exactly the job that would have caught it.
+  #
+  # Nothing is published on this path. Every upload step is guarded by event
+  # name, and the docker job's push flag falls into its `else` branch on any
+  # event that is neither a release nor a dispatch carrying a tag — so a PR run
+  # gets version=smoke, push=false, the GHCR login skips and the image is built
+  # and discarded.
+  #
+  # build-macos is deliberately excluded (see its `if:`).
+  pull_request:
+    branches: [develop]
+
   workflow_dispatch:
     inputs:
       tag:
@@ -109,7 +125,16 @@ jobs:
 
   # Unsigned CAT-only .app DMGs (arm64 + x64). No Apple Developer ID / notarization.
   # workflow_dispatch with empty tag → artifacts only (safe branch smoke test).
+  #
+  # Skipped on pull requests, on wall-clock grounds rather than cost — both
+  # repos are public, so Actions minutes are free. This job builds two DMGs and
+  # routinely runs well over twenty minutes, which would leave every PR sitting
+  # "in progress" long after the answer was known. build-windows and
+  # build-docker cover the same compile in a fraction of the time, and macOS
+  # still runs on dispatch and on release. If a change is macOS-specific, hit
+  # "Run workflow" on the branch.
   build-macos:
+    if: github.event_name != 'pull_request'
     runs-on: macos-latest
     permissions:
       contents: write
