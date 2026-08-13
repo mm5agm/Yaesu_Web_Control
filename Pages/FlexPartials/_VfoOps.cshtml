@@ -12,25 +12,9 @@
                     aria-label="Copy VFO B to VFO A">B&rarr;A</button>
             <button id="copyAtoBBtn" type="button" class="ywc-btn ywc-btn-outline ywc-btn-sm"
                     aria-label="Copy VFO A to VFO B">A&rarr;B</button>
-            <button id="splitBtn" type="button" class="ywc-btn ywc-btn-outline ywc-btn-sm"
-                    aria-label="Toggle split mode">Split</button>
             <button id="quickSplitBtn" type="button" class="ywc-btn ywc-btn-outline ywc-btn-sm"
-                    aria-label="Quick split plus 5 kHz">+5k</button>
-            @if (Model.View.IsSingleReceiver)
-            {
-                <span id="rxTxSplitGroup" class="ywc-rxtx-group ywc-vfo-ops-rxtx" title="Independent RX / TX VFO selection">
-                    <span class="ywc-vfo-ops-rxtx-row">
-                        <span>RX</span>
-                        <button type="button" id="rxVfoA" class="ywc-btn ywc-btn-outline ywc-btn-xs" data-rx="A">A</button>
-                        <button type="button" id="rxVfoB" class="ywc-btn ywc-btn-outline ywc-btn-xs" data-rx="B">B</button>
-                    </span>
-                    <span class="ywc-vfo-ops-rxtx-row">
-                        <span>TX</span>
-                        <button type="button" id="txVfoA" class="ywc-btn ywc-btn-outline ywc-btn-xs" data-tx="A">A</button>
-                        <button type="button" id="txVfoB" class="ywc-btn ywc-btn-outline ywc-btn-xs" data-tx="B">B</button>
-                    </span>
-                </span>
-            }
+                    aria-label="Quick split plus 5 kHz"
+                    title="Quick split: copy this VFO A frequency plus 5 kHz to VFO B and transmit on B">+5k</button>
         </div>
     </div>
 </div>

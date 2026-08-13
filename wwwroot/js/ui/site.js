@@ -888,18 +888,20 @@ function updateTxButton() {
     if (btnA) btnA.style.display = (positionVfo === 0) ? 'inline-block' : 'none';
     if (btnB) btnB.style.display = (positionVfo === 1) ? 'inline-block' : 'none';
 
-    // Update button state
     const activeBtn = (positionVfo === 0) ? btnA : btnB;
     if (activeBtn) {
-        if (isTransmitting) {
+        if (activeBtn.classList.contains('ywc-btn')) {
+            activeBtn.classList.toggle('ywc-btn-danger', isTransmitting);
+            activeBtn.classList.toggle('ywc-btn-warning', !isTransmitting);
+            activeBtn.textContent = isTransmitting ? 'TX ON' : 'TX';
+        } else if (isTransmitting) {
             activeBtn.className = 'btn btn-danger btn-sm';
             activeBtn.innerHTML = '<i class="bi bi-broadcast" aria-hidden="true"></i> TX ON';
-            activeBtn.title = 'Click to stop transmitting';
         } else {
             activeBtn.className = 'btn btn-warning btn-sm';
             activeBtn.innerHTML = '<i class="bi bi-broadcast" aria-hidden="true"></i> TX';
-            activeBtn.title = 'Click to transmit';
         }
+        activeBtn.title = isTransmitting ? 'Click to stop transmitting' : 'Click to transmit';
     }
 }
 
@@ -907,8 +909,8 @@ function updateSplitButton() {
     const btn        = document.getElementById('splitBtn');
     const badgeA     = document.getElementById('splitTxBadgeA');
     const badgeB     = document.getElementById('splitTxBadgeB');
-    const vfoACard   = document.querySelector('#vfoACol .card');
-    const vfoBCard   = document.querySelector('#vfoBCol .card');
+    const vfoACard   = document.querySelector('#vfoACol .card') || document.getElementById('vfoACol');
+    const vfoBCard   = document.querySelector('#vfoBCol .card') || document.getElementById('vfoBCol');
     const vfoRow     = document.getElementById('vfoRow');
     const isSingleReceiver = vfoRow?.dataset.singleReceiver === 'true';
     const active     = splitMode > 0;
@@ -956,13 +958,28 @@ function updateSplitButton() {
     }
 }
 
-// Independent RX / TX VFO selectors (single-receiver radios, #78). RX follows
-// activeVfo (VS / FR), TX follows txVfo (FT); split is derived (TX ≠ RX). The
-// selected RX button is filled grey; the selected TX button is red when split
-// is on and filled grey when TX and RX are the same VFO.
+// Per-VFO RX / TX assignment (FlexLayout, 101-style) and the Index-page
+// RX A/B · TX A/B group (single-receiver, #78). RX follows activeVfo
+// (VS / FR), TX follows txVfo (FT); split is derived (TX ≠ RX).
 function updateRxTxSelectors() {
+    const rxOnA = activeVfo === 0;
+    const rxOnB = activeVfo === 1;
+    const txOnA = effectiveTxVfo() === 0;
+    const txOnB = effectiveTxVfo() === 1;
+
+    const setLed = (el, on) => {
+        if (!el) return;
+        el.classList.toggle('ywc-rxtx-on', on);
+        el.classList.toggle('ywc-btn-outline', !on);
+        el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    };
+    setLed(document.getElementById('vfoRxA'), rxOnA);
+    setLed(document.getElementById('vfoRxB'), rxOnB);
+    setLed(document.getElementById('vfoTxA'), txOnA);
+    setLed(document.getElementById('vfoTxB'), txOnB);
+
     const rxA = document.getElementById('rxVfoA');
-    if (!rxA) return; // group only rendered on single-receiver radios
+    if (!rxA) return;
     const pick = (el, on, onClass) => {
         if (!el) return;
         if (el.classList.contains('ywc-btn')) {
@@ -975,11 +992,11 @@ function updateRxTxSelectors() {
         el.classList.remove('btn-secondary', 'btn-danger', 'btn-outline-secondary');
         el.classList.add(on ? onClass : 'btn-outline-secondary');
     };
-    pick(rxA, activeVfo === 0, 'btn-secondary');
-    pick(document.getElementById('rxVfoB'), activeVfo === 1, 'btn-secondary');
-    const split = txVfo !== activeVfo;
-    pick(document.getElementById('txVfoA'), txVfo === 0, split ? 'btn-danger' : 'btn-secondary');
-    pick(document.getElementById('txVfoB'), txVfo === 1, split ? 'btn-danger' : 'btn-secondary');
+    pick(rxA, rxOnA, 'btn-secondary');
+    pick(document.getElementById('rxVfoB'), rxOnB, 'btn-secondary');
+    const split = txOnA !== rxOnA;
+    pick(document.getElementById('txVfoA'), txOnA, split ? 'btn-danger' : 'btn-secondary');
+    pick(document.getElementById('txVfoB'), txOnB, split ? 'btn-danger' : 'btn-secondary');
 }
 
 async function setRxVfo(vfo) {
@@ -1018,6 +1035,7 @@ async function setSplit(mode) {
             const data = await r.json();
             splitMode = data.splitMode;
             updateSplitButton();
+            updateRxTxSelectors();
             // R7: greying flips between normal and split — refresh after the
             // local toggle even though the radio will also auto-info-broadcast
             // SplitMode and trigger applyVfoActiveStyling that way (covers the
@@ -1383,6 +1401,7 @@ connection.on("RadioStateUpdate", function (update) {
     if (update.property === "SplitMode") {
         splitMode = update.value;
         updateSplitButton();
+        updateRxTxSelectors();
         // R7 (Jacek SP3L #34): greying flips when split toggles — the inactive
         // panel becomes the TX VFO (grey) and the RX VFO becomes white.
         applyVfoActiveStyling();
@@ -2022,12 +2041,16 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Delegated so FlexLayout can clone these buttons after DOMContentLoaded.
     document.addEventListener('click', (e) => {
-        const btn = e.target.closest('#splitBtn, #quickSplitBtn, #rxVfoA, #rxVfoB, #txVfoA, #txVfoB, #swapVfoBtn, #copyBtoABtn, #copyAtoBBtn');
+        const btn = e.target.closest('#splitBtn, #quickSplitBtn, #rxVfoA, #rxVfoB, #txVfoA, #txVfoB, #vfoRxA, #vfoRxB, #vfoTxA, #vfoTxB, #swapVfoBtn, #copyBtoABtn, #copyAtoBBtn');
         if (!btn) return;
         switch (btn.id) {
             case 'splitBtn':
                 setSplit(splitMode > 0 ? 0 : 1);
                 break;
+            case 'vfoRxA': setRxVfo('A'); break;
+            case 'vfoRxB': setRxVfo('B'); break;
+            case 'vfoTxA': setTxVfo('A'); break;
+            case 'vfoTxB': setTxVfo('B'); break;
             case 'quickSplitBtn': {
                 // One-shot action — Split button shows the resulting state.
                 if (btn.classList.contains('ywc-btn')) {

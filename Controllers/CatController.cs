@@ -1932,9 +1932,14 @@ namespace Yaesu_Web_Control.Controllers
                     await _catClient.SendCommandAsync($"VS{rx};", "WebUI", CancellationToken.None);
 
                 _radioStateService.ActiveVfo = rx;
-                _radioStateService.SplitMode = _radioStateService.TxVfo != rx ? 1 : 0;
-                _logger.LogInformation("RX VFO set to {Vfo} (split={Split})", v, _radioStateService.SplitMode);
-                return Ok(new { rxVfo = rx, splitMode = _radioStateService.SplitMode });
+                int rxSplit = _radioStateService.TxVfo != rx ? 1 : 0;
+                _radioStateService.SplitMode = rxSplit;
+                // FTDX3000 has no ST; split is implied by FT2/FT3. Other models
+                // need ST so the radio matches the derived RX≠TX split state.
+                if (rxSettings.RadioModel != "FTDX3000")
+                    await _catClient.SendCommandAsync($"ST{rxSplit};", "WebUI", CancellationToken.None);
+                _logger.LogInformation("RX VFO set to {Vfo} (split={Split})", v, rxSplit);
+                return Ok(new { rxVfo = rx, splitMode = rxSplit });
             }
             catch (Exception ex)
             {
@@ -1958,15 +1963,22 @@ namespace Yaesu_Web_Control.Controllers
                 await EnsureConnectedAsync();
                 var tx = v == "B" ? 1 : 0;
 
-                // FT selects the transmit VFO on all supported models: FT0; = TX on
-                // VFO A, FT1; = TX on VFO B. Already proven driving the FTDX3000
-                // Split button (#78).
-                await _catClient.SendCommandAsync($"FT{tx};", "WebUI", CancellationToken.None);
+                // FT0/FT1 selects the TX VFO on FTdx101 / FTdx10 / FT-710.
+                // FTDX3000 writes FT2 (TX=A, no split) / FT3 (TX=B, split) and
+                // reads back FT0/FT1 (#78).
+                var txSettings = await _settingsService.GetSettingsAsync();
+                if (txSettings.RadioModel == "FTDX3000")
+                    await _catClient.SendCommandAsync(tx == 1 ? "FT3;" : "FT2;", "WebUI", CancellationToken.None);
+                else
+                    await _catClient.SendCommandAsync($"FT{tx};", "WebUI", CancellationToken.None);
 
                 _radioStateService.TxVfo = tx;
-                _radioStateService.SplitMode = tx != _radioStateService.ActiveVfo ? 1 : 0;
-                _logger.LogInformation("TX VFO set to {Vfo} (split={Split})", v, _radioStateService.SplitMode);
-                return Ok(new { txVfo = tx, splitMode = _radioStateService.SplitMode });
+                int txSplit = tx != _radioStateService.ActiveVfo ? 1 : 0;
+                _radioStateService.SplitMode = txSplit;
+                if (txSettings.RadioModel != "FTDX3000")
+                    await _catClient.SendCommandAsync($"ST{txSplit};", "WebUI", CancellationToken.None);
+                _logger.LogInformation("TX VFO set to {Vfo} (split={Split})", v, txSplit);
+                return Ok(new { txVfo = tx, splitMode = txSplit });
             }
             catch (Exception ex)
             {
