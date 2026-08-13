@@ -70,4 +70,5 @@ export function dispatchPanelResize() {
     }
     try { window.ywcMetersFit?.refit(); } catch { /* ignore */ }
     try { window.ywcVfoFit?.refit(); } catch { /* ignore */ }
+    try { window.ywcWidgetFit?.refit(); } catch { /* ignore */ }
 }

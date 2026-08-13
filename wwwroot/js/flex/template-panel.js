@@ -1,7 +1,7 @@
 /**
  * Clones Razor <template> content into a FlexLayout tab host via React.createElement.
  */
-import { registerFlexPopoutWindow } from '/js/flex/dom-shim.js?v=2';
+import { registerFlexPopoutWindow } from '/js/flex/dom-shim.js?v=3';
 
 const TEMPLATE_BY_COMPONENT = {
     meters: 'tpl-meters',
@@ -66,6 +66,7 @@ function TemplatePanel({ templateId, component, nodeId, node }) {
             window.dispatchEvent(new Event('ywc-flex-panel-resize'));
             try { window.ywcMetersFit?.refit(); } catch { /* ignore */ }
             try { window.ywcVfoFit?.refit(); } catch { /* ignore */ }
+            try { window.ywcWidgetFit?.refit(); } catch { /* ignore */ }
         };
 
         let listenerId = null;
