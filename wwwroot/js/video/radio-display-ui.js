@@ -1,10 +1,11 @@
 /**
  * Radio Display UI wiring: status poll + MJPEG img stream + controls.
  */
-import { RadioDisplayPanel } from './radio-display-panel.js?v=3';
+import { RadioDisplayPanel } from './radio-display-panel.js?v=4';
 
 const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;
+const RECONNECT_MAX_MS = 15000;
 const ALLOWED_FPS = [15, 30, 40, 60];
 const CHANNEL_NAME = 'ywc-radio-display';
 
@@ -12,6 +13,10 @@ let panel = null;
 let uiMode = 'index';
 let statusTimer = null;
 let reconnectTimer = null;
+let reconnectAttempt = 0;
+let lastServerStatus = '';
+let lastFrameSeq = 0;
+let blankPolls = 0;
 let enabled = false;
 let streamActive = false;
 let currentDeviceKey = '';
@@ -48,14 +53,39 @@ function streamUrl() {
   return '/api/video/stream?t=' + Date.now();
 }
 
+function reconnectDelayMs() {
+  const ms = Math.min(RECONNECT_MAX_MS, RECONNECT_MS * Math.pow(1.5, reconnectAttempt));
+  reconnectAttempt += 1;
+  return ms;
+}
+
 function scheduleReconnect() {
   if (reconnectTimer) return;
+  const delay = reconnectDelayMs();
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     if (!enabled || !panel || panel.isHiddenByUser()) return;
     if (!currentDeviceKey) return;
     startStream();
-  }, RECONNECT_MS);
+  }, delay);
+}
+
+function onStreamInterrupted() {
+  if (!streamActive) return;
+  streamActive = false;
+  scheduleReconnect();
+}
+
+function bindStreamImage() {
+  const img = document.getElementById('radioDisplayImg');
+  if (!img) return;
+  img.onerror = onStreamInterrupted;
+  img.onstalled = onStreamInterrupted;
+  img.onabort = onStreamInterrupted;
+  img.onload = () => {
+    reconnectAttempt = 0;
+    blankPolls = 0;
+  };
 }
 
 function notifyPopoutReady() {
@@ -76,19 +106,16 @@ function startStream() {
     return;
   }
   streamActive = true;
-  panel.setStreamUrl(streamUrl());
-  if (uiMode === 'popout') notifyPopoutReady();
   const img = document.getElementById('radioDisplayImg');
   if (img) {
-    img.onerror = () => {
-      streamActive = false;
-      panel.setStatus('disconnected', 'stream error');
-      scheduleReconnect();
-    };
-    img.onload = () => {
-      if (streamActive) panel.setStatus('streaming');
-    };
+    img.onerror = null;
+    img.onstalled = null;
+    img.onabort = null;
+    img.onload = null;
   }
+  panel.setStreamUrl(streamUrl());
+  if (uiMode === 'popout') notifyPopoutReady();
+  bindStreamImage();
 }
 
 function stopStream() {
@@ -234,6 +261,7 @@ async function pollStatus(options = {}) {
 
     if (!data.enabled) {
       panel.setStatus('unconfigured');
+      lastServerStatus = 'unconfigured';
       stopStream();
       return;
     }
@@ -246,6 +274,7 @@ async function pollStatus(options = {}) {
 
     if (!currentDeviceKey) {
       panel.setStatus('idle', 'select a device');
+      lastServerStatus = 'idle';
       stopStream();
       return;
     }
@@ -258,7 +287,27 @@ async function pollStatus(options = {}) {
     if (status === 'idle' && streamActive) status = 'connecting';
     panel.setStatus(status, detail);
 
-    if (attachStream && !panel.isHiddenByUser() && !streamActive) {
+    const seq = Number(data.frameSeq) || 0;
+    const recovered = status === 'streaming' && lastServerStatus !== 'streaming';
+    const seqReset = status === 'streaming' && seq > 0 && lastFrameSeq > 0 && seq < lastFrameSeq;
+    lastFrameSeq = seq;
+
+    const img = document.getElementById('radioDisplayImg');
+    const looksBlank = streamActive && status === 'streaming' && img && !img.naturalWidth;
+    if (looksBlank) blankPolls += 1;
+    else blankPolls = 0;
+
+    lastServerStatus = status;
+
+    if (!attachStream || panel.isHiddenByUser()) return;
+
+    if (recovered || seqReset || blankPolls >= 2) {
+      blankPolls = 0;
+      startStream();
+      return;
+    }
+
+    if (!streamActive) {
       startStream();
     }
   } catch (e) {

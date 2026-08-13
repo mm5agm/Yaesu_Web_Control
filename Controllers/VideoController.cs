@@ -49,6 +49,14 @@ namespace Yaesu_Web_Control.Controllers
                 }
 
                 var payload = devices.Select(d => new { key = d.Key, label = d.Label, index = d.Index });
+                if (OperatingSystem.IsWindows() &&
+                    devices.Count > 0 &&
+                    devices.All(d => d.Label.StartsWith("Camera ", StringComparison.Ordinal)))
+                {
+                    _logger.LogDebug(
+                        "Radio Display: DirectShow friendly names empty (CreateClassEnumerator hr={Hr})",
+                        WindowsDshowDevices.LastCreateClassEnumeratorHr);
+                }
                 var notes = OperatingSystem.IsLinux()
                     ? "Linux: devices from /sys/class/video4linux. Map /dev/video* into Docker and add the video group."
                     : "Select a USB webcam or HDMI capture dongle. Indexes can shift when devices are replugged.";
@@ -74,6 +82,7 @@ namespace Yaesu_Web_Control.Controllers
                 width = _capture.FrameWidth,
                 height = _capture.FrameHeight,
                 fps = Math.Round(_capture.MeasuredFps, 1),
+                frameSeq = _capture.FrameSeq,
                 viewers = _sessions.ViewerCount,
                 maxWidth = s.VideoMaxWidth,
                 targetFps = s.VideoTargetFps,

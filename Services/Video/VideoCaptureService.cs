@@ -26,6 +26,16 @@ namespace Yaesu_Web_Control.Services.Video
         private const int SettingsRefreshMs = 500;
         private const int EmptyFrameGiveUp = 45;
 
+        /// <summary>
+        /// DirectShow often returns success with a stale non-empty frame after
+        /// unplug, so <see cref="Mat.Empty"/> never trips. A Read that blocks
+        /// this long is the usual symptom (measured FPS collapses toward 1).
+        /// </summary>
+        private const int SlowReadMs = 750;
+        private const int SlowReadGiveUp = 4;
+        private const int FpsCollapseWindows = 3;
+        private const int FpsWarmupMs = 2500;
+
         private readonly ISettingsService _settings;
         private readonly VideoSessionManager _sessions;
         private readonly ILogger<VideoCaptureService> _logger;
@@ -256,10 +266,12 @@ namespace Yaesu_Web_Control.Services.Video
             lock (_frameLock)
             {
                 _latestJpeg = null;
-                _frameSeq = 0;
+                // Keep _frameSeq monotonic so in-flight MJPEG clients are not
+                // left waiting for a sequence that was reset to zero.
                 _frameWidth = 0;
                 _frameHeight = 0;
             }
+            Volatile.Write(ref _measuredFps, 0);
             _logger.LogInformation("Radio Display capture stopped");
         }
 
@@ -295,8 +307,7 @@ namespace Yaesu_Web_Control.Services.Video
                     cap = OpenCapture(index);
                     if (cap is null || !cap.IsOpened())
                     {
-                        SetStatus("disconnected");
-                        _lastError = $"Could not open capture device index {index}.";
+                        MarkDisconnected($"Could not open capture device index {index}.");
                         _logger.LogWarning("Radio Display: failed to open device index {Index}", index);
                         SleepOrCancel(2000, ct);
                         continue;
@@ -320,8 +331,11 @@ namespace Yaesu_Web_Control.Services.Video
                     using var resized = new Mat();
                     var encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
                     var fpsWindow = Stopwatch.StartNew();
+                    var streamStarted = Stopwatch.StartNew();
                     var framesInWindow = 0;
                     var emptyStreak = 0;
+                    var slowReadStreak = 0;
+                    var fpsCollapseStreak = 0;
 
                     while (!ct.IsCancellationRequested)
                     {
@@ -344,13 +358,14 @@ namespace Yaesu_Web_Control.Services.Video
                         }
 
                         var tick = Stopwatch.StartNew();
-                        if (!cap.Read(frame) || frame.Empty())
+                        var readOk = cap.Read(frame);
+                        var readMs = tick.ElapsedMilliseconds;
+                        if (!readOk || frame.Empty())
                         {
                             emptyStreak++;
                             if (emptyStreak >= EmptyFrameGiveUp)
                             {
-                                SetStatus("disconnected");
-                                _lastError = "Capture device stopped delivering frames.";
+                                MarkDisconnected("Capture device stopped delivering frames.");
                                 break;
                             }
 
@@ -359,6 +374,25 @@ namespace Yaesu_Web_Control.Services.Video
                         }
 
                         emptyStreak = 0;
+
+                        // Unplug: DirectShow keeps succeeding with stale frames
+                        // but Read blocks (~1 fps). Break out so we reopen.
+                        if (readMs >= SlowReadMs)
+                        {
+                            slowReadStreak++;
+                            if (slowReadStreak >= SlowReadGiveUp)
+                            {
+                                MarkDisconnected("Capture device stalled (no timely frames).");
+                                _logger.LogWarning(
+                                    "Radio Display: Read took {Ms} ms for {N} frames — treating as unplug",
+                                    readMs, slowReadStreak);
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            slowReadStreak = 0;
+                        }
 
                         // Keep reading so the UVC graph stays alive; skip JPEG
                         // when nobody is watching (idle-release grace window).
@@ -407,9 +441,28 @@ namespace Yaesu_Web_Control.Services.Video
                         framesInWindow++;
                         if (fpsWindow.ElapsedMilliseconds >= 1000)
                         {
-                            Volatile.Write(ref _measuredFps, framesInWindow * 1000.0 / fpsWindow.ElapsedMilliseconds);
+                            var measured = framesInWindow * 1000.0 / fpsWindow.ElapsedMilliseconds;
+                            Volatile.Write(ref _measuredFps, measured);
                             framesInWindow = 0;
                             fpsWindow.Restart();
+
+                            var floor = Math.Max(2.0, targetFps * 0.25);
+                            if (streamStarted.ElapsedMilliseconds >= FpsWarmupMs && measured < floor)
+                            {
+                                fpsCollapseStreak++;
+                                if (fpsCollapseStreak >= FpsCollapseWindows)
+                                {
+                                    MarkDisconnected("Capture device stalled (frame rate collapsed).");
+                                    _logger.LogWarning(
+                                        "Radio Display: measured {Fps:0.0} fps vs target {Target} — treating as unplug",
+                                        measured, targetFps);
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                fpsCollapseStreak = 0;
+                            }
                         }
 
                         var remaining = frameInterval - tick.Elapsed;
@@ -423,8 +476,7 @@ namespace Yaesu_Web_Control.Services.Video
                 }
                 catch (Exception ex)
                 {
-                    SetStatus("disconnected");
-                    _lastError = ex.Message;
+                    MarkDisconnected(ex.Message);
                     _logger.LogWarning(ex, "Radio Display capture error");
                     SleepOrCancel(2000, ct);
                 }
@@ -491,6 +543,19 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         private void SetStatus(string status) => Volatile.Write(ref _status!, status);
+
+        private void MarkDisconnected(string error)
+        {
+            _lastError = error;
+            Volatile.Write(ref _measuredFps, 0);
+            lock (_frameLock)
+            {
+                _frameWidth = 0;
+                _frameHeight = 0;
+            }
+
+            SetStatus("disconnected");
+        }
 
         private static void SleepOrCancel(int ms, CancellationToken ct)
         {

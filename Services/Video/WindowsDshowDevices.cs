@@ -11,16 +11,65 @@ namespace Yaesu_Web_Control.Services.Video
     /// </summary>
     internal static class WindowsDshowDevices
     {
-        private static readonly Guid SystemDeviceEnum = new("62BE5D10-60EB-11d0-BD3B-00A0C911CE86");
+        private static readonly Guid ClsidSystemDeviceEnum = new("62BE5D10-60EB-11d0-BD3B-00A0C911CE86");
         private static readonly Guid VideoInputDeviceCategory = new("860BB310-5D01-11d0-BD3B-00A0C911CE86");
-        private static readonly Guid PropertyBagIid = new("55272A00-42CB-11CE-8135-00AA004BB851");
+        private static readonly Guid IidPropertyBag = new("55272A00-42CB-11CE-8135-00AA004BB851");
+
+        /// <summary>Last <c>CreateClassEnumerator</c> HRESULT (0 = S_OK, 1 = S_FALSE / empty).</summary>
+        internal static int LastCreateClassEnumeratorHr { get; private set; }
 
         public static IReadOnlyDictionary<int, string> ListFriendlyNames()
         {
             if (!OperatingSystem.IsWindows())
                 return new Dictionary<int, string>();
 
-            return ListFriendlyNamesWindows();
+            return ListFriendlyNamesSta();
+        }
+
+        /// <summary>
+        /// DirectShow's system device enumerator is STA. HTTP/thread-pool
+        /// threads are MTA and often return no monikers (empty dropdown).
+        /// </summary>
+        [SupportedOSPlatform("windows")]
+        private static IReadOnlyDictionary<int, string> ListFriendlyNamesSta()
+        {
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+                return ListFriendlyNamesWindows();
+
+            IReadOnlyDictionary<int, string> result = new Dictionary<int, string>();
+            Exception? error = null;
+            using var done = new ManualResetEventSlim(false);
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    result = ListFriendlyNamesWindows();
+                }
+                catch (Exception ex)
+                {
+                    error = ex;
+                }
+                finally
+                {
+                    done.Set();
+                }
+            })
+            {
+                IsBackground = true,
+                Name = "YWC-DShowEnum"
+            };
+
+            try { thread.SetApartmentState(ApartmentState.STA); }
+            catch (InvalidOperationException) { /* ignore */ }
+
+            thread.Start();
+            if (!done.Wait(4000))
+                return new Dictionary<int, string>();
+
+            if (error != null)
+                return new Dictionary<int, string>();
+
+            return result;
         }
 
         [SupportedOSPlatform("windows")]
@@ -28,10 +77,11 @@ namespace Yaesu_Web_Control.Services.Video
         {
             var map = new Dictionary<int, string>();
             object? deviceEnumObj = null;
-            IEnumMonikerOne? enumerator = null;
+            IEnumMoniker? enumerator = null;
+            LastCreateClassEnumeratorHr = unchecked((int)0x80004005); // E_FAIL until set
             try
             {
-                var clsidType = Type.GetTypeFromCLSID(SystemDeviceEnum, throwOnError: false);
+                var clsidType = Type.GetTypeFromCLSID(ClsidSystemDeviceEnum, throwOnError: false);
                 if (clsidType is null)
                     return map;
 
@@ -39,13 +89,23 @@ namespace Yaesu_Web_Control.Services.Video
                 if (deviceEnumObj is not ICreateDevEnum createDevEnum)
                     return map;
 
-                var hr = createDevEnum.CreateClassEnumerator(VideoInputDeviceCategory, out enumerator, 0);
+                var category = VideoInputDeviceCategory;
+                var hr = createDevEnum.CreateClassEnumerator(ref category, out enumerator, 0);
+                LastCreateClassEnumeratorHr = hr;
+                // S_FALSE (1) = category exists but has no devices.
                 if (hr != 0 || enumerator is null)
                     return map;
 
+                var monikers = new IMoniker[1];
                 var index = 0;
-                while (enumerator.Next(1, out var moniker, IntPtr.Zero) == 0)
+                while (true)
                 {
+                    var nhr = enumerator.Next(1, monikers, IntPtr.Zero);
+                    if (nhr != 0 || monikers[0] is null)
+                        break;
+
+                    var moniker = monikers[0];
+                    monikers[0] = null!;
                     try
                     {
                         var name = ReadFriendlyName(moniker);
@@ -55,14 +115,13 @@ namespace Yaesu_Web_Control.Services.Video
                     }
                     finally
                     {
-                        if (moniker != null)
-                            Marshal.ReleaseComObject(moniker);
+                        Marshal.ReleaseComObject(moniker);
                     }
                 }
             }
             catch
             {
-                // Fall back to index-only labels in the caller.
+                // Fall back to index-only labels / ffmpeg in the caller.
             }
             finally
             {
@@ -84,7 +143,7 @@ namespace Yaesu_Web_Control.Services.Video
             object? bagObj = null;
             try
             {
-                var iid = PropertyBagIid;
+                var iid = IidPropertyBag;
                 moniker.BindToStorage(null!, null!, ref iid, out bagObj);
                 if (bagObj is not IPropertyBag bag)
                     return null;
@@ -113,31 +172,9 @@ namespace Yaesu_Web_Control.Services.Video
         {
             [PreserveSig]
             int CreateClassEnumerator(
-                [In, MarshalAs(UnmanagedType.LPStruct)] Guid deviceClass,
-                out IEnumMonikerOne? enumMoniker,
+                [In] ref Guid deviceClass,
+                out IEnumMoniker enumMoniker,
                 [In] int flags);
-        }
-
-        /// <summary>
-        /// <c>celt == 1</c> form of IEnumMoniker.Next — array marshaling of the
-        /// stock ComTypes interface is unreliable here.
-        /// </summary>
-        [ComImport]
-        [Guid("0000010c-0000-0000-C000-000000000046")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        private interface IEnumMonikerOne
-        {
-            [PreserveSig]
-            int Next(int celt, out IMoniker rgelt, IntPtr pceltFetched);
-
-            [PreserveSig]
-            int Skip(int celt);
-
-            [PreserveSig]
-            int Reset();
-
-            [PreserveSig]
-            int Clone(out IEnumMonikerOne ppenum);
         }
 
         [ComImport]
