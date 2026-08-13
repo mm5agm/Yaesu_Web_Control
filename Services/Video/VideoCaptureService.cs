@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using OpenCvSharp;
+using Yaesu_Web_Control.Models;
 using Yaesu_Web_Control.Services;
 
 namespace Yaesu_Web_Control.Services.Video
@@ -10,6 +11,21 @@ namespace Yaesu_Web_Control.Services.Video
     /// </summary>
     public sealed class VideoCaptureService : IDisposable
     {
+        /// <summary>
+        /// HDMI capture dongles (DirectShow / Media Foundation) native-crash
+        /// the host if a second Open happens while the first graph is still
+        /// tearing down. Pop-out / Hide briefly drop the last viewer — keep
+        /// the device open across that gap.
+        /// </summary>
+        private const int IdleReleaseDelayMs = 2000;
+
+        /// <summary>Settle time after Release before the next Open.</summary>
+        private const int ReopenSettleMs = 500;
+
+        private const int StopWaitMs = 8000;
+        private const int SettingsRefreshMs = 500;
+        private const int EmptyFrameGiveUp = 45;
+
         private readonly ISettingsService _settings;
         private readonly VideoSessionManager _sessions;
         private readonly ILogger<VideoCaptureService> _logger;
@@ -18,6 +34,7 @@ namespace Yaesu_Web_Control.Services.Video
 
         private CancellationTokenSource? _loopCts;
         private Task? _loopTask;
+        private CancellationTokenSource? _idleCts;
         private byte[]? _latestJpeg;
         private long _frameSeq;
         private int _frameWidth;
@@ -25,6 +42,8 @@ namespace Yaesu_Web_Control.Services.Video
         private double _measuredFps;
         private string _status = "idle";
         private string? _lastError;
+        private int _openDeviceIndex = -1;
+        private int _deviceOpenFlag;
 
         public VideoCaptureService(
             ISettingsService settings,
@@ -42,6 +61,19 @@ namespace Yaesu_Web_Control.Services.Video
         public int FrameHeight { get { lock (_frameLock) return _frameHeight; } }
         public double MeasuredFps => Volatile.Read(ref _measuredFps);
         public int ViewerCount => _sessions.ViewerCount;
+
+        /// <summary>True while the native capture graph is open.</summary>
+        public bool IsCapturing => Volatile.Read(ref _deviceOpenFlag) != 0;
+
+        /// <summary>Currently opened OpenCV index, or null when idle.</summary>
+        public int? OpenDeviceIndex
+        {
+            get
+            {
+                var idx = Volatile.Read(ref _openDeviceIndex);
+                return idx >= 0 ? idx : null;
+            }
+        }
 
         public byte[]? LatestJpeg
         {
@@ -66,6 +98,7 @@ namespace Yaesu_Web_Control.Services.Video
                 throw new InvalidOperationException("No video capture device selected in Settings.");
 
             _sessions.TryAcquire(viewerId, out _);
+            CancelIdleRelease();
             EnsureLoopStarted();
             return viewerId;
         }
@@ -73,7 +106,7 @@ namespace Yaesu_Web_Control.Services.Video
         public void ReleaseViewer(string viewerId)
         {
             if (_sessions.Release(viewerId, out var remaining) && remaining == 0)
-                StopLoop();
+                ScheduleIdleRelease();
         }
 
         /// <summary>
@@ -82,30 +115,10 @@ namespace Yaesu_Web_Control.Services.Video
         /// </summary>
         public void RequestRestart()
         {
-            lock (_lifecycleLock)
-            {
-                var hadLoop = _loopTask is { IsCompleted: false };
-                try { _loopCts?.Cancel(); } catch { /* ignore */ }
-                _loopCts = null;
-                _loopTask = null;
-
-                lock (_frameLock)
-                {
-                    _latestJpeg = null;
-                    _frameSeq = 0;
-                    _frameWidth = 0;
-                    _frameHeight = 0;
-                }
-
-                if (hadLoop && _sessions.ViewerCount > 0)
-                {
-                    SetStatus("connecting");
-                    _loopCts = new CancellationTokenSource();
-                    var token = _loopCts.Token;
-                    _loopTask = Task.Run(() => CaptureLoopAsync(token), CancellationToken.None);
-                    _logger.LogInformation("Radio Display capture restart requested");
-                }
-            }
+            CancelIdleRelease();
+            StopLoopAndWait();
+            if (_sessions.ViewerCount > 0)
+                EnsureLoopStarted();
         }
 
         /// <summary>
@@ -147,20 +160,99 @@ namespace Yaesu_Web_Control.Services.Video
 
                 _loopCts = new CancellationTokenSource();
                 var token = _loopCts.Token;
-                _loopTask = Task.Run(() => CaptureLoopAsync(token), CancellationToken.None);
+                var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var thread = new Thread(() =>
+                {
+                    try
+                    {
+                        RunCaptureLoop(token);
+                        tcs.TrySetResult();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Radio Display capture thread failed");
+                        tcs.TrySetException(ex);
+                    }
+                })
+                {
+                    IsBackground = true,
+                    Name = "YWC-RadioDisplay"
+                };
+
+                // DirectShow graphs are STA; opening/releasing them on a
+                // thread-pool MTA is a common native-crash on HDMI dongles.
+                if (OperatingSystem.IsWindows())
+                {
+                    try { thread.SetApartmentState(ApartmentState.STA); }
+                    catch (InvalidOperationException) { /* ignore */ }
+                }
+
+                thread.Start();
+                _loopTask = tcs.Task;
             }
         }
 
-        private void StopLoop()
+        private void ScheduleIdleRelease()
         {
+            CancelIdleRelease();
+            var cts = new CancellationTokenSource();
+            _idleCts = cts;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(IdleReleaseDelayMs, cts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                if (_sessions.ViewerCount == 0)
+                    StopLoopAndWait();
+            });
+        }
+
+        private void CancelIdleRelease()
+        {
+            try { _idleCts?.Cancel(); } catch { /* ignore */ }
+            _idleCts = null;
+        }
+
+        private void StopLoopAndWait()
+        {
+            Task? running;
             lock (_lifecycleLock)
             {
                 try { _loopCts?.Cancel(); } catch { /* ignore */ }
+                running = _loopTask;
+            }
+
+            var finished = running == null;
+            if (running != null)
+            {
+                try { finished = running.Wait(StopWaitMs); }
+                catch (AggregateException) { finished = true; }
+            }
+
+            lock (_lifecycleLock)
+            {
+                if (!finished && _loopTask is { IsCompleted: false })
+                {
+                    _logger.LogWarning(
+                        "Radio Display capture loop did not stop within {Ms} ms; not opening another graph",
+                        StopWaitMs);
+                    return;
+                }
+
                 _loopCts = null;
                 _loopTask = null;
             }
 
-            SetStatus("idle");
+            if (ReopenSettleMs > 0)
+                Thread.Sleep(ReopenSettleMs);
+
+            SetStatus(_sessions.ViewerCount == 0 ? "idle" : "connecting");
             lock (_frameLock)
             {
                 _latestJpeg = null;
@@ -168,24 +260,26 @@ namespace Yaesu_Web_Control.Services.Video
                 _frameWidth = 0;
                 _frameHeight = 0;
             }
-            _logger.LogInformation("Radio Display capture stopped (no viewers)");
+            _logger.LogInformation("Radio Display capture stopped");
         }
 
-        private async Task CaptureLoopAsync(CancellationToken ct)
+        private void RunCaptureLoop(CancellationToken ct)
         {
             SetStatus("connecting");
             _lastError = null;
 
-            while (!ct.IsCancellationRequested && _sessions.ViewerCount > 0)
+            // Stay running across a brief zero-viewer gap (pop-out / Hide).
+            // StopLoopAndWait cancels after IdleReleaseDelayMs.
+            while (!ct.IsCancellationRequested)
             {
-                var settings = await _settings.GetSettingsAsync().ConfigureAwait(false);
+                var settings = ReadSettings();
                 if (!settings.VideoDisplayEnabled ||
                     string.IsNullOrWhiteSpace(settings.VideoCaptureDeviceKey) ||
                     !VideoDeviceKey.TryParseIndex(settings.VideoCaptureDeviceKey, out var index))
                 {
                     SetStatus("unconfigured");
                     _lastError = "No capture device configured.";
-                    await DelayOrCancel(1000, ct).ConfigureAwait(false);
+                    SleepOrCancel(1000, ct);
                     continue;
                 }
 
@@ -193,6 +287,7 @@ namespace Yaesu_Web_Control.Services.Video
                 var targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
                 var jpegQuality = Math.Clamp(settings.VideoJpegQuality, 40, 85);
                 var frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
+                var settingsAge = Stopwatch.StartNew();
 
                 VideoCapture? cap = null;
                 try
@@ -203,9 +298,12 @@ namespace Yaesu_Web_Control.Services.Video
                         SetStatus("disconnected");
                         _lastError = $"Could not open capture device index {index}.";
                         _logger.LogWarning("Radio Display: failed to open device index {Index}", index);
-                        await DelayOrCancel(2000, ct).ConfigureAwait(false);
+                        SleepOrCancel(2000, ct);
                         continue;
                     }
+
+                    Volatile.Write(ref _openDeviceIndex, index);
+                    Volatile.Write(ref _deviceOpenFlag, 1);
 
                     // Best-effort preferred size near radio-panel resolution.
                     cap.Set(VideoCaptureProperties.FrameWidth, maxWidth > 0 ? maxWidth : 800);
@@ -223,16 +321,20 @@ namespace Yaesu_Web_Control.Services.Video
                     var encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
                     var fpsWindow = Stopwatch.StartNew();
                     var framesInWindow = 0;
+                    var emptyStreak = 0;
 
-                    while (!ct.IsCancellationRequested && _sessions.ViewerCount > 0)
+                    while (!ct.IsCancellationRequested)
                     {
-                        // Hot-reload quality knobs without reopening the device.
-                        settings = await _settings.GetSettingsAsync().ConfigureAwait(false);
-                        maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
-                        targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
-                        jpegQuality = Math.Clamp(settings.VideoJpegQuality, 40, 85);
-                        frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
-                        encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
+                        if (settingsAge.ElapsedMilliseconds >= SettingsRefreshMs)
+                        {
+                            settings = ReadSettings();
+                            maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
+                            targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
+                            jpegQuality = Math.Clamp(settings.VideoJpegQuality, 40, 85);
+                            frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
+                            encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
+                            settingsAge.Restart();
+                        }
 
                         if (!settings.VideoDisplayEnabled ||
                             !VideoDeviceKey.TryParseIndex(settings.VideoCaptureDeviceKey, out var newIndex) ||
@@ -244,9 +346,28 @@ namespace Yaesu_Web_Control.Services.Video
                         var tick = Stopwatch.StartNew();
                         if (!cap.Read(frame) || frame.Empty())
                         {
-                            SetStatus("disconnected");
-                            _lastError = "Capture device stopped delivering frames.";
-                            break;
+                            emptyStreak++;
+                            if (emptyStreak >= EmptyFrameGiveUp)
+                            {
+                                SetStatus("disconnected");
+                                _lastError = "Capture device stopped delivering frames.";
+                                break;
+                            }
+
+                            SleepOrCancel(20, ct);
+                            continue;
+                        }
+
+                        emptyStreak = 0;
+
+                        // Keep reading so the UVC graph stays alive; skip JPEG
+                        // when nobody is watching (idle-release grace window).
+                        if (_sessions.ViewerCount == 0)
+                        {
+                            var idleRemain = frameInterval - tick.Elapsed;
+                            if (idleRemain > TimeSpan.Zero)
+                                SleepOrCancel((int)Math.Ceiling(idleRemain.TotalMilliseconds), ct);
+                            continue;
                         }
 
                         Mat source = frame;
@@ -265,13 +386,13 @@ namespace Yaesu_Web_Control.Services.Video
                         }
                         catch
                         {
-                            await DelayOrCancel(50, ct).ConfigureAwait(false);
+                            SleepOrCancel(50, ct);
                             continue;
                         }
 
                         if (jpegBytes is null || jpegBytes.Length == 0)
                         {
-                            await DelayOrCancel(50, ct).ConfigureAwait(false);
+                            SleepOrCancel(50, ct);
                             continue;
                         }
 
@@ -293,7 +414,7 @@ namespace Yaesu_Web_Control.Services.Video
 
                         var remaining = frameInterval - tick.Elapsed;
                         if (remaining > TimeSpan.Zero)
-                            await DelayOrCancel(remaining, ct).ConfigureAwait(false);
+                            SleepOrCancel((int)Math.Ceiling(remaining.TotalMilliseconds), ct);
                     }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -305,23 +426,37 @@ namespace Yaesu_Web_Control.Services.Video
                     SetStatus("disconnected");
                     _lastError = ex.Message;
                     _logger.LogWarning(ex, "Radio Display capture error");
-                    await DelayOrCancel(2000, ct).ConfigureAwait(false);
+                    SleepOrCancel(2000, ct);
                 }
                 finally
                 {
+                    Volatile.Write(ref _deviceOpenFlag, 0);
+                    Volatile.Write(ref _openDeviceIndex, -1);
                     try { cap?.Release(); } catch { /* ignore */ }
                     try { cap?.Dispose(); } catch { /* ignore */ }
                 }
 
-                if (ct.IsCancellationRequested || _sessions.ViewerCount == 0)
+                if (ct.IsCancellationRequested)
                     break;
 
                 SetStatus("connecting");
-                await DelayOrCancel(1000, ct).ConfigureAwait(false);
+                SleepOrCancel(1000, ct);
             }
 
             if (_sessions.ViewerCount == 0)
                 SetStatus("idle");
+        }
+
+        private ApplicationSettings ReadSettings()
+        {
+            try
+            {
+                return _settings.GetSettingsAsync().GetAwaiter().GetResult();
+            }
+            catch
+            {
+                return new ApplicationSettings();
+            }
         }
 
         private static VideoCapture? OpenCapture(int index)
@@ -357,18 +492,25 @@ namespace Yaesu_Web_Control.Services.Video
 
         private void SetStatus(string status) => Volatile.Write(ref _status!, status);
 
-        private static async Task DelayOrCancel(TimeSpan delay, CancellationToken ct)
+        private static void SleepOrCancel(int ms, CancellationToken ct)
         {
-            try { await Task.Delay(delay, ct).ConfigureAwait(false); }
-            catch (OperationCanceledException) { /* swallow */ }
-        }
+            if (ms <= 0)
+                return;
 
-        private static Task DelayOrCancel(int ms, CancellationToken ct) =>
-            DelayOrCancel(TimeSpan.FromMilliseconds(ms), ct);
+            var end = Environment.TickCount64 + ms;
+            while (!ct.IsCancellationRequested)
+            {
+                var left = end - Environment.TickCount64;
+                if (left <= 0)
+                    return;
+                Thread.Sleep((int)Math.Min(left, 50));
+            }
+        }
 
         public void Dispose()
         {
-            StopLoop();
+            CancelIdleRelease();
+            StopLoopAndWait();
         }
     }
 }

@@ -58,6 +58,15 @@ function scheduleReconnect() {
   }, RECONNECT_MS);
 }
 
+function notifyPopoutReady() {
+  postChannel({ type: 'popout-ready' });
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ type: 'ywc-radio-display-popout-ready' }, window.location.origin);
+    }
+  } catch { /* ignore cross-origin */ }
+}
+
 function startStream() {
   if (!panel || !enabled) return;
   if (panel.isHiddenByUser()) return;
@@ -68,6 +77,7 @@ function startStream() {
   }
   streamActive = true;
   panel.setStreamUrl(streamUrl());
+  if (uiMode === 'popout') notifyPopoutReady();
   const img = document.getElementById('radioDisplayImg');
   if (img) {
     img.onerror = () => {
@@ -91,15 +101,19 @@ function stopStream() {
 }
 
 function reattachToIndex() {
-  // Hand the stream back to Home, then close this pop-out.
-  stopStream();
+  // Ask Home to attach first so the host never drops the last viewer
+  // (USB HDMI dongles native-crash if the capture graph is torn down
+  // and immediately reopened).
   postChannel({ type: 'reattach' });
   try {
     if (window.opener && !window.opener.closed) {
       window.opener.postMessage({ type: 'ywc-radio-display-reattach' }, window.location.origin);
     }
   } catch { /* ignore cross-origin */ }
-  window.close();
+  setTimeout(() => {
+    stopStream();
+    window.close();
+  }, 250);
 }
 
 function onReattachFromPopout() {
@@ -162,6 +176,7 @@ async function loadDeviceSelect(selectedKey) {
 
 async function setDeviceKey(key) {
   try {
+    stopStream();
     const res = await fetch('/api/video/device', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -170,9 +185,8 @@ async function setDeviceKey(key) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
     currentDeviceKey = data.deviceKey || '';
-    stopStream();
     if (currentDeviceKey && !panel.isHiddenByUser()) {
-      setTimeout(() => startStream(), 300);
+      setTimeout(() => startStream(), 600);
     } else {
       panel.setStatus(currentDeviceKey ? 'connecting' : 'idle',
         currentDeviceKey ? undefined : 'select a device');
@@ -203,7 +217,11 @@ async function setTargetFps(fps) {
   }
 }
 
-async function pollStatus() {
+/**
+ * @param {{ attachStream?: boolean }} [options]
+ */
+async function pollStatus(options = {}) {
+  const attachStream = options.attachStream !== false;
   try {
     const res = await fetch('/api/video/status');
     if (!res.ok) return;
@@ -240,7 +258,7 @@ async function pollStatus() {
     if (status === 'idle' && streamActive) status = 'connecting';
     panel.setStatus(status, detail);
 
-    if (!panel.isHiddenByUser() && !streamActive) {
+    if (attachStream && !panel.isHiddenByUser() && !streamActive) {
       startStream();
     }
   } catch (e) {
@@ -265,6 +283,12 @@ function ensureRadioDisplayTooltips() {
   window.addEventListener('load', () => initRadioDisplayTooltips(), { once: true });
 }
 
+function onPopoutReady() {
+  if (uiMode !== 'index') return;
+  stopStream();
+  panel?.hide();
+}
+
 function bindChannel() {
   const ch = getChannel();
   if (ch) {
@@ -272,12 +296,14 @@ function bindChannel() {
       const msg = ev?.data;
       if (!msg || typeof msg !== 'object') return;
       if (msg.type === 'reattach') onReattachFromPopout();
+      if (msg.type === 'popout-ready') onPopoutReady();
     };
   }
 
   window.addEventListener('message', (ev) => {
     if (ev.origin !== window.location.origin) return;
     if (ev.data?.type === 'ywc-radio-display-reattach') onReattachFromPopout();
+    if (ev.data?.type === 'ywc-radio-display-popout-ready') onPopoutReady();
   });
 }
 
@@ -309,8 +335,12 @@ function bindControls() {
   document.getElementById('radioDisplayPopoutBtn')?.addEventListener('click', () => {
     const w = window.open('/RadioDisplay', 'ywc-radio-display', 'width=900,height=600');
     if (w) w.focus();
-    stopStream();
+    // Hide the Index card immediately but keep the MJPEG viewer attached
+    // until the pop-out acquires, so the USB device is never released.
     panel.hide();
+    setTimeout(() => {
+      if (uiMode === 'index' && panel?.isHiddenByUser()) stopStream();
+    }, 4000);
   });
 
   document.getElementById('radioDisplayReattachBtn')?.addEventListener('click', () => {
@@ -359,8 +389,11 @@ export async function initRadioDisplayUi(mode = 'index') {
   bindChannel();
   bindControls();
 
-  await pollStatus();
+  // Probe the device list before attaching MJPEG so enumeration never
+  // Open()s the dongle while the capture loop already holds it.
+  await pollStatus({ attachStream: false });
   await loadDeviceSelect(currentDeviceKey);
+  if (enabled && currentDeviceKey && !panel.isHiddenByUser()) startStream();
   if (statusTimer) clearInterval(statusTimer);
   statusTimer = setInterval(pollStatus, STATUS_POLL_MS);
 
