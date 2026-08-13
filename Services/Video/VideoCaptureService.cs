@@ -400,7 +400,7 @@ namespace Yaesu_Web_Control.Services.Video
                         {
                             var idleRemain = frameInterval - tick.Elapsed;
                             if (idleRemain > TimeSpan.Zero)
-                                SleepOrCancel((int)Math.Ceiling(idleRemain.TotalMilliseconds), ct);
+                                SleepOrCancel(idleRemain, ct);
                             continue;
                         }
 
@@ -467,7 +467,7 @@ namespace Yaesu_Web_Control.Services.Video
 
                         var remaining = frameInterval - tick.Elapsed;
                         if (remaining > TimeSpan.Zero)
-                            SleepOrCancel((int)Math.Ceiling(remaining.TotalMilliseconds), ct);
+                            SleepOrCancel(remaining, ct);
                     }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -503,7 +503,10 @@ namespace Yaesu_Web_Control.Services.Video
         {
             try
             {
-                return _settings.GetSettingsAsync().GetAwaiter().GetResult();
+                // Memory snapshot only. GetSettingsAsync re-reads the JSON file
+                // and must not run on this STA capture thread (sync-over-async
+                // plus disk IO stole whole frame slots after 6812e07).
+                return _settings.GetCachedSettings();
             }
             catch
             {
@@ -557,18 +560,32 @@ namespace Yaesu_Web_Control.Services.Video
             SetStatus("disconnected");
         }
 
-        private static void SleepOrCancel(int ms, CancellationToken ct)
+        private static void SleepOrCancel(int ms, CancellationToken ct) =>
+            SleepOrCancel(TimeSpan.FromMilliseconds(ms), ct);
+
+        /// <summary>
+        /// Frame pacing must not use 50 ms <see cref="Thread.Sleep(int)"/>
+        /// chunks: on Windows the timer quantum is ~15.6 ms, so Sleep(50)
+        /// often overshoots a 15 fps slot (~67 ms) or a 30 fps slot (~33 ms)
+        /// and the measured rate falls to ~13 / ~20.
+        /// </summary>
+        private static void SleepOrCancel(TimeSpan delay, CancellationToken ct)
         {
-            if (ms <= 0)
+            if (delay <= TimeSpan.Zero)
                 return;
 
-            var end = Environment.TickCount64 + ms;
+            var sw = Stopwatch.StartNew();
+            var spin = new SpinWait();
             while (!ct.IsCancellationRequested)
             {
-                var left = end - Environment.TickCount64;
-                if (left <= 0)
+                var left = delay - sw.Elapsed;
+                if (left <= TimeSpan.Zero)
                     return;
-                Thread.Sleep((int)Math.Min(left, 50));
+
+                if (left > TimeSpan.FromMilliseconds(2))
+                    Thread.Sleep(1);
+                else
+                    spin.SpinOnce();
             }
         }
 

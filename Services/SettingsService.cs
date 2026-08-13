@@ -8,7 +8,7 @@ namespace Yaesu_Web_Control.Services
         private readonly string _settingsFilePath;
         private readonly ILogger<SettingsService> _logger;
         private readonly SemaphoreSlim _semaphore = new(1, 1);
-        private ApplicationSettings? _cachedSettings;
+        private volatile ApplicationSettings? _cachedSettings;
 
         public SettingsService(IWebHostEnvironment environment, ILogger<SettingsService> logger)
         {
@@ -21,6 +21,9 @@ namespace Yaesu_Web_Control.Services
             _logger = logger;
             _logger.LogInformation("SettingsService initialized. File path: {Path}", _settingsFilePath);
         }
+
+        public ApplicationSettings GetCachedSettings() =>
+            _cachedSettings ?? new ApplicationSettings();
 
         public async Task<ApplicationSettings> GetSettingsAsync()
         {
