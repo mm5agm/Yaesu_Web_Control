@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using OpenCvSharp;
 using Yaesu_Web_Control.Models;
 using Yaesu_Web_Control.Services;
@@ -25,6 +27,13 @@ namespace Yaesu_Web_Control.Services.Video
         private const int StopWaitMs = 8000;
         private const int SettingsRefreshMs = 500;
         private const int EmptyFrameGiveUp = 45;
+
+        /// <summary>
+        /// Default Windows timer quantum. <see cref="Thread.Sleep(int)"/> of 1 ms
+        /// still waits this long unless <c>timeBeginPeriod(1)</c> is active, so
+        /// leftover waits at or below this must spin or they land on ~20 fps.
+        /// </summary>
+        private const int TimerQuantumMs = 16;
 
         /// <summary>
         /// DirectShow often returns success with a stale non-empty frame after
@@ -279,7 +288,19 @@ namespace Yaesu_Web_Control.Services.Video
         {
             SetStatus("connecting");
             _lastError = null;
+            BeginPreciseTimer();
+            try
+            {
+                RunCaptureLoopCore(ct);
+            }
+            finally
+            {
+                EndPreciseTimer();
+            }
+        }
 
+        private void RunCaptureLoopCore(CancellationToken ct)
+        {
             // Stay running across a brief zero-viewer gap (pop-out / Hide).
             // StopLoopAndWait cancels after IdleReleaseDelayMs.
             while (!ct.IsCancellationRequested)
@@ -320,6 +341,7 @@ namespace Yaesu_Web_Control.Services.Video
                     cap.Set(VideoCaptureProperties.FrameWidth, maxWidth > 0 ? maxWidth : 800);
                     cap.Set(VideoCaptureProperties.FrameHeight, 600);
                     cap.Set(VideoCaptureProperties.Fps, targetFps);
+                    try { cap.Set(VideoCaptureProperties.BufferSize, 1); } catch { /* not all backends */ }
 
                     SetStatus("streaming");
                     _lastError = null;
@@ -336,6 +358,8 @@ namespace Yaesu_Web_Control.Services.Video
                     var emptyStreak = 0;
                     var slowReadStreak = 0;
                     var fpsCollapseStreak = 0;
+                    var pace = Stopwatch.StartNew();
+                    var pacedFrames = 0L;
 
                     while (!ct.IsCancellationRequested)
                     {
@@ -343,10 +367,17 @@ namespace Yaesu_Web_Control.Services.Video
                         {
                             settings = ReadSettings();
                             maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
-                            targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
+                            var newFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
                             jpegQuality = Math.Clamp(settings.VideoJpegQuality, 40, 85);
-                            frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
                             encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
+                            if (newFps != targetFps)
+                            {
+                                targetFps = newFps;
+                                frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
+                                pace.Restart();
+                                pacedFrames = 0;
+                            }
+
                             settingsAge.Restart();
                         }
 
@@ -396,78 +427,79 @@ namespace Yaesu_Web_Control.Services.Video
 
                         // Keep reading so the UVC graph stays alive; skip JPEG
                         // when nobody is watching (idle-release grace window).
-                        if (_sessions.ViewerCount == 0)
+                        if (_sessions.ViewerCount > 0)
                         {
-                            var idleRemain = frameInterval - tick.Elapsed;
-                            if (idleRemain > TimeSpan.Zero)
-                                SleepOrCancel(idleRemain, ct);
-                            continue;
-                        }
-
-                        Mat source = frame;
-                        if (maxWidth > 0 && frame.Width > maxWidth)
-                        {
-                            var scale = (double)maxWidth / frame.Width;
-                            var newH = Math.Max(1, (int)Math.Round(frame.Height * scale));
-                            Cv2.Resize(frame, resized, new OpenCvSharp.Size(maxWidth, newH), 0, 0, InterpolationFlags.Area);
-                            source = resized;
-                        }
-
-                        byte[]? jpegBytes = null;
-                        try
-                        {
-                            jpegBytes = source.ImEncode(".jpg", encodeParams);
-                        }
-                        catch
-                        {
-                            SleepOrCancel(50, ct);
-                            continue;
-                        }
-
-                        if (jpegBytes is null || jpegBytes.Length == 0)
-                        {
-                            SleepOrCancel(50, ct);
-                            continue;
-                        }
-
-                        lock (_frameLock)
-                        {
-                            _latestJpeg = jpegBytes;
-                            _frameSeq++;
-                            _frameWidth = source.Width;
-                            _frameHeight = source.Height;
-                        }
-
-                        framesInWindow++;
-                        if (fpsWindow.ElapsedMilliseconds >= 1000)
-                        {
-                            var measured = framesInWindow * 1000.0 / fpsWindow.ElapsedMilliseconds;
-                            Volatile.Write(ref _measuredFps, measured);
-                            framesInWindow = 0;
-                            fpsWindow.Restart();
-
-                            var floor = Math.Max(2.0, targetFps * 0.25);
-                            if (streamStarted.ElapsedMilliseconds >= FpsWarmupMs && measured < floor)
+                            Mat source = frame;
+                            if (maxWidth > 0 && frame.Width > maxWidth)
                             {
-                                fpsCollapseStreak++;
-                                if (fpsCollapseStreak >= FpsCollapseWindows)
+                                var scale = (double)maxWidth / frame.Width;
+                                var newH = Math.Max(1, (int)Math.Round(frame.Height * scale));
+                                Cv2.Resize(frame, resized, new OpenCvSharp.Size(maxWidth, newH), 0, 0, InterpolationFlags.Area);
+                                source = resized;
+                            }
+
+                            byte[]? jpegBytes = null;
+                            try
+                            {
+                                jpegBytes = source.ImEncode(".jpg", encodeParams);
+                            }
+                            catch
+                            {
+                                SleepOrCancel(50, ct);
+                                continue;
+                            }
+
+                            if (jpegBytes is null || jpegBytes.Length == 0)
+                            {
+                                SleepOrCancel(50, ct);
+                                continue;
+                            }
+
+                            lock (_frameLock)
+                            {
+                                _latestJpeg = jpegBytes;
+                                _frameSeq++;
+                                _frameWidth = source.Width;
+                                _frameHeight = source.Height;
+                            }
+
+                            framesInWindow++;
+                            if (fpsWindow.ElapsedMilliseconds >= 1000)
+                            {
+                                var measured = framesInWindow * 1000.0 / fpsWindow.ElapsedMilliseconds;
+                                Volatile.Write(ref _measuredFps, measured);
+                                framesInWindow = 0;
+                                fpsWindow.Restart();
+
+                                var floor = Math.Max(2.0, targetFps * 0.25);
+                                if (streamStarted.ElapsedMilliseconds >= FpsWarmupMs && measured < floor)
                                 {
-                                    MarkDisconnected("Capture device stalled (frame rate collapsed).");
-                                    _logger.LogWarning(
-                                        "Radio Display: measured {Fps:0.0} fps vs target {Target} — treating as unplug",
-                                        measured, targetFps);
-                                    break;
+                                    fpsCollapseStreak++;
+                                    if (fpsCollapseStreak >= FpsCollapseWindows)
+                                    {
+                                        MarkDisconnected("Capture device stalled (frame rate collapsed).");
+                                        _logger.LogWarning(
+                                            "Radio Display: measured {Fps:0.0} fps vs target {Target} — treating as unplug",
+                                            measured, targetFps);
+                                        break;
+                                    }
+                                }
+                                else
+                                {
+                                    fpsCollapseStreak = 0;
                                 }
                             }
-                            else
-                            {
-                                fpsCollapseStreak = 0;
-                            }
                         }
 
-                        var remaining = frameInterval - tick.Elapsed;
-                        if (remaining > TimeSpan.Zero)
-                            SleepOrCancel(remaining, ct);
+                        // Deadline pacing: wait until the next slot on a
+                        // monotonic clock. Sleeping "interval minus this tick"
+                        // stacked on a blocking Read plus a 15.6 ms Sleep(1)
+                        // and locked the stream at ~19.9 fps.
+                        pacedFrames++;
+                        var due = TimeSpan.FromTicks(frameInterval.Ticks * pacedFrames);
+                        var wait = due - pace.Elapsed;
+                        if (wait > TimeSpan.Zero)
+                            SleepOrCancel(wait, ct);
                     }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -564,10 +596,10 @@ namespace Yaesu_Web_Control.Services.Video
             SleepOrCancel(TimeSpan.FromMilliseconds(ms), ct);
 
         /// <summary>
-        /// Frame pacing must not use 50 ms <see cref="Thread.Sleep(int)"/>
-        /// chunks: on Windows the timer quantum is ~15.6 ms, so Sleep(50)
-        /// often overshoots a 15 fps slot (~67 ms) or a 30 fps slot (~33 ms)
-        /// and the measured rate falls to ~13 / ~20.
+        /// Wait without overshooting a 30 fps slot. <see cref="Thread.Sleep(int)"/>
+        /// of 1 ms is still one Windows quantum (~15.6 ms) unless the process
+        /// has 1 ms timer resolution — two such sleeps turn a 33 ms frame into
+        /// ~50 ms (19.9 fps). Spin for the last quantum instead.
         /// </summary>
         private static void SleepOrCancel(TimeSpan delay, CancellationToken ct)
         {
@@ -576,16 +608,49 @@ namespace Yaesu_Web_Control.Services.Video
 
             var sw = Stopwatch.StartNew();
             var spin = new SpinWait();
+            var quantum = TimeSpan.FromMilliseconds(TimerQuantumMs);
             while (!ct.IsCancellationRequested)
             {
                 var left = delay - sw.Elapsed;
                 if (left <= TimeSpan.Zero)
                     return;
 
-                if (left > TimeSpan.FromMilliseconds(2))
+                if (left > quantum)
                     Thread.Sleep(1);
                 else
                     spin.SpinOnce();
+            }
+        }
+
+        private static void BeginPreciseTimer()
+        {
+            if (OperatingSystem.IsWindows())
+                WindowsMultimediaTimer.BeginPeriod1();
+        }
+
+        private static void EndPreciseTimer()
+        {
+            if (OperatingSystem.IsWindows())
+                WindowsMultimediaTimer.EndPeriod1();
+        }
+
+        [SupportedOSPlatform("windows")]
+        private static class WindowsMultimediaTimer
+        {
+            [DllImport("winmm.dll", EntryPoint = "timeBeginPeriod")]
+            private static extern uint TimeBeginPeriod(uint period);
+
+            [DllImport("winmm.dll", EntryPoint = "timeEndPeriod")]
+            private static extern uint TimeEndPeriod(uint period);
+
+            public static void BeginPeriod1()
+            {
+                try { TimeBeginPeriod(1); } catch { /* ignore */ }
+            }
+
+            public static void EndPeriod1()
+            {
+                try { TimeEndPeriod(1); } catch { /* ignore */ }
             }
         }
 
