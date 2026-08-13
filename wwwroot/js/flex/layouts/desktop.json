@@ -1,0 +1,134 @@
+{
+  "global": {
+    "tabEnableClose": false,
+    "tabEnablePopout": true,
+    "tabEnablePopoutIcon": true,
+    "tabSetEnableMaximize": true,
+    "rootOrientationVertical": true,
+    "splitterSize": 8
+  },
+  "borders": [],
+  "layout": {
+    "type": "row",
+    "weight": 100,
+    "children": [
+      {
+        "type": "tabset",
+        "weight": 18,
+        "children": [
+          {
+            "type": "tab",
+            "id": "meters",
+            "name": "Meters",
+            "component": "meters",
+            "enableWindowReMount": true
+          }
+        ]
+      },
+      {
+        "type": "row",
+        "weight": 32,
+        "children": [
+          {
+            "type": "tabset",
+            "weight": 50,
+            "children": [
+              {
+                "type": "tab",
+                "id": "vfoA",
+                "name": "VFO A",
+                "component": "vfoA"
+              }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 50,
+            "children": [
+              {
+                "type": "tab",
+                "id": "vfoB",
+                "name": "VFO B",
+                "component": "vfoB"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "row",
+        "weight": 18,
+        "children": [
+          {
+            "type": "tabset",
+            "weight": 34,
+            "children": [
+              {
+                "type": "tab",
+                "id": "controls",
+                "name": "Controls",
+                "component": "controls"
+              }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 33,
+            "children": [
+              {
+                "type": "tab",
+                "id": "remoteAudio",
+                "name": "Remote Audio",
+                "component": "remoteAudio"
+              }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 33,
+            "children": [
+              {
+                "type": "tab",
+                "id": "clarifier",
+                "name": "Clarifier",
+                "component": "clarifier"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "row",
+        "weight": 32,
+        "children": [
+          {
+            "type": "tabset",
+            "weight": 50,
+            "children": [
+              {
+                "type": "tab",
+                "id": "spectrumA",
+                "name": "Spectrum A",
+                "component": "spectrumA",
+                "enableWindowReMount": true
+              }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 50,
+            "children": [
+              {
+                "type": "tab",
+                "id": "spectrumB",
+                "name": "Spectrum B",
+                "component": "spectrumB",
+                "enableWindowReMount": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

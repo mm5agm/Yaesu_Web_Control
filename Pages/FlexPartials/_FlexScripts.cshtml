@@ -1,0 +1,2218 @@
+    <!-- Cache-busted JS reference, placed BEFORE your inline script if you use window.radioControl, etc. -->
+    <script>window.bandPlan = '@Model.BandPlan';</script>
+    <script>
+        window.ywcTxToggleKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.TxToggleKey));
+        window.ywcVoiceNudgeStepHzA = @Model.VoiceNudgeStepHzA;
+        window.ywcVoiceNudgeStepHzB = @Model.VoiceNudgeStepHzB;
+        window.ywcIsWindowsHost = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IsWindowsHost));
+    </script>
+    <script type="module">
+        import { MeterPanel }           from "/js/guages/meter-panel.js?v=1";
+        import { SMeterHistoryPanel }   from "/js/guages/smeter-history-panel.js?v=1";
+        import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=1";
+        import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=4";
+        import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=5";
+        import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=3";
+        import "/js/ui/if-width-tables.js?v=3";
+        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=6";
+        import { loadLabels }           from "/js/ui/a11y-labels.js?v=1";
+        import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=14";
+        import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
+        import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
+        import { initRemoteAudioFlex }    from "/js/audio/remote-audio-flex-ui.js?v=2";
+        import { initFlexWorkspace, installBootstrapShim } from "/js/flex/flex-layout.js?v=1";
+        import { initMetersFit } from "/js/flex/meters-fit.js?v=1";
+        import { initVfoFit } from "/js/flex/vfo-fit.js?v=1";
+        window.bandPlanData = BAND_PLANS;
+        window.getBandSegments = getSegments;
+        window.getBandSegmentForHz = segmentForHz;
+
+        // Out-of-band marker (site.js applyBandOutOfBand) needs the nearest band
+        // resolved to the operator's own region. Resolve BAND_EDGES inside the
+        // arrow so it picks up any loadBandPlanFromServer() overlay applied later.
+        const _ywcRegion0 = '@Model.BandPlan';
+        window.nearestBandForHz = (hz) =>
+            nearestBandForHz(hz, BAND_EDGES[_ywcRegion0] || BAND_EDGES.Region1);
+
+        installBootstrapShim();
+        initFlexWorkspace(document.getElementById('ywcFlexHost'), window.ywcFlexFlags);
+        // TX / split chrome targets VFO panel DOM — refresh after templates mount.
+        if (typeof window.updateTxButton === 'function') window.updateTxButton();
+        if (typeof window.updateSplitButton === 'function') window.updateSplitButton();
+        if (typeof window.applyVfoActiveStyling === 'function') window.applyVfoActiveStyling();
+        window.ywcVfoFit = initVfoFit();
+        requestAnimationFrame(() => window.ywcVfoFit?.refit());
+
+        // bfcache guard.
+        // back/forward cache (e.g. returning from Meter Calibration via the
+        // Back button), DOMContentLoaded does NOT fire — so none of the init
+        // below runs and the spectrum SignalR connection is never re-opened.
+        // The panels sit frozen and only a hard reload (Ctrl+F5) brings them
+        // back. Forcing a fresh load on a persisted restore re-runs init and
+        // reconnects the spectrum pipeline. (Registered at module-eval time; the
+        // listener survives in the restored page, so it fires on the restore.)
+        window.addEventListener('pageshow', function (e) {
+            if (e.persisted) window.location.reload();
+        });
+
+        loadLabels();
+        initRemoteAudioFlex();
+        // loadLabels() rewrites every title from labels.json on each focus,
+        // wiping the "out of band" title suffix; restore it once that has run.
+        window.addEventListener('focus', async () => {
+            await loadLabels();
+            if (typeof window.refreshBandOutOfBand === 'function') window.refreshBandOutOfBand();
+        });
+        document.addEventListener('DOMContentLoaded', function () {
+            initFreqKeyboard();
+            initMemoriesPanel();
+
+            // ── UTC clock in the top bar ──────────────────────────────────────
+            const utcClockEl = document.getElementById('utcClock');
+            if (utcClockEl) {
+                const pad2 = n => String(n).padStart(2, '0');
+                const tick = () => {
+                    const d = new Date();
+                    utcClockEl.textContent =
+                        `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}Z`;
+                };
+                tick();
+                setInterval(tick, 1000);
+            }
+            window.meterPanel = new MeterPanel({
+                // v2.3.9 dropped SMeterB to a single shared gauge; v2.4.0
+                // restored it as a real VFO A / VFO B pair on dual-receiver
+                // radios (FTdx101MP/D each have an independently calibrated
+                // S-meter, SM0;/SM1;). smeterB's canvas doesn't exist on
+                // single-receiver radios, so MeterPanel._createGauges skips
+                // it automatically (config entries for missing canvases are
+                // no-ops) — no isSingleReceiver check needed here.
+                smeter:      { type: 'smeter', canvasId: 'sMeterCanvas' },
+                smeterB:     { type: 'smeter', canvasId: 'sMeterCanvasB', gaugeTitleId: 'sMeterValueB' },
+                power:       { canvasId: 'powerMeterCanvas' },
+                swr:         { canvasId: 'swrMeterCanvas' },
+                compression: { canvasId: 'compressionMeterCanvas' },
+                alc:         { canvasId: 'alcMeterCanvas' },
+                temp:        { canvasId: 'tempMeterCanvas' },
+                idd:         { canvasId: 'iddMeterCanvas' },
+                vdd:         { canvasId: 'vddMeterCanvas' }
+            });
+            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine);
+            window.ywcMetersFit = initMetersFit();
+            window.ywcVfoFit = initVfoFit();
+            if (!window.ywcMetersFit || !window.ywcVfoFit) {
+                // Flex panel content can lag one frame behind DOMContentLoaded.
+                requestAnimationFrame(() => {
+                    if (!window.ywcMetersFit) {
+                        window.ywcMetersFit = initMetersFit();
+                        window.ywcMetersFit?.refit();
+                    }
+                    if (!window.ywcVfoFit) {
+                        window.ywcVfoFit = initVfoFit();
+                        window.ywcVfoFit?.refit();
+                    }
+                });
+            }
+            if (window.ywcMetersFit) {
+                // Refit after gauges finish their first canvas layout.
+                setTimeout(() => window.ywcMetersFit?.refit(), 0);
+                setTimeout(() => window.ywcMetersFit?.refit(), 100);
+            }
+            if (window.ywcVfoFit) {
+                setTimeout(() => window.ywcVfoFit?.refit(), 0);
+                setTimeout(() => window.ywcVfoFit?.refit(), 100);
+            }
+
+            // ── S-meter history strips ───────────────────────────────────────
+            // Hidden by default. Toggle via the "S-hist" button in the top
+            // toolbar; visibility persists in localStorage so the choice
+            // survives page reloads. Both A and B strips (when B exists)
+            // share the one toggle — independent per-VFO toggles can be
+            // added later if wanted, but one button is the smaller change.
+            window.sMeterHistory  = new SMeterHistoryPanel('sMeterHistoryCanvas');
+            window.sMeterHistoryB = new SMeterHistoryPanel('sMeterHistoryCanvasB');
+            (function () {
+                const btn  = document.getElementById('sMeterHistoryToggleBtn');
+                const con  = document.getElementById('sMeterHistoryContainer');
+                const conB = document.getElementById('sMeterHistoryContainerB');
+                if (!btn || !con) return;
+
+                const KEY = 'ywc.sMeterHistoryVisible';
+                const apply = (visible) => {
+                    con.style.display = visible ? '' : 'none';
+                    if (conB) conB.style.display = visible ? '' : 'none';
+                    btn.classList.toggle('active', visible);
+                    btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    window.ywcMetersFit?.refit();
+                };
+                let visible = false;
+                try { visible = localStorage.getItem(KEY) === '1'; } catch {}
+                apply(visible);
+
+                btn.addEventListener('click', () => {
+                    visible = !visible;
+                    try { localStorage.setItem(KEY, visible ? '1' : '0'); } catch {}
+                    apply(visible);
+                });
+            })();
+
+            // ── Spectrum display (dual-VFO, v2.3.0+) ─────────────────────────
+            // One SpectrumPanel per VFO. SdrSpectrumPipeline routes by sdrId.
+            // SdrManager will only spawn worker(s) for VFO(s) actually configured.
+            // CAT-only hosts skip SpectrumPanel UI but keep the pipeline for DX.
+            const spectrumPanelA = window.ywcIsWindowsHost
+                ? new SpectrumPanel('spectrumCanvasA', 'spectrumContainerA', @Model.RadioState.FrequencyA, 'A')
+                : null;
+            const spectrumPanelB = window.ywcIsWindowsHost
+                ? new SpectrumPanel('spectrumCanvasB', 'spectrumContainerB', @Model.RadioState.FrequencyB, 'B')
+                : null;
+
+            // Region-specific band plan for FT8/CW/SSB markers on both panels.
+            const _ywcRegion = '@Model.BandPlan';
+            if (spectrumPanelA && spectrumPanelB && BAND_PLANS[_ywcRegion]) {
+                spectrumPanelA.setBandPlan(BAND_PLANS[_ywcRegion]);
+                spectrumPanelB.setBandPlan(BAND_PLANS[_ywcRegion]);
+            }
+            // Region-specific band edges (red dashed guard rails). Falls back
+            // to the class-static worldwide envelope inside SpectrumPanel if
+            // the region key isn't found.
+            // First, overlay any updates from /bandplan.default.json so users
+            // who've dropped in a corrected band plan see them on next reload.
+            // This is fire-and-forget: if the fetch succeeds in time we apply
+            // the result; if not, the panels keep the hardcoded defaults and
+            // we re-apply once the fetch resolves. Net effect: hardcoded
+            // defaults always work; updated JSON applies as soon as it loads.
+            loadBandPlanFromServer().then(loaded => {
+                if (!spectrumPanelA || !spectrumPanelB) return;
+                if (loaded && BAND_PLANS[_ywcRegion]) {
+                    spectrumPanelA.setBandPlan(BAND_PLANS[_ywcRegion]);
+                    spectrumPanelB.setBandPlan(BAND_PLANS[_ywcRegion]);
+                }
+                if (loaded && BAND_EDGES[_ywcRegion]) {
+                    spectrumPanelA.setBandEdges(BAND_EDGES[_ywcRegion]);
+                    spectrumPanelB.setBandEdges(BAND_EDGES[_ywcRegion]);
+                }
+            });
+            if (spectrumPanelA && spectrumPanelB && BAND_EDGES[_ywcRegion]) {
+                spectrumPanelA.setBandEdges(BAND_EDGES[_ywcRegion]);
+                spectrumPanelB.setBandEdges(BAND_EDGES[_ywcRegion]);
+            }
+
+            const spectrumPipeline = new SdrSpectrumPipeline();
+
+            // Per-VFO spectrum routing.
+            //
+            // An incoming frame is itself proof the SDR is streaming — the worker
+            // only emits frames while streaming. Waiting for the periodic
+            // "streaming" heartbeat (SdrStatus, re-sent every ~3s) to un-hide the
+            // container means a freshly-loaded page can sit blank for up to that
+            // long even though frames are already flowing. So promote the VFO to
+            // "streaming" on its first frame, which reveals the panel within
+            // ~100ms of connecting instead of waiting on the heartbeat.
+            spectrumPipeline.onSpectrumUpdate('A', data => { spectrumPanelA.update(data); markStreamingFromFrame('A'); });
+            spectrumPipeline.onSpectrumUpdate('B', data => { spectrumPanelB.update(data); markStreamingFromFrame('B'); });
+
+            // Per-VFO status routing — drives the panel state + small badge in the header.
+            function setStatusBadge(vfo, status) {
+                const badge = document.getElementById('spectrumStatusBadge' + vfo);
+                if (!badge) return;
+                const labels = {
+                    unconfigured: ['secondary', 'No SDR'],
+                    connecting:   ['warning',   'Connecting…'],
+                    streaming:    ['success',   'Live'],
+                    disconnected: ['danger',    'Disconnected'],
+                    nodll:        ['danger',    'No SoapySDR'],
+                };
+                const [colour, text] = labels[status] ?? ['secondary', status];
+                badge.className = `ywc-badge ywc-badge-${colour} ywc-badge-sm`;
+                badge.textContent = text;
+            }
+            // Track per-VFO configured/streaming state so we can show or hide the
+            // outer spectrumContainer and the Mono/Multi toggle as appropriate.
+            const sdrState = { A: 'unconfigured', B: 'unconfigured' };
+            function updateContainerVisibility() {
+                if (!window.ywcIsWindowsHost) {
+                    window.ywcFlex?.hidePanel('spectrumA');
+                    window.ywcFlex?.hidePanel('spectrumB');
+                    return;
+                }
+                const aConfigured = sdrState.A !== 'unconfigured';
+                let bConfigured = sdrState.B !== 'unconfigured';
+                const vfoRow = document.getElementById('vfoRow');
+                if (vfoRow?.dataset.singleReceiver === 'true') {
+                    bConfigured = false;
+                }
+                const dock = window.ywcFlex;
+                if (dock?.api) {
+                    if (aConfigured) dock.showPanel('spectrumA');
+                    else dock.hidePanel('spectrumA');
+                    if (bConfigured) dock.showPanel('spectrumB');
+                    else dock.hidePanel('spectrumB');
+                    window.dispatchEvent(new Event('resize'));
+                    return;
+                }
+            }
+
+            // Promote a VFO to "streaming" the moment its first frame arrives, so
+            // the container reveals without waiting for the periodic heartbeat.
+            // A no-op once already streaming, so it costs nothing per frame after
+            // the first. A later real SdrStatus (e.g. "disconnected") still wins
+            // through the onStatusChange handler below.
+            function markStreamingFromFrame(vfo) {
+                if (sdrState[vfo] === 'streaming') return;
+                sdrState[vfo] = 'streaming';
+                const panel = vfo === 'A' ? spectrumPanelA : spectrumPanelB;
+                panel.setStatus('streaming');
+                setStatusBadge(vfo, 'streaming');
+                updateContainerVisibility();
+            }
+
+            // Mono/Multi toggle — persisted in localStorage so the user's
+            // last-used layout sticks across page reloads. Default Multi (both).
+            const MODE_STORAGE_KEY = 'ywc.spectrumMode';
+            let currentMode = localStorage.getItem(MODE_STORAGE_KEY) || 'Multi';
+            function applyMode(mode) {
+                currentMode = mode;
+                localStorage.setItem(MODE_STORAGE_KEY, mode);
+                const showA = (mode === 'A' || mode === 'Multi');
+                const showB = (mode === 'B' || mode === 'Multi');
+                if (window.ywcFlex?.api) {
+                    if (showA) window.ywcFlex.showPanel('spectrumA');
+                    else window.ywcFlex.hidePanel('spectrumA');
+                    if (showB) window.ywcFlex.showPanel('spectrumB');
+                    else window.ywcFlex.hidePanel('spectrumB');
+                    window.dispatchEvent(new Event('resize'));
+                    return;
+                }
+                document.getElementById('spectrumContainerA').style.display = showA ? '' : 'none';
+                document.getElementById('spectrumContainerB').style.display = showB ? '' : 'none';
+                document.querySelectorAll('.spectrum-mode-btn').forEach(b => {
+                    b.classList.toggle('active', b.dataset.mode === mode);
+                });
+                window.dispatchEvent(new Event('resize'));
+            }
+            document.querySelectorAll('.spectrum-mode-btn').forEach(b => {
+                b.addEventListener('click', () => applyMode(b.dataset.mode));
+            });
+
+            spectrumPipeline.onStatusChange('A', status => {
+                sdrState.A = status;
+                spectrumPanelA?.setStatus(status);
+                setStatusBadge('A', status);
+                updateContainerVisibility();
+            });
+            spectrumPipeline.onStatusChange('B', status => {
+                sdrState.B = status;
+                spectrumPanelB?.setStatus(status);
+                setStatusBadge('B', status);
+                updateContainerVisibility();
+            });
+            spectrumPipeline.onError('A', detail => spectrumPanelA?.setError(detail));
+            spectrumPipeline.onError('B', detail => spectrumPanelB?.setError(detail));
+
+            // Stand up the DX Spots list panel BEFORE wiring the pipeline so its
+            // handlers can dispatch to it. It works whether or not the SDR is
+            // configured — relies only on the DxSpot/FrequencyA event stream.
+            window.dxSpotsPanel = new DxSpotsPanel();
+            window.dxSpotsPanel.init();
+            window.dxSpotsPanel.setVfoFrequency(@Model.RadioState.FrequencyA);
+
+            spectrumPipeline.onFrequencyA(hz => {
+                spectrumPanelA?.setVfoFrequency(hz);
+                window.dxSpotsPanel.setVfoFrequency(hz);
+            });
+            spectrumPipeline.onFrequencyB(hz => {
+                spectrumPanelB?.setVfoFrequency(hz);
+            });
+
+            // DX cluster spots — incoming SignalR pushes feed BOTH spectrum
+            // overlays (when visible) plus the DX Spots list (always available).
+            spectrumPipeline.onDxSpot(spot => {
+                spectrumPanelA?.addSpot(spot);
+                spectrumPanelB?.addSpot(spot);
+                window.dxSpotsPanel.addSpot(spot);
+            });
+            spectrumPipeline.onDxClusterStatus(s => {
+                spectrumPanelA?.setDxStatus(s?.status, s?.detail);
+                spectrumPanelB?.setDxStatus(s?.status, s?.detail);
+            });
+            spectrumPipeline.onDxAlert(spot => { if (window.handleDxAlert) window.handleDxAlert(spot); });
+
+            // Repaint when "Show only watched callsigns" changes.
+            window.addEventListener('dxWatchFilterChanged', () => {
+                try { spectrumPanelA?.redraw(); } catch {}
+                try { spectrumPanelB?.redraw(); } catch {}
+                try { window.dxSpotsPanel && window.dxSpotsPanel.redraw(); } catch {}
+            });
+            fetch('/api/dxcluster/spots')
+                .then(r => r.ok ? r.json() : [])
+                .then(arr => {
+                    spectrumPanelA?.setSpots(arr);
+                    spectrumPanelB?.setSpots(arr);
+                    window.dxSpotsPanel.setSpots(arr);
+                })
+                .catch(() => { /* feature off or backend not ready — ignore */ });
+            fetch('/api/dxcluster/status')
+                .then(r => r.ok ? r.json() : null)
+                .then(s => {
+                    if (s) {
+                        spectrumPanelA?.setDxStatus(s.status, s.detail);
+                        spectrumPanelB?.setDxStatus(s.status, s.detail);
+                    }
+                })
+                .catch(() => { /* ignore */ });
+
+            spectrumPipeline.connect();
+            // Drop the spectrum SignalR connection the instant we navigate away or
+            // get frozen into the bfcache. If we don't, the frozen page's socket
+            // stays half-open and the server still treats it as a live client; when
+            // we come back and open a fresh connection, the worker's per-frame
+            // Clients.All.SendAsync back-pressures on that zombie (spectrum frames
+            // are large, its buffer fills) and frame delivery to the new connection
+            // stalls for ~7 s until the transport reaps it. Disconnecting here lets
+            // the server drop it at once, so the reloaded page traces almost instantly.
+            window.addEventListener('pagehide', function () {
+                try { spectrumPipeline.disconnect(); } catch { /* already gone */ }
+            });
+            // Expose both panels globally for cross-module access (overlay redraws,
+            // band-plan reloads, etc.). window.spectrumPanel kept pointing at the
+            // A panel as a backward-compatible alias for code that may still expect
+            // a single-panel handle.
+            window.spectrumPanelA = spectrumPanelA;
+            window.spectrumPanelB = spectrumPanelB;
+            window.spectrumPanel  = spectrumPanelA;
+
+            // ── Filter scope panels ──────────────────────────────────────────
+            window.filterScopePanelA = new FilterScopePanel('filterScopeCanvasA', '@Model.RadioModel', {
+                ifWidthCode:       '@Model.RadioState.IfWidthA',
+                ifShiftHz:          @Model.RadioState.IfShiftA,
+                roofingCode:       '@Model.RadioState.RoofingFilterA',
+                manualNotchOn:      @(Model.RadioState.ManualNotchA == "1" ? "true" : "false"),
+                manualNotchFreqHz:  800,
+                contourOn:          @(Model.RadioState.ContourOnA ? "true" : "false"),
+                contourFreqHz:      @Model.RadioState.ContourFreqA,
+                apfOn:              @(Model.RadioState.ApfOnA ? "true" : "false"),
+                apfFreqHz:          @Model.RadioState.ApfFreqA,
+                mode:              '@Model.RadioState.ModeA'
+            });
+            window.filterScopePanelB = new FilterScopePanel('filterScopeCanvasB', '@Model.RadioModel', {
+                ifWidthCode:       '@Model.RadioState.IfWidthB',
+                ifShiftHz:          @Model.RadioState.IfShiftB,
+                roofingCode:       '@Model.RadioState.RoofingFilterB',
+                manualNotchOn:      @(Model.RadioState.ManualNotchB == "1" ? "true" : "false"),
+                manualNotchFreqHz:  800,
+                contourOn:          @(Model.RadioState.ContourOnB ? "true" : "false"),
+                contourFreqHz:      @Model.RadioState.ContourFreqB,
+                apfOn:              @(Model.RadioState.ApfOnB ? "true" : "false"),
+                apfFreqHz:          @Model.RadioState.ApfFreqB,
+                mode:              '@Model.RadioState.ModeB'
+            });
+
+            // Tighten the contour sliders' ranges to the current passband
+            // now that the panels (which compute the passband) are ready.
+            // Subsequent recomputes happen on mode / IF Width / roofing changes.
+            if (typeof window.updateContourSliderBounds === 'function') {
+                window.updateContourSliderBounds('A');
+                window.updateContourSliderBounds('B');
+            }
+
+            // ── Mode-aware IF Width dropdown ─────────────────────────────────
+            // Populate the IF Width dropdowns based on the current mode. The
+            // SH command codes are mode-dependent: same code = different Hz
+            // in CW vs SSB. The dropdown labels must reflect the current mode.
+            window._radioModel = '@Model.RadioModel';
+            if (window.IfWidth) {
+                window.IfWidth.rebuildIfWidthSelect(
+                    document.getElementById('ifWidthSelectA'),
+                    window._radioModel,
+                    '@Model.RadioState.ModeA'
+                );
+                window.IfWidth.rebuildIfWidthSelect(
+                    document.getElementById('ifWidthSelectB'),
+                    window._radioModel,
+                    '@Model.RadioState.ModeB'
+                );
+            }
+
+            // Hold button — toggles whether the panel updates from incoming
+            // SDR frames. While held the spectrum + waterfall freeze at the
+            // last received frame so the operator can study a fleeting
+            // signal. Click again to resume. State is per-VFO.
+            document.querySelectorAll('.spectrum-hold-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const vfo = btn.dataset.vfo;
+                    const panel = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+                    if (!panel) return;
+                    const nowHeld = !panel.isHeld();
+                    panel.setHold(nowHeld);
+                    // Visual feedback: button goes 'active' (filled) when held.
+                    btn.classList.toggle('active', nowHeld);
+                    btn.classList.toggle('btn-warning', nowHeld);
+                    btn.classList.toggle('btn-outline-light', !nowHeld);
+                    // Reflect in the status badge so the change is obvious
+                    // even when looking at the panel, not just the toolbar.
+                    const badge = document.getElementById('spectrumStatusBadge' + vfo);
+                    if (badge && nowHeld) {
+                        badge.className = 'badge bg-warning small';
+                        badge.textContent = 'Hold';
+                    } else if (badge && !nowHeld) {
+                        // Falls back to whatever the next status update sets;
+                        // until then show "Live" if we were streaming.
+                        badge.className = 'badge bg-success small';
+                        badge.textContent = 'Live';
+                    }
+                });
+            });
+
+            // Spectrum display sliders — Range (vertical scale), Speed (waterfall
+            // scroll rate) and Bright (waterfall colour lift). All three are PURELY
+            // client-side and persisted per-VFO in localStorage by the panel; none
+            // touch the server. The old Low/High pair and the Gain round-trip to the
+            // worker are both gone — the trace auto-tracks the noise floor (see
+            // SpectrumPanel auto-floor) and the worker streams a fixed wide window,
+            // so the operator only sets how much dB of headroom sits above the floor
+            // (Range) and how the waterfall reads (Speed below, Bright further down).
+            (function wireRangeSliders() {
+                ['A', 'B'].forEach(vfo => {
+                    const rangeSlider = document.querySelector(`.spectrum-range-slider[data-vfo="${vfo}"]`);
+                    const rangeLabel  = document.querySelector(`.spectrum-range-label[data-vfo="${vfo}"]`);
+                    const panel       = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+                    if (!rangeSlider || !panel) return;   // VFO B hidden when no SDR
+
+                    // Sync the Range slider to the panel's persisted value (localStorage).
+                    const initialRange = Math.round(panel.getSpectrumRange());
+                    rangeSlider.value = String(initialRange);
+                    rangeLabel.textContent = initialRange + ' dB';
+
+                    rangeSlider.addEventListener('input', () => {
+                        const r = parseInt(rangeSlider.value, 10);
+                        rangeLabel.textContent = r + ' dB';
+                        panel.setSpectrumRange(r);
+                    });
+                });
+            })();
+
+            // Waterfall scroll speed — purely client-side (no backend/worker
+            // involvement, unlike the DSP sliders above): it only changes how
+            // often SpectrumPanel advances the waterfall by one row per
+            // incoming FFT frame. Persisted in localStorage by the panel
+            // itself. The slider drags across an *index* into
+            // SpectrumPanel.WATERFALL_SPEEDS (1,2,4,...,128) rather than the
+            // divisor itself, since the divisors aren't evenly spaced.
+            ['A', 'B'].forEach(vfo => {
+                const slider = document.querySelector(`.spectrum-speed-slider[data-vfo="${vfo}"]`);
+                const label  = document.querySelector(`.spectrum-speed-label[data-vfo="${vfo}"]`);
+                const panel  = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+                if (!slider || !label || !panel) return;
+
+                const speeds = SpectrumPanel.WATERFALL_SPEEDS;
+                const formatSpeed = (d) => d === 1 ? 'Full' : `1/${d}`;
+
+                const initialIndex = Math.max(0, speeds.indexOf(panel.getWaterfallSpeed()));
+                slider.value = String(initialIndex);
+                label.textContent = formatSpeed(speeds[initialIndex]);
+
+                slider.addEventListener('input', () => {
+                    const divisor = speeds[parseInt(slider.value, 10)];
+                    label.textContent = formatSpeed(divisor);
+                    panel.setWaterfallSpeed(divisor);
+                });
+            });
+
+            // Waterfall brightness — purely client-side (like Range and Speed): it
+            // adds a dB lift to the waterfall's colour mapping only, leaving the
+            // spectrum trace alone. 0 = "Off". Persisted per-VFO in localStorage by
+            // the panel. Replaces the old Gain slider, which drove the worker's
+            // pre-dB gain; with the trace auto-ranging that only ever brightened the
+            // waterfall, so it's now done entirely in the browser.
+            ['A', 'B'].forEach(vfo => {
+                const slider = document.querySelector(`.spectrum-bright-slider[data-vfo="${vfo}"]`);
+                const label  = document.querySelector(`.spectrum-bright-label[data-vfo="${vfo}"]`);
+                const panel  = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+                if (!slider || !label || !panel) return;
+
+                const formatBright = (db) => db <= 0 ? 'Off' : `+${db}`;
+
+                const initial = panel.getWaterfallBrightness();
+                slider.value = String(initial);
+                label.textContent = formatBright(initial);
+
+                slider.addEventListener('input', () => {
+                    const db = parseInt(slider.value, 10);
+                    label.textContent = formatBright(db);
+                    panel.setWaterfallBrightness(db);
+                });
+            });
+
+            // Span selector — POST new sample rate for this VFO and restart
+            // the corresponding worker. data-vfo on each button tells the
+            // server which VFO to apply the change to so the other panel
+            // keeps its current bandwidth.
+            document.querySelectorAll('.span-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const hz  = btn.dataset.hz;
+                    const vfo = btn.dataset.vfo || 'A';   // default A for safety
+                    try {
+                        const res = await fetch(`/api/sdr/span?hz=${hz}&sdrId=${vfo}`, { method: 'POST' });
+                        if (res.ok) {
+                            // Move active state only among buttons for this VFO,
+                            // leaving the other VFO's group untouched.
+                            document
+                                .querySelectorAll(`.span-btn[data-vfo="${vfo}"]`)
+                                .forEach(b => b.classList.remove('active'));
+                            btn.classList.add('active');
+                        }
+                    } catch { /* network error — ignore */ }
+                });
+            });
+        });
+        async function launchWsjtx() {
+            try {
+                const response = await fetch('/api/wsjtx/launch', { method: 'POST' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.alreadyRunning) {
+                        console.log('WSJT-X is already running, brought window to front');
+                        // Optional: show a brief message to the user
+                        const btn = document.getElementById('wsjtxBtn');
+                        const originalText = btn.innerHTML;
+                        btn.innerHTML = 'WSJT-X Already Running';
+                        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                    }
+                } else {
+                    const data = await response.json();
+                    alert(data.error || 'Failed to launch WSJT-X');
+                }
+            } catch (e) {
+                alert('Error launching WSJT-X: ' + e.message);
+            }
+        }
+
+        async function updateWsjtxStatus() {
+            try {
+                const response = await fetch('/api/wsjtx/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    const btn = document.getElementById('wsjtxBtn');
+                    const txBadge = document.getElementById('wsjtxTxBadge');
+
+                    // Green = UDP connected (WSJT-X talking to us)
+                    // Yellow = process running but no UDP yet
+                    // Grey = not running
+                    btn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
+                    if (data.connected) {
+                        btn.classList.add('btn-success');
+                        btn.title = 'WSJT-X connected' + (data.mode ? ' \u2014 ' + data.mode : '');
+                    } else if (data.running) {
+                        btn.classList.add('btn-warning');
+                        btn.title = 'WSJT-X running \u2014 waiting for UDP data';
+                    } else {
+                        btn.classList.add('btn-danger');
+                        btn.title = 'WSJT-X is not running';
+                    }
+
+                    // Red TX badge when transmitting
+                    if (txBadge) {
+                        txBadge.style.display = data.transmitting ? 'inline' : 'none';
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        updateWsjtxStatus();
+        setInterval(updateWsjtxStatus, 5000);
+
+        // JTAlert launch and status functions
+        async function launchJtalert() {
+            try {
+                const response = await fetch('/api/jtalert/launch', { method: 'POST' });
+                const btn = document.getElementById('jtalertBtn');
+                if (response.ok) {
+                    const data = await response.json();
+                    btn.classList.remove('btn-secondary');
+                    btn.classList.add('btn-success');
+                    btn.title = 'JTAlert is running';
+                    if (data.alreadyRunning) {
+                        console.log('JTAlert is already running, brought window to front');
+                        const originalText = btn.innerHTML;
+                        btn.innerHTML = 'JTAlert Already Running';
+                        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                    }
+                } else {
+                    const data = await response.json();
+                    alert(data.error || 'Failed to launch JTAlert');
+                }
+            } catch (e) {
+                alert('Error launching JTAlert: ' + e.message);
+            }
+        }
+
+        async function updateJtalertStatus() {
+            try {
+                const response = await fetch('/api/jtalert/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('[JTAlert Status Poll]', data); // Debug log
+                    const btn = document.getElementById('jtalertBtn');
+
+                    btn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
+                    if (data.running) {
+                        btn.classList.add('btn-success');
+                        btn.title = 'JTAlert is running';
+                    } else {
+                        btn.classList.add('btn-danger');
+                        btn.title = 'JTAlert is not running';
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        updateJtalertStatus();
+        setInterval(updateJtalertStatus, 5000);
+
+        // Log4OM launch and status functions
+        async function launchLog4om() {
+            try {
+                const response = await fetch('/api/log4om/launch', { method: 'POST' });
+                const btn = document.getElementById('log4omBtn');
+                if (response.ok) {
+                    const data = await response.json();
+                    btn.classList.remove('btn-secondary');
+                    btn.classList.add('btn-success');
+                    btn.title = 'Log4OM is running';
+                    if (data.alreadyRunning) {
+                        console.log('Log4OM is already running, brought window to front');
+                        const originalText = btn.innerHTML;
+                        btn.innerHTML = 'Log4OM Already Running';
+                        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                    }
+                } else {
+                    const data = await response.json();
+                    alert(data.error || 'Failed to launch Log4OM');
+                }
+            } catch (e) {
+                alert('Error launching Log4OM: ' + e.message);
+            }
+        }
+
+        async function updateLog4omStatus() {
+            try {
+                const response = await fetch('/api/log4om/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('[Log4OM Status Poll]', data); // Debug log
+                    const btn = document.getElementById('log4omBtn');
+
+                    btn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
+                    if (data.running) {
+                        btn.classList.add('btn-success');
+                        btn.title = 'Log4OM is running';
+                    } else {
+                        btn.classList.add('btn-danger');
+                        btn.title = 'Log4OM is not running';
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        updateLog4omStatus();
+        setInterval(updateLog4omStatus, 5000);
+
+        // GridTracker launch and status functions
+        async function launchGridtracker() {
+            try {
+                const response = await fetch('/api/gridtracker/launch', { method: 'POST' });
+                const btn = document.getElementById('gridtrackerBtn');
+                if (response.ok) {
+                    const data = await response.json();
+                    btn.classList.remove('btn-secondary');
+                    btn.classList.add('btn-success');
+                    btn.title = 'GridTracker is running';
+                    if (data.alreadyRunning) {
+                        const originalText = btn.innerHTML;
+                        btn.innerHTML = 'GridTracker Already Running';
+                        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                    }
+                } else {
+                    const data = await response.json();
+                    alert(data.error || 'Failed to launch GridTracker');
+                }
+            } catch (e) {
+                alert('Error launching GridTracker: ' + e.message);
+            }
+        }
+
+        async function updateGridtrackerStatus() {
+            try {
+                const response = await fetch('/api/gridtracker/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    const btn = document.getElementById('gridtrackerBtn');
+                    if (!btn) return;
+                    btn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
+                    if (data.running) {
+                        btn.classList.add('btn-success');
+                        btn.title = 'GridTracker is running';
+                    } else {
+                        btn.classList.add('btn-danger');
+                        btn.title = 'GridTracker is not running';
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        updateGridtrackerStatus();
+        setInterval(updateGridtrackerStatus, 5000);
+
+        // Fldigi launch and status functions
+        async function launchFldigi() {
+            try {
+                const response = await fetch('/api/fldigi/launch', { method: 'POST' });
+                const btn = document.getElementById('fldigiBtn');
+                if (response.ok) {
+                    const data = await response.json();
+                    btn.classList.remove('btn-secondary');
+                    btn.classList.add('btn-success');
+                    btn.title = 'Fldigi is running';
+                    if (data.alreadyRunning) {
+                        const originalText = btn.innerHTML;
+                        btn.innerHTML = 'Fldigi Already Running';
+                        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                    }
+                } else {
+                    const data = await response.json();
+                    alert(data.error || 'Failed to launch Fldigi');
+                }
+            } catch (e) {
+                alert('Error launching Fldigi: ' + e.message);
+            }
+        }
+
+        async function updateFldigiStatus() {
+            try {
+                const response = await fetch('/api/fldigi/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    const btn = document.getElementById('fldigiBtn');
+                    if (!btn) return;
+                    btn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
+                    if (data.running) {
+                        btn.classList.add('btn-success');
+                        btn.title = 'Fldigi is running';
+                    } else {
+                        btn.classList.add('btn-danger');
+                        btn.title = 'Fldigi is not running';
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        updateFldigiStatus();
+        setInterval(updateFldigiStatus, 5000);
+
+        async function setMicGain(value) {
+            console.log('[setMicGain] Called with value:', value);
+            try {
+                const response = await fetch('/api/cat/micgain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: parseInt(value) })
+                });
+                console.log('[setMicGain] API response status:', response.status);
+                if (!response.ok) {
+                    const data = await response.json();
+                    console.error('Failed to set MIC Gain:', data.error);
+                } else {
+                    console.log('[setMicGain] Successfully set MIC Gain to', value);
+                }
+            } catch (e) {
+                console.error('Error setting MIC Gain:', e.message);
+            }
+        }
+
+        async function toggleProc() {
+            const btn = document.getElementById('procBtn');
+            const enabled = btn.classList.contains('ywc-btn-success') || btn.classList.contains('btn-success');
+            try {
+                const response = await fetch('/api/cat/proc', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: !enabled })
+                });
+                if (response.ok) {
+                    updateProcButton(!enabled);
+                }
+            } catch (e) {
+                console.error('Error toggling PROC:', e.message);
+            }
+        }
+
+        async function setProcLevel(value) {
+            try {
+                await fetch('/api/cat/proclevel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: parseInt(value) })
+                });
+            } catch (e) {
+                console.error('Error setting PROC level:', e.message);
+            }
+        }
+
+        function updateProcButton(enabled) {
+            const btn = document.getElementById('procBtn');
+            if (!btn) return;
+            btn.classList.remove('ywc-btn-success', 'ywc-btn-outline', 'btn-success', 'btn-outline-secondary');
+            btn.classList.add(enabled ? 'ywc-btn-success' : 'ywc-btn-outline');
+            btn.textContent = enabled ? 'Proc On' : 'Proc Off';
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+        });
+
+        // --- ATU ---
+        // Short tap toggles ATU on/off. Press-and-hold (>= 500 ms) starts
+        // the radio's auto-tune cycle (CAT command AC002;). Sending AC002;
+        // a second time stops it — so during a running tune cycle, any
+        // tap on the button also stops it. The Yaesu radios use a single
+        // physical button with the same short/long behaviour, so this
+        // matches the radio's UX exactly.
+        const ATU_LONG_PRESS_MS = 500;
+        let atuPressTimer = null;
+        let atuLongFired = false;
+
+        async function toggleAtu() {
+            const btn = document.getElementById('atuBtn');
+            const enabled = btn.classList.contains('ywc-btn-success') || btn.classList.contains('btn-success');
+            try {
+                await fetch('/api/cat/atu', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: !enabled })
+                });
+                updateAtuButton(!enabled);
+            } catch (e) { console.error('toggleAtu error:', e); }
+        }
+        // Yaesu's CAT spec doesn't report tuning-in-progress (AC P2 is
+        // "Fixed at 0" in the manual), so the "Tuning…" UI state is driven
+        // entirely on the client. We mark the button as tuning immediately
+        // after sending AC002;, then auto-clear after a safe upper bound
+        // (typical tune cycles are 2-7 s; 8 s is a reasonable margin) and
+        // GET /api/cat/atu to sync the settled on/off state.
+        const ATU_TUNE_AUTOCLEAR_MS = 8000;
+        let atuAutoclearTimer = null;
+
+        // Shared end-of-tune cleanup: query the radio for the settled ATU
+        // state and use the response body directly to update the button.
+        // We deliberately don't rely on btn.dataset.atuEnabled here because
+        // it's only updated when SignalR delivers an AtuEnabled change —
+        // and there's an inherent race between the SignalR push and this
+        // function reading the dataset. Using the GET response body removes
+        // the race entirely.
+        async function refreshAtuAfterTune() {
+            let finalEnabled = null;
+            try {
+                const r = await fetch('/api/cat/atu');
+                if (r.ok) {
+                    const data = await r.json();
+                    finalEnabled = (data.atuEnabled === true);
+                }
+            } catch (e) { console.error('refreshAtuAfterTune fetch error:', e); }
+            const btn = document.getElementById('atuBtn');
+            if (btn && finalEnabled !== null) {
+                btn.dataset.atuEnabled = finalEnabled ? 'true' : 'false';
+            }
+            updateAtuTuningState(false);
+        }
+
+        async function startAtuTune() {
+            try {
+                await fetch('/api/cat/atu/tune', { method: 'POST' });
+                updateAtuTuningState(true);
+                clearTimeout(atuAutoclearTimer);
+                atuAutoclearTimer = setTimeout(refreshAtuAfterTune, ATU_TUNE_AUTOCLEAR_MS);
+            } catch (e) { console.error('startAtuTune error:', e); }
+        }
+
+        // User tapped the button while a tune cycle was running. Send the
+        // AC002; toggle again to stop the radio, cancel the auto-clear
+        // timer, then refresh + clear the UI after a brief settle period.
+        // We don't await fetch() — fire-and-forget so the UI clears quickly
+        // regardless of HTTP latency.
+        async function stopAtuTune() {
+            try { fetch('/api/cat/atu/tune', { method: 'POST' }); } catch (e) {}
+            clearTimeout(atuAutoclearTimer);
+            atuAutoclearTimer = null;
+            setTimeout(refreshAtuAfterTune, 500);
+        }
+        function updateAtuButton(enabled) {
+            const btn = document.getElementById('atuBtn');
+            if (!btn) return;
+            // Only restyle the on/off appearance if we're not mid-tune; the
+            // tuning state owns the button look while it's running.
+            if (btn.dataset.tuning === 'true') return;
+            btn.classList.remove('ywc-btn-success', 'ywc-btn-outline', 'ywc-btn-danger',
+                'btn-success', 'btn-outline-secondary', 'btn-danger');
+            btn.classList.add(enabled ? 'ywc-btn-success' : 'ywc-btn-outline');
+            btn.textContent = enabled ? 'ATU On' : 'ATU Off';
+        }
+        // Drives the "Tuning..." visual when the radio reports an auto-tune
+        // cycle in progress (AC P2 = 1). Called from the SignalR AtuTuning
+        // route in site.js.
+        function updateAtuTuningState(tuning) {
+            const btn = document.getElementById('atuBtn');
+            if (!btn) return;
+            if (tuning) {
+                btn.dataset.tuning = 'true';
+                btn.classList.remove('ywc-btn-success', 'ywc-btn-outline',
+                    'btn-success', 'btn-outline-secondary');
+                btn.classList.add('ywc-btn-danger');
+                btn.textContent = 'Tuning…';
+            } else {
+                btn.dataset.tuning = 'false';
+                btn.classList.remove('ywc-btn-danger', 'btn-danger');
+                // Restore on/off styling from current state.
+                const onNow = btn.dataset.atuEnabled === 'true';
+                updateAtuButton(onNow);
+            }
+        }
+        // Wire short-tap vs long-press behaviour. Using pointer events
+        // covers mouse, touch, and pen with one code path.
+        document.addEventListener('DOMContentLoaded', function() {
+            const atuBtn = document.getElementById('atuBtn');
+            if (!atuBtn) return;
+            atuBtn.addEventListener('pointerdown', function(e) {
+                atuLongFired = false;
+                clearTimeout(atuPressTimer);
+                atuPressTimer = setTimeout(() => {
+                    atuLongFired = true;
+                    startAtuTune();
+                }, ATU_LONG_PRESS_MS);
+            });
+            const cancelPress = function() {
+                clearTimeout(atuPressTimer);
+                atuPressTimer = null;
+            };
+            atuBtn.addEventListener('pointerup', function(e) {
+                clearTimeout(atuPressTimer);
+                atuPressTimer = null;
+                if (!atuLongFired) {
+                    // Short tap — toggle on/off if idle, or stop the
+                    // running tune cycle if one is in progress.
+                    if (atuBtn.dataset.tuning === 'true') {
+                        stopAtuTune();
+                    } else {
+                        toggleAtu();
+                    }
+                }
+            });
+            atuBtn.addEventListener('pointerleave', cancelPress);
+            atuBtn.addEventListener('pointercancel', cancelPress);
+        });
+
+        // --- MONITOR ON/OFF + LEVEL ---
+        let _monitorOn = @(Model.MonitorOn ? "true" : "false");
+        function _updateMonitorBtn(on) {
+            const btn = document.getElementById('monitorOnBtn');
+            if (!btn) return;
+            btn.classList.remove('ywc-btn-warning', 'ywc-btn-outline', 'btn-warning', 'btn-outline-secondary');
+            btn.classList.add(on ? 'ywc-btn-warning' : 'ywc-btn-outline');
+            btn.setAttribute('aria-label', `TX monitor — currently ${on ? 'on' : 'off'}`);
+        }
+        async function toggleMonitor() {
+            const newOn = !_monitorOn;
+            _monitorOn = newOn;
+            _updateMonitorBtn(newOn);
+            try {
+                await fetch('/api/cat/monitoron', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ on: newOn })
+                });
+            } catch (e) { console.error('toggleMonitor error:', e); }
+        }
+        async function setMonitorLevel(value) {
+            try {
+                await fetch('/api/cat/monitorlevel/a', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ level: parseInt(value) })
+                });
+            } catch (e) { console.error('setMonitorLevel error:', e); }
+        }
+
+        // --- NB LEVEL ---
+        async function setNbLevel(receiver, level) {
+            try {
+                await fetch(`/api/cat/nblevel/${receiver.toLowerCase()}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ level: parseInt(level) })
+                });
+            } catch (e) { console.error('setNbLevel error:', e); }
+        }
+
+        // --- NR LEVEL (DNR algorithm on FTdx10) ---
+        async function setNrLevel(receiver, level) {
+            try {
+                await fetch(`/api/cat/nrlevel/${receiver.toLowerCase()}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ level: parseInt(level) })
+                });
+            } catch (e) { console.error('setNrLevel error:', e); }
+        }
+
+        // --- RF GAIN ---
+        async function setRfGain(receiver, value) {
+            try {
+                await fetch(`/api/cat/rfgain/${receiver.toLowerCase()}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: parseInt(value) })
+                });
+            } catch (e) { console.error('setRfGain error:', e); }
+        }
+
+        // --- SQUELCH ---
+        function _updateSquelchVisibility(vfo, mode) {
+            const isFm = mode === 'FM' || mode === 'FM-N' || mode === 'DATA-FM' || mode === 'DATA-FM-N';
+            const row = document.getElementById(`squelchRow${vfo}`);
+            if (row) row.style.display = isFm ? '' : 'none';
+        }
+        async function setSquelch(receiver, value) {
+            try {
+                await fetch(`/api/cat/squelch/${receiver.toLowerCase()}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: parseInt(value) })
+                });
+            } catch (e) { console.error('setSquelch error:', e); }
+        }
+
+        // --- CONNECT / DISCONNECT ---
+        let _catConnected = false;
+
+        function _applyConnectBtnState(connected) {
+            const btn = document.getElementById('connectBtn');
+            if (!btn) return;
+            btn.classList.remove('ywc-btn-success', 'ywc-btn-danger', 'ywc-btn-secondary',
+                'btn-success', 'btn-danger', 'btn-secondary');
+            if (connected) {
+                btn.classList.add('ywc-btn-success');
+                btn.textContent = 'Connected';
+                btn.setAttribute('aria-label', 'CAT serial connection — currently connected');
+            } else {
+                btn.classList.add('ywc-btn-danger');
+                btn.textContent = 'Disconnected';
+                btn.setAttribute('aria-label', 'CAT serial connection — currently disconnected');
+            }
+            _catConnected = connected;
+        }
+        window._applyConnectBtnState = _applyConnectBtnState;
+
+        async function toggleCatConnection() {
+            const btn = document.getElementById('connectBtn');
+            try {
+                if (_catConnected) {
+                    const r = await fetch('/api/cat/disconnect', { method: 'POST' });
+                    if ((await r.json()).success) _applyConnectBtnState(false);
+                } else {
+                    btn.classList.remove('ywc-btn-danger', 'btn-danger');
+                    btn.classList.add('ywc-btn-secondary');
+                    btn.textContent = 'Connecting…';
+                    const r = await fetch('/api/cat/connect', { method: 'POST' });
+                    _applyConnectBtnState((await r.json()).success);
+                }
+            } catch (e) {
+                console.error('toggleCatConnection error:', e);
+                _applyConnectBtnState(false);
+            }
+        }
+
+        // Set initial button state from server
+        fetch('/api/cat/status').then(r => r.json()).then(d => _applyConnectBtnState(d.isConnected === true)).catch(() => {});
+
+        // --- DRAGGABLE PANELS ---
+        function _saveDlgPos(dialog) {
+            try { localStorage.setItem('dlgPos_' + dialog.id, JSON.stringify({ left: dialog.style.left, top: dialog.style.top })); } catch {}
+        }
+
+        function makeDraggable(dialog, handle) {
+            handle.style.cursor = 'grab';
+            handle.addEventListener('mousedown', e => {
+                if (e.button !== 0 || e.target.closest('button')) return;
+                const r = dialog.getBoundingClientRect();
+                let startX = e.clientX, startY = e.clientY;
+                let origLeft = r.left, origTop = r.top;
+                dialog.style.transform = 'none';
+                function onMove(e) {
+                    dialog.style.left = (origLeft + e.clientX - startX) + 'px';
+                    dialog.style.top  = (origTop  + e.clientY - startY) + 'px';
+                }
+                function onUp() {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    handle.style.cursor = 'grab';
+                    _saveDlgPos(dialog);
+                }
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+                handle.style.cursor = 'grabbing';
+                e.preventDefault();
+            });
+            handle.addEventListener('touchstart', e => {
+                if (e.target.closest('button') || e.touches.length !== 1) return;
+                const r = dialog.getBoundingClientRect();
+                let startX = e.touches[0].clientX, startY = e.touches[0].clientY;
+                let origLeft = r.left, origTop = r.top;
+                dialog.style.transform = 'none';
+                function onMove(e) {
+                    dialog.style.left = (origLeft + e.touches[0].clientX - startX) + 'px';
+                    dialog.style.top  = (origTop  + e.touches[0].clientY - startY) + 'px';
+                    e.preventDefault();
+                }
+                function onEnd() {
+                    document.removeEventListener('touchmove', onMove);
+                    document.removeEventListener('touchend', onEnd);
+                    _saveDlgPos(dialog);
+                }
+                document.addEventListener('touchmove', onMove, { passive: false });
+                document.addEventListener('touchend', onEnd);
+            }, { passive: true });
+        }
+
+        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog'].forEach(id => {
+            const dlg = document.getElementById(id);
+            if (!dlg) return;
+            makeDraggable(dlg, dlg.querySelector('div'));
+            try {
+                const saved = JSON.parse(localStorage.getItem('dlgPos_' + id) || 'null');
+                if (saved && saved.left && saved.top) {
+                    dlg.style.left = saved.left;
+                    dlg.style.top  = saved.top;
+                    dlg.style.transform = 'none';
+                }
+            } catch {}
+        });
+
+        // --- DX Watch (watched-callsign alerts) ---
+        // Backed by ApplicationSettings.DxClusterWatchedCallsigns. The
+        // popup edits the persisted list via GET/PUT on /api/dxcluster/watched.
+        // When a watched spot arrives, DxClusterService fires a DxAlert
+        // SignalR event which we handle in site.js (toast + beep + spectrum
+        // highlight).
+        let _dxWatched = [];
+
+        async function dxWatchLoad() {
+            try {
+                const resp = await fetch('/api/dxcluster/watched');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                _dxWatched = Array.isArray(data.patterns) ? data.patterns : [];
+                dxWatchRender();
+            } catch { /* ignore */ }
+        }
+
+        async function dxWatchSave() {
+            try {
+                const resp = await fetch('/api/dxcluster/watched', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ patterns: _dxWatched })
+                });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                _dxWatched = Array.isArray(data.patterns) ? data.patterns : [];
+                dxWatchRender();
+            } catch { /* ignore */ }
+        }
+
+        function dxWatchRender() {
+            const list = document.getElementById('dxWatchList');
+            const empty = document.getElementById('dxWatchEmpty');
+            if (!list) return;
+            list.innerHTML = '';
+            if (_dxWatched.length === 0) {
+                if (empty) empty.style.display = '';
+                return;
+            }
+            if (empty) empty.style.display = 'none';
+            for (const pat of _dxWatched) {
+                const li = document.createElement('li');
+                li.className = 'd-flex align-items-center justify-content-between py-1';
+                li.style.borderBottom = '1px solid #333';
+                const span = document.createElement('span');
+                span.className = 'font-monospace';
+                span.textContent = pat;
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-sm btn-outline-danger';
+                btn.style.padding = '0 8px';
+                btn.setAttribute('aria-label', `Remove ${pat}`);
+                btn.title = `Remove ${pat}`;
+                btn.textContent = '✕';
+                btn.onclick = () => {
+                    _dxWatched = _dxWatched.filter(p => p !== pat);
+                    dxWatchSave();
+                };
+                li.appendChild(span);
+                li.appendChild(btn);
+                list.appendChild(li);
+            }
+        }
+
+        window.dxWatchAdd = function () {
+            const input = document.getElementById('dxWatchNewInput');
+            if (!input) return;
+            const val = (input.value || '').trim().toUpperCase();
+            if (!val) return;
+            if (_dxWatched.includes(val)) { input.value = ''; return; }
+            _dxWatched = [..._dxWatched, val];
+            input.value = '';
+            dxWatchSave();
+        };
+        window.refreshDxWatchList = dxWatchLoad;
+
+        // Enter key in the input adds the entry
+        document.getElementById('dxWatchNewInput')?.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); window.dxWatchAdd(); }
+        });
+
+        // Initial load on page open so the alert system has the list ready
+        // even if the user never opens the popup.
+        dxWatchLoad();
+
+        // --- "Show only watched callsigns" filter ---
+        // A simple per-browser preference (no backend round-trip needed).
+        // When ticked, both the spectrum overlay and the DX Spots list panel
+        // hide spots whose callsign doesn't match the watch list. The two
+        // panels listen on the dxWatchFilterChanged custom event so a toggle
+        // takes effect immediately, without needing the next spot to arrive.
+        window.dxOnlyWatched = false;
+        try { window.dxOnlyWatched = localStorage.getItem('dxOnlyWatched') === '1'; } catch {}
+
+        const _dxWatchFilterChk = document.getElementById('dxWatchFilterChk');
+        if (_dxWatchFilterChk) {
+            _dxWatchFilterChk.checked = window.dxOnlyWatched;
+            _dxWatchFilterChk.addEventListener('change', () => {
+                window.dxOnlyWatched = _dxWatchFilterChk.checked;
+                try { localStorage.setItem('dxOnlyWatched', window.dxOnlyWatched ? '1' : '0'); } catch {}
+                window.dispatchEvent(new CustomEvent('dxWatchFilterChanged', { detail: { onlyWatched: window.dxOnlyWatched } }));
+            });
+        }
+
+        // --- DX Watch alert handler ---
+        // Fired by SignalR when DxClusterService detects a spot that matches
+        // the watched list. Plays a short beep, shows a toast that auto-fades,
+        // and the spectrum overlay already highlights the spot via spot.isWatched.
+        function _dxAlertBeep() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.type = 'sine';
+                o.frequency.setValueAtTime(880, ctx.currentTime);
+                o.frequency.setValueAtTime(1320, ctx.currentTime + 0.15);
+                g.gain.setValueAtTime(0.0001, ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
+                o.connect(g).connect(ctx.destination);
+                o.start();
+                o.stop(ctx.currentTime + 0.45);
+            } catch { /* ignore — audio not allowed before user interaction */ }
+        }
+
+        // ─ Drag-to-position behaviour for the alert toast container ─
+        // The host has no visible chrome of its own, so each toast itself is
+        // the drag handle. Mouse-down on a toast starts a drag; if the
+        // pointer moves further than DRAG_THRESHOLD px before release, we
+        // commit the new position and skip the click-to-QSY action.
+        const DX_ALERT_POS_KEY = 'dxAlertPos';
+        const DX_ALERT_DRAG_THRESHOLD = 5;
+
+        function _dxAlertApplySavedPos() {
+            const host = document.getElementById('dxAlertToastHost');
+            if (!host) return;
+            try {
+                const saved = JSON.parse(localStorage.getItem(DX_ALERT_POS_KEY) || 'null');
+                if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+                    host.style.left   = saved.left + 'px';
+                    host.style.top    = saved.top  + 'px';
+                    host.style.right  = 'auto';
+                    host.style.bottom = 'auto';
+                }
+            } catch { /* ignore — fall back to default bottom-right */ }
+        }
+        _dxAlertApplySavedPos();
+
+        function _dxAlertSavePos() {
+            const host = document.getElementById('dxAlertToastHost');
+            if (!host) return;
+            const rect = host.getBoundingClientRect();
+            try {
+                localStorage.setItem(DX_ALERT_POS_KEY,
+                    JSON.stringify({ left: Math.round(rect.left), top: Math.round(rect.top) }));
+            } catch {}
+        }
+
+        function _dxAlertAttachDrag(toastEl, spot) {
+            // Drag-vs-click discrimination on pointerdown/move/up. If the
+            // pointer moves more than DRAG_THRESHOLD px after pressing, the
+            // user is dragging — move the host and skip the QSY. Otherwise
+            // treat as a tap and QSY.
+            let startX = 0, startY = 0;
+            let hostStartLeft = 0, hostStartTop = 0;
+            let dragging = false;
+            let pointerMoved = false;
+
+            toastEl.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                toastEl.setPointerCapture(e.pointerId);
+                const host = document.getElementById('dxAlertToastHost');
+                const rect = host.getBoundingClientRect();
+                hostStartLeft = rect.left;
+                hostStartTop  = rect.top;
+                startX = e.clientX;
+                startY = e.clientY;
+                dragging = false;
+                pointerMoved = false;
+            });
+
+            toastEl.addEventListener('pointermove', (e) => {
+                if (!toastEl.hasPointerCapture(e.pointerId)) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                if (!dragging && Math.hypot(dx, dy) > DX_ALERT_DRAG_THRESHOLD) {
+                    dragging = true;
+                }
+                if (dragging) {
+                    pointerMoved = true;
+                    const host = document.getElementById('dxAlertToastHost');
+                    host.style.left   = (hostStartLeft + dx) + 'px';
+                    host.style.top    = (hostStartTop  + dy) + 'px';
+                    host.style.right  = 'auto';
+                    host.style.bottom = 'auto';
+                }
+            });
+
+            toastEl.addEventListener('pointerup', (e) => {
+                toastEl.releasePointerCapture(e.pointerId);
+                if (pointerMoved) {
+                    _dxAlertSavePos();
+                } else {
+                    // Treat as click — QSY to the spotted frequency
+                    fetch('/api/cat/frequency/a', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ frequencyHz: spot.frequencyHz })
+                    }).catch(() => {});
+                    toastEl.remove();
+                }
+            });
+        }
+
+        function _dxAlertToast(spot) {
+            const host = document.getElementById('dxAlertToastHost');
+            if (!host) return;
+            const div = document.createElement('div');
+            div.style.cssText = 'background:#a03030; color:#fff; padding:10px 14px; ' +
+                'border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.4); ' +
+                'min-width:260px; pointer-events:auto; cursor:move; user-select:none; ' +
+                'font-family:sans-serif; opacity:0; transition:opacity 200ms; ' +
+                'touch-action:none;';
+            div.setAttribute('role', 'alert');
+            div.title = 'Click to QSY VFO A. Drag to move the alert position (saved for next time).';
+            const freqMHz = (spot.frequencyHz / 1e6).toFixed(3);
+            div.innerHTML = `<div style="font-weight:bold;font-size:1.05em">DX ${spot.callsign}</div>` +
+                            `<div style="font-size:0.9em;margin-top:2px">${freqMHz} MHz — spotted by ${spot.spotter || '?'}</div>` +
+                            (spot.comment ? `<div style="font-size:0.85em;opacity:0.85;margin-top:2px">${spot.comment}</div>` : '');
+            _dxAlertAttachDrag(div, spot);
+            host.appendChild(div);
+            requestAnimationFrame(() => { div.style.opacity = '1'; });
+            setTimeout(() => {
+                div.style.opacity = '0';
+                setTimeout(() => div.remove(), 220);
+            }, 8000);
+        }
+
+        window.handleDxAlert = function (spot) {
+            if (!spot || !spot.callsign) return;
+            _dxAlertBeep();
+            _dxAlertToast(spot);
+            if (window.voiceAnnounce) window.voiceAnnounce.sayDxAlert(spot);
+        };
+
+        // ───────────────────────────────────────────────────────────────
+        // Voice announcements (Web Speech API)
+        //
+        // Spoken cues for partially sighted operators. Off by default; user
+        // turns on via the Voice popup. Settings (enable, voice name, rate,
+        // volume, category checkboxes) are persisted in localStorage.
+        //
+        // Initial-load suppression: we record the first value of each
+        // category and only start announcing on *subsequent* changes, so
+        // opening the page doesn't read out the whole current state.
+        // ───────────────────────────────────────────────────────────────
+        (function initVoice() {
+            const LS = 'voiceSettings';
+
+            // Defaults — all categories enabled so once the master switch
+            // goes on, the user immediately hears useful announcements.
+            const defaults = {
+                enabled: false,
+                voiceName: '',
+                rate: 1.0,
+                volume: 1.0,
+                band: true, mode: true, tx: true, freq: true, dxAlert: true, txTimeout: true,
+            };
+            let settings = { ...defaults };
+            try {
+                const saved = JSON.parse(localStorage.getItem(LS) || 'null');
+                if (saved) settings = { ...defaults, ...saved };
+            } catch {}
+
+            function persist() { try { localStorage.setItem(LS, JSON.stringify(settings)); } catch {} }
+
+            // Voice list populates asynchronously in some browsers.
+            let voices = [];
+            function loadVoices() {
+                voices = speechSynthesis.getVoices() || [];
+                rebuildVoicePicker();
+            }
+            if (typeof speechSynthesis !== 'undefined') {
+                loadVoices();
+                speechSynthesis.addEventListener?.('voiceschanged', loadVoices);
+            }
+
+            function rebuildVoicePicker() {
+                const sel = document.getElementById('voicePickerSelect');
+                if (!sel) return;
+                const prev = settings.voiceName;
+                sel.innerHTML = '';
+                if (voices.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.textContent = '(no voices available)';
+                    opt.value = '';
+                    sel.appendChild(opt);
+                    return;
+                }
+                for (const v of voices) {
+                    const opt = document.createElement('option');
+                    opt.value = v.name;
+                    opt.textContent = `${v.name}${v.lang ? ' — ' + v.lang : ''}${v.default ? ' (default)' : ''}`;
+                    sel.appendChild(opt);
+                }
+                if (prev && voices.some(v => v.name === prev)) sel.value = prev;
+            }
+
+            function pickVoice() {
+                if (!voices.length) return null;
+                if (settings.voiceName) {
+                    const v = voices.find(v => v.name === settings.voiceName);
+                    if (v) return v;
+                }
+                return voices.find(v => v.default) || voices[0];
+            }
+
+            // Local utterance queue. The Web Speech API's built-in queueing is
+            // unreliable: when two speak() calls land within a few ms (e.g. a
+            // band change that also restores the saved mode, which broadcasts
+            // BandA followed by ModeA), Chromium frequently drops the first
+            // utterance entirely. We chain manually via onend so every cue is
+            // guaranteed to play in order.
+            const _queue = [];
+            let _speaking = false;
+
+            function _flushQueue() {
+                if (_speaking) return;
+                if (_queue.length === 0) return;
+                const text = _queue.shift();
+                try {
+                    // Refresh the voice list — Chromium can update it after the
+                    // initial load and stale voice references silently fail.
+                    voices = speechSynthesis.getVoices() || voices;
+                    const u = new SpeechSynthesisUtterance(text);
+                    const v = pickVoice();
+                    if (v) u.voice = v;
+                    u.rate   = settings.rate;
+                    u.volume = settings.volume;
+                    _speaking = true;
+                    u.onend   = () => { _speaking = false; _flushQueue(); };
+                    u.onerror = () => { _speaking = false; _flushQueue(); };
+                    // Chromium pauses the synthesis engine after long idle and
+                    // future speak() calls become silent. resume() un-sticks it.
+                    if (speechSynthesis.paused) speechSynthesis.resume();
+                    speechSynthesis.speak(u);
+                } catch {
+                    _speaking = false;
+                }
+            }
+
+            // Keep the synthesis engine awake. Chromium has a long-standing
+            // bug where if no speech happens for ~15 s it silently pauses;
+            // calling resume() periodically prevents that.
+            if (typeof speechSynthesis !== 'undefined') {
+                setInterval(() => {
+                    if (speechSynthesis.paused && !speechSynthesis.speaking) {
+                        try { speechSynthesis.resume(); } catch {}
+                    }
+                }, 10000);
+            }
+
+            function speak(text) {
+                if (!settings.enabled || !text) return;
+                if (typeof speechSynthesis === 'undefined') return;
+                // Cap queue depth so a flood of events can't pile up minutes of audio
+                if (_queue.length >= 6) _queue.shift();
+                _queue.push(String(text));
+                _flushQueue();
+            }
+
+            // Hard-stop wipes the queue — used by the dialog's Stop button.
+            function hardStop() {
+                _queue.length = 0;
+                _speaking = false;
+                try { speechSynthesis.cancel(); } catch {}
+            }
+
+            // ─ Formatters ─
+            function fmtBand(b) {
+                if (!b) return '';
+                // The server reports "Unknown" for a frequency outside every
+                // allocation in the operator's own region. Since band names
+                // became region-resolved that is a normal thing to hear, and
+                // "out of band" says what has actually happened.
+                if (String(b).toLowerCase() === 'unknown') return 'out of band';
+                const m = String(b).match(/^(\d+)m$/i);
+                return m ? `${m[1]} metres` : String(b);
+            }
+            function fmtMode(m) {
+                if (!m) return '';
+                const map = {
+                    'LSB': 'lower sideband', 'USB': 'upper sideband',
+                    'CW-U': 'CW upper', 'CW-L': 'CW lower',
+                    'AM': 'A M', 'AM-N': 'A M narrow',
+                    'FM': 'F M', 'FM-N': 'F M narrow',
+                    'RTTY-L': 'RTTY lower', 'RTTY-U': 'RTTY upper',
+                    'DATA-L': 'data lower', 'DATA-U': 'data upper',
+                    'DATA-FM': 'data F M', 'DATA-FM-N': 'data F M narrow',
+                    'PSK': 'P S K',
+                };
+                return map[String(m).toUpperCase()] || String(m);
+            }
+            function fmtFreqMHz(hz) {
+                if (!hz || hz <= 0) return '';
+                return (hz / 1e6).toFixed(3) + ' megahertz';
+            }
+
+            // ─ Initial-load suppression ─
+            // First call for each category just records the value; we only
+            // speak on the SECOND and later changes. That way the page load
+            // doesn't read out every initial value.
+            const seen = {};
+            function announce(category, key, text) {
+                if (!settings.enabled) return;
+                if (!settings[category]) return;
+                if (!(key in seen)) { seen[key] = true; return; }
+                speak(text);
+            }
+
+            // ─ Public API for site.js to call ─
+            window.voiceAnnounce = {
+                sayBand(receiver, band) {
+                    // VFO B band changes only spoken if explicitly the active one;
+                    // for now only A is announced to avoid noise.
+                    if (receiver !== 'A') { seen[`band${receiver}`] = true; return; }
+                    announce('band', 'bandA', fmtBand(band));
+                },
+                sayMode(receiver, mode) {
+                    if (receiver !== 'A') { seen[`mode${receiver}`] = true; return; }
+                    announce('mode', 'modeA', fmtMode(mode));
+                },
+                sayTxState(isTx) {
+                    announce('tx', 'txState', isTx ? 'transmit' : 'receive');
+                },
+                sayFrequencyEntered(hz) {
+                    if (!settings.enabled || !settings.freq) return;
+                    speak(fmtFreqMHz(hz));
+                },
+                sayDxAlert(spot) {
+                    if (!settings.enabled || !settings.dxAlert) return;
+                    const callLetters = String(spot.callsign || '').split('').join(' ');
+                    speak(`D X alert. ${callLetters}. ${fmtFreqMHz(spot.frequencyHz)}`);
+                },
+                sayTxTimeout() {
+                    if (!settings.enabled || !settings.txTimeout) return;
+                    speak('Warning. Transmit timeout. Check microphone.');
+                },
+                test() {
+                    // Force a speak() even if announcements are disabled —
+                    // the test button needs to work to confirm voice setup.
+                    if (typeof speechSynthesis === 'undefined') {
+                        alert('Your browser does not support speech synthesis.');
+                        return;
+                    }
+                    hardStop(); // wipe any queued cues so the test wins immediately
+                    // Chromium quirk: calling cancel() then immediately speak()
+                    // in the same tick can leave the engine silently stuck.
+                    // A small setTimeout lets cancel() complete before we issue
+                    // the new utterance, which makes Test voice reliable.
+                    setTimeout(() => {
+                        // Refresh voices each time — list can change after
+                        // initial load and stale references silently fail.
+                        voices = speechSynthesis.getVoices() || voices;
+                        const u = new SpeechSynthesisUtterance('Voice announcements ready');
+                        const v = pickVoice();
+                        if (v) u.voice = v;
+                        u.rate   = settings.rate;
+                        u.volume = settings.volume;
+                        if (speechSynthesis.paused) speechSynthesis.resume();
+                        speechSynthesis.speak(u);
+                    }, 100);
+                },
+                stop() { hardStop(); },
+                _settings: settings, // exposed for the dialog
+            };
+
+            // ─ Bind dialog controls once the DOM is ready ─
+            document.addEventListener('DOMContentLoaded', () => {
+                const enabledChk    = document.getElementById('voiceEnabledChk');
+                const voicePicker   = document.getElementById('voicePickerSelect');
+                const rateSlider    = document.getElementById('voiceRateSlider');
+                const rateValue     = document.getElementById('voiceRateValue');
+                const volSlider     = document.getElementById('voiceVolumeSlider');
+                const volValue      = document.getElementById('voiceVolumeValue');
+                const bandChk       = document.getElementById('voiceBandChk');
+                const modeChk       = document.getElementById('voiceModeChk');
+                const txChk         = document.getElementById('voiceTxChk');
+                const freqChk       = document.getElementById('voiceFreqChk');
+                const dxAlertChk    = document.getElementById('voiceDxAlertChk');
+                const txTimeoutChk  = document.getElementById('voiceTxTimeoutChk');
+                const testBtn       = document.getElementById('voiceTestBtn');
+                const stopBtn       = document.getElementById('voiceStopBtn');
+
+                if (!enabledChk) return;
+
+                // Apply persisted settings to UI
+                enabledChk.checked   = settings.enabled;
+                bandChk.checked      = settings.band;
+                modeChk.checked      = settings.mode;
+                txChk.checked        = settings.tx;
+                freqChk.checked      = settings.freq;
+                dxAlertChk.checked   = settings.dxAlert;
+                txTimeoutChk.checked = settings.txTimeout;
+                rateSlider.value     = settings.rate;
+                rateValue.textContent = settings.rate.toFixed(1) + '×';
+                volSlider.value      = settings.volume;
+                volValue.textContent = Math.round(settings.volume * 100) + '%';
+                rebuildVoicePicker();
+
+                enabledChk.addEventListener('change', () => {
+                    settings.enabled = enabledChk.checked;
+                    persist();
+                    // Subtle visual indicator on the toolbar button
+                    const btn = document.getElementById('voiceBtn');
+                    if (btn) btn.classList.toggle('btn-warning', settings.enabled);
+                });
+                voicePicker.addEventListener('change', () => { settings.voiceName = voicePicker.value; persist(); });
+                rateSlider.addEventListener('input', () => {
+                    settings.rate = parseFloat(rateSlider.value);
+                    rateValue.textContent = settings.rate.toFixed(1) + '×';
+                    persist();
+                });
+                volSlider.addEventListener('input', () => {
+                    settings.volume = parseFloat(volSlider.value);
+                    volValue.textContent = Math.round(settings.volume * 100) + '%';
+                    persist();
+                });
+                bandChk.addEventListener('change',      () => { settings.band      = bandChk.checked;      persist(); });
+                modeChk.addEventListener('change',      () => { settings.mode      = modeChk.checked;      persist(); });
+                txChk.addEventListener('change',        () => { settings.tx        = txChk.checked;        persist(); });
+                freqChk.addEventListener('change',      () => { settings.freq      = freqChk.checked;      persist(); });
+                dxAlertChk.addEventListener('change',   () => { settings.dxAlert   = dxAlertChk.checked;   persist(); });
+                txTimeoutChk.addEventListener('change', () => { settings.txTimeout = txTimeoutChk.checked; persist(); });
+
+                testBtn.addEventListener('click', () => window.voiceAnnounce.test());
+                stopBtn.addEventListener('click', () => window.voiceAnnounce.stop());
+
+                // Apply toolbar button highlight on initial render
+                const btn = document.getElementById('voiceBtn');
+                if (btn && settings.enabled) btn.classList.add('btn-warning');
+            });
+        })();
+
+        // --- TX timeout warning ---
+        // Watches the SignalR-driven `isTransmitting` flag (via window.handleTxStateForTimeout
+        // which site.js calls every time IsTransmitting updates). After the configured
+        // threshold of continuous TX, shows the red banner across the top of the page
+        // and plays a repeating attention tone. Threshold is persisted to localStorage;
+        // default 120 s.
+        const TX_TIMEOUT_LS_KEY = 'tx_timeout_seconds';
+        const TX_TIMEOUT_DEFAULT = 120;
+        let _txTimeoutTimer = null;
+        let _txTimeoutBeepInterval = null;
+
+        function _getTxTimeoutSeconds() {
+            const v = parseInt(localStorage.getItem(TX_TIMEOUT_LS_KEY), 10);
+            return (isFinite(v) && v > 0) ? v : TX_TIMEOUT_DEFAULT;
+        }
+        function _setTxTimeoutSeconds(s) {
+            const v = Math.max(5, Math.min(3600, parseInt(s, 10) || TX_TIMEOUT_DEFAULT));
+            localStorage.setItem(TX_TIMEOUT_LS_KEY, String(v));
+            return v;
+        }
+
+        function _txTimeoutBeep() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.type = 'square';
+                o.frequency.setValueAtTime(440, ctx.currentTime);
+                g.gain.setValueAtTime(0.0001, ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+                o.connect(g).connect(ctx.destination);
+                o.start();
+                o.stop(ctx.currentTime + 0.3);
+            } catch { /* audio not allowed */ }
+        }
+
+        function _showTxTimeoutBanner() {
+            const banner = document.getElementById('txTimeoutBanner');
+            const text   = document.getElementById('txTimeoutBannerText');
+            if (!banner) return;
+            const secs = _getTxTimeoutSeconds();
+            if (text) text.textContent = `⚠ TX has been ON for more than ${secs} seconds — check your microphone, keyer or VOX!`;
+            banner.style.display = '';
+            _txTimeoutBeep();
+            // Repeat every 3 s until dismissed or TX stops
+            if (_txTimeoutBeepInterval) clearInterval(_txTimeoutBeepInterval);
+            _txTimeoutBeepInterval = setInterval(_txTimeoutBeep, 3000);
+            if (window.voiceAnnounce) window.voiceAnnounce.sayTxTimeout();
+        }
+
+        function _hideTxTimeoutBanner() {
+            const banner = document.getElementById('txTimeoutBanner');
+            if (banner) banner.style.display = 'none';
+            if (_txTimeoutBeepInterval) { clearInterval(_txTimeoutBeepInterval); _txTimeoutBeepInterval = null; }
+        }
+
+        // Called from site.js on every IsTransmitting SignalR update.
+        window.handleTxStateForTimeout = function (isTx) {
+            if (isTx) {
+                if (_txTimeoutTimer) clearTimeout(_txTimeoutTimer);
+                _txTimeoutTimer = setTimeout(_showTxTimeoutBanner, _getTxTimeoutSeconds() * 1000);
+            } else {
+                if (_txTimeoutTimer) { clearTimeout(_txTimeoutTimer); _txTimeoutTimer = null; }
+                _hideTxTimeoutBanner();
+            }
+        };
+
+        document.getElementById('txTimeoutDismissBtn')?.addEventListener('click', _hideTxTimeoutBanner);
+        document.getElementById('txTimeoutSetBtn')?.addEventListener('click', () => {
+            const current = _getTxTimeoutSeconds();
+            const input = prompt(
+                'TX timeout warning threshold (seconds).\n' +
+                'The banner appears after TX has been on for this long.\n' +
+                'Range: 5–3600 seconds. Default: 120.',
+                String(current));
+            if (input === null) return;
+            const newVal = _setTxTimeoutSeconds(input);
+            const banner = document.getElementById('txTimeoutBanner');
+            if (banner && banner.style.display !== 'none') {
+                const text = document.getElementById('txTimeoutBannerText');
+                if (text) text.textContent = `⚠ TX has been ON for more than ${newVal} seconds — check your microphone, keyer or VOX!`;
+            }
+        });
+
+        // --- Toolbar status line ---
+        // Compact single-line summary of band / mode / frequency / power for
+        // each VFO. Updated by site.js whenever the underlying values change
+        // via SignalR. Live state is held on _statusState to avoid having to
+        // pull it from many DOM elements.
+        const _statusState = {
+            bandA: '', modeA: '', freqHzA: 0,
+            bandB: '', modeB: '', freqHzB: 0,
+            power: 0, split: 0, txVfo: 0,
+        };
+
+        function _fmtFreq(hz) {
+            if (!hz || hz <= 0) return '—';
+            // Three groups of digits separated by dots, e.g. 14.150.000
+            const s = String(Math.round(hz)).padStart(9, '0');
+            return `${parseInt(s.slice(0,3),10)}.${s.slice(3,6)}.${s.slice(6,9)}`;
+        }
+
+        function _renderToolbarStatus() {
+            // Per-VFO status lines now live inside each VFO panel under the
+            // IF Width row, banner-coloured to match each receiver. Each line
+            // shows band / mode / frequency, with power and SPLIT/TX flags
+            // appended to whichever VFO is currently transmitting.
+            const a = document.getElementById('vfoAStatusLine');
+            const b = document.getElementById('vfoBStatusLine');
+            const txVfoIsB = _statusState.txVfo === 1;
+            const splitOn  = _statusState.split > 0;
+
+            if (a) {
+                let line = `${_statusState.bandA || '—'} / ${_statusState.modeA || '—'} / ${_fmtFreq(_statusState.freqHzA)}`;
+                if (_statusState.power > 0) line += ` / ${_statusState.power}W`;
+                if (splitOn) line += '   SPLIT';
+                if (splitOn || txVfoIsB === false) {
+                    // VFO A is the TX vfo (default, or split with A receive)
+                    if (splitOn) line += '   RX';
+                }
+                a.textContent = line;
+            }
+            if (b) {
+                let line = `${_statusState.bandB || '—'} / ${_statusState.modeB || '—'} / ${_fmtFreq(_statusState.freqHzB)}`;
+                if (splitOn) line += '   TX';
+                else if (txVfoIsB) line += '   TX';
+                b.textContent = line;
+            }
+        }
+
+        // Public setters that site.js calls from its SignalR handlers.
+        window.updateToolbarStatus = function (key, value) {
+            if (!(key in _statusState)) return;
+            _statusState[key] = value;
+            _renderToolbarStatus();
+        };
+
+        // Initial values from the server-rendered model so the line is
+        // populated before any SignalR updates arrive.
+        _statusState.freqHzA = @Model.State.vfoA.frequency;
+        _statusState.bandA   = '@(Model.State.vfoA.band ?? "")';
+        _statusState.modeA   = '@(Model.State.vfoA.mode ?? "")';
+        _statusState.freqHzB = @Model.State.vfoB.frequency;
+        _statusState.bandB   = '@(Model.State.vfoB.band ?? "")';
+        _statusState.modeB   = '@(Model.State.vfoB.mode ?? "")';
+        _statusState.power   = @Model.State.vfoA.power;
+        _renderToolbarStatus();
+
+        // --- VOX ---
+        async function toggleVox() {
+            const btn = document.getElementById('voxOnBtn');
+            const on = btn?.classList.contains('ywc-btn-warning') || btn?.classList.contains('btn-warning');
+            try {
+                await fetch('/api/cat/vox', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ on: !on })
+                });
+                updateVoxButton(!on);
+            } catch (e) { console.error('toggleVox error:', e); }
+        }
+        function updateVoxButton(on) {
+            const btn = document.getElementById('voxOnBtn');
+            const mainBtn = document.getElementById('voxBtn');
+            if (btn) {
+                btn.classList.remove('ywc-btn-warning', 'ywc-btn-outline', 'btn-warning', 'btn-outline-secondary');
+                btn.classList.add(on ? 'ywc-btn-warning' : 'ywc-btn-outline');
+                btn.textContent = on ? 'VOX On' : 'VOX Off';
+            }
+            if (mainBtn) {
+                mainBtn.classList.remove('ywc-btn-warning', 'ywc-btn-outline', 'btn-warning', 'btn-outline-secondary');
+                mainBtn.classList.add(on ? 'ywc-btn-warning' : 'ywc-btn-outline');
+            }
+        }
+        async function setVoxGain(v) {
+            try { await fetch('/api/cat/vox/gain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gain: parseInt(v) }) }); }
+            catch (e) { console.error('setVoxGain error:', e); }
+        }
+        async function setVoxDelay(v) {
+            try { await fetch('/api/cat/vox/delay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delay: parseInt(v) }) }); }
+            catch (e) { console.error('setVoxDelay error:', e); }
+        }
+        async function setAntiVoxGain(v) {
+            try { await fetch('/api/cat/vox/antivox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gain: parseInt(v) }) }); }
+            catch (e) { console.error('setAntiVoxGain error:', e); }
+        }
+
+        // --- FM REPEATER ---
+        async function setFmShift(v) { _fmSettings.shiftDir = v; }
+        async function setFmOffset(v) { _fmSettings.offsetHz = v; }
+        async function setCtcssMode(v) { _fmSettings.ctcssMode = v; }
+        async function setCtcssTone(v) { _fmSettings.ctcssTone = v; }
+        const _fmSettings = {
+            shiftDir: '@Model.FmShiftDir',
+            offsetHz: @Model.FmOffsetHz,
+            ctcssMode: '@Model.CtcssMode',
+            ctcssTone: '@Model.CtcssTone'
+        };
+        async function saveFmRepeater() {
+            _fmSettings.shiftDir  = document.getElementById('fmShiftSelect').value;
+            _fmSettings.offsetHz  = parseInt(document.getElementById('fmOffsetInput').value) * 1000;
+            _fmSettings.ctcssMode = document.getElementById('ctcssModeSelect').value;
+            _fmSettings.ctcssTone = document.getElementById('ctcssToneSelect').value;
+            try {
+                await fetch('/api/cat/fmrepeater', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ shiftDir: _fmSettings.shiftDir, offsetHz: _fmSettings.offsetHz, ctcssMode: _fmSettings.ctcssMode, ctcssTone: _fmSettings.ctcssTone })
+                });
+            } catch (e) { console.error('saveFmRepeater error:', e); }
+        }
+
+        // --- CW KEYER ---
+        async function setCwPitch(code) {
+            try { await fetch('/api/cat/cwpitch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: parseInt(code) }) }); }
+            catch (e) { console.error('setCwPitch error:', e); }
+        }
+        async function setCwSpeed(v) {
+            try { await fetch('/api/cat/cw/speed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ speed: parseInt(v) }) }); }
+            catch (e) { console.error('setCwSpeed error:', e); }
+        }
+        // vfo argument: 'a', 'b', or 'active'. Fire-and-forget. The CW Keyer
+        // popup button passes 'active' so it follows whichever VFO is in
+        // focus; the per-VFO buttons on each VFO panel pass their own letter
+        // so they always target that specific receiver.
+        async function cwZeroIn(vfo) {
+            const target = (vfo === 'A' || vfo === 'B') ? vfo.toLowerCase() : 'active';
+            try { await fetch(`/api/cat/cw/zin/${target}`, { method: 'POST' }); }
+            catch (e) { console.error('cwZeroIn error:', e); }
+        }
+        async function setCwBreakIn(v) {
+            try { await fetch('/api/cat/cw/breakin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: v }) }); }
+            catch (e) { console.error('setCwBreakIn error:', e); }
+        }
+        async function setCwBreakInDelay(v) {
+            try { await fetch('/api/cat/cw/breakindelay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delayMs: parseInt(v) }) }); }
+            catch (e) { console.error('setCwBreakInDelay error:', e); }
+        }
+        async function sendCwMessage(index) {
+            const input = document.getElementById(`cwMsg${index}`);
+            if (!input || !input.value.trim()) return;
+            try { await fetch('/api/cat/cw/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: input.value }) }); }
+            catch (e) { console.error('sendCwMessage error:', e); }
+        }
+        async function saveCwMessages() {
+            const msgs = [];
+            for (let i = 0; i < 5; i++) {
+                const el = document.getElementById(`cwMsg${i}`);
+                msgs.push(el ? el.value : '');
+            }
+            try {
+                await fetch('/api/cat/cw/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msgs) });
+            } catch (e) { console.error('saveCwMessages error:', e); }
+        }
+
+        // --- AUDIO FILTER POPOUT ---
+        // One independent dialog per VFO so the user can view/adjust both at
+        // once on FTdx101-family dual-receiver radios. Each instance reads/
+        // writes the four EX-menu values for *its* VFO's current mode class,
+        // backed by /api/cat/audiofilter/{vfo}. The dialog is a thin read/
+        // write proxy — the radio holds all state.
+        window.audioFilter = (function () {
+            const $ = (id) => document.getElementById(id);
+
+            function makeInstance(vfo) {
+                const dialogId = 'audioFilterDialog' + vfo;
+                const dlg = () => $(dialogId);
+                const id = (suffix) => `audioFilter${suffix}${vfo}`;
+                const el = (suffix) => $(id(suffix));
+                // Remember the slider's last non-OFF Hz so toggling OFF→ON
+                // returns to the same value rather than the slider's min.
+                let _lastLcutHz = 300;
+                let _lastHcutHz = 3000;
+                let _busy = false;
+
+                async function open() {
+                    const d = dlg();
+                    if (d && typeof d.show === 'function' && !d.open) {
+                        // On first open (no saved drag position), anchor the
+                        // dialog just below the Audio Filter button that
+                        // opened it.
+                        const hasSaved = !!localStorage.getItem('dlgPos_' + dialogId);
+                        if (!hasSaved) {
+                            const btn = $('audioFilterBtn' + vfo);
+                            if (btn) {
+                                const r = btn.getBoundingClientRect();
+                                d.style.left = Math.round(r.left) + 'px';
+                                d.style.top  = Math.round(r.bottom + 6) + 'px';
+                                d.style.transform = 'none';
+                            }
+                        }
+                        d.show();
+                    }
+                    await refresh();
+                }
+
+                async function refresh() {
+                    if (_busy) return;
+                    _busy = true;
+                    try {
+                        const resp = await fetch(`/api/cat/audiofilter/${vfo.toLowerCase()}`);
+                        if (!resp.ok) {
+                            el('Status').textContent = 'Failed to read audio filter.';
+                            return;
+                        }
+                        const data = await resp.json();
+                        el('ModeLabel').textContent = data.modeClass ? `(${data.modeClass})` : '';
+
+                        const otherVfo = vfo === 'A' ? 'B' : 'A';
+                        el('Status').textContent = data.otherVfoShares
+                            ? `VFO ${otherVfo} is also in ${data.modeClass} — these settings affect both VFOs.`
+                            : '';
+
+                        const anySupported = (data.lcutFreq && data.lcutFreq.supported)
+                                          || (data.lcutSlope && data.lcutSlope.supported)
+                                          || (data.hcutFreq && data.hcutFreq.supported)
+                                          || (data.hcutSlope && data.hcutSlope.supported);
+                        el('Unsupported').style.display = anySupported ? 'none' : '';
+                        el('Controls').style.display    = anySupported ? '' : 'none';
+                        if (!anySupported) return;
+
+                        renderFreqRow('Lcut', data.lcutFreq);
+                        renderSlopeBtn('Lcut', data.lcutSlope);
+                        renderFreqRow('Hcut', data.hcutFreq);
+                        renderSlopeBtn('Hcut', data.hcutSlope);
+                    } catch (e) {
+                        console.error(`audioFilter[${vfo}].refresh error:`, e);
+                    } finally {
+                        _busy = false;
+                    }
+                }
+
+                function renderFreqRow(prefix, v) {
+                    const slider = el(prefix + 'FreqSlider');
+                    const off    = el(prefix + 'FreqOff');
+                    const label  = el(prefix + 'FreqLabel');
+                    if (!v || !v.supported) {
+                        slider.disabled = true; off.disabled = true; label.textContent = '—';
+                        return;
+                    }
+                    off.disabled = false;
+                    if (v.label === 'OFF') {
+                        off.checked = true; slider.disabled = true;
+                        label.textContent = 'OFF';
+                    } else {
+                        off.checked = false; slider.disabled = false;
+                        if (typeof v.hz === 'number') {
+                            slider.value = v.hz;
+                            if (prefix === 'Lcut') _lastLcutHz = v.hz; else _lastHcutHz = v.hz;
+                        }
+                        label.textContent = v.label || (slider.value + ' Hz');
+                    }
+                }
+
+                function renderSlopeBtn(prefix, v) {
+                    const btn = el(prefix + 'SlopeBtn');
+                    if (!v || !v.supported) {
+                        btn.disabled = true; btn.textContent = '—';
+                        btn.classList.remove('btn-warning'); btn.classList.add('btn-outline-light');
+                        return;
+                    }
+                    btn.disabled = false;
+                    btn.dataset.slopeCode = v.code || '0';
+                    btn.textContent = v.label || (v.code === '1' ? '18 dB/oct' : '6 dB/oct');
+                    btn.classList.toggle('btn-warning',      v.code === '1');
+                    btn.classList.toggle('btn-outline-light', v.code !== '1');
+                }
+
+                function hzToFreqCode(hz, isLcut) {
+                    const base = isLcut ? 100 : 700;
+                    const n = Math.round((hz - base) / 50) + 1;
+                    return String(n).padStart(2, '0');
+                }
+
+                async function writeOne(setting, code) {
+                    try {
+                        const resp = await fetch(`/api/cat/audiofilter/${vfo.toLowerCase()}/${setting}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ code })
+                        });
+                        if (!resp.ok) return;
+                        const data = await resp.json();
+                        const v = data.result;
+                        if (setting === 'lcutFreq') renderFreqRow('Lcut', v);
+                        else if (setting === 'hcutFreq') renderFreqRow('Hcut', v);
+                        else if (setting === 'lcutSlope') renderSlopeBtn('Lcut', v);
+                        else if (setting === 'hcutSlope') renderSlopeBtn('Hcut', v);
+                    } catch (e) { console.error(`audioFilter[${vfo}].writeOne error:`, e); }
+                }
+
+                function wireDom() {
+                    el('LcutFreqSlider').addEventListener('input',  (e) => el('LcutFreqLabel').textContent = e.target.value + ' Hz');
+                    el('LcutFreqSlider').addEventListener('change', (e) => writeOne('lcutFreq', hzToFreqCode(parseInt(e.target.value), true)));
+                    el('LcutFreqOff').addEventListener('change', (e) => {
+                        if (e.target.checked) writeOne('lcutFreq', '00');
+                        else                  writeOne('lcutFreq', hzToFreqCode(_lastLcutHz, true));
+                    });
+                    el('LcutSlopeBtn').addEventListener('click', () => {
+                        const cur = el('LcutSlopeBtn').dataset.slopeCode || '0';
+                        writeOne('lcutSlope', cur === '0' ? '1' : '0');
+                    });
+                    el('HcutFreqSlider').addEventListener('input',  (e) => el('HcutFreqLabel').textContent = e.target.value + ' Hz');
+                    el('HcutFreqSlider').addEventListener('change', (e) => writeOne('hcutFreq', hzToFreqCode(parseInt(e.target.value), false)));
+                    el('HcutFreqOff').addEventListener('change', (e) => {
+                        if (e.target.checked) writeOne('hcutFreq', '00');
+                        else                  writeOne('hcutFreq', hzToFreqCode(_lastHcutHz, false));
+                    });
+                    el('HcutSlopeBtn').addEventListener('click', () => {
+                        const cur = el('HcutSlopeBtn').dataset.slopeCode || '0';
+                        writeOne('hcutSlope', cur === '0' ? '1' : '0');
+                    });
+                }
+
+                function onModeChanged(changedVfo) {
+                    if (changedVfo !== vfo) return;
+                    const d = dlg();
+                    if (!d || !d.open) return;
+                    refresh();
+                }
+
+                return { open, refresh, onModeChanged, wireDom };
+            }
+
+            const instances = { A: makeInstance('A'), B: makeInstance('B') };
+
+            document.addEventListener('DOMContentLoaded', () => {
+                instances.A.wireDom();
+                instances.B.wireDom();
+            });
+
+            return {
+                open: (vfo) => instances[(vfo === 'B') ? 'B' : 'A'].open(),
+                onModeChanged: (vfo, mode) => {
+                    instances.A.onModeChanged(vfo, mode);
+                    instances.B.onModeChanged(vfo, mode);
+                }
+            };
+        })();
+
+        // Expose functions called from HTML onclick/onchange attributes
+        window.launchWsjtx  = launchWsjtx;
+        window.launchJtalert = launchJtalert;
+        window.launchLog4om  = launchLog4om;
+        window.launchGridtracker = launchGridtracker;
+        window.launchFldigi      = launchFldigi;
+        window.setMicGain    = setMicGain;
+        window.toggleProc    = toggleProc;
+        window.setProcLevel  = setProcLevel;
+        window.toggleAtu        = toggleAtu;
+        window.startAtuTune     = startAtuTune;
+        window.stopAtuTune      = stopAtuTune;
+        window.updateAtuButton  = updateAtuButton;
+        window.updateAtuTuningState = updateAtuTuningState;
+        window.toggleMonitor    = toggleMonitor;
+        window._updateMonitorBtn = _updateMonitorBtn;
+        window.setMonitorLevel  = setMonitorLevel;
+        window.setNbLevel      = setNbLevel;
+        window.setNrLevel      = setNrLevel;
+        window.setRfGain                  = setRfGain;
+        window.setSquelch                 = setSquelch;
+        window._updateSquelchVisibility   = _updateSquelchVisibility;
+        // Apply squelch visibility for initial mode on page load
+        _updateSquelchVisibility('A', '@Model.RadioState.ModeA');
+        _updateSquelchVisibility('B', '@Model.RadioState.ModeB');
+        window.toggleCatConnection = toggleCatConnection;
+        window.toggleVox       = toggleVox;
+        window.setVoxGain      = setVoxGain;
+        window.setVoxDelay     = setVoxDelay;
+        window.setAntiVoxGain  = setAntiVoxGain;
+        window.setFmShift      = setFmShift;
+        window.setFmOffset     = setFmOffset;
+        window.setCtcssMode    = setCtcssMode;
+        window.setCtcssTone    = setCtcssTone;
+        window.saveFmRepeater  = saveFmRepeater;
+        window.setCwPitch      = setCwPitch;
+        window.setCwSpeed      = setCwSpeed;
+        window.cwZeroIn        = cwZeroIn;
+        window.setCwBreakIn    = setCwBreakIn;
+        window.setCwBreakInDelay = setCwBreakInDelay;
+        window.sendCwMessage   = sendCwMessage;
+        window.saveCwMessages  = saveCwMessages;
+    </script>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>@(ViewData["Title"]?.ToString() == "Flex Workspace" ? "Flex Workspace — Yaesu Web Control" : ViewData["Title"] + " - Yaesu Web Control")</title>
+    <link rel="stylesheet" href="~/lib/flexlayout/style/dark.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/flex-widgets.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/closer-to-raw-power.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/gauge-debug.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <script src="~/lib/canvas-gauges/gauge.min.js"></script>
+    <script type="module">
+        import { calibrateNumeric, calibrateSMeterLabel, calibrateSMeterForGauge, loadFromBackend } from '/js/calibration/calibration-engine.js?v=15';
+        window.calibrationEngine = { calibrateNumeric, calibrateSMeterLabel, calibrateSMeterForGauge };
+        const calibMap = { 'S-Meter': ['SMETER', 'SMETER_LABELS'] };
+        window.calibrationEngine.reload = () => loadFromBackend(calibMap);
+        window.calibrationEngine.reload();
+    </script>
+    <script type="module">
+        import { MeterFormatters } from '/js/ui/meter-formatters.js?v=8';
+        window.MeterFormatters = MeterFormatters;
+    </script>
+</head>
+<body class="ywc-flex-body">
+    <header class="ywc-flex-nav" aria-label="Site navigation">
+        <a class="ywc-flex-brand" asp-page="/Index">Yaesu Web Control</a>
+        <nav class="ywc-flex-nav-links">
+            <a asp-page="/Index">Classic Home</a>
+            <a asp-page="/Flex" aria-current="page">Flex</a>
+            <a asp-page="/Settings">Settings</a>
+            <a asp-page="/Diagnostics">Diagnostics</a>
+            <a asp-page="/Labels">Labels</a>
+        </nav>
+        <span class="ywc-flex-nav-hint" title="Popouts need a user gesture; blocked popups become floating panels.">
+            Popouts: allow site popups · Tablet/Phone disable window popouts
+        </span>
+    </header>
+    <main role="application" aria-label="Yaesu radio flex workspace" class="ywc-flex-main">
+        @RenderBody()
+    </main>
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    <script src="~/lib/flexlayout/flexlayout.bundle.js" asp-append-version="true"></script>
+    <script src="~/js/ui/site.js" asp-append-version="true"></script>
+    @{
+        var _ywcSettingsService = (Yaesu_Web_Control.Services.ISettingsService)Context.RequestServices
+            .GetService(typeof(Yaesu_Web_Control.Services.ISettingsService))!;
+        var _ywcVoiceEnabled = false;
+        try
+        {
+#if WINDOWS
+            var _ywcSettings = await _ywcSettingsService.GetSettingsAsync();
+            _ywcVoiceEnabled = _ywcSettings.VoiceControlEnabled;
+#endif
+        }
+        catch { }
+    }
+    <script>window.ywcVoiceEnabled = @(_ywcVoiceEnabled ? "true" : "false");</script>
+    <script src="~/js/ui/voice-control.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

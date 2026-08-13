@@ -1,0 +1,100 @@
+<div id="controlsBar" class="ywc-controls" data-ywc-controls-ui="dock">
+    <div class="ywc-controls-inner">
+        <div class="ywc-controls-toolbar ywc-flex-wrap">
+            <strong class="ywc-controls-title">Controls</strong>
+
+            <label class="ywc-controls-label" for="powerSlider">
+                Power
+                <span id="powerValue" class="ywc-controls-val">@Model.RadioState.Power W</span>
+            </label>
+            <input type="range" class="ywc-range ywc-controls-slider" id="powerSlider"
+                   aria-label="Transmit power"
+                   title="Transmit power"
+                   min="5" max="200" step="5"
+                   value="@Model.RadioState.Power"
+                   oninput="window.radioControl.updatePowerDisplay(window.txVfo === 1 ? 'B' : 'A', this.value)"
+                   onchange="window.radioControl.setPower(window.txVfo === 1 ? 'B' : 'A', this.value)">
+
+            <label class="ywc-controls-label" for="micGainSlider">
+                <span id="micGainLabel">MIC Gain</span>
+                <span id="micGainValue" class="ywc-controls-val">@Model.MicGain</span>
+            </label>
+            <input type="range" class="ywc-range ywc-controls-slider"
+                   id="micGainSlider"
+                   aria-label="Microphone gain"
+                   title="Microphone gain"
+                   min="0" max="100" step="1"
+                   value="@Model.MicGain"
+                   oninput="document.getElementById('micGainValue').innerText = this.value;"
+                   onchange="setMicGain(this.value);">
+
+            <button type="button" id="procBtn"
+                    class="ywc-btn ywc-btn-sm @(Model.ProcEnabled ? "ywc-btn-success" : "ywc-btn-outline")"
+                    aria-label="Speech processor"
+                    title="Speech processor on/off"
+                    onclick="toggleProc()">@(Model.ProcEnabled ? "Proc On" : "Proc Off")</button>
+            <label class="ywc-controls-label" for="procLevelSlider">
+                PROC Level
+                <span id="procLevelValue" class="ywc-controls-val">@Model.ProcLevel</span>
+            </label>
+            <input type="range" class="ywc-range ywc-controls-slider"
+                   id="procLevelSlider"
+                   aria-label="Speech processor level"
+                   title="Speech processor level"
+                   min="0" max="100" step="1"
+                   value="@Model.ProcLevel"
+                   oninput="document.getElementById('procLevelValue').innerText = this.value;"
+                   onchange="setProcLevel(this.value);">
+
+            <button type="button" id="atuBtn"
+                    class="ywc-btn ywc-btn-sm @(Model.AtuEnabled ? "ywc-btn-success" : "ywc-btn-outline")"
+                    aria-label="Antenna tuner — short tap toggles on/off, long press starts auto-tune"
+                    title="Tap to toggle ATU on/off; press and hold to start auto-tune"
+                    style="touch-action: manipulation; user-select: none;">@(Model.AtuEnabled ? "ATU On" : "ATU Off")</button>
+
+            <button type="button" id="monitorOnBtn"
+                    class="ywc-btn ywc-btn-sm @(Model.MonitorOn ? "ywc-btn-warning" : "ywc-btn-outline")"
+                    aria-label="TX monitor — currently @(Model.MonitorOn ? "on" : "off")"
+                    title="Toggle TX monitor / sidetone on/off"
+                    onclick="toggleMonitor()">Mon</button>
+            <label class="ywc-controls-label ywc-controls-label-compact" for="monLevelSlider">
+                <span id="monLevelValue" class="ywc-controls-val">@Model.MonitorLevelA</span>
+            </label>
+            <input type="range" class="ywc-range ywc-controls-slider ywc-controls-slider-sm"
+                   id="monLevelSlider"
+                   aria-label="TX monitor / sidetone level"
+                   title="TX monitor / sidetone level"
+                   min="0" max="100" step="1"
+                   value="@Model.MonitorLevelA"
+                   oninput="document.getElementById('monLevelValue').innerText = this.value;"
+                   onchange="setMonitorLevel(this.value);">
+
+            <button type="button" id="voxBtn"
+                    class="ywc-btn ywc-btn-sm @(Model.VoxOn ? "ywc-btn-warning" : "ywc-btn-outline")"
+                    aria-label="VOX controls"
+                    title="Open VOX controls panel"
+                    onclick="document.getElementById('voxDialog').show()">VOX</button>
+            <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                    aria-label="CW keyer controls"
+                    title="Open CW keyer controls panel"
+                    onclick="document.getElementById('cwDialog').show()">CW</button>
+            <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                    aria-label="FM repeater controls"
+                    title="Open FM repeater controls panel"
+                    onclick="document.getElementById('fmDialog').show()">FM Rep</button>
+            <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                    aria-label="DX watch — alerts for spotted callsigns"
+                    title="Open DX watch list — get alerts when watched callsigns are spotted"
+                    onclick="document.getElementById('dxWatchDialog').show(); window.refreshDxWatchList && window.refreshDxWatchList();">DX Watch</button>
+            <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                    aria-label="DX spots — list of cluster spots on current band"
+                    title="Open DX spots list — see callsigns spotted on the current band"
+                    onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">DX Spots</button>
+            <button type="button" id="voiceBtn"
+                    class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                    aria-label="Voice announcements settings"
+                    title="Voice announcements for band, mode, TX state etc. — useful for partially sighted operators"
+                    onclick="document.getElementById('voiceDialog').show();">Voice</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,85 @@
+<div id="metersBar" class="ywc-meters" data-ywc-meters-ui="dock">
+    <div class="ywc-meters-inner">
+        <div class="ywc-meters-row">
+            <!-- S-Meter rolling history strip — leftmost so the live trace
+                 reads left-to-right toward the S-meter needle. Hidden
+                 until the toolbar's S-hist toggle is on. -->
+            <div id="sMeterHistoryContainer"
+                 class="ywc-meter-cell ywc-smeter-history"
+                 style="display:none;">
+                <canvas id="sMeterHistoryCanvas"
+                        role="img" aria-hidden="true"
+                        aria-label="S-meter 30-second history — VFO A"
+                        data-a11y-key="meters.smeterHistoryA"></canvas>
+            </div>
+            <!-- S-Meter A (MAIN) — always live -->
+            <div class="ywc-meter-cell">
+                <div class="analog-meter-container">
+                    <canvas id="sMeterCanvas" role="img" aria-hidden="true"
+                            aria-label="S meter A" data-a11y-key="meters.smeterA"></canvas>
+                </div>
+            </div>
+            @if (!Model.View.IsSingleReceiver)
+            {
+                <div id="sMeterHistoryContainerB"
+                     class="ywc-meter-cell ywc-smeter-history"
+                     style="display:none;">
+                    <canvas id="sMeterHistoryCanvasB"
+                            role="img" aria-hidden="true"
+                            aria-label="S-meter 30-second history — VFO B"
+                            data-a11y-key="meters.smeterHistoryB"></canvas>
+                </div>
+                <div class="ywc-meter-cell">
+                    <div class="analog-meter-container">
+                        <canvas id="sMeterCanvasB" role="img" aria-hidden="true"
+                                aria-label="S meter B" data-a11y-key="meters.smeterB"></canvas>
+                    </div>
+                </div>
+            }
+            <div class="ywc-meter-cell">
+                <div class="analog-meter-container">
+                    <canvas id="swrMeterCanvas" role="img" aria-hidden="true"
+                            aria-label="SWR meter" data-a11y-key="meters.swr"></canvas>
+                </div>
+            </div>
+            <div class="ywc-meter-cell ywc-power-meter">
+                <div class="analog-meter-container">
+                    <canvas id="powerMeterCanvas" role="img" aria-hidden="true"
+                            aria-label="Power output meter" data-a11y-key="meters.power"></canvas>
+                </div>
+            </div>
+            <div class="ywc-meter-cell">
+                <div class="analog-meter-container">
+                    <canvas id="compressionMeterCanvas" role="img" aria-hidden="true"
+                            aria-label="Compression meter" data-a11y-key="meters.compression"></canvas>
+                </div>
+            </div>
+            <div class="ywc-meter-cell">
+                <div class="analog-meter-container">
+                    <canvas id="alcMeterCanvas" role="img" aria-hidden="true"
+                            aria-label="ALC meter" data-a11y-key="meters.alc"></canvas>
+                </div>
+            </div>
+            @if (!Model.View.IsFtdx10 && !Model.View.IsFt710 && !Model.View.IsFtdx5000) {
+            <div class="ywc-meter-cell">
+                <div class="analog-meter-container">
+                    <canvas id="tempMeterCanvas" role="img" aria-hidden="true"
+                            aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
+                </div>
+            </div>
+            <div class="ywc-meter-cell">
+                <div class="analog-meter-container">
+                    <canvas id="iddMeterCanvas" role="img" aria-hidden="true"
+                            aria-label="Drain current meter" data-a11y-key="meters.idd"></canvas>
+                </div>
+            </div>
+            <div class="ywc-meter-cell">
+                <div class="analog-meter-container">
+                    <canvas id="vddMeterCanvas" role="img" aria-hidden="true"
+                            aria-label="Amplifier supply voltage meter" data-a11y-key="meters.vdd"></canvas>
+                </div>
+            </div>
+            }
+        </div>
+    </div>
+</div>

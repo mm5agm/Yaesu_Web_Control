@@ -1,0 +1,112 @@
+{
+  "global": {
+    "tabEnableClose": false,
+    "tabEnablePopout": false,
+    "tabEnablePopoutIcon": false,
+    "tabSetEnableMaximize": true,
+    "rootOrientationVertical": false,
+    "splitterSize": 10
+  },
+  "borders": [
+    {
+      "type": "border",
+      "location": "right",
+      "size": 280,
+      "children": [
+        {
+          "type": "tab",
+          "id": "clarifier",
+          "name": "Clarifier",
+          "component": "clarifier"
+        },
+        {
+          "type": "tab",
+          "id": "controls",
+          "name": "Controls",
+          "component": "controls"
+        }
+      ]
+    }
+  ],
+  "layout": {
+    "type": "row",
+    "weight": 100,
+    "children": [
+      {
+        "type": "row",
+        "weight": 55,
+        "children": [
+          {
+            "type": "tabset",
+            "weight": 22,
+            "children": [
+              {
+                "type": "tab",
+                "id": "meters",
+                "name": "Meters",
+                "component": "meters",
+                "enableWindowReMount": true
+              }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 39,
+            "children": [
+              {
+                "type": "tab",
+                "id": "vfoA",
+                "name": "VFO A",
+                "component": "vfoA"
+              }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 39,
+            "children": [
+              {
+                "type": "tab",
+                "id": "vfoB",
+                "name": "VFO B",
+                "component": "vfoB"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "row",
+        "weight": 45,
+        "children": [
+          {
+            "type": "tabset",
+            "weight": 50,
+            "children": [
+              {
+                "type": "tab",
+                "id": "spectrumA",
+                "name": "Spectrum A",
+                "component": "spectrumA",
+                "enableWindowReMount": true
+              },
+              {
+                "type": "tab",
+                "id": "spectrumB",
+                "name": "Spectrum B",
+                "component": "spectrumB",
+                "enableWindowReMount": true
+              },
+              {
+                "type": "tab",
+                "id": "remoteAudio",
+                "name": "Remote Audio",
+                "component": "remoteAudio"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

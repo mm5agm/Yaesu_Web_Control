@@ -1,0 +1,418 @@
+@model FlexVfoPanelModel
+@{
+    var id = Model.Id;
+    var idLower = Model.IdLower;
+    var label = Model.Label;
+    var page = Model.Page;
+    var view = Model.View;
+    var vcHidden = Model.VcTuneStartsHidden;
+    var vcRole = Model.VcTuneRole;
+    var scopePanel = Model.FilterScopePanel;
+}
+<div id="@Model.ColId" class="ywc-vfo @Model.CssModifier" data-ywc-vfo-ui="dock" data-vfo="@id">
+    <div class="ywc-vfo-inner">
+        <span id="@Model.HeadingId" class="visually-hidden">@label</span>
+
+        <div class="ywc-vfo-body">
+            <div class="ywc-vfo-actions ywc-flex-wrap">
+                <span id="splitTxBadge@(id)" class="ywc-badge ywc-badge-danger" style="display:none;" aria-live="polite">SPLIT TX</span>
+                <button type="button" id="zinBtn@(id)" class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                        onclick="cwZeroIn('@id')"
+                        aria-label="@label CW Auto Zero In"
+                        title="CW Auto Zero In on @label — nudges the VFO so the received CW signal sits at your configured CW pitch">ZIN</button>
+                @if (Model.ShowVcTune) {
+                <button type="button" id="vcTuneToggleBtn@(id)" class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                        style="@(vcHidden ? "display:none" : null)"
+                        onclick="vcTuneToggle('@idLower')"
+                        aria-label="@vcRole VC Tune on/off"
+                        title="Toggle @vcRole VC Tune preselector on/off">VC Tune</button>
+                <span id="vcTuneRow@(id)" class="ywc-vfo-vctune ywc-flex" style="@(vcHidden ? "display:none !important;" : null)">
+                    <button id="vcTuneDefaultBtn@(id)" class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                            onclick="vcTuneCommand('@idLower','default')"
+                            aria-label="@vcRole VC Tune default" title="@vcRole VC Tune auto-tune">Default</button>
+                    <button class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                            onclick="vcTuneStep('@idLower','minus')"
+                            aria-label="@vcRole VC Tune step down" title="Step @vcRole preselector capacitor down">−</button>
+                    <select id="vcTuneStep@(id)" class="ywc-select ywc-vfo-vctune-step"
+                            aria-label="@vcRole VC Tune step size" title="Step size (1–9)">
+                        <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                        <option value="4">4</option><option value="5" selected>5</option><option value="6">6</option>
+                        <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+                    </select>
+                    <button class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                            onclick="vcTuneStep('@idLower','plus')"
+                            aria-label="@vcRole VC Tune step up" title="Step @vcRole preselector capacitor up">+</button>
+                    <button id="vcTuneCenterBtn@(id)" class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                            onclick="vcTuneCommand('@idLower','center')"
+                            aria-label="@vcRole VC Tune center" title="Center @vcRole preselector capacitor">Center</button>
+                    <span id="vcTuneMeter@(id)" class="ywc-vfo-muted">P5: —</span>
+                    <span id="vcTuneWarn@(id)" class="ywc-vfo-warn" style="display:none;"></span>
+                </span>
+                }
+                <button id="txButton@(id)" class="ywc-btn ywc-btn-sm ywc-btn-warning" style="display:none;"
+                        onclick="toggleTx()" title="Toggle Transmit" aria-label="Toggle Transmit">TX</button>
+            </div>
+
+            <div class="ywc-vfo-controls-group">
+                <div class="ywc-vfo-mem">
+                    <button id="saveMemBtn@(id)" type="button"
+                            class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                            onclick="saveVfoToMemory('@id')"
+                            aria-label="Save @label to memories"
+                            title="Save @label frequency, mode and clarifier to app memories">
+                        Save to Mem
+                    </button>
+                    <span id="saveMemStatus@(id)" class="visually-hidden" role="status" aria-live="polite"></span>
+                </div>
+
+                <div class="ywc-vfo-bands">
+                    @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", id, Model.SelectedBand))
+                    @if (Model.ShowQmb)
+                    {
+                        <div class="ywc-vfo-qmb ywc-flex" id="qmbControls">
+                            <span class="ywc-vfo-label" aria-hidden="true">QMB</span>
+                            <button id="qmbStoreBtn" type="button"
+                                    class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                                    onclick="qmbStore()"
+                                    aria-label="Store current VFO to Quick Memory Bank"
+                                    title="Store the current VFO frequency and mode into the radio's Quick Memory Bank">
+                                Store
+                            </button>
+                            <button id="qmbRecallBtn" type="button"
+                                    class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                                    onclick="qmbRecall()"
+                                    aria-label="Recall from Quick Memory Bank"
+                                    title="Recall from the Quick Memory Bank — the display switches to QMB; repeated presses step through the stored slots. Use V/M to return to VFO.">
+                                Recall
+                            </button>
+                            <button id="qmbVfoBtn" type="button"
+                                    class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                                    onclick="qmbVfo()"
+                                    aria-label="Return to VFO mode (V/M key)"
+                                    title="Return to VFO mode — leaves QMB (mirrors the radio's V/M key).">
+                                V/M
+                            </button>
+                            <span id="qmbStatus" class="visually-hidden" role="status" aria-live="polite"></span>
+                        </div>
+                    }
+                    <div class="ywc-vfo-mode-row ywc-flex">
+                        <label class="ywc-vfo-label" for="modeSelect@(id)">Mode</label>
+                        <select class="ywc-select vfo-mode-select" id="modeSelect@(id)"
+                                aria-label="@label mode"
+                                title="@label mode"
+                                onchange="setMode('@id', this.value)">
+                            @foreach (var mode in view.AllModes)
+                            {
+                                if (Model.Mode == mode)
+                                {
+                                    <option value="@mode" selected>@FlexViewState.ModeLabel(mode)</option>
+                                }
+                                else
+                                {
+                                    <option value="@mode">@FlexViewState.ModeLabel(mode)</option>
+                                }
+                            }
+                        </select>
+                        @if (view.HasAntennaSelector)
+                        {
+                            <select class="ywc-select vfo-ant-select" id="antennaSelect@(id)"
+                                    aria-label="@label antenna"
+                                    title="@label antenna"
+                                    onchange="window.radioControl.setAntenna('@id', this.value)">
+                                @foreach (var ant in new[] { "1", "2", "3" })
+                                {
+                                    if (Model.Antenna == ant)
+                                    {
+                                        <option value="@ant" selected>ANT @ant</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@ant">ANT @ant</option>
+                                    }
+                                }
+                            </select>
+                        }
+                    </div>
+                </div>
+
+                @if (Model.ShowVoice)
+                {
+                <div class="ywc-vfo-voice" id="voiceMicContainer@(id)" style="display:none;">
+                    <div class="ywc-flex">
+                        <select id="voiceNudgeStepSelect@(id)"
+                                class="ywc-select ywc-vfo-voice-step"
+                                title="Voice nudge step size — how far 'tune up'/'tune down' moves @label"
+                                aria-label="@label voice nudge step size">
+                            <option value="10">10 Hz</option>
+                            <option value="100">100 Hz</option>
+                            <option value="1000">1 kHz</option>
+                            <option value="10000">10 kHz</option>
+                            <option value="100000">100 kHz</option>
+                        </select>
+                        <button id="voiceMicBtn@(id)" type="button"
+                                class="ywc-btn ywc-btn-outline ywc-btn-danger voice-mic-btn"
+                                title="Hold to give a @label voice command (right-click for the command list)"
+                                aria-label="Voice command @label — hold to speak">
+                            <span class="ywc-vfo-mic-icon" aria-hidden="true">🎤</span>
+                        </button>
+                    </div>
+                    <div id="voiceLastHeard@(id)" class="ywc-vfo-voice-heard" aria-live="polite"></div>
+                </div>
+                }
+
+                <div class="ywc-vfo-scope" id="filterScopeContainer@(id)">
+                    <canvas id="filterScopeCanvas@(id)" role="img" aria-hidden="true"
+                            aria-label="@label filter display" data-a11y-key="@Model.FilterScopeA11yKey"></canvas>
+                </div>
+
+                <div class="vfo-controls-column ywc-vfo-grid">
+                    <div class="vfo-control-item">
+                        <label class="ywc-vfo-label">AGC</label>
+                        <select class="ywc-select" id="agcSelect@(id)"
+                                aria-label="@label AGC" title="@label AGC"
+                                onchange="window.radioControl.setAgc('@id', this.value)">
+                            <option value="0" selected="@(Model.Agc == "0" ? "selected" : null)">OFF</option>
+                            <option value="1" selected="@(Model.Agc == "1" ? "selected" : null)">FAST</option>
+                            <option value="2" selected="@(Model.Agc == "2" ? "selected" : null)">MID</option>
+                            <option value="3" selected="@(Model.Agc == "3" ? "selected" : null)">SLOW</option>
+                            <option value="4" selected="@(Model.Agc == "4" ? "selected" : null)">AUTO</option>
+                        </select>
+                    </div>
+                    <div class="vfo-control-item">
+                        <label class="ywc-vfo-label">IPO/AMP</label>
+                        <select class="ywc-select" id="ipoSelect@(id)"
+                                aria-label="@label IPO amp" title="@label IPO / amplifier"
+                                onchange="window.radioControl.setIpo('@id', this.value)">
+                            <option value="0" selected="@(Model.Ipo == "0" ? "selected" : null)">IPO</option>
+                            <option value="1" selected="@(Model.Ipo == "1" ? "selected" : null)">AMP1</option>
+                            <option value="2" selected="@(Model.Ipo == "2" ? "selected" : null)">AMP2</option>
+                        </select>
+                    </div>
+                    <div class="vfo-control-item">
+                        <label class="ywc-vfo-label">ATT</label>
+                        <select class="ywc-select" id="attSelect@(id)"
+                                aria-label="@label attenuator" title="@label attenuator"
+                                onchange="window.radioControl.setAttenuator('@id', this.value)">
+                            <option value="00" selected="@(Model.Att == "00" ? "selected" : null)">OFF</option>
+                            <option value="06" selected="@(Model.Att == "06" ? "selected" : null)">6 dB</option>
+                            <option value="12" selected="@(Model.Att == "12" ? "selected" : null)">12 dB</option>
+                            <option value="18" selected="@(Model.Att == "18" ? "selected" : null)">18 dB</option>
+                        </select>
+                    </div>
+                    <div class="vfo-control-item">
+                        <label class="ywc-vfo-label">@(view.IsFtdx10 || view.IsFt710 ? "DNR" : "NR")</label>
+                        <select class="ywc-select" id="nrSelect@(id)"
+                                aria-label="@label @(view.IsFtdx10 || view.IsFt710 ? "digital noise reduction" : "noise reduction")"
+                                title="@label @(view.IsFtdx10 || view.IsFt710 ? "digital noise reduction" : "noise reduction")"
+                                onchange="window.radioControl.setNr('@id', this.value)">
+                            <option value="0" selected="@(Model.Nr == "0" ? "selected" : null)">OFF</option>
+                            @if (view.IsFtdx10 || view.IsFt710)
+                            {
+                                <option value="1" selected="@(Model.Nr == "1" ? "selected" : null)">ON</option>
+                            }
+                            else
+                            {
+                                <option value="1" selected="@(Model.Nr == "1" ? "selected" : null)">NR1</option>
+                                <option value="2" selected="@(Model.Nr == "2" ? "selected" : null)">NR2</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="vfo-control-item">
+                        <label class="ywc-vfo-label">@(view.IsFtdx10 || view.IsFt710 ? "DNR No." : "NR Lvl")</label>
+                        <select class="ywc-select" id="nrLevelSelect@(id)"
+                                aria-label="@label @(view.IsFtdx10 || view.IsFt710 ? "DNR algorithm" : "NR level") (1-15)"
+                                title="@label @(view.IsFtdx10 || view.IsFt710 ? "DNR algorithm (1=lightest, 15=heaviest)" : "NR depth (1=light, 15=heavy)")"
+                                onchange="setNrLevel('@id', this.value)">
+                            @for (int i = 1; i <= 15; i++) {
+                                <option value="@i" selected="@(Model.NrLevel == i ? "selected" : null)">@i</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="vfo-control-item">
+                        <label class="ywc-vfo-label">NB</label>
+                        <select class="ywc-select" id="nbSelect@(id)"
+                                aria-label="@label noise blanker" title="@label noise blanker"
+                                onchange="window.radioControl.setNoiseBlanker('@id', this.value)">
+                            <option value="0" selected="@(Model.Nb == "0" ? "selected" : null)">OFF</option>
+                            <option value="1" selected="@(Model.Nb == "1" ? "selected" : null)">ON</option>
+                        </select>
+                    </div>
+                    <div class="vfo-control-item">
+                        <label class="ywc-vfo-label">NB Level</label>
+                        <select class="ywc-select" id="nbLevelSelect@(id)"
+                                aria-label="@label noise blanker level"
+                                title="@label noise blanker depth (1=min, 20=max)"
+                                onchange="setNbLevel('@id', this.value)">
+                            @for (int i = 1; i <= 20; i++) {
+                                <option value="@i" selected="@(Model.NbLevel == i ? "selected" : null)">@i</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="vfo-control-item">
+                        <label class="ywc-vfo-label">Auto Notch</label>
+                        <select class="ywc-select" id="autoNotchSelect@(id)"
+                                aria-label="@label auto notch" title="@label auto notch"
+                                onchange="window.radioControl.setAutoNotch('@id', this.value)">
+                            <option value="0" selected="@(Model.AutoNotch == "0" ? "selected" : null)">OFF</option>
+                            <option value="1" selected="@(Model.AutoNotch == "1" ? "selected" : null)">ON</option>
+                        </select>
+                    </div>
+                    <div class="vfo-control-item">
+                        <label class="ywc-vfo-label">Man Notch</label>
+                        <select class="ywc-select" id="manualNotchSelect@(id)"
+                                aria-label="@label manual notch" title="@label manual notch"
+                                onchange="window.radioControl.setManualNotch('@id', this.value)">
+                            <option value="0" selected="@(Model.ManualNotch == "0" ? "selected" : null)">OFF</option>
+                            <option value="1" selected="@(Model.ManualNotch == "1" ? "selected" : null)">ON</option>
+                        </select>
+                    </div>
+                    <div class="vfo-control-item ywc-vfo-span">
+                        <label class="ywc-vfo-label">Notch Hz</label>
+                        <input type="range" class="ywc-range" id="manualNotchFreq@(id)"
+                               aria-label="@label manual notch frequency" title="@label manual notch frequency"
+                               min="10" max="3200" step="10" value="@Model.ManualNotchFreq"
+                               oninput="document.getElementById('manualNotchFreqValue@(id)').textContent = this.value + ' Hz'; window.radioControl.setManualNotchFreq('@id', this.value)">
+                        <span id="manualNotchFreqValue@(id)" class="ywc-vfo-val">@Model.ManualNotchFreq Hz</span>
+                    </div>
+                    <div class="vfo-control-item ywc-vfo-span">
+                        <label class="ywc-vfo-label">RF Gain</label>
+                        <input type="range" class="ywc-range" id="rfGainSlider@(id)"
+                               aria-label="@label RF gain" title="@label RF gain (0=min, 255=max)"
+                               min="0" max="255" step="1" value="@Model.RfGain"
+                               oninput="document.getElementById('rfGainValue@(id)').textContent = this.value"
+                               onchange="setRfGain('@id', this.value)">
+                        <span id="rfGainValue@(id)" class="ywc-vfo-val">@Model.RfGain</span>
+                    </div>
+                    <div class="vfo-control-item ywc-vfo-span" id="squelchRow@(id)" style="display:none;">
+                        <label class="ywc-vfo-label">Squelch</label>
+                        <input type="range" class="ywc-range" id="squelchSlider@(id)"
+                               aria-label="@label squelch" title="@label squelch level (0=open, 255=max)"
+                               min="0" max="255" step="1" value="@Model.Squelch"
+                               oninput="document.getElementById('squelchValue@(id)').textContent = this.value"
+                               onchange="setSquelch('@id', this.value)">
+                        <span id="squelchValue@(id)" class="ywc-vfo-val">@Model.Squelch</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ywc-vfo-row ywc-flex-wrap">
+                <span class="ywc-vfo-label">Segment</span>
+                <select class="ywc-select segment-select" id="segmentSelect@(id)"
+                        aria-label="@label band segment" title="@label band segment"
+                        onchange="window.onSegmentChange && window.onSegmentChange('@id', this.value)">
+                    <option value="">--</option>
+                </select>
+                <button type="button" id="contourBtn@(id)"
+                        class="ywc-btn ywc-btn-sm @(Model.ContourOn ? "ywc-btn-success" : "ywc-btn-outline")"
+                        aria-label="@label Contour filter" title="Toggle Contour audio peak filter"
+                        onclick="toggleContour('@id')">@(Model.ContourOn ? "Contour On" : "Contour Off")</button>
+                <input type="range" class="ywc-range ywc-vfo-slider-sm" id="contourFreqSlider@(id)"
+                       min="100" max="@view.ContourMaxFreq" step="@view.ContourStep"
+                       value="@Model.ContourFreq"
+                       oninput="document.getElementById('contourFreqValue@(id)').textContent = this.value + ' Hz'"
+                       onchange="setContourFreq('@id', parseInt(this.value))"
+                       aria-label="@label Contour frequency">
+                <span id="contourFreqValue@(id)" class="ywc-vfo-val">@(Model.ContourFreq) Hz</span>
+                <button type="button" id="apfBtn@(id)"
+                        class="ywc-btn ywc-btn-sm @(Model.ApfOn ? "ywc-btn-success" : "ywc-btn-outline")"
+                        aria-label="@label APF filter" title="Toggle APF audio peak filter (CW)"
+                        onclick="toggleApf('@id')">@(Model.ApfOn ? "APF On" : "APF Off")</button>
+                <input type="range" class="ywc-range ywc-vfo-slider-sm" id="apfFreqSlider@(id)"
+                       min="-250" max="250" step="@view.ApfStep"
+                       value="@Model.ApfFreq"
+                       oninput="document.getElementById('apfFreqValue@(id)').textContent = this.value + ' Hz'"
+                       onchange="setApfFreq('@id', parseInt(this.value))"
+                       aria-label="@label APF frequency">
+                <span id="apfFreqValue@(id)" class="ywc-vfo-val">@(Model.ApfFreq) Hz</span>
+            </div>
+
+            <div class="ywc-vfo-freq-row ywc-flex-wrap">
+                <span id="freq@(id)" class="frequency-display digit-display ywc-vfo-freq" role="spinbutton"
+                      aria-label="@label frequency" title="@label frequency" data-a11y-key="@Model.FreqA11yKey"
+                      tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
+                <span class="frequency-display digit-display ywc-vfo-freq-unit">MHz</span>
+                <div id="freq@(id)-controls" class="freq-step-controls ywc-vfo-freq-steps"
+                     style="display:@(page.ShowFrequencyArrowButtons ? "inline-flex" : "none");">
+                    <button type="button" id="freq@(id)-up" class="ywc-btn ywc-btn-sm ywc-btn-secondary"
+                            aria-label="Step @label selected digit up" title="Step @label selected digit up (↑)">▲</button>
+                    <button type="button" id="freq@(id)-down" class="ywc-btn ywc-btn-sm ywc-btn-secondary"
+                            aria-label="Step @label selected digit down" title="Step @label selected digit down (↓)">▼</button>
+                </div>
+                <button class="ywc-btn ywc-btn-sm ywc-btn-outline fkb-open-btn"
+                        data-freq-keyboard="@id"
+                        aria-label="Keyboard — enter @label frequency"
+                        data-a11y-key="@Model.KeyboardA11yKey"
+                        title="Keyboard — enter @label frequency">
+                    <strong>123</strong>
+                </button>
+                @if (!view.IsFt710)
+                {
+                <label class="ywc-vfo-label" for="roofingFilterSelect@(id)">Roofing</label>
+                <select class="ywc-select" id="roofingFilterSelect@(id)"
+                        aria-label="@label roofing filter" title="@label roofing filter"
+                        onchange="window.radioControl.setRoofingFilter('@id', this.value)">
+                    @if (view.IsFtdx10)
+                    {
+                        @foreach (var opt in view.RoofingOptionsFtdx10)
+                        {
+                            <option value="@opt.Value" selected="@(Model.RoofingFilter==opt.Value ? "selected" : null)">@opt.Label</option>
+                        }
+                    }
+                    else if (view.IsFtdx3000)
+                    {
+                        @foreach (var opt in view.RoofingOptions3000)
+                        {
+                            <option value="@opt.Value" selected="@(Model.RoofingFilter==opt.Value ? "selected" : null)">@opt.Label</option>
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var opt in view.RoofingOptions)
+                        {
+                            <option value="@opt.Value" selected="@(Model.RoofingFilter==opt.Value ? "selected" : null)">@opt.Label</option>
+                        }
+                    }
+                </select>
+                }
+                <label class="ywc-vfo-label" for="afGainSlider@(id)">AF Gain <span id="afGainValue@(id)" class="ywc-vfo-val">@Model.AfGain</span></label>
+                <input type="range" class="ywc-range ywc-vfo-slider-sm"
+                       id="afGainSlider@(id)"
+                       aria-label="@label AF gain" title="@label AF gain"
+                       min="0" max="255" step="1" value="@Model.AfGain"
+                       oninput="document.getElementById('afGainValue@(id)').innerText = this.value">
+            </div>
+
+            <div class="ywc-vfo-if-row ywc-flex-wrap">
+                <label class="ywc-vfo-label" for="ifWidthSelect@(id)">IF Width</label>
+                <select class="ywc-select" id="ifWidthSelect@(id)"
+                        aria-label="@label IF width" title="@label IF width"
+                        onchange="window.radioControl.setIfWidth('@id', this.value)">
+                    @foreach (var opt in view.IfWidthOptions)
+                    {
+                        bool isDefault = string.IsNullOrEmpty(Model.IfWidth) && opt.Value == Model.IfWidthDefault;
+                        <option value="@opt.Value" selected="@(Model.IfWidth==opt.Value||isDefault ? "selected" : null)">@opt.Label</option>
+                    }
+                </select>
+                <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-secondary"
+                        id="audioFilterBtn@(id)"
+                        aria-label="@label Audio Filter"
+                        title="Open the Audio Filter dialog for @label's current mode (LCUT FREQ, LCUT SLOPE, HCUT FREQ, HCUT SLOPE)"
+                        onclick="window.audioFilter && window.audioFilter.open('@id')">
+                    Audio Filter
+                </button>
+                <label class="ywc-vfo-label" for="ifShiftSlider@(id)">IF Shift <span id="ifShiftValue@(id)" class="ywc-vfo-val">@Model.IfShift</span></label>
+                <input type="range" class="ywc-range ifshift-slider ywc-vfo-slider-sm"
+                       id="ifShiftSlider@(id)"
+                       aria-label="@label IF shift" title="@label IF shift"
+                       min="-1000" max="1000" step="20" value="@Model.IfShift"
+                       oninput="document.getElementById('ifShiftValue@(id)').textContent = this.value; var _p=window['@scopePanel']; if(_p) _p.setState({ifShiftHz: parseInt(this.value)||0})">
+                <button type="button" class="ywc-btn ywc-btn-sm ywc-btn-secondary"
+                        onclick="resetIfShift('@id')" title="Zero IF Shift">Zero</button>
+            </div>
+
+            <div id="@Model.StatusLineId"
+                 class="ywc-vfo-status @Model.StatusCss"
+                 aria-live="polite" aria-atomic="true">—</div>
+        </div>
+    </div>
+</div>

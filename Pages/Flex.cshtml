@@ -1,0 +1,68 @@
+@page "/Flex"
+@model Yaesu_Web_Control.Pages.FlexModel
+@{
+    Layout = "_FlexLayout";
+    ViewData["Title"] = "Flex Workspace";
+    ViewData["BodyRole"]  = "application";
+    ViewData["BodyLabel"] = "Yaesu radio flex workspace";
+}
+
+<div id="initOverlay" class="init-overlay ywc-overlay">
+    <div class="init-message">
+        <span id="initStatusText">Initializing radio, please wait...</span>
+    </div>
+</div>
+
+<dialog class="ywc-modal" id="messageBoxModal" aria-labelledby="messageBoxTitle">
+    <div class="ywc-modal-dialog">
+        <div class="ywc-modal-content">
+            <div class="ywc-modal-header">
+                <h6 id="messageBoxTitle">Warning</h6>
+            </div>
+            <div class="ywc-modal-body">
+                <p id="messageBoxText"></p>
+            </div>
+            <div class="ywc-modal-footer">
+                <button type="button" class="ywc-btn ywc-btn-danger ywc-btn-sm" id="messageBoxOkBtn">OK</button>
+            </div>
+        </div>
+    </div>
+</dialog>
+<script>
+document.getElementById('messageBoxOkBtn')?.addEventListener('click', () => {
+    window.bootstrap?.Modal?.getInstance?.(document.getElementById('messageBoxModal'))?.hide()
+        || document.getElementById('messageBoxModal')?.close?.();
+});
+</script>
+
+<div id="vfoRow" data-radio-model="@Model.RadioModel" data-single-receiver="@(Model.View.IsSingleReceiver ? "true" : "false")" hidden aria-hidden="true"></div>
+
+@await Html.PartialAsync("FlexPartials/_FlexToolbar")
+
+<div id="ywcFlexHost" class="ywc-flex-host"></div>
+
+<div id="ywcPanelTemplates" hidden aria-hidden="true">
+    <template id="tpl-meters">@await Html.PartialAsync("FlexPartials/_Meters")</template>
+    <template id="tpl-controls">@await Html.PartialAsync("FlexPartials/_Controls")</template>
+    <template id="tpl-remote-audio">@await Html.PartialAsync("FlexPartials/_RemoteAudio")</template>
+    <template id="tpl-spectrum-a">@await Html.PartialAsync("FlexPartials/_SpectrumA")</template>
+    <template id="tpl-spectrum-b">@await Html.PartialAsync("FlexPartials/_SpectrumB")</template>
+    <template id="tpl-vfo-a">@await Html.PartialAsync("FlexPartials/_Vfo", FlexVfoPanelModel.A(Model))</template>
+    <template id="tpl-vfo-b">@await Html.PartialAsync("FlexPartials/_Vfo", FlexVfoPanelModel.B(Model))</template>
+    <template id="tpl-clarifier">@await Html.PartialAsync("FlexPartials/_Clarifier")</template>
+    <template id="tpl-empty"><div></div></template>
+</div>
+
+@await Html.PartialAsync("FlexPartials/_FlexDialogs")
+
+@section Scripts {
+<script>
+window.ywcFlexFlags = {
+  remoteAudio: true,
+  spectrumA: @Model.IsWindowsHost.ToString().ToLower(),
+  spectrumB: @Model.IsWindowsHost.ToString().ToLower(),
+  vfoB: true
+};
+</script>
+@await Html.PartialAsync("FlexPartials/_FlexScripts")
+}
