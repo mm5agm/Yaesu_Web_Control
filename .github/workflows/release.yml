@@ -267,3 +267,71 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # The three build jobs above are independent on purpose — no `needs:` between
+  # them, so they run in parallel and a release is not held up by the slowest.
+  # The cost of that is nobody notices when one of them does not finish: the
+  # release event fires when the tag is created, each job uploads its own assets
+  # to a release that already exists, and if one never gets there the tag simply
+  # ends up short an asset. The release page looks finished. That is exactly what
+  # a stalled build-macos produced on 2026-08-13 — installer and image present,
+  # both DMGs missing, nothing red for six hours.
+  #
+  # This job is the only thing that actually checks. It runs last and in parallel
+  # with nothing, so it costs the release no wall-clock time.
+  verify-release-assets:
+    # always() matters: without it a failed or cancelled `needs` would SKIP this
+    # job, so the check would go silent in precisely the case it exists for.
+    # The event guard stays inside the same expression — a dispatch or a PR has
+    # no release to inspect.
+    if: ${{ always() && github.event_name == 'release' }}
+    needs: [build-windows, build-macos, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check every build job succeeded
+        run: |
+          fail=0
+          for pair in "build-windows:${{ needs.build-windows.result }}" \
+                      "build-macos:${{ needs.build-macos.result }}" \
+                      "build-docker:${{ needs.build-docker.result }}"; do
+            name="${pair%%:*}"; result="${pair##*:}"
+            if [ "$result" = "success" ]; then
+              echo "OK       $name"
+            else
+              echo "::error::$name did not succeed (result: $result)"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Check the release carries every expected asset
+        # always() again, so a failed job above does not hide which assets are
+        # actually missing — both answers are more useful than either alone.
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          names="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          echo "Assets on $tag:"
+          echo "$names" | sed 's/^/  /'
+          echo
+          fail=0
+          # Matched on a suffix rather than a full filename: the DMGs carry
+          # AppVersion.Current (2.4.3), which is deliberately NOT the tag on a
+          # pre-release (v2.4.3-pre6), so building the name from the tag would
+          # fail every pre-release for the wrong reason.
+          for want in 'Yaesu_Web_Control_Setup.exe' 'macos-arm64.dmg' 'macos-x64.dmg'; do
+            if printf '%s\n' "$names" | grep -q -- "$want"; then
+              echo "OK       $want"
+            else
+              echo "::error::missing from release $tag: $want"
+              fail=1
+            fi
+          done
+          # The Docker image is not a release asset — it goes to GHCR — so it is
+          # covered by build-docker's job result in the step above, not here.
+          exit $fail
