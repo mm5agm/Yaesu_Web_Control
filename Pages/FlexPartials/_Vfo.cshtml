@@ -54,17 +54,6 @@
             </div>
 
             <div class="ywc-vfo-controls-group">
-                <div class="ywc-vfo-mem">
-                    <button id="saveMemBtn@(id)" type="button"
-                            class="ywc-btn ywc-btn-sm ywc-btn-outline"
-                            onclick="saveVfoToMemory('@id')"
-                            aria-label="Save @label to memories"
-                            title="Save @label frequency, mode and clarifier to app memories">
-                        Save to Mem
-                    </button>
-                    <span id="saveMemStatus@(id)" class="visually-hidden" role="status" aria-live="polite"></span>
-                </div>
-
                 <div class="ywc-vfo-bands">
                     @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", id, Model.SelectedBand))
                     @if (Model.ShowQmb)
@@ -160,9 +149,21 @@
                 </div>
                 }
 
-                <div class="ywc-vfo-scope" id="filterScopeContainer@(id)">
-                    <canvas id="filterScopeCanvas@(id)" role="img" aria-hidden="true"
-                            aria-label="@label filter display" data-a11y-key="@Model.FilterScopeA11yKey"></canvas>
+                <div class="ywc-vfo-scope-col">
+                    <div class="ywc-vfo-scope" id="filterScopeContainer@(id)">
+                        <canvas id="filterScopeCanvas@(id)" role="img" aria-hidden="true"
+                                aria-label="@label filter display" data-a11y-key="@Model.FilterScopeA11yKey"></canvas>
+                    </div>
+                    <div class="ywc-vfo-mem">
+                        <button id="saveMemBtn@(id)" type="button"
+                                class="ywc-btn ywc-btn-sm ywc-btn-outline"
+                                onclick="saveVfoToMemory('@id')"
+                                aria-label="Save @label to memories"
+                                title="Save @label frequency, mode and clarifier to app memories">
+                            Save to Mem
+                        </button>
+                        <span id="saveMemStatus@(id)" class="visually-hidden" role="status" aria-live="polite"></span>
+                    </div>
                 </div>
 
                 <div class="vfo-controls-column ywc-vfo-grid">

@@ -1,5 +1,5 @@
-import { createTemplateElement } from '/js/flex/template-panel.js?v=2';
-import { installDomShim, dispatchPanelResize } from '/js/flex/dom-shim.js?v=2';
+import { createTemplateElement } from '/js/flex/template-panel.js?v=3';
+import { installDomShim, dispatchPanelResize } from '/js/flex/dom-shim.js?v=3';
 import { installBootstrapShim } from '/js/flex/bootstrap-shim.js?v=1';
 
 export { installBootstrapShim };

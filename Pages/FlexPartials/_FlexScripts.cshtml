@@ -20,9 +20,10 @@
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
         import { initRemoteAudioFlex }    from "/js/audio/remote-audio-flex-ui.js?v=2";
-        import { initFlexWorkspace, installBootstrapShim } from "/js/flex/flex-layout.js?v=2";
-        import { initMetersFit } from "/js/flex/meters-fit.js?v=1";
-        import { initVfoFit } from "/js/flex/vfo-fit.js?v=2";
+        import { initFlexWorkspace, installBootstrapShim } from "/js/flex/flex-layout.js?v=3";
+        import { initMetersFit } from "/js/flex/meters-fit.js?v=2";
+        import { initVfoFit } from "/js/flex/vfo-fit.js?v=3";
+        import { initWidgetFit } from "/js/flex/widget-fit.js?v=1";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -36,12 +37,18 @@
 
         installBootstrapShim();
         window.ywcVfoFit = initVfoFit();
+        window.ywcWidgetFit = initWidgetFit();
+        window.ywcMetersFit = initMetersFit();
         initFlexWorkspace(document.getElementById('ywcFlexHost'), window.ywcFlexFlags);
         // TX / split chrome targets VFO panel DOM — refresh after templates mount.
         if (typeof window.updateTxButton === 'function') window.updateTxButton();
         if (typeof window.updateSplitButton === 'function') window.updateSplitButton();
         if (typeof window.applyVfoActiveStyling === 'function') window.applyVfoActiveStyling();
-        requestAnimationFrame(() => window.ywcVfoFit?.refit());
+        requestAnimationFrame(() => {
+            window.ywcVfoFit?.refit();
+            window.ywcWidgetFit?.refit();
+            window.ywcMetersFit?.refit();
+        });
 
         // bfcache guard.
         // back/forward cache (e.g. returning from Meter Calibration via the
@@ -98,30 +105,18 @@
                 vdd:         { canvasId: 'vddMeterCanvas' }
             });
             window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine);
-            window.ywcMetersFit = initMetersFit();
-            window.ywcVfoFit = initVfoFit();
-            if (!window.ywcMetersFit || !window.ywcVfoFit) {
-                // Flex panel content can lag one frame behind DOMContentLoaded.
-                requestAnimationFrame(() => {
-                    if (!window.ywcMetersFit) {
-                        window.ywcMetersFit = initMetersFit();
-                        window.ywcMetersFit?.refit();
-                    }
-                    if (!window.ywcVfoFit) {
-                        window.ywcVfoFit = initVfoFit();
-                        window.ywcVfoFit?.refit();
-                    }
-                });
-            }
-            if (window.ywcMetersFit) {
-                // Refit after gauges finish their first canvas layout.
-                setTimeout(() => window.ywcMetersFit?.refit(), 0);
-                setTimeout(() => window.ywcMetersFit?.refit(), 100);
-            }
-            if (window.ywcVfoFit) {
-                setTimeout(() => window.ywcVfoFit?.refit(), 0);
-                setTimeout(() => window.ywcVfoFit?.refit(), 100);
-            }
+            // Fitters are started at module load; gauges paint just after first
+            // canvas layout so refit once they have a size.
+            setTimeout(() => {
+                window.ywcMetersFit?.refit();
+                window.ywcVfoFit?.refit();
+                window.ywcWidgetFit?.refit();
+            }, 0);
+            setTimeout(() => {
+                window.ywcMetersFit?.refit();
+                window.ywcVfoFit?.refit();
+                window.ywcWidgetFit?.refit();
+            }, 100);
 
             // ── S-meter history strips ───────────────────────────────────────
             // Hidden by default. Toggle via the "S-hist" button in the top

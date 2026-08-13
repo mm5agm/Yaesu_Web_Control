@@ -328,7 +328,18 @@ html, body.ywc-flex-body {
     min-width: 0;
 }
 
+.ywc-vfo-scope-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    flex: 0 0 auto;
+    width: 160px;
+}
+
 .ywc-vfo-mem { flex: 0 0 auto; }
+
+.ywc-vfo-scope-col .ywc-vfo-mem .ywc-btn { width: 100%; }
 
 .ywc-vfo-bands {
     display: flex;
@@ -377,7 +388,7 @@ html, body.ywc-flex-body {
 
 .ywc-vfo-scope {
     flex: 0 0 auto;
-    width: 160px;
+    width: 100%;
 }
 
 .ywc-vfo-scope canvas {
@@ -530,6 +541,9 @@ html, body.ywc-flex-body {
 
 /* Meters panel (Dock tab) — gauges only */
 .ywc-meters {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     flex: 1 1 auto;
     min-height: 0;
     min-width: 0;
@@ -546,6 +560,9 @@ html, body.ywc-flex-body {
     /* Extra top padding: gauge arc labels sit near/above the canvas top edge. */
     padding: 0.85rem 0.35rem 0.35rem;
     box-sizing: content-box;
+    flex: 0 0 auto;
+    align-self: flex-start;
+    overflow: visible;
     transform-origin: top left;
     will-change: transform;
 }
@@ -587,6 +604,9 @@ html, body.ywc-flex-body {
 .ywc-clarifier,
 .ywc-remote-audio,
 .ywc-vfo {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     flex: 1 1 auto;
     min-height: 0;
     min-width: 0;
@@ -602,10 +622,15 @@ html, body.ywc-flex-body {
     flex-direction: column;
     gap: 0.35rem;
     padding: 0.35rem 0.25rem;
+    flex: 0 0 auto;
+    width: max-content;
+    height: auto;
     min-height: 0;
-    height: 100%;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible;
+    transform-origin: top left;
+    will-change: transform;
+    align-self: flex-start;
 }
 
 .ywc-controls-toolbar {
@@ -653,10 +678,15 @@ html, body.ywc-flex-body {
     flex-direction: column;
     gap: 0.35rem;
     padding: 0.35rem 0.25rem;
+    flex: 0 0 auto;
+    width: max-content;
+    height: auto;
     min-height: 0;
-    height: 100%;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible;
+    transform-origin: top left;
+    will-change: transform;
+    align-self: flex-start;
 }
 
 .ywc-clarifier-toolbar {
@@ -762,10 +792,15 @@ html, body.ywc-flex-body {
     flex-direction: column;
     gap: 0.65rem;
     padding: 0.35rem 0.25rem;
+    flex: 0 0 auto;
+    width: max-content;
+    height: auto;
     min-height: 0;
-    height: 100%;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible;
+    transform-origin: top left;
+    will-change: transform;
+    align-self: flex-start;
 }
 
 .ywc-remote-audio-toolbar {
