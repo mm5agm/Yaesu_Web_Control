@@ -3047,6 +3047,9 @@ See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial
 | High CPU on Pi | Lower Max width / FPS / JPEG quality; confirm the dongle is not encoding full 1080p without downscale. |
 | Device list empty (Linux) | Check `/dev/video*`, `video` group, Docker `devices:` / `group_add`. |
 | Could not open capture device index N (Docker) | That index is listed from sysfs but `/dev/videoN` is not in the container, or it is a metadata/codec node. Map `video0` **and** `video1`, set `YWC_VIDEO_GID` (`getent group video`, often 44), and select the capture node (usually video0). |
+| Device list empty (macOS) | Launch via the `.app` / `scripts/macos/run-dev.sh` (not bare `dotnet run`), then allow **Camera** for Yaesu Web Control. |
+| `Could not open capture device` on Intel Mac | OpenCvSharp’s `osx-x64` native library needs Homebrew **libavif**. Run `brew install libavif`, restart YWC, pick the device again. (Apple Silicon builds do not need this.) |
+| Stream stays black / FPS stays 0 after allowing Camera | Quit YWC fully and relaunch via `scripts/macos/run-dev.sh` (or the DMG). The first permission grant must complete before OpenCV can deliver frames; also confirm the HDMI cable is live into the USB capture dongle. |
 | Host app exits when stopping / popping out the stream | USB HDMI dongles crash if the capture graph is closed and immediately reopened. Use a current build — pop-out hands off the live device; Close waits ~2 s before release. |
 
 OCR, click-through of the captured UI, capture-device audio, and WebRTC are **not** in this version.

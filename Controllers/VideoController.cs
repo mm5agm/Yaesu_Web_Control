@@ -57,9 +57,29 @@ namespace Yaesu_Web_Control.Controllers
                         "Radio Display: DirectShow friendly names empty (CreateClassEnumerator hr={Hr})",
                         WindowsDshowDevices.LastCreateClassEnumeratorHr);
                 }
-                var notes = OperatingSystem.IsLinux()
-                    ? "Linux: devices from /sys/class/video4linux. Map /dev/video* into Docker and add the video group."
-                    : "Select a USB webcam or HDMI capture dongle. Indexes can shift when devices are replugged.";
+                string notes;
+                if (OperatingSystem.IsLinux())
+                {
+                    notes = "Linux: devices from /sys/class/video4linux. Map /dev/video* into Docker and add the video group.";
+                }
+                else if (OperatingSystem.IsMacOS() && devices.Count == 0)
+                {
+                    notes =
+                        "macOS: no cameras visible (Camera permission denied or missing). " +
+                        "Use scripts/macos/run-dev.sh or the DMG .app (not bare `dotnet run` / `make run`), " +
+                        "then allow Camera under System Settings → Privacy & Security → Camera → Yaesu Web Control, and refresh. " +
+                        "On Intel Macs also install Homebrew libavif (`brew install libavif`) — OpenCvSharp’s x64 native library links it.";
+                }
+                else if (OperatingSystem.IsMacOS())
+                {
+                    notes =
+                        "Select a USB webcam or HDMI capture dongle. Indexes can shift when devices are replugged. " +
+                        "If open fails on Intel Mac with a libavif error, run: brew install libavif";
+                }
+                else
+                {
+                    notes = "Select a USB webcam or HDMI capture dongle. Indexes can shift when devices are replugged.";
+                }
                 return Ok(new { devices = payload, notes });
             }
             catch (Exception ex)
