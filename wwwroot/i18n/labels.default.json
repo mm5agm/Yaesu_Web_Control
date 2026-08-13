@@ -96,6 +96,8 @@
     "manualNotchA": "Manual notch, VFO A",
     "manualNotchB": "Manual notch, VFO B",
     "roofingA":     "Roofing filter, VFO A",
-    "roofingB":     "Roofing filter, VFO B"
+    "roofingB":     "Roofing filter, VFO B",
+    "atu":          "Antenna tuner on or off — tap to toggle, press and hold to auto-tune",
+    "atuTune":      "Start antenna auto-tune"
   }
 }
