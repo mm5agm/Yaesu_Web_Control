@@ -20,8 +20,9 @@
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
         import { initRemoteAudioDock }    from "/js/audio/remote-audio-dock-ui.js?v=1";
-        import { initDockWorkspace, installBootstrapShim } from "/js/ui/dock-layout.js?v=6";
+        import { initDockWorkspace, installBootstrapShim } from "/js/ui/dock-layout.js?v=12";
         import { initMetersFit } from "/js/dock/meters-fit.js?v=3";
+        import { initVfoFit } from "/js/dock/vfo-fit.js?v=2";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -39,6 +40,8 @@
         if (typeof window.updateTxButton === 'function') window.updateTxButton();
         if (typeof window.updateSplitButton === 'function') window.updateSplitButton();
         if (typeof window.applyVfoActiveStyling === 'function') window.applyVfoActiveStyling();
+        window.ywcVfoFit = initVfoFit();
+        requestAnimationFrame(() => window.ywcVfoFit?.refit());
 
         // bfcache guard.
         // back/forward cache (e.g. returning from Meter Calibration via the
@@ -96,16 +99,28 @@
             });
             window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine);
             window.ywcMetersFit = initMetersFit();
-            if (!window.ywcMetersFit) {
+            window.ywcVfoFit = initVfoFit();
+            if (!window.ywcMetersFit || !window.ywcVfoFit) {
                 // Dock panel content can lag one frame behind DOMContentLoaded.
                 requestAnimationFrame(() => {
-                    window.ywcMetersFit = initMetersFit();
-                    window.ywcMetersFit?.refit();
+                    if (!window.ywcMetersFit) {
+                        window.ywcMetersFit = initMetersFit();
+                        window.ywcMetersFit?.refit();
+                    }
+                    if (!window.ywcVfoFit) {
+                        window.ywcVfoFit = initVfoFit();
+                        window.ywcVfoFit?.refit();
+                    }
                 });
-            } else {
+            }
+            if (window.ywcMetersFit) {
                 // Refit after gauges finish their first canvas layout.
                 setTimeout(() => window.ywcMetersFit?.refit(), 0);
                 setTimeout(() => window.ywcMetersFit?.refit(), 100);
+            }
+            if (window.ywcVfoFit) {
+                setTimeout(() => window.ywcVfoFit?.refit(), 0);
+                setTimeout(() => window.ywcVfoFit?.refit(), 100);
             }
 
             // ── S-meter history strips ───────────────────────────────────────

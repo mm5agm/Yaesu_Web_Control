@@ -42,4 +42,5 @@ export function dispatchPanelResize() {
         } catch { /* ignore */ }
     }
     try { window.ywcMetersFit?.refit(); } catch { /* ignore */ }
+    try { window.ywcVfoFit?.refit(); } catch { /* ignore */ }
 }

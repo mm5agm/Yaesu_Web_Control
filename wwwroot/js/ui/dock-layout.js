@@ -2,7 +2,10 @@ import { TemplatePanel } from '/js/dock/template-panel.js?v=4';
 import { GroupPopoutAction } from '/js/dock/group-popout-action.js?v=1';
 import { installDomShim, dispatchPanelResize } from '/js/dock/dom-shim.js';
 
-const LAYOUT_KEY = 'ywc.dockLayout.v4';
+const LAYOUT_KEY = 'ywc.dockLayout.v9';
+/** Meters row height as a fraction of the dock host (Dockview only accepts px). */
+const METERS_ROW_FRAC = 0.22;
+const METERS_ROW_MIN_PX = 100;
 
 /** @typedef {import('dockview').DockviewApi} DockviewApi */
 
@@ -43,7 +46,7 @@ export function initDockWorkspace(host, flags) {
     }
 
     if (!restored) {
-        buildDefaultLayout(api, panelDefs);
+        buildDefaultLayout(api, panelDefs, host);
     }
 
     api.onDidLayoutChange(() => {
@@ -71,7 +74,7 @@ export function initDockWorkspace(host, flags) {
         resetLayout() {
             localStorage.removeItem(LAYOUT_KEY);
             api.clear();
-            buildDefaultLayout(api, panelDefs);
+            buildDefaultLayout(api, panelDefs, host);
             dispatchPanelResize();
         },
         showPanel(id) {
@@ -87,10 +90,28 @@ export function initDockWorkspace(host, flags) {
                 opts.position = { referencePanel: 'spectrumA', direction: 'right' };
             } else if (id === 'vfoB') {
                 opts.position = { referencePanel: 'vfoA', direction: 'right' };
-            } else if (id === 'controls' && api.getPanel('meters')) {
-                opts.position = { referencePanel: 'meters', direction: 'right' };
-            } else if (id === 'clarifier' && api.getPanel('remoteAudio')) {
-                opts.position = { referencePanel: 'remoteAudio', direction: 'within' };
+            } else if (id === 'controls') {
+                if (api.getPanel('remoteAudio')) {
+                    opts.position = { referencePanel: 'remoteAudio', direction: 'left' };
+                } else if (api.getPanel('clarifier')) {
+                    opts.position = { referencePanel: 'clarifier', direction: 'left' };
+                } else if (api.getPanel('vfoB')) {
+                    opts.position = { referencePanel: 'vfoB', direction: 'below' };
+                } else if (api.getPanel('vfoA')) {
+                    opts.position = { referencePanel: 'vfoA', direction: 'below' };
+                }
+            } else if (id === 'clarifier') {
+                if (api.getPanel('remoteAudio')) {
+                    opts.position = { referencePanel: 'remoteAudio', direction: 'right' };
+                } else if (api.getPanel('controls')) {
+                    opts.position = { referencePanel: 'controls', direction: 'right' };
+                }
+            } else if (id === 'remoteAudio') {
+                if (api.getPanel('controls')) {
+                    opts.position = { referencePanel: 'controls', direction: 'right' };
+                } else if (api.getPanel('clarifier')) {
+                    opts.position = { referencePanel: 'clarifier', direction: 'left' };
+                }
             }
             api.addPanel(opts);
             dispatchPanelResize();
@@ -141,7 +162,30 @@ function panelDef(id, title, templateId) {
     };
 }
 
-function buildDefaultLayout(api, defs) {
+/** Dockview only accepts px — derive from host height so it tracks resolution. */
+function metersRowHeightPx(host) {
+    const h = host?.clientHeight || window.innerHeight || 800;
+    return Math.max(METERS_ROW_MIN_PX, Math.round(h * METERS_ROW_FRAC));
+}
+
+/**
+ * initialHeight on addPanel is swallowed when later panels split the grid.
+ * Force the meters group size after the full default tree exists.
+ * @param {DockviewApi} api
+ * @param {HTMLElement} host
+ */
+function applyMetersRowHeight(api, host) {
+    const panel = api.getPanel('meters');
+    if (!panel?.api?.setSize) return;
+    panel.api.setSize({ height: metersRowHeightPx(host) });
+}
+
+/**
+ * @param {DockviewApi} api
+ * @param {Array<{id:string, options:object}>} defs
+ * @param {HTMLElement} host
+ */
+function buildDefaultLayout(api, defs, host) {
     const map = new Map(defs.map((d) => [d.id, d]));
     const add = (id, position) => {
         if (!map.has(id)) return;
@@ -150,13 +194,12 @@ function buildDefaultLayout(api, defs) {
         api.addPanel(opts);
     };
 
-    // Meters | Controls side by side across the top row.
+    // Meters across the top row.
     add('meters');
-    add('controls', { referencePanel: 'meters', direction: 'right' });
 
     // Everything under that row must use the dock edge (`direction: 'below'`
-    // with no reference) so it spans the full width of meters|controls,
-    // not only one column.
+    // with no reference) so it spans the full width of meters, not only one
+    // column. VFOs sit above the utility row (Controls | Remote Audio | Clarifier).
     if (map.has('remoteAudio')) {
         add('remoteAudio', { direction: 'below' });
         add('vfoA', { referencePanel: 'remoteAudio', direction: 'above' });
@@ -165,16 +208,18 @@ function buildDefaultLayout(api, defs) {
     }
     add('vfoB', { referencePanel: 'vfoA', direction: 'right' });
 
-    if (map.has('remoteAudio') && map.has('clarifier')) {
-        add('clarifier', { referencePanel: 'remoteAudio', direction: 'within' });
-    } else if (map.has('clarifier')) {
-        add('clarifier', {
+    if (map.has('remoteAudio')) {
+        add('controls', { referencePanel: 'remoteAudio', direction: 'left' });
+        add('clarifier', { referencePanel: 'remoteAudio', direction: 'right' });
+    } else {
+        add('controls', {
             referencePanel: map.has('vfoB') ? 'vfoB' : 'vfoA',
             direction: 'below',
         });
+        add('clarifier', { referencePanel: 'controls', direction: 'right' });
     }
 
-    let below = map.has('remoteAudio') ? 'remoteAudio' : (map.has('vfoB') ? 'vfoB' : 'vfoA');
+    let below = map.has('remoteAudio') ? 'remoteAudio' : 'controls';
 
     if (map.has('spectrumA')) {
         add('spectrumA', { referencePanel: below, direction: 'below' });
@@ -183,6 +228,10 @@ function buildDefaultLayout(api, defs) {
     if (map.has('spectrumB')) {
         add('spectrumB', { referencePanel: 'spectrumA', direction: 'right' });
     }
+
+    // Must run after all splits — otherwise Dockview redistributes and
+    // initialHeight on meters alone has no lasting effect.
+    applyMetersRowHeight(api, host);
 }
 
 function wireToolbar(api, defs) {

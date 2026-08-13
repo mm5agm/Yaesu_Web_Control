@@ -272,16 +272,23 @@ html, body.ywc-dock-body {
     border: 1px solid var(--ywc-border);
     border-radius: 4px;
     background: var(--ywc-surface);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 
 .ywc-vfo-inner {
     display: flex;
     flex-direction: column;
     gap: 0;
+    flex: 0 0 auto;
+    width: max-content;
+    height: auto;
     min-height: 0;
-    height: 100%;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible;
+    transform-origin: top left;
+    will-change: transform;
 }
 
 .ywc-vfo-body {
@@ -289,9 +296,9 @@ html, body.ywc-dock-body {
     flex-direction: column;
     gap: 0.35rem;
     padding: 0.35rem;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .ywc-vfo-a.vfo-active,
