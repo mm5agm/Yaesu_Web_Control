@@ -43,7 +43,7 @@ namespace Yaesu_Web_Control.Services.Video
 
                 if (OperatingSystem.IsWindows())
                 {
-                    var named = FromFriendlyNames(WindowsDshowDevices.ListFriendlyNames());
+                    var named = FromFriendlyNames(ReadWindowsFriendlyNames());
                     if (named.Count > 0)
                     {
                         lock (CacheLock)
@@ -98,12 +98,92 @@ namespace Yaesu_Web_Control.Services.Video
         /// </summary>
         private static List<VideoDeviceInfo> EnumerateWindows()
         {
-            var names = WindowsDshowDevices.ListFriendlyNames();
+            var names = ReadWindowsFriendlyNames();
             if (names.Count == 0)
                 return ProbeIndices(VideoCaptureAPIs.DSHOW, ReadEmptyNames());
 
             var probed = ProbeNamedIndices(VideoCaptureAPIs.DSHOW, names);
             return MergeUnprobedNames(probed, names);
+        }
+
+        /// <summary>
+        /// DirectShow COM first (STA), then ffmpeg <c>-f dshow -list_devices</c>
+        /// if COM returned no monikers — same index space as OpenCV CAP_DSHOW.
+        /// </summary>
+        private static IReadOnlyDictionary<int, string> ReadWindowsFriendlyNames()
+        {
+            var names = WindowsDshowDevices.ListFriendlyNames();
+            if (names.Count > 0)
+                return names;
+            return ReadFfmpegDshowNames();
+        }
+
+        /// <summary>
+        /// Parse <c>ffmpeg -f dshow -list_devices</c> video lines:
+        /// <c>"USB Video"</c>. Indices match OpenCV DirectShow order.
+        /// </summary>
+        private static IReadOnlyDictionary<int, string> ReadFfmpegDshowNames()
+        {
+            var ffmpeg = FindOnPath("ffmpeg.exe") ?? FindOnPath("ffmpeg");
+            if (ffmpeg is null)
+                return ReadEmptyNames();
+
+            try
+            {
+                using var proc = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = ffmpeg,
+                        ArgumentList = { "-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy" },
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                proc.Start();
+                var stderr = proc.StandardError.ReadToEnd();
+                _ = proc.StandardOutput.ReadToEnd();
+                if (!proc.WaitForExit(6000))
+                {
+                    try { proc.Kill(entireProcessTree: true); } catch { /* ignore */ }
+                    return ReadEmptyNames();
+                }
+
+                var map = new Dictionary<int, string>();
+                var inVideo = false;
+                var index = 0;
+                foreach (var raw in stderr.Split('\n'))
+                {
+                    var line = raw.Trim();
+                    if (line.Contains("DirectShow video devices", StringComparison.OrdinalIgnoreCase))
+                    {
+                        inVideo = true;
+                        continue;
+                    }
+                    if (line.Contains("DirectShow audio devices", StringComparison.OrdinalIgnoreCase))
+                        break;
+                    if (!inVideo)
+                        continue;
+                    if (line.Contains("Alternative name", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var m = Regex.Match(line, "\"([^\"]+)\"");
+                    if (!m.Success)
+                        continue;
+                    var name = m.Groups[1].Value.Trim();
+                    if (name.Length == 0)
+                        continue;
+                    map[index++] = name;
+                }
+
+                return map;
+            }
+            catch
+            {
+                return ReadEmptyNames();
+            }
         }
 
         private static List<VideoDeviceInfo> FromFriendlyNames(IReadOnlyDictionary<int, string> names)
@@ -428,11 +508,13 @@ namespace Yaesu_Web_Control.Services.Video
                 }
             }
 
-            // Common Homebrew locations when PATH is minimal (launchd / tray apps).
+            // Common locations when PATH is minimal (launchd / tray / Windows).
             foreach (var candidate in new[]
                      {
                          "/opt/homebrew/bin/ffmpeg",
-                         "/usr/local/bin/ffmpeg"
+                         "/usr/local/bin/ffmpeg",
+                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ffmpeg", "bin", "ffmpeg.exe"),
+                         @"C:\ffmpeg\bin\ffmpeg.exe"
                      })
             {
                 if (File.Exists(candidate))

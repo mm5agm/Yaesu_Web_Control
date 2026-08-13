@@ -153,6 +153,10 @@ export class RadioDisplayPanel {
 
   clearStream() {
     if (!this._img) return;
+    this._img.onload = null;
+    this._img.onerror = null;
+    this._img.onstalled = null;
+    this._img.onabort = null;
     this._img.removeAttribute('src');
   }
 
