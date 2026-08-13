@@ -1,0 +1,11 @@
+# Build output. Note this file also applies inside the consuming applications,
+# which pull this repository in as a git subtree at core/ — so core/bin and
+# core/obj are ignored there without either app's .gitignore mentioning them.
+bin/
+obj/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+*.user
+*.suo
