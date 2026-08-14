@@ -187,3 +187,7 @@ plan.txt
 
 # Local Docker volume (docker-compose default)
 data/
+
+# Generated at build time from the Radio_Web_Control_Core subtree (core/js is
+# the single source of truth). See core/js/README.md.
+/wwwroot/js/calibration/calibration-engine.js
