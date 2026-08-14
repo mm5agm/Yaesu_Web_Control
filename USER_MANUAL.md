@@ -742,6 +742,8 @@ Click the button to toggle the connection. While connecting, it briefly shows "C
 - **Short tap** toggles the ATU between **ATU On** (green) and **ATU Off** (grey). On = the tuner network is engaged in the signal path; Off = bypassed.
 - **Long press (≥500 ms)** starts the radio's auto-tune cycle. The button turns red and shows **Tuning…** while the radio searches for a low-SWR match — typically 2-7 seconds. When tuning completes the button returns to **ATU On** automatically. Tap the red button during a running tune to stop it early. **Because the tune cycle didn't complete, the ATU is left bypassed (Off)** — the radio doesn't retain partial tuning data, so to find a match you'd need to long-press again for a fresh cycle.
 
+**Tune button** — Next to the ATU button is a separate **Tune** button that starts the same auto-tune cycle with a single plain click. I added it because the long-press gesture on the ATU button isn't reachable by keyboard, screen reader, or voice — this button is. It has its own label and `aria-label` so a screen reader announces it, it takes keyboard focus in the normal tab order, and it's driven by the "tune antenna" voice command (see [§17.1](#171-what-you-can-say)). Click it and it turns red and reads **Stop** while a cycle runs; click the red **Stop** to cancel the cycle early, exactly as tapping the red ATU button does. Because the Yaesu `AC` command reports its tuning field as a fixed value, the radio never tells the app when a cycle has finished on its own — so the Stop state is timed on the app's side and clears itself shortly after a normal cycle would have completed.
+
 On single-receiver radios (FTdx10, FT-710, FTDX3000) the radio firmware stores the ATU on/off state per VFO. Swapping the active VFO via the **A↔B** button updates YWC's ATU display to match whichever VFO is now active — even if the on/off settings differ between the two. The radio has only one physical tuner, but it remembers per-VFO which setting to apply.
 
 Only applies to radios fitted with an internal or external ATU.
@@ -2741,6 +2743,7 @@ Every command below targets whichever VFO's mic button you're holding down — a
 | IF filter width | "filter wider" / "filter narrower" | Held VFO's IF (roofing) filter bandwidth nudges one step |
 | Transmit | "key transmitter" / "start transmitting"; "stop transmitting" / "go to receive" | Radio keys up / drops back to receive |
 | Split | "split on" / "enable split"; "split off" / "simplex" | Split operation toggles |
+| Antenna tuner | "tuner on" / "tuner off"; "tune antenna" | "tuner on"/"off" engages/bypasses the ATU; "tune antenna" starts the auto-tune cycle. There's deliberately no bare "tune" — that would collide with the "tune up" / "tune down" step commands above |
 | Status read-back | "what frequency", "what mode", "what band" | YWC speaks the held VFO's current value out loud — no CAT command is sent to the radio |
 | Help | "help", "what can I say" | YWC speaks a short list of the available command categories |
 | Macros | "noise reduction on/off", "noise blanker on/off", "copy a to b" / "copy b to a", "fine step up/down", "roofing three/six/twelve kilohertz" | Runs the matching one-shot CAT command. See the Macros group in the phrase editor for the full list and their exact CAT strings |
@@ -2763,6 +2766,7 @@ A few notes on phrasing:
 - *"Mode U S B, successful"* — for SetMode.
 - *"Swap V F O, successful"* — for SwapVFO.
 - *"Tune up, successful"* / *"Tune down, successful"* — for nudge.
+- *"Antenna tuning"* — for "tune antenna". This one is a plain acknowledgement rather than a "successful"/"unsuccessful" verdict, because the radio doesn't report whether the tune cycle found a match.
 - If the command was rejected (e.g. frequency out of range), the suffix is *"unsuccessful"* instead.
 
 This is a primary accessibility feature: a partially-sighted operator can drive the radio without watching the screen and hear exactly what happened to each command. The confirmation also doubles as the safety net for misrecognition — if you said "tune to fourteen" but heard *"Move to forty megahertz, successful"*, the spoken readback tells you the engine misheard and you can issue the command again. Confirmations don't name the VFO — you already know which one from which mic button you were holding. Disable in **Settings → Voice Control → Speak confirmation after each voice command** if you find it chatty.
