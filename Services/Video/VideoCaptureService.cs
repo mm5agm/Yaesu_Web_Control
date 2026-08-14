@@ -1057,8 +1057,10 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         /// <summary>
-        /// Downscale a captured JPEG to <paramref name="maxWidth"/> with linear
-        /// resize (macOS encode path). Native ≤ maxWidth is copied as-is.
+        /// Apply panel JPEG quality (and optional max-width scale) to a
+        /// captured JPEG. MJPEG passthrough copies the dongle bitstream as-is,
+        /// so Low/Medium must re-encode or the quality toggle does nothing.
+        /// Max at native size keeps the hardware JPEG (sharpest, cheapest).
         /// </summary>
         private static bool TryDownscalePublishedJpeg(
             byte[] jpegIn,
@@ -1074,23 +1076,41 @@ namespace Yaesu_Web_Control.Services.Video
             jpegOut = jpegIn;
             outW = srcW;
             outH = srcH;
-            if (maxWidth <= 0 || srcW <= maxWidth)
+            var needScale = maxWidth > 0 && srcW > maxWidth;
+            var needRecompress = jpegQuality < VideoJpegQualityOptions.Max;
+            if (!needScale && !needRecompress)
                 return true;
 
             using var decoded = Cv2.ImDecode(jpegIn, ImreadModes.Color);
             if (decoded.Empty() || decoded.Width < 2 || decoded.Height < 2)
                 return true;
 
-            var newH = Math.Max(1, (int)Math.Round(decoded.Height * ((double)maxWidth / decoded.Width)));
-            Cv2.Resize(decoded, resizedScratch, new OpenCvSharp.Size(maxWidth, newH), 0, 0, InterpolationFlags.Linear);
+            Mat source = decoded;
+            if (needScale)
+            {
+                var newH = Math.Max(1, (int)Math.Round(decoded.Height * ((double)maxWidth / decoded.Width)));
+                Cv2.Resize(decoded, resizedScratch, new OpenCvSharp.Size(maxWidth, newH), 0, 0, InterpolationFlags.Linear);
+                source = resizedScratch;
+                outW = maxWidth;
+                outH = newH;
+            }
+            else
+            {
+                outW = decoded.Width;
+                outH = decoded.Height;
+            }
+
             var encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
-            var encoded = resizedScratch.ImEncode(".jpg", encodeParams);
+            var encoded = source.ImEncode(".jpg", encodeParams);
             if (encoded is null || encoded.Length < 100)
+            {
+                jpegOut = jpegIn;
+                outW = srcW;
+                outH = srcH;
                 return true;
+            }
 
             jpegOut = encoded;
-            outW = maxWidth;
-            outH = newH;
             return true;
         }
 

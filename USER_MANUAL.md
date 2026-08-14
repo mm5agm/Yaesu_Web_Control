@@ -2990,7 +2990,7 @@ Radio DVI-D / HDMI video output
         Web browser (Index panel or /RadioDisplay pop-out)
 ```
 
-Typical radio panel resolutions are modest (e.g. FTDX-10 **800×480** or **800×600**). Many cheap capture sticks still open at **720p/1080p** with letterboxing — leave **Max width** at **800** so the host downscales before JPEG encode (important on a Raspberry Pi).
+Typical radio panel resolutions are modest (e.g. FTDX-10 **800×480** or **800×600**). Many cheap capture sticks still open at **720p/1080p** with letterboxing — leave **Max width** at **800** so the host downscales before JPEG encode (important on a Raspberry Pi). On Windows and macOS the host picks **one** capture size for **15 / 30 / 60 fps**: a 4:3 mode at least 800 px wide when the dongle has one (typically **800×600** after scale, or 1024×768 → 800×600). Changing FPS does not jump between 640×480 and 720p. **640×480** is used only if the dongle has nothing ≥800 wide. **60 fps** may stay ~30 if that 4:3 pin cannot run 60 — the size stays put rather than switching to 1080p60. The **15 fps** setting is paced in software even when the pin’s floor is 20.
 
 ### 19.2 Electrical safety
 
@@ -3005,7 +3005,7 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
 
 1. Open **Settings → Radio Display** and enable **Radio display**, then Save.
 2. On Home, the **Radio Display** card appears. Pick the capture device, then click **Start**. The stream does **not** open until you start it (so a leftover device selection cannot grab the dongle). Tick **Auto** if you want the previous behaviour — start as soon as the panel opens with a device selected. Preference is stored in the browser.
-3. Frame rate (**15 / 30 / 60 fps**; default **15**) and image quality (**Low / Medium / Max** = 40 / 65 / 85; default **Medium**) are chosen on the same card. The FPS list is a **target** — USB bandwidth, JPEG encode, and host CPU can still deliver less. Rates above what the capture device advertises (for example **60** on a 30 fps stick) are hidden. Higher rates and **Max** quality use more CPU — prefer **15 fps** and **Low** or **Medium** on a Raspberry Pi. **Max** is crisper on digits when you enlarge the image; the 85 cap is intentional.
+3. Frame rate (**15 / 30 / 60 fps**; default **15**) and image quality (**Low / Medium / Max** = 40 / 65 / 85; default **Max**) are chosen on the same card. The FPS list is a **target** — USB bandwidth, JPEG encode, and host CPU can still deliver less. Rates above what the capture device advertises (for example **60** on a 30 fps stick) are hidden. **Max** keeps the capture JPEG (least CPU when the dongle already sends MJPEG). **Low** / **Medium** recompress — smaller stream, more CPU. Prefer **15 fps** on a Raspberry Pi; use Low/Medium there only if the link needs a smaller stream. On Windows/macOS, 15 / 30 / 60 share the same panel-sized pin (see §19.1); the badge should track the dropdown (15 via pacing if the pin floor is 20).
 4. Other controls:
    - **Start / Stop** — attach or release the MJPEG viewer (Stop lets the host drop the dongle after a couple of seconds)
    - **Fit / Fill** — `object-fit` contain vs cover
@@ -3022,7 +3022,7 @@ Capture opens while at least one browser is viewing the stream, and stays open f
 
 - Plug in the capture dongle; confirm nodes with `ls /dev/video*` and names under `/sys/class/video4linux/*/name`.
 - Ensure the YWC process user can open the device (often membership of the **`video`** group).
-- Keep **Max width ≤ 800** (host default) and prefer **15 fps** and **Low** or **Medium** image quality on Pi-class CPUs. Raising FPS to 30–60 or quality to **Max** increases encode load sharply.
+- Keep **Max width ≤ 800** (host default) and prefer **15 fps** on Pi-class CPUs. **Max** quality keeps the capture JPEG (least extra CPU). **Low** / **Medium** recompress and add encode load — use them only if the browser link needs a smaller stream. Raising FPS to 30–60 increases load sharply.
 
 **Docker:** map the V4L2 device and the host **video** group GID, similar to serial/audio:
 
@@ -3046,7 +3046,9 @@ See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial
 | `/api/video/stream` → 403 | Feature disabled or no device key saved. |
 | Black / disconnected | Wrong device index; another app holding the UVC device exclusively; unplug/replug; Refresh device list. Unplug is reported as **Disconnected**; after replug the host reopens and the panel re-attaches the stream without a page reload. |
 | Panel blank while badge says Streaming | The MJPEG `<img>` connection dropped; it should reconnect on its own within a few seconds. Hard-reload if it does not. |
-| High CPU on Pi | Prefer **15 fps** and **Low** image quality; confirm the dongle is not encoding full 1080p without downscale. |
+| High CPU on Pi | Prefer **15 fps**; confirm the dongle is not capturing full 1080p without downscale. **Low** / **Medium** quality add a recompress step. |
+| Resolution jumps when changing FPS (640×480 vs 800×600 vs 720p) | Use a current build. 15 / 30 / 60 share one ≥800 4:3 pin when the dongle has one; **640×480** only if nothing is ≥800 wide. |
+| 15 fps badge shows ~20 | Use a current build — the host paces to 15 even when the pin’s floor is 20. |
 | Device list empty (Linux) | Check `/dev/video*`, `video` group, Docker `devices:` / `group_add`. |
 | Could not open capture device index N (Docker) | That index is listed from sysfs but `/dev/videoN` is not in the container, or it is a metadata/codec node. Map `video0` **and** `video1`, set `YWC_VIDEO_GID` (`getent group video`, often 44), and select the capture node (usually video0). |
 | Device list empty (macOS) | Launch via the `.app` / `scripts/macos/run-dev.sh` (not bare `dotnet run`), then allow **Camera** for Yaesu Web Control. |
