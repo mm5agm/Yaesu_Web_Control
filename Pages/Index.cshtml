@@ -1,4 +1,4 @@
-﻿﻿﻿﻿@page
+﻿﻿﻿﻿﻿@page
 @model Yaesu_Web_Control.Pages.IndexModel
 @{
     ViewData["Title"]     = "Yaesu Web Control";
@@ -825,6 +825,31 @@
                             <option value="60">60 fps</option>
                         </select>
                     </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Image quality. Max is crisper on digits; Low saves CPU and bandwidth (Pi)."
+                          aria-label="Image quality">
+                        <select id="radioDisplayQualitySelect" class="form-select form-select-sm"
+                                style="width:6.5rem; max-width:6.5rem;" aria-label="Image quality">
+                            <option value="50">Low</option>
+                            <option value="65" selected>Medium</option>
+                            <option value="85">Max</option>
+                        </select>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Start or stop the video stream" aria-label="Start or stop the video stream">
+                        <button type="button" class="btn btn-sm btn-outline-success" id="radioDisplayStreamBtn"
+                                aria-label="Start stream">
+                            <i class="bi bi-play-fill" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Start the stream automatically when the panel opens"
+                          aria-label="Auto-start stream">
+                        <label class="form-check-label small d-flex align-items-center gap-1 mb-0 user-select-none">
+                            <input class="form-check-input mt-0" type="checkbox" id="radioDisplayAutoStart" />
+                            Auto
+                        </label>
+                    </span>
                     <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                               data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
@@ -853,10 +878,13 @@
                         </span>
                     </div>
                 </div>
-                <div class="card-body p-0 bg-black radio-display-body" style="text-align:center; overflow:hidden;">
+                <div class="card-body p-0 bg-black radio-display-body" style="text-align:center; overflow:hidden; position:relative; min-height:240px;">
+                    <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
+                        Click Start to show the radio display
+                    </div>
                     <img id="radioDisplayImg" alt="Radio display" decoding="async"
                          class="radio-display-img"
-                         style="max-width:100%; width:auto; height:auto; max-height:50vh; object-fit:contain; background:#000; vertical-align:middle;" />
+                         style="display:none; max-width:100%; width:auto; height:auto; max-height:50vh; object-fit:contain; background:#000; vertical-align:middle;" />
                 </div>
             </div>
         </div>

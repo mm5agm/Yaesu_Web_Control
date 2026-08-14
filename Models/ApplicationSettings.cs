@@ -311,7 +311,9 @@
         /// </summary>
         public int VideoTargetFps { get; set; } = 15;
 
-        /// <summary>JPEG quality 40–85. Default 65 balances text readability vs CPU/bandwidth.</summary>
+        /// <summary>
+        /// Image Quality
+        /// </summary>
         public int VideoJpegQuality { get; set; } = 65;
 
         // ── Optional HTTPS (self-signed; restart to apply) ────────────────

@@ -1397,7 +1397,7 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 
 ### 6.9 Radio Display
 
-**Settings → Radio Display** enables the feature. Capture device and frame rate are chosen on the Index **Radio Display** panel (or pop-out). Full setup and electrical-safety notes are in [§19 Radio Display](#19-radio-display).
+**Settings → Radio Display** enables the feature. Capture device, frame rate, image quality, and **Start / Stop** are on the Index **Radio Display** panel (or pop-out). The stream does not open until you click **Start** (or tick **Auto**). Full setup and electrical-safety notes are in [§19 Radio Display](#19-radio-display).
 
 | Setting | Description |
 |---------|-------------|
@@ -3004,15 +3004,17 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
 ### 19.3 Settings and Index panel
 
 1. Open **Settings → Radio Display** and enable **Radio display**, then Save.
-2. On Home, the **Radio Display** card appears. Pick the capture device and frame rate (**15 / 30 / 40 / 60 fps**; default **15**). Higher rates use more CPU — prefer **15** on a Raspberry Pi.
-3. Other controls:
+2. On Home, the **Radio Display** card appears. Pick the capture device, then click **Start**. The stream does **not** open until you start it (so a leftover device selection cannot grab the dongle). Tick **Auto** if you want the previous behaviour — start as soon as the panel opens with a device selected. Preference is stored in the browser.
+3. Frame rate (**15 / 30 / 40 / 60 fps**; default **15**) and image quality (**Low / Medium / Max** = 50 / 65 / 85; default **Medium**) are chosen on the same card. Higher rates and **Max** quality use more CPU — prefer **15 fps** and **Low** or **Medium** on a Raspberry Pi. **Max** is crisper on digits when you enlarge the image; the 85 cap is intentional.
+4. Other controls:
+   - **Start / Stop** — attach or release the MJPEG viewer (Stop lets the host drop the dongle after a couple of seconds)
    - **Fit / Fill** — `object-fit` contain vs cover
    - **Fullscreen** — fullscreen the card
-   - **Pop out** — opens `/RadioDisplay` in a separate window (closes the Index panel)
+   - **Pop out** — opens `/RadioDisplay` in a separate window (closes the Index panel); if you were streaming, the pop-out keeps the stream
    - **Reattach** (pop-out) — returns the stream to the main window and closes the pop-out
-   - **Close** — closes the panel (Show button restores it); preference stored in the browser
+   - **Close** — stops the stream and closes the panel (Show button restores it); preference stored in the browser
 
-Capture opens while at least one browser is viewing the stream, and stays open for a couple of seconds after the last viewer disconnects so **Pop out** / **Close** does not tear down the USB capture device mid-handoff. After that idle window the host releases the dongle so an idle Pi pays no capture CPU. Max width (800) and JPEG quality (65) stay at host defaults tuned for modest radio panels.
+Capture opens while at least one browser is viewing the stream, and stays open for a couple of seconds after the last viewer disconnects so **Pop out** / **Close** does not tear down the USB capture device mid-handoff. After that idle window the host releases the dongle so an idle Pi pays no capture CPU. Max width stays at **800** (host default) for modest radio panels.
 
 ### 19.4 Raspberry Pi and Docker
 
@@ -3020,7 +3022,7 @@ Capture opens while at least one browser is viewing the stream, and stays open f
 
 - Plug in the capture dongle; confirm nodes with `ls /dev/video*` and names under `/sys/class/video4linux/*/name`.
 - Ensure the YWC process user can open the device (often membership of the **`video`** group).
-- Keep **Max width ≤ 800** (host default) and prefer **15 fps** on Pi-class CPUs. Raising FPS to 30–60 increases encode load sharply.
+- Keep **Max width ≤ 800** (host default) and prefer **15 fps** and **Low** or **Medium** image quality on Pi-class CPUs. Raising FPS to 30–60 or quality to **Max** increases encode load sharply.
 
 **Docker:** map the V4L2 device and the host **video** group GID, similar to serial/audio:
 
@@ -3040,11 +3042,11 @@ See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial
 
 | Symptom | What to try |
 |---------|-------------|
-| Panel hidden | Enable Radio Display + select a device in Settings; check Close was not pressed (Show button). |
+| Panel hidden | Enable Radio Display in Settings, then Show Radio Display; check Close was not pressed. |
 | `/api/video/stream` → 403 | Feature disabled or no device key saved. |
 | Black / disconnected | Wrong device index; another app holding the UVC device exclusively; unplug/replug; Refresh device list. Unplug is reported as **Disconnected**; after replug the host reopens and the panel re-attaches the stream without a page reload. |
 | Panel blank while badge says Streaming | The MJPEG `<img>` connection dropped; it should reconnect on its own within a few seconds. Hard-reload if it does not. |
-| High CPU on Pi | Lower Max width / FPS / JPEG quality; confirm the dongle is not encoding full 1080p without downscale. |
+| High CPU on Pi | Prefer **15 fps** and **Low** image quality; confirm the dongle is not encoding full 1080p without downscale. |
 | Device list empty (Linux) | Check `/dev/video*`, `video` group, Docker `devices:` / `group_add`. |
 | Could not open capture device index N (Docker) | That index is listed from sysfs but `/dev/videoN` is not in the container, or it is a metadata/codec node. Map `video0` **and** `video1`, set `YWC_VIDEO_GID` (`getent group video`, often 44), and select the capture node (usually video0). |
 | Device list empty (macOS) | Launch via the `.app` / `scripts/macos/run-dev.sh` (not bare `dotnet run`), then allow **Camera** for Yaesu Web Control. |

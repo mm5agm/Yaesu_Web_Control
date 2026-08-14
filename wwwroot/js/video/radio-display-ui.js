@@ -1,13 +1,15 @@
 /**
  * Radio Display UI wiring: status poll + MJPEG img stream + controls.
  */
-import { RadioDisplayPanel } from './radio-display-panel.js?v=4';
+import { RadioDisplayPanel } from './radio-display-panel.js?v=6';
 
 const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;
 const RECONNECT_MAX_MS = 15000;
 const ALLOWED_FPS = [15, 30, 40, 60];
+const ALLOWED_QUALITY = [50, 65, 85];
 const CHANNEL_NAME = 'ywc-radio-display';
+const AUTO_START_KEY = 'ywc.radioDisplayAutoStart';
 
 let panel = null;
 let uiMode = 'index';
@@ -19,8 +21,11 @@ let lastFrameSeq = 0;
 let blankPolls = 0;
 let enabled = false;
 let streamActive = false;
+/** Operator asked for a live stream (Start, Auto, or pop-out handoff). */
+let wantStream = false;
 let currentDeviceKey = '';
 let currentTargetFps = 15;
+let currentJpegQuality = 65;
 let controlsBound = false;
 let channel = null;
 
@@ -35,9 +40,22 @@ function postChannel(msg) {
   try { getChannel()?.postMessage(msg); } catch { /* ignore */ }
 }
 
+function isAutoStart() {
+  return localStorage.getItem(AUTO_START_KEY) === '1';
+}
+
+function setAutoStart(on) {
+  localStorage.setItem(AUTO_START_KEY, on ? '1' : '0');
+}
+
 function normalizeFps(fps) {
   const n = Number(fps);
   return ALLOWED_FPS.includes(n) ? n : 15;
+}
+
+function normalizeQuality(q) {
+  const n = Number(q);
+  return ALLOWED_QUALITY.includes(n) ? n : 65;
 }
 
 function syncFpsSelect(fps) {
@@ -46,6 +64,42 @@ function syncFpsSelect(fps) {
   const want = String(normalizeFps(fps));
   if (sel.value !== want && document.activeElement !== sel) {
     sel.value = want;
+  }
+}
+
+function syncQualitySelect(quality) {
+  const sel = document.getElementById('radioDisplayQualitySelect');
+  if (!sel) return;
+  const want = String(normalizeQuality(quality));
+  if (sel.value !== want && document.activeElement !== sel) {
+    sel.value = want;
+  }
+}
+
+function syncAutoStartCheckbox() {
+  const el = document.getElementById('radioDisplayAutoStart');
+  if (el) el.checked = isAutoStart();
+}
+
+function syncStreamButton() {
+  const btn = document.getElementById('radioDisplayStreamBtn');
+  if (!btn) return;
+  let icon = btn.querySelector('i');
+  if (!icon) {
+    icon = document.createElement('i');
+    icon.setAttribute('aria-hidden', 'true');
+    btn.replaceChildren(icon);
+  }
+  if (wantStream) {
+    btn.className = 'btn btn-sm btn-outline-danger';
+    icon.className = 'bi bi-stop-fill';
+    btn.setAttribute('aria-label', 'Stop stream');
+    btn.disabled = false;
+  } else {
+    btn.className = 'btn btn-sm btn-outline-success';
+    icon.className = 'bi bi-play-fill';
+    btn.setAttribute('aria-label', 'Start stream');
+    btn.disabled = !enabled || !currentDeviceKey;
   }
 }
 
@@ -65,7 +119,7 @@ function scheduleReconnect() {
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     if (!enabled || !panel || panel.isHiddenByUser()) return;
-    if (!currentDeviceKey) return;
+    if (!wantStream || !currentDeviceKey) return;
     startStream();
   }, delay);
 }
@@ -73,6 +127,7 @@ function scheduleReconnect() {
 function onStreamInterrupted() {
   if (!streamActive) return;
   streamActive = false;
+  panel?.hideFrame();
   scheduleReconnect();
 }
 
@@ -85,6 +140,7 @@ function bindStreamImage() {
   img.onload = () => {
     reconnectAttempt = 0;
     blankPolls = 0;
+    panel?.markFrameLoaded();
   };
 }
 
@@ -98,11 +154,12 @@ function notifyPopoutReady() {
 }
 
 function startStream() {
-  if (!panel || !enabled) return;
+  if (!panel || !enabled || !wantStream) return;
   if (panel.isHiddenByUser()) return;
   if (!currentDeviceKey) {
     stopStream();
     panel.setStatus('idle', 'select a device');
+    syncStreamButton();
     return;
   }
   streamActive = true;
@@ -116,6 +173,7 @@ function startStream() {
   panel.setStreamUrl(streamUrl());
   if (uiMode === 'popout') notifyPopoutReady();
   bindStreamImage();
+  syncStreamButton();
 }
 
 function stopStream() {
@@ -125,16 +183,34 @@ function stopStream() {
     reconnectTimer = null;
   }
   panel?.clearStream();
+  syncStreamButton();
+}
+
+function requestStart() {
+  wantStream = true;
+  startStream();
+  syncStreamButton();
+}
+
+function requestStop() {
+  wantStream = false;
+  stopStream();
+  if (panel && enabled) {
+    panel.setStatus('idle', currentDeviceKey ? 'stopped' : 'select a device');
+  }
+  syncStreamButton();
 }
 
 function reattachToIndex() {
   // Ask Home to attach first so the host never drops the last viewer
   // (USB HDMI dongles native-crash if the capture graph is torn down
   // and immediately reopened).
-  postChannel({ type: 'reattach' });
+  postChannel({ type: 'reattach', stream: wantStream });
   try {
     if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ type: 'ywc-radio-display-reattach' }, window.location.origin);
+      window.opener.postMessage(
+        { type: 'ywc-radio-display-reattach', stream: wantStream },
+        window.location.origin);
     }
   } catch { /* ignore cross-origin */ }
   setTimeout(() => {
@@ -143,14 +219,16 @@ function reattachToIndex() {
   }, 250);
 }
 
-function onReattachFromPopout() {
+function onReattachFromPopout(stream) {
   if (uiMode !== 'index' || !panel) return;
   panel.show();
-  if (enabled && currentDeviceKey) {
+  wantStream = !!stream || isAutoStart();
+  if (wantStream && enabled && currentDeviceKey) {
     startStream();
   } else {
     pollStatus();
   }
+  syncStreamButton();
 }
 
 function deviceOptionMatches(d, want) {
@@ -234,11 +312,13 @@ async function setDeviceKey(key) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
     currentDeviceKey = data.deviceKey || '';
-    if (currentDeviceKey && !panel.isHiddenByUser()) {
+    syncStreamButton();
+    if (wantStream && currentDeviceKey && !panel.isHiddenByUser()) {
       setTimeout(() => startStream(), 600);
+    } else if (!currentDeviceKey) {
+      panel.setStatus('idle', 'select a device');
     } else {
-      panel.setStatus(currentDeviceKey ? 'connecting' : 'idle',
-        currentDeviceKey ? undefined : 'select a device');
+      panel.setStatus('idle', wantStream ? undefined : 'click Start');
     }
   } catch (e) {
     console.warn('Radio Display device change failed', e);
@@ -266,6 +346,25 @@ async function setTargetFps(fps) {
   }
 }
 
+async function setJpegQuality(quality) {
+  const want = normalizeQuality(quality);
+  try {
+    const res = await fetch('/api/video/jpeg-quality', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quality: want })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    currentJpegQuality = normalizeQuality(data.jpegQuality ?? want);
+    syncQualitySelect(currentJpegQuality);
+  } catch (e) {
+    console.warn('Radio Display image quality change failed', e);
+    alert('Could not change image quality: ' + (e.message || e));
+    syncQualitySelect(currentJpegQuality);
+  }
+}
+
 /**
  * @param {{ attachStream?: boolean }} [options]
  */
@@ -278,13 +377,16 @@ async function pollStatus(options = {}) {
     enabled = !!data.enabled;
     currentDeviceKey = data.deviceKey || '';
     currentTargetFps = normalizeFps(data.targetFps);
+    currentJpegQuality = normalizeQuality(data.jpegQuality);
 
     if (!panel) return;
 
     if (!data.enabled) {
+      wantStream = false;
       panel.setStatus('unconfigured');
       lastServerStatus = 'unconfigured';
       stopStream();
+      syncStreamButton();
       return;
     }
 
@@ -293,6 +395,8 @@ async function pollStatus(options = {}) {
       await loadDeviceSelect(currentDeviceKey);
     }
     syncFpsSelect(currentTargetFps);
+    syncQualitySelect(currentJpegQuality);
+    syncStreamButton();
 
     if (!currentDeviceKey) {
       panel.setStatus('idle', 'select a device');
@@ -306,8 +410,15 @@ async function pollStatus(options = {}) {
       : (data.error || undefined);
 
     let status = data.status || 'idle';
-    if (status === 'idle' && streamActive) status = 'connecting';
-    panel.setStatus(status, detail);
+    if (!wantStream) {
+      status = 'idle';
+      panel.setStatus('idle', 'click Start');
+      lastServerStatus = 'idle';
+      if (attachStream) return;
+    } else if (status === 'idle' && streamActive) {
+      status = 'connecting';
+    }
+    if (wantStream) panel.setStatus(status, detail);
 
     const seq = Number(data.frameSeq) || 0;
     const recovered = status === 'streaming' && lastServerStatus !== 'streaming';
@@ -321,7 +432,7 @@ async function pollStatus(options = {}) {
 
     lastServerStatus = status;
 
-    if (!attachStream || panel.isHiddenByUser()) return;
+    if (!attachStream || panel.isHiddenByUser() || !wantStream) return;
 
     if (recovered || seqReset || blankPolls >= 2) {
       blankPolls = 0;
@@ -366,14 +477,16 @@ function bindChannel() {
     ch.onmessage = (ev) => {
       const msg = ev?.data;
       if (!msg || typeof msg !== 'object') return;
-      if (msg.type === 'reattach') onReattachFromPopout();
+      if (msg.type === 'reattach') onReattachFromPopout(!!msg.stream);
       if (msg.type === 'popout-ready') onPopoutReady();
     };
   }
 
   window.addEventListener('message', (ev) => {
     if (ev.origin !== window.location.origin) return;
-    if (ev.data?.type === 'ywc-radio-display-reattach') onReattachFromPopout();
+    if (ev.data?.type === 'ywc-radio-display-reattach') {
+      onReattachFromPopout(!!ev.data.stream);
+    }
     if (ev.data?.type === 'ywc-radio-display-popout-ready') onPopoutReady();
   });
 }
@@ -390,7 +503,7 @@ function bindControls() {
   });
 
   document.getElementById('radioDisplayCloseBtn')?.addEventListener('click', () => {
-    stopStream();
+    requestStop();
     if (uiMode === 'popout') {
       window.close();
       return;
@@ -400,11 +513,13 @@ function bindControls() {
 
   document.getElementById('radioDisplayShowBtn')?.addEventListener('click', () => {
     panel.show();
-    if (enabled) startStream();
+    if (isAutoStart()) requestStart();
+    else syncStreamButton();
   });
 
   document.getElementById('radioDisplayPopoutBtn')?.addEventListener('click', () => {
-    const w = window.open('/RadioDisplay', 'ywc-radio-display', 'width=900,height=600');
+    const qs = wantStream ? '?stream=1' : '';
+    const w = window.open('/RadioDisplay' + qs, 'ywc-radio-display', 'width=900,height=600');
     if (w) w.focus();
     // Hide the Index card immediately but keep the MJPEG viewer attached
     // until the pop-out acquires, so the USB device is never released.
@@ -429,6 +544,20 @@ function bindControls() {
     document.getElementById('radioDisplayFpsSelect')?.addEventListener('change', (ev) => {
       setTargetFps(ev.target.value);
     });
+    document.getElementById('radioDisplayQualitySelect')?.addEventListener('change', (ev) => {
+      setJpegQuality(ev.target.value);
+    });
+    document.getElementById('radioDisplayStreamBtn')?.addEventListener('click', () => {
+      if (wantStream) requestStop();
+      else requestStart();
+    });
+    document.getElementById('radioDisplayAutoStart')?.addEventListener('change', (ev) => {
+      const on = !!ev.target.checked;
+      setAutoStart(on);
+      if (on && enabled && currentDeviceKey && !panel.isHiddenByUser()) {
+        requestStart();
+      }
+    });
   }
 
   const fitBtn = document.getElementById('radioDisplayFitBtn');
@@ -436,6 +565,8 @@ function bindControls() {
     fitBtn.textContent = panel.getFitMode() === 'contain' ? 'Fit' : 'Fill';
   }
 
+  syncAutoStartCheckbox();
+  syncStreamButton();
   ensureRadioDisplayTooltips();
 }
 
@@ -460,11 +591,16 @@ export async function initRadioDisplayUi(mode = 'index') {
   bindChannel();
   bindControls();
 
+  const streamHint = uiMode === 'popout'
+    && new URLSearchParams(window.location.search).get('stream') === '1';
+  wantStream = isAutoStart() || streamHint;
+
   // Probe the device list before attaching MJPEG so enumeration never
   // Open()s the dongle while the capture loop already holds it.
   await pollStatus({ attachStream: false });
   await loadDeviceSelect(currentDeviceKey);
-  if (enabled && currentDeviceKey && !panel.isHiddenByUser()) startStream();
+  if (wantStream && enabled && currentDeviceKey && !panel.isHiddenByUser()) startStream();
+  syncStreamButton();
   if (statusTimer) clearInterval(statusTimer);
   statusTimer = setInterval(pollStatus, STATUS_POLL_MS);
 

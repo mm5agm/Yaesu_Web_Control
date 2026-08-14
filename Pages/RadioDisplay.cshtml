@@ -20,45 +20,92 @@
         #radioDisplayContainer > .col-12 { height: 100%; padding: 0; max-width: 100%; }
         #radioDisplayContainer .card { height: 100%; border-radius: 0; border: none; background: #000; max-width: 100%; }
         #radioDisplayContainer .card-header {
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             max-width: 100%;
             min-width: 0;
-            gap: 0.35rem !important;
+            gap: 0.25rem !important;
+            padding-top: 0.35rem;
+            padding-bottom: 0.35rem;
+            overflow: hidden;
+        }
+        #radioDisplayContainer .card-header > strong {
+            flex: 0 0 auto;
+            font-size: 0.9rem;
+        }
+        #radioDisplayContainer .card-header .radio-display-title {
+            display: none;
+        }
+        #radioDisplayContainer .card-header .btn {
+            padding: 0.15rem 0.35rem;
+        }
+        #radioDisplayContainer .card-header .form-select-sm {
+            padding-top: 0.15rem;
+            padding-bottom: 0.15rem;
+            font-size: 0.8rem;
         }
         #radioDisplayContainer .card-body {
-            height: calc(100% - 3.25rem);
+            height: calc(100% - 2.5rem);
             min-height: 0 !important;
             max-height: none !important;
+            position: relative;
         }
         #radioDisplayImg { width: 100%; height: 100%; object-fit: contain; background: #000; }
+        .radio-display-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9a9a9a;
+            font-size: 0.95rem;
+            text-align: center;
+            padding: 1.25rem;
+            pointer-events: none;
+            user-select: none;
+        }
+        .radio-display-placeholder[hidden] {
+            display: none !important;
+        }
         /* Cap intrinsic <select> width so long camera names don't grow the window. */
         #radioDisplayDeviceSelect {
-            width: 11rem;
-            max-width: 11rem;
+            width: 8rem;
+            max-width: 8rem;
             min-width: 0;
-            flex: 0 1 11rem;
+            flex: 0 1 8rem;
         }
         #radioDisplayFpsSelect {
+            width: 4.75rem;
+            max-width: 4.75rem;
+            min-width: 0;
+            flex: 0 0 4.75rem;
+            padding-left: 0.3rem;
+            padding-right: 1.2rem;
+        }
+        #radioDisplayQualitySelect {
             width: 5.25rem;
             max-width: 5.25rem;
             min-width: 0;
             flex: 0 0 5.25rem;
-            padding-left: 0.4rem;
-            padding-right: 1.4rem;
+            padding-left: 0.3rem;
+            padding-right: 1.2rem;
+        }
+        #radioDisplayStreamBtn {
+            flex: 0 0 auto;
         }
         #radioDisplayBadge {
-            max-width: 11rem;
+            max-width: 7.5rem;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            flex: 0 1 auto;
         }
         .radio-display-actions {
             flex: 0 0 auto;
             margin-left: auto !important;
         }
         .radio-display-actions .btn {
-            padding-left: 0.45rem;
-            padding-right: 0.45rem;
+            padding-left: 0.35rem;
+            padding-right: 0.35rem;
         }
     </style>
 </head>
@@ -67,7 +114,10 @@
         <div class="col-12">
             <div class="card border-dark">
                 <div class="card-header bg-dark text-white d-flex align-items-center py-2">
-                    <strong class="me-1 text-nowrap"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
+                    <strong class="me-1 text-nowrap" title="Radio Display">
+                        <i class="bi bi-display" aria-hidden="true"></i>
+                        <span class="radio-display-title"> Radio Display</span>
+                    </strong>
                     <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
                     <select id="radioDisplayDeviceSelect" class="form-select form-select-sm"
                             aria-label="Capture device">
@@ -89,6 +139,31 @@
                             <option value="40">40 fps</option>
                             <option value="60">60 fps</option>
                         </select>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Image quality. Max is crisper on digits; Low saves CPU and bandwidth (Pi)."
+                          aria-label="Image quality">
+                        <select id="radioDisplayQualitySelect" class="form-select form-select-sm"
+                                aria-label="Image quality">
+                            <option value="50">Low</option>
+                            <option value="65" selected>Medium</option>
+                            <option value="85">Max</option>
+                        </select>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Start or stop the video stream" aria-label="Start or stop the video stream">
+                        <button type="button" class="btn btn-sm btn-outline-success" id="radioDisplayStreamBtn"
+                                aria-label="Start stream">
+                            <i class="bi bi-play-fill" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Start the stream automatically when the panel opens"
+                          aria-label="Auto-start stream">
+                        <label class="form-check-label small d-flex align-items-center gap-1 mb-0 user-select-none">
+                            <input class="form-check-input mt-0" type="checkbox" id="radioDisplayAutoStart" />
+                            Auto
+                        </label>
                     </span>
                     <div class="radio-display-actions d-flex flex-nowrap align-items-center gap-1">
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
@@ -120,15 +195,18 @@
                         </span>
                     </div>
                 </div>
-                <div class="card-body p-0 bg-black">
-                    <img id="radioDisplayImg" alt="Radio display" decoding="async" />
+                <div class="card-body p-0 bg-black radio-display-body">
+                    <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
+                        Click Start to show the radio display
+                    </div>
+                    <img id="radioDisplayImg" alt="Radio display" decoding="async" style="display:none;" />
                 </div>
             </div>
         </div>
     </div>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
     <script type="module">
-        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=11";
+        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=15";
         initRadioDisplayUi('popout');
     </script>
 </body>

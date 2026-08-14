@@ -13,7 +13,9 @@ export class RadioDisplayPanel {
     this._img = document.getElementById(imgId);
     this._container = document.getElementById(containerId);
     this._badge = document.getElementById(badgeId);
+    this._placeholder = document.getElementById('radioDisplayPlaceholder');
     this._status = 'unconfigured';
+    this._hasFrame = false;
     /** Pop-out must not share Index Hide via localStorage. */
     this._ignoreHidePreference = !!options.ignoreHidePreference;
     /** Index: size to video aspect ratio; pop-out: fill the window. */
@@ -50,7 +52,10 @@ export class RadioDisplayPanel {
         disconnected: 'Disconnected',
         error: 'Error'
       };
-      this._badge.textContent = detail
+      this._badge.textContent = (status === 'streaming' && detail)
+        ? detail
+        : (detail ? `${labels[status] || status}: ${detail}` : (labels[status] || status));
+      this._badge.title = detail
         ? `${labels[status] || status}: ${detail}`
         : (labels[status] || status);
       this._badge.className = 'badge ' + (
@@ -60,6 +65,18 @@ export class RadioDisplayPanel {
         'bg-secondary'
       );
     }
+
+    if (!this._hasFrame) this._syncPlaceholderText(status, detail);
+  }
+
+  _syncPlaceholderText(status, detail) {
+    if (!this._placeholder) return;
+    let text = 'Click Start to show the radio display';
+    if (status === 'connecting' || status === 'streaming') text = 'Starting…';
+    else if (status === 'disconnected') text = 'Disconnected';
+    else if (status === 'error') text = detail || 'No video';
+    else if (detail === 'select a device') text = 'Select a capture device, then click Start';
+    this._placeholder.textContent = text;
   }
 
   show() {
@@ -101,15 +118,51 @@ export class RadioDisplayPanel {
     return this._fitMode;
   }
 
+  _body() {
+    return this._container?.querySelector('.radio-display-body')
+      || this._img?.parentElement;
+  }
+
+  _showPlaceholder() {
+    this._hasFrame = false;
+    const body = this._body();
+    if (body) body.classList.remove('has-frame');
+    if (this._placeholder) this._placeholder.hidden = false;
+    if (this._img) this._img.style.display = 'none';
+    if (this._naturalSize && body) {
+      body.style.minHeight = '240px';
+      body.style.height = '';
+    }
+  }
+
+  markFrameLoaded() {
+    this._hasFrame = true;
+    const body = this._body();
+    if (body) body.classList.add('has-frame');
+    if (this._placeholder) this._placeholder.hidden = true;
+    this._applyFit();
+  }
+
+  hideFrame() {
+    this._showPlaceholder();
+  }
+
   _applyFit() {
     if (!this._img) return;
-    const body = this._container?.querySelector('.radio-display-body')
-      || this._img.parentElement;
+    const body = this._body();
 
     this._img.style.objectFit = this._fitMode;
-    this._img.style.display = 'block';
+    this._img.style.display = this._hasFrame ? 'block' : 'none';
     this._img.style.margin = '0 auto';
     this._img.style.background = '#000';
+
+    if (!this._hasFrame) {
+      if (this._naturalSize && body) {
+        body.style.minHeight = '240px';
+        body.style.height = '';
+      }
+      return;
+    }
 
     if (this._naturalSize) {
       // Index: keep radio aspect ratio; don't stretch into a tall black box.
@@ -148,6 +201,8 @@ export class RadioDisplayPanel {
    */
   setStreamUrl(url) {
     if (!this._img) return;
+    this._showPlaceholder();
+    this._syncPlaceholderText('connecting');
     this._img.src = url || '';
   }
 
@@ -158,6 +213,7 @@ export class RadioDisplayPanel {
     this._img.onstalled = null;
     this._img.onabort = null;
     this._img.removeAttribute('src');
+    this._showPlaceholder();
   }
 
   async requestFullscreen() {

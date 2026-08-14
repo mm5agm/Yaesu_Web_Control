@@ -394,7 +394,7 @@ namespace Yaesu_Web_Control.Services.Video
 
                 var maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
                 var targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
-                var jpegQuality = Math.Clamp(settings.VideoJpegQuality, 40, 85);
+                var jpegQuality = VideoJpegQualityOptions.Normalize(settings.VideoJpegQuality);
                 var frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
                 var settingsAge = Stopwatch.StartNew();
 
@@ -452,7 +452,7 @@ namespace Yaesu_Web_Control.Services.Video
                             settings = ReadSettings();
                             maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
                             var newFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
-                            jpegQuality = Math.Clamp(settings.VideoJpegQuality, 40, 85);
+                            jpegQuality = VideoJpegQualityOptions.Normalize(settings.VideoJpegQuality);
                             encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
                             if (newFps != targetFps)
                             {
