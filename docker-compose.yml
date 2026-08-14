@@ -3,9 +3,10 @@
 # 1. Set YWC_SERIAL_DEVICE to your USB-serial node (ls /dev/ttyUSB* /dev/ttyACM*).
 # 2. Optional Remote Audio: compose maps /dev/snd; set YWC_AUDIO_GID if needed
 #    (getent group audio). Pick the radio USB codec in Settings → Remote Audio.
-# 3. Optional Radio Display: map a UVC capture node (ls /dev/video*) and set
-#    YWC_VIDEO_GID to the host `video` group (often 44). Pick the device in
-#    Settings → Radio Display. Keep Max width ≤ 800 on a Pi.
+# 3. Optional Radio Display: map UVC nodes (ls /dev/video*) — compose maps
+#    video0 + video1 by default — and set YWC_VIDEO_GID to the host `video`
+#    group (often 44). Pick the capture node in Settings → Radio Display
+#    (usually video0, not metadata/codec). Keep Max width ≤ 800 on a Pi.
 # 4. docker compose pull && docker compose up -d
 #    (or pin a release: image: ghcr.io/mm5agm/yaesu_web_control:vX.Y.Z)
 #    Local rebuild: docker compose up -d --build
@@ -45,9 +46,10 @@ services:
       # To pin one card only, replace with e.g. /dev/snd/controlC1 + pcmC1D0c/p.
       - /dev/snd:/dev/snd
       # Optional USB webcam / HDMI capture dongle for Radio Display (UVC/V4L2).
-      # Comment out if unused. Some dongles expose several /dev/video* nodes —
-      # pick the capture node (often video0) via Settings after start.
+      # Comment out if unused. UVC dongles usually expose video0 (capture) plus
+      # video1 (metadata). Map both; pick the capture node in Settings.
       - ${YWC_VIDEO_DEVICE:-/dev/video0}:${YWC_VIDEO_DEVICE:-/dev/video0}
+      - ${YWC_VIDEO_DEVICE_ALT:-/dev/video1}:${YWC_VIDEO_DEVICE_ALT:-/dev/video1}
     group_add:
       # Host "dialout" is usually GID 20 on Debian/Raspberry Pi OS.
       - "${YWC_DIALOUT_GID:-20}"

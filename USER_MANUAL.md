@@ -3027,9 +3027,12 @@ Capture opens while at least one browser is viewing the stream, and stays open f
 ```yaml
 devices:
   - ${YWC_VIDEO_DEVICE:-/dev/video0}:${YWC_VIDEO_DEVICE:-/dev/video0}
+  - ${YWC_VIDEO_DEVICE_ALT:-/dev/video1}:${YWC_VIDEO_DEVICE_ALT:-/dev/video1}
 group_add:
   - "${YWC_VIDEO_GID:-44}"   # host `getent group video`
 ```
+
+UVC dongles typically expose **video0** (capture) and **video1** (metadata). The device list is built from `/sys/class/video4linux`, which is visible even when the matching `/dev/videoN` is not mapped into the container — selecting an unmapped or metadata node fails with **Could not open capture device index N**. Map both nodes, add the **video** group, then choose the capture device (usually **USB Video (video0)**).
 
 See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial driver on the **host** as usual; video uses the kernel UVC/V4L2 stack.
 
@@ -3043,6 +3046,7 @@ See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial
 | Panel blank while badge says Streaming | The MJPEG `<img>` connection dropped; it should reconnect on its own within a few seconds. Hard-reload if it does not. |
 | High CPU on Pi | Lower Max width / FPS / JPEG quality; confirm the dongle is not encoding full 1080p without downscale. |
 | Device list empty (Linux) | Check `/dev/video*`, `video` group, Docker `devices:` / `group_add`. |
+| Could not open capture device index N (Docker) | That index is listed from sysfs but `/dev/videoN` is not in the container, or it is a metadata/codec node. Map `video0` **and** `video1`, set `YWC_VIDEO_GID` (`getent group video`, often 44), and select the capture node (usually video0). |
 | Host app exits when stopping / popping out the stream | USB HDMI dongles crash if the capture graph is closed and immediately reopened. Use a current build — pop-out hands off the live device; Close waits ~2 s before release. |
 
 OCR, click-through of the captured UI, capture-device audio, and WebRTC are **not** in this version.
