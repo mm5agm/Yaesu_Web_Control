@@ -1,4 +1,9 @@
-// Yaesu Web Control – Calibration Engine
+// Radio Web Control – Calibration Engine
+// Shared by Icom Web Control and Yaesu Web Control. Radio-agnostic: the
+// per-radio numbers live in each app's own calibration-tables.js, imported
+// as a sibling below. This file is copied into each app's wwwroot at build
+// time — see js/README.md. Edit it here, in the core, never in a wwwroot copy.
+//
 // Pure functions only. No DOM, no UI, no gauge logic, no side effects.
 //
 // This is the single source of truth for all meter calibration.

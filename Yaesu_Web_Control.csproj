@@ -285,4 +285,29 @@
     </Content>
   </ItemGroup>
 
+  <!-- Shared browser modules from the Radio_Web_Control_Core subtree (core/js).
+       The engine is authored once in core/js and copied into wwwroot at build
+       time; the copies are git-ignored so core/js stays the single source of
+       truth (see core/js/README.md). Runs before AssignTargetPaths so the
+       freshly-copied files are first-class Content THIS build, not next build:
+       EnableDefaultContentItems is false and the wwwroot glob above is evaluated
+       before any target runs, so on a clean checkout the file is absent when the
+       glob is computed and would 404 until a second build. Exclude="@(Content)"
+       drops anything that glob already found on a later build, so we never add a
+       duplicate Content item. -->
+  <Target Name="CopySharedCoreJs" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <_SharedCoreJs Include="core\js\**\*.js" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_SharedCoreJs)"
+          DestinationFiles="@(_SharedCoreJs->'wwwroot\js\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <Content Include="@(_SharedCoreJs->'wwwroot\js\%(RecursiveDir)%(Filename)%(Extension)')"
+               Exclude="@(Content)">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+
 </Project>
