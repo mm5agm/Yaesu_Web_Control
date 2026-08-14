@@ -10,9 +10,10 @@
 // throws on HDMI dongles whose real pin is 60000/1001 (59.94). Set duration
 // from the range, inside @try.
 //
-// Format is chosen once for a 60-capable pin at least 800 px wide so 15 / 30 /
-// 60 share size and aspect. 640×480 is last-resort only. Only the frame
-// duration changes with the dropdown.
+// Format is chosen once so 15 / 30 / 60 share size. Prefer a 4:3 pin at
+// least 800 px wide (800×600 after scale) over 16:9 720p/1080p (800×450).
+// 640×480 is last-resort only. Only the frame duration changes with the
+// dropdown. If the 4:3 pin cannot do 60, duration is clamped.
 
 static void set_err(char *err, int errLen, NSString *msg)
 {
@@ -31,20 +32,31 @@ static BOOL is_jpeg(FourCharCode sub)
 
 static BOOL format_can_do_any(AVCaptureDevice *dev, int fps);
 static CMTime duration_near_30(AVFrameRateRange *range);
+static BOOL is_radio_panel_aspect(int width, int height);
+static AVCaptureDeviceFormat *pick_format(AVCaptureDevice *dev, int fps, int minWidth, int target, BOOL panelAspectOnly);
 
-static int rank_format(BOOL jpeg, int width, int minWidth, int target)
+static BOOL is_radio_panel_aspect(int width, int height)
 {
-    // 800+ is a floor: 640 JPEG must not beat 800 uncompressed.
-    if (width >= minWidth)
-    {
-        int closeness = 2000000 - abs(width - target);
-        if (jpeg)
-            closeness += 100000;
-        return closeness;
-    }
+    if (height < 1)
+        return NO;
+    double a = (double)width / (double)height;
+    // 4:3 (800×600) and 5:3 (800×480). 16:9 (~1.78) is 800×450 after scale.
+    return a >= 1.20 && a <= 1.72;
+}
 
-    // Below the floor: last resort, prefer the least-tiny pin.
-    return width + (jpeg ? 50 : 0);
+static int rank_format(BOOL jpeg, int width, int height, int minWidth, int target)
+{
+    if (width < minWidth)
+        return width + (jpeg ? 50 : 0);
+
+    int scaledH = (int)llround((double)target * (double)height / (double)width);
+    int closeness = 2000000 - abs(width - target);
+    closeness += 400000 - abs(scaledH - 600) * 400;
+    if (is_radio_panel_aspect(width, height))
+        closeness += 500000;
+    if (jpeg)
+        closeness += 100000;
+    return closeness;
 }
 
 static BOOL format_can_do(AVCaptureDeviceFormat *fmt, int fps)
@@ -87,6 +99,38 @@ static int encode_target(int maxWidth)
     if (t > 1280)
         t = 1280;
     return t;
+}
+
+static AVCaptureDeviceFormat *pick_format(AVCaptureDevice *dev, int fps, int minWidth, int target, BOOL panelAspectOnly)
+{
+    AVCaptureDeviceFormat *chosen = nil;
+    int bestRank = -1;
+    for (AVCaptureDeviceFormat *fmt in dev.formats)
+    {
+        if (!format_can_do(fmt, fps))
+            continue;
+
+        CMFormatDescriptionRef desc = fmt.formatDescription;
+        CMVideoDimensions dims = CMVideoFormatDescriptionGetDimensions(desc);
+        if (dims.width < 2 || dims.height < 2)
+            continue;
+        if (panelAspectOnly)
+        {
+            if (dims.width < minWidth)
+                continue;
+            if (!is_radio_panel_aspect(dims.width, dims.height))
+                continue;
+        }
+
+        BOOL jpeg = is_jpeg(CMFormatDescriptionGetMediaSubType(desc));
+        int rank = rank_format(jpeg, dims.width, dims.height, minWidth, target);
+        if (chosen == nil || rank > bestRank)
+        {
+            chosen = fmt;
+            bestRank = rank;
+        }
+    }
+    return chosen;
 }
 
 static CMTime duration_for_fps(AVFrameRateRange *range, int fps)
@@ -139,61 +183,18 @@ int YwcSetAvFoundationFps(const char *uniqueIdUtf8, int fps, int maxWidth, char 
             if (!format_can_do_any(dev, 60))
                 wantFps = format_can_do_any(dev, 30) ? 30 : (format_can_do_any(dev, 15) ? 15 : fps);
 
-            AVCaptureDeviceFormat *chosen = nil;
-            int bestRank = -1;
-            CMVideoDimensions activeDims = { 0, 0 };
-            if (dev.activeFormat != nil)
-                activeDims = CMVideoFormatDescriptionGetDimensions(dev.activeFormat.formatDescription);
-            double activeAspect = (activeDims.height > 0)
-                ? (double)activeDims.width / (double)activeDims.height
-                : 0.0;
-
-            for (AVCaptureDeviceFormat *fmt in dev.formats)
-            {
-                if (!format_can_do(fmt, wantFps))
-                    continue;
-
-                CMFormatDescriptionRef desc = fmt.formatDescription;
-                CMVideoDimensions dims = CMVideoFormatDescriptionGetDimensions(desc);
-                if (dims.width < 2 || dims.height < 2)
-                    continue;
-
-                BOOL jpeg = is_jpeg(CMFormatDescriptionGetMediaSubType(desc));
-                int rank = rank_format(jpeg, dims.width, minWidth, target);
-                if (activeAspect > 0.1)
-                {
-                    double a = (double)dims.width / (double)dims.height;
-                    if (fabs(a - activeAspect) / activeAspect < 0.06)
-                        rank += 50000; // keep 16:9 vs 4:3 when the session is already running
-                }
-
-                if (chosen == nil || rank > bestRank)
-                {
-                    chosen = fmt;
-                    bestRank = rank;
-                }
-            }
-
+            // 4:3 ≥800 first; rank prefers 800×600 over 800×480. Do not
+            // require 60 here — that is how 16:9 720p/1080p (800×450) won.
+            // OpenCV's default is 1080p 16:9; locking to it keeps 800×450.
+            AVCaptureDeviceFormat *chosen = pick_format(dev, 15, minWidth, target, YES);
             if (chosen == nil)
-            {
-                // No 60-capable pin — fall back to whatever can do the request.
-                for (AVCaptureDeviceFormat *fmt in dev.formats)
-                {
-                    if (!format_can_do(fmt, fps))
-                        continue;
-                    CMFormatDescriptionRef desc = fmt.formatDescription;
-                    CMVideoDimensions dims = CMVideoFormatDescriptionGetDimensions(desc);
-                    if (dims.width < 2)
-                        continue;
-                    BOOL jpeg = is_jpeg(CMFormatDescriptionGetMediaSubType(desc));
-                    int rank = rank_format(jpeg, dims.width, minWidth, target);
-                    if (chosen == nil || rank > bestRank)
-                    {
-                        chosen = fmt;
-                        bestRank = rank;
-                    }
-                }
-            }
+                chosen = pick_format(dev, 30, minWidth, target, YES);
+            if (chosen == nil)
+                chosen = pick_format(dev, 60, minWidth, target, YES);
+            if (chosen == nil)
+                chosen = pick_format(dev, wantFps, minWidth, target, NO);
+            if (chosen == nil)
+                chosen = pick_format(dev, fps, minWidth, target, NO);
 
             if (chosen == nil)
             {
