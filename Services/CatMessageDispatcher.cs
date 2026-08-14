@@ -597,6 +597,19 @@
                             });
                         }
                         break;
+                    case "MS":
+                        // MS{P1}; or MS{P1}{P2}; — front-panel METER SW selection.
+                        // Stored verbatim: the parameter encoding differs per model
+                        // (see RadioStateService.RadioMeterSelection) and YWC only
+                        // ever needs to replay it, never to understand it. Sent at
+                        // init by GetInitialValues and pushed by the radio's auto-
+                        // information whenever the operator changes meters.
+                        {
+                            var msDigits = message.Substring(2).TrimEnd(';');
+                            if (msDigits.Length is 1 or 2 && msDigits.All(char.IsDigit))
+                                _stateService.ReportMeterSelection(msDigits);
+                        }
+                        break;
                     case "MG":
                         // MG{NNN}; — MIC Gain 000-100
                         if (message.Length >= 6 && int.TryParse(message.Substring(2, 3), out int mgVal))

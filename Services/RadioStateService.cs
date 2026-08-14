@@ -423,6 +423,43 @@ namespace Yaesu_Web_Control.Services
         private int? _powerMeter;
         public int? PowerMeter { get => _powerMeter; set => SetField(ref _powerMeter, value); }
 
+        // --- Front-panel meter selection (MS) ---------------------------------
+        //
+        // The operator's own front-panel meter choice, stored as the RAW parameter
+        // digits from the radio's own MS answer — never interpreted. That matters,
+        // because MS's parameter encoding is model-specific:
+        //
+        //   FTdx101MP/D  MSP1P2;  P1 MAIN 0=POW 1=COMP 2=TEMP
+        //                         P2 SUB  0=ALC 1=VDD  2=ID   3=SWR
+        //   FTdx10/710   MSP1P2;  P1 0=PO 1=COMP 2=ALC 3=VDD 4=ID 5=SWR, P2 fixed 0
+        //   FTDX5000     MSP1;    0=COMP 1=ALC 2=PO 3=SWR 4=ID 5=VDD
+        //   FT-991A      MSP1;    0=COMP 1=ALC 2=PO 3=SWR 4=ID 5=VDD
+        //   FTDX3000     MSP1;    0=COMP 1=ALC 3=SWR 4=ID 5=VDD  (no PO)
+        //
+        // Keeping the digits opaque means capture-and-restore works on every model
+        // without a per-model table: we replay exactly what the radio told us it
+        // had. Only the *borrow* value (MS13 on the FTdx101) is model-specific, and
+        // that stays confined to the FTdx101 branch in MeterPollingService.
+        //
+        // Populated from the MS; read issued during init and from the unsolicited
+        // MS auto-info the radio pushes when the operator changes meters on the
+        // front panel (MS has AI in every supported model's CAT manual).
+        public string? RadioMeterSelection { get; private set; }
+
+        // True while MeterPollingService has commandeered the meter pair for the
+        // FTdx101 comp+SWR read. MS traffic seen during a borrow is our own write
+        // echoing back, so ReportMeterSelection drops it rather than recording
+        // MS13 as the operator's preference and "restoring" to it forever.
+        public bool MetersBorrowed { get; set; }
+
+        public void ReportMeterSelection(string digits)
+        {
+            if (MetersBorrowed || string.IsNullOrEmpty(digits)) return;
+            if (RadioMeterSelection == digits) return;
+            RadioMeterSelection = digits;
+            _logger.LogInformation("[Meters] Operator front-panel meter selection is MS{Digits}", digits);
+        }
+
         private int? _compressionMeter;
         public int? CompressionMeter
         {

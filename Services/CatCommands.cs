@@ -21,8 +21,14 @@
         // METER READING COMMANDS (RM)
         public const string MeterPower = "RM5";    // Power output meter (0-255)
         public const string MeterSWR = "RM6";      // SWR meter (0-255) — NOTE: RM6 returns stale/wrong values on FTdx101MP; use SetMetersSWR+MeterBoth instead
-        public const string SetMetersCompAndSWR = "MS13"; // Select Compression(left) + SWR(right) for RM0 read
-        public const string SetMeterPower       = "MS01"; // Restore the default Power meter on shutdown so the user's radio is left in a normal state
+        public const string SetMetersCompAndSWR = "MS13"; // FTdx101MP/D ONLY: Compression(left) + SWR(right) for the RM0 read
+        public const string SetMeterPower       = "MS01"; // FTdx101MP/D ONLY: POW(left) + ALC(right) — the radio's own default pair
+
+        // Fallback used when restoring the operator's meters and YWC never saw an
+        // MS answer (radio powered up mid-session, init answer lost, etc.). MS01 on
+        // the FTdx101 is POW + ALC, which is what the radio shows out of the box —
+        // the same value the pre-existing shutdown restore has always used.
+        public const string DefaultFtdx101MeterSelection = "01";
         public const string MeterBoth = "RM0";            // Read both currently-selected meters: RM0LLLRRR;
         public const string MeterALC = "RM4";      // ALC meter (0-255)
         public const string MeterComp = "RM3";     // Compression meter (0-255)
