@@ -530,19 +530,14 @@ namespace Yaesu_Web_Control.Services.Video
                         if (!loggedFormat)
                         {
                             loggedFormat = true;
-                            var uncompressedMbps = reportW * reportH * Yuy2BytesPerPixel * targetFps / 1e6;
-                            _logger.LogInformation(
-                                "Radio Display negotiated {W}x{H} {FourCc} device={DevFps:0.#}fps " +
-                                "(encode {Target} fps, maxW={MaxW}, mode={Mode}, uncompressed {Mbps:0.#} MB/s vs ~{Budget:0} MB/s USB2)",
+                            LogNegotiatedFormat(
                                 reportW,
                                 reportH,
-                                FormatFourCc(cap.Get(VideoCaptureProperties.FourCC)),
+                                cap.Get(VideoCaptureProperties.FourCC),
                                 cap.Get(VideoCaptureProperties.Fps),
                                 targetFps,
                                 maxWidth,
-                                jpegPassthrough ? "passthrough" : "encode",
-                                uncompressedMbps,
-                                Usb2UvcBytesPerSecond / 1e6);
+                                jpegPassthrough);
                         }
 
                         // Unplug: DirectShow keeps succeeding with stale frames
@@ -1397,9 +1392,73 @@ namespace Yaesu_Web_Control.Services.Video
         private static TaskCompletionSource<bool> NewFramePulse() =>
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        private void LogNegotiatedFormat(
+            int width,
+            int height,
+            double fourCcValue,
+            double deviceFps,
+            int targetFps,
+            int maxWidth,
+            bool jpegPassthrough)
+        {
+            var fourCc = FormatFourCc(fourCcValue);
+            var mode = jpegPassthrough ? "passthrough" : "encode";
+            var uncompressedMbps = width * height * Yuy2BytesPerPixel * targetFps / 1e6;
+            var usb2BudgetMbps = Usb2UvcBytesPerSecond / 1e6;
+
+            // USB2 comparison only makes sense for known uncompressed packed
+            // formats. MJPEG / unknown FourCC on a Pi at 640×480@60 can sustain
+            // 60 fps on the wire while the YUY2 estimate (36.9 MB/s) looks over
+            // the ~22 MB/s budget — a false alarm.
+            if (LooksUncompressedFourCc(fourCc) && uncompressedMbps > usb2BudgetMbps)
+            {
+                _logger.LogWarning(
+                    "Radio Display negotiated {W}x{H} {FourCc} device={DevFps:0.#}fps " +
+                    "(encode {Target} fps, maxW={MaxW}, mode={Mode}, uncompressed {Mbps:0.#} MB/s vs ~{Budget:0} MB/s USB2)",
+                    width, height, fourCc, deviceFps, targetFps, maxWidth, mode,
+                    uncompressedMbps, usb2BudgetMbps);
+                return;
+            }
+
+            _logger.LogInformation(
+                "Radio Display negotiated {W}x{H} {FourCc} device={DevFps:0.#}fps " +
+                "(encode {Target} fps, maxW={MaxW}, mode={Mode})",
+                width, height, fourCc, deviceFps, targetFps, maxWidth, mode);
+        }
+
+        /// <summary>
+        /// Packed YUV/RGB FourCCs whose USB payload is ~2–3 bytes/pixel.
+        /// Anything else (MJPG, unknown, hex dump) is treated as compressed or
+        /// untrusted so we do not warn on USB2 budget.
+        /// </summary>
+        private static bool LooksUncompressedFourCc(string fourCc)
+        {
+            return fourCc.Equals("YUY2", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("YUYV", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("UYVY", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("YVYU", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("RGB3", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("BGR3", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("RGB4", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("BGR4", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("I420", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("YV12", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("NV12", StringComparison.OrdinalIgnoreCase)
+                || fourCc.Equals("GREY", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static string FormatFourCc(double value)
         {
-            var c = unchecked((uint)(int)value);
+            if (double.IsNaN(value) || double.IsInfinity(value) || value <= 0)
+                return "unknown";
+
+            // CAP_PROP_FOURCC is a u32 packed as double. Cast via long so
+            // codes with the high bit set are not truncated by (int).
+            var rounded = Math.Round(value);
+            if (rounded > uint.MaxValue)
+                return "unknown";
+
+            var c = unchecked((uint)rounded);
             Span<char> chars = stackalloc char[4];
             chars[0] = (char)(c & 0xFF);
             chars[1] = (char)((c >> 8) & 0xFF);
@@ -1407,12 +1466,18 @@ namespace Yaesu_Web_Control.Services.Video
             chars[3] = (char)((c >> 24) & 0xFF);
             for (var i = 0; i < 4; i++)
             {
-                if (chars[i] < 32 || chars[i] > 126)
-                    chars[i] = '?';
+                // FourCC is letters, digits, or space (e.g. "Y16 "). Punctuation
+                // from a driver that does not return a real FourCC (seen as
+                // "}?6?" on V4L2/AVFoundation) is not useful in the log.
+                if (!IsFourCcChar(chars[i]))
+                    return $"0x{c:X8}";
             }
 
             return new string(chars);
         }
+
+        private static bool IsFourCcChar(char ch) =>
+            ch is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or ' ';
 
         private void SetStatus(string status) => Volatile.Write(ref _status!, status);
 

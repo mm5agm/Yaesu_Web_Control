@@ -312,7 +312,8 @@
         public int VideoTargetFps { get; set; } = 15;
 
         /// <summary>
-        /// Image Quality
+        /// JPEG quality. Allowed: 40, 65, 85 (Low / Medium / Max on the Radio Display panel).
+        /// Default 65. The 85 cap is intentional.
         /// </summary>
         public int VideoJpegQuality { get; set; } = 65;
 
