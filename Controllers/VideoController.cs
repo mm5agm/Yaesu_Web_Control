@@ -112,7 +112,7 @@ namespace Yaesu_Web_Control.Controllers
                 viewers = _sessions.ViewerCount,
                 maxWidth = s.VideoMaxWidth,
                 targetFps = s.VideoTargetFps,
-                jpegQuality = s.VideoJpegQuality
+                jpegQuality = VideoJpegQualityOptions.Normalize(s.VideoJpegQuality)
             });
         }
 
@@ -158,6 +158,24 @@ namespace Yaesu_Web_Control.Controllers
             s.VideoTargetFps = VideoFpsOptions.Normalize(body?.Fps ?? s.VideoTargetFps);
             await _settings.SaveSettingsAsync(s);
             return Ok(new { targetFps = s.VideoTargetFps });
+        }
+
+        public sealed class JpegQualityRequest
+        {
+            public int? Quality { get; set; }
+        }
+
+        /// <summary>Persist JPEG quality (50 / 65 / 85). Applied on the next encode cycle.</summary>
+        [HttpPost("jpeg-quality")]
+        public async Task<IActionResult> SetJpegQuality([FromBody] JpegQualityRequest? body)
+        {
+            var s = await _settings.GetSettingsAsync();
+            if (!s.VideoDisplayEnabled)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
+
+            s.VideoJpegQuality = VideoJpegQualityOptions.Normalize(body?.Quality ?? s.VideoJpegQuality);
+            await _settings.SaveSettingsAsync(s);
+            return Ok(new { jpegQuality = s.VideoJpegQuality });
         }
 
         /// <summary>

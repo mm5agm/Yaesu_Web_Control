@@ -1225,3 +1225,20 @@ fieldset.calibration-card {
     font-size: 0.7rem;
     color: #aaa;
 }
+
+.radio-display-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9a9a9a;
+    font-size: 0.95rem;
+    text-align: center;
+    padding: 1.25rem;
+    pointer-events: none;
+    user-select: none;
+}
+.radio-display-placeholder[hidden] {
+    display: none !important;
+}
