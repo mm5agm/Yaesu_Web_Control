@@ -343,11 +343,14 @@ namespace Yaesu_Web_Control.Services.Video
                         continue;
                     }
 
-                    cap = OpenCapture(index, maxWidth, targetFps, out var jpegPassthrough);
+                    cap = OpenCapture(index, maxWidth, targetFps, out var jpegPassthrough, out var openError);
                     if (cap is null || !cap.IsOpened())
                     {
-                        MarkDisconnected($"Could not open capture device index {index}.");
-                        _logger.LogWarning("Radio Display: failed to open device index {Index}", index);
+                        var detail = OperatingSystem.IsLinux()
+                            ? LinuxV4l2Devices.DescribeOpenFailure(index, openError)
+                            : (openError ?? $"Could not open capture device index {index}.");
+                        MarkDisconnected(detail);
+                        _logger.LogWarning("Radio Display: failed to open device index {Index}: {Detail}", index, detail);
                         SleepOrCancel(2000, ct);
                         continue;
                     }
@@ -810,9 +813,15 @@ namespace Yaesu_Web_Control.Services.Video
             return (320, 240);
         }
 
-        private static VideoCapture? OpenCapture(int index, int maxWidth, int targetFps, out bool jpegPassthrough)
+        private static VideoCapture? OpenCapture(
+            int index,
+            int maxWidth,
+            int targetFps,
+            out bool jpegPassthrough,
+            out string? openError)
         {
             jpegPassthrough = false;
+            openError = null;
             VideoCaptureAPIs[] backends;
             if (OperatingSystem.IsWindows())
                 backends = [VideoCaptureAPIs.DSHOW, VideoCaptureAPIs.MSMF, VideoCaptureAPIs.ANY];
@@ -837,14 +846,24 @@ namespace Yaesu_Web_Control.Services.Video
             };
             foreach (var api in backends)
             {
-                var cap = TryOpen(index, api, bgrParams);
+                if (OperatingSystem.IsLinux())
+                {
+                    var byPath = TryOpenPath(LinuxV4l2Devices.DevicePath(index), api, bgrParams, ref openError);
+                    if (byPath is not null)
+                    {
+                        ApplyPreferredCaptureFormat(byPath, maxWidth, targetFps);
+                        return byPath;
+                    }
+                }
+
+                var cap = TryOpen(index, api, bgrParams, ref openError);
                 if (cap is not null)
                 {
                     ApplyPreferredCaptureFormat(cap, maxWidth, targetFps);
                     return cap;
                 }
 
-                cap = TryOpen(index, api, paramsArray: null);
+                cap = TryOpen(index, api, paramsArray: null, ref openError);
                 if (cap is not null)
                 {
                     ApplyPreferredCaptureFormat(cap, maxWidth, targetFps);
@@ -868,7 +887,7 @@ namespace Yaesu_Web_Control.Services.Video
             try { cap.Set(VideoCaptureProperties.BufferSize, 3); } catch { /* not all backends */ }
         }
 
-        private static VideoCapture? TryOpen(int index, VideoCaptureAPIs api, int[]? paramsArray)
+        private static VideoCapture? TryOpen(int index, VideoCaptureAPIs api, int[]? paramsArray, ref string? openError)
         {
             try
             {
@@ -879,12 +898,43 @@ namespace Yaesu_Web_Control.Services.Video
                     return cap;
                 cap.Dispose();
             }
-            catch
+            catch (Exception ex)
             {
-                // try next
+                openError = FlattenException(ex);
             }
 
             return null;
+        }
+
+        private static VideoCapture? TryOpenPath(string path, VideoCaptureAPIs api, int[]? paramsArray, ref string? openError)
+        {
+            try
+            {
+                var cap = paramsArray is null
+                    ? new VideoCapture(path, api)
+                    : new VideoCapture(path, api, paramsArray);
+                if (cap.IsOpened())
+                    return cap;
+                cap.Dispose();
+            }
+            catch (Exception ex)
+            {
+                openError = FlattenException(ex);
+            }
+
+            return null;
+        }
+
+        private static string FlattenException(Exception ex)
+        {
+            var parts = new List<string>();
+            for (var e = ex; e != null; e = e.InnerException)
+            {
+                if (!string.IsNullOrWhiteSpace(e.Message) && !parts.Contains(e.Message))
+                    parts.Add(e.Message);
+            }
+
+            return string.Join(" → ", parts);
         }
 
         private static bool TryCopyJpeg(Mat frame, out byte[]? jpeg)

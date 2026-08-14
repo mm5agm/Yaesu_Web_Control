@@ -44,7 +44,8 @@ RUN arch="$TARGETARCH"; \
       --self-contained false \
       --no-restore \
       -o /app/publish \
-      /p:UseAppHost=true
+      /p:UseAppHost=true \
+    && test -f /app/publish/libOpenCvSharpExtern.so
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
@@ -53,12 +54,29 @@ WORKDIR /app
 # System.IO.Ports on Linux talks to USB-serial via libudev.
 # Remote Audio (PortAudio) needs ALSA + libportaudio against /dev/snd.
 # Radio Display (OpenCvSharp / V4L2) uses kernel UVC nodes under /dev/video*.
-# aspnet:10.0 is Ubuntu 24.04 — ALSA ships as libasound2t64 (not libasound2).
-RUN apt-get update \
+# OpenCvSharp4.runtime.linux-arm64 ships libOpenCvSharpExtern.so linked against
+# GTK3, FFmpeg 6, Tesseract, and image codecs (readelf DT_NEEDED). Those packages
+# live in Ubuntu universe. aspnet:10.0 is Ubuntu 24.04 (t64 sonames).
+RUN if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+      sed -i 's/Components: main/Components: main universe/' /etc/apt/sources.list.d/ubuntu.sources; \
+    fi \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
          libudev1 \
          libasound2t64 \
          libportaudio2 \
+         libgtk-3-0t64 \
+         libtesseract5 \
+         libavcodec60 \
+         libavformat60 \
+         libavutil58 \
+         libswscale7 \
+         libjpeg-turbo8 \
+         libwebp7 \
+         libwebpmux3 \
+         libwebpdemux2 \
+         libpng16-16t64 \
+         libtiff6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Persist settings/logs under XDG_CONFIG_HOME (SpecialFolder.ApplicationData).

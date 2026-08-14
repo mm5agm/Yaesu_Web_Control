@@ -281,6 +281,12 @@ namespace Yaesu_Web_Control.Services.Video
                 if (string.IsNullOrWhiteSpace(friendly))
                     friendly = name;
 
+                // Sysfs lists metadata + Pi codec nodes that OpenCV cannot open,
+                // and Docker often maps only one /dev/videoN while sysfs still
+                // shows the rest of the host.
+                if (OperatingSystem.IsLinux() && !LinuxV4l2Devices.ShouldList(index, friendly))
+                    continue;
+
                 result.Add(new VideoDeviceInfo
                 {
                     Index = index,

@@ -127,7 +127,8 @@
     <PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
     <!-- Native runtimes: pin to published versions (linux/osx packs skip 4.11). -->
     <PackageReference Include="OpenCvSharp4.official.runtime.linux-x64.slim" Version="4.13.0.20260225" />
-    <PackageReference Include="OpenCvSharp4.runtime.linux-arm" Version="4.13.0.20260211" />
+    <!-- linux-arm (20260211) used RID linux-arm, so linux-arm64 publish omitted natives. -->
+    <PackageReference Include="OpenCvSharp4.runtime.linux-arm64" Version="4.13.0.20260627" />
     <PackageReference Include="OpenCvSharp4.runtime.osx.arm64" Version="4.13.0.20260627" />
     <PackageReference Include="OpenCvSharp4.runtime.osx.x64" Version="4.13.0.20260627" />
     <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
