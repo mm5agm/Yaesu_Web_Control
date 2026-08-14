@@ -165,7 +165,7 @@ namespace Yaesu_Web_Control.Controllers
             public int? Quality { get; set; }
         }
 
-        /// <summary>Persist JPEG quality (50 / 65 / 85). Applied on the next encode cycle.</summary>
+        /// <summary>Persist JPEG quality (40 / 65 / 85). Applied on the next encode cycle.</summary>
         [HttpPost("jpeg-quality")]
         public async Task<IActionResult> SetJpegQuality([FromBody] JpegQualityRequest? body)
         {

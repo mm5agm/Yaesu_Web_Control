@@ -7,7 +7,7 @@ const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;
 const RECONNECT_MAX_MS = 15000;
 const ALLOWED_FPS = [15, 30, 40, 60];
-const ALLOWED_QUALITY = [50, 65, 85];
+const ALLOWED_QUALITY = [40, 65, 85];
 const CHANNEL_NAME = 'ywc-radio-display';
 const AUTO_START_KEY = 'ywc.radioDisplayAutoStart';
 
@@ -55,7 +55,10 @@ function normalizeFps(fps) {
 
 function normalizeQuality(q) {
   const n = Number(q);
-  return ALLOWED_QUALITY.includes(n) ? n : 65;
+  if (!Number.isFinite(n)) return 65;
+  if (ALLOWED_QUALITY.includes(n)) return n;
+  return ALLOWED_QUALITY.reduce((best, a) =>
+    Math.abs(a - n) < Math.abs(best - n) ? a : best);
 }
 
 function syncFpsSelect(fps) {
