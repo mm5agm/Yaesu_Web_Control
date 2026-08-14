@@ -210,7 +210,7 @@ namespace Yaesu_Web_Control.Services.Video
                 {
                     Index = kv.Key,
                     Key = VideoDeviceKey.FromIndex(kv.Key),
-                    Label = FormatLabel(kv.Key, kv.Value, 0, 0, collisions.Contains(kv.Value.Trim())),
+                    Label = FormatLabel(kv.Key, kv.Value, collisions.Contains(kv.Value.Trim())),
                     Rates = VideoDeviceFpsCaps.PeekRates(VideoDeviceKey.FromIndex(kv.Key))
                 });
             }
@@ -245,7 +245,7 @@ namespace Yaesu_Web_Control.Services.Video
                 {
                     Index = i,
                     Key = VideoDeviceKey.FromIndex(i),
-                    Label = FormatLabel(i, friendly, 0, 0, collisions.Contains(friendly.Trim())),
+                    Label = FormatLabel(i, friendly, collisions.Contains(friendly.Trim())),
                     Rates = VideoDeviceFpsCaps.PeekRates(VideoDeviceKey.FromIndex(i))
                 });
             }
@@ -261,13 +261,11 @@ namespace Yaesu_Web_Control.Services.Video
                 .Select(g => g.Key)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        private static string FormatLabel(int index, string? friendly, int width, int height, bool nameCollision)
+        private static string FormatLabel(int index, string? friendly, bool nameCollision)
         {
             var name = string.IsNullOrWhiteSpace(friendly) ? $"Camera {index}" : friendly.Trim();
             if (nameCollision)
                 name = $"{name} (#{index})";
-            if (width > 0 && height > 0)
-                return $"{name}  {width}×{height}";
             return name;
         }
 
@@ -359,7 +357,7 @@ namespace Yaesu_Web_Control.Services.Video
                 {
                     Index = d.Index,
                     Key = key,
-                    Label = FormatLabel(d.Index, d.LocalizedName, 0, 0, collision),
+                    Label = FormatLabel(d.Index, d.LocalizedName, collision),
                     Rates = d.Rates
                 });
                 VideoDeviceFpsCaps.Remember(key, d.Rates);
@@ -542,8 +540,6 @@ namespace Yaesu_Web_Control.Services.Video
                 if (!cap.IsOpened())
                     return;
 
-                var w = (int)cap.Get(VideoCaptureProperties.FrameWidth);
-                var h = (int)cap.Get(VideoCaptureProperties.FrameHeight);
                 friendlyNames.TryGetValue(index, out var friendly);
                 var collision = !string.IsNullOrWhiteSpace(friendly) && collisions.Contains(friendly.Trim());
 
@@ -552,7 +548,7 @@ namespace Yaesu_Web_Control.Services.Video
                 {
                     Index = index,
                     Key = key,
-                    Label = FormatLabel(index, friendly, w, h, collision),
+                    Label = FormatLabel(index, friendly, collision),
                     Rates = VideoDeviceFpsCaps.PeekRates(key)
                 });
             }

@@ -70,6 +70,7 @@ namespace Yaesu_Web_Control.Services.Video
         private int _openDeviceIndex = -1;
         private int _deviceOpenFlag;
         private bool _mfUnavailable;
+        private bool _dshowMjpegUnavailable;
         private VideoCapture? _liveCapture;
         private TaskCompletionSource<bool> _framePulse = NewFramePulse();
 
@@ -336,6 +337,7 @@ namespace Yaesu_Web_Control.Services.Video
             PulseFrame();
             Volatile.Write(ref _measuredFps, 0);
             _mfUnavailable = false;
+            _dshowMjpegUnavailable = false;
             _logger.LogInformation("Radio Display capture stopped");
         }
 
@@ -402,7 +404,17 @@ namespace Yaesu_Web_Control.Services.Video
                 VideoCapture? cap = null;
                 try
                 {
-                    if (OperatingSystem.IsWindows() && !_mfUnavailable && RunMfSession(index, targetFps, ct))
+                    if (OperatingSystem.IsWindows() && !_dshowMjpegUnavailable &&
+                        RunDshowMjpegSession(index, maxWidth, targetFps, ct))
+                    {
+                        if (ct.IsCancellationRequested)
+                            break;
+                        SetStatus("connecting");
+                        SleepOrCancel(1000, ct);
+                        continue;
+                    }
+
+                    if (OperatingSystem.IsWindows() && !_mfUnavailable && RunMfSession(index, maxWidth, targetFps, ct))
                     {
                         if (ct.IsCancellationRequested)
                             break;
@@ -802,11 +814,11 @@ namespace Yaesu_Web_Control.Services.Video
         /// Run the Media Foundation MJPEG session on its own MTA thread and
         /// wait for it. The capture thread is STA (DirectShow graphs need that);
         /// the MF source reader misbehaves in a single-threaded apartment.
-        /// Returns false when this device has no MJPEG pin, so the caller falls
-        /// back to the OpenCV decode-and-encode path.
+        /// Returns false when this device has no ranked MJPEG pin, so the caller
+        /// falls back to the OpenCV decode-and-encode path.
         /// </summary>
         [SupportedOSPlatform("windows")]
-        private bool RunMfSession(int index, int targetFps, CancellationToken ct)
+        private bool RunMfSession(int index, int maxWidth, int targetFps, CancellationToken ct)
         {
             var opened = false;
             var thread = new Thread(() =>
@@ -814,14 +826,14 @@ namespace Yaesu_Web_Control.Services.Video
                 WindowsMfMjpegSession? mf = null;
                 try
                 {
-                    mf = WindowsMfMjpegSession.TryOpen(index, targetFps, _logger);
+                    mf = WindowsMfMjpegSession.TryOpen(index, targetFps, maxWidth, _logger);
                     if (mf is null)
                         return;
 
                     opened = true;
                     Volatile.Write(ref _openDeviceIndex, index);
                     Volatile.Write(ref _deviceOpenFlag, 1);
-                    RunMfPassthroughLoop(mf, index, targetFps, ct);
+                    RunJpegPassthroughLoop(mf, index, maxWidth, targetFps, "Media Foundation", ct);
                 }
                 catch (Exception ex)
                 {
@@ -848,20 +860,63 @@ namespace Yaesu_Web_Control.Services.Video
             if (!opened)
             {
                 // Do not re-probe on every reconnect once we know this host's
-                // device has no MJPEG pin — it costs seconds per attempt.
+                // device has no ranked MJPEG pin — it costs seconds per attempt.
                 _mfUnavailable = true;
             }
 
             return opened;
         }
 
+        /// <summary>
+        /// DirectShow MJPEG pin (the OBS path) on this STA capture thread.
+        /// Returns false when the dongle has no usable MJPEG type or the graph
+        /// failed to connect without a decoder, so the caller can fall back.
+        /// </summary>
         [SupportedOSPlatform("windows")]
-        private void RunMfPassthroughLoop(WindowsMfMjpegSession mf, int index, int targetFps, CancellationToken ct)
+        private bool RunDshowMjpegSession(int index, int maxWidth, int targetFps, CancellationToken ct)
+        {
+            WindowsDshowMjpegSession? ds = null;
+            var opened = false;
+            try
+            {
+                ds = WindowsDshowMjpegSession.TryOpen(index, targetFps, maxWidth, _logger);
+                if (ds is null)
+                {
+                    _dshowMjpegUnavailable = true;
+                    return false;
+                }
+
+                opened = true;
+                Volatile.Write(ref _openDeviceIndex, index);
+                Volatile.Write(ref _deviceOpenFlag, 1);
+                RunJpegPassthroughLoop(ds, index, maxWidth, targetFps, "DirectShow", ct);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Radio Display DirectShow MJPEG session failed");
+                if (!opened)
+                    _dshowMjpegUnavailable = true;
+                return opened;
+            }
+            finally
+            {
+                Volatile.Write(ref _deviceOpenFlag, 0);
+                Volatile.Write(ref _openDeviceIndex, -1);
+                ds?.Dispose();
+            }
+        }
+
+        [SupportedOSPlatform("windows")]
+        private void RunJpegPassthroughLoop(
+            IJpegCaptureSession session, int index, int maxWidth, int targetFps, string via, CancellationToken ct)
         {
             SetStatus("streaming");
             _lastError = null;
 
             var settings = ReadSettings();
+            var jpegQuality = VideoJpegQualityOptions.Normalize(settings.VideoJpegQuality);
+            var frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
             var settingsAge = Stopwatch.StartNew();
             var fpsWindow = Stopwatch.StartNew();
             var streamStarted = Stopwatch.StartNew();
@@ -869,13 +924,25 @@ namespace Yaesu_Web_Control.Services.Video
             var emptyStreak = 0;
             var fpsCollapseStreak = 0;
             var loggedFormat = false;
+            using var resizedScratch = new Mat();
 
             while (!ct.IsCancellationRequested)
             {
                 if (settingsAge.ElapsedMilliseconds >= SettingsRefreshMs)
                 {
                     settings = ReadSettings();
-                    targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps, VideoDeviceFpsCaps.PeekRates(settings.VideoCaptureDeviceKey));
+                    maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
+                    jpegQuality = VideoJpegQualityOptions.Normalize(settings.VideoJpegQuality);
+                    var newFps = VideoFpsOptions.Normalize(
+                        settings.VideoTargetFps, VideoDeviceFpsCaps.PeekRates(settings.VideoCaptureDeviceKey));
+                    if (newFps != targetFps)
+                    {
+                        targetFps = newFps;
+                        frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
+                        if (session.TrySetFrameRate(targetFps))
+                            loggedFormat = false;
+                    }
+
                     settingsAge.Restart();
                 }
 
@@ -887,7 +954,7 @@ namespace Yaesu_Web_Control.Services.Video
                 }
 
                 var tick = Stopwatch.StartNew();
-                if (!mf.TryReadJpeg(out var jpegBytes) || jpegBytes is null || jpegBytes.Length == 0)
+                if (!session.TryReadJpeg(out var jpegBytes) || jpegBytes is null || jpegBytes.Length == 0)
                 {
                     emptyStreak++;
                     if (emptyStreak >= EmptyFrameGiveUp)
@@ -904,36 +971,56 @@ namespace Yaesu_Web_Control.Services.Video
                 if (!loggedFormat)
                 {
                     loggedFormat = true;
+                    var mode = maxWidth > 0 && session.Width > maxWidth ? "passthrough+scale" : "passthrough";
                     _logger.LogInformation(
-                        "Radio Display negotiated {W}x{H} MJPG device={DevFps}fps (encode {Target} fps, maxW={MaxW}, mode={Mode})",
-                        mf.Width,
-                        mf.Height,
+                        "Radio Display negotiated {W}x{H} MJPG device={DevFps:0.#}fps (encode {Target} fps, maxW={MaxW}, mode={Mode}, via={Via})",
+                        session.Width,
+                        session.Height,
+                        session.DeviceFps,
                         targetFps,
-                        targetFps,
-                        0,
-                        "passthrough");
+                        maxWidth,
+                        mode,
+                        via);
                 }
 
                 if (tick.ElapsedMilliseconds >= SlowReadMs)
                 {
                     MarkDisconnected("Capture device stalled (no timely frames).");
                     _logger.LogWarning(
-                        "Radio Display: Media Foundation ReadSample took {Ms} ms — treating as unplug",
-                        tick.ElapsedMilliseconds);
+                        "Radio Display: {Via} JPEG read took {Ms} ms — treating as unplug",
+                        via, tick.ElapsedMilliseconds);
                     break;
                 }
 
                 if (_sessions.ViewerCount > 0)
                 {
+                    var outW = session.Width;
+                    var outH = session.Height;
+                    if (TryDownscalePublishedJpeg(
+                            jpegBytes, session.Width, session.Height, maxWidth, jpegQuality, resizedScratch,
+                            out var sized, out outW, out outH) &&
+                        sized is { Length: > 0 })
+                    {
+                        jpegBytes = sized;
+                    }
+
+                    long publishedSeq;
                     lock (_frameLock)
                     {
                         _latestJpeg = jpegBytes;
-                        _frameSeq++;
-                        _frameWidth = mf.Width;
-                        _frameHeight = mf.Height;
+                        publishedSeq = ++_frameSeq;
+                        _frameWidth = outW;
+                        _frameHeight = outH;
                     }
 
                     PulseFrame();
+
+                    if (publishedSeq == 1)
+                    {
+                        _logger.LogInformation(
+                            "Radio Display first JPEG published ({Bytes} bytes, {W}x{H})",
+                            jpegBytes.Length, outW, outH);
+                    }
 
                     framesInWindow++;
                     if (fpsWindow.ElapsedMilliseconds >= 1000)
@@ -963,8 +1050,48 @@ namespace Yaesu_Web_Control.Services.Video
                     }
                 }
 
-                // ReadSample already waits for the next device frame.
+                var wait = frameInterval - tick.Elapsed;
+                if (wait > TimeSpan.Zero)
+                    SleepOrCancel(wait, ct);
             }
+        }
+
+        /// <summary>
+        /// Downscale a captured JPEG to <paramref name="maxWidth"/> with linear
+        /// resize (macOS encode path). Native ≤ maxWidth is copied as-is.
+        /// </summary>
+        private static bool TryDownscalePublishedJpeg(
+            byte[] jpegIn,
+            int srcW,
+            int srcH,
+            int maxWidth,
+            int jpegQuality,
+            Mat resizedScratch,
+            out byte[]? jpegOut,
+            out int outW,
+            out int outH)
+        {
+            jpegOut = jpegIn;
+            outW = srcW;
+            outH = srcH;
+            if (maxWidth <= 0 || srcW <= maxWidth)
+                return true;
+
+            using var decoded = Cv2.ImDecode(jpegIn, ImreadModes.Color);
+            if (decoded.Empty() || decoded.Width < 2 || decoded.Height < 2)
+                return true;
+
+            var newH = Math.Max(1, (int)Math.Round(decoded.Height * ((double)maxWidth / decoded.Width)));
+            Cv2.Resize(decoded, resizedScratch, new OpenCvSharp.Size(maxWidth, newH), 0, 0, InterpolationFlags.Linear);
+            var encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
+            var encoded = resizedScratch.ImEncode(".jpg", encodeParams);
+            if (encoded is null || encoded.Length < 100)
+                return true;
+
+            jpegOut = encoded;
+            outW = maxWidth;
+            outH = newH;
+            return true;
         }
 
         private ApplicationSettings ReadSettings()
@@ -992,39 +1119,14 @@ namespace Yaesu_Web_Control.Services.Video
         /// <summary>Uncompressed YUY2 is 2 bytes per pixel.</summary>
         private const int Yuy2BytesPerPixel = 2;
 
-        private static readonly (int Width, int Height)[] FallbackCaptureSizes =
-        [
-            (1024, 768),
-            (800, 600),
-            (640, 480),
-            (512, 384),
-            (480, 360),
-            (320, 240)
-        ];
-
         /// <summary>
-        /// Largest 4:3 mode whose uncompressed frames still fit the USB 2.0
-        /// budget at <paramref name="targetFps"/>. Without this, 800×600 YUY2 at
-        /// 30 fps asks for ~29 MB/s on a ~22 MB/s bus and the dongle delivers
-        /// ~20 fps no matter how the host paces its reads. Only the compressed
-        /// MJPEG path (WindowsMfMjpegSession) escapes this trade-off.
+        /// Stable 4:3 ≥800 request for the OpenCV YUY2 fallback so 15 / 30 / 60
+        /// share size. USB2 may still cap uncompressed 800×600@30 at ~20 fps;
+        /// that is logged, not silently dropped to 640×480. MJPEG passthrough
+        /// is the path that can hold 30/60.
         /// </summary>
-        private static (int Width, int Height) PreferredCaptureSize(int maxWidth, int targetFps)
-        {
-            var ceiling = maxWidth > 0 ? maxWidth : 800;
-            var fps = Math.Max(1, targetFps);
-            var pixelBudget = Usb2UvcBytesPerSecond / (fps * Yuy2BytesPerPixel);
-
-            foreach (var (w, h) in FallbackCaptureSizes)
-            {
-                if (w > ceiling)
-                    continue;
-                if (w * h <= pixelBudget)
-                    return (w, h);
-            }
-
-            return (320, 240);
-        }
+        private static (int Width, int Height) PreferredCaptureSize(int maxWidth) =>
+            VideoCapturePinRank.PreferredUncompressedSize(maxWidth);
 
         /// <summary>
         /// On macOS, open the AVFoundation device on Avalonia's UI thread so
@@ -1122,17 +1224,32 @@ namespace Yaesu_Web_Control.Services.Video
             }
 
             // OpenCV DirectShow always decodes to BGR — MJPEG passthrough is
-            // handled by WindowsMfMjpegSession. Stay on the USB2-safe YUY2
-            // panel size here so a failed MF open does not repeat the 10 fps
-            // 720p-BGR regression.
-            var (wantW, wantH) = PreferredCaptureSize(maxWidth, targetFps);
-            var bgrParams = new[]
+            // handled by WindowsMfMjpegSession. Ask for MJPEG 800×600 first so a
+            // failed MF open does not land on YUY2 640×480@30 (USB2 rejects
+            // uncompressed 800×600@30 and the driver drops the size).
+            var (wantW, wantH) = PreferredCaptureSize(maxWidth);
+            int[] bgrParams;
+            if (OperatingSystem.IsWindows())
             {
-                (int)VideoCaptureProperties.FrameWidth, wantW,
-                (int)VideoCaptureProperties.FrameHeight, wantH,
-                (int)VideoCaptureProperties.Fps, targetFps,
-                (int)VideoCaptureProperties.BufferSize, 3
-            };
+                var mjpeg = VideoWriter.FourCC('M', 'J', 'P', 'G');
+                bgrParams =
+                [
+                    (int)VideoCaptureProperties.FourCC, mjpeg,
+                    (int)VideoCaptureProperties.FrameWidth, wantW,
+                    (int)VideoCaptureProperties.FrameHeight, wantH,
+                    (int)VideoCaptureProperties.BufferSize, 3
+                ];
+            }
+            else
+            {
+                bgrParams =
+                [
+                    (int)VideoCaptureProperties.FrameWidth, wantW,
+                    (int)VideoCaptureProperties.FrameHeight, wantH,
+                    (int)VideoCaptureProperties.Fps, targetFps,
+                    (int)VideoCaptureProperties.BufferSize, 3
+                ];
+            }
 
             foreach (var api in backends)
             {
@@ -1392,12 +1509,14 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         /// <summary>
-        /// Request a size close to the encode width. Used only for the YUY2
-        /// fallback path — MJPEG passthrough keeps the native 720p/1080p pin.
+        /// MJPEG 800×600 when the pin exists (USB2-safe). FourCC before size so
+        /// DirectShow does not pick YUY2 640×480@30. FPS last — requesting
+        /// 800×600 YUY2@30 is what made the driver drop to 640.
         /// </summary>
         private static void ApplyPreferredCaptureFormat(VideoCapture cap, int maxWidth, int targetFps)
         {
-            var (wantW, wantH) = PreferredCaptureSize(maxWidth, targetFps);
+            var (wantW, wantH) = PreferredCaptureSize(maxWidth);
+            PreferMjpegFourCc(cap);
             try { cap.Set(VideoCaptureProperties.FrameWidth, wantW); } catch { /* ignore */ }
             try { cap.Set(VideoCaptureProperties.FrameHeight, wantH); } catch { /* ignore */ }
             try { cap.Set(VideoCaptureProperties.Fps, targetFps); } catch { /* ignore */ }
