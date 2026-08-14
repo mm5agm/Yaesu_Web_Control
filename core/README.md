@@ -96,15 +96,16 @@ no-package-references rule above.
 
 **The rest moves opportunistically, not in a batch.** Before you edit any file
 in either application, check the migration checklist in
-[`shared-core-plan.md` §2](https://github.com/mm5agm/Icom_Web_Control/blob/develop/docs/design/shared-core-plan.md#2-the-boundary-draws-itself):
+[`docs/design/shared-core-plan.md` §2](docs/design/shared-core-plan.md#2-the-boundary-draws-itself):
 if the file is on it and you are touching it anyway, move it into `core/` as
 part of that same change. The work is paid for by the change that needed doing
 regardless. Do not batch-migrate, and do not scatter "move me" markers across
 the files — the checklist is the one place that tracks this.
 
 Full plan, including the measurements behind it and the costs:
-[`docs/design/shared-core-plan.md`](https://github.com/mm5agm/Icom_Web_Control/blob/develop/docs/design/shared-core-plan.md)
-in the IWC repository.
+[`docs/design/shared-core-plan.md`](docs/design/shared-core-plan.md). It lives
+here in the core now, so both applications carry it under `core/` — edit it
+here, never in a `core/` copy.
 
 ## Licence
 
