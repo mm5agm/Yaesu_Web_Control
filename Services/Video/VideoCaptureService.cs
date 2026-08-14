@@ -732,15 +732,15 @@ namespace Yaesu_Web_Control.Services.Video
                         if (fpsCollapseStreak >= FpsCollapseWindows)
                             break;
 
-                        // Blocking Read is already the device clock — leftover
-                        // wait on top of it is how 30 fps became 19.8 (one extra
-                        // 15.6 ms Windows quantum). Only pace when Read returned early.
-                        if (readMs < frameInterval.TotalMilliseconds * 0.6)
-                        {
-                            var wait = frameInterval - tick.Elapsed;
-                            if (wait > TimeSpan.Zero)
-                                SleepOrCancel(wait, ct);
-                        }
+                        // Pace to the panel target even when the pin's minimum
+                        // is faster (15 fps on a 20–60 pin used to publish at
+                        // 20 because Read already took 50 ms and the 0.6
+                        // threshold skipped the leftover wait). Sub-quantum
+                        // leftovers spin in SleepOrCancel, so this does not
+                        // recreate the Windows 19.8 fps overshoot.
+                        var wait = frameInterval - tick.Elapsed;
+                        if (wait > TimeSpan.Zero)
+                            SleepOrCancel(wait, ct);
                     }
                     }
                     finally
