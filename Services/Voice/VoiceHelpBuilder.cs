@@ -42,6 +42,9 @@ namespace Yaesu_Web_Control.Services.Voice
             ["TxOff"]            = "Stop transmitting (back to receive)",
             ["SplitOn"]          = "Turn split on",
             ["SplitOff"]         = "Turn split off",
+            ["AtuOn"]            = "Turn the antenna tuner on",
+            ["AtuOff"]           = "Turn the antenna tuner off",
+            ["AtuTune"]          = "Start an antenna auto-tune",
             ["Help"]             = "Speak a short help summary",
             ["NudgeIfWidthUp"]   = "Widen the filter",
             ["NudgeIfWidthDown"] = "Narrow the filter",
@@ -90,7 +93,10 @@ namespace Yaesu_Web_Control.Services.Voice
                 Simple("TxOn", cfg),
                 Simple("TxOff", cfg),
                 Simple("SplitOn", cfg),
-                Simple("SplitOff", cfg));
+                Simple("SplitOff", cfg),
+                Simple("AtuOn", cfg),
+                Simple("AtuOff", cfg),
+                Simple("AtuTune", cfg));
 
             Group("Status & help",
                 Simple("StatusFrequency", cfg),

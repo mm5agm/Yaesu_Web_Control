@@ -106,6 +106,9 @@ namespace Yaesu_Web_Control.Services.Voice
                     case "TxOff":             return await TxOffAsync(cancellationToken);
                     case "SplitOn":           return await SplitAsync(true, cancellationToken);
                     case "SplitOff":          return await SplitAsync(false, cancellationToken);
+                    case "AtuOn":             return await AtuAsync(true, cancellationToken);
+                    case "AtuOff":            return await AtuAsync(false, cancellationToken);
+                    case "AtuTune":           return await AtuTuneAsync(cancellationToken);
                     case "Help":              return Help();
                     case "NudgeIfWidth":      return await NudgeIfWidthAsync(parameters, cancellationToken);
                     case "SetAfGain":          return await SetAfGainAsync(parameters, cancellationToken);
@@ -420,6 +423,42 @@ namespace Yaesu_Web_Control.Services.Voice
             _state.SplitMode = on ? 1 : 0;
             _logger.LogInformation("[Voice] Split {State}", on ? "on" : "off");
             return new DispatchResult(true, on ? "Split on" : "Split off");
+        }
+
+        // -- ATU (antenna tuner) -------------------------------------------
+        // AC{P1}{P2}{P3}; per the FTdx10 / FTdx101MP CAT manual:
+        //   P3 = 0 tuner off (bypass), 1 tuner on (in line), 2 start/stop
+        //   the auto-tune cycle. Same command set across FTdx101MP / FTdx10 /
+        //   FT-710; the tuner is radio-wide, not per-VFO, so there's no VfoP1.
+        // Setting _state.AtuEnabled directly gives immediate UI feedback and
+        // broadcasts over SignalR, exactly as the HTTP /api/cat/atu endpoint
+        // does — the radio's own AC echo confirms it afterwards.
+        //
+        // The whole reason these exist: on the web UI the auto-tune was only
+        // reachable by a press-and-hold on the ATU button, which a screen
+        // reader can't announce and voice can't perform — so voice/keyboard
+        // operators had no route to the tuner at all.
+        private async Task<DispatchResult> AtuAsync(bool on, CancellationToken ct)
+        {
+            await SendCommand(on ? "AC001;" : "AC000;", ct);
+            _state.AtuEnabled = on;
+            _logger.LogInformation("[Voice] Atu {State}", on ? "on" : "off");
+            return new DispatchResult(true, on ? "Tuner on" : "Tuner off");
+        }
+
+        // AC002; toggles the auto-tune cycle (a second AC002; aborts a run).
+        // Yaesu's CAT spec fixes AC's tuning-in-progress field at 0 (unlike
+        // Icom's tuner readback), so we genuinely can't tell start from stop
+        // here — the spoken confirmation is deliberately neutral. We also
+        // don't drive the "Tuning…" button state from the voice path: nothing
+        // server-side would clear it (the page's own startAtuTune() owns the
+        // 8 s auto-clear), so a voice-started tune would otherwise leave the
+        // button stuck. The spoken confirmation is what the operator relies on.
+        private async Task<DispatchResult> AtuTuneAsync(CancellationToken ct)
+        {
+            await SendCommand("AC002;", ct);
+            _logger.LogInformation("[Voice] AtuTune (AC002;)");
+            return new DispatchResult(true, "Antenna tuning");
         }
 
         // -- IF width / AF gain nudges (query → adjust → set) --------------

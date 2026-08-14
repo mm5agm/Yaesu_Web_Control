@@ -609,9 +609,23 @@
                                onchange="setProcLevel(this.value);">
                         <button id="atuBtn"
                                 class="btn btn-sm ms-2 @(Model.AtuEnabled ? "btn-success" : "btn-outline-secondary")"
+                                data-a11y-key="controls.atu"
                                 aria-label="Antenna tuner — short tap toggles on/off, long press starts auto-tune"
                                 title="Tap to toggle ATU on/off; press and hold to start auto-tune"
                                 style="touch-action: manipulation; user-select: none;">@(Model.AtuEnabled ? "ATU On" : "ATU Off")</button>
+                        @* Explicit auto-tune button. The ATU button above also
+                           starts a tune on press-and-hold, but a long press can't
+                           be announced by a screen reader or performed by voice —
+                           this gives keyboard/AT/voice users a real control. It
+                           becomes a red "Stop" while a tune cycle is running. *@
+                        <button id="atuTuneBtn"
+                                type="button"
+                                class="btn btn-sm ms-1 btn-outline-secondary"
+                                data-a11y-key="controls.atuTune"
+                                aria-label="Start antenna auto-tune"
+                                title="Start antenna auto-tune"
+                                onclick="atuTuneButtonClick()"
+                                style="touch-action: manipulation;">Tune</button>
                         <button id="monitorOnBtn"
                                 class="btn btn-sm ms-2 @(Model.MonitorOn ? "btn-warning" : "btn-outline-secondary")"
                                 aria-label="TX monitor — currently @(Model.MonitorOn ? "on" : "off")"
@@ -3312,6 +3326,45 @@
                 const onNow = btn.dataset.atuEnabled === 'true';
                 updateAtuButton(onNow);
             }
+            // Mirror the state on the dedicated Tune button: it becomes a red
+            // "Stop" while a cycle runs so the button never silently means
+            // something other than what it says. aria-label / title follow,
+            // and the idle label is preserved so a customised or translated
+            // accessible label (data-a11y-key="controls.atuTune") survives a
+            // tune cycle rather than being overwritten with a hard-coded string.
+            const tuneBtn = document.getElementById('atuTuneBtn');
+            if (tuneBtn) {
+                if (tuning) {
+                    if (!tuneBtn.dataset.idleLabel)
+                        tuneBtn.dataset.idleLabel = tuneBtn.getAttribute('aria-label') || 'Start antenna auto-tune';
+                    tuneBtn.classList.remove('btn-outline-secondary');
+                    tuneBtn.classList.add('btn-danger');
+                    tuneBtn.textContent = 'Stop';
+                    tuneBtn.setAttribute('aria-label', 'Stop antenna tuning');
+                    tuneBtn.setAttribute('title', 'Stop antenna tuning');
+                } else {
+                    const idle = tuneBtn.dataset.idleLabel || 'Start antenna auto-tune';
+                    tuneBtn.classList.remove('btn-danger');
+                    tuneBtn.classList.add('btn-outline-secondary');
+                    tuneBtn.textContent = 'Tune';
+                    tuneBtn.setAttribute('aria-label', idle);
+                    tuneBtn.setAttribute('title', idle);
+                    delete tuneBtn.dataset.idleLabel;
+                }
+            }
+        }
+
+        // Dedicated Tune button: start a tune when idle, stop the running
+        // cycle when one's in progress. Mirrors the ATU button's short-tap
+        // behaviour but as an explicit, announceable, keyboard-reachable
+        // control (the press-and-hold gesture is neither).
+        function atuTuneButtonClick() {
+            const atuBtn = document.getElementById('atuBtn');
+            if (atuBtn && atuBtn.dataset.tuning === 'true') {
+                stopAtuTune();
+            } else {
+                startAtuTune();
+            }
         }
         // Wire short-tap vs long-press behaviour. Using pointer events
         // covers mouse, touch, and pen with one code path.
@@ -4515,6 +4568,7 @@
         window.toggleAtu        = toggleAtu;
         window.startAtuTune     = startAtuTune;
         window.stopAtuTune      = stopAtuTune;
+        window.atuTuneButtonClick = atuTuneButtonClick;
         window.updateAtuButton  = updateAtuButton;
         window.updateAtuTuningState = updateAtuTuningState;
         window.toggleMonitor    = toggleMonitor;
