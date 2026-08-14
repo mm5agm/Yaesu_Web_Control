@@ -1,7 +1,7 @@
 /**
  * Radio Display UI wiring: status poll + MJPEG img stream + controls.
  */
-import { RadioDisplayPanel } from './radio-display-panel.js?v=6';
+import { RadioDisplayPanel } from './radio-display-panel.js?v=7';
 
 const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;
@@ -367,7 +367,7 @@ async function setDeviceKey(key) {
     } else if (!currentDeviceKey) {
       panel.setStatus('idle', 'select a device');
     } else {
-      panel.setStatus('idle', wantStream ? undefined : 'click Start');
+      panel.setStatus('idle');
     }
   } catch (e) {
     console.warn('Radio Display device change failed', e);
@@ -461,7 +461,7 @@ async function pollStatus(options = {}) {
     let status = data.status || 'idle';
     if (!wantStream) {
       status = 'idle';
-      panel.setStatus('idle', 'click Start');
+      panel.setStatus('idle');
       lastServerStatus = 'idle';
       if (attachStream) return;
     } else if (status === 'idle' && streamActive) {

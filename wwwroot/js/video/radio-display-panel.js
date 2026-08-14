@@ -71,12 +71,18 @@ export class RadioDisplayPanel {
 
   _syncPlaceholderText(status, detail) {
     if (!this._placeholder) return;
-    let text = 'Click Start to show the radio display';
-    if (status === 'connecting' || status === 'streaming') text = 'Starting…';
-    else if (status === 'disconnected') text = 'Disconnected';
-    else if (status === 'error') text = detail || 'No video';
-    else if (detail === 'select a device') text = 'Select a capture device, then click Start';
-    this._placeholder.textContent = text;
+    const play = '<i class="bi bi-play-fill" aria-hidden="true"></i>';
+    if (status === 'connecting' || status === 'streaming') {
+      this._placeholder.textContent = 'Starting…';
+    } else if (status === 'disconnected') {
+      this._placeholder.textContent = 'Disconnected';
+    } else if (status === 'error') {
+      this._placeholder.textContent = detail || 'No video';
+    } else if (detail === 'select a device') {
+      this._placeholder.innerHTML = `<span>Select a capture device, then click ${play}</span>`;
+    } else {
+      this._placeholder.innerHTML = `<span>Click ${play} to show the radio display</span>`;
+    }
   }
 
   show() {

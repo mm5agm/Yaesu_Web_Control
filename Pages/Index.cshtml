@@ -826,7 +826,7 @@
                 </div>
                 <div class="card-body p-0 bg-black radio-display-body" style="text-align:center; overflow:hidden; position:relative; min-height:240px;">
                     <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
-                        Click Start to show the radio display
+                        <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
                     </div>
                     <img id="radioDisplayImg" alt="Radio display" decoding="async"
                          class="radio-display-img"
@@ -2461,7 +2461,7 @@
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=10";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=22";
-        import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=20";
+        import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=21";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
