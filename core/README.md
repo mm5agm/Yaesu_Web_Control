@@ -72,21 +72,35 @@ into the library and once directly into the application.
 
 ## Testing
 
-Neither application has automated tests. **If anything justifies the first
-ones, it is this repository** — a mistake here breaks two applications instead
-of one, and the natural first tenants (`AdifParser`, `calibration-engine`) are
-pure functions with no DOM, no radio and no I/O.
+Neither application has automated tests. **The first ones live here** — a
+mistake in this repository breaks two applications instead of one. The first
+tenants (`AdifParser`, `calibration-engine`) were chosen precisely because they
+are pure functions with no DOM, no radio and no I/O.
+
+```bash
+dotnet test tests/RadioWebControl.Core.Tests          # C# (xUnit)
+node --test tests/js/calibration-engine.test.mjs      # JS (Node built-in runner)
+```
+
+The Node runner is used deliberately — no npm dependency, matching the
+no-package-references rule above.
 
 ## Status
 
-Phase 1 — the plumbing, proved end to end with one trivial type. `Models/DxSpot.cs`
-is here because it was byte-identical in both applications bar its namespace,
-which makes it the cheapest possible way to find out whether the subtree,
-the project reference, the build and both installers survive.
+- **Phase 1** — the plumbing, proved end to end with `Models/DxSpot.cs`, the
+  cheapest byte-identical type, to find out whether the subtree, the project
+  reference, the build and both installers survive. They did.
+- **Phase 2** — `Services/AdifParser.cs` and `js/calibration/calibration-engine.js`,
+  each with the first tests. This is where the C# and JS test harnesses were
+  established.
 
-The rest moves **opportunistically, not in a batch**: the next time a file here
-would have been edited in both repositories, it moves instead. The work is paid
-for by the change that needed doing anyway.
+**The rest moves opportunistically, not in a batch.** Before you edit any file
+in either application, check the migration checklist in
+[`shared-core-plan.md` §2](https://github.com/mm5agm/Icom_Web_Control/blob/develop/docs/design/shared-core-plan.md#2-the-boundary-draws-itself):
+if the file is on it and you are touching it anyway, move it into `core/` as
+part of that same change. The work is paid for by the change that needed doing
+regardless. Do not batch-migrate, and do not scatter "move me" markers across
+the files — the checklist is the one place that tracks this.
 
 Full plan, including the measurements behind it and the costs:
 [`docs/design/shared-core-plan.md`](https://github.com/mm5agm/Icom_Web_Control/blob/develop/docs/design/shared-core-plan.md)
