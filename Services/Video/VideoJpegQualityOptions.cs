@@ -2,7 +2,7 @@ namespace Yaesu_Web_Control.Services.Video
 {
     /// <summary>
     /// Radio Display JPEG quality presets (panel selector).
-    /// Low 40 / Medium 65 (default) / Max 85. The 85 cap is intentional.
+        /// Low 40 / Medium 65 / Max 85 (default). The 85 cap is intentional.
     /// Unknown values snap to the nearest preset so a hand-tuned 40 stays Low
     /// instead of jumping to Medium.
     /// </summary>

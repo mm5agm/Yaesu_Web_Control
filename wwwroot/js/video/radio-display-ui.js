@@ -25,7 +25,7 @@ let streamActive = false;
 let wantStream = false;
 let currentDeviceKey = '';
 let currentTargetFps = 15;
-let currentJpegQuality = 65;
+let currentJpegQuality = 85;
 let deviceRates = [];
 let controlsBound = false;
 let channel = null;
@@ -105,7 +105,7 @@ function syncFpsSelect(fps) {
 
 function normalizeQuality(q) {
   const n = Number(q);
-  if (!Number.isFinite(n)) return 65;
+  if (!Number.isFinite(n)) return 85;
   if (ALLOWED_QUALITY.includes(n)) return n;
   return ALLOWED_QUALITY.reduce((best, a) =>
     Math.abs(a - n) < Math.abs(best - n) ? a : best);

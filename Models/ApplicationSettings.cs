@@ -314,9 +314,9 @@
 
         /// <summary>
         /// JPEG quality. Allowed: 40, 65, 85 (Low / Medium / Max on the Radio Display panel).
-        /// Default 65. The 85 cap is intentional.
+        /// Default 85 (Max): keep the capture JPEG. Low/Medium recompress.
         /// </summary>
-        public int VideoJpegQuality { get; set; } = 65;
+        public int VideoJpegQuality { get; set; } = 85;
 
         // ── Optional HTTPS (self-signed; restart to apply) ────────────────
         // Required for getUserMedia from a remote browser (secure context).
