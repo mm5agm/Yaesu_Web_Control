@@ -173,7 +173,163 @@ namespace Yaesu_Web_Control.Services.Video
         [DllImport("libc", EntryPoint = "close", SetLastError = true)]
         private static extern int Close(int fd);
 
+        // _IOWR('V', 2, struct v4l2_fmtdesc) — 64 bytes
+        private static readonly UIntPtr VidIocEnumFmt = unchecked((UIntPtr)0xC0405602);
+        // _IOWR('V', 74, struct v4l2_frmsizeenum) — 44 bytes
+        private static readonly UIntPtr VidIocEnumFramesizes = unchecked((UIntPtr)0xC02C564A);
+        // _IOWR('V', 75, struct v4l2_frmivalenum) — 52 bytes
+        private static readonly UIntPtr VidIocEnumFrameintervals = unchecked((UIntPtr)0xC034564B);
+
+        private const uint V4l2BufTypeVideoCapture = 1;
+        private const uint V4l2BufTypeVideoCaptureMplane = 9;
+        private const uint V4l2FrmSizeDiscrete = 1;
+        private const uint V4l2FrmSizeStepwise = 3;
+        private const uint V4l2FrmIvalDiscrete = 1;
+        private const uint V4l2FrmIvalContinuous = 2;
+        private const uint V4l2FrmIvalStepwise = 3;
+        private const int EnumCap = 32;
+
+        /// <summary>
+        /// Advertised capture rates via ENUM_FMT / FRAMESIZES / FRAMEINTERVALS.
+        /// Empty if the node is busy or the driver does not report intervals.
+        /// Does not start streaming.
+        /// </summary>
+        public static int[] TryQueryFpsRates(int index)
+        {
+            var fd = Open(DevicePath(index), O_RDONLY | O_NONBLOCK);
+            if (fd < 0)
+                return [];
+
+            try
+            {
+                var raw = new List<double>();
+                CollectRatesForBufType(fd, V4l2BufTypeVideoCapture, raw);
+                if (raw.Count == 0)
+                    CollectRatesForBufType(fd, V4l2BufTypeVideoCaptureMplane, raw);
+                return VideoFpsOptions.UniqueSorted(raw);
+            }
+            finally
+            {
+                _ = Close(fd);
+            }
+        }
+
+        public static int TryQueryMaxFps(int index) =>
+            VideoFpsOptions.Max(TryQueryFpsRates(index));
+
+        private static void CollectRatesForBufType(int fd, uint bufType, List<double> dest)
+        {
+            for (uint fmtIndex = 0; fmtIndex < EnumCap; fmtIndex++)
+            {
+                var fmt = new V4l2FmtDesc { Index = fmtIndex, Type = bufType };
+                if (Ioctl(fd, VidIocEnumFmt, ref fmt) != 0 || fmt.PixelFormat == 0)
+                    break;
+
+                for (uint sizeIndex = 0; sizeIndex < EnumCap; sizeIndex++)
+                {
+                    var size = new V4l2FrmSizeEnum
+                    {
+                        Index = sizeIndex,
+                        PixelFormat = fmt.PixelFormat
+                    };
+                    if (Ioctl(fd, VidIocEnumFramesizes, ref size) != 0)
+                        break;
+
+                    if (size.Type == V4l2FrmSizeDiscrete)
+                    {
+                        CollectIntervalRates(fd, fmt.PixelFormat, size.U0, size.U1, dest);
+                    }
+                    else if (size.Type == V4l2FrmSizeStepwise)
+                    {
+                        CollectIntervalRates(fd, fmt.PixelFormat, size.U0, size.U3, dest);
+                        CollectIntervalRates(fd, fmt.PixelFormat, size.U1, size.U4, dest);
+                    }
+                }
+            }
+        }
+
+        private static void CollectIntervalRates(
+            int fd, uint pixelFormat, uint width, uint height, List<double> dest)
+        {
+            if (width < 2 || height < 2)
+                return;
+
+            for (uint i = 0; i < EnumCap; i++)
+            {
+                var ival = new V4l2FrmIvalEnum
+                {
+                    Index = i,
+                    PixelFormat = pixelFormat,
+                    Width = width,
+                    Height = height
+                };
+                if (Ioctl(fd, VidIocEnumFrameintervals, ref ival) != 0)
+                    break;
+
+                if (ival.Type == V4l2FrmIvalDiscrete)
+                {
+                    dest.Add(IntervalToFps(ival.U0, ival.U1));
+                }
+                else if (ival.Type is V4l2FrmIvalContinuous or V4l2FrmIvalStepwise)
+                {
+                    var fastest = IntervalToFps(ival.U0, ival.U1);
+                    var slowest = IntervalToFps(ival.U2, ival.U3);
+                    if (slowest <= 0)
+                        slowest = fastest;
+                    dest.Add(fastest);
+                    dest.Add(slowest);
+                    VideoFpsOptions.AddPresetsInRange(dest, slowest, fastest);
+                }
+            }
+        }
+
+        private static double IntervalToFps(uint numerator, uint denominator) =>
+            numerator == 0 ? 0 : (double)denominator / numerator;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct V4l2FmtDesc
+        {
+            public uint Index;
+            public uint Type;
+            public uint Flags;
+            public uint D0, D1, D2, D3, D4, D5, D6, D7;
+            public uint PixelFormat;
+            public uint MbusCode;
+            public uint Reserved0, Reserved1, Reserved2;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct V4l2FrmSizeEnum
+        {
+            public uint Index;
+            public uint PixelFormat;
+            public uint Type;
+            public uint U0, U1, U2, U3, U4, U5;
+            public uint Reserved0, Reserved1;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct V4l2FrmIvalEnum
+        {
+            public uint Index;
+            public uint PixelFormat;
+            public uint Width;
+            public uint Height;
+            public uint Type;
+            public uint U0, U1, U2, U3, U4, U5;
+            public uint Reserved0, Reserved1;
+        }
+
         [DllImport("libc", EntryPoint = "ioctl", SetLastError = true)]
         private static extern int Ioctl(int fd, UIntPtr request, ref V4l2Capability arg);
+
+        [DllImport("libc", EntryPoint = "ioctl", SetLastError = true)]
+        private static extern int Ioctl(int fd, UIntPtr request, ref V4l2FmtDesc arg);
+
+        [DllImport("libc", EntryPoint = "ioctl", SetLastError = true)]
+        private static extern int Ioctl(int fd, UIntPtr request, ref V4l2FrmSizeEnum arg);
+
+        [DllImport("libc", EntryPoint = "ioctl", SetLastError = true)]
+        private static extern int Ioctl(int fd, UIntPtr request, ref V4l2FrmIvalEnum arg);
     }
 }

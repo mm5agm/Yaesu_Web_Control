@@ -129,6 +129,150 @@ namespace Yaesu_Web_Control.Services.Video
             }
         }
 
+        /// <summary>
+        /// Native media-type frame rates. Opens a source reader but does not
+        /// start streaming. Empty if MF is unavailable or the device is busy.
+        /// </summary>
+        public static int[] QueryFrameRates(int dshowIndex)
+        {
+            if (!OperatingSystem.IsWindows())
+                return [];
+            if (!EnsureStartup())
+                return [];
+
+            try
+            {
+                var symlink = ResolveSymbolicLinkQuiet(dshowIndex);
+                if (string.IsNullOrEmpty(symlink))
+                    return [];
+
+                var source = CreateDeviceSource(symlink);
+                if (source is null)
+                    return [];
+
+                IMFSourceReader? reader = null;
+                try
+                {
+                    reader = CreateReader(source);
+                    return reader is null ? [] : NativeFrameRates(reader);
+                }
+                finally
+                {
+                    SafeRelease(source);
+                    if (reader != null)
+                        SafeRelease(reader);
+                }
+            }
+            catch
+            {
+                return [];
+            }
+            finally
+            {
+                ReleaseStartup();
+            }
+        }
+
+        public static int QueryMaxFrameRate(int dshowIndex) =>
+            VideoFpsOptions.Max(QueryFrameRates(dshowIndex));
+
+        private static string? ResolveSymbolicLinkQuiet(int dshowIndex)
+        {
+            var names = WindowsDshowDevices.ListFriendlyNames();
+            var friendly = names.TryGetValue(dshowIndex, out var dshowName) && !string.IsNullOrWhiteSpace(dshowName)
+                ? dshowName.Trim()
+                : $"Camera {dshowIndex}";
+
+            var devices = EnumVideoDevicesQuiet();
+            foreach (var (name, symlink) in devices)
+            {
+                if (string.Equals(name, friendly, StringComparison.OrdinalIgnoreCase))
+                    return symlink;
+            }
+
+            if ((uint)dshowIndex < (uint)devices.Count)
+                return devices[dshowIndex].Symlink;
+
+            return null;
+        }
+
+        private static List<(string Name, string Symlink)> EnumVideoDevicesQuiet()
+        {
+            var list = new List<(string, string)>();
+            var hr = MFCreateAttributes(out var attrs, 1);
+            if (hr < 0 || attrs is null)
+                return list;
+
+            try
+            {
+                var type = MfDevsourceAttributeSourceType;
+                var vidcap = MfDevsourceAttributeSourceTypeVidcapGuid;
+                if (attrs.SetGUID(ref type, ref vidcap) < 0)
+                    return list;
+
+                hr = MFEnumDeviceSources(attrs, out var activateArray, out var count);
+                if (hr < 0 || activateArray == IntPtr.Zero || count == 0)
+                    return list;
+
+                try
+                {
+                    for (uint i = 0; i < count; i++)
+                    {
+                        var ptr = Marshal.ReadIntPtr(activateArray, (int)(i * (nuint)IntPtr.Size));
+                        if (ptr == IntPtr.Zero)
+                            continue;
+                        var activate = (IMFActivate)Marshal.GetObjectForIUnknown(ptr);
+                        Marshal.Release(ptr);
+                        try
+                        {
+                            var nameKey = MfDevsourceAttributeFriendlyName;
+                            var linkKey = MfDevsourceAttributeSourceTypeVidcapSymbolicLink;
+                            var name = ReadAllocatedString(activate, ref nameKey) ?? $"Camera {i}";
+                            var symlink = ReadAllocatedString(activate, ref linkKey);
+                            if (!string.IsNullOrEmpty(symlink))
+                                list.Add((name, symlink));
+                        }
+                        finally
+                        {
+                            SafeRelease(activate);
+                        }
+                    }
+                }
+                finally
+                {
+                    Marshal.FreeCoTaskMem(activateArray);
+                }
+            }
+            finally
+            {
+                SafeRelease(attrs);
+            }
+
+            return list;
+        }
+
+        private static int[] NativeFrameRates(IMFSourceReader reader)
+        {
+            var raw = new List<double>();
+            for (uint i = 0; ; i++)
+            {
+                var hr = reader.GetNativeMediaType(SourceReaderFirstVideoStream, i, out var mediaType);
+                if (hr == MfENoMoreTypes || hr < 0 || mediaType is null)
+                    break;
+
+                try
+                {
+                    raw.Add(ReadFrameRate(mediaType));
+                }
+                finally
+                {
+                    SafeRelease(mediaType);
+                }
+            }
+
+            return VideoFpsOptions.UniqueSorted(raw);
+        }
+
         public bool TryReadJpeg(out byte[]? jpeg)
         {
             jpeg = null;

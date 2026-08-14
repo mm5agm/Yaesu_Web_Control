@@ -12,7 +12,10 @@ namespace Yaesu_Web_Control.Services.Video
     /// </summary>
     internal static class MacAvFoundationDevices
     {
-        internal readonly record struct Device(int Index, string UniqueId, string LocalizedName);
+        internal readonly record struct Device(int Index, string UniqueId, string LocalizedName, int[] Rates)
+        {
+            public int MaxFps => VideoFpsOptions.Max(Rates);
+        }
 
         private static readonly object Sync = new();
         private static bool _frameworkLoaded;
@@ -132,7 +135,7 @@ namespace Yaesu_Web_Control.Services.Video
                     var name = NsToString(Native.MsgSend(ptrs[i], selName));
                     if (string.IsNullOrWhiteSpace(name))
                         name = $"Camera {i}";
-                    result.Add(new Device(i, uid, name.Trim()));
+                    result.Add(new Device(i, uid, name.Trim(), RatesFromDevice(ptrs[i])));
                 }
 
                 return result;
@@ -142,6 +145,74 @@ namespace Yaesu_Web_Control.Services.Video
                 if (pool != IntPtr.Zero)
                     Native.MsgSend(pool, drain);
             }
+        }
+
+        /// <summary>Advertised rates from <c>formats</c> / frame-rate ranges.</summary>
+        public static int[] TryQueryFpsRates(int index, string? uniqueId)
+        {
+            foreach (var d in List())
+            {
+                if (!string.IsNullOrWhiteSpace(uniqueId) &&
+                    string.Equals(d.UniqueId, uniqueId, StringComparison.Ordinal))
+                    return d.Rates;
+
+                if (string.IsNullOrWhiteSpace(uniqueId) && d.Index == index)
+                    return d.Rates;
+            }
+
+            return [];
+        }
+
+        public static int TryQueryMaxFps(int index, string? uniqueId) =>
+            VideoFpsOptions.Max(TryQueryFpsRates(index, uniqueId));
+
+        [SupportedOSPlatform("macos")]
+        private static int[] RatesFromDevice(IntPtr device)
+        {
+            if (device == IntPtr.Zero)
+                return [];
+
+            var selFormats = Native.sel_registerName("formats");
+            var selRanges = Native.sel_registerName("videoSupportedFrameRateRanges");
+            var selMax = Native.sel_registerName("maxFrameRate");
+            var selMin = Native.sel_registerName("minFrameRate");
+            var selCount = Native.sel_registerName("count");
+            var selAt = Native.sel_registerName("objectAtIndex:");
+
+            var formats = Native.MsgSend(device, selFormats);
+            if (formats == IntPtr.Zero)
+                return [];
+
+            var raw = new List<double>();
+            var formatCount = Native.MsgSendNuint(formats, selCount);
+            for (nuint i = 0; i < formatCount; i++)
+            {
+                var format = Native.MsgSendNuintArg(formats, selAt, i);
+                if (format == IntPtr.Zero)
+                    continue;
+
+                var ranges = Native.MsgSend(format, selRanges);
+                if (ranges == IntPtr.Zero)
+                    continue;
+
+                var rangeCount = Native.MsgSendNuint(ranges, selCount);
+                for (nuint r = 0; r < rangeCount; r++)
+                {
+                    var range = Native.MsgSendNuintArg(ranges, selAt, r);
+                    if (range == IntPtr.Zero)
+                        continue;
+                    var max = Native.MsgSendDouble(range, selMax);
+                    var min = Native.MsgSendDouble(range, selMin);
+                    if (min <= 0)
+                        min = max;
+                    raw.Add(max);
+                    raw.Add(min);
+                    if (Math.Abs(max - min) > 1)
+                        VideoFpsOptions.AddPresetsInRange(raw, min, max);
+                }
+            }
+
+            return VideoFpsOptions.UniqueSorted(raw);
         }
 
         [SupportedOSPlatform("macos")]
@@ -210,6 +281,17 @@ namespace Yaesu_Web_Control.Services.Video
 
             [DllImport(LibObjc, EntryPoint = "objc_msgSend")]
             public static extern nint MsgSendNint(IntPtr receiver, IntPtr selector, IntPtr arg);
+
+            [DllImport(LibObjc, EntryPoint = "objc_msgSend")]
+            public static extern double MsgSendF64(IntPtr receiver, IntPtr selector);
+
+            [DllImport(LibObjc, EntryPoint = "objc_msgSend_fpret")]
+            public static extern double MsgSendFpret(IntPtr receiver, IntPtr selector);
+
+            public static double MsgSendDouble(IntPtr receiver, IntPtr selector) =>
+                RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+                    ? MsgSendF64(receiver, selector)
+                    : MsgSendFpret(receiver, selector);
         }
     }
 }

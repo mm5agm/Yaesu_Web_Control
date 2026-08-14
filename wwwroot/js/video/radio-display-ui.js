@@ -26,6 +26,7 @@ let wantStream = false;
 let currentDeviceKey = '';
 let currentTargetFps = 15;
 let currentJpegQuality = 65;
+let deviceRates = [];
 let controlsBound = false;
 let channel = null;
 
@@ -48,9 +49,56 @@ function setAutoStart(on) {
   localStorage.setItem(AUTO_START_KEY, on ? '1' : '0');
 }
 
-function normalizeFps(fps) {
+function parseRates(raw) {
+  if (Array.isArray(raw)) {
+    return raw.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  }
+  return [];
+}
+
+function fpsChoices(rates) {
+  const list = parseRates(rates);
+  return list.length ? list : ALLOWED_FPS.slice();
+}
+
+function normalizeFps(fps, rates = deviceRates) {
   const n = Number(fps);
-  return ALLOWED_FPS.includes(n) ? n : 15;
+  const allowed = fpsChoices(rates);
+  if (allowed.includes(n)) return n;
+  return allowed.reduce((best, a) =>
+    Math.abs(a - n) < Math.abs(best - n) ? a : best);
+}
+
+function applyDeviceFpsCap(rates, selected) {
+  const sel = document.getElementById('radioDisplayFpsSelect');
+  const parsed = parseRates(rates);
+  if (parsed.length) deviceRates = parsed;
+  const allowed = deviceRates.length ? deviceRates : ALLOWED_FPS.slice();
+  const want = normalizeFps(selected ?? currentTargetFps, allowed);
+  if (sel && document.activeElement !== sel) {
+    const same =
+      sel.options.length === allowed.length &&
+      allowed.every((f, i) => sel.options[i] && sel.options[i].value === String(f));
+    if (!same) {
+      sel.innerHTML = '';
+      allowed.forEach((f) => {
+        const opt = document.createElement('option');
+        opt.value = String(f);
+        opt.textContent = f + ' fps';
+        sel.appendChild(opt);
+      });
+    }
+    if (sel.value !== String(want)) sel.value = String(want);
+  }
+  currentTargetFps = want;
+  return want;
+}
+
+function syncFpsSelect(fps) {
+  applyDeviceFpsCap(deviceRates, fps);
 }
 
 function normalizeQuality(q) {
@@ -59,15 +107,6 @@ function normalizeQuality(q) {
   if (ALLOWED_QUALITY.includes(n)) return n;
   return ALLOWED_QUALITY.reduce((best, a) =>
     Math.abs(a - n) < Math.abs(best - n) ? a : best);
-}
-
-function syncFpsSelect(fps) {
-  const sel = document.getElementById('radioDisplayFpsSelect');
-  if (!sel) return;
-  const want = String(normalizeFps(fps));
-  if (sel.value !== want && document.activeElement !== sel) {
-    sel.value = want;
-  }
 }
 
 function syncQualitySelect(quality) {
@@ -279,6 +318,7 @@ async function loadDeviceSelect(selectedKey) {
       const opt = document.createElement('option');
       opt.value = key;
       if (d.index != null) opt.dataset.index = String(d.index);
+      if (d.rates && d.rates.length) opt.dataset.rates = d.rates.join(',');
       opt.textContent = truncateLabel(full, maxLabel);
       opt.title = full;
       if (deviceOptionMatches(d, want)) {
@@ -296,6 +336,9 @@ async function loadDeviceSelect(selectedKey) {
       sel.appendChild(orphan);
     }
     if (!want) none.selected = true;
+    const selected = sel.selectedOptions && sel.selectedOptions[0];
+    const listedRates = selected && selected.dataset ? selected.dataset.rates : '';
+    if (listedRates) applyDeviceFpsCap(listedRates, currentTargetFps);
     if ((data.devices || []).length === 0 && data.notes && panel) {
       panel.setStatus('idle', String(data.notes));
     }
@@ -315,6 +358,7 @@ async function setDeviceKey(key) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
     currentDeviceKey = data.deviceKey || '';
+    if (data.rates) applyDeviceFpsCap(data.rates, currentTargetFps);
     syncStreamButton();
     if (wantStream && currentDeviceKey && !panel.isHiddenByUser()) {
       setTimeout(() => startStream(), 600);
@@ -340,8 +384,8 @@ async function setTargetFps(fps) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-    currentTargetFps = normalizeFps(data.targetFps ?? want);
-    syncFpsSelect(currentTargetFps);
+    currentTargetFps = normalizeFps(data.targetFps ?? want, data.rates ?? deviceRates);
+    applyDeviceFpsCap(data.rates ?? deviceRates, currentTargetFps);
   } catch (e) {
     console.warn('Radio Display FPS change failed', e);
     alert('Could not change frame rate: ' + (e.message || e));
@@ -379,8 +423,8 @@ async function pollStatus(options = {}) {
     const data = await res.json();
     enabled = !!data.enabled;
     currentDeviceKey = data.deviceKey || '';
-    currentTargetFps = normalizeFps(data.targetFps);
     currentJpegQuality = normalizeQuality(data.jpegQuality);
+    applyDeviceFpsCap(data.rates, data.targetFps);
 
     if (!panel) return;
 

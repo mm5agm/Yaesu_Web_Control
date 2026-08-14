@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using OpenCvSharp;
@@ -209,7 +210,8 @@ namespace Yaesu_Web_Control.Services.Video
                 {
                     Index = kv.Key,
                     Key = VideoDeviceKey.FromIndex(kv.Key),
-                    Label = FormatLabel(kv.Key, kv.Value, 0, 0, collisions.Contains(kv.Value.Trim()))
+                    Label = FormatLabel(kv.Key, kv.Value, 0, 0, collisions.Contains(kv.Value.Trim())),
+                    Rates = VideoDeviceFpsCaps.PeekRates(VideoDeviceKey.FromIndex(kv.Key))
                 });
             }
             return result;
@@ -243,7 +245,8 @@ namespace Yaesu_Web_Control.Services.Video
                 {
                     Index = i,
                     Key = VideoDeviceKey.FromIndex(i),
-                    Label = FormatLabel(i, friendly, 0, 0, collisions.Contains(friendly.Trim()))
+                    Label = FormatLabel(i, friendly, 0, 0, collisions.Contains(friendly.Trim())),
+                    Rates = VideoDeviceFpsCaps.PeekRates(VideoDeviceKey.FromIndex(i))
                 });
             }
 
@@ -268,6 +271,7 @@ namespace Yaesu_Web_Control.Services.Video
             return name;
         }
 
+        [SupportedOSPlatform("linux")]
         private static List<VideoDeviceInfo> EnumerateLinuxV4L2()
         {
             var result = new List<VideoDeviceInfo>();
@@ -298,11 +302,18 @@ namespace Yaesu_Web_Control.Services.Video
                 if (OperatingSystem.IsLinux() && !LinuxV4l2Devices.ShouldList(index, friendly))
                     continue;
 
+                var key = VideoDeviceKey.FromIndex(index);
+                var rates = LinuxV4l2Devices.TryQueryFpsRates(index);
+                if (rates.Length == 0)
+                    rates = VideoDeviceFpsCaps.PeekRates(key);
+                VideoDeviceFpsCaps.Remember(key, rates);
+
                 result.Add(new VideoDeviceInfo
                 {
                     Index = index,
-                    Key = VideoDeviceKey.FromIndex(index),
-                    Label = $"{friendly} ({name})"
+                    Key = key,
+                    Label = $"{friendly} ({name})",
+                    Rates = rates
                 });
             }
 
@@ -348,8 +359,10 @@ namespace Yaesu_Web_Control.Services.Video
                 {
                     Index = d.Index,
                     Key = key,
-                    Label = FormatLabel(d.Index, d.LocalizedName, 0, 0, collision)
+                    Label = FormatLabel(d.Index, d.LocalizedName, 0, 0, collision),
+                    Rates = d.Rates
                 });
+                VideoDeviceFpsCaps.Remember(key, d.Rates);
             }
 
             return result;
@@ -534,11 +547,13 @@ namespace Yaesu_Web_Control.Services.Video
                 friendlyNames.TryGetValue(index, out var friendly);
                 var collision = !string.IsNullOrWhiteSpace(friendly) && collisions.Contains(friendly.Trim());
 
+                var key = VideoDeviceKey.FromIndex(index);
                 result.Add(new VideoDeviceInfo
                 {
                     Index = index,
-                    Key = VideoDeviceKey.FromIndex(index),
-                    Label = FormatLabel(index, friendly, w, h, collision)
+                    Key = key,
+                    Label = FormatLabel(index, friendly, w, h, collision),
+                    Rates = VideoDeviceFpsCaps.PeekRates(key)
                 });
             }
             catch
