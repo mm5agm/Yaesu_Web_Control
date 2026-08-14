@@ -49,6 +49,12 @@ namespace Yaesu_Web_Control.Controllers
                 }
 
                 var payload = devices.Select(d => new { key = d.Key, label = d.Label, index = d.Index });
+                if (OperatingSystem.IsMacOS() && devices.Count > 0)
+                {
+                    _logger.LogDebug(
+                        "Radio Display macOS cameras: {Cameras}",
+                        string.Join("; ", devices.Select(d => $"{d.Index}={d.Label} [{d.Key}]")));
+                }
                 if (OperatingSystem.IsWindows() &&
                     devices.Count > 0 &&
                     devices.All(d => d.Label.StartsWith("Camera ", StringComparison.Ordinal)))
@@ -73,7 +79,7 @@ namespace Yaesu_Web_Control.Controllers
                 else if (OperatingSystem.IsMacOS())
                 {
                     notes =
-                        "Select a USB webcam or HDMI capture dongle. Indexes can shift when devices are replugged. " +
+                        "Select a USB webcam or HDMI capture dongle. Devices are matched by unique ID when Continuity Camera (iPhone) is present. " +
                         "If open fails on Intel Mac with a libavif error, run: brew install libavif";
                 }
                 else
@@ -122,7 +128,7 @@ namespace Yaesu_Web_Control.Controllers
         public async Task<IActionResult> SetDevice([FromBody] DeviceRequest? body)
         {
             var key = (body?.Key ?? "").Trim();
-            if (!string.IsNullOrEmpty(key) && !VideoDeviceKey.TryParseIndex(key, out _))
+            if (!string.IsNullOrEmpty(key) && !VideoDeviceKey.IsPersistableKey(key))
                 return BadRequest(new { error = "Invalid device key." });
 
             var s = await _settings.GetSettingsAsync();

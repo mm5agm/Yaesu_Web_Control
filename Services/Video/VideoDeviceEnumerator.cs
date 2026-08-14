@@ -54,13 +54,12 @@ namespace Yaesu_Web_Control.Services.Video
 
                 if (OperatingSystem.IsMacOS())
                 {
-                    var names = ReadMacFriendlyNames();
-                    if (names.Count > 0)
+                    var mac = FromMacAvFoundation();
+                    if (mac.Count > 0)
                     {
-                        var named = FromFriendlyNames(names);
                         lock (CacheLock)
-                            _cache = named;
-                        return named;
+                            _cache = mac;
+                        return mac;
                     }
                 }
 
@@ -305,20 +304,49 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         /// <summary>
-        /// macOS: name sources prefer ffmpeg AVFoundation (same index space as
-        /// OpenCV CAP_AVFOUNDATION), then system_profiler. Do <strong>not</strong>
-        /// probe-open here — AVFoundation Open/Read from a request thread hangs
-        /// without an AppKit run loop and races the capture service. Opening is
-        /// done once on the UI thread inside <see cref="VideoCaptureService"/>.
+        /// macOS: prefer native AVFoundation (same video+muxed list and uniqueID
+        /// sort as OpenCV). ffmpeg / system_profiler order does not match that
+        /// index space. Do <strong>not</strong> probe-open here — AVFoundation
+        /// Open/Read from a request thread hangs without an AppKit run loop.
         /// </summary>
         private static List<VideoDeviceInfo> EnumerateMacOS()
         {
+            var mac = FromMacAvFoundation();
+            if (mac.Count > 0)
+                return mac;
+
             var names = ReadMacFriendlyNames();
             if (names.Count > 0)
                 return FromFriendlyNames(names);
 
             // No names available — last resort probe (may be empty under TCC).
             return ProbeIndices(VideoCaptureAPIs.AVFOUNDATION, names);
+        }
+
+        private static List<VideoDeviceInfo> FromMacAvFoundation()
+        {
+            var devices = MacAvFoundationDevices.ListDistinct();
+            if (devices.Count == 0)
+                return [];
+
+            var names = devices.ToDictionary(d => d.Index, d => d.LocalizedName);
+            var collisions = CollidingNames(names);
+            var result = new List<VideoDeviceInfo>(devices.Count);
+            foreach (var d in devices)
+            {
+                var collision = collisions.Contains(d.LocalizedName.Trim());
+                var key = string.IsNullOrWhiteSpace(d.UniqueId)
+                    ? VideoDeviceKey.FromIndex(d.Index)
+                    : VideoDeviceKey.FromUniqueId(d.UniqueId);
+                result.Add(new VideoDeviceInfo
+                {
+                    Index = d.Index,
+                    Key = key,
+                    Label = FormatLabel(d.Index, d.LocalizedName, 0, 0, collision)
+                });
+            }
+
+            return result;
         }
 
         private static IReadOnlyDictionary<int, string> ReadMacFriendlyNames()
