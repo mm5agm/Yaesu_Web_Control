@@ -10,8 +10,9 @@
 // throws on HDMI dongles whose real pin is 60000/1001 (59.94). Set duration
 // from the range, inside @try.
 //
-// Format is chosen once for a 60-capable pin near the encode width so 15 / 30 /
-// 60 share size and aspect. Only the frame duration changes with the dropdown.
+// Format is chosen once for a 60-capable pin at least 800 px wide so 15 / 30 /
+// 60 share size and aspect. 640×480 is last-resort only. Only the frame
+// duration changes with the dropdown.
 
 static void set_err(char *err, int errLen, NSString *msg)
 {
@@ -31,13 +32,19 @@ static BOOL is_jpeg(FourCharCode sub)
 static BOOL format_can_do_any(AVCaptureDevice *dev, int fps);
 static CMTime duration_near_30(AVFrameRateRange *range);
 
-static int rank_format(BOOL jpeg, int width, int ceiling)
+static int rank_format(BOOL jpeg, int width, int minWidth, int target)
 {
-    if (jpeg && width <= ceiling)
-        return 3000000 + width;
-    if (width <= ceiling)
-        return 2000000 + width;
-    return 1000000 - width;
+    // 800+ is a floor: 640 JPEG must not beat 800 uncompressed.
+    if (width >= minWidth)
+    {
+        int closeness = 2000000 - abs(width - target);
+        if (jpeg)
+            closeness += 100000;
+        return closeness;
+    }
+
+    // Below the floor: last resort, prefer the least-tiny pin.
+    return width + (jpeg ? 50 : 0);
 }
 
 static BOOL format_can_do(AVCaptureDeviceFormat *fmt, int fps)
@@ -72,16 +79,14 @@ static AVFrameRateRange *range_for_fps(AVCaptureDeviceFormat *fmt, int fps)
     return best;
 }
 
-static int encode_ceiling(int fps, int maxWidth)
+static int encode_target(int maxWidth)
 {
-    // Always size the pin for 60 so 15/30 do not jump to a different aspect.
-    int ceiling = maxWidth > 0 ? maxWidth : 1280;
-    if (ceiling < 640)
-        ceiling = 640;
-    if (ceiling > 1280)
-        ceiling = 1280;
-    (void)fps;
-    return ceiling;
+    int t = maxWidth > 0 ? maxWidth : 800;
+    if (t < 800)
+        t = 800;
+    if (t > 1280)
+        t = 1280;
+    return t;
 }
 
 static CMTime duration_for_fps(AVFrameRateRange *range, int fps)
@@ -128,7 +133,8 @@ int YwcSetAvFoundationFps(const char *uniqueIdUtf8, int fps, int maxWidth, char 
                 return 0;
             }
 
-            int ceiling = encode_ceiling(fps, maxWidth);
+            int target = encode_target(maxWidth);
+            const int minWidth = 800;
             int wantFps = 60;
             if (!format_can_do_any(dev, 60))
                 wantFps = format_can_do_any(dev, 30) ? 30 : (format_can_do_any(dev, 15) ? 15 : fps);
@@ -153,7 +159,7 @@ int YwcSetAvFoundationFps(const char *uniqueIdUtf8, int fps, int maxWidth, char 
                     continue;
 
                 BOOL jpeg = is_jpeg(CMFormatDescriptionGetMediaSubType(desc));
-                int rank = rank_format(jpeg, dims.width, ceiling);
+                int rank = rank_format(jpeg, dims.width, minWidth, target);
                 if (activeAspect > 0.1)
                 {
                     double a = (double)dims.width / (double)dims.height;
@@ -180,7 +186,7 @@ int YwcSetAvFoundationFps(const char *uniqueIdUtf8, int fps, int maxWidth, char 
                     if (dims.width < 2)
                         continue;
                     BOOL jpeg = is_jpeg(CMFormatDescriptionGetMediaSubType(desc));
-                    int rank = rank_format(jpeg, dims.width, ceiling);
+                    int rank = rank_format(jpeg, dims.width, minWidth, target);
                     if (chosen == nil || rank > bestRank)
                     {
                         chosen = fmt;
