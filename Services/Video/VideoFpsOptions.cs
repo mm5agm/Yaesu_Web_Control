@@ -1,13 +1,13 @@
 namespace Yaesu_Web_Control.Services.Video
 {
     /// <summary>
-    /// Radio Display FPS selector. Prefer the capture pin's advertised rates;
-    /// fall back to 15 / 30 / 40 / 60 when the driver reports none. The chosen
-    /// value is a target — USB, encode, and CPU can still deliver less.
+    /// Radio Display FPS selector: 15 / 30 / 60. Device max hides presets the
+    /// capture pin cannot do. The chosen value is a target — USB, encode, and
+    /// CPU can still deliver less.
     /// </summary>
     public static class VideoFpsOptions
     {
-        public static readonly int[] Allowed = { 15, 30, 40, 60 };
+        public static readonly int[] Allowed = { 15, 30, 60 };
 
         public static int[] UniqueSorted(IEnumerable<double> raw)
         {
@@ -26,6 +26,7 @@ namespace Yaesu_Web_Control.Services.Video
 
         /// <summary>
         /// Presets that fall inside a driver-reported min/max interval range.
+        /// Used only when collecting the device's maximum advertised rate.
         /// </summary>
         public static void AddPresetsInRange(ICollection<double> dest, double minFps, double maxFps)
         {
@@ -38,8 +39,15 @@ namespace Yaesu_Web_Control.Services.Video
             }
         }
 
-        public static int[] ForDevice(int[]? advertised) =>
-            advertised is { Length: > 0 } ? advertised : Allowed;
+        public static int[] ForDevice(int[]? advertised)
+        {
+            var max = Max(advertised);
+            if (max <= 0)
+                return Allowed;
+
+            var capped = Allowed.Where(a => a <= max).ToArray();
+            return capped.Length > 0 ? capped : [Allowed[0]];
+        }
 
         public static int Normalize(int fps, int[]? advertised = null)
         {
