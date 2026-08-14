@@ -19,17 +19,11 @@ namespace Yaesu_Web_Control.Services.Video
             if (Dispatcher.UIThread.CheckAccess())
                 return work();
 
-            T? result = default;
-            Exception? error = null;
-            Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                try { result = work(); }
-                catch (Exception ex) { error = ex; }
-            }).GetAwaiter().GetResult();
-
-            if (error is not null)
-                throw error;
-            return result!;
+            // Send runs before layout/render. InvokeAsync at default priority
+            // waits for the next dispatcher turn (~display refresh, ~16 ms),
+            // which stacked with a blocking Read + JPEG encode capped the
+            // stream around 20 fps.
+            return Dispatcher.UIThread.Invoke(work, DispatcherPriority.Send);
         }
 
         public static void OnUiThread(Action work)

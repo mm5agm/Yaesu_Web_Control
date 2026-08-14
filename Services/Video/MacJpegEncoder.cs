@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using OpenCvSharp;
 using SkiaSharp;
 
@@ -11,12 +10,6 @@ namespace Yaesu_Web_Control.Services.Video
     /// </summary>
     internal static class MacJpegEncoder
     {
-        [ThreadStatic]
-        private static byte[]? t_bgrRow;
-
-        [ThreadStatic]
-        private static byte[]? t_bgraRow;
-
         public static bool TryEncode(
             Mat bgrOrGray,
             int maxWidth,
@@ -37,45 +30,39 @@ namespace Yaesu_Web_Control.Services.Video
                 return false;
             }
 
-            Mat? owned = null;
             Mat? resized = null;
-            Mat? bgr = null;
             try
             {
-                owned = bgrOrGray.Clone();
-                var src = owned;
+                var src = bgrOrGray;
 
                 if (maxWidth > 0 && src.Width > maxWidth)
                 {
                     var scale = (double)maxWidth / src.Width;
                     var newH = Math.Max(1, (int)Math.Round(src.Height * scale));
                     resized = new Mat();
-                    Cv2.Resize(src, resized, new OpenCvSharp.Size(maxWidth, newH), 0, 0, InterpolationFlags.Area);
+                    // Linear is much cheaper than Area at 1080p→800 and is
+                    // sharp enough for a radio LCD. Area was a measurable
+                    // slice of the ~20 fps ceiling.
+                    Cv2.Resize(src, resized, new OpenCvSharp.Size(maxWidth, newH), 0, 0, InterpolationFlags.Linear);
                     src = resized;
                 }
 
                 var ch = src.Channels();
-                if (ch == 4)
+                ColorConversionCodes? toBgra = ch switch
                 {
-                    bgr = new Mat();
-                    Cv2.CvtColor(src, bgr, ColorConversionCodes.BGRA2BGR);
-                    src = bgr;
-                    ch = 3;
-                }
-                else if (ch == 1)
+                    1 => ColorConversionCodes.GRAY2BGRA,
+                    3 => ColorConversionCodes.BGR2BGRA,
+                    4 => null,
+                    _ => throw new InvalidOperationException($"unsupported channel count {ch}")
+                };
+
+                if (toBgra is null && src.Type() != MatType.CV_8UC4)
                 {
-                    bgr = new Mat();
-                    Cv2.CvtColor(src, bgr, ColorConversionCodes.GRAY2BGR);
-                    src = bgr;
-                    ch = 3;
-                }
-                else if (ch != 3)
-                {
-                    skipReason = $"unsupported channel count {ch}";
+                    skipReason = $"bad mat type {src.Type()}";
                     return false;
                 }
 
-                if (src.Type() != MatType.CV_8UC3)
+                if (toBgra is not null && src.Type() != MatType.CV_8UC1 && src.Type() != MatType.CV_8UC3)
                 {
                     skipReason = $"bad mat type {src.Type()}";
                     return false;
@@ -84,10 +71,28 @@ namespace Yaesu_Web_Control.Services.Video
                 var w = src.Width;
                 var h = src.Height;
                 using var bitmap = new SKBitmap(w, h, SKColorType.Bgra8888, SKAlphaType.Opaque);
-                if (!CopyBgrToBgra(src, bitmap))
+                using var pixmap = bitmap.PeekPixels();
+                if (pixmap is null)
                 {
-                    skipReason = "failed to copy pixels into SKBitmap";
+                    skipReason = "failed to lock SKBitmap pixels";
                     return false;
+                }
+
+                var dstPtr = pixmap.GetPixels();
+                if (dstPtr == IntPtr.Zero)
+                {
+                    skipReason = "SKBitmap pixel pointer was null";
+                    return false;
+                }
+
+                // Write BGRA straight into the Skia bitmap — OpenCV SIMD
+                // CvtColor, no per-pixel C# loop and no extra BGRA Mat.
+                using (var wrapped = Mat.FromPixelData(h, w, MatType.CV_8UC4, dstPtr, pixmap.RowBytes))
+                {
+                    if (toBgra is { } code)
+                        Cv2.CvtColor(src, wrapped, code);
+                    else
+                        src.CopyTo(wrapped);
                 }
 
                 var quality = Math.Clamp(jpegQuality, 1, 100);
@@ -111,6 +116,12 @@ namespace Yaesu_Web_Control.Services.Video
                 outH = h;
                 return true;
             }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("unsupported channel", StringComparison.Ordinal))
+            {
+                skipReason = ex.Message;
+                jpegBytes = null;
+                return false;
+            }
             catch (Exception ex)
             {
                 skipReason = ex.GetType().Name + ": " + ex.Message;
@@ -119,63 +130,8 @@ namespace Yaesu_Web_Control.Services.Video
             }
             finally
             {
-                bgr?.Dispose();
                 resized?.Dispose();
-                owned?.Dispose();
             }
-        }
-
-        private static bool CopyBgrToBgra(Mat bgr, SKBitmap bitmap)
-        {
-            var w = bgr.Width;
-            var h = bgr.Height;
-            if (bitmap.Width != w || bitmap.Height != h)
-                return false;
-
-            using var pixmap = bitmap.PeekPixels();
-            if (pixmap is null)
-                return false;
-
-            var dstBase = pixmap.GetPixels();
-            if (dstBase == IntPtr.Zero)
-                return false;
-
-            var srcStride = (int)bgr.Step();
-            var dstStride = pixmap.RowBytes;
-            var rowBytes = w * 3;
-            var outBytes = w * 4;
-
-            var bgrRow = t_bgrRow;
-            if (bgrRow is null || bgrRow.Length < rowBytes)
-            {
-                bgrRow = new byte[rowBytes];
-                t_bgrRow = bgrRow;
-            }
-
-            var bgraRow = t_bgraRow;
-            if (bgraRow is null || bgraRow.Length < outBytes)
-            {
-                bgraRow = new byte[outBytes];
-                t_bgraRow = bgraRow;
-            }
-
-            for (var y = 0; y < h; y++)
-            {
-                Marshal.Copy(bgr.Data + (y * srcStride), bgrRow, 0, rowBytes);
-                for (var x = 0; x < w; x++)
-                {
-                    var i = x * 3;
-                    var o = x * 4;
-                    bgraRow[o + 0] = bgrRow[i + 0]; // B
-                    bgraRow[o + 1] = bgrRow[i + 1]; // G
-                    bgraRow[o + 2] = bgrRow[i + 2]; // R
-                    bgraRow[o + 3] = 255;
-                }
-
-                Marshal.Copy(bgraRow, 0, dstBase + (y * dstStride), outBytes);
-            }
-
-            return true;
         }
     }
 }

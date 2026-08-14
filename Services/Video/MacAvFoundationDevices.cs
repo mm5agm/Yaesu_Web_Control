@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Text;
 
 namespace Yaesu_Web_Control.Services.Video
 {
@@ -166,6 +167,59 @@ namespace Yaesu_Web_Control.Services.Video
         public static int TryQueryMaxFps(int index, string? uniqueId) =>
             VideoFpsOptions.Max(TryQueryFpsRates(index, uniqueId));
 
+        /// <summary>
+        /// Lock a 60-capable pin near the encode width (same size/aspect for
+        /// 15 / 30 / 60) and only change frame duration. Lives in
+        /// <c>libYwcMacAvFps.dylib</c> because C# <c>objc_msgSend</c> of
+        /// <c>CMTime</c> aborts on 59.94 fps HDMI pins. Must run on the AppKit
+        /// thread after OpenCV has started the session.
+        /// </summary>
+        public static bool TrySetFrameRate(int index, string? uniqueId, int targetFps, int maxWidth, out string detail)
+        {
+            detail = "AVFoundation frame-rate not applied";
+            if (!OperatingSystem.IsMacOS() || targetFps < 1)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(uniqueId))
+            {
+                foreach (var d in List())
+                {
+                    if (d.Index == index)
+                    {
+                        uniqueId = d.UniqueId;
+                        break;
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(uniqueId))
+            {
+                detail = "AVFoundation device not found for frame-rate set";
+                return false;
+            }
+
+            try
+            {
+                var buf = new byte[512];
+                var ok = NativeFps.Set(uniqueId.Trim(), targetFps, maxWidth, buf, buf.Length);
+                var nul = Array.IndexOf(buf, (byte)0);
+                detail = Encoding.UTF8.GetString(buf, 0, nul < 0 ? buf.Length : nul);
+                if (string.IsNullOrWhiteSpace(detail))
+                    detail = ok != 0 ? "AVFoundation frame-rate applied" : "AVFoundation frame-rate failed";
+                return ok != 0;
+            }
+            catch (DllNotFoundException)
+            {
+                detail = "libYwcMacAvFps.dylib missing — rebuild on macOS";
+                return false;
+            }
+            catch (Exception ex)
+            {
+                detail = "AVFoundation frame-rate failed: " + ex.GetType().Name + ": " + ex.Message;
+                return false;
+            }
+        }
+
         [SupportedOSPlatform("macos")]
         private static int[] RatesFromDevice(IntPtr device)
         {
@@ -255,6 +309,17 @@ namespace Yaesu_Web_Control.Services.Video
                 return null;
             var utf8 = Native.MsgSend(nsString, Native.sel_registerName("UTF8String"));
             return utf8 == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(utf8);
+        }
+
+        private static class NativeFps
+        {
+            [DllImport("libYwcMacAvFps.dylib", EntryPoint = "YwcSetAvFoundationFps", CallingConvention = CallingConvention.Cdecl)]
+            public static extern int Set(
+                [MarshalAs(UnmanagedType.LPUTF8Str)] string uniqueId,
+                int fps,
+                int maxWidth,
+                byte[] err,
+                int errLen);
         }
 
         private static class Native
