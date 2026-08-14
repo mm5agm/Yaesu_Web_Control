@@ -196,7 +196,7 @@
                 </div>
                 <div class="card-body p-0 bg-black radio-display-body">
                     <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
-                        Click Start to show the radio display
+                        <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
                     </div>
                     <img id="radioDisplayImg" alt="Radio display" decoding="async" style="display:none;" />
                 </div>
@@ -205,7 +205,7 @@
     </div>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
     <script type="module">
-        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=20";
+        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=21";
         initRadioDisplayUi('popout');
     </script>
 </body>

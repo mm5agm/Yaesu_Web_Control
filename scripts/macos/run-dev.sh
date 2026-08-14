@@ -26,15 +26,18 @@ APP="$ROOT/bin/$CONFIG/macos-app/Yaesu Web Control.app"
 HOST="$APP/Contents/MacOS/Yaesu_Web_Control"
 LOG_DIR="$HOME/Library/Application Support/MM5AGM/Yaesu Web Control/logs"
 
-if pgrep -x Yaesu_Web_Control >/dev/null 2>&1; then
+# Match the wrapped apphost path (not `pgrep -x`): Darwin truncates p_comm to
+# 16 characters, so `Yaesu_Web_Control` would not exact-match.
+EXISTING_PAT="macos-app/Yaesu Web Control.app/Contents/MacOS/Yaesu_Web_Control"
+if pgrep -f "$EXISTING_PAT" >/dev/null 2>&1; then
   echo "Stopping existing Yaesu_Web_Control..."
-  pkill -x Yaesu_Web_Control || true
+  pkill -f "$EXISTING_PAT" || true
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-    pgrep -x Yaesu_Web_Control >/dev/null 2>&1 || break
+    pgrep -f "$EXISTING_PAT" >/dev/null 2>&1 || break
     sleep 0.15
   done
-  if pgrep -x Yaesu_Web_Control >/dev/null 2>&1; then
-    pkill -9 -x Yaesu_Web_Control || true
+  if pgrep -f "$EXISTING_PAT" >/dev/null 2>&1; then
+    pkill -9 -f "$EXISTING_PAT" || true
     sleep 0.3
   fi
 fi

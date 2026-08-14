@@ -1239,6 +1239,9 @@ fieldset.calibration-card {
     pointer-events: none;
     user-select: none;
 }
+.radio-display-placeholder .bi {
+    vertical-align: -0.08em;
+}
 .radio-display-placeholder[hidden] {
     display: none !important;
 }
