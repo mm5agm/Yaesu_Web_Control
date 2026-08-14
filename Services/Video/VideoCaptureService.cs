@@ -393,7 +393,8 @@ namespace Yaesu_Web_Control.Services.Video
                 }
 
                 var maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
-                var targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
+                var rates = VideoDeviceFpsCaps.PeekRates(settings.VideoCaptureDeviceKey);
+                var targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps, rates);
                 var jpegQuality = VideoJpegQualityOptions.Normalize(settings.VideoJpegQuality);
                 var frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
                 var settingsAge = Stopwatch.StartNew();
@@ -451,7 +452,7 @@ namespace Yaesu_Web_Control.Services.Video
                         {
                             settings = ReadSettings();
                             maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
-                            var newFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
+                            var newFps = VideoFpsOptions.Normalize(settings.VideoTargetFps, VideoDeviceFpsCaps.PeekRates(settings.VideoCaptureDeviceKey));
                             jpegQuality = VideoJpegQualityOptions.Normalize(settings.VideoJpegQuality);
                             encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
                             if (newFps != targetFps)
@@ -797,7 +798,7 @@ namespace Yaesu_Web_Control.Services.Video
                 if (settingsAge.ElapsedMilliseconds >= SettingsRefreshMs)
                 {
                     settings = ReadSettings();
-                    targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps);
+                    targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps, VideoDeviceFpsCaps.PeekRates(settings.VideoCaptureDeviceKey));
                     settingsAge.Restart();
                 }
 

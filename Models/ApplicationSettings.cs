@@ -307,7 +307,8 @@
         public int VideoMaxWidth { get; set; } = 800;
 
         /// <summary>
-        /// Target encode rate. Allowed: 15, 30, 40, 60 (chosen on the Radio Display panel).
+        /// Target encode rate. Chosen from the capture device's advertised rates
+        /// (15 / 30 / 40 / 60 fallback if the driver reports none).
         /// </summary>
         public int VideoTargetFps { get; set; } = 15;
 

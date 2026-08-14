@@ -40,15 +40,17 @@ namespace Yaesu_Web_Control.Controllers
                     .ToList();
                 if (devices.Count == 0 && _capture.OpenDeviceIndex is int idx)
                 {
+                    var key = VideoDeviceKey.FromIndex(idx);
                     devices.Add(new VideoDeviceInfo
                     {
                         Index = idx,
-                        Key = VideoDeviceKey.FromIndex(idx),
-                        Label = $"Camera {idx} (in use)"
+                        Key = key,
+                        Label = $"Camera {idx} (in use)",
+                        Rates = VideoDeviceFpsCaps.PeekRates(key)
                     });
                 }
 
-                var payload = devices.Select(d => new { key = d.Key, label = d.Label, index = d.Index });
+                var payload = devices.Select(d => new { key = d.Key, label = d.Label, index = d.Index, maxFps = d.MaxFps, rates = d.Rates });
                 if (OperatingSystem.IsMacOS() && devices.Count > 0)
                 {
                     _logger.LogDebug(
@@ -99,6 +101,8 @@ namespace Yaesu_Web_Control.Controllers
         public async Task<IActionResult> Status()
         {
             var s = await _settings.GetSettingsAsync();
+            var rates = VideoDeviceFpsCaps.RatesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
+            var targetFps = VideoFpsOptions.Normalize(s.VideoTargetFps, rates);
             return Ok(new
             {
                 enabled = s.VideoDisplayEnabled,
@@ -111,7 +115,9 @@ namespace Yaesu_Web_Control.Controllers
                 frameSeq = _capture.FrameSeq,
                 viewers = _sessions.ViewerCount,
                 maxWidth = s.VideoMaxWidth,
-                targetFps = s.VideoTargetFps,
+                targetFps,
+                maxFps = VideoFpsOptions.Max(rates),
+                rates,
                 jpegQuality = VideoJpegQualityOptions.Normalize(s.VideoJpegQuality)
             });
         }
@@ -139,7 +145,8 @@ namespace Yaesu_Web_Control.Controllers
             await _settings.SaveSettingsAsync(s);
             _capture.RequestRestart();
             _logger.LogInformation("Radio Display device set to {Key}", string.IsNullOrEmpty(key) ? "(none)" : key);
-            return Ok(new { deviceKey = s.VideoCaptureDeviceKey, status = _capture.Status });
+            var rates = VideoDeviceFpsCaps.RatesFor(key, allowDeviceOpen: !_capture.IsCapturing);
+            return Ok(new { deviceKey = s.VideoCaptureDeviceKey, status = _capture.Status, maxFps = VideoFpsOptions.Max(rates), rates });
         }
 
         public sealed class FpsRequest
@@ -147,7 +154,7 @@ namespace Yaesu_Web_Control.Controllers
             public int? Fps { get; set; }
         }
 
-        /// <summary>Persist encode FPS (15 / 30 / 40 / 60). Applied on the next frame cycle.</summary>
+        /// <summary>Persist encode FPS from the device-advertised list. Applied on the next frame cycle.</summary>
         [HttpPost("fps")]
         public async Task<IActionResult> SetFps([FromBody] FpsRequest? body)
         {
@@ -155,9 +162,10 @@ namespace Yaesu_Web_Control.Controllers
             if (!s.VideoDisplayEnabled)
                 return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
 
-            s.VideoTargetFps = VideoFpsOptions.Normalize(body?.Fps ?? s.VideoTargetFps);
+            var rates = VideoDeviceFpsCaps.RatesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
+            s.VideoTargetFps = VideoFpsOptions.Normalize(body?.Fps ?? s.VideoTargetFps, rates);
             await _settings.SaveSettingsAsync(s);
-            return Ok(new { targetFps = s.VideoTargetFps });
+            return Ok(new { targetFps = s.VideoTargetFps, maxFps = VideoFpsOptions.Max(rates), rates });
         }
 
         public sealed class JpegQualityRequest
