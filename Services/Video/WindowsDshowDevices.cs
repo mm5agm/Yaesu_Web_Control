@@ -14,6 +14,7 @@ namespace Yaesu_Web_Control.Services.Video
         private static readonly Guid ClsidSystemDeviceEnum = new("62BE5D10-60EB-11d0-BD3B-00A0C911CE86");
         private static readonly Guid VideoInputDeviceCategory = new("860BB310-5D01-11d0-BD3B-00A0C911CE86");
         private static readonly Guid IidPropertyBag = new("55272A00-42CB-11CE-8135-00AA004BB851");
+        private static readonly Guid IidBaseFilter = new("56a86895-0ad4-11ce-b03a-0020af0ba770");
 
         /// <summary>Last <c>CreateClassEnumerator</c> HRESULT (0 = S_OK, 1 = S_FALSE / empty).</summary>
         internal static int LastCreateClassEnumeratorHr { get; private set; }
@@ -108,7 +109,7 @@ namespace Yaesu_Web_Control.Services.Video
                     monikers[0] = null!;
                     try
                     {
-                        var name = ReadFriendlyName(moniker);
+                        var name = ReadBagString(moniker, "FriendlyName");
                         if (!string.IsNullOrWhiteSpace(name))
                             map[index] = name.Trim();
                         index++;
@@ -134,8 +135,170 @@ namespace Yaesu_Web_Control.Services.Video
             return map;
         }
 
+        /// <summary>
+        /// DirectShow <c>DevicePath</c> for OpenCV index <paramref name="dshowIndex"/>.
+        /// Same symbolic link Media Foundation uses — lets us open the source
+        /// without <c>MFEnumDeviceSources</c>.
+        /// </summary>
         [SupportedOSPlatform("windows")]
-        private static string? ReadFriendlyName(IMoniker? moniker)
+        public static string? TryGetDevicePath(int dshowIndex)
+        {
+            if (!OperatingSystem.IsWindows() || dshowIndex < 0)
+                return null;
+
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+                return DevicePathAt(dshowIndex);
+
+            string? path = null;
+            using var done = new ManualResetEventSlim(false);
+            var thread = new Thread(() =>
+            {
+                try { path = DevicePathAt(dshowIndex); }
+                catch { /* ignore */ }
+                finally { done.Set(); }
+            })
+            {
+                IsBackground = true,
+                Name = "YWC-DShowPath"
+            };
+            try { thread.SetApartmentState(ApartmentState.STA); }
+            catch (InvalidOperationException) { /* ignore */ }
+            thread.Start();
+            done.Wait(4000);
+            return path;
+        }
+
+        [SupportedOSPlatform("windows")]
+        private static string? DevicePathAt(int dshowIndex)
+        {
+            object? deviceEnumObj = null;
+            IEnumMoniker? enumerator = null;
+            try
+            {
+                var clsidType = Type.GetTypeFromCLSID(ClsidSystemDeviceEnum, throwOnError: false);
+                if (clsidType is null)
+                    return null;
+                deviceEnumObj = Activator.CreateInstance(clsidType);
+                if (deviceEnumObj is not ICreateDevEnum createDevEnum)
+                    return null;
+
+                var category = VideoInputDeviceCategory;
+                if (createDevEnum.CreateClassEnumerator(ref category, out enumerator, 0) != 0 || enumerator is null)
+                    return null;
+
+                var monikers = new IMoniker[1];
+                var index = 0;
+                while (true)
+                {
+                    var nhr = enumerator.Next(1, monikers, IntPtr.Zero);
+                    if (nhr != 0 || monikers[0] is null)
+                        break;
+                    var moniker = monikers[0];
+                    monikers[0] = null!;
+                    try
+                    {
+                        if (index == dshowIndex)
+                            return ReadBagString(moniker, "DevicePath");
+                        index++;
+                    }
+                    finally
+                    {
+                        Marshal.ReleaseComObject(moniker);
+                    }
+                }
+            }
+            catch
+            {
+                return null;
+            }
+            finally
+            {
+                if (enumerator != null)
+                    Marshal.ReleaseComObject(enumerator);
+                if (deviceEnumObj != null)
+                    Marshal.ReleaseComObject(deviceEnumObj);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Bind the DirectShow capture filter at OpenCV index
+        /// <paramref name="dshowIndex"/>. Must run on an STA thread that will
+        /// own the graph — do not call from the thread pool (the filter is
+        /// apartment-bound).
+        /// </summary>
+        [SupportedOSPlatform("windows")]
+        public static object? BindFilterAt(int dshowIndex)
+        {
+            if (!OperatingSystem.IsWindows() || dshowIndex < 0)
+                return null;
+            if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+                return null;
+            return BindFilterAtWindows(dshowIndex);
+        }
+
+        [SupportedOSPlatform("windows")]
+        private static object? BindFilterAtWindows(int dshowIndex)
+        {
+            object? deviceEnumObj = null;
+            IEnumMoniker? enumerator = null;
+            try
+            {
+                var clsidType = Type.GetTypeFromCLSID(ClsidSystemDeviceEnum, throwOnError: false);
+                if (clsidType is null)
+                    return null;
+                deviceEnumObj = Activator.CreateInstance(clsidType);
+                if (deviceEnumObj is not ICreateDevEnum createDevEnum)
+                    return null;
+
+                var category = VideoInputDeviceCategory;
+                if (createDevEnum.CreateClassEnumerator(ref category, out enumerator, 0) != 0 || enumerator is null)
+                    return null;
+
+                var monikers = new IMoniker[1];
+                var index = 0;
+                while (true)
+                {
+                    var nhr = enumerator.Next(1, monikers, IntPtr.Zero);
+                    if (nhr != 0 || monikers[0] is null)
+                        break;
+                    var moniker = monikers[0];
+                    monikers[0] = null!;
+                    try
+                    {
+                        if (index == dshowIndex)
+                        {
+                            var iid = IidBaseFilter;
+                            moniker.BindToObject(null!, null!, ref iid, out var filter);
+                            return filter;
+                        }
+
+                        index++;
+                    }
+                    finally
+                    {
+                        Marshal.ReleaseComObject(moniker);
+                    }
+                }
+            }
+            catch
+            {
+                return null;
+            }
+            finally
+            {
+                if (enumerator != null)
+                    Marshal.ReleaseComObject(enumerator);
+                if (deviceEnumObj != null)
+                    Marshal.ReleaseComObject(deviceEnumObj);
+            }
+
+            return null;
+        }
+
+        [SupportedOSPlatform("windows")]
+        private static string? ReadBagString(IMoniker? moniker, string propertyName)
         {
             if (moniker is null)
                 return null;
@@ -149,7 +312,7 @@ namespace Yaesu_Web_Control.Services.Video
                     return null;
 
                 object value = "";
-                var hr = bag.Read("FriendlyName", ref value, IntPtr.Zero);
+                var hr = bag.Read(propertyName, ref value, IntPtr.Zero);
                 if (hr != 0)
                     return null;
                 return value as string;

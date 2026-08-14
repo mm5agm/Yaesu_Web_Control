@@ -11,7 +11,7 @@ namespace Yaesu_Web_Control.Services.Video
     /// while OBS holds 30 on the same dongle.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    internal sealed class WindowsMfMjpegSession : IDisposable
+    internal sealed class WindowsMfMjpegSession : IJpegCaptureSession
     {
         private const int MfVersion = 0x00020070; // MF_VERSION
         private const int SourceReaderFirstVideoStream = unchecked((int)0xFFFFFFFC);
@@ -32,24 +32,68 @@ namespace Yaesu_Web_Control.Services.Video
         private static readonly Guid MfReadwriteDisableConverters = new("98d44c05-8a0d-4b80-8f1a-6f9a315fad27");
 
         private static readonly object StartupLock = new();
-        private static int _startupCount;
+        private static bool _mfStarted;
+
+        private static class AttrVtbl
+        {
+            // IUnknown (3) + IMFAttributes slots. SetUINT32=18, SetGUID=21, SetString=22.
+            private const int SetUint32Slot = 21;
+            private const int SetGuidSlot = 24;
+            private const int SetStringSlot = 25;
+
+            [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+            private delegate int SetGuidProc(IntPtr self, ref Guid key, ref Guid value);
+
+            [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+            private delegate int SetStringProc(IntPtr self, ref Guid key, [MarshalAs(UnmanagedType.LPWStr)] string value);
+
+            [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+            private delegate int SetUint32Proc(IntPtr self, ref Guid key, uint value);
+
+            public static int SetGuid(IMFAttributes attrs, Guid key, Guid value) =>
+                Call<SetGuidProc>(attrs, SetGuidSlot, (proc, p) => proc(p, ref key, ref value));
+
+            public static int SetString(IMFAttributes attrs, Guid key, string value) =>
+                Call<SetStringProc>(attrs, SetStringSlot, (proc, p) => proc(p, ref key, value));
+
+            public static int SetUint32(IMFAttributes attrs, Guid key, uint value) =>
+                Call<SetUint32Proc>(attrs, SetUint32Slot, (proc, p) => proc(p, ref key, value));
+
+            private static int Call<T>(IMFAttributes attrs, int slot, Func<T, IntPtr, int> invoke)
+                where T : Delegate
+            {
+                var p = Marshal.GetComInterfaceForObject(attrs, typeof(IMFAttributes));
+                try
+                {
+                    var vtbl = Marshal.ReadIntPtr(p);
+                    var fn = Marshal.GetDelegateForFunctionPointer<T>(Marshal.ReadIntPtr(vtbl, slot * IntPtr.Size));
+                    return invoke(fn, p);
+                }
+                finally
+                {
+                    Marshal.Release(p);
+                }
+            }
+        }
 
         private readonly IMFSourceReader _reader;
         private bool _disposed;
 
-        public int Width { get; }
-        public int Height { get; }
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+        public double DeviceFps { get; private set; }
         public string DeviceName { get; }
 
-        private WindowsMfMjpegSession(IMFSourceReader reader, int width, int height, string deviceName)
+        private WindowsMfMjpegSession(IMFSourceReader reader, int width, int height, double deviceFps, string deviceName)
         {
             _reader = reader;
             Width = width;
             Height = height;
+            DeviceFps = deviceFps;
             DeviceName = deviceName;
         }
 
-        public static WindowsMfMjpegSession? TryOpen(int dshowIndex, int targetFps, ILogger logger)
+        public static WindowsMfMjpegSession? TryOpen(int dshowIndex, int targetFps, int maxWidth, ILogger logger)
         {
             if (!OperatingSystem.IsWindows())
                 return null;
@@ -75,8 +119,9 @@ namespace Yaesu_Web_Control.Services.Video
                 if (source is null)
                 {
                     logger.LogWarning(
-                        "Radio Display: MFCreateDeviceSource failed for '{Name}'",
-                        friendly);
+                        "Radio Display: MFCreateDeviceSource failed for '{Name}' (link={Link})",
+                        friendly,
+                        symlink);
                     return null;
                 }
 
@@ -93,7 +138,9 @@ namespace Yaesu_Web_Control.Services.Video
                     }
 
                     var formats = new List<string>();
-                    var selected = SelectMjpegType(reader, formats, out var width, out var height);
+                    var selected = SelectRankedMjpegType(
+                        reader, formats, targetFps, maxWidth,
+                        out var width, out var height, out var deviceFps);
                     logger.LogInformation(
                         "Radio Display: '{Name}' Media Foundation formats: {Formats}",
                         friendly,
@@ -101,14 +148,14 @@ namespace Yaesu_Web_Control.Services.Video
 
                     if (!selected)
                     {
-                        logger.LogWarning(
-                            "Radio Display: '{Name}' exposes no MJPEG mode to Media Foundation — falling back to OpenCV encode",
+                        logger.LogInformation(
+                            "Radio Display: '{Name}' Media Foundation has no ranked MJPEG pin — falling back to OpenCV encode",
                             friendly);
                         return null;
                     }
 
                     opened = true;
-                    return new WindowsMfMjpegSession(reader, width, height, friendly);
+                    return new WindowsMfMjpegSession(reader, width, height, deviceFps, friendly);
                 }
                 finally
                 {
@@ -126,6 +173,53 @@ namespace Yaesu_Web_Control.Services.Video
             {
                 if (!opened)
                     ReleaseStartup();
+            }
+        }
+
+        /// <summary>
+        /// Re-select the discrete MJPEG type at the locked size whose native
+        /// frame rate is nearest <paramref name="targetFps"/>. Does not change
+        /// width/height.
+        /// </summary>
+        public bool TrySetFrameRate(int targetFps)
+        {
+            if (_disposed || targetFps < 1)
+                return false;
+
+            var natives = EnumerateNativeTypes(_reader, formats: null);
+            try
+            {
+                var pins = natives.Select(n => n.ToPin()).ToList();
+                var match = VideoCapturePinRank.NearestFps(pins, Width, Height, jpeg: true, targetFps);
+                if (match is null)
+                    return false;
+
+                NativeType? chosen = null;
+                foreach (var n in natives)
+                {
+                    if (n.Width != match.Value.Width ||
+                        n.Height != match.Value.Height ||
+                        !n.Jpeg ||
+                        Math.Abs(n.Fps - match.Value.Fps) > 0.01)
+                        continue;
+                    chosen = n;
+                    break;
+                }
+
+                if (chosen is null)
+                    return false;
+
+                var hr = _reader.SetCurrentMediaType(SourceReaderFirstVideoStream, IntPtr.Zero, chosen.Type);
+                if (hr < 0)
+                    return false;
+
+                DeviceFps = chosen.Fps;
+                return true;
+            }
+            finally
+            {
+                foreach (var n in natives)
+                    SafeRelease(n.Type);
             }
         }
 
@@ -193,7 +287,7 @@ namespace Yaesu_Web_Control.Services.Video
             if ((uint)dshowIndex < (uint)devices.Count)
                 return devices[dshowIndex].Symlink;
 
-            return null;
+            return WindowsDshowDevices.TryGetDevicePath(dshowIndex);
         }
 
         private static List<(string Name, string Symlink)> EnumVideoDevicesQuiet()
@@ -205,9 +299,8 @@ namespace Yaesu_Web_Control.Services.Video
 
             try
             {
-                var type = MfDevsourceAttributeSourceType;
-                var vidcap = MfDevsourceAttributeSourceTypeVidcapGuid;
-                if (attrs.SetGUID(ref type, ref vidcap) < 0)
+                hr = AttrVtbl.SetGuid(attrs, MfDevsourceAttributeSourceType, MfDevsourceAttributeSourceTypeVidcapGuid);
+                if (hr < 0)
                     return list;
 
                 hr = MFEnumDeviceSources(attrs, out var activateArray, out var count);
@@ -371,6 +464,15 @@ namespace Yaesu_Web_Control.Services.Video
                 return devices[dshowIndex].Symlink;
             }
 
+            var dshowPath = WindowsDshowDevices.TryGetDevicePath(dshowIndex);
+            if (!string.IsNullOrEmpty(dshowPath))
+            {
+                logger.LogInformation(
+                    "Radio Display: Media Foundation enum empty; using DirectShow DevicePath for '{Friendly}'",
+                    friendly);
+                return dshowPath;
+            }
+
             return null;
         }
 
@@ -386,9 +488,7 @@ namespace Yaesu_Web_Control.Services.Video
 
             try
             {
-                var type = MfDevsourceAttributeSourceType;
-                var vidcap = MfDevsourceAttributeSourceTypeVidcapGuid;
-                hr = attrs.SetGUID(ref type, ref vidcap);
+                hr = AttrVtbl.SetGuid(attrs, MfDevsourceAttributeSourceType, MfDevsourceAttributeSourceTypeVidcapGuid);
                 if (hr < 0)
                 {
                     logger.LogWarning("Radio Display: SetGUID(SOURCE_TYPE=VIDCAP) failed (hr=0x{Hr:X8})", hr);
@@ -399,9 +499,12 @@ namespace Yaesu_Web_Control.Services.Video
                 if (hr < 0 || activateArray == IntPtr.Zero || count == 0)
                 {
                     logger.LogWarning(
-                        "Radio Display: MFEnumDeviceSources returned hr=0x{Hr:X8}, count={Count}. " +
-                        "If hr is 0 with count 0, Windows camera privacy is likely blocking Media Foundation " +
-                        "(Settings → Privacy & security → Camera → Let desktop apps access your camera).",
+                        "Radio Display: MFEnumDeviceSources returned hr=0x{Hr:X8}, count={Count}" +
+                        (hr == unchecked((int)0xC00D36E6)
+                            ? " (MF_E_ATTRIBUTENOTFOUND — SOURCE_TYPE did not stick; will try DirectShow DevicePath)."
+                            : hr == 0
+                                ? " (empty list: check Settings → Privacy & security → Camera → Let desktop apps access your camera)."
+                                : "."),
                         hr,
                         count);
                     return list;
@@ -452,12 +555,9 @@ namespace Yaesu_Web_Control.Services.Video
 
             try
             {
-                var type = MfDevsourceAttributeSourceType;
-                var vidcap = MfDevsourceAttributeSourceTypeVidcapGuid;
-                var linkKey = MfDevsourceAttributeSourceTypeVidcapSymbolicLink;
-                if (attrs.SetGUID(ref type, ref vidcap) < 0)
+                if (AttrVtbl.SetGuid(attrs, MfDevsourceAttributeSourceType, MfDevsourceAttributeSourceTypeVidcapGuid) < 0)
                     return null;
-                if (attrs.SetString(ref linkKey, symlink) < 0)
+                if (AttrVtbl.SetString(attrs, MfDevsourceAttributeSourceTypeVidcapSymbolicLink, symlink) < 0)
                     return null;
 
                 hr = MFCreateDeviceSource(attrs, out var source);
@@ -477,8 +577,8 @@ namespace Yaesu_Web_Control.Services.Video
 
             try
             {
-                var disable = MfReadwriteDisableConverters;
-                attrs.SetUINT32(ref disable, 1);
+                if (AttrVtbl.SetUint32(attrs, MfReadwriteDisableConverters, 1) < 0)
+                    return null;
                 hr = MFCreateSourceReaderFromMediaSource(source, attrs, out var reader);
                 return hr >= 0 ? reader : null;
             }
@@ -488,65 +588,119 @@ namespace Yaesu_Web_Control.Services.Video
             }
         }
 
-        private static bool SelectMjpegType(IMFSourceReader reader, List<string> formats, out int width, out int height)
+        private sealed class NativeType
+        {
+            public required IMFMediaType Type { get; init; }
+            public int Width { get; init; }
+            public int Height { get; init; }
+            public double Fps { get; init; }
+            public bool Jpeg { get; init; }
+
+            public VideoCapturePinRank.Pin ToPin() => new(Width, Height, Fps, Jpeg);
+        }
+
+        private static bool SelectRankedMjpegType(
+            IMFSourceReader reader,
+            List<string> formats,
+            int targetFps,
+            int maxWidth,
+            out int width,
+            out int height,
+            out double deviceFps)
         {
             width = 0;
             height = 0;
-            (int Width, int Height, IMFMediaType Type)? best = null;
+            deviceFps = 0;
+            var natives = EnumerateNativeTypes(reader, formats);
             try
             {
-                for (uint i = 0; ; i++)
-                {
-                    var hr = reader.GetNativeMediaType(SourceReaderFirstVideoStream, i, out var mediaType);
-                    if (hr == MfENoMoreTypes || hr < 0 || mediaType is null)
-                        break;
-
-                    try
-                    {
-                        var subtypeKey = MfMtSubtype;
-                        if (mediaType.GetGUID(ref subtypeKey, out var subtype) < 0)
-                            continue;
-
-                        var sizeKey = MfMtFrameSize;
-                        if (mediaType.GetUINT64(ref sizeKey, out var packed) < 0)
-                            continue;
-                        var w = (int)(packed >> 32);
-                        var h = (int)(packed & 0xFFFFFFFF);
-
-                        formats.Add($"{FourCcFromSubtype(subtype)} {w}x{h}@{ReadFrameRate(mediaType):0.#}");
-
-                        if (subtype != MfVideoFormatMjpg || w < 160 || h < 120)
-                            continue;
-
-                        if (best is null || BetterMjpegSize(w, h, best.Value.Width, best.Value.Height))
-                        {
-                            if (best != null)
-                                SafeRelease(best.Value.Type);
-                            best = (w, h, mediaType);
-                            mediaType = null!;
-                        }
-                    }
-                    finally
-                    {
-                        if (mediaType != null)
-                            SafeRelease(mediaType);
-                    }
-                }
-
-                if (best is null)
+                if (natives.Count == 0)
                     return false;
 
-                var chosen = best.Value;
+                var pins = natives.Select(n => n.ToPin()).ToList();
+                var passthrough = VideoCapturePinRank.PickMjpegPassthrough(pins, targetFps, maxWidth);
+                if (passthrough is null)
+                    return false;
+
+                var match = VideoCapturePinRank.NearestFps(
+                    pins, passthrough.Value.Width, passthrough.Value.Height, jpeg: true, targetFps)
+                    ?? passthrough.Value;
+
+                NativeType? chosen = null;
+                foreach (var n in natives)
+                {
+                    if (n.Width != match.Width || n.Height != match.Height || !n.Jpeg)
+                        continue;
+                    if (chosen is not null && Math.Abs(n.Fps - match.Fps) >= Math.Abs(chosen.Fps - match.Fps))
+                        continue;
+                    chosen = n;
+                }
+
+                if (chosen is null)
+                    return false;
+
                 var setHr = reader.SetCurrentMediaType(SourceReaderFirstVideoStream, IntPtr.Zero, chosen.Type);
+                if (setHr < 0)
+                    return false;
+
                 width = chosen.Width;
                 height = chosen.Height;
-                return setHr >= 0;
+                deviceFps = chosen.Fps;
+                return true;
             }
             finally
             {
-                if (best != null)
-                    SafeRelease(best.Value.Type);
+                foreach (var n in natives)
+                    SafeRelease(n.Type);
             }
+        }
+
+        private static List<NativeType> EnumerateNativeTypes(IMFSourceReader reader, List<string>? formats)
+        {
+            var list = new List<NativeType>();
+            for (uint i = 0; ; i++)
+            {
+                var hr = reader.GetNativeMediaType(SourceReaderFirstVideoStream, i, out var mediaType);
+                if (hr == MfENoMoreTypes || hr < 0 || mediaType is null)
+                    break;
+
+                var subtypeKey = MfMtSubtype;
+                if (mediaType.GetGUID(ref subtypeKey, out var subtype) < 0)
+                {
+                    SafeRelease(mediaType);
+                    continue;
+                }
+
+                var sizeKey = MfMtFrameSize;
+                if (mediaType.GetUINT64(ref sizeKey, out var packed) < 0)
+                {
+                    SafeRelease(mediaType);
+                    continue;
+                }
+
+                var w = (int)(packed >> 32);
+                var h = (int)(packed & 0xFFFFFFFF);
+                var fps = ReadFrameRate(mediaType);
+                var jpeg = subtype == MfVideoFormatMjpg;
+                formats?.Add($"{FourCcFromSubtype(subtype)} {w}x{h}@{fps:0.#}");
+
+                if (w < 2 || h < 2)
+                {
+                    SafeRelease(mediaType);
+                    continue;
+                }
+
+                list.Add(new NativeType
+                {
+                    Type = mediaType,
+                    Width = w,
+                    Height = h,
+                    Fps = fps,
+                    Jpeg = jpeg
+                });
+            }
+
+            return list;
         }
 
         private static double ReadFrameRate(IMFMediaType mediaType)
@@ -570,23 +724,6 @@ namespace Yaesu_Web_Control.Services.Video
             }
 
             return new string(chars);
-        }
-
-        /// <summary>Prefer 1280×720 (USB2-friendly 30 fps), then 1920×1080, then anything else.</summary>
-        private static bool BetterMjpegSize(int w, int h, int curW, int curH)
-        {
-            int Rank(int a, int b)
-            {
-                if (a == 1280 && b == 720) return 0;
-                if (a == 1920 && b == 1080) return 1;
-                return 2;
-            }
-
-            var r = Rank(w, h);
-            var c = Rank(curW, curH);
-            if (r != c)
-                return r < c;
-            return w * h > curW * curH;
         }
 
         private static string? ReadAllocatedString(IMFAttributes attrs, ref Guid key)
@@ -618,30 +755,20 @@ namespace Yaesu_Web_Control.Services.Video
         {
             lock (StartupLock)
             {
-                if (_startupCount == 0)
-                {
-                    var hr = MFStartup(MfVersion, 0);
-                    if (hr < 0)
-                        return false;
-                }
-
-                _startupCount++;
+                if (_mfStarted)
+                    return true;
+                var hr = MFStartup(MfVersion, 0);
+                if (hr < 0)
+                    return false;
+                _mfStarted = true;
                 return true;
             }
         }
 
         private static void ReleaseStartup()
         {
-            lock (StartupLock)
-            {
-                if (_startupCount <= 0)
-                    return;
-                _startupCount--;
-                if (_startupCount == 0)
-                {
-                    try { MFShutdown(); } catch { /* ignore */ }
-                }
-            }
+            // Keep MF started for the process. QueryFrameRates and OpenCV MSMF
+            // race MFShutdown into MFEnumDeviceSources returning ATTRIBUTENOTFOUND.
         }
 
         private static void SafeRelease(object? com)
