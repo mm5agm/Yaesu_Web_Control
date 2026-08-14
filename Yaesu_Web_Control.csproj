@@ -321,4 +321,22 @@
     </ItemGroup>
   </Target>
 
+  <!-- ObjC helper for Radio Display FPS. C# objc_msgSend of CMTime aborts
+       (NSException) on 59.94 fps HDMI pins; this dylib uses @try and the
+       range's own minFrameDuration. -->
+  <Target Name="BuildMacAvFpsDylib"
+          AfterTargets="Build"
+          Condition="'$(TargetFramework)' == 'net10.0' AND $([MSBuild]::IsOSPlatform('OSX'))">
+    <Exec Command="clang -dynamiclib -fobjc-arc -O2 -framework AVFoundation -framework CoreMedia -framework Foundation -o &quot;$(OutputPath)libYwcMacAvFps.dylib&quot; &quot;$(MSBuildProjectDirectory)/Services/Video/MacAvFoundationFps.m&quot;" />
+  </Target>
+
+  <Target Name="PublishMacAvFpsDylib"
+          AfterTargets="Publish"
+          Condition="'$(TargetFramework)' == 'net10.0' AND $([MSBuild]::IsOSPlatform('OSX'))">
+    <Copy SourceFiles="$(OutputPath)libYwcMacAvFps.dylib"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(OutputPath)libYwcMacAvFps.dylib')" />
+  </Target>
+
 </Project>

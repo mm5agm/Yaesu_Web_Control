@@ -437,6 +437,9 @@ namespace Yaesu_Web_Control.Services.Video
 
                     using var frame = new Mat();
                     using var resized = new Mat();
+#if !WINDOWS
+                    using var macEncodeSrc = new Mat();
+#endif
                     var encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
                     var fpsWindow = Stopwatch.StartNew();
                     var streamStarted = Stopwatch.StartNew();
@@ -445,9 +448,81 @@ namespace Yaesu_Web_Control.Services.Video
                     var slowReadStreak = 0;
                     var fpsCollapseStreak = 0;
                     var loggedFormat = false;
+                    Task<(byte[]? jpeg, int w, int h)>? macEncodeInflight = null;
 
-                    while (!ct.IsCancellationRequested && Volatile.Read(ref _captureEpoch) == epoch)
+                    void PublishJpeg(byte[] jpegBytes, int outW, int outH)
                     {
+                        long publishedSeq;
+                        lock (_frameLock)
+                        {
+                            _latestJpeg = jpegBytes;
+                            publishedSeq = ++_frameSeq;
+                            _frameWidth = outW;
+                            _frameHeight = outH;
+                        }
+
+                        PulseFrame();
+
+                        if (publishedSeq == 1)
+                        {
+                            _logger.LogInformation(
+                                "Radio Display first JPEG published ({Bytes} bytes, {W}x{H})",
+                                jpegBytes.Length, outW, outH);
+                        }
+
+                        framesInWindow++;
+                        if (fpsWindow.ElapsedMilliseconds < 1000)
+                            return;
+
+                        var measured = framesInWindow * 1000.0 / fpsWindow.ElapsedMilliseconds;
+                        Volatile.Write(ref _measuredFps, measured);
+                        framesInWindow = 0;
+                        fpsWindow.Restart();
+
+                        var floor = Math.Max(2.0, targetFps * 0.25);
+                        if (streamStarted.ElapsedMilliseconds >= FpsWarmupMs && measured < floor)
+                        {
+                            fpsCollapseStreak++;
+                            if (fpsCollapseStreak >= FpsCollapseWindows)
+                            {
+                                MarkDisconnected("Capture device stalled (frame rate collapsed).");
+                                _logger.LogWarning(
+                                    "Radio Display: measured {Fps:0.0} fps vs target {Target} — treating as unplug",
+                                    measured, targetFps);
+                            }
+                        }
+                        else
+                        {
+                            fpsCollapseStreak = 0;
+                        }
+                    }
+
+                    void DrainMacEncode()
+                    {
+                        if (macEncodeInflight is null)
+                            return;
+
+                        (byte[]? jpeg, int w, int h) result;
+                        try
+                        {
+                            result = macEncodeInflight.GetAwaiter().GetResult();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Radio Display: macOS JPEG encode failed");
+                            macEncodeInflight = null;
+                            return;
+                        }
+
+                        macEncodeInflight = null;
+                        if (result.jpeg is { Length: > 0 })
+                            PublishJpeg(result.jpeg, result.w, result.h);
+                    }
+
+                    try
+                    {
+                        while (!ct.IsCancellationRequested && Volatile.Read(ref _captureEpoch) == epoch)
+                        {
                         if (settingsAge.ElapsedMilliseconds >= SettingsRefreshMs)
                         {
                             settings = ReadSettings();
@@ -459,6 +534,23 @@ namespace Yaesu_Web_Control.Services.Video
                             {
                                 targetFps = newFps;
                                 frameInterval = TimeSpan.FromSeconds(1.0 / targetFps);
+#if !WINDOWS
+                                if (OperatingSystem.IsMacOS())
+                                {
+                                    var fpsWant = targetFps;
+                                    var idx = index;
+                                    string? avDetail = null;
+                                    MacAvFoundationCapture.OnUiThread(() =>
+                                    {
+                                        MacAvFoundationDevices.TrySetFrameRate(
+                                            idx, UniqueIdFromDeviceKey(settings.VideoCaptureDeviceKey),
+                                            fpsWant, maxWidth, out avDetail);
+                                    });
+                                    if (!string.IsNullOrWhiteSpace(avDetail))
+                                        _logger.LogInformation("Radio Display {Detail}", avDetail);
+                                    loggedFormat = false;
+                                }
+#endif
                             }
 
                             settingsAge.Restart();
@@ -491,6 +583,7 @@ namespace Yaesu_Web_Control.Services.Video
                         var readMs = tick.ElapsedMilliseconds;
                         if (!readOk || frame.Empty())
                         {
+                            DrainMacEncode();
                             emptyStreak++;
                             if (emptyStreak == 1 || emptyStreak % 15 == 0)
                             {
@@ -562,6 +655,12 @@ namespace Yaesu_Web_Control.Services.Video
 
                         // Keep reading so the UVC graph stays alive; skip JPEG
                         // when nobody is watching (idle-release grace window).
+                        // Drain first so a macOS Skia encode overlaps the Read
+                        // we just finished instead of running after it.
+                        DrainMacEncode();
+                        if (fpsCollapseStreak >= FpsCollapseWindows)
+                            break;
+
                         if (_sessions.ViewerCount > 0)
                         {
                             byte[]? jpegBytes = null;
@@ -590,13 +689,26 @@ namespace Yaesu_Web_Control.Services.Video
                                 {
                                     // OpenCvSharp ImEncode can native-crash (libjpeg
                                     // longjmp) on AVFoundation frames — use Skia.
-                                    if (!MacJpegEncoder.TryEncode(frame, maxWidth, jpegQuality, out jpegBytes, out outW, out outH, out var encodeSkip))
+                                    // Copy off `frame` and encode on the threadpool
+                                    // so the next UI-thread Read can run in parallel
+                                    // (Read blocks the AppKit thread for a full
+                                    // device interval; doing JPEG after it is why
+                                    // 30 fps became ~20).
+                                    var encodeMaxW = maxWidth;
+                                    var encodeQ = jpegQuality;
+                                    frame.CopyTo(macEncodeSrc);
+                                    macEncodeInflight = Task.Run(() =>
                                     {
+                                        if (MacJpegEncoder.TryEncode(
+                                                macEncodeSrc, encodeMaxW, encodeQ,
+                                                out var encoded, out var ew, out var eh,
+                                                out var encodeSkip))
+                                            return (encoded, ew, eh);
+
                                         if (encodeSkip != null)
                                             _logger.LogWarning("Radio Display: skip JPEG encode — {Reason}", encodeSkip);
-                                        SleepOrCancel(50, ct);
-                                        continue;
-                                    }
+                                        return ((byte[]?)null, 0, 0);
+                                    });
                                 }
 #endif
                                 else if (!TryEncodeFrameJpeg(frame, resized, maxWidth, encodeParams, out jpegBytes, out outW, out outH, out var encodeSkipCv))
@@ -608,57 +720,17 @@ namespace Yaesu_Web_Control.Services.Video
                                 }
                             }
 
-                            if (jpegBytes is null || jpegBytes.Length == 0)
+                            if (jpegBytes is { Length: > 0 })
+                                PublishJpeg(jpegBytes, outW, outH);
+                            else if (macEncodeInflight is null)
                             {
                                 SleepOrCancel(50, ct);
                                 continue;
                             }
-
-                            long publishedSeq;
-                            lock (_frameLock)
-                            {
-                                _latestJpeg = jpegBytes;
-                                publishedSeq = ++_frameSeq;
-                                _frameWidth = outW;
-                                _frameHeight = outH;
-                            }
-
-                            PulseFrame();
-
-                            if (publishedSeq == 1)
-                            {
-                                _logger.LogInformation(
-                                    "Radio Display first JPEG published ({Bytes} bytes, {W}x{H})",
-                                    jpegBytes.Length, outW, outH);
-                            }
-
-                            framesInWindow++;
-                            if (fpsWindow.ElapsedMilliseconds >= 1000)
-                            {
-                                var measured = framesInWindow * 1000.0 / fpsWindow.ElapsedMilliseconds;
-                                Volatile.Write(ref _measuredFps, measured);
-                                framesInWindow = 0;
-                                fpsWindow.Restart();
-
-                                var floor = Math.Max(2.0, targetFps * 0.25);
-                                if (streamStarted.ElapsedMilliseconds >= FpsWarmupMs && measured < floor)
-                                {
-                                    fpsCollapseStreak++;
-                                    if (fpsCollapseStreak >= FpsCollapseWindows)
-                                    {
-                                        MarkDisconnected("Capture device stalled (frame rate collapsed).");
-                                        _logger.LogWarning(
-                                            "Radio Display: measured {Fps:0.0} fps vs target {Target} — treating as unplug",
-                                            measured, targetFps);
-                                        break;
-                                    }
-                                }
-                                else
-                                {
-                                    fpsCollapseStreak = 0;
-                                }
-                            }
                         }
+
+                        if (fpsCollapseStreak >= FpsCollapseWindows)
+                            break;
 
                         // Blocking Read is already the device clock — leftover
                         // wait on top of it is how 30 fps became 19.8 (one extra
@@ -669,6 +741,11 @@ namespace Yaesu_Web_Control.Services.Video
                             if (wait > TimeSpan.Zero)
                                 SleepOrCancel(wait, ct);
                         }
+                    }
+                    }
+                    finally
+                    {
+                        DrainMacEncode();
                     }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -951,7 +1028,7 @@ namespace Yaesu_Web_Control.Services.Video
 
         /// <summary>
         /// On macOS, open the AVFoundation device on Avalonia's UI thread so
-        /// AppKit/TCC complete; reading stays on the capture thread afterward.
+        /// AppKit/TCC complete. Reads also stay on that thread.
         /// </summary>
         private VideoCapture? OpenCaptureForHost(
             int index,
@@ -968,8 +1045,20 @@ namespace Yaesu_Web_Control.Services.Video
                 VideoCapture? opened = null;
                 try
                 {
+                    string? avDetail = null;
                     opened = MacAvFoundationCapture.OpenOnUiThread(() =>
-                        OpenCapture(index, maxWidth, targetFps, out jpeg, out detail));
+                    {
+                        var cap = OpenCapture(index, maxWidth, targetFps, out jpeg, out detail);
+                        if (cap is not null)
+                        {
+                            MacAvFoundationDevices.TrySetFrameRate(index, null, targetFps, maxWidth, out var setDetail);
+                            avDetail = setDetail;
+                        }
+
+                        return cap;
+                    });
+                    if (!string.IsNullOrWhiteSpace(avDetail))
+                        _logger.LogInformation("Radio Display {Detail}", avDetail);
                 }
                 catch (Exception ex)
                 {
@@ -1016,7 +1105,7 @@ namespace Yaesu_Web_Control.Services.Video
                     var cap = TryOpen(index, api, paramsArray: null, out lastError);
                     if (cap is not null)
                     {
-                        PreferMjpegFourCc(cap);
+                        ApplyMacCaptureHints(cap);
                         return cap;
                     }
 
@@ -1025,7 +1114,7 @@ namespace Yaesu_Web_Control.Services.Video
                         cap = TryOpenPath($"{index}:none", api, out lastError);
                         if (cap is not null)
                         {
-                            PreferMjpegFourCc(cap);
+                            ApplyMacCaptureHints(cap);
                             return cap;
                         }
                     }
@@ -1099,6 +1188,29 @@ namespace Yaesu_Web_Control.Services.Video
             {
                 // Device may ignore; native mode still preferred over forced YUY2.
             }
+        }
+
+        /// <summary>
+        /// Ask AVFoundation for MJPEG. Do not force a panel size here —
+        /// Macrosilicon dongles then report IsOpened() but deliver black /
+        /// stalled frames. Frame rate is applied after open via
+        /// <c>MacAvFoundationDevices.TrySetFrameRate</c> (OpenCV's FPS
+        /// property is ignored by the AVFoundation backend).
+        /// </summary>
+        private static void ApplyMacCaptureHints(VideoCapture cap)
+        {
+            PreferMjpegFourCc(cap);
+            try { cap.Set(VideoCaptureProperties.BufferSize, 2); } catch { /* ignore */ }
+        }
+
+        private static string? UniqueIdFromDeviceKey(string? key)
+        {
+            if (string.IsNullOrWhiteSpace(key) ||
+                !key.StartsWith("uid:", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var uid = key["uid:".Length..].Trim();
+            return uid.Length > 0 ? uid : null;
         }
 
         private static string DescribeOpenFailure(string? lastError)
