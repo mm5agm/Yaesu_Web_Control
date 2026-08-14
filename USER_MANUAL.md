@@ -1403,7 +1403,7 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 |---------|-------------|
 | Enable radio display | Opt-in. When off, capture stays closed and the Index panel is hidden. |
 
-On the panel: pick a USB capture device, set the frame rate from the rates the stick advertises, Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close.
+On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close.
 
 ---
 
@@ -3005,7 +3005,7 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
 
 1. Open **Settings → Radio Display** and enable **Radio display**, then Save.
 2. On Home, the **Radio Display** card appears. Pick the capture device, then click **Start**. The stream does **not** open until you start it (so a leftover device selection cannot grab the dongle). Tick **Auto** if you want the previous behaviour — start as soon as the panel opens with a device selected. Preference is stored in the browser.
-3. Frame rate and image quality (**Low / Medium / Max** = 40 / 65 / 85; default **Medium**) are chosen on the same card. The FPS list is read from the capture device (for example **30 / 60** on a typical HDMI stick). If the driver does not report rates, **15 / 30 / 40 / 60** is shown. The selected value is a **target** — USB bandwidth, JPEG encode, and host CPU can still deliver less. Higher rates and **Max** quality use more CPU — prefer a lower FPS and **Low** or **Medium** on a Raspberry Pi. **Max** is crisper on digits when you enlarge the image; the 85 cap is intentional.
+3. Frame rate (**15 / 30 / 60 fps**; default **15**) and image quality (**Low / Medium / Max** = 40 / 65 / 85; default **Medium**) are chosen on the same card. The FPS list is a **target** — USB bandwidth, JPEG encode, and host CPU can still deliver less. Rates above what the capture device advertises (for example **60** on a 30 fps stick) are hidden. Higher rates and **Max** quality use more CPU — prefer **15 fps** and **Low** or **Medium** on a Raspberry Pi. **Max** is crisper on digits when you enlarge the image; the 85 cap is intentional.
 4. Other controls:
    - **Start / Stop** — attach or release the MJPEG viewer (Stop lets the host drop the dongle after a couple of seconds)
    - **Fit / Fill** — `object-fit` contain vs cover

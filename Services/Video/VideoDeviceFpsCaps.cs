@@ -5,7 +5,7 @@ namespace Yaesu_Web_Control.Services.Video
 {
     /// <summary>
     /// Frame rates the capture pin advertises. Empty = unknown (use the
-    /// 15 / 30 / 40 / 60 fallback list).
+    /// 15 / 30 / 60 fallback list).
     /// </summary>
     internal static class VideoDeviceFpsCaps
     {

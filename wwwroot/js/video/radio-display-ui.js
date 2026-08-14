@@ -6,7 +6,7 @@ import { RadioDisplayPanel } from './radio-display-panel.js?v=6';
 const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;
 const RECONNECT_MAX_MS = 15000;
-const ALLOWED_FPS = [15, 30, 40, 60];
+const ALLOWED_FPS = [15, 30, 60];
 const ALLOWED_QUALITY = [40, 65, 85];
 const CHANNEL_NAME = 'ywc-radio-display';
 const AUTO_START_KEY = 'ywc.radioDisplayAutoStart';
@@ -60,8 +60,10 @@ function parseRates(raw) {
 }
 
 function fpsChoices(rates) {
-  const list = parseRates(rates);
-  return list.length ? list : ALLOWED_FPS.slice();
+  const parsed = parseRates(rates);
+  const cap = parsed.length ? Math.max.apply(null, parsed) : 0;
+  const list = cap > 0 ? ALLOWED_FPS.filter((f) => f <= cap) : ALLOWED_FPS.slice();
+  return list.length ? list : [ALLOWED_FPS[0]];
 }
 
 function normalizeFps(fps, rates = deviceRates) {
@@ -76,8 +78,8 @@ function applyDeviceFpsCap(rates, selected) {
   const sel = document.getElementById('radioDisplayFpsSelect');
   const parsed = parseRates(rates);
   if (parsed.length) deviceRates = parsed;
-  const allowed = deviceRates.length ? deviceRates : ALLOWED_FPS.slice();
-  const want = normalizeFps(selected ?? currentTargetFps, allowed);
+  const allowed = fpsChoices(deviceRates);
+  const want = normalizeFps(selected ?? currentTargetFps, deviceRates);
   if (sel && document.activeElement !== sel) {
     const same =
       sel.options.length === allowed.length &&

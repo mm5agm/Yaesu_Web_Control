@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿@page
+﻿﻿﻿﻿﻿﻿﻿﻿@page
 @model Yaesu_Web_Control.Pages.IndexModel
 @{
     ViewData["Title"]     = "Yaesu Web Control";
@@ -816,12 +816,11 @@
                         </button>
                     </span>
                     <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Target stream frame rate from the capture device. Actual FPS can still be lower (USB, encode, CPU)." aria-label="Stream frame rate">
+                          data-bs-title="How fast the picture updates" aria-label="Stream frame rate">
                         <select id="radioDisplayFpsSelect" class="form-select form-select-sm"
                                 style="width:5.5rem; max-width:5.5rem;" aria-label="Stream frame rate">
                             <option value="15">15 fps</option>
                             <option value="30">30 fps</option>
-                            <option value="40">40 fps</option>
                             <option value="60">60 fps</option>
                         </select>
                     </span>

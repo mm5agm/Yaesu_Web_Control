@@ -131,12 +131,11 @@
                         </button>
                     </span>
                     <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Target stream frame rate from the capture device. Actual FPS can still be lower (USB, encode, CPU)." aria-label="Stream frame rate">
+                          data-bs-title="How fast the picture updates" aria-label="Stream frame rate">
                         <select id="radioDisplayFpsSelect" class="form-select form-select-sm"
                                 aria-label="Stream frame rate">
                             <option value="15">15 fps</option>
                             <option value="30">30 fps</option>
-                            <option value="40">40 fps</option>
                             <option value="60">60 fps</option>
                         </select>
                     </span>
@@ -206,7 +205,7 @@
     </div>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
     <script type="module">
-        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=18";
+        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=20";
         initRadioDisplayUi('popout');
     </script>
 </body>
