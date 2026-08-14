@@ -153,6 +153,24 @@ function onReattachFromPopout() {
   }
 }
 
+function deviceOptionMatches(d, want) {
+  if (!want) return false;
+  const key = d.key || '';
+  if (key && key === want) return true;
+  if (d.index == null) return false;
+  return want === ('index:' + d.index) || want === String(d.index);
+}
+
+function selectMatchesSavedKey(sel, want) {
+  if (!sel) return true;
+  if ((sel.value || '') === (want || '')) return true;
+  if (!want) return false;
+  const opt = sel.selectedOptions && sel.selectedOptions[0];
+  if (!opt) return false;
+  const idx = opt.dataset && opt.dataset.index;
+  return idx != null && (want === ('index:' + idx) || want === String(idx));
+}
+
 function truncateLabel(text, maxLen) {
   const s = String(text || '');
   if (s.length <= maxLen) return s;
@@ -179,9 +197,10 @@ async function loadDeviceSelect(selectedKey) {
       const full = d.label || key;
       const opt = document.createElement('option');
       opt.value = key;
+      if (d.index != null) opt.dataset.index = String(d.index);
       opt.textContent = truncateLabel(full, maxLabel);
       opt.title = full;
-      if (key && key === want) {
+      if (deviceOptionMatches(d, want)) {
         opt.selected = true;
         matched = true;
       }
@@ -270,7 +289,7 @@ async function pollStatus(options = {}) {
     }
 
     const sel = document.getElementById('radioDisplayDeviceSelect');
-    if (sel && sel.value !== currentDeviceKey && document.activeElement !== sel) {
+    if (sel && document.activeElement !== sel && !selectMatchesSavedKey(sel, currentDeviceKey)) {
       await loadDeviceSelect(currentDeviceKey);
     }
     syncFpsSelect(currentTargetFps);

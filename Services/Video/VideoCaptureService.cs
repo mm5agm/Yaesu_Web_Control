@@ -384,7 +384,7 @@ namespace Yaesu_Web_Control.Services.Video
                 var settings = ReadSettings();
                 if (!settings.VideoDisplayEnabled ||
                     string.IsNullOrWhiteSpace(settings.VideoCaptureDeviceKey) ||
-                    !VideoDeviceKey.TryParseIndex(settings.VideoCaptureDeviceKey, out var index))
+                    !VideoDeviceKey.TryResolveOpenIndex(settings.VideoCaptureDeviceKey, out var index))
                 {
                     SetStatus("unconfigured");
                     _lastError = "No capture device configured.";
@@ -464,14 +464,14 @@ namespace Yaesu_Web_Control.Services.Video
                         }
 
                         if (!settings.VideoDisplayEnabled ||
-                            !VideoDeviceKey.TryParseIndex(settings.VideoCaptureDeviceKey, out var newIndex) ||
+                            !VideoDeviceKey.TryResolveOpenIndex(settings.VideoCaptureDeviceKey, out var newIndex) ||
                             newIndex != index)
                         {
                             _logger.LogInformation(
                                 "Radio Display switching capture device {From} → {To}",
                                 index,
                                 settings.VideoDisplayEnabled &&
-                                VideoDeviceKey.TryParseIndex(settings.VideoCaptureDeviceKey, out var logged)
+                                VideoDeviceKey.TryResolveOpenIndex(settings.VideoCaptureDeviceKey, out var logged)
                                     ? logged
                                     : -1);
                             break; // reopen with new device / disabled
@@ -807,7 +807,7 @@ namespace Yaesu_Web_Control.Services.Video
                 }
 
                 if (!settings.VideoDisplayEnabled ||
-                    !VideoDeviceKey.TryParseIndex(settings.VideoCaptureDeviceKey, out var newIndex) ||
+                    !VideoDeviceKey.TryResolveOpenIndex(settings.VideoCaptureDeviceKey, out var newIndex) ||
                     newIndex != index)
                 {
                     break;

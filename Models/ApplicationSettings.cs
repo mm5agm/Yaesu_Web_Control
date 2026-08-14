@@ -295,8 +295,8 @@
         public bool VideoDisplayEnabled { get; set; } = false;
 
         /// <summary>
-        /// Capture device key from <c>/api/video/devices</c> (typically
-        /// <c>index:N</c>). Empty = no device selected.
+        /// Capture device key from <c>/api/video/devices</c>
+        /// (<c>index:N</c>, or macOS <c>uid:…</c>). Empty = no device selected.
         /// </summary>
         public string? VideoCaptureDeviceKey { get; set; } = "";
 

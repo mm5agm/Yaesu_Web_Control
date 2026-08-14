@@ -46,6 +46,8 @@ write_info_plist() {
 	<string>Yaesu Web Control captures the radio USB audio codec (and optionally the Mac microphone) for Remote Audio in the browser.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Yaesu Web Control captures a USB webcam or HDMI capture dongle to show the radio display in the browser.</string>
+	<key>NSCameraUseContinuityCameraDeviceType</key>
+	<true/>
 EOF
   if [[ "$include_icon" == "1" ]]; then
     cat >>"$plist" <<EOF
