@@ -1338,6 +1338,10 @@ connection.on("RadioStateUpdate", function (update) {
         }
         updateTxButton();
         updateTxIndicators(update.value);
+        // EXPERIMENT (feat/meter-visibility-experiment): de-emphasise the
+        // transmit-only gauges while receiving. No-op unless the operator has
+        // picked dim or hide from the "Meters:" toolbar button.
+        if (window.meterVisibility) window.meterVisibility.setTransmitting(update.value);
         publishTxState();
         if (typeof window.handleTxStateForTimeout === 'function') {
             window.handleTxStateForTimeout(!!update.value);

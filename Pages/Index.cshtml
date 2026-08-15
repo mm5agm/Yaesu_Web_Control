@@ -206,6 +206,28 @@
         display: none !important;
     }
 
+    /* EXPERIMENT (feat/meter-visibility-experiment) — de-emphasise the
+       transmit-only gauges while receiving. Two candidate behaviours, cycled
+       from the "Meters:" toolbar button; one gets deleted before this ships.
+       See wwwroot/js/ui/meter-visibility.js for which gauges are tagged and
+       why Temp and VDD are deliberately NOT among them.
+
+       dim: geometry untouched, so nothing reflows when TX/RX flips mid-QSO.
+       Costs nothing to the layout, buys no width back either. */
+    .meters-idle-dim [data-meter-scope="tx"] {
+        filter: grayscale(1);
+        opacity: 0.3;
+        transition: opacity 0.25s ease, filter 0.25s ease;
+    }
+
+    /* hide: reclaims the row, at the price of a reflow on every over. Note
+       this does NOT reliably fix the narrow-viewport wrap warning below —
+       transmit still needs room for the full set, so a row that wraps at
+       nine may well still wrap at seven. */
+    .meters-idle-hide [data-meter-scope="tx"] {
+        display: none !important;
+    }
+
     /* Voice command help popup (right-click a mic button). */
     #voiceHelpBody .vh-intro   { color: #bbb; font-size: 0.85rem; margin-bottom: 0.75rem; }
     #voiceHelpBody .vh-group   { margin-bottom: 0.85rem; }
@@ -401,6 +423,16 @@
                     aria-pressed="false">
                 S-hist
             </button>
+            @* EXPERIMENT (feat/meter-visibility-experiment) — cycles the
+               transmit-only gauges between always-shown, dimmed-on-receive and
+               hidden-on-receive so the two candidates can be compared at the
+               rig. Remove with the losing variant. *@
+            <button id="meterVisibilityBtn" class="btn btn-sm btn-outline-secondary"
+                    style="padding-top: 1px; padding-bottom: 1px;"
+                    title="Transmit-only gauges always shown (current behaviour)"
+                    aria-label="Cycle how transmit-only gauges appear while receiving">
+                Meters: all
+            </button>
             <button id="vfoBToggleBtn" class="btn btn-sm btn-outline-secondary"
                     style="padding-top: 1px; padding-bottom: 1px;" title="Show/Hide VFO-B"
                     aria-label="Show or hide VFO B panel">
@@ -470,7 +502,7 @@
             <div class="card border-secondary">
                 <div class="card-body py-2">
                     <!-- Gauges row -->
-                    <div class="d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
+                    <div id="meterGaugesRow" class="d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
                         <!-- S-Meter rolling history strip — leftmost so the live trace
                              reads left-to-right toward the S-meter needle. Hidden
                              until the toolbar's S-hist toggle is on. Sized to match
@@ -515,26 +547,27 @@
                                 </div>
                             </div>
                         }
-                        <!-- SWR Meter -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                        <!-- SWR Meter — transmit-only (pinned to 0 on RX by
+                             MeterPollingService, see data-meter-scope above). -->
+                        <div class="text-center" data-meter-scope="tx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="swrMeterCanvas" role="img" aria-hidden="true" aria-label="SWR meter" data-a11y-key="meters.swr"></canvas>
                             </div>
                         </div>
-                        <!-- Power Meter -->
-                        <div class="text-center power-meter-container" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                        <!-- Power Meter — transmit-only -->
+                        <div class="text-center power-meter-container" data-meter-scope="tx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="powerMeterCanvas" role="img" aria-hidden="true" aria-label="Power output meter" data-a11y-key="meters.power"></canvas>
                             </div>
                         </div>
-                        <!-- Compression Meter -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                        <!-- Compression Meter — transmit-only -->
+                        <div class="text-center" data-meter-scope="tx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="compressionMeterCanvas" role="img" aria-hidden="true" aria-label="Compression meter" data-a11y-key="meters.compression"></canvas>
                             </div>
                         </div>
-                        <!-- ALC Meter -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                        <!-- ALC Meter — transmit-only -->
+                        <div class="text-center" data-meter-scope="tx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="alcMeterCanvas" role="img" aria-hidden="true" aria-label="ALC meter" data-a11y-key="meters.alc"></canvas>
                             </div>
@@ -547,8 +580,13 @@
                                 <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
                             </div>
                         </div>
-                        <!-- IDD Meter — FTdx101/FTDX3000 only -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                        <!-- IDD Meter — FTdx101/FTDX3000 only. Transmit-only:
+                             drain current is ~0 with no carrier. Temp and VDD
+                             below are deliberately NOT tagged — both stay
+                             meaningful on receive (a hot PA after a long over,
+                             a sagging supply), and Temp is polled outside the
+                             isTransmitting branch in MeterPollingService. -->
+                        <div class="text-center" data-meter-scope="tx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="iddMeterCanvas" role="img" aria-hidden="true" aria-label="Drain current meter" data-a11y-key="meters.idd"></canvas>
                             </div>
@@ -2346,6 +2384,7 @@
     <script type="module">
         import { MeterPanel }           from "/js/guages/meter-panel.js?v=1";
         import { SMeterHistoryPanel }   from "/js/guages/smeter-history-panel.js?v=1";
+        import { MeterVisibility }      from "/js/ui/meter-visibility.js?v=1";
         import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=1";
         import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=4";
         import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=5";
@@ -2423,6 +2462,11 @@
                 vdd:         { canvasId: 'vddMeterCanvas' }
             });
             window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine);
+
+            // ── Transmit-only gauge visibility (EXPERIMENT) ──────────────────
+            // Published on window so site.js's IsTransmitting handler can push
+            // TX state in, the same way it drives the other TX indicators.
+            window.meterVisibility = new MeterVisibility('meterGaugesRow', 'meterVisibilityBtn');
 
             // ── S-meter history strips ───────────────────────────────────────
             // Hidden by default. Toggle via the "S-hist" button in the top
