@@ -17,7 +17,8 @@
 // DOM access outside the canvas, no string formatting. The caller pushes raw
 // 0-255 values via push(); the panel does its own ring-buffer + render loop.
 
-import { calibrateSMeterLabel } from '../calibration/calibration-engine.js';
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
+import { calibrateSMeterLabel } from '../calibration/calibration-engine.js?v=1';
 
 export class SMeterHistoryPanel {
 

@@ -5,7 +5,8 @@
 // regardless of whether an SDR is configured — relies only on the SignalR
 // DxSpot event stream, which flows unconditionally.
 
-import { modeForHz } from './band-plan.js';
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
+import { modeForHz } from './band-plan.js?v=1';
 
 const LS_KEY     = 'dxSpotsPanel';
 const AGE_MAX_MS = 15 * 60 * 1000;   // matches DxSpotAgeMinutes default

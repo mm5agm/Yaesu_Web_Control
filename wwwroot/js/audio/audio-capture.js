@@ -1,7 +1,8 @@
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
 import {
   SAMPLE_RATE, FRAME_SAMPLES, MSG_OPUS_TX, MSG_PCM_TX, OPUS_FRAME_DURATION_US,
   frameMessage, floatToPcm16, supportsWebCodecsOpus
-} from './audio-protocol.js';
+} from './audio-protocol.js?v=1';
 
 /**
  * Captures microphone PCM, encodes Opus (WebCodecs) or PCM16, sends via callback.

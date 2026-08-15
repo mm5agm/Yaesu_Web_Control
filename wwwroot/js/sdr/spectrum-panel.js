@@ -7,7 +7,8 @@
 // Frequency axis labels are computed from the VFO frequency reported by
 // SdrSpectrumPipeline so the display is always centred on the current band.
 
-import { modeForHz } from '../ui/band-plan.js';
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
+import { modeForHz } from '../ui/band-plan.js?v=1';
 
 export class SpectrumPanel {
 

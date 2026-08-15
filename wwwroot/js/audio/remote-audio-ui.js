@@ -1,5 +1,6 @@
-import { createAudioSession } from './audio-session.js';
-import { supportsWebCodecsOpus } from './audio-protocol.js';
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
+import { createAudioSession } from './audio-session.js?v=1';
+import { supportsWebCodecsOpus } from './audio-protocol.js?v=1';
 
 const CHANNEL_NAME = 'ywc-remote-audio';
 const POPOUT_STORAGE_KEY = 'ywc.remoteAudio.popout';

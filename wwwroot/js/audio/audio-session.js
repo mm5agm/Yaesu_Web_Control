@@ -1,9 +1,10 @@
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
 import {
   MSG_CONTROL, MSG_OPUS_RX, MSG_PCM_RX,
   frameMessage, parseBody, buildCodecOfferList
-} from './audio-protocol.js';
-import { AudioCapture } from './audio-capture.js';
-import { AudioPlayback } from './audio-playback.js';
+} from './audio-protocol.js?v=1';
+import { AudioCapture } from './audio-capture.js?v=1';
+import { AudioPlayback } from './audio-playback.js?v=1';
 
 /**
  * Owns the /audio WebSocket session and wires capture ↔ playback.

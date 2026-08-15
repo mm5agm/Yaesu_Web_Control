@@ -159,7 +159,7 @@
         window.ywcTxToggleKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.TxToggleKey));
     </script>
     <script type="module">
-        import { initRemoteAudioPopout } from "/js/audio/remote-audio-ui.js?v=22";
+        import { initRemoteAudioPopout } from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         initRemoteAudioPopout();
     </script>
 </body>
