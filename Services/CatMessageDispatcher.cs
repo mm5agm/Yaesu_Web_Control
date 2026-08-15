@@ -602,8 +602,12 @@
                         // Stored verbatim: the parameter encoding differs per model
                         // (see RadioStateService.RadioMeterSelection) and YWC only
                         // ever needs to replay it, never to understand it. Sent at
-                        // init by GetInitialValues and pushed by the radio's auto-
-                        // information whenever the operator changes meters.
+                        // init from RadioInitializationService's readQueries, and
+                        // pushed by the radio's auto-information whenever the
+                        // operator changes meters. (It was NOT sent between
+                        // 2026-02-22 and 2026-08-15: the read sat in
+                        // CatMultiplexerService.GetInitialValues(), which lost its
+                        // only caller in 5d83175 and became dead code.)
                         {
                             var msDigits = message.Substring(2).TrimEnd(';');
                             if (msDigits.Length is 1 or 2 && msDigits.All(char.IsDigit))

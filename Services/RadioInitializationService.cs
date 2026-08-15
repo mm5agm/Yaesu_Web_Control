@@ -369,6 +369,24 @@ namespace Yaesu_Web_Control.Services
                     "PC;",                   // RF Power (Issue #35) — radio is
                                              //   source of truth on connect
                     "ML0;", "ML1;",          // Monitor on/off / level
+                    // Front-panel METER SW selection. Needed so the FTdx101
+                    // meter restores put back the operator's own pair rather
+                    // than falling back to the POW+ALC default. Note that is
+                    // both restores, not just this service's shutdown one:
+                    // MeterPollingService returns the panel 10 s after TX
+                    // goes idle using the same expression, so without this
+                    // read the operator's pair was overwritten after the
+                    // first over of every session. This
+                    // used to live in CatMultiplexerService.GetInitialValues(),
+                    // but that method's only call site was deleted on
+                    // 2026-02-22 (5d83175, "Fixed initialization hang") and it
+                    // has been dead code ever since — so MS; had not actually
+                    // been sent for months, and RadioMeterSelection was always
+                    // null on a fresh start. Harmless on the other models:
+                    // MS is a documented read on FTdx10 / FT-710 / FTDX3000,
+                    // the dispatcher stores it verbatim, and only the FTdx101
+                    // branch ever replays it.
+                    "MS;",                   // METER SW (front-panel meter pair)
                     // CW
                     "KP;",                   // CW Pitch
                     "KS;",                   // CW Speed
