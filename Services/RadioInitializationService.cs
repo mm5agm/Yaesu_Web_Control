@@ -369,6 +369,24 @@ namespace Yaesu_Web_Control.Services
                     "PC;",                   // RF Power (Issue #35) — radio is
                                              //   source of truth on connect
                     "ML0;", "ML1;",          // Monitor on/off / level
+                    // Front-panel METER SW selection. Needed so the FTdx101
+                    // meter restores put back the operator's own pair rather
+                    // than falling back to the POW+ALC default. Note that is
+                    // both restores, not just this service's shutdown one:
+                    // MeterPollingService returns the panel 10 s after TX
+                    // goes idle using the same expression, so without this
+                    // read the operator's pair was overwritten after the
+                    // first over of every session. This
+                    // used to live in CatMultiplexerService.GetInitialValues(),
+                    // but that method's only call site was deleted on
+                    // 2026-02-22 (5d83175, "Fixed initialization hang") and it
+                    // has been dead code ever since — so MS; had not actually
+                    // been sent for months, and RadioMeterSelection was always
+                    // null on a fresh start. Harmless on the other models:
+                    // MS is a documented read on FTdx10 / FT-710 / FTDX3000,
+                    // the dispatcher stores it verbatim, and only the FTdx101
+                    // branch ever replays it.
+                    "MS;",                   // METER SW (front-panel meter pair)
                     // CW
                     "KP;",                   // CW Pitch
                     "KS;",                   // CW Speed
@@ -601,32 +619,40 @@ namespace Yaesu_Web_Control.Services
                 logger?.LogWarning(ex, "[RadioInit] TX0; on shutdown failed — non-fatal");
             }
 
-            // FTdx101 power-meter restore (discussion #6, F1ubw). During normal
-            // operation MeterPollingService sets the radio's front-panel meter
-            // to MS13 (Comp + SWR) as the RM0 read workaround; without this
-            // restore, quitting YWC leaves the FTdx101's Power needle hidden
-            // until the operator power-cycles the radio or hits the METER button.
+            // FTdx101 meter restore (discussion #6, F1ubw). MeterPollingService
+            // borrows the radio's front-panel meter pair (MS13 = Comp + SWR) for
+            // the duration of each transmission as the RM0 read workaround; if YWC
+            // quits mid-borrow, without this restore the operator is left staring
+            // at Comp + SWR until they power-cycle the radio or hit METER.
+            //
+            // Restores the operator's own selection when YWC has seen one (from the
+            // MS; read at init or an auto-info push), falling back to the radio's
+            // default POW + ALC pair otherwise — which is what this always sent
+            // before the selection was tracked.
             //
             // Best-effort with a 1 s timeout so a hung send (e.g. radio
             // powered off, COM cable yanked) can't stall host shutdown.
-            // Only FTdx101MP/D set MS13; other radios don't touch the meter.
+            // Only FTdx101MP/D borrow the meters; other radios never touch MS.
             try
             {
                 var settingsService = scopeForLogger.ServiceProvider.GetRequiredService<ISettingsService>();
                 var settings = await settingsService.GetSettingsAsync();
                 if (settings.RadioModel is "FTdx101MP" or "FTdx101D")
                 {
-                    logger?.LogInformation("[RadioInit] Sending MS01 to restore FTdx101 power meter");
+                    var radioStateService = scopeForLogger.ServiceProvider.GetRequiredService<RadioStateService>();
+                    var restore = radioStateService.RadioMeterSelection
+                                  ?? CatCommands.DefaultFtdx101MeterSelection;
+                    logger?.LogInformation("[RadioInit] Sending MS{Restore} to restore FTdx101 front-panel meters", restore);
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     cts.CancelAfter(TimeSpan.FromSeconds(1));
                     await _multiplexer.SendCommandAsync(
-                        CatCommands.SetMeterPower + ";", "RadioInit-Shutdown", cts.Token);
-                    logger?.LogInformation("[RadioInit] MS01 send completed");
+                        $"MS{restore};", "RadioInit-Shutdown", cts.Token);
+                    logger?.LogInformation("[RadioInit] Meter restore send completed");
                 }
             }
             catch (Exception ex)
             {
-                logger?.LogWarning(ex, "[RadioInit] MS01 send failed — non-fatal");
+                logger?.LogWarning(ex, "[RadioInit] Meter restore send failed — non-fatal");
             }
 
             logger?.LogInformation("[RadioInit] Disconnecting multiplexer");

@@ -70,6 +70,41 @@ namespace Yaesu_Web_Control.Services
         // doesn't hold the other's needle back.
         private int _sMeterBZeroCount = 0;
 
+        // --- FTdx101 meter borrowing ------------------------------------------
+        //
+        // Reading compression + SWR on the FTdx101 needs the radio's two front-
+        // panel meter slots pinned to MS13 so RM0 returns the pair (see the long
+        // comment at the RM0 branch below). Until now that MS13 went out on every
+        // 500 ms cycle, which meant the operator could never change the meters on
+        // the touchscreen — the poller stomped their choice twice a second, and it
+        // was the only thing Fabio's video stream could ever show.
+        //
+        // Both borrowed values are TX-only: SWRMeter and CompressionMeter are
+        // forced to 0 whenever the radio isn't transmitting, so during receive the
+        // poller was pinning the display to harvest readings it then threw away.
+        // So: borrow the meters when TX starts, hand them straight back once TX has
+        // been quiet for MeterReturnDelay. During receive the radio shows whatever
+        // the operator picked.
+        //
+        // The return delay is deliberately longer than a between-overs gap. Handing
+        // the meters back the instant TX drops would make the display flap once per
+        // over on SSB and strobe on QSK CW break-in, which is worse than leaving it
+        // pinned. 10 s means a normal QSO keeps the meters borrowed for its
+        // duration and they come back during genuine idle/listening time — which is
+        // when a video stream of the front panel is worth watching anyway.
+        private DateTime _lastTxSeenUtc = DateTime.MinValue;
+        private bool _metersBorrowed = false;
+        private static readonly TimeSpan MeterReturnDelay = TimeSpan.FromSeconds(10);
+
+        // Cycles to discard after switching the meter pair. The radio needs a
+        // moment to settle onto the newly-selected meters, so the first RM0 read
+        // after an MS13 write can carry a value belonging to the previous
+        // selection. Discarding one 500 ms cycle costs nothing (SWR at the very
+        // start of an over is not meaningful) and avoids a bogus spike. If bench
+        // testing shows SWR coming up a beat late, this is the knob.
+        private int _borrowSettleCycles = 0;
+        private const int BorrowSettleCycles = 1;
+
         public MeterPollingService(
             CatMultiplexerService multiplexer,
             RadioStateService stateService,
@@ -213,25 +248,71 @@ namespace Yaesu_Web_Control.Services
                     //  - FTdx101MP / FTdx101D: RM6 (the documented SWR read) returns
                     //    stale/wrong values, so we have to set both meter slots via
                     //    MS13 (compression-left, SWR-right) and then read both at once
-                    //    with RM0. Pre-existing workaround, do not regress.
+                    //    with RM0. Pre-existing workaround, do not regress. The MS13
+                    //    is now issued only while transmitting and handed back
+                    //    afterwards — see the meter-borrowing comment above.
                     //
                     //  - FTdx10 / FT-710 / FTDX3000: MS13+RM0 doesn't read SWR
                     //    correctly (reported by OE5HMR on FTdx10, 2026-06-01).
                     //    Reverting to the documented direct reads — RM3 for
                     //    compression, RM6 for SWR — which is what Yaesu's CAT
-                    //    manual specifies for these radios.
+                    //    manual specifies for these radios. These models never touch
+                    //    MS at all, so their front-panel meters were always free and
+                    //    nothing in the borrowing logic applies to them.
                     var settings = await _settingsService.GetSettingsAsync();
                     bool useRm0Pair = settings.RadioModel is "FTdx101MP" or "FTdx101D";
                     int compression;
                     int swr;
                     if (useRm0Pair)
                     {
-                        _logger.LogDebug("[MeterPolling][DEBUG] Polling Compression+SWR (MS13+RM0)... TX={IsTransmitting}", isTransmitting);
-                        await _multiplexer.SendCommandAsync(CatCommands.SetMetersCompAndSWR + ";", "MeterPoll", stoppingToken);
-                        var compSwrResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterBoth + ";", "MeterPoll", stoppingToken);
-                        _logger.LogDebug("[MeterPolling][DEBUG] MS13+RM0 response: '{Raw}'", compSwrResponse);
-                        compression = CatCommands.ParseRm0LeftMeter(compSwrResponse ?? "");
-                        swr         = CatCommands.ParseRm0RightMeter(compSwrResponse ?? "");
+                        if (isTransmitting)
+                        {
+                            _lastTxSeenUtc = DateTime.UtcNow;
+                            if (!_metersBorrowed)
+                            {
+                                // Flag before the write: the radio echoes MS via auto-
+                                // information, and the dispatcher must not mistake our
+                                // own MS13 for an operator choice.
+                                _stateService.MetersBorrowed = true;
+                                _metersBorrowed = true;
+                                _borrowSettleCycles = BorrowSettleCycles;
+                                _logger.LogDebug("[MeterPolling] TX started — borrowing front-panel meters (MS13)");
+                                await _multiplexer.SendCommandAsync(CatCommands.SetMetersCompAndSWR + ";", "MeterPoll", stoppingToken);
+                            }
+
+                            var compSwrResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterBoth + ";", "MeterPoll", stoppingToken);
+                            _logger.LogDebug("[MeterPolling][DEBUG] RM0 response: '{Raw}'", compSwrResponse);
+                            compression = CatCommands.ParseRm0LeftMeter(compSwrResponse ?? "");
+                            swr         = CatCommands.ParseRm0RightMeter(compSwrResponse ?? "");
+
+                            if (_borrowSettleCycles > 0)
+                            {
+                                // Meters have only just switched — this read may still
+                                // describe the operator's previous selection.
+                                _borrowSettleCycles--;
+                                compression = 0;
+                                swr         = 0;
+                            }
+                        }
+                        else
+                        {
+                            // Nothing to read: both values are discarded during RX
+                            // anyway (see the assignments below).
+                            compression = 0;
+                            swr         = 0;
+
+                            if (_metersBorrowed && DateTime.UtcNow - _lastTxSeenUtc > MeterReturnDelay)
+                            {
+                                var restore = _stateService.RadioMeterSelection
+                                              ?? CatCommands.DefaultFtdx101MeterSelection;
+                                _logger.LogInformation("[MeterPolling] TX idle — returning front-panel meters to MS{Restore}", restore);
+                                await _multiplexer.SendCommandAsync($"MS{restore};", "MeterPoll", stoppingToken);
+                                _metersBorrowed = false;
+                                // Cleared last: any MS echo of the restore carries the
+                                // operator's own value, so recording it is harmless.
+                                _stateService.MetersBorrowed = false;
+                            }
+                        }
                     }
                     else
                     {
@@ -330,7 +411,7 @@ namespace Yaesu_Web_Control.Services
         // in RadioInitializationService.StopAsync, not here — the hosted-service
         // reverse-shutdown order means MeterPollingService stops AFTER
         // RadioInitializationService has already disconnected the multiplexer,
-        // so sending MS01 from this StopAsync would talk to a closed port (at
+        // so sending the MS restore from this StopAsync would talk to a closed port (at
         // best a no-op, at worst a hang that stalls host shutdown).
     }
 }
