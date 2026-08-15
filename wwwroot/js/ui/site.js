@@ -423,11 +423,21 @@ function updatePowerSliderMax(maxPower) {
     if (labelMax) labelMax.textContent = window.MeterFormatters.powerLabel(actualMax);
 }
 
+// True while the radio is transmitting and therefore no longer measuring
+// received signal. Read by updateSMeter() — see the comment there.
+let sMetersFrozenByTx = false;
+
 // TX state updater - updates TX button and meters
 function updateTxIndicators(isTransmitting) {
     if (window.radioControl && window.radioControl._state) {
         window.radioControl._state.isTransmitting = isTransmitting;
     }
+    // Grey the S-meters for the duration of the over. The radio latches SM0
+    // and SM1 at key-down and holds them until release (measured — see the
+    // .meters-tx-dim comment in Index.cshtml), so they are not readings.
+    sMetersFrozenByTx = !!isTransmitting;
+    document.getElementById('meterGaugesRow')
+        ?.classList.toggle('meters-tx-dim', sMetersFrozenByTx);
     if (window.ftdx101Meters) {
         window.ftdx101Meters.setTransmitting(isTransmitting);
     }
@@ -3264,6 +3274,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // window.meterPanel has no 'smeterB' gauge (canvas doesn't exist —
         // MeterPanel._createGauges skipped it) and sMeterHistoryB.push() is
         // a no-op (canvas doesn't exist).
+        // The radio stops measuring received signal at key-down: it latches
+        // SM0/SM1 and holds them for the whole over, then resumes within
+        // ~200 ms of release (measured — see the .meters-tx-dim comment in
+        // Index.cshtml). So the value arriving here during transmit is a
+        // snapshot of the instant you keyed, not a reading, and until now it
+        // was drawn as though it were live.
+        //
+        // Show zero instead. Safe only because updateTxIndicators() greys the
+        // gauges at the same time: a zeroed needle on its own would claim "no
+        // signal", but greyed-and-zero reads as "not measuring".
+        //
+        // Deliberately placed before everything below so the gauge, the S-unit
+        // label, the raw readout and the 30-second history strip all agree.
+        // In particular the strip now records a floor across each over rather
+        // than a flat line at the frozen value, which was the same untruth
+        // drawn sideways.
+        if (sMetersFrozenByTx) value = 0;
+
         const gaugeKey   = receiver === 'B' ? 'smeterB' : 'smeter';
         const history     = receiver === 'B' ? window.sMeterHistoryB : window.sMeterHistory;
         const canvasId    = receiver === 'B' ? 'sMeterCanvasB' : 'sMeterCanvas';

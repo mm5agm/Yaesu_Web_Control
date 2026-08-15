@@ -206,6 +206,30 @@
         display: none !important;
     }
 
+    /* Grey the S-meters while transmitting.
+
+       The radio does not keep measuring during an over — it latches SM0 and
+       SM1 at key-down and holds them until release. Measured on an FTdx101MP
+       by sampling TX;/SM0;/SM1; together at ~21 Hz with the app stopped:
+
+         RECEIVE   n=375   SM0 29 distinct values   SM1 21 distinct
+         TRANSMIT  n=101   SM0  1 distinct value    SM1  1 distinct
+
+       101 consecutive transmit samples returned SM0=154 SM1=75 unchanged;
+       both resumed within ~200 ms of release. So every reading drawn during
+       an over was a snapshot of the instant you keyed, presented as live.
+
+       Greyed, not hidden: the S-meters are leftmost, so removing them would
+       shift the whole row sideways on every over. site.js also substitutes 0
+       for the frozen value — see updateSMeter(). The two go together: a
+       zeroed needle on its own would claim "no signal", but greyed-and-zero
+       reads as "not measuring", which is what is actually happening. */
+    .meters-tx-dim [data-meter-scope="rx"] {
+        filter: grayscale(1);
+        opacity: 0.3;
+        transition: opacity 0.25s ease, filter 0.25s ease;
+    }
+
     /* Voice command help popup (right-click a mic button). */
     #voiceHelpBody .vh-intro   { color: #bbb; font-size: 0.85rem; margin-bottom: 0.75rem; }
     #voiceHelpBody .vh-group   { margin-bottom: 0.85rem; }
@@ -469,8 +493,11 @@
         <div class="col-12">
             <div class="card border-secondary">
                 <div class="card-body py-2">
-                    <!-- Gauges row -->
-                    <div class="d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
+                    <!-- Gauges row. The id is the hook site.js uses to add
+                         .meters-tx-dim while transmitting; data-meter-scope="rx"
+                         on a cell marks it as one the radio stops measuring
+                         during an over. -->
+                    <div id="meterGaugesRow" class="d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
                         <!-- S-Meter rolling history strip — leftmost so the live trace
                              reads left-to-right toward the S-meter needle. Hidden
                              until the toolbar's S-hist toggle is on. Sized to match
@@ -492,7 +519,7 @@
                         <!-- S-Meter A (MAIN) — moved from per-VFO panels to the top
                              row in v2.3.9. Always live (unlike SWR/Power/etc which
                              are TX-only). -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                        <div class="text-center" data-meter-scope="rx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="sMeterCanvas" role="img" aria-hidden="true" aria-label="S meter A" data-a11y-key="meters.smeterA"></canvas>
                             </div>
@@ -509,7 +536,7 @@
                                         data-a11y-key="meters.smeterHistoryB"
                                         style="display:block; width:100%; height:100%; border-radius:3px;"></canvas>
                             </div>
-                            <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="text-center" data-meter-scope="rx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                                 <div class="analog-meter-container">
                                     <canvas id="sMeterCanvasB" role="img" aria-hidden="true" aria-label="S meter B" data-a11y-key="meters.smeterB"></canvas>
                                 </div>
