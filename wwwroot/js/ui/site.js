@@ -3268,6 +3268,21 @@ document.addEventListener('DOMContentLoaded', function() {
         // window.meterPanel has no 'smeterB' gauge (canvas doesn't exist —
         // MeterPanel._createGauges skipped it) and sMeterHistoryB.push() is
         // a no-op (canvas doesn't exist).
+        // EXPERIMENT (feat/meter-visibility-experiment): the radio freezes both
+        // S-meters at key-down and holds them for the whole over — measured on
+        // an FTdx101MP, 101 consecutive transmit samples returned one unchanged
+        // value each. So the raw figure arriving here during transmit is a
+        // stale snapshot, not a reading. Zero it, but only while the gauges are
+        // also greyed (see MeterVisibility.suppressSMeters): greyed-and-zero
+        // reads as "not measuring", whereas zero on its own would claim "no
+        // signal". No-op in the default "all" mode.
+        //
+        // Deliberately placed before everything below, so the gauge, the S-unit
+        // label, the raw readout and the history strip all agree. In particular
+        // the strip now records a floor across each over rather than a flat
+        // line at the frozen value, which was the same lie drawn sideways.
+        if (window.meterVisibility?.suppressSMeters) value = 0;
+
         const gaugeKey   = receiver === 'B' ? 'smeterB' : 'smeter';
         const history     = receiver === 'B' ? window.sMeterHistoryB : window.sMeterHistory;
         const canvasId    = receiver === 'B' ? 'sMeterCanvasB' : 'sMeterCanvas';

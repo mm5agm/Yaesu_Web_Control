@@ -8,10 +8,11 @@
 //   dim    transmit-only gauges greyed in place, geometry unchanged
 //   hide   transmit-only gauges removed from layout, row reflows
 //
-// Both active modes also grey the S-meters while transmitting, which is the
-// mirror of the same problem: the radio freezes SM0/SM1 at key-down, so those
-// needles are stale for the whole over. See the CSS comment in Index.cshtml
-// for the measurement.
+// Both active modes also grey the S-meters while transmitting AND make them
+// read zero, which is the mirror of the same problem: the radio freezes
+// SM0/SM1 at key-down, so those needles are stale for the whole over. See the
+// CSS comment in Index.cshtml for the measurement, and `suppressSMeters`
+// below for why zeroing is only safe in company with the greying.
 //
 // Which gauges count as transmit-only is decided in the markup, not here: a
 // cell carries data-meter-scope="tx" if it means nothing while receiving.
@@ -79,6 +80,21 @@ export class MeterVisibility {
     }
 
     get mode() { return this._mode; }
+
+    /**
+     * True while the S-meters are being drawn as inactive (greyed).
+     *
+     * The radio freezes SM0/SM1 at key-down, so every reading taken during an
+     * over is a stale snapshot of the moment you keyed. site.js checks this in
+     * updateSMeter() and substitutes 0, so the greyed gauges read zero rather
+     * than sitting at whatever the band happened to be doing when you started
+     * talking. Safe to zero only because the gauge is greyed at the same time:
+     * on its own a zeroed needle would claim "no signal", but dimmed it reads
+     * as "not measuring", which is the truth.
+     */
+    get suppressSMeters() {
+        return this._mode !== 'off' && this._transmitting;
+    }
 
     _apply() {
         if (!this._row) return;
