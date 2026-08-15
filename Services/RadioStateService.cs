@@ -168,6 +168,23 @@ namespace Yaesu_Web_Control.Services
             }
         }
 
+        /// <summary>
+        /// Pushes a one-off update down the normal RadioStateUpdate envelope for
+        /// something that has no stored property here.
+        ///
+        /// Used by the scope panel, whose eleven SS sub-commands are read on
+        /// demand and held in the browser. Mirroring them as fields on this
+        /// service would mean eleven more properties, eleven more snapshot
+        /// entries and a persistence round-trip, all so that one collapsible
+        /// panel could learn something it re-reads whenever it opens anyway.
+        ///
+        /// Not a general escape hatch: anything the rest of the UI depends on,
+        /// or that a late-joining client needs replayed, belongs in a property
+        /// and in GetClientStateSnapshot instead.
+        /// </summary>
+        public void BroadcastTransient(string property, object value) =>
+            BroadcastUpdate(property, value);
+
         // --- Properties for all CAT commands in GetInitialValues() ---
 
         private string _id = "";

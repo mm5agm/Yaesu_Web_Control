@@ -41,6 +41,21 @@ function composeMode(is3dss, placement, size) {
     return index < 10 ? String(index) : String.fromCharCode(65 + index - 10);
 }
 
+// Inverse of composeMode, mirroring ScopeCommands.ParseMode in
+// Services/CatCommands.cs. Needed because the radio announces its front-panel
+// mode changes as the composed character, so unpicking it happens in the
+// browser rather than costing a server round-trip to re-read what we were just
+// told.
+function parseMode(ch) {
+    const c = String(ch || '0').toUpperCase();
+    let index = 0;
+    if (c >= '0' && c <= '9')      index = c.charCodeAt(0) - 48;
+    else if (c >= 'A' && c <= 'B') index = c.charCodeAt(0) - 65 + 10;
+    if (index < 3) return { is3dss: true, placement: index, size: 0 };
+    const offset = index - 3;
+    return { is3dss: false, placement: Math.floor(offset / 3), size: offset % 3 };
+}
+
 export class RadioScopeControl {
     constructor() {
         this.card = document.getElementById('radioScopeCard');
@@ -231,6 +246,47 @@ export class RadioScopeControl {
         if (!this.card.querySelector(`.scope-band-btn[data-band="${band}"]`)) return;
         if (band === this.band) return;
         this._selectBand(band);
+    }
+
+    // ── the operator changed something at the rig ────────────────────────────
+
+    // Called from site.js for each unsolicited SS the radio sends when someone
+    // works its front panel. Patches the one sub-command that changed and
+    // repaints, rather than re-reading all six over a port shared with the
+    // ~10 Hz meter poll: the radio has just told us the value, so asking it
+    // again would be both slower and no more truthful.
+    //
+    // { band: "main"|"sub", setting: "0".."8", field: 5 chars }
+    applyRemote(msg) {
+        if (!this.card || !msg) return;
+        if (msg.band !== this.band) return;   // the band we are not showing
+        if (!this.state) return;              // nothing loaded yet; expand reads it
+
+        const v = String(msg.field ?? '');
+        const s = { ...this.state };
+
+        switch (String(msg.setting)) {
+            case '5': s.span   = v[0]; break;
+            case '2': s.marker = v[0]; break;
+            case '1': s.peak   = v[0]; break;
+            case '0': s.speed  = v[0]; break;
+            case '8': s.hold   = v[0]; break;
+            // LEVEL is the one sub-command using the whole five-character
+            // field ("+05.0"), kept as the raw string so there is no float
+            // round-trip to disagree with the server about.
+            case '4': s.level  = v; break;
+            case '6': {
+                s.mode = v[0];
+                const m = parseMode(v[0]);
+                s.is3dss = m.is3dss; s.placement = m.placement; s.size = m.size;
+                break;
+            }
+            // Colour and AF-FFT have no control in this panel. Ignoring them
+            // is correct, not an omission.
+            default: return;
+        }
+
+        this._apply(s);
     }
 
     _sendMode(change) {

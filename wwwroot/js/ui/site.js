@@ -1380,6 +1380,15 @@ connection.on("RadioStateUpdate", function (update) {
         window.radioScopeControl?.setActiveBand(update.value);
     }
 
+    // --- RADIO SCOPE CHANGED AT THE FRONT PANEL ---
+    // The radio announces SS changes the operator makes on the rig itself, so
+    // the scope panel can follow a hand on the front panel the same way it
+    // already follows its own writes. Transient: nothing is stored server-side
+    // (see RadioStateService.BroadcastTransient).
+    if (update.property === "ScopeSetting") {
+        window.radioScopeControl?.applyRemote(update.value);
+    }
+
     // --- SPLIT MODE ---
     if (update.property === "SplitMode") {
         splitMode = update.value;
