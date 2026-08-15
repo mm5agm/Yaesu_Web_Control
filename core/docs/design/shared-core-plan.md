@@ -135,6 +135,49 @@ add a second radio model without forking again.
 **Do not treat that back-port as a prerequisite for starting.** It gates the
 second half only.
 
+### 3a. When the seam question actually arrives — and who has to be in it
+
+Added 2026-08-15, after a no-hardware **stub radio** for YWC was raised.
+
+IWC can run its whole UI with no radio attached (`IWC_USE_STUB_RADIO=1` swaps a
+canned `StubRadioController` in behind the seam). That has already paid for
+itself — the Firefox meter-needle bug was reproduced *and* its fix verified
+entirely under the stub, no radio involved — and its absence in YWC has a cost
+on record: the static-asset caching fix (YWC PR #110) is a pure HTTP-layer
+change that still could not be runtime-verified, because starting YWC opens the
+CAT port to the radio.
+
+**The stub is the wrong unit to argue about.** A canned controller is shaped to
+one radio's capabilities and has no second copy to agree with, so it fails §4's
+"only move what already agrees" rule outright. The unit is the seam — and the
+decision point arrives the **moment** stub work starts, because you cannot build
+the stub without building a seam. Building a YWC-local seam first and moving it
+to core afterwards is the expensive order.
+
+So when that moment comes, two things are true at once:
+
+- **The prize is real.** A seam in core would be the first thing in here with
+  serious leverage — core today is `DxSpot.cs`, `AdifParser.cs` and
+  `calibration-engine.js`. It would make UI, voice dispatch and test harness
+  shared surface, and both apps would get a stub nearly free.
+- **The shape is not obvious, and it is not Colin's alone to settle.** IWC's
+  seam is shaped around a **single-receiver IC-7300**; YWC spans the
+  **dual-receiver FTdx101**, the FTdx10 and the FT-710. Making one seam span
+  both is a decision about which behaviour wins, not a copy. And it points in
+  the same direction as the monorepo proposal in §5 — smaller, but adjacent to
+  something parked by agreement — **so it deserves a conversation with Fabio
+  rather than a unilateral start.**
+
+**Therefore: raise the seam's shape with Fabio before building anything against
+it.** If that stalls, a YWC-local seam is still worth having — but go in knowing
+it may have to be redone.
+
+*Unrelated to all of the above, and worth trying first: for anything in the
+HTTP/static layer you do not need a fake radio, only a booting app. Starting YWC
+against a non-existent COM port would probably serve its pages showing
+disconnected, which is enough to check response headers and rendered markup.
+That is an untested guess, not a finding.*
+
 ## 4. What to do first — and it is not extracting all 36 at once
 
 A big-bang extraction across two live applications with installers going out is
