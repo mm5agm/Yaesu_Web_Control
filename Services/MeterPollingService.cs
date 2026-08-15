@@ -411,7 +411,7 @@ namespace Yaesu_Web_Control.Services
         // in RadioInitializationService.StopAsync, not here — the hosted-service
         // reverse-shutdown order means MeterPollingService stops AFTER
         // RadioInitializationService has already disconnected the multiplexer,
-        // so sending MS01 from this StopAsync would talk to a closed port (at
+        // so sending the MS restore from this StopAsync would talk to a closed port (at
         // best a no-op, at worst a hang that stalls host shutdown).
     }
 }
