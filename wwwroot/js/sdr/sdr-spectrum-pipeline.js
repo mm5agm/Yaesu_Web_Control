@@ -16,7 +16,8 @@
 // Uses the same { property, value } message envelope as the rest of the app
 // so the existing WsUpdatePipeline can be reused for dispatching.
 
-import { WsUpdatePipeline } from '../websocket/ws-update-pipeline.js';
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
+import { WsUpdatePipeline } from '../websocket/ws-update-pipeline.js?v=1';
 
 export class SdrSpectrumPipeline {
 

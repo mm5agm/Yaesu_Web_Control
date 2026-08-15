@@ -25,9 +25,10 @@
     <script src="~/lib/canvas-gauges/gauge.min.js"></script>
 
     <!-- Calibration engine — exposes window.calibrationEngine for site.js -->
-    <!-- v=15: bump this when calibration-engine.js or calibration-tables.js changes -->
+    @* Version-tied, so a release invalidates it. It previously carried a
+       hand-kept ?v=15 with a comment telling the next editor to bump it. *@
     <script type="module">
-        import { calibrateNumeric, calibrateSMeterLabel, calibrateSMeterForGauge, loadFromBackend } from '/js/calibration/calibration-engine.js?v=15';
+        import { calibrateNumeric, calibrateSMeterLabel, calibrateSMeterForGauge, loadFromBackend } from '/js/calibration/calibration-engine.js?v=@Yaesu_Web_Control.AppVersion.Current';
         // Expose immediately with default tables so site.js never gets undefined.
         window.calibrationEngine = { calibrateNumeric, calibrateSMeterLabel, calibrateSMeterForGauge };
         // S-Meter calibration drives BOTH the gauge needle position (SMETER
@@ -44,7 +45,7 @@
 
     <!-- Meter formatters — exposes window.MeterFormatters for site.js -->
     <script type="module">
-        import { MeterFormatters } from '/js/ui/meter-formatters.js?v=8';
+        import { MeterFormatters } from '/js/ui/meter-formatters.js?v=@Yaesu_Web_Control.AppVersion.Current';
         window.MeterFormatters = MeterFormatters;
     </script>
 </head>

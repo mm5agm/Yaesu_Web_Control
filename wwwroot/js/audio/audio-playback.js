@@ -1,7 +1,8 @@
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
 import {
   SAMPLE_RATE, FRAME_SAMPLES, MSG_OPUS_RX, MSG_PCM_RX,
   pcm16ToFloat, supportsWebCodecsOpus
-} from './audio-protocol.js';
+} from './audio-protocol.js?v=1';
 
 /**
  * Low-latency playback of RX Opus or PCM16 frames.

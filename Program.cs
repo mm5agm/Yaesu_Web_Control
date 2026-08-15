@@ -590,14 +590,45 @@ try
         app.UseHsts();
     }
 
-    app.UseStaticFiles();
+    // Static files must be REVALIDATED, not trusted from cache.
+    //
+    // Without an explicit Cache-Control, ASP.NET Core sends only Last-Modified
+    // and ETag, which leaves the browser free to apply heuristic freshness —
+    // commonly a tenth of the file's age. A file that was already a fortnight
+    // old when the browser cached it therefore stays "fresh" for a day or more,
+    // and the browser will not so much as ask whether it changed.
+    //
+    // Installing a new version over the top replaces the file on disk but does
+    // nothing to that cached copy, so an upgrading user gets the new page with
+    // the old JavaScript behind it and any fix living in that JavaScript simply
+    // never arrives. Ctrl+F5 clears it, which is not something an operator
+    // should have to know. This was found in IWC, where it had silently
+    // swallowed both headline fixes of a release; YWC carried the same hole.
+    //
+    // "no-cache" does NOT mean "do not store": the browser keeps the file and
+    // revalidates it, so an unchanged file costs one conditional GET answered
+    // with a 304 and no body. On a localhost or LAN app that is free, and it is
+    // the price of never shipping a fix that fails to arrive.
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        OnPrepareResponse = ctx =>
+        {
+            ctx.Context.Response.Headers.CacheControl = "no-cache, must-revalidate";
+        }
+    });
     var picturesPath = System.IO.Path.Combine(app.Environment.ContentRootPath, "pictures");
     if (System.IO.Directory.Exists(picturesPath))
     {
         app.UseStaticFiles(new StaticFileOptions
         {
             FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(picturesPath),
-            RequestPath = "/pictures"
+            RequestPath = "/pictures",
+            // Same reasoning as above. These are user-supplied images, so a
+            // replaced picture must not go on being served from cache either.
+            OnPrepareResponse = ctx =>
+            {
+                ctx.Context.Response.Headers.CacheControl = "no-cache, must-revalidate";
+            }
         });
     }
     app.UseWebSockets();
