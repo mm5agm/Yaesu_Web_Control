@@ -507,9 +507,22 @@
                              radios (FTdx101MP/D) have an independently calibrated
                              S-meter per receiver (SM0;/SM1;); single-receiver radios
                              only get the VFO A pair since there's no SUB receiver. -->
+                        @* 110px, not the 135px of the gauge cells beside it. The
+                           Power / MIC Gain row below is pulled up by
+                           margin-top:-18px so its labels sit close to the meters,
+                           and the analogue gauges tolerate that because they are
+                           transparent dials — but these strips are solid filled
+                           rectangles, so the slider thumbs visibly cut into them.
+                           Measured at 3840x2160: 15px of overlap. Only shows on
+                           wide screens; below about 2560px the gauge row wraps to
+                           two lines, which pushes the controls clear and hides it.
+                           Shrinking the strips rather than dropping the row keeps
+                           the labels under their gauges. The panel sizes its
+                           canvas from clientHeight via a ResizeObserver, so the
+                           trace re-renders to fit on its own. *@
                         <div id="sMeterHistoryContainer"
                              class="text-center smeter-history-container"
-                             style="display:none; position: relative; height: 135px; width: 260px; flex-shrink: 0; margin: 0; padding: 0;">
+                             style="display:none; position: relative; height: 110px; width: 260px; flex-shrink: 0; margin: 0; padding: 0;">
                             <canvas id="sMeterHistoryCanvas"
                                     role="img" aria-hidden="true"
                                     aria-label="S-meter 30-second history — VFO A"
@@ -527,9 +540,10 @@
                         @if (!isSingleReceiver)
                         {
                             <!-- S-Meter B (SUB) — dual-receiver radios only. -->
+                            @* 110px to match VFO A's strip — see the note there. *@
                             <div id="sMeterHistoryContainerB"
                                  class="text-center smeter-history-container"
-                                 style="display:none; position: relative; height: 135px; width: 260px; flex-shrink: 0; margin: 0; padding: 0;">
+                                 style="display:none; position: relative; height: 110px; width: 260px; flex-shrink: 0; margin: 0; padding: 0;">
                                 <canvas id="sMeterHistoryCanvasB"
                                         role="img" aria-hidden="true"
                                         aria-label="S-meter 30-second history — VFO B"
