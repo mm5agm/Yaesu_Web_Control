@@ -1,10 +1,10 @@
 # Driving the radio's own display over CAT
 
-**Status:** DESIGN NOTE — nothing implemented. Raised by Colin MM5AGM
-2026-08-15.
-**Bench evidence:** `SS` read-probe run against a real FTdx101MP (ID0682) on
-COM4, 2026-08-15. Read frames only; no `Set` frame was sent. Results are in
-§2.
+**Status:** IMPLEMENTED for FTdx101 / FTdx10 / FT-710, bench-tested on an
+FTdx101MP. Raised by Colin MM5AGM 2026-08-15.
+**Bench evidence:** `SS` read-probe and write-probe run against a real
+FTdx101MP (ID0682) on COM4, 2026-08-15, plus end-to-end testing through the
+app's own endpoints. Results in §2; what the implementation turned up in §6.
 **Related:** PR #97 (USB video capture of the radio's screen), and the
 overlay idea this note replaces.
 
@@ -78,8 +78,24 @@ Three things this establishes that the manual alone did not:
 3. **Every sub-command answered, including `HOLD` (P2=8).** No CAT errors, no
    timeouts.
 
-**Not yet verified: writes.** Every frame above is a Read. No `Set` frame has
-been sent to any radio. See §6.
+### Writes, verified separately
+
+`scripts/probe/ss-write-probe.ps1` then confirmed that Set frames land. For
+each sub-command it reads the current value, writes a different one, reads
+back, and writes the original back, so the radio is left as it was found:
+
+```
+MAIN SPAN    was '90000' -> wrote '40000' -> reads 'SS0540000;'   WRITE OK
+MAIN HOLD    was '00000' -> wrote '10000' -> reads 'SS0810000;'   WRITE OK
+MAIN MARKER  was '10000' -> wrote '00000' -> reads 'SS0200000;'   WRITE OK
+SUB SPAN     was '80000' -> wrote '40000' -> reads 'SS1540000;'   WRITE OK
+```
+
+One warning from writing that probe, because the radio hides the mistake: in a
+double-quoted PowerShell string `` `0 `` is a NUL character, not a zero. The
+first run therefore sent `SS054<NUL>000;` — and **the radio applied it anyway**
+and read back cleanly. The table above is from the corrected run. A malformed
+pad will not announce itself.
 
 ---
 
@@ -179,8 +195,7 @@ normally one significant character followed by `0000`.
 | A | W/F FIX (N) | W/F FIX (NORMAL) |
 | B | W/F FIX (S) | — |
 
-Worked examples (FTdx101, derived from the confirmed frame shape — **not yet
-written to a radio**):
+Worked examples (FTdx101, all of these written to a real radio and read back):
 
 ```
 SS0540000;   MAIN span -> 20 kHz
@@ -188,7 +203,14 @@ SS1540000;   SUB  span -> 20 kHz
 SS0620000;   MAIN mode -> 3DSS FIX
 SS0810000;   MAIN HOLD -> ON
 SS0800000;   MAIN HOLD -> OFF
+SS04+02.5;   MAIN LEVEL -> +2.5 dB
 ```
+
+Note that the twelve mode values are a 2×3×3 grid, not an arbitrary list —
+display type × placement × size. `ScopeCommands.ModeValue` composes them from
+those three axes, which is why the UI offers three small selectors instead of
+one twelve-entry dropdown. The browser mirrors the same rule in
+`radio-scope.js`; the two must agree.
 
 ### `MS` — METER SW
 
@@ -207,55 +229,90 @@ feature.
 
 ---
 
-## 5. Implementation shape
+## 5. What was built
 
-Nothing here is built. This is the seam list, not a schedule.
+| File | Role |
+|---|---|
+| `Services/RadioCapabilities.cs` | `SupportsSpectrumScopeCat`, `SupportsScopeHold`, `HasPerReceiverScopes`, `ScopeSizeLabels` |
+| `Services/CatCommands.cs` | `ScopeCommands` — frame construction, answer parsing, mode composition |
+| `Controllers/ScopeController.cs` | `GET /api/scope/{main\|sub}`, `POST /api/scope/{band}/{setting}` |
+| `Pages/Shared/_RadioScopePartial.cshtml` | the control panel markup, gated per model |
+| `wwwroot/js/ui/radio-scope.js` | wiring; repaints from the radio's read-back |
+| `scripts/probe/ss-probe.ps1`, `ss-write-probe.ps1` | the read and write probes |
 
-**`Services/RadioCapabilities.cs`** — add capability predicates alongside the
-existing ones. The file already documents itself as the place per-model
-variation hangs off, and it already has the right shape (`SupportsQmb`,
-`SupportsVCTuneMain`). Wanted:
+Three decisions worth knowing about, because none of them is obvious from the
+code alone:
 
-- `SupportsSpectrumScopeCat(model)` — FTdx101MP/D, FTdx10, FT-710.
-- `SupportsScopeHold(model)` — the above minus FT-710.
-- `ScopeHasPerReceiverScopes(model)` — FTdx101MP/D only, drives `P1`.
-- A mode-table accessor returning the model's `P2=6` value list, because the
-  FT-710's differs and must not be unified.
+**Every write is followed by a read-back, and the read-back is what repaints
+the UI.** The radio is the source of truth, never our optimism. That matters
+more here than elsewhere because the operator may be standing at the rig
+changing the same settings by hand, and because a radio that quietly refuses a
+value should look refused rather than accepted.
 
-**`Services/CatCommands.cs`** — `SS` opcode plus builders. Keep the frame
-construction in one place; the 5-character pad field is exactly the kind of
-detail that gets miscounted at each call site.
+**The panel is collapsed by default and reads its state lazily, on first
+expand.** Six `SS` reads on a port shared with the ~10 Hz meter poll is not a
+cost worth paying for a panel most users will never open. The collapsed state
+persists in `localStorage` as `ywc.radioScopeOpen`.
 
-**`Services/CatMessageDispatcher.cs`** — parse `SS` answers into state. The
-FTdx101 marks `SS` as auto-information reported, so front-panel changes should
-arrive unprompted and the UI can stay in sync when the operator touches the
-radio. **[VERIFY]** that AI actually emits `SS` frames in practice — the
-manual's flag column and reality have diverged before.
+**It is a partial view, not inline markup.** Placement on the page is not
+settled — it currently sits above YWC's own spectrum panels — so moving it is a
+matter of moving one `<partial>` line. Do not inline it until that argument is
+had. Note the conceptual trap it is guarding against: YWC's SDR spectrum
+display and the radio's internal scope are entirely different things, which is
+why the card header says "the radio's own display" out loud.
 
-**UI** — a scope-control strip, gated per model. Natural home is beside the
-existing spectrum panels, but note the conceptual split: YWC's own SDR spectrum
-display and the radio's internal scope are two different things, and putting
-controls for the radio's scope next to YWC's spectrum will confuse people
-unless it is labelled clearly.
+`CatMessageDispatcher` was deliberately **not** touched. Read-back after write
+covers the cases the UI actually has, and adding `SS` to the dispatcher only
+pays off if the radio really does report scope changes over auto-information —
+which is still unverified (§6).
 
 ---
 
-## 6. Open questions and bench gates
+## 6. What the implementation turned up
 
-1. **No write has been attempted.** Everything in §2 is a Read. Before any
-   code, send one `Set` by hand — `SS0540000;` to move MAIN span to 20 kHz —
-   confirm the radio's display changes and that a subsequent `SS05;` reads back
-   `4`. Read-back-after-write is the honest test.
-2. **Does `SS` come back over auto-information?** Change the span on the radio's
-   own touchscreen with a CAT monitor running and see whether an `SS` frame
-   arrives unbidden. Determines whether the UI can stay in sync or must poll.
-3. **The FTdx10 and FT-710 columns are manual-only.** Fabio (FTdx10) can
-   confirm his; nobody currently runs an FT-710 actively enough to confirm
-   that one, so it ships unverified or not at all.
-4. **How does this interact with the meter borrow?** See §4. Needs deciding
-   before a meter selector is exposed, not after.
-5. **Is remote Mono/Multi actually wanted?** If yes, it needs the overlay this
+Two findings that were not in any manual, both measured on an FTdx101MP through
+the app's own endpoints.
+
+**Span is stored per display mode.** Setting the span to 20 kHz and then
+switching mode appeared at first to "revert" it. It does not: the radio keeps a
+separate span for each mode. Over ten consecutive mode changes, W/F CURSOR (L)
+held 20 kHz and 3DSS FIX held 1 MHz, each returning reliably. So the
+highlighted span button moving on its own after a mode change is correct
+behaviour, and re-sending the previous span to "fix" it would overwrite a
+setting the operator deliberately chose. Repainting everything from the
+read-back is what keeps this honest. The UI says so in a hint line, because it
+otherwise looks like a bug.
+
+**Reads issued immediately after a write go unanswered while the radio
+redraws** — roughly one in three following a mode change, which is the most
+expensive redraw. Fixed with a 150 ms settle delay before the read-back plus
+one retry; ten consecutive mode changes then produced zero dropped reads.
+Anything still unanswered after the retry is reported as null and shown as
+unknown rather than guessed at.
+
+One trap for the next person: **`CatMultiplexerService` strips the trailing
+`;`** from answers. A parser that requires it works perfectly against a raw
+serial probe and then returns null for everything inside the app. That happened
+here; `ScopeCommands.ValueField` now treats the terminator as optional.
+
+### Still open
+
+1. **Does `SS` come back over auto-information?** Change the span on the
+   radio's own touchscreen with a CAT monitor running and see whether an `SS`
+   frame arrives unbidden. Only worth answering if the read-back approach turns
+   out to feel stale in use.
+2. **The FTdx10 and FT-710 are manual-only** — nothing on either has been
+   hardware-verified. Fabio (FTdx10) can confirm his. Nobody currently runs an
+   FT-710 actively enough to confirm that one, so it either ships unverified or
+   is gated off until someone steps up.
+3. **The meter selector is not built**, and the reason is in §4: it has to
+   cooperate with the borrow-and-restore in `MeterPollingService` or it will
+   appear to randomly revert. That is a design decision to take deliberately,
+   not a control to bolt on.
+4. **Is remote Mono/Multi actually wanted?** If yes it needs the overlay this
    note was written to avoid — but only for that one control.
+5. **Placement.** Above the spectrum panels is a starting position, not a
+   verdict.
 
 ---
 
