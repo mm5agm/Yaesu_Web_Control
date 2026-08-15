@@ -8,6 +8,11 @@
 //   dim    transmit-only gauges greyed in place, geometry unchanged
 //   hide   transmit-only gauges removed from layout, row reflows
 //
+// Both active modes also grey the S-meters while transmitting, which is the
+// mirror of the same problem: the radio freezes SM0/SM1 at key-down, so those
+// needles are stale for the whole over. See the CSS comment in Index.cshtml
+// for the measurement.
+//
 // Which gauges count as transmit-only is decided in the markup, not here: a
 // cell carries data-meter-scope="tx" if it means nothing while receiving.
 // S-meters are obviously excluded. So are Temp and VDD, which are NOT
@@ -78,11 +83,18 @@ export class MeterVisibility {
     _apply() {
         if (!this._row) return;
 
-        // Receive-idle styling only bites while receiving; on transmit every
-        // gauge is live and the row always looks exactly as it does today.
-        const idle = !this._transmitting && this._mode !== 'off';
+        const active = this._mode !== 'off';
+
+        // Receiving: the transmit-only gauges are the ones reading nothing.
+        const idle = active && !this._transmitting;
         this._row.classList.toggle('meters-idle-dim',  idle && this._mode === 'dim');
         this._row.classList.toggle('meters-idle-hide', idle && this._mode === 'hide');
+
+        // Transmitting: the S-meters are the ones reading nothing — the radio
+        // freezes both at key-down (measured, see the CSS comment). Always
+        // dimmed, never hidden, in BOTH modes: they sit at the left of the row,
+        // so removing them would shift everything else across on every over.
+        this._row.classList.toggle('meters-tx-dim', active && this._transmitting);
 
         if (this._btn) {
             this._btn.textContent = LABEL[this._mode];

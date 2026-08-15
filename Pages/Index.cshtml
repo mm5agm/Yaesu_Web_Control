@@ -228,6 +228,23 @@
         display: none !important;
     }
 
+    /* The mirror case, and a real defect in its own right: the radio FREEZES
+       both S-meters at key-down. Measured on the MP 2026-08-15 — 101 samples
+       across a 5 s over returned one value each (SM0=154, SM1=75), against 29
+       and 21 distinct values while receiving. The needles look alive but are
+       showing whatever the band was doing at the instant of key-down.
+
+       Dimmed rather than hidden because the S-meters are leftmost: hiding them
+       would shift the whole row left on every over, which is exactly the
+       movement the reorder removed. Dimmed rather than zeroed because a needle
+       dropping to S0 asserts "no signal", which is a different untruth. Grey
+       reads consistently across the row as "not telling you anything now". */
+    .meters-tx-dim [data-meter-scope="rx"] {
+        filter: grayscale(1);
+        opacity: 0.3;
+        transition: opacity 0.25s ease, filter 0.25s ease;
+    }
+
     /* Voice command help popup (right-click a mic button). */
     #voiceHelpBody .vh-intro   { color: #bbb; font-size: 0.85rem; margin-bottom: 0.75rem; }
     #voiceHelpBody .vh-group   { margin-bottom: 0.85rem; }
@@ -524,7 +541,7 @@
                         <!-- S-Meter A (MAIN) — moved from per-VFO panels to the top
                              row in v2.3.9. Always live (unlike SWR/Power/etc which
                              are TX-only). -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                        <div class="text-center" data-meter-scope="rx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="sMeterCanvas" role="img" aria-hidden="true" aria-label="S meter A" data-a11y-key="meters.smeterA"></canvas>
                             </div>
@@ -541,7 +558,7 @@
                                         data-a11y-key="meters.smeterHistoryB"
                                         style="display:block; width:100%; height:100%; border-radius:3px;"></canvas>
                             </div>
-                            <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="text-center" data-meter-scope="rx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                                 <div class="analog-meter-container">
                                     <canvas id="sMeterCanvasB" role="img" aria-hidden="true" aria-label="S meter B" data-a11y-key="meters.smeterB"></canvas>
                                 </div>
