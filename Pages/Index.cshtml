@@ -547,8 +547,50 @@
                                 </div>
                             </div>
                         }
-                        <!-- SWR Meter — transmit-only (pinned to 0 on RX by
-                             MeterPollingService, see data-meter-scope above). -->
+                        @* EXPERIMENT (feat/meter-visibility-experiment) — row
+                           REORDERED so the always-meaningful gauges are
+                           contiguous on the left and every transmit-only gauge
+                           sits in one block on the right. Colin's call, and it
+                           improves both candidate behaviours: dim gives one
+                           bright group and one grey group instead of the two
+                           alternating, and hide removes a trailing block so
+                           nothing that survives changes position. Previously
+                           Temp and VDD were stranded at the far right with IDD
+                           between them.
+
+                           Cost to weigh before shipping: this changes gauge
+                           order for every existing user, which is muscle
+                           memory for 100+ people. Note Temp/IDD/VDD share one
+                           radio-capability gate, so it now appears twice. *@
+
+                        @* --- Always meaningful: receive and transmit alike --- *@
+                        @if (!isFtdx10 && !isFt710 && !isFtdx5000) {
+                        <!-- PA Temperature Meter — FTdx101/FTDX3000 only (high-voltage PA board).
+                             FTDX5000 excluded: no temperature read-code in its RM meter set.
+                             NOT transmit-only: polled outside the isTransmitting
+                             branch in MeterPollingService, and a hot PA after a
+                             long over is worth seeing while receiving. -->
+                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="analog-meter-container">
+                                <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
+                            </div>
+                        </div>
+                        <!-- VDD Meter — FTdx101/FTDX3000 only. NOT transmit-only:
+                             a sagging supply is worth seeing at any time. -->
+                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+                            <div class="analog-meter-container">
+                                <canvas id="vddMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier supply voltage meter" data-a11y-key="meters.vdd"></canvas>
+                            </div>
+                        </div>
+                        }
+
+                        @* --- Transmit-only block: dimmed or hidden on receive ---
+                           All five are pinned to zero during receive by
+                           MeterPollingService, so nothing live is being
+                           suppressed here. Keep this block last and contiguous
+                           — that is what stops the surviving gauges moving when
+                           the hide variant reflows the row. *@
+                        <!-- SWR Meter — transmit-only -->
                         <div class="text-center" data-meter-scope="tx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="swrMeterCanvas" role="img" aria-hidden="true" aria-label="SWR meter" data-a11y-key="meters.swr"></canvas>
@@ -573,28 +615,11 @@
                             </div>
                         </div>
                         @if (!isFtdx10 && !isFt710 && !isFtdx5000) {
-                        <!-- PA Temperature Meter — FTdx101/FTDX3000 only (high-voltage PA board).
-                             FTDX5000 excluded: no temperature read-code in its RM meter set. -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                            <div class="analog-meter-container">
-                                <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
-                            </div>
-                        </div>
                         <!-- IDD Meter — FTdx101/FTDX3000 only. Transmit-only:
-                             drain current is ~0 with no carrier. Temp and VDD
-                             below are deliberately NOT tagged — both stay
-                             meaningful on receive (a hot PA after a long over,
-                             a sagging supply), and Temp is polled outside the
-                             isTransmitting branch in MeterPollingService. -->
+                             drain current is ~0 with no carrier. -->
                         <div class="text-center" data-meter-scope="tx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="iddMeterCanvas" role="img" aria-hidden="true" aria-label="Drain current meter" data-a11y-key="meters.idd"></canvas>
-                            </div>
-                        </div>
-                        <!-- VDD Meter — FTdx101/FTDX3000 only -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                            <div class="analog-meter-container">
-                                <canvas id="vddMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier supply voltage meter" data-a11y-key="meters.vdd"></canvas>
                             </div>
                         </div>
                         }
