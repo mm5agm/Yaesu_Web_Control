@@ -1,4 +1,5 @@
 @model string
+@inject Yaesu_Web_Control.Services.RadioStateService RadioState
 @{
     // Controls for the RADIO's own spectrum scope, driven over CAT with the SS
     // command. Nothing here touches YWC's SDR spectrum panel — that is separate
@@ -16,6 +17,13 @@
     var hasHold    = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeHold(radioModel);
     var hasSub     = Yaesu_Web_Control.Services.RadioCapabilities.HasPerReceiverScopes(radioModel);
     var sizeLabels = Yaesu_Web_Control.Services.RadioCapabilities.ScopeSizeLabels(radioModel);
+
+    // Start pointed at whichever band the radio is actually operating on, so the
+    // panel opens aimed at the scope on screen. Rendered server-side rather than
+    // left to the first SignalR ActiveVfo broadcast: the panel can be expanded
+    // and read from before any broadcast arrives, and being aimed at the wrong
+    // scope for even one interaction is exactly the confusion this avoids.
+    var initialBand = (hasSub && RadioState.ActiveVfo == 1) ? "sub" : "main";
 
     // SS P2=5 span table — identical across every model that has the command.
     var spans = new (string Value, string Label)[]
@@ -37,7 +45,7 @@
 
 @if (hasScope)
 {
-    <div id="radioScopeCard" class="card border-dark mt-3">
+    <div id="radioScopeCard" class="card border-dark mt-3" data-initial-band="@initialBand">
         <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1"
              role="button" tabindex="0" id="radioScopeToggle"
              aria-expanded="false" aria-controls="radioScopeBody"
@@ -54,16 +62,30 @@
         <div id="radioScopeBody" class="card-body py-2" style="display:none;">
             @if (hasSub)
             {
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="small text-muted" style="min-width:5.5em;">Scope</span>
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Which scope to control">
-                        <button type="button" class="btn btn-outline-secondary active scope-band-btn"
+                @* These SWITCH THE RADIO's band, via the same VS command and the
+                   same endpoint as clicking a VFO panel header. The radio shows
+                   the scope of whichever band is operating, so "show me the SUB
+                   scope" and "make SUB the operating band" are the same request —
+                   there is no way to display one band's scope while operating the
+                   other, and pretending otherwise is what made the first version
+                   of this row so confusing. The controls below then follow the
+                   band automatically (see setActiveBand in radio-scope.js). *@
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="small text-muted" style="min-width:5.5em;">Band</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Which band's scope to show and adjust">
+                        <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "main" ? "active" : "")"
                                 data-band="main" data-a11y-key="radioScope.bandMain"
-                                title="Control the MAIN band scope">MAIN</button>
-                        <button type="button" class="btn btn-outline-secondary scope-band-btn"
+                                title="Switch the radio to MAIN — the screen shows the MAIN scope and the controls below follow">MAIN</button>
+                        <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "sub" ? "active" : "")"
                                 data-band="sub" data-a11y-key="radioScope.bandSub"
-                                title="Control the SUB band scope — the FTdx101 keeps the two entirely separate">SUB</button>
+                                title="Switch the radio to SUB — the screen shows the SUB scope and the controls below follow">SUB</button>
                     </div>
+                </div>
+                <div class="form-text mb-2">
+                    Switches the radio's band, exactly as clicking the VFO A or VFO B panel header
+                    does. The radio displays the scope of whichever band is operating, so this is
+                    also how you choose which scope you are looking at &mdash; the controls below
+                    follow it automatically.
                 </div>
             }
 

@@ -54,7 +54,10 @@ export class RadioScopeControl {
         this.levelSlider = document.getElementById('scopeLevelSlider');
         this.levelLabel  = document.getElementById('scopeLevelLabel');
 
-        this.band    = 'main';
+        // Server-rendered from RadioStateService.ActiveVfo so the panel is aimed
+        // at the band the radio is actually operating on from the very first
+        // paint. setActiveBand() keeps it there as the operator moves bands.
+        this.band    = this.card.dataset.initialBand === 'sub' ? 'sub' : 'main';
         this.state   = null;
         this.loaded  = false;
         this.busy    = false;
@@ -96,15 +99,7 @@ export class RadioScopeControl {
 
     _wireControls() {
         this.card.querySelectorAll('.scope-band-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.band = btn.dataset.band;
-                this.card.querySelectorAll('.scope-band-btn')
-                    .forEach(b => b.classList.toggle('active', b === btn));
-                // MAIN and SUB hold genuinely independent settings on the '101,
-                // so switching scope means re-reading, not re-labelling.
-                this.loaded = false;
-                this.refresh();
-            });
+            btn.addEventListener('click', () => this._requestBand(btn.dataset.band));
         });
 
         this.card.querySelectorAll('.scope-span-btn').forEach(btn => {
@@ -143,6 +138,101 @@ export class RadioScopeControl {
         }
     }
 
+    // ── band selection ───────────────────────────────────────────────────────
+
+    // The MAIN/SUB buttons move THE RADIO, not just these controls. The radio
+    // displays the scope of whichever band it is operating on, so there is no
+    // such thing as "look at SUB's scope while operating MAIN" — asking for the
+    // SUB scope and asking for the SUB band are one request, and splitting them
+    // is what made the first version of this row so confusing.
+    //
+    // So this sends VS via the same endpoint as clicking a VFO panel header,
+    // then stops. The ActiveVfo broadcast that comes back re-aims the controls
+    // through setActiveBand(), which keeps one path for "the band changed"
+    // whether the change came from here, from the VFO header, or from the
+    // operator's hand on the front panel.
+    async _requestBand(band) {
+        if (band !== 'main' && band !== 'sub') return;
+        if (band === this.band) return;
+        if (this.busy) return;
+        this.busy = true;
+        try {
+            this._setStatus('…', 'bg-secondary');
+            const res = await fetch(`/api/cat/active-vfo/${band === 'sub' ? 'B' : 'A'}`,
+                                    { method: 'POST' });
+            if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                this._setStatus(data?.error || `Error ${res.status}`, 'bg-danger');
+                return;
+            }
+        } catch (err) {
+            this._setStatus('No response', 'bg-danger');
+            console.error('[radio-scope]', err);
+            return;
+        } finally {
+            this.busy = false;
+        }
+
+        // Reconcile once we are out of the way. Two things can have gone wrong,
+        // and both were observed on the bench rather than imagined:
+        //
+        //  * The ActiveVfo broadcast beat the POST's own response back, so
+        //    _selectBand ran while this method still held `busy` and its
+        //    refresh() was swallowed by the guard in _call. Symptom: the right
+        //    band highlighted, the badge stuck on the ellipsis. `loaded` is
+        //    false in that case, which is exactly what we test for.
+        //  * No broadcast arrived at all, and the panel is still labelled MAIN
+        //    while the radio has moved to SUB — the precise failure this whole
+        //    row exists to prevent.
+        setTimeout(() => {
+            if (this.band !== band) { this._selectBand(band); return; }
+            if (!this.loaded && this.body.style.display !== 'none') this.refresh();
+        }, 400);
+    }
+
+    // Points the controls at a band and re-reads it. MAIN and SUB hold genuinely
+    // independent settings on the '101, so switching scope means re-reading,
+    // not re-labelling. Internal: reached from setActiveBand(), never straight
+    // from a click — a click has to move the radio first.
+    _selectBand(band) {
+        if (band !== 'main' && band !== 'sub') return;
+        this.band = band;
+        this.card.querySelectorAll('.scope-band-btn')
+            .forEach(b => b.classList.toggle('active', b.dataset.band === band));
+        this.loaded = false;
+        if (this.body.style.display !== 'none') {
+            this.refresh();
+        } else {
+            // Nothing to read while collapsed — the panel loads lazily on
+            // expand, and this port is shared with the ~10 Hz meter poll. But
+            // the badge stays visible in the header when collapsed, so leaving
+            // the previous band's summary sitting under the new band's name
+            // would be an outright lie. Blank it; expanding reloads it.
+            this.state = null;
+            this._setStatus('—', 'bg-secondary');
+        }
+    }
+
+    // Called from site.js when the radio's active band changes (the ActiveVfo
+    // SignalR update, i.e. a VS command from any source — this panel, the VFO
+    // headers, or the operator's hand on the front panel). The radio's scope
+    // follows the operating band, so these controls follow it too; otherwise the
+    // operator selects SUB at the rig and carries on adjusting MAIN's scope with
+    // no indication that anything is wrong. That exact confusion is what this
+    // panel's first bench test ran into.
+    //
+    // Every band change reaches _selectBand through here (bar the fallback timer
+    // in _requestBand), which is what keeps the button highlight and the radio in
+    // step no matter who moved the band.
+    setActiveBand(activeVfo) {
+        if (!this.card) return;                    // model has no CAT scope control
+        const band = Number(activeVfo) === 1 ? 'sub' : 'main';
+        // Single-receiver models render no band buttons; SS P1 is fixed at 0.
+        if (!this.card.querySelector(`.scope-band-btn[data-band="${band}"]`)) return;
+        if (band === this.band) return;
+        this._selectBand(band);
+    }
+
     _sendMode(change) {
         const s = this.state || { is3dss: false, placement: 0, size: 0 };
         const is3dss    = change.is3dss    !== undefined ? change.is3dss    : !!s.is3dss;
@@ -164,8 +254,14 @@ export class RadioScopeControl {
     async _call(url, body) {
         if (this.busy) return;               // the port is serial; so are we
         this.busy = true;
-        this._setStatus('…', 'bg-secondary');
         try {
+            // Everything after busy=true belongs inside the try. The first
+            // version set the status here, one line above it, and _setStatus did
+            // not exist: the TypeError escaped this method entirely, so the
+            // finally never ran, busy stayed true forever, and every subsequent
+            // click was swallowed by the guard above without a sound. One
+            // missing method turned into a panel where nothing at all responded.
+            this._setStatus('…', 'bg-secondary');
             const res = await fetch(url, body === null ? {} : {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -219,6 +315,16 @@ export class RadioScopeControl {
         }
 
         this._setStatus(this._summary(state), 'bg-success');
+    }
+
+    /// Repaints the badge in the card header. That badge is the panel's only
+    /// feedback channel — the controls themselves look identical whether a write
+    /// landed, was refused by the radio, or never left the browser — so it needs
+    /// to say something after every single call.
+    _setStatus(text, cls) {
+        if (!this.status) return;
+        this.status.textContent = text;
+        this.status.className = `badge ${cls} small`;
     }
 
     _mark(selector, isActive) {

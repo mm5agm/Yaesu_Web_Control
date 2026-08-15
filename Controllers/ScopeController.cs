@@ -78,6 +78,13 @@ public class ScopeController : ControllerBase
         try
         {
             await EnsureConnectedAsync();
+            // Logged at Information alongside the writes. A read changes nothing
+            // on the radio, so it is invisible from the operating position — and
+            // when someone reports "pressing the buttons does nothing", the first
+            // question is whether the request arrived at all. Without this line a
+            // scope panel whose JS never wired up and one that is working
+            // normally produce byte-identical logs.
+            _logger.LogInformation("Scope {Band} read", band);
             return Ok(await ReadStateAsync(p1, model));
         }
         catch (Exception ex)

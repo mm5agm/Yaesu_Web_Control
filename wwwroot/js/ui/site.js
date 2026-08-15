@@ -1374,6 +1374,10 @@ connection.on("RadioStateUpdate", function (update) {
         // opposite of active, so the SPLIT TX badge and the red border have
         // to switch panels whenever the active VFO changes.
         updateSplitButton();
+        // The radio's own scope display follows the operating band, so point
+        // the CAT scope controls at the same band. Absent on models without
+        // the SS command, and a no-op on single-receiver ones.
+        window.radioScopeControl?.setActiveBand(update.value);
     }
 
     // --- SPLIT MODE ---
