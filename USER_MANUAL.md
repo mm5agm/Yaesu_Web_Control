@@ -60,6 +60,7 @@
    - 9.4 [GridTracker](#94-gridtracker)
 10. [Meter Calibration](#10-meter-calibration)
 11. [Diagnostics](#11-diagnostics)
+    - 11.1 [The log file, and sending me one](#111-the-log-file-and-sending-me-one)
 12. [Using the App on a Tablet or Phone](#12-using-the-app-on-a-tablet-or-phone)
 13. [Keyboard Shortcuts](#13-keyboard-shortcuts)
 14. [Troubleshooting](#14-troubleshooting)
