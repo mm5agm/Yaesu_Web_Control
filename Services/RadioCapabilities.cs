@@ -123,8 +123,18 @@ public static class RadioCapabilities
     /// Confirmed on FTdx101MP (Colin MM5AGM, 2026-08-15): all nine SS
     /// sub-commands answered a Read, and Set frames for SPAN, HOLD and MARKER
     /// were written and read back on both MAIN and SUB
-    /// (scripts/probe/ss-probe.ps1 and ss-write-probe.ps1). FTdx10 and FT-710
-    /// are from their CAT manuals only and are not yet hardware-verified.
+    /// (scripts/probe/ss-probe.ps1 and ss-write-probe.ps1).
+    ///
+    /// Only the FTdx101 pair is enabled, and that is the whole point of this
+    /// switch. The FTdx10 and FT-710 also document SS, and the tables below
+    /// (hold, size labels) carry their values — but nobody has yet sent a Set
+    /// frame to either radio. These are writes: they change what appears on
+    /// somebody's front panel, and the bench run turned up two behaviours the
+    /// manuals do not mention (span is stored per display mode, and a Read
+    /// straight after a Write can come back stale). Shipping manual-derived
+    /// writes to an untested model would find that out on an operator's rig.
+    /// Enabling a model here is a one-line change once someone has run
+    /// scripts/probe/ss-write-probe.ps1 against it and reported the result.
     ///
     /// Excluded, and not by oversight: the FTDX3000 has no SS command at all —
     /// its scope lives in EX menu items 124-148, which is writing configuration
@@ -133,7 +143,7 @@ public static class RadioCapabilities
     /// </summary>
     public static bool SupportsSpectrumScopeCat(string radioModel) => radioModel switch
     {
-        "FTdx101MP" or "FTdx101D" or "FTdx10" or "FT-710" => true,
+        "FTdx101MP" or "FTdx101D" => true,
         _ => false
     };
 
@@ -142,6 +152,11 @@ public static class RadioCapabilities
     /// The FT-710's SS sub-command list genuinely stops at 7 — it has fewer
     /// functions, not a gap in its manual — so the Hold button is hidden there
     /// rather than sent and silently ignored.
+    ///
+    /// The FTdx10 stays listed here even though SupportsSpectrumScopeCat gates
+    /// it off today. That is not an inconsistency to tidy up: this table is
+    /// manual-derived knowledge worth keeping, and it is never consulted unless
+    /// the gate above lets the model through.
     /// </summary>
     public static bool SupportsScopeHold(string radioModel) => radioModel switch
     {
@@ -171,6 +186,9 @@ public static class RadioCapabilities
     /// does not exist, and sending it would be a guess.
     ///
     /// Returns an empty array for models with no CAT scope control.
+    /// Like the hold table above, the FTdx10 and FT-710 rows are retained
+    /// while SupportsSpectrumScopeCat gates those models off — see the note
+    /// there before deleting them.
     /// </summary>
     public static string[] ScopeSizeLabels(string radioModel) => radioModel switch
     {

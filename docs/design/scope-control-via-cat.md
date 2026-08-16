@@ -1,7 +1,11 @@
 # Driving the radio's own display over CAT
 
-**Status:** IMPLEMENTED for FTdx101 / FTdx10 / FT-710, bench-tested on an
-FTdx101MP. Raised by Colin MM5AGM 2026-08-15.
+**Status:** IMPLEMENTED, and **enabled for the FTdx101MP/D only**. The FTdx10
+and FT-710 tables below are written and kept, but gated off in
+`RadioCapabilities.SupportsSpectrumScopeCat` until someone has run the write
+probe on one — these are commands that change what appears on an operator's
+front panel, so manual-derived writes do not ship unverified. Bench-tested on
+an FTdx101MP. Raised by Colin MM5AGM 2026-08-15.
 **Bench evidence:** `SS` read-probe and write-probe run against a real
 FTdx101MP (ID0682) on COM4, 2026-08-15, plus end-to-end testing through the
 app's own endpoints. Results in §2; what the implementation turned up in §6.
@@ -302,9 +306,12 @@ here; `ScopeCommands.ValueField` now treats the terminator as optional.
    frame arrives unbidden. Only worth answering if the read-back approach turns
    out to feel stale in use.
 2. **The FTdx10 and FT-710 are manual-only** — nothing on either has been
-   hardware-verified. Fabio (FTdx10) can confirm his. Nobody currently runs an
-   FT-710 actively enough to confirm that one, so it either ships unverified or
-   is gated off until someone steps up.
+   hardware-verified, so both are **gated off** (decided 2026-08-16; see the
+   Status note at the top). Re-enabling either is one line in
+   `RadioCapabilities.SupportsSpectrumScopeCat` plus a probe run. Fabio
+   (FTdx10) can confirm his whenever video-tx frees him; nobody currently runs
+   an FT-710 actively enough to confirm that one, so it stays gated until
+   someone steps up.
 3. **The meter selector is not built**, and the reason is in §4: it has to
    cooperate with the borrow-and-restore in `MeterPollingService` or it will
    appear to randomly revert. That is a design decision to take deliberately,
