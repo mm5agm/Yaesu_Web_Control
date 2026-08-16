@@ -275,8 +275,20 @@ var logDir = Path.Combine(
     "MM5AGM", "Yaesu Web Control", "logs");
 try { Directory.CreateDirectory(logDir); } catch { /* fall through, Serilog will surface the problem */ }
 
+// Apply the saved "Detailed logging (for bug reports)" flag before the first
+// line is written, so a user who ticked it gets the startup sequence captured.
+// Read straight off disk — the DI container does not exist yet, and startup is
+// over before it would.
+Yaesu_Web_Control.Services.LogLevelController.Apply(
+    Yaesu_Web_Control.Services.LogLevelController.ReadDetailedLoggingFromDisk());
+
+const string LogOutputTemplate =
+    "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}";
+
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information()
+    // Controlled by a switch rather than fixed, so the Settings checkbox takes
+    // effect immediately instead of at the next restart.
+    .MinimumLevel.ControlledBy(Yaesu_Web_Control.Services.LogLevelController.Switch)
     .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
     .MinimumLevel.Override("Microsoft.AspNetCore.SignalR", Serilog.Events.LogEventLevel.Warning)
     // Keep Hosting.Lifetime at Information so we see exactly when
@@ -296,12 +308,43 @@ Log.Logger = new LoggerConfiguration()
     // DT0 step and the app hung at "Initializing". Intermittent because it
     // depends on disk / AV / file-lock timing (issue #73, wa6auf). Dropped
     // shared:true as well — YWC is the only writer of this file.
+    //
+    // Two separate files, deliberately.
+    //
+    // ywc-.log is the history, and it must survive: it is capped at
+    // Information regardless of the switch, so turning Detailed logging on
+    // cannot flood it or push older days out of the 7-day retention. That
+    // matters because the whole argument for logging by default is catching
+    // the intermittent fault nobody could reproduce on request — a history
+    // that a stray checkbox can erase is not a history.
+    //
+    // ywc-detail-.log only exists while Detailed logging is on, and carries
+    // everything including Debug. Measured at roughly 1,300 lines/second on a
+    // live radio (~160 KB/s), which is why it gets its own file, its own size
+    // cap and a short retention rather than sharing the normal budget.
     .WriteTo.Async(a => a.File(
         Path.Combine(logDir, "ywc-.log"),
+        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information,
         rollingInterval: RollingInterval.Day,
         retainedFileCountLimit: 7,
+        // Never trips in normal use (~1 MB/day); a backstop, not a policy.
+        fileSizeLimitBytes: 25L * 1024 * 1024,
+        rollOnFileSizeLimit: true,
         flushToDiskInterval: TimeSpan.FromSeconds(1),
-        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}"))
+        outputTemplate: LogOutputTemplate))
+    .WriteTo.Conditional(
+        _ => Yaesu_Web_Control.Services.LogLevelController.IsDetailed,
+        w => w.Async(a => a.File(
+            Path.Combine(logDir, "ywc-detail-.log"),
+            rollingInterval: RollingInterval.Day,
+            // Three files at 50 MB bounds this at 150 MB even if a user ticks
+            // the box and forgets. A detailed capture is meant to be minutes
+            // long, so losing the oldest of three is no loss at all.
+            retainedFileCountLimit: 3,
+            fileSizeLimitBytes: 50L * 1024 * 1024,
+            rollOnFileSizeLimit: true,
+            flushToDiskInterval: TimeSpan.FromSeconds(1),
+            outputTemplate: LogOutputTemplate)))
     .CreateLogger();
 
 Log.Information("Yaesu Web Control starting (v{Version})", Yaesu_Web_Control.AppVersion.Current);

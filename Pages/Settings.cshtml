@@ -1976,6 +1976,23 @@
                             </div>
                         </div>
 
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" asp-for="Settings.DetailedLogging" />
+                            <label class="form-check-label" asp-for="Settings.DetailedLogging">
+                                Detailed logging (for bug reports)
+                            </label>
+                            <div class="form-text">
+                                Normally YWC keeps a modest log of what it did — startup, the radio connection,
+                                band and mode changes, and anything that went wrong. That is usually enough for me
+                                to work out what happened, and it costs about a megabyte a day.
+                                <strong>Only turn this on if I've asked you to</strong>, or if you're chasing
+                                something yourself: it also records every single CAT command and reply, which is
+                                tens of thousands of extra lines a day. It takes effect straight away — no restart —
+                                so you can switch it on, make the fault happen, and switch it off again.
+                                Then use <a href="/Diagnostics">Diagnostics</a> to send me just that capture.
+                            </div>
+                        </div>
+
                         <hr class="my-4" />
                         <h5 class="mb-3">Optional HTTPS (for remote microphone)</h5>
                         <p class="text-muted small">

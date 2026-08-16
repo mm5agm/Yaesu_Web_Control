@@ -318,7 +318,16 @@ namespace Yaesu_Web_Control.Pages
                     : 8443;
                 current.HttpsSanHosts = Settings.HttpsSanHosts ?? "";
 
+                // Diagnostics
+                current.DetailedLogging = Settings.DetailedLogging;
+
                 await _settingsService.SaveSettingsAsync(current);
+
+                // Apply the log level immediately rather than at next startup.
+                // A user who has just been asked for a detailed log needs it to
+                // cover the fault they are about to reproduce, and restarting
+                // to enable logging can clear the state that caused it.
+                Yaesu_Web_Control.Services.LogLevelController.Apply(current.DetailedLogging);
 
                 // Only reconnect the radio if something that actually affects the
                 // CAT link changed — Radio Model (different init command set),

@@ -24,11 +24,29 @@ namespace Yaesu_Web_Control.Controllers
             var logDir = Path.Combine(appData, "MM5AGM", "Yaesu Web Control", "logs");
             if (!Directory.Exists(logDir)) return null;
 
-            // Today's file, falling back to the newest if the app started on a
-            // previous day and hasn't rolled over to today's file yet.
-            var todayPath = Path.Combine(logDir, $"ywc-{DateTime.Now:yyyyMMdd}.log");
+            // When Detailed logging is on, that file is the one worth sending —
+            // it is a superset of the normal log, so there is no reason to hand
+            // back the trimmed version. Falls through to the normal log if the
+            // detail file doesn't exist yet (switched on seconds ago).
+            if (Services.LogLevelController.IsDetailed)
+            {
+                var detailPath = Newest(logDir, "ywc-detail-", $"ywc-detail-{DateTime.Now:yyyyMMdd}.log");
+                if (detailPath != null) return detailPath;
+            }
+
+            return Newest(logDir, "ywc-", $"ywc-{DateTime.Now:yyyyMMdd}.log");
+        }
+
+        // Today's file, falling back to the newest match if the app started on a
+        // previous day and hasn't rolled over to today's file yet.
+        private static string? Newest(string logDir, string prefix, string todayName)
+        {
+            var todayPath = Path.Combine(logDir, todayName);
             if (System.IO.File.Exists(todayPath)) return todayPath;
-            return new DirectoryInfo(logDir).GetFiles("ywc-*.log")
+
+            return new DirectoryInfo(logDir).GetFiles($"{prefix}*.log")
+                // "ywc-*" would otherwise also match "ywc-detail-*".
+                .Where(f => prefix != "ywc-" || !f.Name.StartsWith("ywc-detail-", StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(f => f.LastWriteTimeUtc)
                 .FirstOrDefault()?.FullName;
         }

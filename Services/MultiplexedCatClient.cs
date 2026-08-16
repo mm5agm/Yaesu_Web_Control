@@ -38,7 +38,10 @@ namespace Yaesu_Web_Control.Services
 
         public async Task<string> SendCommandAsync(string command, string clientId, CancellationToken cancellationToken = default, int timeoutMs = 150)
         {
-            _logger.LogWarning("[sent] {Command}", command.Trim());
+            // Debug, not Warning: this fires for every CAT command the app sends
+            // (hundreds per minute once the scope is polling). At Warning it made
+            // routine traffic indistinguishable from real problems in a user's log.
+            _logger.LogDebug("[sent] {Command}", command.Trim());
             var result = await _multiplexer.SendCommandAsync(command, clientId, cancellationToken, timeoutMs);
             return result ?? string.Empty; // Guarantees non-null return
         }

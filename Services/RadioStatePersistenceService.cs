@@ -70,7 +70,9 @@ namespace Yaesu_Web_Control.Services
 
                     var json = JsonSerializer.Serialize(state, options);
                     File.WriteAllText(_filePath, json);
-                    _logger.LogInformation("Radio state saved to {FilePath}: MicGain={MicGain}, Power={Power}", 
+                    // Debug: a routine save on a timer, not an event worth a line in
+                    // every user's log. The load at startup stays at Information.
+                    _logger.LogDebug("Radio state saved to {FilePath}: MicGain={MicGain}, Power={Power}",
                         _filePath, state.MicGain, state.Power);
                 }
             }

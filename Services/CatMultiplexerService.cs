@@ -96,7 +96,9 @@ namespace Yaesu_Web_Control.Services
             // Suppress high-frequency RM meter poll responses from logs
             if (!message.StartsWith("RM"))
             {
-                _logger.LogInformation("[CatMultiplexerService] OnMessageReceived: {Message}", message);
+                // Debug: the S-meter alone lands here ~10 times a second. This was
+                // the single largest contributor to a 12 MB/day log file.
+                _logger.LogDebug("[CatMultiplexerService] OnMessageReceived: {Message}", message);
             }
 
             if (message.Length < 2) return;

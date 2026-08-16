@@ -357,9 +357,9 @@ namespace Yaesu_Web_Control.Controllers
                 await EnsureConnectedAsync();
             }
 
-            // Log what we're returning for debugging
-            _logger.LogInformation("[API] GetStatus called");
-            _logger.LogInformation("[API Status] Returning: FreqA={FreqA}, BandA={BandA}, FreqB={FreqB}, BandB={BandB}",
+            // Debug: every browser status poll came through here, two lines each.
+            _logger.LogDebug("[API] GetStatus called");
+            _logger.LogDebug("[API Status] Returning: FreqA={FreqA}, BandA={BandA}, FreqB={FreqB}, BandB={BandB}",
                 _radioStateService.FrequencyA, _radioStateService.BandA,
                 _radioStateService.FrequencyB, _radioStateService.BandB);
 

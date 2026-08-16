@@ -85,7 +85,10 @@ namespace Yaesu_Web_Control.Services
                 };
 
                 var json = JsonSerializer.Serialize(settings, options);
-                _logger.LogInformation("Serialized to JSON: {Json}", json);
+                // Debug: this is the entire settings file, including the user's
+                // callsign and local paths. It belongs in a log the user opted
+                // into for a bug report, not in every log by default.
+                _logger.LogDebug("Serialized to JSON: {Json}", json);
 
                 await File.WriteAllTextAsync(_settingsFilePath, json);
                 _cachedSettings = settings;
@@ -96,7 +99,7 @@ namespace Yaesu_Web_Control.Services
                 if (File.Exists(_settingsFilePath))
                 {
                     var verify = await File.ReadAllTextAsync(_settingsFilePath);
-                    _logger.LogInformation("Verification: File content after save: {Content}", verify);
+                    _logger.LogDebug("Verification: File content after save: {Content}", verify);
                 }
             }
             catch (Exception ex)

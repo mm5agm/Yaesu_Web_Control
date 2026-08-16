@@ -155,7 +155,7 @@ namespace Yaesu_Web_Control.Services
             _logger.LogDebug("[BroadcastUpdate] Broadcasting {Property} = {Value}", property, value);
             if (property == "PowerMeter")
             {
-                _logger.LogWarning("[DEBUG][PowerMeter] Broadcasting PowerMeter value: {@Value}", value);
+                _logger.LogDebug("[PowerMeter] Broadcasting PowerMeter value: {@Value}", value);
             }
             // Special case: PowerMeter should include isTransmitting for frontend sync
             if (property == "PowerMeter")

@@ -30,6 +30,22 @@
 
         public string RadioModel { get; set; } = "FTdx101MP"; // MP = dual receiver, D = single receiver
 
+        /// <summary>
+        /// When true, the log file records Debug as well as Information — every
+        /// CAT command sent, every reply received, every state save and every
+        /// browser status poll. Default OFF: on a live radio that is ~85,000
+        /// extra lines and ~12 MB a day, almost none of which anyone ever reads.
+        ///
+        /// The normal log is NOT switched off by this, only trimmed. An
+        /// opt-in-only log is never present for the first occurrence of an
+        /// intermittent fault, which is the occurrence that gets reported.
+        ///
+        /// Applied live via <see cref="Services.LogLevelController"/> — no
+        /// restart, because restarting to enable logging can destroy the state
+        /// that caused the bug.
+        /// </summary>
+        public bool DetailedLogging { get; set; } = false;
+
 
         // External Applications - Command Lines.
         // RULE: paths containing spaces MUST be wrapped in double quotes; any
