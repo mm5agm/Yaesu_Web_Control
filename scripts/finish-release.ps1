@@ -330,6 +330,18 @@ Re-run with -SkipVersionCheck to release without them.
             }
         }
     }
+
+    # --- manual navigation, a hard check ---------------------------------
+    # Unlike the staleness heuristic above, this one blocks. Broken anchors
+    # and sections missing from the contents are objective defects, not
+    # judgements about prose, so there is no reason to ship one. Both got
+    # into the manual on 2026-08-16 and neither was visible while reading
+    # the file -- a broken anchor renders as a normal link and just does
+    # nothing. -SkipVersionCheck bypasses this along with the rest.
+    & (Join-Path $PSScriptRoot 'check-manual-links.ps1')
+    if ($LASTEXITCODE -ne 0) {
+        throw "USER_MANUAL.md has broken links or sections missing from the contents (listed above). Fix them, or re-run with -SkipVersionCheck."
+    }
 }
 
 # --- 1. commit pending work on develop -------------------------------------
