@@ -32,6 +32,7 @@
    - 5.17 [DX Spots List](#517-dx-spots-list)
    - 5.18 [Audio Filter popout](#518-audio-filter-popout)
    - 5.19 [VC Tune Preselector (FTdx101MP)](#519-vc-tune-preselector-ftdx101mp)
+   - 5.20 [Radio Scope — the radio's own display (FTdx101MP and FTdx101D)](#520-radio-scope--the-radios-own-display-ftdx101mp-and-ftdx101d)
 6. [Settings Page](#6-settings-page)
    - 6.1 [Radio Connection](#61-radio-connection)
    - 6.2 [Web Server Settings](#62-web-server-settings)
@@ -465,6 +466,8 @@ The slider snaps to 5 W steps for ease of dragging, but the numerical label show
 ### 5.4 Spectrum Display
 
 The spectrum display is only visible if an SDR device has been configured in Settings (**Windows host only** — see §6.3). It shows a real-time spectrum and scrolling waterfall of the band around the current VFO A frequency.
+
+This panel is drawn by YWC from your SDR. It is not the radio's own scope, and nothing here changes what the radio is displaying. To drive the radio's screen instead — its span, waterfall or 3DSS, reference level — see §5.20, which needs no SDR at all.
 
 **Span buttons** — Click **250k**, **500k**, **1M**, or **2M** to change the visible bandwidth. The display recentres on VFO A.
 
@@ -1034,6 +1037,61 @@ Some FTdx101MP units have an optional **VC Tune** preselector fitted to the MAIN
 All changes are confirmed by reading the radio's state back after each command, so the displayed state always reflects what the radio actually has.
 
 **If the VC Tune controls do not appear on your FTdx101MP,** your unit's hardware revision is likely not in the supported list. Check the radio firmware and hardware revision via the front-panel menu and raise a report on the [GitHub Issues page](https://github.com/mm5agm/Yaesu_Web_Control/issues) if you believe your hardware should be able to support VT CAT.
+
+---
+
+### 5.20 Radio Scope — the radio's own display (FTdx101MP and FTdx101D)
+
+**This is not the spectrum panel in §5.4.** The two are easy to confuse, so it is worth being clear about which is which:
+
+| | §5.4 Spectrum Display | §5.20 Radio Scope |
+|---|---|---|
+| What you see | A spectrum YWC draws in the browser | The radio's own screen, unchanged |
+| Where the data comes from | An SDR on the rear-panel IF output | The radio's internal scope |
+| What the controls change | What YWC draws | What the **radio** displays |
+| Extra hardware | SDR required | None |
+
+The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It only appears on radios where I have verified the CAT commands against the hardware — currently the FTdx101MP and FTdx101D. See "Why only the FTdx101" below.
+
+When you expand the card it reads the current settings from the radio, so it opens showing what the radio is actually doing rather than a set of defaults.
+
+#### The controls
+
+**Band (MAIN / SUB)** — chooses which of the radio's two scopes you are looking at and adjusting. The radio always displays the scope of whichever band it is operating, so "show me the SUB scope" and "make SUB the operating band" are the same request — this button does both, exactly as clicking the VFO A or VFO B panel header does. The rest of the controls then follow the band automatically.
+
+**Span** — 1k, 2k, 5k, 10k, 20k, 50k, 100k, 200k, 500k, 1M.
+
+**Display** — **W/F** (waterfall) or **3DSS**, the radio's three-dimensional spectrum stream display.
+
+**Placement** — **Center** keeps the scope centred on your operating frequency; **Cursor** moves the marker within a fixed window; **Fix** pins the window to the band regardless of where you tune.
+
+**Size** — **L** / **N** / **S**. Waterfall modes only; 3DSS has no size variants, so the buttons grey out when you select it rather than disappearing and reflowing the row.
+
+**Hold** — freezes the trace so you can study it. Click again to resume.
+
+**Marker** — shows or hides the frequency marker.
+
+**Level** — the scope reference level, −30 to +30 dB in 0.5 dB steps.
+
+#### Two behaviours that look like bugs and are not
+
+**The span button can change on its own when you switch display mode.** The radio stores a *separate span for each display mode*. I confirmed this over ten consecutive mode changes: W/F held 20 kHz and 3DSS held 1 MHz, each returning reliably. So the highlight moving is the radio reporting its own setting, and YWC deliberately does not "correct" it — re-sending the old span would overwrite a choice you made.
+
+**Changes you make at the radio appear in the browser.** Turn the SPAN knob on the front panel and the highlighted button follows within a moment, with no need to collapse and reopen the card. The radio announces front-panel scope changes over CAT and YWC listens for them. It does not announce changes YWC itself made, which is correct — those are already repainted from the command's own read-back.
+
+#### What cannot be controlled from here
+
+**Mono / Multi.** Yaesu exposes no CAT command for it on any supported model, so it stays a front-panel control. This is a limit of the radio, not of YWC.
+
+**The FTdx10 and FT-710** have the scope command in their manuals, but I have not been able to verify either against real hardware, so both are switched off rather than shipped on the strength of a document. If you own one and would like to help confirm it, please say so on the [GitHub Issues page](https://github.com/mm5agm/Yaesu_Web_Control/issues) — enabling a model is a one-line change once someone has run it on a real radio.
+
+#### Why only the FTdx101
+
+Every setting in this card was measured on my own FTdx101MP before it shipped. The radios differ more than their manuals suggest — the FT-710's command list genuinely stops one sub-command short (it has no scope Hold), and it names its scope sizes differently rather than abbreviating the same three. Guessing at those differences would produce controls that silently do nothing, which is worse than not offering them.
+
+#### Screen reader use
+
+Every button and the level slider carry labels that screen readers announce, and all of them can be renamed through the Accessibility Labels editor (§16.6) if the defaults do not suit you.
 
 ---
 
