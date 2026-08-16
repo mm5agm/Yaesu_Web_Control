@@ -480,6 +480,38 @@
                         if (message.Length >= 4 && int.TryParse(message.Substring(2, 1), out int txVfo))
                             _stateService.TxVfo = txVfo;
                         break;
+                    case "SS":
+                        // SS P1 P2 {5-char field}; — SPECTRUM SCOPE. The radio
+                        // announces scope changes made at its own front panel,
+                        // one message per sub-command, tagged with the band.
+                        //
+                        // Measured on an FTdx101MP, 2026-08-15: SPAN (P2=5),
+                        // MODE (6) and HOLD (8) all report. A mode change
+                        // arrives as TWO messages a few ms apart — the new mode
+                        // and the span that mode carries, because the radio
+                        // stores span per display mode. MARKER and LEVEL were
+                        // never observed, which may mean they do not report or
+                        // may only mean they were not touched during the test;
+                        // routing on P2 instead of listing sub-commands means it
+                        // costs nothing to be wrong about that.
+                        //
+                        // Deliberately not stored: the scope panel holds this
+                        // state in the browser and re-reads it on every expand,
+                        // and it is the only consumer. See BroadcastTransient.
+                        if (message.Length >= 10)
+                        {
+                            var ss = message.TrimEnd(';');
+                            if (ss.Length == 9)
+                            {
+                                _stateService.BroadcastTransient("ScopeSetting", new
+                                {
+                                    band    = ss[2] == '1' ? "sub" : "main",
+                                    setting = ss[3].ToString(),
+                                    field   = ss.Substring(4, 5)
+                                });
+                            }
+                        }
+                        break;
                     case "VS":
                         // VS{n}; — VFO SELECT: 0=VFO-A active (operating/RX),
                         // 1=VFO-B active. On single-receiver radios this is

@@ -784,6 +784,18 @@
         </div>
     </div>
 
+    @* Controls for the RADIO's own scope, sent over CAT (SS command). Renders
+       only on models that have the command; collapsed by default so the page
+       gains one header row, not a wall of controls.
+
+       Placement is not settled. It sits above YWC's own spectrum panels here
+       because both concern "what am I looking at on which band", but it could
+       equally live beside the meters or behind a toolbar button. It is a
+       partial precisely so that argument can be had by moving one line.
+
+       See docs/design/scope-control-via-cat.md. *@
+    <partial name="_RadioScopePartial" model="@Model.RadioModel" />
+
     <!-- Spectrum Display — dual-VFO layout (v2.3.0+).
          Each panel has its own canvas. Mono A / Mono B / Multi toggle below
          hides/shows individual panels. Outer container hides itself when no
@@ -2404,6 +2416,7 @@
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -2438,6 +2451,11 @@
         document.addEventListener('DOMContentLoaded', function () {
             initFreqKeyboard();
             initMemoriesPanel();
+
+            // Radio-scope CAT controls. The constructor no-ops when the card is
+            // absent, which is the case on every model without the SS command,
+            // so there is no capability check to keep in sync here.
+            window.radioScopeControl = new RadioScopeControl();
 
             // ── UTC clock in the top bar ──────────────────────────────────────
             const utcClockEl = document.getElementById('utcClock');

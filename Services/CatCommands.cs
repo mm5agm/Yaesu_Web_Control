@@ -321,6 +321,152 @@
         };
     }
 
+    /// <summary>
+    /// Frame construction for SS (SPECTRUM SCOPE) — the radio's OWN display,
+    /// not YWC's SDR spectrum panel. See docs/design/scope-control-via-cat.md.
+    ///
+    /// Frame shape, confirmed against a real FTdx101MP rather than inferred from
+    /// the CAT manual (whose table is mangled by the PDF layout):
+    ///
+    ///     Set / Answer   SS P1 P2 P3P4P5P6P7 ;    10 characters
+    ///     Read           SS P1 P2 ;                5 characters
+    ///
+    /// P3-P7 is ONE five-character value field, not five one-character fields.
+    /// LEVEL uses all five ("+05.0"); every other sub-command uses the first
+    /// character and pads the rest with zeros. Reading SS04; on the bench
+    /// answered SS04+05.0; which is what settles it.
+    ///
+    /// Everything here builds the padded field in one place on purpose. Writing
+    /// the pad at each call site is exactly the kind of detail that gets
+    /// miscounted, and the radio is tolerant enough of a malformed tail to hide
+    /// the mistake — the write probe accidentally sent a NUL in the pad and the
+    /// radio still applied the value.
+    /// </summary>
+    public static class ScopeCommands
+    {
+        public const string Opcode = "SS";
+
+        // P2 sub-command selectors.
+        public const char Speed  = '0';
+        public const char Peak   = '1';
+        public const char Marker = '2';
+        public const char Color  = '3';
+        public const char Level  = '4';
+        public const char Span   = '5';
+        public const char Mode   = '6';
+        public const char AfFft  = '7';
+        public const char Hold   = '8';   // absent on FT-710
+
+        /// <summary>P1: 0 = MAIN scope, 1 = SUB scope. Fixed at 0 on every
+        /// model except the FTdx101 family.</summary>
+        public static char BandDigit(bool isSub) => isSub ? '1' : '0';
+
+        /// <summary>Read frame, e.g. Read('0', Span) => "SS05;".</summary>
+        public static string Read(char band, char subCommand) =>
+            $"{Opcode}{band}{subCommand};";
+
+        /// <summary>
+        /// Set frame for the single-character sub-commands (everything except
+        /// LEVEL), e.g. Set('0', Span, '4') => "SS0540000;".
+        /// </summary>
+        public static string Set(char band, char subCommand, char value) =>
+            $"{Opcode}{band}{subCommand}{value}0000;";
+
+        /// <summary>
+        /// Set frame for LEVEL, which is the one sub-command that uses the whole
+        /// five-character field: -30.0 to +30.0 in 0.5 dB steps, always signed
+        /// and always zero-padded to two integer digits ("+05.0", "-30.0").
+        /// </summary>
+        public static string SetLevel(char band, double db)
+        {
+            // Clamp then snap to the radio's 0.5 dB grid; a value off the grid
+            // is not a rounding nicety, the radio rejects the frame.
+            var clamped = Math.Clamp(db, -30.0, 30.0);
+            var snapped = Math.Round(clamped * 2, MidpointRounding.AwayFromZero) / 2;
+            var sign    = snapped < 0 ? '-' : '+';
+            var field   = $"{sign}{Math.Abs(snapped):00.0}";
+            return $"{Opcode}{band}{Level}{field};";
+        }
+
+        /// <summary>
+        /// Extracts the five-character value field from an SS answer, or null if
+        /// the answer is not the expected shape. "SS0540000;" => "40000".
+        ///
+        /// The terminator is optional on the way in. On the wire the radio always
+        /// sends it, but CatMultiplexerService strips it before handing the
+        /// answer back, so a parser that insists on it works perfectly against a
+        /// raw serial probe and then returns null for everything in the actual
+        /// app. It did exactly that once already.
+        /// </summary>
+        public static string? ValueField(string? answer, char band, char subCommand)
+        {
+            if (string.IsNullOrEmpty(answer)) return null;
+            var a = answer.TrimEnd();
+            if (a.EndsWith(';')) a = a[..^1];
+            if (a.Length != 9) return null;
+            if (a[0] != 'S' || a[1] != 'S') return null;
+            if (a[2] != band || a[3] != subCommand) return null;
+            return a.Substring(4, 5);
+        }
+
+        /// <summary>
+        /// The P3 character of an SS answer — the value for every sub-command
+        /// except LEVEL. Returns null if the answer did not parse.
+        /// </summary>
+        public static char? Value(string? answer, char band, char subCommand) =>
+            ValueField(answer, band, subCommand) is { Length: > 0 } f ? f[0] : null;
+
+        // ── MODE (P2=6) composition ──────────────────────────────────────────
+        //
+        // The twelve mode values are not an arbitrary list, they are a 2x3x3
+        // grid, which is why the UI offers three small selectors rather than one
+        // twelve-entry dropdown:
+        //
+        //   0,1,2  3DSS      CENTER / CURSOR / FIX          (no size variants)
+        //   3,4,5  W/F       CENTER  x  L / N / S
+        //   6,7,8  W/F       CURSOR  x  L / N / S
+        //   9,A,B  W/F       FIX     x  L / N / S
+        //
+        // The FT-710 uses the same positions with only two sizes
+        // (EXPAND / NORMAL) and documents the third slot of each group as "-",
+        // i.e. it does not exist. Callers must therefore range-check `size`
+        // against RadioCapabilities.ScopeSizeLabels for the model.
+
+        public const int PlacementCenter = 0;
+        public const int PlacementCursor = 1;
+        public const int PlacementFix    = 2;
+
+        /// <summary>
+        /// Composes the P3 mode character from the three axes the UI exposes.
+        /// 3DSS has no size variants, so <paramref name="size"/> is ignored when
+        /// <paramref name="is3dss"/> is true.
+        /// </summary>
+        public static char ModeValue(bool is3dss, int placement, int size)
+        {
+            placement = Math.Clamp(placement, 0, 2);
+            if (is3dss) return (char)('0' + placement);
+
+            var index = 3 + placement * 3 + Math.Clamp(size, 0, 2);
+            // 10 and 11 are 'A' and 'B', not '10' and '11'.
+            return index < 10 ? (char)('0' + index) : (char)('A' + index - 10);
+        }
+
+        /// <summary>Decomposes a P3 mode character back into the three axes.</summary>
+        public static (bool Is3dss, int Placement, int Size) ParseMode(char value)
+        {
+            var index = value switch
+            {
+                >= '0' and <= '9' => value - '0',
+                >= 'A' and <= 'B' => value - 'A' + 10,
+                >= 'a' and <= 'b' => value - 'a' + 10,
+                _                 => 0
+            };
+            if (index < 3) return (true, index, 0);
+            var offset = index - 3;
+            return (false, offset / 3, offset % 3);
+        }
+    }
+
     public static class IFCommandParser
     {
         public static (long frequency, string mode) ParseIFResponse(string response)

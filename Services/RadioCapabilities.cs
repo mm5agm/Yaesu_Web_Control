@@ -112,6 +112,92 @@ public static class RadioCapabilities
         !string.IsNullOrEmpty(hardwareId) && !_vcTuneCatBlockedIds.Contains(hardwareId);
 
     /// <summary>
+    /// True when the radio's own spectrum scope can be driven over CAT with the
+    /// SS command, so YWC can change what the radio's front-panel display shows
+    /// (span, 3DSS vs waterfall, fix/centre/cursor, hold, marker).
+    ///
+    /// This is deliberately not the same question as "does YWC show a spectrum
+    /// for this radio" — that is YWC's own SDR panel, which is unrelated
+    /// hardware. See docs/design/scope-control-via-cat.md.
+    ///
+    /// Confirmed on FTdx101MP (Colin MM5AGM, 2026-08-15): all nine SS
+    /// sub-commands answered a Read, and Set frames for SPAN, HOLD and MARKER
+    /// were written and read back on both MAIN and SUB
+    /// (scripts/probe/ss-probe.ps1 and ss-write-probe.ps1).
+    ///
+    /// Only the FTdx101 pair is enabled, and that is the whole point of this
+    /// switch. The FTdx10 and FT-710 also document SS, and the tables below
+    /// (hold, size labels) carry their values — but nobody has yet sent a Set
+    /// frame to either radio. These are writes: they change what appears on
+    /// somebody's front panel, and the bench run turned up two behaviours the
+    /// manuals do not mention (span is stored per display mode, and a Read
+    /// straight after a Write can come back stale). Shipping manual-derived
+    /// writes to an untested model would find that out on an operator's rig.
+    /// Enabling a model here is a one-line change once someone has run
+    /// scripts/probe/ss-write-probe.ps1 against it and reported the result.
+    ///
+    /// Excluded, and not by oversight: the FTDX3000 has no SS command at all —
+    /// its scope lives in EX menu items 124-148, which is writing configuration
+    /// rather than operating a control — and the FTDX5000 has only a DP
+    /// display-page selector.
+    /// </summary>
+    public static bool SupportsSpectrumScopeCat(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" => true,
+        _ => false
+    };
+
+    /// <summary>
+    /// True when the scope supports HOLD (freeze the trace) via SS P2=8.
+    /// The FT-710's SS sub-command list genuinely stops at 7 — it has fewer
+    /// functions, not a gap in its manual — so the Hold button is hidden there
+    /// rather than sent and silently ignored.
+    ///
+    /// The FTdx10 stays listed here even though SupportsSpectrumScopeCat gates
+    /// it off today. That is not an inconsistency to tidy up: this table is
+    /// manual-derived knowledge worth keeping, and it is never consulted unless
+    /// the gate above lets the model through.
+    /// </summary>
+    public static bool SupportsScopeHold(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" => true,
+        _ => false
+    };
+
+    /// <summary>
+    /// True when the radio has two independently-configurable scopes addressed
+    /// by SS P1 (0 = MAIN, 1 = SUB), so the UI needs a MAIN/SUB selector.
+    /// Proven on the FTdx101MP by reading both at once: MAIN answered span=1 MHz
+    /// mode=W/F CURSOR (L) while SUB answered span=500 kHz mode=3DSS FIX.
+    /// On every other model SS P1 is documented as "0: (Fixed)".
+    /// </summary>
+    public static bool HasPerReceiverScopes(string radioModel) =>
+        radioModel is "FTdx101MP" or "FTdx101D";
+
+    /// <summary>
+    /// The size variants of the waterfall scope modes, in SS P2=6 value order.
+    ///
+    /// The FTdx101 and FTdx10 offer three (Large / Normal / Small); the FT-710
+    /// offers two, and calls them something else entirely (Expand / Normal).
+    /// Same command, same value positions, different vocabulary and different
+    /// length — so this must stay a per-model list. Do not be tempted to
+    /// collapse it into one shared enum: on the FT-710 the third slot of each
+    /// group (values 5, 8 and the one after B) is documented as "-", i.e. it
+    /// does not exist, and sending it would be a guess.
+    ///
+    /// Returns an empty array for models with no CAT scope control.
+    /// Like the hold table above, the FTdx10 and FT-710 rows are retained
+    /// while SupportsSpectrumScopeCat gates those models off — see the note
+    /// there before deleting them.
+    /// </summary>
+    public static string[] ScopeSizeLabels(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" => ["L", "N", "S"],
+        "FT-710"                              => ["Expand", "Normal"],
+        _                                     => []
+    };
+
+    /// <summary>
     /// Returns the P1 character for a per-VFO CAT command, given the
     /// user's (or voice command's) targeted receiver ("A" or "B"). On
     /// single-receiver radios always "0" -- the firmware hard-codes that
