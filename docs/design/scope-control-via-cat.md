@@ -8,7 +8,9 @@ front panel, so manual-derived writes do not ship unverified. Bench-tested on
 an FTdx101MP. Raised by Colin MM5AGM 2026-08-15.
 **Bench evidence:** `SS` read-probe and write-probe run against a real
 FTdx101MP (ID0682) on COM4, 2026-08-15, plus end-to-end testing through the
-app's own endpoints. Results in §2; what the implementation turned up in §6.
+app's own endpoints. Live sync from the radio's own front panel confirmed
+end to end 2026-08-16 (§6.1). Results in §2; what the implementation turned
+up in §6.
 **Related:** PR #97 (USB video capture of the radio's screen), and the
 overlay idea this note replaces.
 
@@ -328,19 +330,33 @@ One trap for the next person: **`CatMultiplexerService` strips the trailing
 serial probe and then returns null for everything inside the app. That happened
 here; `ScopeCommands.ValueField` now treats the terminator as optional.
 
-### 6.1 The one gap in the live-sync evidence
+### 6.1 Live sync, confirmed end to end
 
-The two halves of live sync were verified separately, and never as one loop:
+The two halves were originally verified separately — the radio half by the
+capture above, the browser half by `scripts/probe/cdp-scope-remote.mjs`
+injecting a synthetic `ScopeSetting` envelope — and for a day that was all the
+evidence there was.
 
-- **Radio half** — the capture above proves the frames arrive.
-- **Browser half** — `scripts/probe/cdp-scope-remote.mjs` injects a synthetic
-  `ScopeSetting` envelope and checks `applyRemote` patches the one sub-command
-  and repaints without re-reading.
+**Joined up and confirmed 2026-08-16 (Colin MM5AGM, FTdx101MP on COM4),** on
+`develop` after the merge, with the CAT log watched from the other side while
+the knob was turned. The panel was expanded first and its lazy read answered
+all seven sub-commands with no drops:
 
-What has no record is the joined-up path: hand on the rig, and the panel in a
-real browser moving in response. Closing it is one action — expand the panel,
-turn the span knob on the radio, watch the highlighted span button. Until
-someone does, treat live sync as working-but-unconfirmed end to end.
+```
+SPAN 4 · MODE 1 · MARKER 1 · PEAK 0 · SPEED 2 · LEVEL +02.5 · HOLD 0
+```
+
+Four front-panel span changes then arrived unsolicited — `SS0500000`,
+`SS0560000`, `SS0520000`, `SS0530000` — and the highlighted span button in the
+browser followed each one, with no re-read and no collapse-and-expand.
+
+**What this does and does not cover.** It confirms SPAN, which is the path all
+sub-commands share: dispatcher → `BroadcastTransient` → `ScopeSetting` →
+`applyRemote`. It does **not** separately exercise the two-frames-a-few-ms-apart
+case that a front-panel *mode* change produces, nor HOLD. Those go through the
+same code with a different `P2`, so they are expected to work — but expected is
+not measured, and the mode pair is the one with an ordering hazard worth
+proving. MARKER and LEVEL still have not been seen announced at all (§6).
 
 ### Still open
 
