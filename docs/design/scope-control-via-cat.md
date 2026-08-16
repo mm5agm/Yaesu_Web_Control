@@ -265,17 +265,46 @@ had. Note the conceptual trap it is guarding against: YWC's SDR spectrum
 display and the radio's internal scope are entirely different things, which is
 why the card header says "the radio's own display" out loud.
 
-`CatMessageDispatcher` was deliberately **not** touched. Read-back after write
-covers the cases the UI actually has, and adding `SS` to the dispatcher only
-pays off if the radio really does report scope changes over auto-information —
-which is still unverified (§6).
+`CatMessageDispatcher` was deliberately **not** touched in the first landing.
+Read-back after write covered the cases the UI actually had, and adding `SS` to
+the dispatcher only paid off if the radio really did report scope changes over
+auto-information. It does (§6), so a `case "SS":` was added afterwards and live
+sync now rides on it.
 
 ---
 
 ## 6. What the implementation turned up
 
-Two findings that were not in any manual, both measured on an FTdx101MP through
-the app's own endpoints.
+Three findings that were not in any manual, all measured on an FTdx101MP
+through the app's own endpoints.
+
+**The radio announces front-panel scope changes over auto-information.** This
+was an open question when the section below was first written; it is not any
+more. A temporary log line on the `SS` opcode, with a hand on the rig, caught
+SPAN (P2=5), MODE (6) and HOLD (8) all arriving unbidden and tagged with the
+band:
+
+```
+SS0510000   MAIN  span 5  (50k)
+SS0590000   MAIN  span 9  (1M)
+SS0580000   MAIN  span 8  (500k)  \ 12 ms apart
+SS0620000   MAIN  mode 2  3DSS Fix /
+SS0810000   MAIN  hold ON
+SS0800000   MAIN  hold OFF
+```
+
+A mode change arrives as **two** messages a few ms apart — the new mode, then
+the span that mode carries, because of the per-mode span above. Following it
+live therefore gets that behaviour right with no special handling. MARKER and
+LEVEL were never observed, and it is not known whether the radio omits them or
+they simply were not touched; the handler routes on the sub-command number
+rather than listing them, so being wrong about that costs nothing. The radio
+does **not** echo changes YWC itself sent — only front-panel ones, which is
+what you want, since a write's own read-back already repaints those.
+
+Live sync is built on this (`CatMessageDispatcher` → `BroadcastTransient` →
+`ScopeSetting` → `radio-scope.js applyRemote`). See §6.1 for what that leaves
+untested.
 
 **Span is stored per display mode.** Setting the span to 20 kHz and then
 switching mode appeared at first to "revert" it. It does not: the radio keeps a
@@ -299,26 +328,36 @@ One trap for the next person: **`CatMultiplexerService` strips the trailing
 serial probe and then returns null for everything inside the app. That happened
 here; `ScopeCommands.ValueField` now treats the terminator as optional.
 
+### 6.1 The one gap in the live-sync evidence
+
+The two halves of live sync were verified separately, and never as one loop:
+
+- **Radio half** — the capture above proves the frames arrive.
+- **Browser half** — `scripts/probe/cdp-scope-remote.mjs` injects a synthetic
+  `ScopeSetting` envelope and checks `applyRemote` patches the one sub-command
+  and repaints without re-reading.
+
+What has no record is the joined-up path: hand on the rig, and the panel in a
+real browser moving in response. Closing it is one action — expand the panel,
+turn the span knob on the radio, watch the highlighted span button. Until
+someone does, treat live sync as working-but-unconfirmed end to end.
+
 ### Still open
 
-1. **Does `SS` come back over auto-information?** Change the span on the
-   radio's own touchscreen with a CAT monitor running and see whether an `SS`
-   frame arrives unbidden. Only worth answering if the read-back approach turns
-   out to feel stale in use.
-2. **The FTdx10 and FT-710 are manual-only** — nothing on either has been
+1. **The FTdx10 and FT-710 are manual-only** — nothing on either has been
    hardware-verified, so both are **gated off** (decided 2026-08-16; see the
    Status note at the top). Re-enabling either is one line in
    `RadioCapabilities.SupportsSpectrumScopeCat` plus a probe run. Fabio
    (FTdx10) can confirm his whenever video-tx frees him; nobody currently runs
    an FT-710 actively enough to confirm that one, so it stays gated until
    someone steps up.
-3. **The meter selector is not built**, and the reason is in §4: it has to
+2. **The meter selector is not built**, and the reason is in §4: it has to
    cooperate with the borrow-and-restore in `MeterPollingService` or it will
    appear to randomly revert. That is a design decision to take deliberately,
    not a control to bolt on.
-4. **Is remote Mono/Multi actually wanted?** If yes it needs the overlay this
+3. **Is remote Mono/Multi actually wanted?** If yes it needs the overlay this
    note was written to avoid — but only for that one control.
-5. **Placement.** Above the spectrum panels is a starting position, not a
+4. **Placement.** Above the spectrum panels is a starting position, not a
    verdict.
 
 ---
