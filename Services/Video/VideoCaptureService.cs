@@ -26,7 +26,12 @@ namespace Yaesu_Web_Control.Services.Video
 
         private const int StopWaitMs = 8000;
         private const int SettingsRefreshMs = 500;
-        private const int EmptyFrameGiveUp = 45;
+
+        /// <summary>
+        /// DirectShow/MJPEG Read can keep returning empty (or block ~1 s) after
+        /// unplug. Give up on wall-clock, not a retry counter × wait.
+        /// </summary>
+        private const int EmptyFrameGiveUpMs = 5000;
 
         /// <summary>
         /// Bumped when a capture loop is cancelled/orphaned so a stuck worker
@@ -71,6 +76,12 @@ namespace Yaesu_Web_Control.Services.Video
         private int _deviceOpenFlag;
         private bool _mfUnavailable;
         private bool _dshowMjpegUnavailable;
+        /// <summary>
+        /// Set by <see cref="MarkDisconnected"/>. The outer loop must exit so
+        /// we do not reopen <c>index:N</c> after Windows hands that slot to
+        /// another camera.
+        /// </summary>
+        private int _haltAfterDisconnect;
         private VideoCapture? _liveCapture;
         private TaskCompletionSource<bool> _framePulse = NewFramePulse();
 
@@ -364,6 +375,9 @@ namespace Yaesu_Web_Control.Services.Video
 
         private void RunCaptureLoop(CancellationToken ct, int epoch)
         {
+            Interlocked.Exchange(ref _haltAfterDisconnect, 0);
+            _mfUnavailable = false;
+            _dshowMjpegUnavailable = false;
             SetStatus("connecting");
             _lastError = null;
             BeginPreciseTimer();
@@ -394,6 +408,11 @@ namespace Yaesu_Web_Control.Services.Video
                     continue;
                 }
 
+                // New open (including a user device-key change) must re-probe
+                // MJPEG; the latches only skip fall-through inside this attempt.
+                _mfUnavailable = false;
+                _dshowMjpegUnavailable = false;
+
                 var maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
                 var rates = VideoDeviceFpsCaps.PeekRates(settings.VideoCaptureDeviceKey);
                 var targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps, rates);
@@ -407,7 +426,7 @@ namespace Yaesu_Web_Control.Services.Video
                     if (OperatingSystem.IsWindows() && !_dshowMjpegUnavailable &&
                         RunDshowMjpegSession(index, maxWidth, targetFps, ct))
                     {
-                        if (ct.IsCancellationRequested)
+                        if (ct.IsCancellationRequested || ShouldHaltAfterDisconnect())
                             break;
                         SetStatus("connecting");
                         SleepOrCancel(1000, ct);
@@ -416,7 +435,7 @@ namespace Yaesu_Web_Control.Services.Video
 
                     if (OperatingSystem.IsWindows() && !_mfUnavailable && RunMfSession(index, maxWidth, targetFps, ct))
                     {
-                        if (ct.IsCancellationRequested)
+                        if (ct.IsCancellationRequested || ShouldHaltAfterDisconnect())
                             break;
                         SetStatus("connecting");
                         SleepOrCancel(1000, ct);
@@ -433,8 +452,7 @@ namespace Yaesu_Web_Control.Services.Video
                                 : $"Could not open capture device index {index}. {openError}";
                         MarkDisconnected(detail);
                         _logger.LogWarning("Radio Display: failed to open device index {Index}: {Detail}", index, detail);
-                        SleepOrCancel(2000, ct);
-                        continue;
+                        break;
                     }
 
                     Interlocked.Exchange(ref _liveCapture, cap);
@@ -456,7 +474,7 @@ namespace Yaesu_Web_Control.Services.Video
                     var fpsWindow = Stopwatch.StartNew();
                     var streamStarted = Stopwatch.StartNew();
                     var framesInWindow = 0;
-                    var emptyStreak = 0;
+                    var emptySince = new Stopwatch();
                     var slowReadStreak = 0;
                     var fpsCollapseStreak = 0;
                     var loggedFormat = false;
@@ -596,16 +614,21 @@ namespace Yaesu_Web_Control.Services.Video
                         if (!readOk || frame.Empty())
                         {
                             DrainMacEncode();
-                            emptyStreak++;
-                            if (emptyStreak == 1 || emptyStreak % 15 == 0)
+                            if (!emptySince.IsRunning)
+                                emptySince.Start();
+                            if (emptySince.ElapsedMilliseconds < 50 ||
+                                emptySince.ElapsedMilliseconds % 1000 < 40)
                             {
                                 _logger.LogDebug(
-                                    "Radio Display: empty/failed Read streak={Streak} readMs={Ms}",
-                                    emptyStreak, readMs);
+                                    "Radio Display: empty/failed Read for {Ms} ms readMs={ReadMs}",
+                                    emptySince.ElapsedMilliseconds, readMs);
                             }
-                            if (emptyStreak >= EmptyFrameGiveUp)
+                            if (emptySince.ElapsedMilliseconds >= EmptyFrameGiveUpMs)
                             {
                                 MarkDisconnected("Capture device stopped delivering frames.");
+                                _logger.LogWarning(
+                                    "Radio Display: no frames for {Ms} ms — treating as unplug",
+                                    emptySince.ElapsedMilliseconds);
                                 break;
                             }
 
@@ -613,7 +636,7 @@ namespace Yaesu_Web_Control.Services.Video
                             continue;
                         }
 
-                        emptyStreak = 0;
+                        emptySince.Reset();
 
                         // Prefer the Mat size from the UI-thread Read — property
                         // Gets from another thread are unreliable on AVFoundation.
@@ -768,7 +791,7 @@ namespace Yaesu_Web_Control.Services.Video
                 {
                     MarkDisconnected(ex.Message);
                     _logger.LogWarning(ex, "Radio Display capture error");
-                    SleepOrCancel(2000, ct);
+                    break;
                 }
                 finally
                 {
@@ -799,14 +822,14 @@ namespace Yaesu_Web_Control.Services.Video
                     }
                 }
 
-                if (ct.IsCancellationRequested)
+                if (ct.IsCancellationRequested || ShouldHaltAfterDisconnect())
                     break;
 
                 SetStatus("connecting");
                 SleepOrCancel(ReopenSettleMs > 0 ? ReopenSettleMs : 1000, ct);
             }
 
-            if (_sessions.ViewerCount == 0)
+            if (_sessions.ViewerCount == 0 && !ShouldHaltAfterDisconnect())
                 SetStatus("idle");
         }
 
@@ -821,12 +844,15 @@ namespace Yaesu_Web_Control.Services.Video
         private bool RunMfSession(int index, int maxWidth, int targetFps, CancellationToken ct)
         {
             var opened = false;
+            var noUsableMjpegPin = false;
             var thread = new Thread(() =>
             {
                 WindowsMfMjpegSession? mf = null;
                 try
                 {
-                    mf = WindowsMfMjpegSession.TryOpen(index, targetFps, maxWidth, _logger);
+                    mf = WindowsMfMjpegSession.TryOpen(
+                        index, targetFps, maxWidth, _logger, out var noMjpeg);
+                    noUsableMjpegPin = noMjpeg;
                     if (mf is null)
                         return;
 
@@ -857,12 +883,8 @@ namespace Yaesu_Web_Control.Services.Video
             thread.Start();
             thread.Join();
 
-            if (!opened)
-            {
-                // Do not re-probe on every reconnect once we know this host's
-                // device has no ranked MJPEG pin — it costs seconds per attempt.
+            if (!opened && noUsableMjpegPin)
                 _mfUnavailable = true;
-            }
 
             return opened;
         }
@@ -879,10 +901,12 @@ namespace Yaesu_Web_Control.Services.Video
             var opened = false;
             try
             {
-                ds = WindowsDshowMjpegSession.TryOpen(index, targetFps, maxWidth, _logger);
+                ds = WindowsDshowMjpegSession.TryOpen(
+                    index, targetFps, maxWidth, _logger, out var noUsableMjpegPin);
                 if (ds is null)
                 {
-                    _dshowMjpegUnavailable = true;
+                    if (noUsableMjpegPin)
+                        _dshowMjpegUnavailable = true;
                     return false;
                 }
 
@@ -895,8 +919,6 @@ namespace Yaesu_Web_Control.Services.Video
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Radio Display DirectShow MJPEG session failed");
-                if (!opened)
-                    _dshowMjpegUnavailable = true;
                 return opened;
             }
             finally
@@ -921,7 +943,7 @@ namespace Yaesu_Web_Control.Services.Video
             var fpsWindow = Stopwatch.StartNew();
             var streamStarted = Stopwatch.StartNew();
             var framesInWindow = 0;
-            var emptyStreak = 0;
+            var emptySince = new Stopwatch();
             var fpsCollapseStreak = 0;
             var loggedFormat = false;
             using var resizedScratch = new Mat();
@@ -956,10 +978,14 @@ namespace Yaesu_Web_Control.Services.Video
                 var tick = Stopwatch.StartNew();
                 if (!session.TryReadJpeg(out var jpegBytes) || jpegBytes is null || jpegBytes.Length == 0)
                 {
-                    emptyStreak++;
-                    if (emptyStreak >= EmptyFrameGiveUp)
+                    if (!emptySince.IsRunning)
+                        emptySince.Start();
+                    if (emptySince.ElapsedMilliseconds >= EmptyFrameGiveUpMs)
                     {
                         MarkDisconnected("Capture device stopped delivering frames.");
+                        _logger.LogWarning(
+                            "Radio Display: {Via} no JPEG for {Ms} ms — treating as unplug",
+                            via, emptySince.ElapsedMilliseconds);
                         break;
                     }
 
@@ -967,7 +993,7 @@ namespace Yaesu_Web_Control.Services.Video
                     continue;
                 }
 
-                emptyStreak = 0;
+                emptySince.Reset();
                 if (!loggedFormat)
                 {
                     loggedFormat = true;
@@ -1733,8 +1759,11 @@ namespace Yaesu_Web_Control.Services.Video
 
         private void SetStatus(string status) => Volatile.Write(ref _status!, status);
 
+        private bool ShouldHaltAfterDisconnect() => Volatile.Read(ref _haltAfterDisconnect) != 0;
+
         private void MarkDisconnected(string error)
         {
+            Interlocked.Exchange(ref _haltAfterDisconnect, 1);
             _lastError = error;
             Volatile.Write(ref _measuredFps, 0);
             lock (_frameLock)

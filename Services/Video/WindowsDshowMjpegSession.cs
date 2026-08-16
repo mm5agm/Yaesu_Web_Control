@@ -77,8 +77,10 @@ namespace Yaesu_Web_Control.Services.Video
             callback.Owner = this;
         }
 
-        public static WindowsDshowMjpegSession? TryOpen(int dshowIndex, int targetFps, int maxWidth, ILogger logger)
+        public static WindowsDshowMjpegSession? TryOpen(
+            int dshowIndex, int targetFps, int maxWidth, ILogger logger, out bool noUsableMjpegPin)
         {
+            noUsableMjpegPin = false;
             if (!OperatingSystem.IsWindows())
                 return null;
             if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
@@ -178,6 +180,7 @@ namespace Yaesu_Web_Control.Services.Video
                     logger.LogInformation(
                         "Radio Display: '{Name}' DirectShow has no MJPEG pin — falling back",
                         friendly);
+                    noUsableMjpegPin = true;
                     return null;
                 }
 

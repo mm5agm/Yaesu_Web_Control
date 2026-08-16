@@ -93,8 +93,10 @@ namespace Yaesu_Web_Control.Services.Video
             DeviceName = deviceName;
         }
 
-        public static WindowsMfMjpegSession? TryOpen(int dshowIndex, int targetFps, int maxWidth, ILogger logger)
+        public static WindowsMfMjpegSession? TryOpen(
+            int dshowIndex, int targetFps, int maxWidth, ILogger logger, out bool noUsableMjpegPin)
         {
+            noUsableMjpegPin = false;
             if (!OperatingSystem.IsWindows())
                 return null;
             if (!EnsureStartup())
@@ -151,6 +153,7 @@ namespace Yaesu_Web_Control.Services.Video
                         logger.LogInformation(
                             "Radio Display: '{Name}' Media Foundation has no ranked MJPEG pin — falling back to OpenCV encode",
                             friendly);
+                        noUsableMjpegPin = true;
                         return null;
                     }
 

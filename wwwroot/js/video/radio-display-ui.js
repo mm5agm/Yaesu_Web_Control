@@ -1,7 +1,7 @@
 /**
  * Radio Display UI wiring: status poll + MJPEG img stream + controls.
  */
-import { RadioDisplayPanel } from './radio-display-panel.js?v=7';
+import { RadioDisplayPanel } from './radio-display-panel.js?v=8';
 
 const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;
@@ -23,6 +23,11 @@ let enabled = false;
 let streamActive = false;
 /** Operator asked for a live stream (Start, Auto, or pop-out handoff). */
 let wantStream = false;
+/** Host reported disconnect; do not reopen index:N until Start / device change. */
+let holdDisconnected = false;
+let holdDisconnectedDetail = '';
+/** Start is in flight; ignore a leftover disconnected status from the previous halt. */
+let awaitingCapture = false;
 let currentDeviceKey = '';
 let currentTargetFps = 15;
 let currentJpegQuality = 85;
@@ -157,11 +162,27 @@ function reconnectDelayMs() {
   return ms;
 }
 
+function clearDisconnectedHold() {
+  holdDisconnected = false;
+  holdDisconnectedDetail = '';
+}
+
+function onDeviceLost(detail) {
+  awaitingCapture = false;
+  holdDisconnected = true;
+  holdDisconnectedDetail = detail || '';
+  wantStream = false;
+  stopStream();
+  panel?.setStatus('disconnected', detail || undefined);
+  syncStreamButton();
+}
+
 function scheduleReconnect() {
   if (reconnectTimer) return;
   const delay = reconnectDelayMs();
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
+    if (holdDisconnected) return;
     if (!enabled || !panel || panel.isHiddenByUser()) return;
     if (!wantStream || !currentDeviceKey) return;
     startStream();
@@ -231,7 +252,9 @@ function stopStream() {
 }
 
 function requestStart() {
+  clearDisconnectedHold();
   wantStream = true;
+  awaitingCapture = true;
   startStream();
   syncStreamButton();
 }
@@ -351,6 +374,7 @@ async function loadDeviceSelect(selectedKey) {
 
 async function setDeviceKey(key) {
   try {
+    clearDisconnectedHold();
     stopStream();
     const res = await fetch('/api/video/device', {
       method: 'POST',
@@ -431,6 +455,7 @@ async function pollStatus(options = {}) {
     if (!panel) return;
 
     if (!data.enabled) {
+      clearDisconnectedHold();
       wantStream = false;
       panel.setStatus('unconfigured');
       lastServerStatus = 'unconfigured';
@@ -448,6 +473,7 @@ async function pollStatus(options = {}) {
     syncStreamButton();
 
     if (!currentDeviceKey) {
+      clearDisconnectedHold();
       panel.setStatus('idle', 'select a device');
       lastServerStatus = 'idle';
       stopStream();
@@ -459,7 +485,28 @@ async function pollStatus(options = {}) {
       : (data.error || undefined);
 
     let status = data.status || 'idle';
-    if (!wantStream) {
+    if (status === 'connecting' || status === 'streaming') {
+      awaitingCapture = false;
+    }
+    if (status === 'disconnected') {
+      if (awaitingCapture && wantStream) {
+        awaitingCapture = false;
+        panel.setStatus('connecting');
+        lastServerStatus = 'connecting';
+        return;
+      }
+      if (wantStream && !holdDisconnected) {
+        onDeviceLost(data.error || undefined);
+        lastServerStatus = 'disconnected';
+        return;
+      }
+    }
+    if (holdDisconnected && !wantStream) {
+      panel.setStatus('disconnected', holdDisconnectedDetail || data.error || undefined);
+      lastServerStatus = 'disconnected';
+      syncStreamButton();
+      if (attachStream) return;
+    } else if (!wantStream) {
       status = 'idle';
       panel.setStatus('idle');
       lastServerStatus = 'idle';
@@ -481,7 +528,7 @@ async function pollStatus(options = {}) {
 
     lastServerStatus = status;
 
-    if (!attachStream || panel.isHiddenByUser() || !wantStream) return;
+    if (!attachStream || panel.isHiddenByUser() || !wantStream || holdDisconnected) return;
 
     if (recovered || seqReset || blankPolls >= 2) {
       blankPolls = 0;
@@ -648,7 +695,10 @@ export async function initRadioDisplayUi(mode = 'index') {
   // Open()s the dongle while the capture loop already holds it.
   await pollStatus({ attachStream: false });
   await loadDeviceSelect(currentDeviceKey);
-  if (wantStream && enabled && currentDeviceKey && !panel.isHiddenByUser()) startStream();
+  if (wantStream && enabled && currentDeviceKey && !panel.isHiddenByUser()) {
+    awaitingCapture = true;
+    startStream();
+  }
   syncStreamButton();
   if (statusTimer) clearInterval(statusTimer);
   statusTimer = setInterval(pollStatus, STATUS_POLL_MS);

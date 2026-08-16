@@ -75,7 +75,7 @@ export class RadioDisplayPanel {
     if (status === 'connecting' || status === 'streaming') {
       this._placeholder.textContent = 'Starting…';
     } else if (status === 'disconnected') {
-      this._placeholder.textContent = 'Disconnected';
+      this._placeholder.textContent = 'Disconnected — refresh the device list, then Start';
     } else if (status === 'error') {
       this._placeholder.textContent = detail || 'No video';
     } else if (detail === 'select a device') {
