@@ -267,10 +267,16 @@ namespace Yaesu_Web_Control.Services
                 if (line.Length == 0) continue;
 
                 // Log every line received. Three destinations:
-                //   1. Standard ILogger (filtered to Information for DxCluster)
+                //   1. Standard ILogger (Debug — see below)
                 //   2. Browser-visible ring buffer via /api/dxcluster/recent
                 //   3. Diagnostic file (%APPDATA%\MM5AGM\Yaesu Web Control\dx-cluster.log)
-                _logger.LogInformation("[DxCluster] << {Line}", line);
+                //
+                // Debug, not Information: a busy cluster feed is a line every two
+                // or three seconds, which was ~5 MB a day and the largest single
+                // source left in the default log. Nothing is lost by demoting it —
+                // destinations 2 and 3 both keep the full stream regardless of
+                // log level, and (3) is the file to look at for cluster problems.
+                _logger.LogDebug("[DxCluster] << {Line}", line);
                 AppendLogFile($"<< {line}");
                 lock (_recentLinesLock)
                 {

@@ -109,7 +109,7 @@ namespace Yaesu_Web_Control.Services
             // This is the only path that triggers SignalInitializationComplete.
             if (prefix == "DT")
             {
-                _logger.LogWarning("[CatMultiplexerService] >>> Dispatching DT message: {Message}", message);
+                _logger.LogDebug("[CatMultiplexerService] >>> Dispatching DT message: {Message}", message);
                 _messageDispatcher.DispatchMessage(message);
                 return; // Do not fall through to _pendingResponses
             }
@@ -668,15 +668,19 @@ namespace Yaesu_Web_Control.Services
 
         public async Task InitializeRadioAsync()
         {
-            _logger.LogWarning("[CatMultiplexerService] InitializeRadioAsync starting...");
+            // Information, not Warning: this whole sequence is the normal connect
+            // path, and it runs once per connect. It stays in the default log
+            // because it is the trace that made #73's startup hang diagnosable —
+            // but a successful connect is not a warning.
+            _logger.LogInformation("[CatMultiplexerService] InitializeRadioAsync starting...");
             LogThreadPoolState("init-start");
             _initializationCompletionSource = new TaskCompletionSource<bool>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
-            _logger.LogWarning("[CatMultiplexerService] Sending AI1 command...");
+            _logger.LogInformation("[CatMultiplexerService] Sending AI1 command...");
             await SendCommandAsync("AI1;", "Initialization", CancellationToken.None);
 
-            _logger.LogWarning("[CatMultiplexerService] Sending {Count} initialization commands (fast mode)...",
+            _logger.LogInformation("[CatMultiplexerService] Sending {Count} initialization commands (fast mode)...",
                 CatCommands.InitializationCommands.Length);
             await SendInitializationCommandsFastAsync(CatCommands.InitializationCommands);
 
@@ -684,7 +688,7 @@ namespace Yaesu_Web_Control.Services
             await Task.Delay(100);
 
             LogThreadPoolState("init-burst-complete, before DT0");
-            _logger.LogWarning("[CatMultiplexerService] Sending DT0 command (raw)...");
+            _logger.LogInformation("[CatMultiplexerService] Sending DT0 command (raw)...");
 
             // Send DT0 raw — do NOT use SendCommandAsync here.
             // SendCommandAsync would register "DT" in _pendingResponses, which competes
@@ -694,7 +698,7 @@ namespace Yaesu_Web_Control.Services
             var dt0Bytes = Encoding.ASCII.GetBytes("DT0;");
             _serialPort!.Write(dt0Bytes, 0, dt0Bytes.Length);
 
-            _logger.LogWarning("[CatMultiplexerService] Waiting for DT0 response...");
+            _logger.LogInformation("[CatMultiplexerService] Waiting for DT0 response...");
 
             var completionTask = _initializationCompletionSource.Task;
             var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
@@ -706,7 +710,7 @@ namespace Yaesu_Web_Control.Services
                 throw new TimeoutException("Timeout waiting for DT0 response from radio");
             }
 
-            _logger.LogWarning("[CatMultiplexerService] ✓ DT0 response received, initialization complete");
+            _logger.LogInformation("[CatMultiplexerService] ✓ DT0 response received, initialization complete");
         }
 
         public async Task ShutdownRadioAsync()
@@ -716,10 +720,14 @@ namespace Yaesu_Web_Control.Services
 
         public void SignalInitializationComplete()
         {
-            _logger.LogWarning("[CatMultiplexerService] >>> SignalInitializationComplete called");
+            // Debug: these two only trace the mechanism. The outcome is already in
+            // the default log either way — "DT0 response received" on success, or
+            // the TIMEOUT error above. The null branch below stays at Warning
+            // because that one really is a fault.
+            _logger.LogDebug("[CatMultiplexerService] >>> SignalInitializationComplete called");
             if (_initializationCompletionSource != null)
             {
-                _logger.LogWarning("[CatMultiplexerService] >>> Setting _initializationCompletionSource result to true");
+                _logger.LogDebug("[CatMultiplexerService] >>> Setting _initializationCompletionSource result to true");
                 _initializationCompletionSource.TrySetResult(true);
             }
             else
