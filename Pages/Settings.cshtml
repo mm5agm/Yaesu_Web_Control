@@ -2822,6 +2822,13 @@
                 const txSel = document.getElementById('audioRadioTxDevice');
                 if (!rxSel || !txSel) return;
                 try {
+                    const statusRes = await fetch('/api/audio/status');
+                    if (statusRes.ok) {
+                        const status = await statusRes.json();
+                        // Never touch portaudio.dll from Settings while a stream is
+                        // live — enumeration during WASAPI callbacks crashes the host.
+                        if (status.sessionActive || status.devicesOpen) return;
+                    }
                     const res = await fetch('/api/audio/devices');
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     const data = await res.json();

@@ -83,10 +83,15 @@ namespace Yaesu_Web_Control.Hubs
             }
         }
 
-        // Called by the main page every 5 seconds
+        // Called by the main page every 5 seconds (and once immediately on connect).
         public Task Heartbeat()
         {
             _heartbeats[Context.ConnectionId] = DateTime.UtcNow;
+            // OnConnectedAsync already cancels, but a page that connects before
+            // the previous tab's OnDisconnectedAsync can miss that cancel —
+            // the disconnect then schedules shutdown because this connection
+            // has not heartbeated yet. Count a heartbeat as "a browser is here".
+            CancelShutdown();
             return Task.CompletedTask;
         }
 

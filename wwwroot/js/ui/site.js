@@ -182,7 +182,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- SignalR connection setup and disconnect on page unload ---
     if (window.signalRConnection === undefined) {
         window.signalRConnection = new signalR.HubConnectionBuilder().withUrl("/radioHub").withAutomaticReconnect().build();
-        window.signalRConnection.start().catch(function (err) { });
+        window.signalRConnection.start().then(function () {
+            window.signalRConnection.invoke("Heartbeat").catch(function () { });
+        }).catch(function (err) { });
         // Heartbeat: send every 5 seconds
         window.signalRHeartbeatInterval = setInterval(function () {
             if (window.signalRConnection && window.signalRConnection.invoke) {

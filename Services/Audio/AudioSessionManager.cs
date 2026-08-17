@@ -23,12 +23,15 @@ namespace Yaesu_Web_Control.Services.Audio
 
         /// <summary>
         /// Try to claim the single audio session. Returns false if busy.
+        /// Busy until <see cref="Release"/> — not merely while the socket is
+        /// Open — so a reconnect cannot start while StopSessionAsync is still
+        /// tearing down PortAudio streams.
         /// </summary>
         public bool TryAcquire(string connectionId, WebSocket socket)
         {
             lock (_lock)
             {
-                if (_socket is { State: WebSocketState.Open })
+                if (_connectionId != null)
                     return false;
                 _connectionId = connectionId;
                 _socket = socket;

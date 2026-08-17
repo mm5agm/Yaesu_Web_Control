@@ -841,8 +841,9 @@ function bindRemoteAudioControls(role) {
   popoutBtn?.addEventListener('click', async () => {
     const wasStreaming = !!session?.running;
     if (wasStreaming) {
+      // Close the Index WebSocket only — the host keeps PortAudio open for
+      // a few seconds so the pop-out can reconnect without WASAPI teardown.
       await stopLocal();
-      await new Promise((r) => setTimeout(r, 150));
     }
     const win = openPopoutWindow(!!wasStreaming);
     if (!win) {

@@ -28,6 +28,46 @@ namespace Yaesu_Web_Control.Controllers
         [HttpGet("devices")]
         public IActionResult ListDevices()
         {
+            // Belt-and-braces: never enumerate while PortAudio streams are open.
+            // AudioDeviceEnumerator also caches, but a controller guard keeps
+            // Settings / Diagnostics from touching portaudio.dll at all.
+            if (_bridge.DevicesOpen)
+            {
+                try
+                {
+                    var inputs = AudioDeviceEnumerator.ListInputs()
+                        .Select(d => new
+                        {
+                            d.Index,
+                            d.Name,
+                            d.HostApiName,
+                            d.HostApiIndex,
+                            displayName = d.DisplayName,
+                            key = d.PersistenceKey,
+                            d.DefaultSampleRate,
+                            likelyRadio = AudioDeviceEnumerator.LooksLikeRadioUsbCodec(d.Name)
+                        });
+                    var outputs = AudioDeviceEnumerator.ListOutputs()
+                        .Select(d => new
+                        {
+                            d.Index,
+                            d.Name,
+                            d.HostApiName,
+                            d.HostApiIndex,
+                            displayName = d.DisplayName,
+                            key = d.PersistenceKey,
+                            d.DefaultSampleRate,
+                            likelyRadio = AudioDeviceEnumerator.LooksLikeRadioUsbCodec(d.Name)
+                        });
+                    return Ok(new { inputs, outputs, cachedWhileStreaming = true });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Cached audio device list unavailable while streaming");
+                    return Ok(new { inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), cachedWhileStreaming = true });
+                }
+            }
+
             try
             {
                 var inputs = AudioDeviceEnumerator.ListInputs()
