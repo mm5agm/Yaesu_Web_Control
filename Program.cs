@@ -425,6 +425,11 @@ builder.Services.AddSingleton<CatMultiplexerService>();
 // Register the main CAT client for the web app
 builder.Services.AddSingleton<ICatClient, MultiplexedCatClient>();
 
+// Tells the browser when an external program asked for a frequency the radio
+// cannot tune. Shared by RigctldServer and WsjtxUdpService so the throttle
+// state is common to both.
+builder.Services.AddSingleton<FrequencyRejectionNotifier>();
+
 // Register the rigctld server as a background service
 builder.Services.AddHostedService<RigctldServer>();
 

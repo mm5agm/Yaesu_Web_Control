@@ -13,6 +13,7 @@ namespace Yaesu_Web_Control.Services
         private readonly CatMultiplexerService _multiplexer;
         private readonly RadioStateService _radioStateService;
         private readonly ILogger<RigctldServer> _logger;
+        private readonly FrequencyRejectionNotifier _rejectionNotifier;
         private TcpListener? _listener;
         private readonly List<TcpClient> _clients = new();
         private readonly object _clientsLock = new();
@@ -82,11 +83,16 @@ namespace Yaesu_Web_Control.Services
             { "4m",   "11" } // Added 4m band
         };
 
-        public RigctldServer(CatMultiplexerService multiplexer, RadioStateService radioStateService, ILogger<RigctldServer> logger)
+        public RigctldServer(
+            CatMultiplexerService multiplexer,
+            RadioStateService radioStateService,
+            ILogger<RigctldServer> logger,
+            FrequencyRejectionNotifier rejectionNotifier)
         {
             _multiplexer = multiplexer;
             _radioStateService = radioStateService;
             _logger = logger;
+            _rejectionNotifier = rejectionNotifier;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -321,7 +327,19 @@ namespace Yaesu_Web_Control.Services
 
             var freq = (long)Math.Round(freqDouble);
             if (!IsTunable(freq))
+            {
+                // RPRT -1 is the honest answer and is deliberately kept: the
+                // radio genuinely cannot tune this. The notifier only explains
+                // the refusal to the operator — it does not suppress the
+                // client-side error, and cannot (see FrequencyRejectionNotifier).
+                // "rigctld", not clientId: clientId is an endpoint like
+                // rigctld-127.0.0.1:54321, and rigctld cannot know which
+                // program is on the other end. Naming a specific one would be
+                // a guess shown to the operator as fact.
+                _logger.LogDebug("[{ClientId}] Refused out-of-range set_freq {Freq}", clientId, freq);
+                await _rejectionNotifier.NotifyAsync(freq, "rigctld");
                 return "RPRT -1";
+            }
 
             var command = CatCommands.FormatFrequencyA(freq);
             await _multiplexer.SendCommandAsync(command, clientId);

@@ -23,6 +23,7 @@ namespace Yaesu_Web_Control.Services
         private readonly RadioStateService _radioStateService;
         private readonly ILogger<WsjtxUdpService> _logger;
         private readonly ISettingsService _settingsService;
+        private readonly FrequencyRejectionNotifier _rejectionNotifier;
 
         private readonly object _lock = new();
         private DateTime _lastSeen = DateTime.MinValue;
@@ -39,12 +40,14 @@ namespace Yaesu_Web_Control.Services
             ICatClient catClient,
             RadioStateService radioStateService,
             ILogger<WsjtxUdpService> logger,
-            ISettingsService settingsService)
+            ISettingsService settingsService,
+            FrequencyRejectionNotifier rejectionNotifier)
         {
             _catClient = catClient;
             _radioStateService = radioStateService;
             _logger = logger;
             _settingsService = settingsService;
+            _rejectionNotifier = rejectionNotifier;
             _logger.LogInformation("WsjtxUdpService constructor called. Service is being constructed.");
         }
 
@@ -197,6 +200,13 @@ namespace Yaesu_Web_Control.Services
                         _logger.LogDebug(
                             "[WSJT-X UDP] Ignoring out-of-range dial frequency {Freq} Hz for {Model}",
                             msg.DialFrequency, _radioStateService.RadioModel);
+
+                        // This path is otherwise completely silent to the
+                        // operator — unlike rigctld, a UDP broadcast has no
+                        // reply, so WSJT-X is never told and shows nothing.
+                        // The notifier throttles: WSJT-X rebroadcasts this
+                        // status about once a second while it sits on the band.
+                        await _rejectionNotifier.NotifyAsync(msg.DialFrequency, "WSJT-X");
                     }
                     else if (msg.DialFrequency > 0)
                     {

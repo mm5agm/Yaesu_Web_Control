@@ -1110,6 +1110,60 @@ connection.on("RadioInfoStatus", function (message) {
 });
 
 
+// An external program (WSJT-X, a logger, anything on rigctld) asked for a
+// frequency this radio cannot tune, so the request was refused and the radio
+// stayed where it was.
+//
+// This explains the refusal; it does not prevent the other program from
+// complaining. WSJT-X in particular decides it failed from the rigctld reply
+// and never sees this page, so its own "Rig control error" still appears —
+// the whole point of this banner is that the operator now knows why.
+//
+// Deliberately a banner, not a modal: WSJT-X re-sends while it sits on the
+// offending band, and a dialog needing dismissal each time would be worse than
+// silence — especially with a screen reader. role="alert" (not "status" like
+// the overlay above) because this reports a request that did not happen.
+connection.on("FrequencyRejected", function (info) {
+    if (!info) return;
+    const mhz = typeof info.frequencyMhz === 'number'
+        ? info.frequencyMhz.toFixed(3)
+        : String(info.frequencyHz || '');
+    const who = info.source ? ` (requested by ${info.source})` : '';
+
+    let el = document.getElementById('frequencyRejectedBanner');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'frequencyRejectedBanner';
+        el.setAttribute('role', 'alert');
+        el.style.cssText = [
+            'position: fixed',
+            'top: 1rem',
+            'left: 50%',
+            'transform: translateX(-50%)',
+            'z-index: 9999',
+            'background: rgba(120, 78, 8, 0.96)',
+            'color: #fff',
+            'padding: 0.75rem 1.25rem',
+            'border-radius: 0.5rem',
+            'border: 1px solid #ffc107',
+            'font-size: 0.95rem',
+            'max-width: 90vw',
+            'text-align: center',
+            'box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35)',
+            'pointer-events: none'
+        ].join(';');
+        document.body.appendChild(el);
+    }
+    el.textContent =
+        `Requested frequency not available: ${mhz} MHz is outside this radio's range${who}. ` +
+        `The radio has stayed on its current frequency.`;
+    el.style.display = '';
+
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, 8000);
+});
+
+
 
 
 function sMeterLabel(val) {
