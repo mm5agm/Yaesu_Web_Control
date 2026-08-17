@@ -37,19 +37,15 @@ namespace Yaesu_Web_Control.Services
 
         public bool IsConnected => _serialPort?.IsOpen ?? false;
 
-        private readonly ISettingsService _settingsService;
-
         public CatMultiplexerService(
             ILogger<CatMultiplexerService> logger,
             CatMessageBuffer messageBuffer,
             CatMessageDispatcher messageDispatcher,
-            ISettingsService settingsService,
             RadioStateService radioStateService)
         {
             _logger = logger;
             _messageBuffer = messageBuffer;
             _messageDispatcher = messageDispatcher;
-            _settingsService = settingsService;
             _radioStateService = radioStateService;
 
             _messageBuffer.MessageReceived += OnMessageReceived;
@@ -483,138 +479,6 @@ namespace Yaesu_Web_Control.Services
             public string Command { get; set; } = string.Empty;
             public TaskCompletionSource<string> CompletionSource { get; set; } = null!;
             public DateTime Timestamp { get; set; }
-        }
-
-        public async Task SendCommand(string command, bool processResult = false, int delay = 0)
-        {
-            var response = await SendCommandAsync(command, "InitialValues");
-            _logger.LogDebug("Command {Command} got response: {Response}", command, response);
-            if (processResult && !string.IsNullOrEmpty(response))
-            {
-                _messageDispatcher.DispatchMessage(response + ";");
-            }
-            if (delay > 0)
-                await Task.Delay(Math.Min(delay, 20));
-        }
-
-        public async Task SendCommandPause(string command, bool processResult = false)
-        {
-            await SendCommand(command, processResult, delay: 20);
-        }
-
-        public async Task GetInitialValues()
-        {
-            await SendCommand("AI1;", true);
-            await SendCommand("ID;", true);
-            await SendCommand("AG0;", true);
-            await SendCommand("AG1;", true);
-            await SendCommand("RG0;", true);
-            await SendCommand("RG1;", true);
-            await SendCommand("FA;", true);
-            await SendCommand("FB;", true);
-            await SendCommand("FR;", true);
-            await SendCommand("FT;", true);
-            await SendCommand("SS04;", true);
-            await SendCommand("SS14;", true);
-            await SendCommand("AO;", true);
-            await SendCommand("MG;", true);
-            await SendCommand("PL;", true);
-            await SendCommand("PR0;", true);
-            await SendCommand("PR1;", true);
-            await SendCommand("MD0;", true);
-            await SendCommand("MD1;", true);
-            await SendCommand("VS;", true);
-            await SendCommand("KP;", true);
-            await SendCommand("PC;", true);
-            await SendCommand("RL0;", true);
-            await SendCommand("RL1;", true);
-            await SendCommand("NR0;", true);
-            await SendCommand("NR1;", true);
-            await SendCommand("NB0;", true);
-            await SendCommand("NB1;", true);
-            await SendCommand("NL0;", true);
-            await SendCommand("CO00;", true);
-            await SendCommand("CO10;", true);
-            await SendCommand("CO01;", true);
-            await SendCommand("CO11;", true);
-            await SendCommand("CO02;", true);
-            await SendCommand("CO12;", true);
-            await SendCommand("CO03;", true);
-            await SendCommand("CO13;", true);
-            await SendCommand("CN00;", true);
-            await SendCommand("CN10;", true);
-            await SendCommand("CT0;", true);
-            await SendCommand("CT1;", true);
-            await SendCommandPause("EX030203;", true);
-            await SendCommandPause("EX030202;", true);
-            await SendCommandPause("EX030102;", true);
-            await SendCommandPause("EX030103;", true);
-            await SendCommandPause("EX040105;", true);
-            await SendCommandPause("EX030201;", true);
-            await SendCommandPause("EX010111;", true);
-            await SendCommandPause("EX010112;", true);
-            await SendCommandPause("EX030405;", true);
-            await SendCommandPause("EX010111;", true);
-            await SendCommandPause("EX010211;", true);
-            await SendCommandPause("EX010310;", true);
-            await SendCommandPause("EX010413;", true);
-            await SendCommandPause("EX010112;", true);
-            await SendCommandPause("EX010213;", true);
-            await SendCommandPause("EX010312;", true);
-            await SendCommandPause("EX010414;", true);
-            await SendCommandPause("EX0403021;", false);
-            await SendCommand("SH0;", true);
-            await SendCommand("SH1;", true);
-            await SendCommand("IS0;", true);
-            await SendCommand("SS06;", true);
-            await SendCommand("IS1;", true);
-            await SendCommand("AC;", true);
-            await SendCommand("KP;", true);
-            await SendCommand("FT;", true);
-            await SendCommand("IF;", true);
-            await SendCommand("BP00;", true);
-            await SendCommand("BP01;", true);
-            await SendCommand("BP10;", true);
-            await SendCommand("BP11;", true);
-            await SendCommand("GT0;", true);
-            await SendCommand("GT1;", true);
-            await SendCommand("AN0;", true);
-            await SendCommand("AN1;", true);
-            await SendCommand("PA0;", true);
-            await SendCommand("PA1;", true);
-            await SendCommand("RF0;", true);
-            var initSettings = await _settingsService.GetSettingsAsync();
-            if (RadioCapabilities.IsDualReceiver(initSettings.RadioModel))
-                await SendCommand("RF1;", true);
-            await SendCommand("ID;", true);
-            await SendCommand("CS;", true);
-            await SendCommand("ML0;", true);
-            await SendCommand("ML1;", true);
-            await SendCommand("BI;", true);
-            await SendCommand("MS;", true);
-            await SendCommand("KS;", true);
-            await SendCommand("SS05;", true);
-            await SendCommand("SS15;", true);
-            await SendCommand("SS06;", true);
-            await SendCommand("SS16;", true);
-            // VT0; removed: VC Tune status is probed by VCTuneModule.InitializeAsync
-            // after init completes. Hardware revisions that reject VT CAT frames
-            // (e.g. ID0682) would return "?;?;" here, polluting the message buffer.
-            await SendCommand("VX;", true);
-            await SendCommand("VG;", true);
-            await SendCommand("AV;", true);
-            await SendCommand("CF000;", true);
-            await SendCommand("CF100;", true);
-            await SendCommand("CF001;", true);
-            await SendCommand("CF101;", true);
-            await SendCommand("BC0;", true);
-            await SendCommand("BC1;", true);
-            await SendCommand("KR;", true);
-            await SendCommand("RA0;", true);
-            await SendCommand("RA1;", true);
-            await SendCommand("SY;", true);
-            await SendCommandPause("VD;", true);
-            await SendCommandPause("DT0;", true);
         }
 
         /// <summary>

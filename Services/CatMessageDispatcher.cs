@@ -639,7 +639,9 @@
                         // operator changes meters. (It was NOT sent between
                         // 2026-02-22 and 2026-08-15: the read sat in
                         // CatMultiplexerService.GetInitialValues(), which lost its
-                        // only caller in 5d83175 and became dead code.)
+                        // only caller in 5d83175 and became dead code. That method
+                        // was deleted 2026-08-17 — see git history if you need the
+                        // original list of reads.)
                         {
                             var msDigits = message.Substring(2).TrimEnd(';');
                             if (msDigits.Length is 1 or 2 && msDigits.All(char.IsDigit))

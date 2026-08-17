@@ -185,7 +185,10 @@ namespace Yaesu_Web_Control.Services
         public void BroadcastTransient(string property, object value) =>
             BroadcastUpdate(property, value);
 
-        // --- Properties for all CAT commands in GetInitialValues() ---
+        // --- Properties for the CAT commands read at connect ---
+        // (the read list lives in RadioInitializationService.readQueries; this
+        // header used to name CatMultiplexerService.GetInitialValues(), which
+        // was dead code from 2026-02-22 and was deleted 2026-08-17)
 
         private string _id = "";
         public string Id { get => _id; set => SetField(ref _id, value); }

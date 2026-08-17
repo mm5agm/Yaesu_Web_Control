@@ -380,9 +380,10 @@ namespace Yaesu_Web_Control.Services
                     // used to live in CatMultiplexerService.GetInitialValues(),
                     // but that method's only call site was deleted on
                     // 2026-02-22 (5d83175, "Fixed initialization hang") and it
-                    // has been dead code ever since — so MS; had not actually
-                    // been sent for months, and RadioMeterSelection was always
-                    // null on a fresh start. Harmless on the other models:
+                    // was dead code from then until its removal on 2026-08-17 —
+                    // so MS; had not actually been sent for months, and
+                    // RadioMeterSelection was always null on a fresh start.
+                    // Harmless on the other models:
                     // MS is a documented read on FTdx10 / FT-710 / FTDX3000,
                     // the dispatcher stores it verbatim, and only the FTdx101
                     // branch ever replays it.
