@@ -1403,7 +1403,7 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 |---------|-------------|
 | Enable radio display | Opt-in. When off, capture stays closed and the Index panel is hidden. |
 
-On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close. If the dongle is unplugged, the badge stays **Disconnected** until you refresh the device list and click **Start** — YWC does not reopen whatever camera now sits at the old index.
+On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close. If the dongle is unplugged, the badge stays **Disconnected** until you refresh the device list and click **Start** — YWC does not reopen whatever camera now sits at the old index. **Auto** and reloading the page do not bypass that halt; only **Start** (after refresh) or choosing a different device clears it.
 
 ---
 
@@ -3014,7 +3014,7 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
    - **Reattach** (pop-out) — returns the stream to the main window and closes the pop-out
    - **Close** — stops the stream and closes the panel (Show button restores it); preference stored in the browser
 
-If the capture dongle is unplugged (or the host cannot open the saved device), the badge stays **Disconnected**. Refresh the device list — Windows camera indexes can move — then click **Start**. The host does **not** automatically reopen whatever camera now sits at the old index (that would be the laptop webcam on many PCs). **Auto** still means start when the panel opens, not retry after an unplug.
+If the capture dongle is unplugged (or the host cannot open the saved device), the badge stays **Disconnected**. Recovery: (1) refresh the device list, (2) confirm the intended capture device is present, (3) click **Start**. Windows camera indexes can move when devices are replugged — do not assume the old index still refers to the same camera. The host does **not** automatically reopen whatever camera now sits at the old index (that would be the laptop webcam on many PCs). **Auto** still means start when the panel opens with a saved device, not retry after an unplug; reloading the page while disconnected also leaves capture halted until you press **Start** or pick a different device.
 
 Capture opens while at least one browser is viewing the stream, and stays open for a couple of seconds after the last viewer disconnects so **Pop out** / **Close** does not tear down the USB capture device mid-handoff. After that idle window the host releases the dongle so an idle Pi pays no capture CPU. Max width stays at **800** (host default) for modest radio panels.
 
@@ -3046,7 +3046,7 @@ See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial
 |---------|-------------|
 | Panel hidden | Enable Radio Display in Settings, then Show Radio Display; check Close was not pressed. |
 | `/api/video/stream` → 403 | Feature disabled or no device key saved. |
-| Black / disconnected | Wrong device index; another app holding the UVC device exclusively; unplug/replug. Unplug is reported as **Disconnected** and the host does **not** reopen that index (Windows may have given it to another camera). Refresh the device list, then click **Start**. |
+| Black / disconnected | Wrong device index; another app holding the UVC device exclusively; unplug/replug. Unplug is reported as **Disconnected** and the host does **not** reopen that index (Windows may have given it to another camera). Recovery: refresh the device list, confirm the intended device is present, then click **Start**. `/api/video/stream` returns **409** while halted. **Auto** and page reload cannot bypass the halt. |
 | Panel blank while badge says Streaming | The MJPEG `<img>` connection dropped; it should reconnect on its own within a few seconds. Hard-reload if it does not. |
 | High CPU on Pi | Prefer **15 fps**; confirm the dongle is not capturing full 1080p without downscale. **Low** / **Medium** quality add a recompress step. |
 | Resolution jumps when changing FPS (640×480 vs 800×600 vs 720p) | Use a current build. 15 / 30 / 60 share one ≥800 4:3 pin when the dongle has one; **640×480** only if nothing is ≥800 wide. |

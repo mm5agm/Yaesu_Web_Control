@@ -152,6 +152,22 @@ function syncStreamButton() {
   }
 }
 
+function syncDisconnectedControls() {
+  const held = holdDisconnected;
+  const fpsSel = document.getElementById('radioDisplayFpsSelect');
+  const qualSel = document.getElementById('radioDisplayQualitySelect');
+  const autoEl = document.getElementById('radioDisplayAutoStart');
+  const devSel = document.getElementById('radioDisplayDeviceSelect');
+  if (fpsSel) fpsSel.disabled = held;
+  if (qualSel) qualSel.disabled = held;
+  if (autoEl) autoEl.disabled = held;
+  if (devSel) {
+    devSel.title = held
+      ? 'Device disconnected — refresh the list, confirm the intended camera, then Start. Select a different device to switch intentionally.'
+      : '';
+  }
+}
+
 function streamUrl() {
   return '/api/video/stream?t=' + Date.now();
 }
@@ -175,6 +191,7 @@ function onDeviceLost(detail) {
   stopStream();
   panel?.setStatus('disconnected', detail || undefined);
   syncStreamButton();
+  syncDisconnectedControls();
 }
 
 function scheduleReconnect() {
@@ -193,7 +210,9 @@ function onStreamInterrupted() {
   if (!streamActive) return;
   streamActive = false;
   panel?.hideFrame();
+  if (holdDisconnected) return;
   scheduleReconnect();
+  pollStatus({ attachStream: false });
 }
 
 function bindStreamImage() {
@@ -251,12 +270,22 @@ function stopStream() {
   syncStreamButton();
 }
 
-function requestStart() {
-  clearDisconnectedHold();
-  wantStream = true;
-  awaitingCapture = true;
-  startStream();
-  syncStreamButton();
+async function requestStart() {
+  if (!enabled || !currentDeviceKey) return;
+  try {
+    const res = await fetch('/api/video/start', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    clearDisconnectedHold();
+    wantStream = true;
+    awaitingCapture = true;
+    startStream();
+    syncStreamButton();
+    syncDisconnectedControls();
+  } catch (e) {
+    console.warn('Radio Display start failed', e);
+    alert('Could not start capture: ' + (e.message || e));
+  }
 }
 
 function requestStop() {
@@ -289,11 +318,16 @@ function reattachToIndex() {
 function onReattachFromPopout(stream) {
   if (uiMode !== 'index' || !panel) return;
   panel.show();
-  wantStream = !!stream || isAutoStart();
-  if (wantStream && enabled && currentDeviceKey) {
-    startStream();
-  } else {
+  if (holdDisconnected) {
+    wantStream = false;
     pollStatus();
+  } else {
+    wantStream = !!stream || isAutoStart();
+    if (wantStream && enabled && currentDeviceKey) {
+      requestStart();
+    } else {
+      pollStatus();
+    }
   }
   syncStreamButton();
 }
@@ -302,6 +336,7 @@ function deviceOptionMatches(d, want) {
   if (!want) return false;
   const key = d.key || '';
   if (key && key === want) return true;
+  if (holdDisconnected) return false;
   if (d.index == null) return false;
   return want === ('index:' + d.index) || want === String(d.index);
 }
@@ -309,6 +344,7 @@ function deviceOptionMatches(d, want) {
 function selectMatchesSavedKey(sel, want) {
   if (!sel) return true;
   if ((sel.value || '') === (want || '')) return true;
+  if (holdDisconnected) return false;
   if (!want) return false;
   const opt = sel.selectedOptions && sel.selectedOptions[0];
   if (!opt) return false;
@@ -355,8 +391,9 @@ async function loadDeviceSelect(selectedKey) {
     if (want && !matched) {
       const orphan = document.createElement('option');
       orphan.value = want;
-      orphan.textContent = truncateLabel(want + ' (not present)', maxLabel);
-      orphan.title = want + ' (not present)';
+      const suffix = holdDisconnected ? ' (unavailable)' : ' (not present)';
+      orphan.textContent = truncateLabel(want + suffix, maxLabel);
+      orphan.title = want + suffix;
       orphan.selected = true;
       sel.appendChild(orphan);
     }
@@ -374,7 +411,6 @@ async function loadDeviceSelect(selectedKey) {
 
 async function setDeviceKey(key) {
   try {
-    clearDisconnectedHold();
     stopStream();
     const res = await fetch('/api/video/device', {
       method: 'POST',
@@ -383,11 +419,13 @@ async function setDeviceKey(key) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    clearDisconnectedHold();
     currentDeviceKey = data.deviceKey || '';
     if (data.rates) applyDeviceFpsCap(data.rates, currentTargetFps);
     syncStreamButton();
+    syncDisconnectedControls();
     if (wantStream && currentDeviceKey && !panel.isHiddenByUser()) {
-      setTimeout(() => startStream(), 600);
+      setTimeout(() => requestStart(), 600);
     } else if (!currentDeviceKey) {
       panel.setStatus('idle', 'select a device');
     } else {
@@ -487,24 +525,35 @@ async function pollStatus(options = {}) {
     let status = data.status || 'idle';
     if (status === 'connecting' || status === 'streaming') {
       awaitingCapture = false;
+      if (holdDisconnected && !data.halted && status !== 'disconnected') {
+        clearDisconnectedHold();
+        syncDisconnectedControls();
+      }
     }
-    if (status === 'disconnected') {
+
+    const serverHalted = !!data.halted || status === 'disconnected';
+    if (serverHalted) {
+      holdDisconnected = true;
+      if (data.error) holdDisconnectedDetail = data.error;
       if (awaitingCapture && wantStream) {
-        awaitingCapture = false;
         panel.setStatus('connecting');
         lastServerStatus = 'connecting';
         return;
       }
-      if (wantStream && !holdDisconnected) {
-        onDeviceLost(data.error || undefined);
-        lastServerStatus = 'disconnected';
-        return;
-      }
+      wantStream = false;
+      stopStream();
+      panel.setStatus('disconnected', holdDisconnectedDetail || data.error || undefined);
+      lastServerStatus = 'disconnected';
+      syncStreamButton();
+      syncDisconnectedControls();
+      if (attachStream) return;
     }
+
     if (holdDisconnected && !wantStream) {
       panel.setStatus('disconnected', holdDisconnectedDetail || data.error || undefined);
       lastServerStatus = 'disconnected';
       syncStreamButton();
+      syncDisconnectedControls();
       if (attachStream) return;
     } else if (!wantStream) {
       status = 'idle';
@@ -689,15 +738,18 @@ export async function initRadioDisplayUi(mode = 'index') {
 
   const streamHint = uiMode === 'popout'
     && new URLSearchParams(window.location.search).get('stream') === '1';
-  wantStream = isAutoStart() || streamHint;
+  const autoWanted = isAutoStart() || streamHint;
+
+  // Probe status before attaching MJPEG so server halt blocks Auto/reload reopen.
+  await pollStatus({ attachStream: false });
+  syncDisconnectedControls();
+  wantStream = !holdDisconnected && autoWanted;
 
   // Probe the device list before attaching MJPEG so enumeration never
   // Open()s the dongle while the capture loop already holds it.
-  await pollStatus({ attachStream: false });
   await loadDeviceSelect(currentDeviceKey);
   if (wantStream && enabled && currentDeviceKey && !panel.isHiddenByUser()) {
-    awaitingCapture = true;
-    startStream();
+    await requestStart();
   }
   syncStreamButton();
   if (statusTimer) clearInterval(statusTimer);

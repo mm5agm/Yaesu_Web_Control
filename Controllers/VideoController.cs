@@ -108,6 +108,7 @@ namespace Yaesu_Web_Control.Controllers
                 enabled = s.VideoDisplayEnabled,
                 deviceKey = s.VideoCaptureDeviceKey ?? "",
                 status = _capture.Status,
+                halted = _capture.IsHaltedAfterDisconnect,
                 error = _capture.LastError,
                 width = _capture.FrameWidth,
                 height = _capture.FrameHeight,
@@ -143,6 +144,7 @@ namespace Yaesu_Web_Control.Controllers
 
             s.VideoCaptureDeviceKey = key;
             await _settings.SaveSettingsAsync(s);
+            _capture.ClearDisconnectHalt();
             _capture.RequestRestart();
             _logger.LogInformation("Radio Display device set to {Key}", string.IsNullOrEmpty(key) ? "(none)" : key);
             var rates = VideoDeviceFpsCaps.RatesFor(key, allowDeviceOpen: !_capture.IsCapturing);
@@ -187,6 +189,30 @@ namespace Yaesu_Web_Control.Controllers
         }
 
         /// <summary>
+        /// Operator recovery after a disconnect halt. Clears the server-side halt
+        /// so the next stream request may open capture again.
+        /// </summary>
+        [HttpPost("start")]
+        public async Task<IActionResult> Start()
+        {
+            var s = await _settings.GetSettingsAsync();
+            if (!s.VideoDisplayEnabled)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
+
+            if (string.IsNullOrWhiteSpace(s.VideoCaptureDeviceKey))
+                return BadRequest(new { error = "No video capture device selected." });
+
+            _capture.ClearDisconnectHalt();
+            _logger.LogInformation("Radio Display operator Start — disconnect halt cleared");
+            return Ok(new
+            {
+                status = _capture.Status,
+                halted = _capture.IsHaltedAfterDisconnect,
+                error = _capture.LastError
+            });
+        }
+
+        /// <summary>
         /// MJPEG multipart stream. Opens capture on first viewer; releases on disconnect.
         /// </summary>
         [HttpGet("stream")]
@@ -204,6 +230,16 @@ namespace Yaesu_Web_Control.Controllers
             {
                 Response.StatusCode = StatusCodes.Status403Forbidden;
                 await Response.WriteAsync("No video capture device selected in Settings.", cancellationToken);
+                return;
+            }
+
+            if (_capture.IsHaltedAfterDisconnect)
+            {
+                Response.StatusCode = StatusCodes.Status409Conflict;
+                var msg = string.IsNullOrWhiteSpace(_capture.LastError)
+                    ? "Capture device is disconnected. Refresh the device list, then press Start."
+                    : _capture.LastError + " Refresh the device list, then press Start.";
+                await Response.WriteAsync(msg, cancellationToken);
                 return;
             }
 

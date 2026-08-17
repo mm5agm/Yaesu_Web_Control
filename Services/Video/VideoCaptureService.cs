@@ -79,20 +79,22 @@ namespace Yaesu_Web_Control.Services.Video
         /// <summary>
         /// Set by <see cref="MarkDisconnected"/>. The outer loop must exit so
         /// we do not reopen <c>index:N</c> after Windows hands that slot to
-        /// another camera.
+        /// another camera. Cleared only by operator Start or device change.
         /// </summary>
-        private int _haltAfterDisconnect;
+        private readonly VideoDisconnectHalt _disconnectHalt = new();
         private VideoCapture? _liveCapture;
         private TaskCompletionSource<bool> _framePulse = NewFramePulse();
 
         public VideoCaptureService(
             ISettingsService settings,
             VideoSessionManager sessions,
-            ILogger<VideoCaptureService> logger)
+            ILogger<VideoCaptureService> logger,
+            VideoDisconnectHalt? disconnectHalt = null)
         {
             _settings = settings;
             _sessions = sessions;
             _logger = logger;
+            _disconnectHalt = disconnectHalt ?? new VideoDisconnectHalt();
         }
 
         public string Status => Volatile.Read(ref _status!);
@@ -125,6 +127,14 @@ namespace Yaesu_Web_Control.Services.Video
             get { lock (_frameLock) return _frameSeq; }
         }
 
+        /// <summary>True while capture is halted after a disconnect until operator recovery.</summary>
+        public bool IsHaltedAfterDisconnect => _disconnectHalt.IsActive;
+
+        /// <summary>
+        /// Clear the post-disconnect halt so the operator can start capture again.
+        /// </summary>
+        public void ClearDisconnectHalt() => _disconnectHalt.Clear();
+
         /// <summary>
         /// Register a viewer and ensure the capture loop is running.
         /// </summary>
@@ -136,6 +146,10 @@ namespace Yaesu_Web_Control.Services.Video
 
             if (string.IsNullOrWhiteSpace(settings.VideoCaptureDeviceKey))
                 throw new InvalidOperationException("No video capture device selected in Settings.");
+
+            if (_disconnectHalt.IsActive)
+                throw new InvalidOperationException(
+                    "Capture device is disconnected. Refresh the device list, then press Start.");
 
             _sessions.TryAcquire(viewerId, out _);
             CancelIdleRelease();
@@ -222,6 +236,9 @@ namespace Yaesu_Web_Control.Services.Video
 
         private void EnsureLoopStarted()
         {
+            if (_disconnectHalt.IsActive)
+                return;
+
             lock (_lifecycleLock)
             {
                 if (_loopTask is { IsCompleted: false })
@@ -333,10 +350,11 @@ namespace Yaesu_Web_Control.Services.Video
                 _loopTask = null;
             }
 
-            if (ReopenSettleMs > 0)
+            if (ReopenSettleMs > 0 && !_disconnectHalt.IsActive)
                 Thread.Sleep(ReopenSettleMs);
 
-            SetStatus(_sessions.ViewerCount == 0 ? "idle" : "connecting");
+            if (!_disconnectHalt.IsActive)
+                SetStatus(_sessions.ViewerCount == 0 ? "idle" : "connecting");
             lock (_frameLock)
             {
                 _latestJpeg = null;
@@ -375,11 +393,11 @@ namespace Yaesu_Web_Control.Services.Video
 
         private void RunCaptureLoop(CancellationToken ct, int epoch)
         {
-            Interlocked.Exchange(ref _haltAfterDisconnect, 0);
             _mfUnavailable = false;
             _dshowMjpegUnavailable = false;
             SetStatus("connecting");
-            _lastError = null;
+            if (!_disconnectHalt.IsActive)
+                _lastError = null;
             BeginPreciseTimer();
             try
             {
@@ -510,6 +528,8 @@ namespace Yaesu_Web_Control.Services.Video
                         fpsWindow.Restart();
 
                         var floor = Math.Max(2.0, targetFps * 0.25);
+                        // FPS collapse after warmup: treat as unplug/disconnect, release
+                        // capture, and halt — operator must refresh and press Start.
                         if (streamStarted.ElapsedMilliseconds >= FpsWarmupMs && measured < floor)
                         {
                             fpsCollapseStreak++;
@@ -597,7 +617,7 @@ namespace Yaesu_Web_Control.Services.Video
                                 VideoDeviceKey.TryResolveOpenIndex(settings.VideoCaptureDeviceKey, out var logged)
                                     ? logged
                                     : -1);
-                            break; // reopen with new device / disabled
+                            break; // exit inner loop to reopen after intentional device change
                         }
 
                         var tick = Stopwatch.StartNew();
@@ -670,7 +690,9 @@ namespace Yaesu_Web_Control.Services.Video
                         }
 
                         // Unplug: DirectShow keeps succeeding with stale frames
-                        // but Read blocks (~1 fps). Break out so we reopen.
+                        // but Read blocks (~1 fps). Treat as disconnect, release
+                        // capture, and halt — no automatic reopen; operator must
+                        // refresh the device list and press Start.
                         if (readMs >= SlowReadMs)
                         {
                             slowReadStreak++;
@@ -1011,6 +1033,7 @@ namespace Yaesu_Web_Control.Services.Video
 
                 if (tick.ElapsedMilliseconds >= SlowReadMs)
                 {
+                    // Slow JPEG read: stall after unplug — disconnect, release, halt.
                     MarkDisconnected("Capture device stalled (no timely frames).");
                     _logger.LogWarning(
                         "Radio Display: {Via} JPEG read took {Ms} ms — treating as unplug",
@@ -1057,6 +1080,8 @@ namespace Yaesu_Web_Control.Services.Video
                         fpsWindow.Restart();
 
                         var floor = Math.Max(2.0, targetFps * 0.25);
+                        // FPS collapse after warmup: treat as unplug/disconnect, release
+                        // capture, and halt — operator must refresh and press Start.
                         if (streamStarted.ElapsedMilliseconds >= FpsWarmupMs && measured < floor)
                         {
                             fpsCollapseStreak++;
@@ -1759,11 +1784,11 @@ namespace Yaesu_Web_Control.Services.Video
 
         private void SetStatus(string status) => Volatile.Write(ref _status!, status);
 
-        private bool ShouldHaltAfterDisconnect() => Volatile.Read(ref _haltAfterDisconnect) != 0;
+        private bool ShouldHaltAfterDisconnect() => _disconnectHalt.IsActive;
 
         private void MarkDisconnected(string error)
         {
-            Interlocked.Exchange(ref _haltAfterDisconnect, 1);
+            _disconnectHalt.Set();
             _lastError = error;
             Volatile.Write(ref _measuredFps, 0);
             lock (_frameLock)
