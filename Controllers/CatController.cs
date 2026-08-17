@@ -421,7 +421,7 @@ namespace Yaesu_Web_Control.Controllers
             {
                 await EnsureConnectedAsync();
                 var freq = request.FrequencyHz;
-                if (freq < 30000 || freq > 75000000)
+                if (!RadioCapabilities.IsTunableFrequency(_radioStateService.RadioModel, freq))
                     return BadRequest(new { error = "Frequency out of range" });
 
                 var command = $"FA{freq:D9};";
@@ -456,7 +456,7 @@ namespace Yaesu_Web_Control.Controllers
             {
                 await EnsureConnectedAsync();
                 var freq = request.FrequencyHz;
-                if (freq < 30000 || freq > 75000000)
+                if (!RadioCapabilities.IsTunableFrequency(_radioStateService.RadioModel, freq))
                     return BadRequest(new { error = "Frequency out of range" });
 
                 var command = $"FB{freq:D9};";
@@ -2579,7 +2579,8 @@ namespace Yaesu_Web_Control.Controllers
             public string ShiftDir { get; set; } = "0";
             public int OffsetHz { get; set; } = 600000;
             public string CtcssMode { get; set; } = "00";
-            public string CtcssTone { get; set; } = "01";
+            // CN's P3, so a 3-digit Table 1 index — 000 = 67.0 Hz.
+            public string CtcssTone { get; set; } = "000";
         }
 
         [HttpPost("fmrepeater")]
@@ -2598,13 +2599,23 @@ namespace Yaesu_Web_Control.Controllers
                 int offsetClamp = Math.Max(0, Math.Min(999999, request.OffsetHz));
                 await _catClient.SendCommandAsync($"RO{offsetClamp:D6};", "WebUI", CancellationToken.None);
                 _radioStateService.FmOffsetHz = offsetClamp;
-                if (new[] { "00", "01", "02", "03" }.Contains(request.CtcssMode))
+                // CT P1 P2; — MAIN only, P2 0=OFF / 1=ENC/DEC / 2=ENC. "03" was
+                // accepted here and sent as CT03;, which is not a defined P2.
+                if (new[] { "00", "01", "02" }.Contains(request.CtcssMode))
                 {
                     await _catClient.SendCommandAsync($"CT{request.CtcssMode};", "WebUI", CancellationToken.None);
                     _radioStateService.CtcssMode = request.CtcssMode;
                 }
-                await _catClient.SendCommandAsync($"CN{request.CtcssTone};", "WebUI", CancellationToken.None);
-                _radioStateService.CtcssTone = request.CtcssTone;
+                // CN P1 P2 P3P3P3; — P1=0 MAIN, P2=0 CTCSS, P3 000-049.
+                // This used to send CN{tone};, which with the old 2-digit tone
+                // codes produced 5-character frames like CN01; — that is CN's
+                // *Read* form (CN P1 P2;), so the radio's tone was never set at
+                // all and the app got an answer back it did not dispatch.
+                if (int.TryParse(request.CtcssTone, out int toneIdx) && toneIdx >= 0 && toneIdx <= 49)
+                {
+                    await _catClient.SendCommandAsync($"CN00{toneIdx:D3};", "WebUI", CancellationToken.None);
+                    _radioStateService.CtcssTone = toneIdx.ToString("D3");
+                }
                 return Ok();
             }
             catch (Exception ex) { _logger.LogError(ex, "Error setting FM repeater"); return StatusCode(500, new { error = "Failed" }); }

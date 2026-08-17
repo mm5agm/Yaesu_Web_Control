@@ -25,6 +25,51 @@ public static class RadioCapabilities
     //   Firmware: MAIN V01-28 / DISPLAY V01-51 / DSP V01-20 (current / up to date)
     private static readonly HashSet<string> _vcTuneCatBlockedIds = ["0682"];
     /// <summary>
+    /// The frequency range the radio can tune, in Hz, as (MinHz, MaxHz).
+    /// Used to reject frequencies the radio cannot reach before they are
+    /// written to it or shown in the UI.
+    ///
+    /// This exists because 30 kHz - 75 MHz was hard-coded in three separate
+    /// places (CatController's set-frequency endpoints and RigctldServer's
+    /// Min/MaxFrequency constants) while a fourth path — the WSJT-X UDP
+    /// listener — had no bound at all. That gap is how an out-of-band WSJT-X
+    /// on 2 m put 144.174 MHz into VFO A, displayed with band "Unknown", and
+    /// sent FA144174000; to a radio that cannot tune it.
+    ///
+    /// The default is deliberately the previous hard-coded range, so every
+    /// model behaves exactly as before unless it is listed here. Only the
+    /// FT-991A deviates, because it genuinely reaches VHF/UHF and would be
+    /// wrongly rejected by the HF default the moment it is added to the
+    /// Settings dropdown.
+    ///
+    /// Tighten per model only against a manual, and note the trade-off first:
+    /// a bound that is too generous merely lets an impossible frequency
+    /// through to a radio that will ignore it, but one that is too tight
+    /// silently rejects legitimate tuning. Several models are narrower than
+    /// the default in reality (the FTDX3000 and FTDX5000 both stop well short
+    /// of 75 MHz) — they are left at the default rather than guessed at.
+    /// Note also that this is a range, not a coverage map: the FT-991A's
+    /// gap between 56 MHz and 108 MHz is not expressed here.
+    /// </summary>
+    public static (long MinHz, long MaxHz) FrequencyRangeHz(string radioModel) => radioModel switch
+    {
+        // RX 30 kHz - 56 MHz, 118 - 164 MHz and 420 - 470 MHz.
+        "FT-991A" => (30_000, 470_000_000),
+        _ => (30_000, 75_000_000)
+    };
+
+    /// <summary>
+    /// True when <paramref name="hz"/> is within the model's tunable range.
+    /// An unknown or not-yet-initialised model falls back to the default
+    /// range, which is the behaviour that was in place before this existed.
+    /// </summary>
+    public static bool IsTunableFrequency(string radioModel, long hz)
+    {
+        var (minHz, maxHz) = FrequencyRangeHz(radioModel);
+        return hz >= minHz && hz <= maxHz;
+    }
+
+    /// <summary>
     /// True when the radio has two independent physical receiver chains
     /// (MAIN + SUB), each with its own set of RX controls addressable
     /// separately via CAT (P1=0 for MAIN, P1=1 for SUB on commands like

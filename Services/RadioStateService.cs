@@ -625,7 +625,7 @@ namespace Yaesu_Web_Control.Services
         public int FmOffsetHz { get => _fmOffsetHz; set => SetField(ref _fmOffsetHz, value); }
         private string _ctcssMode = "00";
         public string CtcssMode { get => _ctcssMode; set => SetField(ref _ctcssMode, value); }
-        private string _ctcssTone = "01";
+        private string _ctcssTone = "000";   // CN P3 — Table 1 index, 000 = 67.0 Hz
         public string CtcssTone { get => _ctcssTone; set => SetField(ref _ctcssTone, value); }
 
         // CW Keyer

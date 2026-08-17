@@ -679,14 +679,25 @@
                             _stateService.FmOffsetHz = roVal;
                         break;
                     case "CT":
-                        // CT{nn}; — CTCSS mode: 00=off, 01=ENC, 02=DEC, 03=T-DEC
-                        if (message.Length >= 5)
+                        // CT P1 P2; — P1 0=MAIN/1=SUB, P2 0=OFF, 1=CTCSS
+                        // ENC/DEC, 2=CTCSS ENC. Stored as the P1P2 pair, so
+                        // MAIN only — a SUB answer (CT1x;) would otherwise be
+                        // stored as "1x" and match no dropdown option.
+                        if (message.Length >= 5 && message[2] == '0')
                             _stateService.CtcssMode = message.Substring(2, 2);
                         break;
                     case "CN":
-                        // CN{nn}; — CTCSS/DCS tone number
-                        if (message.Length >= 5)
-                            _stateService.CtcssTone = message.Substring(2, 2);
+                        // CN P1 P2 P3P3P3; — CTCSS tone number (8 chars).
+                        // P1 0=MAIN/1=SUB, P2 0=CTCSS, P3 tone index 000-049
+                        // (000=67.0 Hz .. 049=254.1 Hz — Yaesu Table 1).
+                        // This used to read Substring(2, 2), i.e. P1P2 — the
+                        // address, not the tone — so the tone the radio
+                        // reported was thrown away and "00" was stored as if it
+                        // were a tone index. Only MAIN is tracked: CtcssTone is
+                        // a single state property, so a SUB answer would
+                        // overwrite MAIN's. (2026-08-17)
+                        if (message.Length >= 8 && message[2] == '0')
+                            _stateService.CtcssTone = message.Substring(4, 3);
                         break;
                     case "KS":
                         // KS{nnn}; — CW keyer speed 004-060 WPM

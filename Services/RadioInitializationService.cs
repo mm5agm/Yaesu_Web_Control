@@ -305,11 +305,18 @@ namespace Yaesu_Web_Control.Services
                         radioStateService.TxClarOn = xtVal == 1;
                 }
 
-                // For FTdx10/FT-710: read per-VFO offsets via CF (dispatcher updates state)
+                // For FTdx10/FT-710: read per-VFO clarifier offsets via CF.
+                // Read form is CF P1 P2 P3; — P1 0=MAIN/1=SUB, P2 is fixed at 0,
+                // P3 1=offset. So VFO B is CF101;, not CF011;: the old CF011;
+                // set P2=1, which the manual does not define, and it addressed
+                // VFO A a second time rather than VFO B. These must also go
+                // through SendCommandAndDispatchAsync — SendCommandAsync returns
+                // the answer without dispatching it, so with the plain call the
+                // radio replied and nothing ever read the reply. (2026-08-17)
                 if (settings.RadioModel is "FTdx10" or "FT-710")
                 {
-                    await multiplexer.SendCommandAsync("CF001;", "Initialization", stoppingToken);
-                    await multiplexer.SendCommandAsync("CF011;", "Initialization", stoppingToken);
+                    await multiplexer.SendCommandAndDispatchAsync("CF001;", "Initialization", stoppingToken);
+                    await multiplexer.SendCommandAndDispatchAsync("CF101;", "Initialization", stoppingToken);
                 }
 
                 // Read actual radio state — all dispatcher-handled commands.
@@ -397,6 +404,15 @@ namespace Yaesu_Web_Control.Services
                     "VX;",                   // VOX on/off
                     "VG;",                   // VOX Gain
                     "VD;",                   // VOX Delay
+                    // FM repeater CTCSS. MAIN only for both: CtcssMode and
+                    // CtcssTone are single state properties, so reading SUB
+                    // (CT1; / CN10;) would immediately overwrite MAIN's value
+                    // with the sub receiver's. Neither was ever read before, so
+                    // the FM panel showed its defaults no matter what the radio
+                    // was actually set to. Read forms are CT P1; and
+                    // CN P1 P2; — see CAT manual p.8. (2026-08-17)
+                    "CT0;",                  // CTCSS mode, MAIN
+                    "CN00;",                 // CTCSS tone number, MAIN
                 };
                 foreach (var q in readQueries)
                     await multiplexer.SendCommandAndDispatchAsync(q, "Initialization", stoppingToken);

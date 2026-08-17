@@ -73,7 +73,7 @@ namespace Yaesu_Web_Control.Pages
         public string FmShiftDir { get; set; } = "0";
         public int FmOffsetHz { get; set; } = 600000;
         public string CtcssMode { get; set; } = "00";
-        public string CtcssTone { get; set; } = "01";
+        public string CtcssTone { get; set; } = "000";
 
         public double SdrSampleRateHz  { get; set; } = 2_048_000;
         public double SdrSampleRateHzA { get; set; } = 2_048_000;

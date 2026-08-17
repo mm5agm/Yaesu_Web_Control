@@ -58,8 +58,12 @@ namespace Yaesu_Web_Control.Services
             { "RTTY-R", "RTTY-U"   },
         };
 
-        private const long MinFrequency = 30000;
-        private const long MaxFrequency = 75000000;
+        // The tunable range is per model — see RadioCapabilities.FrequencyRangeHz.
+        // It used to be a pair of constants here, duplicating the same two
+        // literals in CatController, while the WSJT-X UDP path had no bound at
+        // all. IsTunableFrequency is now the single source for all of them.
+        private bool IsTunable(long hz) =>
+            RadioCapabilities.IsTunableFrequency(_radioStateService.RadioModel, hz);
 
         // Band mapping for set_band support (using BSxx; command codes)
         private static readonly Dictionary<string, string> BandCodes = new()
@@ -316,7 +320,7 @@ namespace Yaesu_Web_Control.Services
                 return "RPRT -1";
 
             var freq = (long)Math.Round(freqDouble);
-            if (freq < MinFrequency || freq > MaxFrequency)
+            if (!IsTunable(freq))
                 return "RPRT -1";
 
             var command = CatCommands.FormatFrequencyA(freq);
@@ -503,7 +507,7 @@ namespace Yaesu_Web_Control.Services
         private string GetSplitFrequency() => _splitFrequency.ToString();
         private string SetSplitFrequency(string freqStr)
         {
-            if (long.TryParse(freqStr, out var freq) && freq >= MinFrequency && freq <= MaxFrequency)
+            if (long.TryParse(freqStr, out var freq) && IsTunable(freq))
             {
                 _splitFrequency = freq;
                 return "RPRT 0";
@@ -643,7 +647,7 @@ namespace Yaesu_Web_Control.Services
                 return "RPRT 0";
             }
             // Try parsing as frequency in Hz
-            if (long.TryParse(band, out var freqHz) && freqHz >= MinFrequency && freqHz <= MaxFrequency)
+            if (long.TryParse(band, out var freqHz) && IsTunable(freqHz))
             {
                 var command = CatCommands.FormatFrequencyA(freqHz);
                 await _multiplexer.SendCommandAsync(command, clientId);

@@ -182,7 +182,23 @@ namespace Yaesu_Web_Control.Services
                     // - Band is changed
                     // - User clicks outside current passband on wide graph
                     // - Split mode frequency changes
-                    if (msg.DialFrequency > 0)
+                    // Ignore a dial frequency the radio cannot tune. WSJT-X
+                    // broadcasts whatever band it is sitting on, which need not
+                    // be one this radio has: seen on 2026-08-14 with WSJT-X on
+                    // 2 m, where 144.174 MHz was both written into VFO A
+                    // (displayed with band "Unknown" until WSJT-X moved back to
+                    // 20 m) and sent to the radio as FA144174000;. The rigctld
+                    // path has always bounded this; this one never did, which is
+                    // why the rigctld guard did not catch it.
+                    if (msg.DialFrequency > 0
+                        && !RadioCapabilities.IsTunableFrequency(
+                               _radioStateService.RadioModel, msg.DialFrequency))
+                    {
+                        _logger.LogDebug(
+                            "[WSJT-X UDP] Ignoring out-of-range dial frequency {Freq} Hz for {Model}",
+                            msg.DialFrequency, _radioStateService.RadioModel);
+                    }
+                    else if (msg.DialFrequency > 0)
                     {
                         var currentFreq = _radioStateService.FrequencyA;
                         var diff = Math.Abs(msg.DialFrequency - currentFreq);
