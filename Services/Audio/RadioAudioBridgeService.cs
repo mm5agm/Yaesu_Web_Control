@@ -48,6 +48,13 @@ namespace Yaesu_Web_Control.Services.Audio
         private string? _openRxDeviceKey;
         private string? _openTxDeviceKey;
         private CancellationTokenSource? _deviceCloseCts;
+        private float[] _cbCapRaw = Array.Empty<float>();
+        private float[] _cbCapMono = Array.Empty<float>();
+        private float[] _cbCapResampled = Array.Empty<float>();
+        private float[] _cbPlayBridge = Array.Empty<float>();
+        private float[] _cbPlayMono = Array.Empty<float>();
+        private float[] _cbPlayInterleaved = Array.Empty<float>();
+        private readonly SemaphoreSlim _wsSendLock = new(1, 1);
 
         /// <summary>
         /// Pop-out handoff closes the Index WebSocket then immediately opens
@@ -233,7 +240,11 @@ namespace Yaesu_Web_Control.Services.Audio
             });
 
             _pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            _sendTask = Task.Run(() => SendPumpAsync(socket, _pumpCts.Token), _pumpCts.Token);
+            _sendTask = Task.Factory.StartNew(
+                () => SendPumpAsync(socket, _pumpCts.Token),
+                _pumpCts.Token,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default).Unwrap();
             _levelsTask = Task.Run(() => LevelsPumpAsync(socket, _pumpCts.Token), _pumpCts.Token);
 
             var buffer = new byte[64 * 1024];
@@ -495,19 +506,24 @@ namespace Yaesu_Web_Control.Services.Audio
                         {
                             if (!_devicesOpen || input == IntPtr.Zero) return StreamCallbackResult.Continue;
                             int interleaved = (int)frameCount * inCh;
-                            var raw = new float[interleaved];
-                            Marshal.Copy(input, raw, 0, interleaved);
-                            var mono = new float[frameCount];
+                            EnsureCallbackBuffer(ref _cbCapRaw, interleaved);
+                            Marshal.Copy(input, _cbCapRaw, 0, interleaved);
+                            EnsureCallbackBuffer(ref _cbCapMono, (int)frameCount);
                             if (inCh == 1)
                             {
-                                Array.Copy(raw, mono, (int)frameCount);
+                                Array.Copy(_cbCapRaw, _cbCapMono, (int)frameCount);
                             }
                             else
                             {
                                 for (int i = 0; i < (int)frameCount; i++)
-                                    mono[i] = 0.5f * (raw[i * inCh] + raw[i * inCh + 1]);
+                                    _cbCapMono[i] = 0.5f * (_cbCapRaw[i * inCh] + _cbCapRaw[i * inCh + 1]);
                             }
-                            OnCaptureSamples(Resample(mono, rxRate, AudioConstants.SampleRate));
+                            int resampledLen = ResampleInto(
+                                _cbCapMono.AsSpan(0, (int)frameCount),
+                                rxRate,
+                                AudioConstants.SampleRate,
+                                ref _cbCapResampled);
+                            OnCaptureSamples(_cbCapResampled.AsSpan(0, resampledLen));
                         }
                         catch (Exception ex)
                         {
@@ -524,30 +540,35 @@ namespace Yaesu_Web_Control.Services.Audio
                             if (output == IntPtr.Zero) return StreamCallbackResult.Continue;
                             int bridgeCount = Math.Max(1,
                                 (int)Math.Round(frameCount * (double)AudioConstants.SampleRate / txRate));
-                            var bridge = new float[bridgeCount];
-                            PullPlayback(bridge);
-                            var mono = Resample(bridge, AudioConstants.SampleRate, txRate);
-                            // Callback asked for frameCount samples; pad/truncate if rounding drifted.
-                            if (mono.Length != frameCount)
+                            EnsureCallbackBuffer(ref _cbPlayBridge, bridgeCount);
+                            PullPlayback(_cbPlayBridge.AsSpan(0, bridgeCount));
+                            int monoLen = ResampleInto(
+                                _cbPlayBridge.AsSpan(0, bridgeCount),
+                                AudioConstants.SampleRate,
+                                txRate,
+                                ref _cbPlayMono);
+                            if (monoLen != frameCount)
                             {
-                                var adjusted = new float[frameCount];
-                                Array.Copy(mono, adjusted, Math.Min(mono.Length, (int)frameCount));
-                                mono = adjusted;
+                                EnsureCallbackBuffer(ref _cbPlayMono, (int)frameCount);
+                                if (monoLen < frameCount)
+                                    _cbPlayMono.AsSpan(monoLen, (int)frameCount - monoLen).Clear();
+                                monoLen = (int)frameCount;
                             }
                             if (outCh == 1)
                             {
-                                Marshal.Copy(mono, 0, output, (int)frameCount);
+                                Marshal.Copy(_cbPlayMono, 0, output, (int)frameCount);
                             }
                             else
                             {
-                                var interleaved = new float[frameCount * outCh];
+                                int interleaved = (int)frameCount * outCh;
+                                EnsureCallbackBuffer(ref _cbPlayInterleaved, interleaved);
                                 for (int i = 0; i < (int)frameCount; i++)
                                 {
-                                    float s = mono[i];
-                                    interleaved[i * outCh] = s;
-                                    interleaved[i * outCh + 1] = s;
+                                    float s = _cbPlayMono[i];
+                                    _cbPlayInterleaved[i * outCh] = s;
+                                    _cbPlayInterleaved[i * outCh + 1] = s;
                                 }
-                                Marshal.Copy(interleaved, 0, output, interleaved.Length);
+                                Marshal.Copy(_cbPlayInterleaved, 0, output, interleaved);
                             }
                         }
                         catch (Exception ex)
@@ -616,13 +637,25 @@ namespace Yaesu_Web_Control.Services.Audio
         private static uint DeviceFramesPerBuffer(int deviceRate) =>
             (uint)Math.Max(64, (int)Math.Round(deviceRate * AudioConstants.FrameSamples / (double)AudioConstants.SampleRate));
 
-        private static float[] Resample(ReadOnlySpan<float> input, int inRate, int outRate)
+        private static void EnsureCallbackBuffer(ref float[] buffer, int length)
         {
-            if (inRate == outRate || input.Length == 0)
-                return input.ToArray();
+            if (buffer.Length < length)
+                buffer = new float[length];
+        }
+
+        /// <summary>Linear resample into a reusable scratch buffer; returns output length.</summary>
+        private static int ResampleInto(ReadOnlySpan<float> input, int inRate, int outRate, ref float[] scratch)
+        {
+            if (input.Length == 0) return 0;
+            if (inRate == outRate)
+            {
+                EnsureCallbackBuffer(ref scratch, input.Length);
+                input.CopyTo(scratch);
+                return input.Length;
+            }
 
             int outLen = Math.Max(1, (int)Math.Round(input.Length * (double)outRate / inRate));
-            var output = new float[outLen];
+            EnsureCallbackBuffer(ref scratch, outLen);
             double ratio = (double)inRate / outRate;
             int last = input.Length - 1;
             for (int i = 0; i < outLen; i++)
@@ -631,16 +664,28 @@ namespace Yaesu_Web_Control.Services.Audio
                 int i0 = (int)src;
                 if (i0 >= last)
                 {
-                    output[i] = input[last];
+                    scratch[i] = input[last];
                     continue;
                 }
                 double frac = src - i0;
-                output[i] = (float)(input[i0] + (input[i0 + 1] - input[i0]) * frac);
+                scratch[i] = (float)(input[i0] + (input[i0 + 1] - input[i0]) * frac);
             }
+            return outLen;
+        }
+
+        private static float[] Resample(ReadOnlySpan<float> input, int inRate, int outRate)
+        {
+            if (inRate == outRate || input.Length == 0)
+                return input.ToArray();
+
+            var scratch = Array.Empty<float>();
+            int len = ResampleInto(input, inRate, outRate, ref scratch);
+            var output = new float[len];
+            scratch.AsSpan(0, len).CopyTo(output);
             return output;
         }
 
-        private void OnCaptureSamples(float[] samples)
+        private void OnCaptureSamples(ReadOnlySpan<float> samples)
         {
             Span<float> frame = stackalloc float[AudioConstants.FrameSamples];
             int offset = 0;
@@ -648,7 +693,7 @@ namespace Yaesu_Web_Control.Services.Audio
             {
                 int space = _captureAccum.Length - _captureAccumLen;
                 int take = Math.Min(space, samples.Length - offset);
-                Array.Copy(samples, offset, _captureAccum, _captureAccumLen, take);
+                samples.Slice(offset, take).CopyTo(_captureAccum.AsSpan(_captureAccumLen, take));
                 _captureAccumLen += take;
                 offset += take;
 
@@ -717,7 +762,7 @@ namespace Yaesu_Web_Control.Services.Audio
                 await foreach (var frame in channel.Reader.ReadAllAsync(ct))
                 {
                     if (socket.State != WebSocketState.Open) break;
-                    await socket.SendAsync(frame, WebSocketMessageType.Binary, true, ct);
+                    await SendWebSocketAsync(socket, frame, ct);
                 }
             }
             catch (OperationCanceledException) { }
@@ -733,12 +778,12 @@ namespace Yaesu_Web_Control.Services.Audio
             {
                 try
                 {
-                    await Task.Delay(100, ct);
+                    await Task.Delay(200, ct);
                     if (socket.State != WebSocketState.Open) break;
                     var levels = AudioWireProtocol.FrameControl(
                         (uint)Interlocked.Increment(ref _rxSeq),
                         new { cmd = "levels", rx = _rxLevel, tx = _txLevel });
-                    await socket.SendAsync(levels, WebSocketMessageType.Binary, true, ct);
+                    await SendWebSocketAsync(socket, levels, ct);
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
@@ -822,6 +867,20 @@ namespace Yaesu_Web_Control.Services.Audio
             }
         }
 
+        private async Task SendWebSocketAsync(WebSocket socket, byte[] frame, CancellationToken ct)
+        {
+            await _wsSendLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                if (socket.State != WebSocketState.Open) return;
+                await socket.SendAsync(frame, WebSocketMessageType.Binary, true, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _wsSendLock.Release();
+            }
+        }
+
         private static async Task SendControlAsync(WebSocket socket, object payload)
         {
             var frame = AudioWireProtocol.FrameControl(0, payload);
@@ -851,6 +910,7 @@ namespace Yaesu_Web_Control.Services.Audio
         {
             CancelScheduledDeviceClose();
             StopSessionAsync(forceCloseDevices: true).GetAwaiter().GetResult();
+            _wsSendLock.Dispose();
         }
     }
 }

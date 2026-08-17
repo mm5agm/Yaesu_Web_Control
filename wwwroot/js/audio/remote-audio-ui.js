@@ -11,6 +11,8 @@ const POPOUT_FEATURES = 'width=780,height=380,resizable=yes,scrollbars=no';
 const SPECTRUM_HZ = 15;
 const HEARTBEAT_MS = 2000;
 const HEARTBEAT_STALE_MS = 6000;
+const INDEX_STATUS_DEBOUNCE_MS = 2500;
+let _lastIndexStatusRequest = 0;
 
 const TIP_CONNECT = 'Connect to transceiver audio';
 const TIP_DISCONNECT = 'Disconnect transceiver audio';
@@ -475,6 +477,13 @@ function bindRemoteAudioControls(role) {
     try { channel?.postMessage(msg); } catch { /* ignore */ }
   }
 
+  function requestPopoutStatusDebounced() {
+    const now = Date.now();
+    if (now - _lastIndexStatusRequest < INDEX_STATUS_DEBOUNCE_MS) return;
+    _lastIndexStatusRequest = now;
+    post({ type: 'requestStatus' });
+  }
+
   function attachLocalSpectrum() {
     if (!session) return;
     attachFilterScopeSpectrum(() => session.getSpectrum());
@@ -638,7 +647,7 @@ function bindRemoteAudioControls(role) {
           // Don't lock Start until the popout is actually streaming.
           setStatusText('In pop-out window');
           setPopoutHints(true);
-          post({ type: 'requestStatus' });
+          requestPopoutStatusDebounced();
           window.publishTxState?.();
           updateLocalButtons();
           return;
@@ -915,7 +924,7 @@ function bindRemoteAudioControls(role) {
     if (remoteOwned) {
       setStatusText('In pop-out window');
       setPopoutHints(true);
-      post({ type: 'requestStatus' });
+      requestPopoutStatusDebounced();
       window.publishTxState?.();
     }
     staleTimer = setInterval(() => {
