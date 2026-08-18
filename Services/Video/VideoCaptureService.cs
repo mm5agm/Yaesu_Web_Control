@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using OpenCvSharp;
@@ -76,6 +76,7 @@ namespace Yaesu_Web_Control.Services.Video
         private int _deviceOpenFlag;
         private bool _mfUnavailable;
         private bool _dshowMjpegUnavailable;
+        private bool _dshowPreferNativeMjpeg;
         private bool _linuxMjpegUnavailable;
         /// <summary>
         /// Set by <see cref="MarkDisconnected"/>. The outer loop must exit so
@@ -953,7 +954,8 @@ namespace Yaesu_Web_Control.Services.Video
             try
             {
                 ds = WindowsDshowMjpegSession.TryOpen(
-                    index, targetFps, maxWidth, _logger, out var noUsableMjpegPin);
+                    index, targetFps, maxWidth, _logger, out var noUsableMjpegPin,
+                    _dshowPreferNativeMjpeg);
                 if (ds is null)
                 {
                     if (noUsableMjpegPin)
@@ -1057,6 +1059,22 @@ namespace Yaesu_Web_Control.Services.Video
                     !VideoDeviceKey.TryResolveOpenIndex(settings.VideoCaptureDeviceKey, out var newIndex) ||
                     newIndex != index)
                 {
+                    break;
+                }
+
+                // The device is packing several pictures into one sample, which
+                // renders as a tiled repeat. Nothing downstream can undo that —
+                // the merge is inside a single JPEG scan — so drop the session and
+                // reopen on the device's native mode. Checked before the read: the
+                // session stops publishing merged samples once it is sure, so
+                // waiting for a frame here would stall until the unplug watchdog.
+                if (session.DeviceMergesFrames && !_dshowPreferNativeMjpeg)
+                {
+                    _dshowPreferNativeMjpeg = true;
+                    _logger.LogWarning(
+                        "Radio Display: {Via} device is merging frames at {W}x{H} — reopening on its " +
+                        "native mode and scaling here instead",
+                        via, session.Width, session.Height);
                     break;
                 }
 
