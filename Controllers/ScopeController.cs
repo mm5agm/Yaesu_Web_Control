@@ -168,6 +168,34 @@ public class ScopeController : ControllerBase
                 frame = ScopeCommands.Set(p1, ScopeCommands.Peak, peak);
                 break;
 
+            case "color":
+                // Three axes packed into one SS P2=3 field. Writing any one of
+                // them with a single-character Set() would zero the other two.
+                if (!TryColorValue(value, out var color, out var nbColor, out var nbOn, out var colorSupplied))
+                    return BadRequest(new { error = "color must be 1 or 3 characters: colour 0-9/A, NB colour 0-6, NB on 0-1" });
+                if (!await _gate.WaitAsync(2000))
+                    return StatusCode(503, new { error = "Radio busy" });
+                try
+                {
+                    await EnsureConnectedAsync();
+                    var current = await ReadFieldAsync(p1, ScopeCommands.Color);
+                    var (curColor, curNb, curOn) = ScopeCommands.ParseColor(current);
+                    if (colorSupplied < 1) color  = curColor;
+                    if (colorSupplied < 2) nbColor = curNb;
+                    if (colorSupplied < 3) nbOn    = curOn;
+                    frame = ScopeCommands.SetColor(p1, color, nbColor, nbOn);
+                    await _catClient.SendCommandAsync(frame, "WebUI", CancellationToken.None);
+                    _logger.LogInformation("Scope {Band} color -> {Frame}", band, frame);
+                    await Task.Delay(SettleAfterWriteMs);
+                    return Ok(await ReadStateAsync(p1, model));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error setting scope color on {Band}", band);
+                    return StatusCode(500, new { error = "Failed to set scope color" });
+                }
+                finally { _gate.Release(); }
+
             case "speed":
                 // The FT-710 adds a sixth setting, STOP (5); the others stop at
                 // FAST3 (4). Labels are the source of truth so a new radio
@@ -220,7 +248,7 @@ public class ScopeController : ControllerBase
             default:
                 return BadRequest(new
                 {
-                    error = $"Unknown scope setting '{setting}'. Expected span, mode, hold, marker, peak, speed, level or affft."
+                    error = $"Unknown scope setting '{setting}'. Expected span, mode, hold, marker, peak, color, speed, level or affft."
                 });
         }
 
@@ -267,6 +295,16 @@ public class ScopeController : ControllerBase
         var speed  = await ReadValueAsync(p1, ScopeCommands.Speed);
         var level  = await ReadFieldAsync(p1, ScopeCommands.Level);
 
+        char? color = null, nbColor = null, nbOn = null;
+        var colorField = await ReadFieldAsync(p1, ScopeCommands.Color);
+        if (colorField is not null)
+        {
+            var parsedColor = ScopeCommands.ParseColor(colorField);
+            color   = parsedColor.Color;
+            nbColor = parsedColor.NbColor;
+            nbOn    = parsedColor.NbOn;
+        }
+
         char? hold = null;
         if (RadioCapabilities.SupportsScopeHold(model))
             hold = await ReadValueAsync(p1, ScopeCommands.Hold);
@@ -299,6 +337,9 @@ public class ScopeController : ControllerBase
             hold      = hold?.ToString(),
             marker    = marker?.ToString(),
             peak      = peak?.ToString(),
+            color     = color?.ToString(),
+            nbColor   = nbColor?.ToString(),
+            nbOn      = nbOn?.ToString(),
             speed     = speed?.ToString(),
             fftAtt,
             oscAtt,
@@ -418,6 +459,36 @@ public class ScopeController : ControllerBase
         if (value.Length == 1) return true;
         if (!TryDigit(value[1].ToString(), 0, 2, out oscAtt)) return false;
         if (!TryDigit(value[2].ToString(), 0, 5, out oscTime)) return false;
+        supplied = 3;
+        return true;
+    }
+
+    private static bool TryColorDigit(string value, out char digit)
+    {
+        digit = '0';
+        if (value.Length != 1) return false;
+        var c = char.ToUpperInvariant(value[0]);
+        if (c is >= '0' and <= '9' or 'A')
+        {
+            digit = c;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Accepts a 1-character colour (0–9/A) or a 3-character colour/NB/on triple.
+    /// </summary>
+    private static bool TryColorValue(string value, out char color, out char nbColor, out char nbOn, out int supplied)
+    {
+        color = nbColor = nbOn = '0';
+        supplied = 0;
+        if (value.Length is not (1 or 3)) return false;
+        if (!TryColorDigit(value[0].ToString(), out color)) return false;
+        supplied = 1;
+        if (value.Length == 1) return true;
+        if (!TryDigit(value[1].ToString(), 0, 6, out nbColor)) return false;
+        if (!TryDigit(value[2].ToString(), 0, 1, out nbOn)) return false;
         supplied = 3;
         return true;
     }

@@ -30,14 +30,12 @@
             @if (hasSub)
             {
                 <div class="radio-scope-row">
-                    <span class="radio-scope-label">Band</span>
+                    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Which physical receiver's scope the radio is showing. Switching band here is the same as clicking the VFO A or VFO B panel header.">Band</span>
                     <div class="btn-group btn-group-sm" role="group" aria-label="Which band's scope to show and adjust">
                         <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "main" ? "active" : "")"
-                                data-band="main" data-a11y-key="radioScope.bandMain"
-                                title="Switch the radio to MAIN — the screen shows the MAIN scope and the controls below follow">MAIN</button>
+                                data-band="main" data-a11y-key="radioScope.bandMain">MAIN</button>
                         <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "sub" ? "active" : "")"
-                                data-band="sub" data-a11y-key="radioScope.bandSub"
-                                title="Switch the radio to SUB — the screen shows the SUB scope and the controls below follow">SUB</button>
+                                data-band="sub" data-a11y-key="radioScope.bandSub">SUB</button>
                     </div>
                 </div>
             }

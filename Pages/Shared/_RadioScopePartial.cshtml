@@ -30,8 +30,7 @@
     <div id="radioScopeCard" class="card border-dark mt-3" data-initial-band="@initialBand">
         <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1 scope-toggle"
              role="button" tabindex="0" id="radioScopeToggle"
-             aria-expanded="false" aria-controls="radioScopeBody"
-             title="Change what the radio's own screen is showing. Collapsed by default — these controls drive the radio, not the spectrum panel below.">
+             aria-expanded="false" aria-controls="radioScopeBody">
             <span class="small fw-bold">
                 <i class="bi bi-display me-1" aria-hidden="true"></i>Radio Scope &mdash; the radio's own display
             </span>
@@ -53,14 +52,12 @@
                    of this row so confusing. The controls below then follow the
                    band automatically (see setActiveBand in radio-scope.js). *@
                 <div class="d-flex align-items-center gap-2 mb-1">
-                    <span class="small text-muted" style="min-width:5.5em;">Band</span>
+                    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Which physical receiver's scope the radio is showing. Switching band here is the same as clicking the VFO A or VFO B panel header.">Band</span>
                     <div class="btn-group btn-group-sm" role="group" aria-label="Which band's scope to show and adjust">
                         <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "main" ? "active" : "")"
-                                data-band="main" data-a11y-key="radioScope.bandMain"
-                                title="Switch the radio to MAIN — the screen shows the MAIN scope and the controls below follow">MAIN</button>
+                                data-band="main" data-a11y-key="radioScope.bandMain">MAIN</button>
                         <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "sub" ? "active" : "")"
-                                data-band="sub" data-a11y-key="radioScope.bandSub"
-                                title="Switch the radio to SUB — the screen shows the SUB scope and the controls below follow">SUB</button>
+                                data-band="sub" data-a11y-key="radioScope.bandSub">SUB</button>
                     </div>
                 </div>
                 <div class="form-text mb-2">
@@ -73,26 +70,14 @@
 
             <partial name="_RadioScopeButtonsPartial" model="@radioModel" />
 
-            <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
-                <span class="small text-muted" style="min-width:5.5em;">Options</span>
-                @if (hasHold)
-                {
+            @if (hasHold)
+            {
+                <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+                    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Freeze the radio's scope trace so you can study it. Click Hold again to resume.">Options</span>
                     <button type="button" class="btn btn-outline-secondary btn-sm scope-toggle-btn"
-                            data-setting="hold" data-a11y-key="radioScope.hold"
-                            title="Freeze the radio's scope trace so you can study it. Click again to resume.">Hold</button>
-                }
-                <button type="button" class="btn btn-outline-secondary btn-sm scope-toggle-btn"
-                        data-setting="marker" data-a11y-key="radioScope.marker"
-                        title="Show or hide the frequency marker on the radio's scope">Marker</button>
-
-                <span class="small text-muted ms-2">Level</span>
-                <input type="range" class="form-range scope-level-slider"
-                       min="-30" max="30" step="0.5" value="0"
-                       aria-label="Radio scope reference level in dB"
-                       title="Reference level of the radio's scope, -30 to +30 dB in 0.5 dB steps"
-                       style="flex:0 1 140px; min-width:90px;">
-                <span class="scope-level-label text-monospace small" style="min-width:4em;">&mdash;</span>
-            </div>
+                            data-setting="hold" data-a11y-key="radioScope.hold">Hold</button>
+                </div>
+            }
 
             @if (!hasHold)
             {
@@ -104,11 +89,6 @@
             <div class="form-text mt-1">
                 The radio keeps a separate span for each display mode, so the highlighted span
                 may change when you switch between W/F and 3DSS. That is the radio doing it, not YWC.
-            </div>
-            <div class="form-text mt-1">
-                MULTI cannot be changed from here: Yaesu exposes no CAT command for it
-                on any supported model. Press it on the radio's TFT. AF-FFT and
-                oscilloscope ATT still apply once MULTI is showing.
             </div>
         </div>
     </div>

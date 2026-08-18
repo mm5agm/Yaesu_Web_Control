@@ -36,6 +36,22 @@ public sealed class ScopeCommandsTests
     }
 
     [Fact]
+    public void SetColor_PacksThreeAxesWithoutZeroingTheRest()
+    {
+        Assert.Equal("SS0341100;", ScopeCommands.SetColor('0', '4', '1', '1'));
+        Assert.Equal("SS13A0000;", ScopeCommands.SetColor('1', 'A', '0', '0'));
+    }
+
+    [Fact]
+    public void ParseColor_ReadsThePackedField()
+    {
+        var (color, nb, on) = ScopeCommands.ParseColor("41100");
+        Assert.Equal('4', color);
+        Assert.Equal('1', nb);
+        Assert.Equal('1', on);
+    }
+
+    [Fact]
     public void ParseAfFft_NullOrShortDefaultsToZeros()
     {
         var (fft, osc, time) = ScopeCommands.ParseAfFft(null);

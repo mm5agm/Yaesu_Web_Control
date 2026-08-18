@@ -412,10 +412,42 @@
             return (f[0], f[1], f[2]);
         }
 
+        /// <summary>
+        /// Set frame for COLOR (P2=3). P3/P4/P5 are independent axes packed into
+        /// one field: scope colour, narrow-band colour, NB-colour on/off.
+        /// Writing any one of them with Set() would zero the other two.
+        ///
+        /// P3 0–9/A = colour 1–11
+        /// P4 0–6   = narrow-band colour 1–7
+        /// P5 0/1   = narrow-band colour off/on
+        /// </summary>
+        public static string SetColor(char band, char color, char nbColor, char nbOn)
+        {
+            color   = ClampColor(color);
+            nbColor = ClampDigit(nbColor, '6');
+            nbOn    = ClampDigit(nbOn,    '1');
+            return $"{Opcode}{band}{Color}{color}{nbColor}{nbOn}00;";
+        }
+
+        /// <summary>
+        /// Unpacks the P2=3 five-character field. "41100" => colour 5, NB colour 2, NB on.
+        /// </summary>
+        public static (char Color, char NbColor, char NbOn) ParseColor(string? field)
+        {
+            var f = (field ?? "00000").PadRight(5, '0');
+            return (char.ToUpperInvariant(f[0]), f[1], f[2]);
+        }
+
         private static char ClampDigit(char value, char max)
         {
             if (value < '0') return '0';
             return value > max ? max : value;
+        }
+
+        private static char ClampColor(char value)
+        {
+            value = char.ToUpperInvariant(value);
+            return value is >= '0' and <= '9' or 'A' ? value : '0';
         }
 
         /// <summary>

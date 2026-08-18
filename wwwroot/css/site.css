@@ -1270,6 +1270,10 @@ fieldset.calibration-card {
     min-width: min(420px, 96vw);
     max-width: min(720px, 96vw);
     max-height: 80vh;
+    overflow: visible;
+}
+#radioDisplayScopeDialog .tooltip {
+    z-index: 10050;
 }
 #radioDisplayScopeDialog .radio-display-scope-dialog-header {
     cursor: grab;
@@ -1286,8 +1290,13 @@ fieldset.calibration-card {
 #radioDisplayScopeDialog .text-muted,
 #radioDisplayScopeDialog .form-text,
 #radioDisplayScopeDialog .radio-scope-label,
-#radioDisplayScopeDialog .radio-scope-sublabel {
+#radioDisplayScopeDialog .radio-scope-sublabel,
+#radioDisplayScopeDialog .scope-level-label,
+#radioDisplayScopeDialog .radio-scope-multi-toggle {
     color: #9aa0a6 !important;
+}
+#radioDisplayScopeDialog .scope-level-slider {
+    accent-color: #0d6efd;
 }
 
 /* Compact even rows: global .btn-outline-secondary is font-weight 700 for VFO
@@ -1303,15 +1312,53 @@ fieldset.calibration-card {
 .radio-scope-controls .radio-scope-row:last-child {
     margin-bottom: 0;
 }
+.radio-scope-controls .radio-scope-multi {
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+    margin-top: 0.15rem;
+    padding-top: 0.25rem;
+}
+.radio-scope-controls .radio-scope-multi > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 1.75rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.radio-scope-controls .radio-scope-multi > summary::-webkit-details-marker {
+    display: none;
+}
+.radio-scope-controls .radio-scope-multi > summary::before {
+    content: "▸";
+    display: inline-block;
+    color: #6c757d;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+.radio-scope-controls .radio-scope-multi[open] > summary::before {
+    transform: rotate(90deg);
+}
+.radio-scope-controls .radio-scope-multi > summary:focus-visible {
+    outline: 2px solid #6ea8fe;
+    outline-offset: 1px;
+}
+.radio-scope-controls .radio-scope-multi-body {
+    padding-top: 0.4rem;
+}
 .radio-scope-controls .radio-scope-label {
     flex: 0 0 4.4em;
     font-size: 0.8rem;
     line-height: 1;
+    cursor: help;
 }
 .radio-scope-controls .radio-scope-sublabel {
     font-size: 0.8rem;
     line-height: 1;
     margin-left: 0.15rem;
+    cursor: help;
 }
 .radio-scope-controls .btn-group {
     flex-wrap: nowrap;
@@ -1334,10 +1381,27 @@ fieldset.calibration-card {
 .radio-scope-controls .scope-span-btn {
     min-width: 2.65rem;
 }
+.radio-scope-controls .scope-peak-btn,
+.radio-scope-controls .scope-color-btn,
+.radio-scope-controls .scope-nbcolor-btn {
+    min-width: 2.15rem;
+}
 .radio-scope-controls .scope-fftatt-btn,
 .radio-scope-controls .scope-oscatt-btn,
 .radio-scope-controls .scope-osctime-btn {
     min-width: 3.4rem;
+}
+.radio-scope-controls .scope-level-slider {
+    flex: 0 1 140px;
+    min-width: 90px;
+    width: 140px;
+    height: 1.75rem;
+    margin: 0;
+}
+.radio-scope-controls .scope-level-label {
+    min-width: 4.5em;
+    font-size: 0.8rem;
+    line-height: 1;
 }
 .radio-scope-controls .btn:focus-visible {
     outline: 2px solid #6ea8fe;
@@ -1377,6 +1441,12 @@ fieldset.calibration-card {
     background-color: #2c2c2c;
     border-color: #4a4a4a;
     opacity: 1;
+}
+#radioDisplayScopeDialog .radio-scope-multi {
+    border-top-color: #444;
+}
+#radioDisplayScopeDialog .radio-scope-multi > summary::before {
+    color: #9aa0a6;
 }
 #radioDisplayScopeDialog .ywc-dialog-close {
     background: #c0392b;

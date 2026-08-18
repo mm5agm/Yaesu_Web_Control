@@ -1100,9 +1100,15 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 **Hold** — freezes the trace so you can study it. Click again to resume.
 
+**Peak** — **LV1**–**LV5**. Peak hold on the radio's own scope: LV1 fades fastest, LV5 holds signal peaks longest.
+
 **Marker** — shows or hides the frequency marker.
 
+**Color** — palette **1**–**11** for the waterfall / 3DSS. **NB Col** is a second palette for the narrow filter passband, with Off / On.
+
 **Level** — the scope reference level, −30 to +30 dB in 0.5 dB steps.
+
+**MULTI** — collapsed by default. Expand it if you use the radio's MULTI layout (scope + oscilloscope + AF-FFT). There is no CAT command to turn MULTI on, so press it on the TFT first; then **AF-FFT** ATT (0 / 10 / 20 dB) and **OSC** ATT / timebase apply. YWC remembers whether you left the group open.
 
 #### Two behaviours that look like bugs and are not
 
@@ -1112,7 +1118,7 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 #### What cannot be controlled from here
 
-**Mono / Multi.** Yaesu exposes no CAT command for it on any supported model, so it stays a front-panel control. This is a limit of the radio, not of YWC.
+**Mono / Multi.** Yaesu exposes no CAT command for it on any supported model, so it stays a front-panel control. This is a limit of the radio, not of YWC. Expand the **MULTI** group in this card for AF-FFT and oscilloscope ATT / timebase once MULTI is already showing on the TFT.
 
 **The FTdx10 and FT-710** have the scope command in their manuals, but I have not been able to verify either against real hardware, so both are switched off rather than shipped on the strength of a document. If you own one and would like to help confirm it, please say so on the [GitHub Issues page](https://github.com/mm5agm/Yaesu_Web_Control/issues) — enabling a model is a one-line change once someone has run it on a real radio.
 
@@ -1487,7 +1493,7 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 
 On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close. If the dongle is unplugged, the badge stays **Disconnected** until you refresh the device list and click **Start** — YWC does not reopen whatever camera now sits at the old index. **Auto** and reloading the page do not bypass that halt; only **Start** (after refresh) or choosing a different device clears it.
 
-On **FTdx10** and **FTdx101MP/D**, **Controls** on the video bar opens a dialog to drive the radio’s own scope (span, 3DSS, Center/Cursor/Fix, FFT speed, AF-FFT/OSC). That is not click-through on the video — HDMI capture is one-way. See [§19.4](#194-cat-scope-controls).
+On **FTdx10** and **FTdx101MP/D**, **Controls** on the video bar opens a dialog to drive the radio’s own scope (span, 3DSS, Center/Cursor/Fix, FFT speed, Level, Peak, Marker, Color, AF-FFT/OSC). That is not click-through on the video — HDMI capture is one-way. See [§19.4](#194-cat-scope-controls).
 
 ---
 
@@ -3210,15 +3216,15 @@ Capture opens while at least one browser is viewing the stream, and stays open f
 
 ### 19.4 CAT scope controls
 
-The Radio Display picture is a live capture of the radio’s TFT. Clicks on that image never reach the touchscreen (the dongle is one-way). On radios that expose the spectrum scope over CAT (`SS`), a **Controls** button on the video bar (next to FPS / quality) opens a dialog — the same kind of floating panel as **Mic & Gain** — so you can change what the radio draws without covering the picture: Center / Cursor / Fix, 3DSS vs waterfall, Expand (L / N / S), FFT SPAN, FFT SPEED, and AF-FFT / OSC attenuators and timebase. The pop-out window has the same button.
+The Radio Display picture is a live capture of the radio’s TFT. Clicks on that image never reach the touchscreen (the dongle is one-way). On radios that expose the spectrum scope over CAT (`SS`), a **Controls** button on the video bar (next to FPS / quality) opens a dialog — the same kind of floating panel as **Mic & Gain** — so you can change what the radio draws without covering the picture: Center / Cursor / Fix, 3DSS vs waterfall, Expand (L / N / S), FFT SPAN, FFT SPEED, Level, Peak, Marker, Color / NB colour, and AF-FFT / OSC attenuators and timebase. The pop-out window has the same button.
 
 **FTdx10** and **FTdx101MP/D** show **Controls**. **FTdx101** also has MAIN / SUB (two independent scopes). **FTdx10** is a single receiver, so that row is omitted. **FT-710** stays off until the `SS` writes have been probed on that radio.
 
-**MULTI** (scope + oscilloscope + AF-FFT on the TFT) has no CAT command on any supported radio. The MULTI button in YWC is disabled; press MULTI on the radio. AF-FFT ATT (0 / 10 / 20 dB) and OSC ATT / timebase still work — they apply once MULTI is already showing.
+**MULTI** (scope + oscilloscope + AF-FFT on the TFT) has no CAT command on any supported radio. The MULTI group in YWC is collapsed by default — expand it for AF-FFT ATT (0 / 10 / 20 dB) and OSC ATT / timebase, which apply once MULTI is already showing on the radio. Press MULTI on the TFT; YWC cannot turn it on.
 
 SPAN, display mode, and SPEED on the front panel live-sync the highlighted buttons while the dialog is open.
 
-If Radio Display is **off**, FTdx101 (and FTdx10) still have a standalone **Radio Scope** card above the SDR panels, with the same CAT controls plus Hold / Marker / Level. Enabling Radio Display hides that card so the buttons are not shown twice; use **Controls** on the video bar instead.
+If Radio Display is **off**, FTdx101 (and FTdx10) still have a standalone **Radio Scope** card above the SDR panels, with the same CAT controls plus Hold. Enabling Radio Display hides that card so the buttons are not shown twice; use **Controls** on the video bar instead.
 
 ### 19.5 Raspberry Pi and Docker
 
