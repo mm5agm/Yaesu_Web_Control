@@ -19,7 +19,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Yaesu_Web_Control.csproj" />
+    <ProjectReference Include="..\..\Yaesu_Web_Control.csproj">
+      <SetTargetFramework>TargetFramework=net10.0</SetTargetFramework>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>

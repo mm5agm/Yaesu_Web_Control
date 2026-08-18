@@ -179,6 +179,9 @@ namespace Yaesu_Web_Control.Services.Video
         private static readonly UIntPtr VidIocEnumFramesizes = unchecked((UIntPtr)0xC02C564A);
         // _IOWR('V', 75, struct v4l2_frmivalenum) — 52 bytes
         private static readonly UIntPtr VidIocEnumFrameintervals = unchecked((UIntPtr)0xC034564B);
+        // _IOWR('V', 21/22, struct v4l2_streamparm) — 204 bytes
+        private static readonly UIntPtr VidIocGParm = unchecked((UIntPtr)0xC0CC5615);
+        private static readonly UIntPtr VidIocSParm = unchecked((UIntPtr)0xC0CC5616);
 
         private const uint V4l2BufTypeVideoCapture = 1;
         private const uint V4l2BufTypeVideoCaptureMplane = 9;
@@ -189,12 +192,24 @@ namespace Yaesu_Web_Control.Services.Video
         private const uint V4l2FrmIvalStepwise = 3;
         private const int EnumCap = 32;
 
+        private static uint FourCc(char a, char b, char c, char d) =>
+            (uint)(a | (b << 8) | (c << 16) | (d << 24));
+
+        private static bool IsJpegPixelFormat(uint pixelFormat) =>
+            pixelFormat == FourCc('M', 'J', 'P', 'G') || pixelFormat == FourCc('J', 'P', 'E', 'G');
+
         /// <summary>
         /// Advertised capture rates via ENUM_FMT / FRAMESIZES / FRAMEINTERVALS.
         /// Empty if the node is busy or the driver does not report intervals.
         /// Does not start streaming.
         /// </summary>
-        public static int[] TryQueryFpsRates(int index)
+        public static int[] TryQueryFpsRates(int index) =>
+            VideoFpsOptions.UniqueSorted(TryQueryPins(index).Select(p => p.Fps));
+
+        public static int TryQueryMaxFps(int index) =>
+            VideoFpsOptions.Max(TryQueryFpsRates(index));
+
+        public static List<VideoCapturePinRank.Pin> TryQueryPins(int index)
         {
             var fd = Open(DevicePath(index), O_RDONLY | O_NONBLOCK);
             if (fd < 0)
@@ -202,11 +217,11 @@ namespace Yaesu_Web_Control.Services.Video
 
             try
             {
-                var raw = new List<double>();
-                CollectRatesForBufType(fd, V4l2BufTypeVideoCapture, raw);
-                if (raw.Count == 0)
-                    CollectRatesForBufType(fd, V4l2BufTypeVideoCaptureMplane, raw);
-                return VideoFpsOptions.UniqueSorted(raw);
+                var pins = new List<VideoCapturePinRank.Pin>();
+                CollectPinsForBufType(fd, V4l2BufTypeVideoCapture, pins);
+                if (pins.Count == 0)
+                    CollectPinsForBufType(fd, V4l2BufTypeVideoCaptureMplane, pins);
+                return pins;
             }
             finally
             {
@@ -214,10 +229,42 @@ namespace Yaesu_Web_Control.Services.Video
             }
         }
 
-        public static int TryQueryMaxFps(int index) =>
-            VideoFpsOptions.Max(TryQueryFpsRates(index));
+        /// <summary>
+        /// VIDIOC_S_PARM timeperframe. OpenCV's CAP_PROP_FPS often does not
+        /// stick on V4L2 after the first S_FMT.
+        /// </summary>
+        public static bool TrySetFrameRate(int index, int fps)
+        {
+            if (fps < 1)
+                return false;
 
-        private static void CollectRatesForBufType(int fd, uint bufType, List<double> dest)
+            var fd = Open(DevicePath(index), O_RDONLY | O_NONBLOCK);
+            if (fd < 0)
+                return false;
+
+            try
+            {
+                return TrySetFrameRateOnFd(fd, V4l2BufTypeVideoCapture, fps)
+                    || TrySetFrameRateOnFd(fd, V4l2BufTypeVideoCaptureMplane, fps);
+            }
+            finally
+            {
+                _ = Close(fd);
+            }
+        }
+
+        private static bool TrySetFrameRateOnFd(int fd, uint bufType, int fps)
+        {
+            var parm = new V4l2StreamParm { Type = bufType };
+            if (Ioctl(fd, VidIocGParm, ref parm) != 0)
+                return false;
+
+            parm.TpfNumerator = 1;
+            parm.TpfDenominator = (uint)fps;
+            return Ioctl(fd, VidIocSParm, ref parm) == 0;
+        }
+
+        private static void CollectPinsForBufType(int fd, uint bufType, List<VideoCapturePinRank.Pin> dest)
         {
             for (uint fmtIndex = 0; fmtIndex < EnumCap; fmtIndex++)
             {
@@ -225,6 +272,7 @@ namespace Yaesu_Web_Control.Services.Video
                 if (Ioctl(fd, VidIocEnumFmt, ref fmt) != 0 || fmt.PixelFormat == 0)
                     break;
 
+                var jpeg = IsJpegPixelFormat(fmt.PixelFormat);
                 for (uint sizeIndex = 0; sizeIndex < EnumCap; sizeIndex++)
                 {
                     var size = new V4l2FrmSizeEnum
@@ -237,19 +285,20 @@ namespace Yaesu_Web_Control.Services.Video
 
                     if (size.Type == V4l2FrmSizeDiscrete)
                     {
-                        CollectIntervalRates(fd, fmt.PixelFormat, size.U0, size.U1, dest);
+                        CollectPinIntervals(fd, fmt.PixelFormat, size.U0, size.U1, jpeg, dest);
                     }
                     else if (size.Type == V4l2FrmSizeStepwise)
                     {
-                        CollectIntervalRates(fd, fmt.PixelFormat, size.U0, size.U3, dest);
-                        CollectIntervalRates(fd, fmt.PixelFormat, size.U1, size.U4, dest);
+                        CollectPinIntervals(fd, fmt.PixelFormat, size.U0, size.U3, jpeg, dest);
+                        CollectPinIntervals(fd, fmt.PixelFormat, size.U1, size.U4, jpeg, dest);
                     }
                 }
             }
         }
 
-        private static void CollectIntervalRates(
-            int fd, uint pixelFormat, uint width, uint height, List<double> dest)
+        private static void CollectPinIntervals(
+            int fd, uint pixelFormat, uint width, uint height, bool jpeg,
+            List<VideoCapturePinRank.Pin> dest)
         {
             if (width < 2 || height < 2)
                 return;
@@ -268,7 +317,7 @@ namespace Yaesu_Web_Control.Services.Video
 
                 if (ival.Type == V4l2FrmIvalDiscrete)
                 {
-                    dest.Add(IntervalToFps(ival.U0, ival.U1));
+                    dest.Add(new VideoCapturePinRank.Pin((int)width, (int)height, IntervalToFps(ival.U0, ival.U1), jpeg));
                 }
                 else if (ival.Type is V4l2FrmIvalContinuous or V4l2FrmIvalStepwise)
                 {
@@ -276,9 +325,12 @@ namespace Yaesu_Web_Control.Services.Video
                     var slowest = IntervalToFps(ival.U2, ival.U3);
                     if (slowest <= 0)
                         slowest = fastest;
-                    dest.Add(fastest);
-                    dest.Add(slowest);
-                    VideoFpsOptions.AddPresetsInRange(dest, slowest, fastest);
+                    dest.Add(new VideoCapturePinRank.Pin((int)width, (int)height, fastest, jpeg));
+                    dest.Add(new VideoCapturePinRank.Pin((int)width, (int)height, slowest, jpeg));
+                    var extras = new List<double>();
+                    VideoFpsOptions.AddPresetsInRange(extras, slowest, fastest);
+                    foreach (var fps in extras)
+                        dest.Add(new VideoCapturePinRank.Pin((int)width, (int)height, fps, jpeg));
                 }
             }
         }
@@ -331,5 +383,20 @@ namespace Yaesu_Web_Control.Services.Video
 
         [DllImport("libc", EntryPoint = "ioctl", SetLastError = true)]
         private static extern int Ioctl(int fd, UIntPtr request, ref V4l2FrmIvalEnum arg);
+
+        [DllImport("libc", EntryPoint = "ioctl", SetLastError = true)]
+        private static extern int Ioctl(int fd, UIntPtr request, ref V4l2StreamParm arg);
+
+        [StructLayout(LayoutKind.Sequential, Size = 204)]
+        private struct V4l2StreamParm
+        {
+            public uint Type;
+            public uint Capability;
+            public uint CaptureMode;
+            public uint TpfNumerator;
+            public uint TpfDenominator;
+            public uint ExtendedMode;
+            public uint ReadBuffers;
+        }
     }
 }
