@@ -23,8 +23,8 @@ Slot the model into the right buckets:
 - `SupportsVCTuneMain` / `SupportsVCTuneSubStatic` — the FTdx101 µ-Tune preselector.
 - Max TX power (100 W vs 200 W) and **4 m band availability**.
 - Which meters it has — some radios lack Temp / IDD / VDD (gated in `Pages/Index.cshtml` and `Services/MeterPollingService.cs`).
-- **Radio Display CAT toolbar** (the radio's own TFT scope via `SS` — not YWC's SDR panel). Slot the model into:
-  - `SupportsSpectrumScopeCat` — gate for the toolbar and standalone Radio Scope card. FTdx101 and FTdx10 are on; FT-710 stays off until `scripts/probe/ss-write-probe.ps1` has been run on one.
+- **Radio Display CAT controls** (the radio's own TFT scope via `SS` — not YWC's SDR panel). Slot the model into:
+  - `SupportsSpectrumScopeCat` — gate for the Controls dialog and standalone Radio Scope card. FTdx101 and FTdx10 are on; FT-710 stays off until `scripts/probe/ss-write-probe.ps1` has been run on one.
   - `SupportsScopeHold` — HOLD (`SS` P2=8); the 710's `SS` list stops at 7.
   - `HasPerReceiverScopes` — MAIN/SUB selector; FTdx101 only (`SS` P1 = 0/1).
   - `ScopeSizeLabels` — 101/10: L/N/S; 710: Expand/Normal.

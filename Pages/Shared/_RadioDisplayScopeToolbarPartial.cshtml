@@ -1,10 +1,10 @@
 @model string
 @inject Yaesu_Web_Control.Services.RadioStateService RadioState
 @{
-    // Compact CAT toolbar for the Radio Display card. Same SS commands as the
-    // standalone Radio Scope card, sitting under the captured TFT so the
-    // operator can change what they are looking at without leaving the video.
-    // See docs/design/scope-control-via-cat.md.
+    // Modeless dialog of CAT scope controls for Radio Display. Opened from the
+    // video header Controls button — not a footer under the picture, so the
+    // captured TFT keeps the space. Same SS commands as the standalone Radio
+    // Scope card. See docs/design/scope-control-via-cat.md.
     var radioModel  = Model ?? "";
     var hasScope    = Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(radioModel);
     var hasSub      = Yaesu_Web_Control.Services.RadioCapabilities.HasPerReceiverScopes(radioModel);
@@ -13,26 +13,35 @@
 
 @if (hasScope)
 {
-    <div id="radioDisplayScopeBar" class="radio-display-scope-bar"
-         data-initial-band="@initialBand" data-eager-load="1">
-        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
-            <span class="small text-muted">Radio scope</span>
-            <span class="scope-status badge bg-secondary small">&mdash;</span>
-        </div>
-        @if (hasSub)
-        {
-            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
-                <span class="small text-muted" style="min-width:5.5em;">Band</span>
-                <div class="btn-group btn-group-sm" role="group" aria-label="Which band's scope to show and adjust">
-                    <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "main" ? "active" : "")"
-                            data-band="main" data-a11y-key="radioScope.bandMain"
-                            title="Switch the radio to MAIN — the screen shows the MAIN scope and the controls below follow">MAIN</button>
-                    <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "sub" ? "active" : "")"
-                            data-band="sub" data-a11y-key="radioScope.bandSub"
-                            title="Switch the radio to SUB — the screen shows the SUB scope and the controls below follow">SUB</button>
-                </div>
+    <dialog id="radioDisplayScopeDialog"
+            class="radio-display-scope-dialog"
+            data-initial-band="@initialBand"
+            aria-labelledby="radioDisplayScopeDialogTitle">
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 radio-display-scope-dialog-header">
+            <div class="d-flex align-items-center gap-2 min-w-0">
+                <strong id="radioDisplayScopeDialogTitle">Radio scope</strong>
+                <span class="scope-status badge bg-secondary small">&mdash;</span>
             </div>
-        }
-        <partial name="_RadioScopeButtonsPartial" model="@radioModel" />
-    </div>
+            <button type="button" class="btn btn-sm ywc-dialog-close"
+                    onclick="document.getElementById('radioDisplayScopeDialog').close()"
+                    aria-label="Close radio scope controls">✕</button>
+        </div>
+        <div class="p-3 radio-display-scope-dialog-body">
+            @if (hasSub)
+            {
+                <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                    <span class="small text-muted" style="min-width:5.5em;">Band</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Which band's scope to show and adjust">
+                        <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "main" ? "active" : "")"
+                                data-band="main" data-a11y-key="radioScope.bandMain"
+                                title="Switch the radio to MAIN — the screen shows the MAIN scope and the controls below follow">MAIN</button>
+                        <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "sub" ? "active" : "")"
+                                data-band="sub" data-a11y-key="radioScope.bandSub"
+                                title="Switch the radio to SUB — the screen shows the SUB scope and the controls below follow">SUB</button>
+                    </div>
+                </div>
+            }
+            <partial name="_RadioScopeButtonsPartial" model="@radioModel" />
+        </div>
+    </dialog>
 }

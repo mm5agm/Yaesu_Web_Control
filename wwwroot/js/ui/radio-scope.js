@@ -18,8 +18,8 @@
 //    refuses a value should look refused rather than accepted.
 //
 //  * The standalone card reads state lazily, on first expand, not at page load.
-//    The Radio Display toolbar eager-loads (data-eager-load="1") because those
-//    buttons are already on screen next to the captured TFT.
+//    The Radio Display Controls dialog does the same when opened, so the CAT
+//    port is idle until the operator asks for the buttons.
 //
 //  * SPAN IS STORED PER MODE on the radio, which is why the highlighted span
 //    button moves on its own when you change display mode. Measured on an
@@ -99,6 +99,7 @@ export class RadioScopeControl {
     }
 
     _isOpen() {
+        if (this.card?.tagName === 'DIALOG') return !!this.card.open;
         if (this.eager) return true;
         return this.body && this.body.style.display !== 'none';
     }

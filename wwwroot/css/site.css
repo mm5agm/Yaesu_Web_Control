@@ -1254,20 +1254,40 @@ fieldset.calibration-card {
     display: none !important;
 }
 
-.radio-display-scope-bar {
-    flex: 0 0 auto;
-    max-height: 40%;
+/* Radio Display CAT scope — modeless dialog, same pattern as Mic & Gain. */
+#radioDisplayScopeDialog {
+    position: fixed;
+    top: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9998;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #555;
+    border-radius: 8px;
+    background: #222;
+    color: #eee;
+    min-width: min(420px, 96vw);
+    max-width: min(640px, 96vw);
+    max-height: 80vh;
+}
+#radioDisplayScopeDialog .radio-display-scope-dialog-header {
+    cursor: grab;
+    user-select: none;
+    border-bottom: 1px solid #444;
+}
+#radioDisplayScopeDialog .radio-display-scope-dialog-header:active {
+    cursor: grabbing;
+}
+#radioDisplayScopeDialog .radio-display-scope-dialog-body {
     overflow-y: auto;
-    background: #1a1a1a;
-    border-top: 1px solid #333;
-    padding: 0.45rem 0.65rem 0.55rem;
-    color: #ddd;
-    text-align: left;
+    max-height: calc(80vh - 2.75rem);
 }
-.radio-display-scope-bar .text-muted {
-    color: #9a9a9a !important;
+#radioDisplayScopeDialog .text-muted,
+#radioDisplayScopeDialog .form-text {
+    color: #9aa0a6 !important;
 }
-.radio-display-scope-bar .btn-outline-secondary {
+#radioDisplayScopeDialog .btn-outline-secondary {
     --bs-btn-color: #ccc;
     --bs-btn-border-color: #555;
     --bs-btn-hover-bg: #333;
@@ -1279,8 +1299,21 @@ fieldset.calibration-card {
     --bs-btn-disabled-color: #777;
     --bs-btn-disabled-border-color: #444;
 }
-.radio-display-scope-bar .btn-outline-secondary.active {
+#radioDisplayScopeDialog .btn-outline-secondary.active {
     background-color: #0d6efd;
     border-color: #0d6efd;
     color: #fff;
+}
+#radioDisplayScopeDialog .ywc-dialog-close {
+    background: #c0392b;
+    color: #fff;
+    border: 1px solid #e74c3c;
+    font-weight: bold;
+    line-height: 1;
+}
+#radioDisplayScopeDialog .ywc-dialog-close:hover,
+#radioDisplayScopeDialog .ywc-dialog-close:focus {
+    background: #e74c3c;
+    color: #fff;
+    border-color: #ff6b5a;
 }

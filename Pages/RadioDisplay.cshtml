@@ -191,6 +191,18 @@
                             Auto
                         </label>
                     </span>
+                    @if (Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(Model.RadioModel))
+                    {
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Change what the radio's own screen is showing (span, 3DSS, speed)"
+                              aria-label="Open radio scope controls">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayScopeBtn"
+                                    aria-haspopup="dialog" aria-expanded="false" aria-controls="radioDisplayScopeDialog"
+                                    aria-label="Open radio scope controls">
+                                <i class="bi bi-sliders" aria-hidden="true"></i>&nbsp;Controls
+                            </button>
+                        </span>
+                    }
                     <div class="radio-display-actions d-flex flex-nowrap align-items-center gap-1">
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                               data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
@@ -227,20 +239,20 @@
                     </div>
                     <img id="radioDisplayImg" alt="Radio display" decoding="async" style="display:none;" />
                 </div>
-                <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
             </div>
         </div>
     </div>
+    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     <script type="module">
         import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl } from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         initRadioDisplayUi('popout');
-        const bar = document.getElementById('radioDisplayScopeBar');
+        const dlg = document.getElementById('radioDisplayScopeDialog');
         window.radioScopeControls = [];
-        if (bar) {
-            const control = new RadioScopeControl(bar);
+        if (dlg) {
+            const control = new RadioScopeControl(dlg);
             window.radioScopeControls.push(control);
             window.radioScopeControl = control;
             const conn = new signalR.HubConnectionBuilder()

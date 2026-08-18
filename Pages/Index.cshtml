@@ -745,8 +745,8 @@
     </div>
 
     @* Controls for the RADIO's own scope, sent over CAT (SS command). Hidden
-       when Radio Display is on — the same buttons sit under the captured
-       picture as a toolbar, so they are not shown twice. CAT-without-video
+       when Radio Display is on — those controls live in the Controls dialog
+       on the video card, so they are not shown twice. CAT-without-video
        keeps this standalone card.
 
        See docs/design/scope-control-via-cat.md. *@
@@ -817,6 +817,18 @@
                             Auto
                         </label>
                     </span>
+                    @if (Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(Model.RadioModel))
+                    {
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Change what the radio's own screen is showing (span, 3DSS, speed)"
+                              aria-label="Open radio scope controls">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayScopeBtn"
+                                    aria-haspopup="dialog" aria-expanded="false" aria-controls="radioDisplayScopeDialog"
+                                    aria-label="Open radio scope controls">
+                                <i class="bi bi-sliders" aria-hidden="true"></i>&nbsp;Controls
+                            </button>
+                        </span>
+                    }
                     <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                               data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
@@ -853,10 +865,6 @@
                          class="radio-display-img"
                          style="display:none; max-width:100%; width:auto; height:auto; max-height:50vh; object-fit:contain; background:#000; vertical-align:middle;" />
                 </div>
-                @if (Model.VideoDisplayEnabled)
-                {
-                    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
-                }
             </div>
         </div>
     </div>
@@ -2371,6 +2379,11 @@
     </div>
 </dialog>
 
+@if (Model.VideoDisplayEnabled)
+{
+    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
+}
+
 <!-- UTC clock info popover — opened by clicking the top-bar clock.
      Explains the clock source, what depends on it, and how to verify
      the PC's time-sync state. -->
@@ -2696,13 +2709,13 @@
             initMemoriesPanel();
 
             // Radio-scope CAT controls. Bind each host (standalone card and/or
-            // Radio Display toolbar) so SignalR updates reach every instance.
-            // The constructor no-ops when the root is absent.
+            // Radio Display Controls dialog) so SignalR updates reach every
+            // instance. The constructor no-ops when the root is absent.
             window.radioScopeControls = [];
             const scopeCard = document.getElementById('radioScopeCard');
             if (scopeCard) window.radioScopeControls.push(new RadioScopeControl(scopeCard));
-            const scopeBar = document.getElementById('radioDisplayScopeBar');
-            if (scopeBar) window.radioScopeControls.push(new RadioScopeControl(scopeBar));
+            const scopeDlg = document.getElementById('radioDisplayScopeDialog');
+            if (scopeDlg) window.radioScopeControls.push(new RadioScopeControl(scopeDlg));
             window.radioScopeControl = window.radioScopeControls[0] || null;
 
             // ── UTC clock in the top bar ──────────────────────────────────────
@@ -3894,7 +3907,7 @@
             }, { passive: true });
         }
 
-        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog'].forEach(id => {
+        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
             makeDraggable(dlg, dlg.querySelector('div'));

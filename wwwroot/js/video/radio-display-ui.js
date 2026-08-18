@@ -705,7 +705,62 @@ function bindChannel() {
   });
 }
 
+function closeScopeDialog() {
+  document.getElementById('radioDisplayScopeDialog')?.close();
+}
+
+function bindScopeDialog() {
+  const dlg = document.getElementById('radioDisplayScopeDialog');
+  const btn = document.getElementById('radioDisplayScopeBtn');
+  if (!dlg || !btn) return;
+
+  const syncExpanded = () => btn.setAttribute('aria-expanded', dlg.open ? 'true' : 'false');
+  btn.addEventListener('click', () => {
+    if (dlg.open) dlg.close();
+    else if (typeof dlg.show === 'function') dlg.show();
+    else dlg.setAttribute('open', '');
+    syncExpanded();
+    if (dlg.open) window.notifyRadioScopeControls?.(c => c.refresh());
+  });
+  dlg.addEventListener('close', syncExpanded);
+
+  // Index already makes this dialog draggable with the other popovers.
+  // The pop-out page has no such helper, so bind a small drag here.
+  if (uiMode === 'popout') {
+    const handle = dlg.querySelector('.radio-display-scope-dialog-header');
+    if (handle) bindDialogDrag(dlg, handle);
+  }
+}
+
+function bindDialogDrag(dialog, handle) {
+  handle.style.cursor = 'grab';
+  handle.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || e.target.closest('button')) return;
+    const r = dialog.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origLeft = r.left;
+    const origTop = r.top;
+    dialog.style.transform = 'none';
+    const onMove = (ev) => {
+      dialog.style.left = `${origLeft + ev.clientX - startX}px`;
+      dialog.style.top = `${origTop + ev.clientY - startY}px`;
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      handle.style.cursor = 'grab';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    handle.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+}
+
 function bindControls() {
+  bindScopeDialog();
+
   document.getElementById('radioDisplayFitBtn')?.addEventListener('click', () => {
     const mode = panel.toggleFitMode();
     const btn = document.getElementById('radioDisplayFitBtn');
@@ -717,6 +772,7 @@ function bindControls() {
   });
 
   document.getElementById('radioDisplayCloseBtn')?.addEventListener('click', () => {
+    closeScopeDialog();
     requestStop();
     if (uiMode === 'popout') {
       window.close();
@@ -735,6 +791,7 @@ function bindControls() {
     const qs = wantStream ? '?stream=1' : '';
     const w = window.open('/RadioDisplay' + qs, 'ywc-radio-display', 'width=900,height=600');
     if (w) w.focus();
+    closeScopeDialog();
     // Hide the Index card immediately but keep the MJPEG viewer attached
     // until the pop-out acquires, so the USB device is never released.
     panel.hide();
