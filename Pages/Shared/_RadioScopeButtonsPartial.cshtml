@@ -3,8 +3,8 @@
     // Shared CAT scope buttons: span, display type/placement/size, speed,
     // MULTI (disabled until a CAT command exists), AF-FFT ATT, OSC ATT/time.
     // Included from the standalone Radio Scope card and the Radio Display
-    // toolbar. Query by class inside a root element — never by global id —
-    // so the two hosts do not collide if both ever land on one page.
+    // Controls dialog. Query by class inside a root element — never by global
+    // id — so the two hosts do not collide if both ever land on one page.
     var radioModel   = Model ?? "";
     var sizeLabels   = Yaesu_Web_Control.Services.RadioCapabilities.ScopeSizeLabels(radioModel);
     var speedLabels  = Yaesu_Web_Control.Services.RadioCapabilities.ScopeSpeedLabels(radioModel);
@@ -30,9 +30,10 @@
     };
 }
 
-<div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-    <span class="small text-muted" style="min-width:5.5em;">Span</span>
-    <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Radio scope span">
+<div class="radio-scope-controls">
+<div class="radio-scope-row">
+    <span class="radio-scope-label">Span</span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope span">
         @foreach (var (value, label) in spans)
         {
             <button type="button" class="btn btn-outline-secondary scope-span-btn"
@@ -42,8 +43,8 @@
     </div>
 </div>
 
-<div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-    <span class="small text-muted" style="min-width:5.5em;">Display</span>
+<div class="radio-scope-row">
+    <span class="radio-scope-label">Display</span>
     <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope display type">
         <button type="button" class="btn btn-outline-secondary scope-type-btn"
                 data-value="wf" data-a11y-key="radioScope.typeWf"
@@ -52,8 +53,7 @@
                 data-value="3dss" data-a11y-key="radioScope.type3dss"
                 title="3DSS — the radio's three-dimensional spectrum stream display">3DSS</button>
     </div>
-
-    <div class="btn-group btn-group-sm ms-2" role="group" aria-label="Radio scope placement">
+    <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope placement">
         <button type="button" class="btn btn-outline-secondary scope-place-btn"
                 data-value="0" data-a11y-key="radioScope.placeCenter"
                 title="Centre — the scope stays centred on the operating frequency">Center</button>
@@ -64,8 +64,7 @@
                 data-value="2" data-a11y-key="radioScope.placeFix"
                 title="Fix — the window stays put on the band regardless of where you tune">Fix</button>
     </div>
-
-    <div class="scope-size-group btn-group btn-group-sm ms-2" role="group" aria-label="Radio scope size">
+    <div class="scope-size-group btn-group btn-group-sm" role="group" aria-label="Radio scope size">
         @for (var i = 0; i < sizeLabels.Length; i++)
         {
             <button type="button" class="btn btn-outline-secondary scope-size-btn"
@@ -77,9 +76,9 @@
 
 @if (speedLabels.Length > 0)
 {
-    <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-        <span class="small text-muted" style="min-width:5.5em;">Speed</span>
-        <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Radio scope FFT speed">
+    <div class="radio-scope-row">
+        <span class="radio-scope-label">Speed</span>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope FFT speed">
             @for (var i = 0; i < speedLabels.Length; i++)
             {
                 <button type="button" class="btn btn-outline-secondary scope-speed-btn"
@@ -92,16 +91,15 @@
 
 @if (hasAfFft)
 {
-    <div class="d-flex align-items-center gap-2 mb-0 flex-wrap">
-        <span class="small text-muted" style="min-width:5.5em;">MULTI</span>
+    <div class="radio-scope-row">
+        <span class="radio-scope-label">MULTI</span>
         <button type="button" class="btn btn-outline-secondary btn-sm scope-multi-btn"
                 data-a11y-key="radioScope.multi"
                 @(hasMulti ? null : "disabled")
                 title="@(hasMulti
                     ? "Show or hide the oscilloscope and AF-FFT on the radio's screen"
                     : "The radio has no CAT command for MULTI — press it on the TFT.")">MULTI</button>
-
-        <span class="small text-muted ms-2">AF-FFT</span>
+        <span class="radio-scope-sublabel">AF-FFT</span>
         <div class="btn-group btn-group-sm" role="group" aria-label="AF-FFT attenuator">
             @foreach (var (value, label) in fftAtts)
             {
@@ -110,8 +108,7 @@
                         title="AF-FFT attenuator @label (applies when MULTI is showing on the radio)">@label</button>
             }
         </div>
-
-        <span class="small text-muted ms-2">OSC</span>
+        <span class="radio-scope-sublabel">OSC</span>
         <div class="btn-group btn-group-sm" role="group" aria-label="Oscilloscope attenuator">
             @foreach (var (value, label) in fftAtts)
             {
@@ -120,9 +117,10 @@
                         title="Oscilloscope attenuator @label (applies when MULTI is showing on the radio)">@label</button>
             }
         </div>
-
-        <span class="small text-muted ms-2">Time</span>
-        <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Oscilloscope timebase">
+    </div>
+    <div class="radio-scope-row">
+        <span class="radio-scope-label">Time</span>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Oscilloscope timebase">
             @foreach (var (value, label) in oscTimes)
             {
                 <button type="button" class="btn btn-outline-secondary scope-osctime-btn"
@@ -132,3 +130,4 @@
         </div>
     </div>
 }
+</div>
