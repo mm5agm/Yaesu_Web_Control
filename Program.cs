@@ -650,32 +650,38 @@ try
         app.UseHsts();
     }
 
-    // Static files must be REVALIDATED, not trusted from cache.
+    // Static files are served by MapStaticAssets (down with the endpoint
+    // routing) rather than UseStaticFiles, so that every asset can be offered
+    // at a content-hashed URL and the browser told the truth about it.
     //
-    // Without an explicit Cache-Control, ASP.NET Core sends only Last-Modified
-    // and ETag, which leaves the browser free to apply heuristic freshness —
-    // commonly a tenth of the file's age. A file that was already a fortnight
-    // old when the browser cached it therefore stays "fresh" for a day or more,
-    // and the browser will not so much as ask whether it changed.
+    // The problem this addresses: without an explicit Cache-Control, ASP.NET
+    // Core sends only Last-Modified and ETag, which leaves the browser free to
+    // apply heuristic freshness - commonly a tenth of the file's age. A file
+    // that was already a fortnight old when the browser cached it therefore
+    // stays "fresh" for a day or more, and the browser will not so much as ask
+    // whether it changed. Installing a new version over the top replaces the
+    // file on disk but does nothing to that cached copy, so an upgrading user
+    // got the new page with the old JavaScript behind it, and any fix living in
+    // that JavaScript simply never arrived. Ctrl+F5 cleared it, which is not
+    // something an operator should have to know. This was found in IWC, where
+    // it had silently swallowed both headline fixes of a release; YWC carried
+    // the same hole.
     //
-    // Installing a new version over the top replaces the file on disk but does
-    // nothing to that cached copy, so an upgrading user gets the new page with
-    // the old JavaScript behind it and any fix living in that JavaScript simply
-    // never arrives. Ctrl+F5 clears it, which is not something an operator
-    // should have to know. This was found in IWC, where it had silently
-    // swallowed both headline fixes of a release; YWC carried the same hole.
+    // The first fix was a blanket "no-cache, must-revalidate". That is correct,
+    // but it costs a conditional GET per file on every page load - around forty
+    // of them here. Free on localhost; much less so over a Tailscale link from
+    // the other end of the country, which is now a supported way to operate.
     //
-    // "no-cache" does NOT mean "do not store": the browser keeps the file and
-    // revalidates it, so an unchanged file costs one conditional GET answered
-    // with a 304 and no body. On a localhost or LAN app that is free, and it is
-    // the price of never shipping a fix that fails to arrive.
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        OnPrepareResponse = ctx =>
-        {
-            ctx.Context.Response.Headers.CacheControl = "no-cache, must-revalidate";
-        }
-    });
+    // MapStaticAssets serves each file at two URLs with different headers. The
+    // content-hashed one (/js/ui/site.abc123.js - what the Razor tag helpers
+    // and the import map emit) is immutable and never revalidated; the plain
+    // one (/js/ui/site.js - what anything still hand-written asks for) keeps
+    // no-cache. A new build changes the hash, so the new file arrives under a
+    // URL the browser has never seen and therefore cannot serve stale.
+    //
+    // It serves only files present at build time. Nothing writes into wwwroot
+    // at runtime - user labels, memories and settings all go to %APPDATA% - but
+    // /pictures is user-supplied and so stays on UseStaticFiles below.
     var picturesPath = System.IO.Path.Combine(app.Environment.ContentRootPath, "pictures");
     if (System.IO.Directory.Exists(picturesPath))
     {
@@ -695,6 +701,10 @@ try
     app.UseRouting();
     app.UseAuthorization();
     //app.MapGet("/", () => "ROOT ROUTE HIT");
+
+    // Serves wwwroot, both fingerprinted and plain. See the note above the
+    // /pictures block for why this is not UseStaticFiles.
+    app.MapStaticAssets();
 
     app.MapRazorPages();
     app.MapControllers();
