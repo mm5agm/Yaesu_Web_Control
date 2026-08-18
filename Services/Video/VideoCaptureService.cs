@@ -76,6 +76,7 @@ namespace Yaesu_Web_Control.Services.Video
         private int _deviceOpenFlag;
         private bool _mfUnavailable;
         private bool _dshowMjpegUnavailable;
+        private bool _linuxMjpegUnavailable;
         /// <summary>
         /// Set by <see cref="MarkDisconnected"/>. The outer loop must exit so
         /// we do not reopen <c>index:N</c> after Windows hands that slot to
@@ -367,6 +368,7 @@ namespace Yaesu_Web_Control.Services.Video
             Volatile.Write(ref _measuredFps, 0);
             _mfUnavailable = false;
             _dshowMjpegUnavailable = false;
+            _linuxMjpegUnavailable = false;
             _logger.LogInformation("Radio Display capture stopped");
         }
 
@@ -395,6 +397,7 @@ namespace Yaesu_Web_Control.Services.Video
         {
             _mfUnavailable = false;
             _dshowMjpegUnavailable = false;
+            _linuxMjpegUnavailable = false;
             SetStatus("connecting");
             if (!_disconnectHalt.IsActive)
                 _lastError = null;
@@ -430,6 +433,7 @@ namespace Yaesu_Web_Control.Services.Video
                 // MJPEG; the latches only skip fall-through inside this attempt.
                 _mfUnavailable = false;
                 _dshowMjpegUnavailable = false;
+                _linuxMjpegUnavailable = false;
 
                 var maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
                 var rates = VideoDeviceFpsCaps.PeekRates(settings.VideoCaptureDeviceKey);
@@ -441,6 +445,16 @@ namespace Yaesu_Web_Control.Services.Video
                 VideoCapture? cap = null;
                 try
                 {
+                    if (OperatingSystem.IsLinux() && !_linuxMjpegUnavailable &&
+                        RunLinuxMjpegSession(index, maxWidth, targetFps, ct))
+                    {
+                        if (ct.IsCancellationRequested || ShouldHaltAfterDisconnect())
+                            break;
+                        SetStatus("connecting");
+                        SleepOrCancel(1000, ct);
+                        continue;
+                    }
+
                     if (OperatingSystem.IsWindows() && !_dshowMjpegUnavailable &&
                         RunDshowMjpegSession(index, maxWidth, targetFps, ct))
                     {
@@ -658,12 +672,27 @@ namespace Yaesu_Web_Control.Services.Video
 
                         emptySince.Reset();
 
-                        // Prefer the Mat size from the UI-thread Read — property
-                        // Gets from another thread are unreliable on AVFoundation.
-                        var reportW = frame.Width > 1 ? frame.Width : (int)cap.Get(VideoCaptureProperties.FrameWidth);
-                        var reportH = frame.Height > 1 ? frame.Height : (int)cap.Get(VideoCaptureProperties.FrameHeight);
-                        if (reportW <= 1) reportW = frame.Width;
-                        if (reportH <= 1) reportH = frame.Height;
+                        // JPEG bitstream Mats are 1×nbytes (width = compressed
+                        // size, varies every frame). Picture size is in the SOF.
+                        var reportW = frame.Width;
+                        var reportH = frame.Height;
+                        if (LooksLikeJpegMat(frame) &&
+                            VideoJpegSof.TryReadSize(frame.Data, (int)(frame.Total() * frame.ElemSize()), out var sofW, out var sofH))
+                        {
+                            reportW = sofW;
+                            reportH = sofH;
+                        }
+                        else
+                        {
+                            reportW = frame.Width > 1 && frame.Width <= 1920
+                                ? frame.Width
+                                : (int)cap.Get(VideoCaptureProperties.FrameWidth);
+                            reportH = frame.Height > 1 && frame.Height <= 1200
+                                ? frame.Height
+                                : (int)cap.Get(VideoCaptureProperties.FrameHeight);
+                            if (reportW <= 1 || reportW > 1920) reportW = frame.Width;
+                            if (reportH <= 1 || reportH > 1200) reportH = frame.Height;
+                        }
 
                         // Surface size even before the first JPEG so the UI is
                         // not stuck at 0×0 / 0 fps while encode catches up.
@@ -951,7 +980,41 @@ namespace Yaesu_Web_Control.Services.Video
             }
         }
 
-        [SupportedOSPlatform("windows")]
+        [SupportedOSPlatform("linux")]
+        private bool RunLinuxMjpegSession(int index, int maxWidth, int targetFps, CancellationToken ct)
+        {
+            LinuxV4l2MjpegSession? session = null;
+            var opened = false;
+            try
+            {
+                session = LinuxV4l2MjpegSession.TryOpen(
+                    index, targetFps, maxWidth, _logger, out var noUsableMjpegPin);
+                if (session is null)
+                {
+                    if (noUsableMjpegPin)
+                        _linuxMjpegUnavailable = true;
+                    return false;
+                }
+
+                opened = true;
+                Volatile.Write(ref _openDeviceIndex, index);
+                Volatile.Write(ref _deviceOpenFlag, 1);
+                RunJpegPassthroughLoop(session, index, maxWidth, targetFps, "V4L2", ct);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Radio Display V4L2 MJPEG session failed");
+                return opened;
+            }
+            finally
+            {
+                Volatile.Write(ref _deviceOpenFlag, 0);
+                Volatile.Write(ref _openDeviceIndex, -1);
+                session?.Dispose();
+            }
+        }
+
         private void RunJpegPassthroughLoop(
             IJpegCaptureSession session, int index, int maxWidth, int targetFps, string via, CancellationToken ct)
         {
@@ -1298,14 +1361,39 @@ namespace Yaesu_Web_Control.Services.Video
             // handled by WindowsMfMjpegSession. Ask for MJPEG 800×600 first so a
             // failed MF open does not land on YUY2 640×480@30 (USB2 rejects
             // uncompressed 800×600@30 and the driver drops the size).
+            // Linux V4L2 must pass FourCC at open too: post-open Set(FourCC)
+            // is ignored after VIDIOC_S_FMT, and YUYV 800×600 is USB2-capped
+            // at 15 fps. CONVERT_RGB=0 keeps the JPEG bitstream for passthrough.
             var (wantW, wantH) = PreferredCaptureSize(maxWidth);
+            if (OperatingSystem.IsLinux())
+            {
+                var pick = VideoCapturePinRank.PickMjpegCaptureMeetingFps(
+                    LinuxV4l2Devices.TryQueryPins(index), targetFps, maxWidth);
+                if (pick is { Width: >= 2, Height: >= 2 } p)
+                {
+                    wantW = p.Width;
+                    wantH = p.Height;
+                }
+            }
+
+            var mjpeg = VideoWriter.FourCC('M', 'J', 'P', 'G');
             int[] bgrParams;
             if (OperatingSystem.IsWindows())
             {
-                var mjpeg = VideoWriter.FourCC('M', 'J', 'P', 'G');
                 bgrParams =
                 [
                     (int)VideoCaptureProperties.FourCC, mjpeg,
+                    (int)VideoCaptureProperties.FrameWidth, wantW,
+                    (int)VideoCaptureProperties.FrameHeight, wantH,
+                    (int)VideoCaptureProperties.BufferSize, 3
+                ];
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                bgrParams =
+                [
+                    (int)VideoCaptureProperties.FourCC, mjpeg,
+                    (int)VideoCaptureProperties.ConvertRgb, 0,
                     (int)VideoCaptureProperties.FrameWidth, wantW,
                     (int)VideoCaptureProperties.FrameHeight, wantH,
                     (int)VideoCaptureProperties.BufferSize, 3
@@ -1326,12 +1414,49 @@ namespace Yaesu_Web_Control.Services.Video
             {
                 if (OperatingSystem.IsLinux())
                 {
-                    var byPath = TryOpenPath(LinuxV4l2Devices.DevicePath(index), api, bgrParams, out lastError);
-                    if (byPath is not null)
+                    var linuxBgrParams = new[]
                     {
-                        ApplyPreferredCaptureFormat(byPath, maxWidth, targetFps);
-                        return byPath;
-                    }
+                        (int)VideoCaptureProperties.FourCC, mjpeg,
+                        (int)VideoCaptureProperties.ConvertRgb, 0,
+                        (int)VideoCaptureProperties.FrameWidth, wantW,
+                        (int)VideoCaptureProperties.FrameHeight, wantH,
+                        (int)VideoCaptureProperties.BufferSize, 3
+                    };
+
+                    var opened = FinishLinuxOpen(
+                        TryOpenPath(LinuxV4l2Devices.DevicePath(index), api, bgrParams, out lastError),
+                        index, wantW, wantH, maxWidth, targetFps, ref jpegPassthrough);
+                    if (opened is not null)
+                        return opened;
+
+                    opened = FinishLinuxOpen(
+                        TryOpen(index, api, bgrParams, out lastError),
+                        index, wantW, wantH, maxWidth, targetFps, ref jpegPassthrough);
+                    if (opened is not null)
+                        return opened;
+
+                    opened = FinishLinuxOpen(
+                        TryOpenPath(LinuxV4l2Devices.DevicePath(index), api, linuxBgrParams, out lastError),
+                        index, wantW, wantH, maxWidth, targetFps, ref jpegPassthrough,
+                        requestJpegPassthrough: false);
+                    if (opened is not null)
+                        return opened;
+
+                    opened = FinishLinuxOpen(
+                        TryOpen(index, api, linuxBgrParams, out lastError),
+                        index, wantW, wantH, maxWidth, targetFps, ref jpegPassthrough,
+                        requestJpegPassthrough: false);
+                    if (opened is not null)
+                        return opened;
+
+                    opened = FinishLinuxOpen(
+                        TryOpen(index, api, paramsArray: null, out lastError),
+                        index, wantW, wantH, maxWidth, targetFps, ref jpegPassthrough,
+                        requestJpegPassthrough: false);
+                    if (opened is not null)
+                        return opened;
+
+                    continue;
                 }
 
                 var cap = TryOpen(index, api, bgrParams, out lastError);
@@ -1376,6 +1501,98 @@ namespace Yaesu_Web_Control.Services.Video
             {
                 // Device may ignore; native mode still preferred over forced YUY2.
             }
+        }
+
+        /// <summary>
+        /// Linux: lock MJPEG + raw JPEG Mats when the dongle actually delivers
+        /// SOI. CONVERT_RGB=0 after a YUYV negotiate would break ImEncode, so
+        /// a non-JPEG probe either restores BGR conversion or discards the open.
+        /// </summary>
+        private static VideoCapture? FinishLinuxOpen(
+            VideoCapture? cap,
+            int index,
+            int wantW,
+            int wantH,
+            int maxWidth,
+            int targetFps,
+            ref bool jpegPassthrough,
+            bool requestJpegPassthrough = true)
+        {
+            if (cap is null)
+                return null;
+
+            ApplyPreferredCaptureFormat(cap, maxWidth, targetFps, wantW, wantH, setFps: false);
+            if (OperatingSystem.IsLinux())
+            {
+                if (!LinuxV4l2Devices.TrySetMjpegFormat(index, wantW, wantH, targetFps)
+                    && targetFps >= 30
+                    && LinuxV4l2Devices.TrySetMjpegFormat(index, 640, 480, targetFps))
+                {
+                    wantW = 640;
+                    wantH = 480;
+                    ApplyPreferredCaptureFormat(cap, maxWidth, targetFps, wantW, wantH, setFps: false);
+                }
+            }
+
+            if (!requestJpegPassthrough)
+            {
+                jpegPassthrough = false;
+                try { cap.Set(VideoCaptureProperties.ConvertRgb, 1); } catch { /* ignore */ }
+                return cap;
+            }
+
+            try { cap.Set(VideoCaptureProperties.ConvertRgb, 0); } catch { /* ignore */ }
+
+            using var probe = new Mat();
+            var readOk = false;
+            try { readOk = cap.Read(probe); }
+            catch { /* treat as failed probe */ }
+
+            if (readOk && !probe.Empty() && LooksLikeJpegMat(probe))
+            {
+                jpegPassthrough = true;
+                return cap;
+            }
+
+            try { cap.Set(VideoCaptureProperties.ConvertRgb, 1); } catch { /* ignore */ }
+
+            if (readOk && !probe.Empty())
+            {
+                jpegPassthrough = false;
+                return cap;
+            }
+
+            try { cap.Release(); } catch { /* ignore */ }
+            try { cap.Dispose(); } catch { /* ignore */ }
+            return null;
+        }
+
+        private static bool LooksLikeJpegMat(Mat frame)
+        {
+            if (frame.Empty())
+                return false;
+
+            var len = (int)(frame.Total() * frame.ElemSize());
+            if (len < 100)
+                return false;
+
+            try
+            {
+                if (Marshal.ReadByte(frame.Data) != 0xFF || Marshal.ReadByte(frame.Data, 1) != 0xD8)
+                    return false;
+            }
+            catch
+            {
+                return false;
+            }
+
+            // Decoded BGR/YUV images are WxH; MJPEG bitstreams are 1-row (or
+            // 1-col) 8U buffers whose long side is the compressed length.
+            if (frame.Height <= 2 || frame.Width <= 2)
+                return true;
+            if (frame.Channels() is 3 or 4 && frame.Width <= 1920 && frame.Height <= 1200)
+                return false;
+            return frame.Width > 1920 || frame.Height > 1200;
         }
 
         /// <summary>
@@ -1584,13 +1801,21 @@ namespace Yaesu_Web_Control.Services.Video
         /// DirectShow does not pick YUY2 640×480@30. FPS last — requesting
         /// 800×600 YUY2@30 is what made the driver drop to 640.
         /// </summary>
-        private static void ApplyPreferredCaptureFormat(VideoCapture cap, int maxWidth, int targetFps)
+        private static void ApplyPreferredCaptureFormat(
+            VideoCapture cap, int maxWidth, int targetFps, int? width = null, int? height = null,
+            bool setFps = true)
         {
-            var (wantW, wantH) = PreferredCaptureSize(maxWidth);
+            var (wantW, wantH) = width is >= 2 && height is >= 2
+                ? (width.Value, height.Value)
+                : PreferredCaptureSize(maxWidth);
             PreferMjpegFourCc(cap);
             try { cap.Set(VideoCaptureProperties.FrameWidth, wantW); } catch { /* ignore */ }
             try { cap.Set(VideoCaptureProperties.FrameHeight, wantH); } catch { /* ignore */ }
-            try { cap.Set(VideoCaptureProperties.Fps, targetFps); } catch { /* ignore */ }
+            if (setFps)
+            {
+                try { cap.Set(VideoCaptureProperties.Fps, targetFps); } catch { /* ignore */ }
+            }
+
             try { cap.Set(VideoCaptureProperties.BufferSize, 3); } catch { /* not all backends */ }
         }
 
@@ -1656,15 +1881,10 @@ namespace Yaesu_Web_Control.Services.Video
         private static bool TryCopyJpeg(Mat frame, out byte[]? jpeg)
         {
             jpeg = null;
-            if (frame.Empty())
+            if (!LooksLikeJpegMat(frame))
                 return false;
 
             var len = (int)(frame.Total() * frame.ElemSize());
-            if (len < 4)
-                return false;
-
-            if (Marshal.ReadByte(frame.Data) != 0xFF || Marshal.ReadByte(frame.Data, 1) != 0xD8)
-                return false;
 
             var bytes = new byte[len];
             Marshal.Copy(frame.Data, bytes, 0, len);

@@ -99,6 +99,32 @@ namespace Yaesu_Web_Control.Services.Video
             PickMjpegCapture(pins, requestedFps, maxWidth);
 
         /// <summary>
+        /// Linux: honour the panel FPS. <see cref="PickSize"/> locks 800×600
+        /// because that pin can do 15, then nearest-to-30 becomes 20 on
+        /// dongles whose 800×600 MJPEG type tops out at 20. Prefer a JPEG pin
+        /// that can actually run at <paramref name="requestedFps"/> — 640×480@30
+        /// beats 800×600@20 when the operator asked for 30.
+        /// </summary>
+        public static Pin? PickMjpegCaptureMeetingFps(
+            IReadOnlyList<Pin> pins, int requestedFps, int maxWidth)
+        {
+            var jpeg = pins.Where(p => p.Jpeg).ToList();
+            if (jpeg.Count == 0)
+                return null;
+
+            var target = EncodeTarget(maxWidth);
+            var size = PickFormat(jpeg, requestedFps, MinWidth, target, panelAspectOnly: true)
+                ?? PickFormat(jpeg, requestedFps, MinWidth, target, panelAspectOnly: false)
+                ?? PickFormat(jpeg, requestedFps, minWidth: 2, target, panelAspectOnly: false)
+                ?? PickSize(jpeg, requestedFps, maxWidth);
+            if (size is null)
+                return null;
+
+            return NearestFps(jpeg, size.Value.Width, size.Value.Height, jpeg: true, requestedFps)
+                ?? size.Value;
+        }
+
+        /// <summary>
         /// Discrete type at the locked size whose advertised rate is nearest
         /// <paramref name="requestedFps"/> (59.94 vs 60 uses the native ratio).
         /// </summary>
