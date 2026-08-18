@@ -23,6 +23,16 @@ Slot the model into the right buckets:
 - `SupportsVCTuneMain` / `SupportsVCTuneSubStatic` — the FTdx101 µ-Tune preselector.
 - Max TX power (100 W vs 200 W) and **4 m band availability**.
 - Which meters it has — some radios lack Temp / IDD / VDD (gated in `Pages/Index.cshtml` and `Services/MeterPollingService.cs`).
+- **Radio Display CAT toolbar** (the radio's own TFT scope via `SS` — not YWC's SDR panel). Slot the model into:
+  - `SupportsSpectrumScopeCat` — gate for the toolbar and standalone Radio Scope card. FTdx101 and FTdx10 are on; FT-710 stays off until `scripts/probe/ss-write-probe.ps1` has been run on one.
+  - `SupportsScopeHold` — HOLD (`SS` P2=8); the 710's `SS` list stops at 7.
+  - `HasPerReceiverScopes` — MAIN/SUB selector; FTdx101 only (`SS` P1 = 0/1).
+  - `ScopeSizeLabels` — 101/10: L/N/S; 710: Expand/Normal.
+  - `ScopeSpeedLabels` — 101/10: SLOW1…FAST3; 710 adds STOP.
+  - `SupportsScopeAfFft` — AF-FFT ATT / OSC ATT / OSC timebase (`SS` P2=7). Does **not** open MULTI.
+  - `SupportsScopeMulti` — leave `false` unless a probe names a real CAT frame that toggles the radio-TFT MULTI layout. Do not guess an extra `SS` P2.
+
+  Markup is server-rendered from these flags (`Pages/Shared/_RadioDisplayScopeToolbarPartial.cshtml` and `_RadioScopePartial.cshtml`). See `docs/design/scope-control-via-cat.md`.
 
 ### 3. Band coverage
 If the radio reaches bands the current line-up doesn't (VHF/UHF, 4 m):

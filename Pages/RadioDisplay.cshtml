@@ -18,8 +18,17 @@
         html, body { height: 100%; margin: 0; background: #000; color: #e8e8e8; overflow: hidden; }
         #radioDisplayContainer { height: 100%; margin: 0 !important; max-width: 100%; }
         #radioDisplayContainer > .col-12 { height: 100%; padding: 0; max-width: 100%; }
-        #radioDisplayContainer .card { height: 100%; border-radius: 0; border: none; background: #000; max-width: 100%; }
+        #radioDisplayContainer .card {
+            height: 100%;
+            border-radius: 0;
+            border: none;
+            background: #000;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
         #radioDisplayContainer .card-header {
+            flex: 0 0 auto;
             flex-wrap: nowrap;
             max-width: 100%;
             min-width: 0;
@@ -44,7 +53,8 @@
             font-size: 0.8rem;
         }
         #radioDisplayContainer .card-body {
-            height: calc(100% - 2.5rem);
+            flex: 1 1 auto;
+            height: auto;
             min-height: 0 !important;
             max-height: none !important;
             position: relative;
@@ -217,13 +227,34 @@
                     </div>
                     <img id="radioDisplayImg" alt="Radio display" decoding="async" style="display:none;" />
                 </div>
+                <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
             </div>
         </div>
     </div>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     <script type="module">
-        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=22";
+        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RadioScopeControl } from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         initRadioDisplayUi('popout');
+        const bar = document.getElementById('radioDisplayScopeBar');
+        window.radioScopeControls = [];
+        if (bar) {
+            const control = new RadioScopeControl(bar);
+            window.radioScopeControls.push(control);
+            window.radioScopeControl = control;
+            const conn = new signalR.HubConnectionBuilder()
+                .withUrl('/radioHub')
+                .withAutomaticReconnect()
+                .build();
+            conn.on('RadioStateUpdate', (update) => {
+                if (update.property === 'ScopeSetting')
+                    window.radioScopeControls.forEach(c => c.applyRemote(update.value));
+                if (update.property === 'ActiveVfo')
+                    window.radioScopeControls.forEach(c => c.setActiveBand(update.value));
+            });
+            conn.start().catch(err => console.error('[radio-display-scope]', err));
+        }
     </script>
 </body>
 </html>

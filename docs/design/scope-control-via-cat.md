@@ -1,11 +1,14 @@
 # Driving the radio's own display over CAT
 
-**Status:** IMPLEMENTED, and **enabled for the FTdx101MP/D only**. The FTdx10
-and FT-710 tables below are written and kept, but gated off in
-`RadioCapabilities.SupportsSpectrumScopeCat` until someone has run the write
-probe on one — these are commands that change what appears on an operator's
-front panel, so manual-derived writes do not ship unverified. Bench-tested on
-an FTdx101MP. Raised by Colin MM5AGM 2026-08-15.
+**Status:** IMPLEMENTED, and **enabled for the FTdx101MP/D and FTdx10**.
+FTdx10 uses the same documented `SS` table as the 101 (P1 fixed at 0; HOLD
+present; L/N/S sizes) so Radio Display can drive the captured TFT. The FT-710
+tables below are written and kept, but still gated off in
+`RadioCapabilities.SupportsSpectrumScopeCat` until someone has run
+`scripts/probe/ss-write-probe.ps1` on one — its size labels and SPEED STOP
+differ, and these are commands that change what appears on an operator's
+front panel. Bench-tested on an FTdx101MP. Raised by Colin MM5AGM 2026-08-15.
+FTdx10 Radio Display toolbar: 2026-08-18.
 **Bench evidence:** `SS` read-probe and write-probe run against a real
 FTdx101MP (ID0682) on COM4, 2026-08-15, plus end-to-end testing through the
 app's own endpoints. Live sync from the radio's own front panel confirmed
@@ -107,8 +110,9 @@ pad will not announce itself.
 
 ## 3. Per-radio capability matrix
 
-Derived from the CAT manuals in `docs/manuals/`. Only the FTdx101MP column is
-hardware-confirmed.
+Derived from the CAT manuals in `docs/manuals/`. The FTdx101MP column is
+hardware-confirmed. FTdx10 is enabled from that same `SS` table (operator
+TFT + Radio Display verification). FT-710 stays gated.
 
 | Function | FTdx101MP/D | FTdx10 | FT-710 | FTDX3000 | FTDX5000 |
 |---|---|---|---|---|---|
@@ -125,11 +129,15 @@ hardware-confirmed.
 
 ### The four differences that matter
 
-**Mono/Multi is not in CAT on any radio.** Searched all seven CAT manuals for
-the term; there is no command and no menu entry. This is the one item on the
-original wish-list that stays front-panel-only. If remote Mono/Multi is
-essential, an overlay click-target over the video is the only route, and that
-is a much smaller overlay than the original proposal.
+**Mono/Multi is not in CAT on any radio.** Searched CAT manuals (FTdx10 /
+FTdx101 / FT-710 / FTX-1), EX DISPLAY/SCOPE menus, Hamlib `newcat.c`,
+SCU-LAN10 (its MULTI button is a *PC GUI* layout, not a radio-TFT command),
+and this repo's mnemonic sweep. `SS` P2=7 sets AF-FFT/OSC attenuators and
+timebase *while* MULTI is already showing; writing it does not open MULTI.
+The UI ships a **disabled MULTI button** (`SupportsScopeMulti = false`) with
+a tooltip to press it on the TFT. HDMI capture is one-way, so a click overlay
+on the MJPEG image cannot substitute. Do not guess extra `SS` P2 values
+(e.g. `SS09`) without a probe that names the frame and the read-back.
 
 **The FT-710 has no HOLD.** Its `SS` P2 list stops at 7; the FTdx101 and FTdx10
 go to 8. Same command, genuinely fewer functions — not an omission in the
@@ -239,11 +247,13 @@ feature.
 
 | File | Role |
 |---|---|
-| `Services/RadioCapabilities.cs` | `SupportsSpectrumScopeCat`, `SupportsScopeHold`, `HasPerReceiverScopes`, `ScopeSizeLabels` |
-| `Services/CatCommands.cs` | `ScopeCommands` — frame construction, answer parsing, mode composition |
-| `Controllers/ScopeController.cs` | `GET /api/scope/{main\|sub}`, `POST /api/scope/{band}/{setting}` |
-| `Pages/Shared/_RadioScopePartial.cshtml` | the control panel markup, gated per model |
-| `wwwroot/js/ui/radio-scope.js` | wiring; repaints from the radio's read-back |
+| `Services/RadioCapabilities.cs` | `SupportsSpectrumScopeCat`, `SupportsScopeHold`, `HasPerReceiverScopes`, `ScopeSizeLabels`, `ScopeSpeedLabels`, `SupportsScopeAfFft`, `SupportsScopeMulti` |
+| `Services/CatCommands.cs` | `ScopeCommands` — frame construction, answer parsing, mode composition, `SetAfFft` / `ParseAfFft` |
+| `Controllers/ScopeController.cs` | `GET /api/scope/{main\|sub}`, `POST /api/scope/{band}/{setting}` including `affft` |
+| `Pages/Shared/_RadioScopePartial.cshtml` | standalone card (CAT-without-video); Hold / Marker / Level live here |
+| `Pages/Shared/_RadioScopeButtonsPartial.cshtml` | shared span / display / speed / MULTI / AF-FFT / OSC buttons |
+| `Pages/Shared/_RadioDisplayScopeToolbarPartial.cshtml` | footer toolbar on Index Radio Display and `/RadioDisplay` pop-out |
+| `wwwroot/js/ui/radio-scope.js` | wiring; one instance per root; `applyRemote` includes P2=7 |
 | `scripts/probe/ss-probe.ps1`, `ss-write-probe.ps1` | the read and write probes |
 
 Three decisions worth knowing about, because none of them is obvious from the
@@ -255,17 +265,20 @@ more here than elsewhere because the operator may be standing at the rig
 changing the same settings by hand, and because a radio that quietly refuses a
 value should look refused rather than accepted.
 
-**The panel is collapsed by default and reads its state lazily, on first
-expand.** Six `SS` reads on a port shared with the ~10 Hz meter poll is not a
-cost worth paying for a panel most users will never open. The collapsed state
-persists in `localStorage` as `ywc.radioScopeOpen`.
+**The standalone card is collapsed by default and reads its state lazily, on
+first expand.** Six `SS` reads on a port shared with the ~10 Hz meter poll is
+not a cost worth paying for a panel most users will never open. The collapsed
+state persists in `localStorage` as `ywc.radioScopeOpen`. The **Radio Display
+toolbar** is the opposite: it eager-loads (`data-eager-load="1"`) because those
+buttons are already on screen next to the captured TFT. When Radio Display is
+enabled, Index hides the standalone card so the same buttons are not shown
+twice.
 
-**It is a partial view, not inline markup.** Placement on the page is not
-settled — it currently sits above YWC's own spectrum panels — so moving it is a
-matter of moving one `<partial>` line. Do not inline it until that argument is
-had. Note the conceptual trap it is guarding against: YWC's SDR spectrum
-display and the radio's internal scope are entirely different things, which is
-why the card header says "the radio's own display" out loud.
+**It is a partial view, not inline markup.** The standalone card sits above
+YWC's own spectrum panels when video is off; the toolbar is a footer on the
+Radio Display card (Index and pop-out). Note the conceptual trap: YWC's SDR
+spectrum display and the radio's internal scope are entirely different things,
+which is why the card header says "the radio's own display" out loud.
 
 `CatMessageDispatcher` was deliberately **not** touched in the first landing.
 Read-back after write covered the cases the UI actually had, and adding `SS` to
@@ -360,21 +373,22 @@ proving. MARKER and LEVEL still have not been seen announced at all (§6).
 
 ### Still open
 
-1. **The FTdx10 and FT-710 are manual-only** — nothing on either has been
-   hardware-verified, so both are **gated off** (decided 2026-08-16; see the
-   Status note at the top). Re-enabling either is one line in
-   `RadioCapabilities.SupportsSpectrumScopeCat` plus a probe run. Fabio
-   (FTdx10) can confirm his whenever video-tx frees him; nobody currently runs
-   an FT-710 actively enough to confirm that one, so it stays gated until
-   someone steps up.
+1. **The FT-710 is still gated.** Size labels (Expand/Normal) and SPEED STOP
+   differ from the 101/10 table, and nobody has run `ss-write-probe.ps1` on
+   one. Re-enabling it is one line in
+   `RadioCapabilities.SupportsSpectrumScopeCat` plus a probe run (P1 fixed at
+   0, skip HOLD). FTdx10 is **on** (same `SS` table as the 101; Radio Display
+   toolbar 2026-08-18).
 2. **The meter selector is not built**, and the reason is in §4: it has to
    cooperate with the borrow-and-restore in `MeterPollingService` or it will
    appear to randomly revert. That is a design decision to take deliberately,
    not a control to bolt on.
-3. **Is remote Mono/Multi actually wanted?** If yes it needs the overlay this
-   note was written to avoid — but only for that one control.
-4. **Placement.** Above the spectrum panels is a starting position, not a
-   verdict.
+3. **MULTI remains a CAT gap.** `SupportsScopeMulti` is false for every
+   current model. AF-FFT ATT / OSC ATT / OSC timebase still ship (P2=7) and
+   take effect once MULTI is on at the radio. Flip the flag if a later probe
+   finds a real frame; do not invent one.
+4. **Placement.** Radio Display footer when video is on; standalone Radio
+   Scope card (with Hold / Marker / Level) when video is off.
 
 ---
 

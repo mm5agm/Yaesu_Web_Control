@@ -6,7 +6,8 @@
 // showing on its front-panel screen.
 //
 // See docs/design/scope-control-via-cat.md. Frame format is hardware-confirmed
-// on an FTdx101MP; the FTdx10 and FT-710 tables come from their CAT manuals.
+// on an FTdx101MP. FTdx10 is enabled from the same SS table; FT-710 stays
+// gated until a write probe.
 //
 // Design notes worth keeping:
 //
@@ -16,9 +17,9 @@
 //    rig changing the same settings by hand, and because a radio that quietly
 //    refuses a value should look refused rather than accepted.
 //
-//  * The panel reads state lazily, on first expand, not at page load. Six SS
-//    reads on a port shared with the meter poll is not a cost worth
-//    paying for a panel most users will never open.
+//  * The standalone card reads state lazily, on first expand, not at page load.
+//    The Radio Display toolbar eager-loads (data-eager-load="1") because those
+//    buttons are already on screen next to the captured TFT.
 //
 //  * SPAN IS STORED PER MODE on the radio, which is why the highlighted span
 //    button moves on its own when you change display mode. Measured on an
@@ -56,18 +57,31 @@ function parseMode(ch) {
     return { is3dss: false, placement: Math.floor(offset / 3), size: offset % 3 };
 }
 
+function notifyRadioScopeControls(fn) {
+    const list = window.radioScopeControls;
+    if (Array.isArray(list) && list.length) {
+        list.forEach(fn);
+        return;
+    }
+    if (window.radioScopeControl) fn(window.radioScopeControl);
+}
+window.notifyRadioScopeControls = notifyRadioScopeControls;
+
 export class RadioScopeControl {
-    constructor() {
-        this.card = document.getElementById('radioScopeCard');
+    constructor(root) {
+        this.card = root instanceof Element
+            ? root
+            : document.getElementById(typeof root === 'string' ? root : 'radioScopeCard');
         if (!this.card) return;              // model has no CAT scope control
 
-        this.body     = document.getElementById('radioScopeBody');
-        this.toggle   = document.getElementById('radioScopeToggle');
-        this.chevron  = document.getElementById('radioScopeChevron');
-        this.status   = document.getElementById('radioScopeStatus');
-        this.sizeGroup = document.getElementById('scopeSizeGroup');
-        this.levelSlider = document.getElementById('scopeLevelSlider');
-        this.levelLabel  = document.getElementById('scopeLevelLabel');
+        this.body        = this.card.querySelector('.scope-body') || this.card;
+        this.toggle      = this.card.querySelector('.scope-toggle');
+        this.chevron     = this.card.querySelector('.scope-chevron');
+        this.status      = this.card.querySelector('.scope-status');
+        this.sizeGroup   = this.card.querySelector('.scope-size-group');
+        this.levelSlider = this.card.querySelector('.scope-level-slider');
+        this.levelLabel  = this.card.querySelector('.scope-level-label');
+        this.eager       = this.card.dataset.eagerLoad === '1';
 
         // Server-rendered from RadioStateService.ActiveVfo so the panel is aimed
         // at the band the radio is actually operating on from the very first
@@ -77,12 +91,16 @@ export class RadioScopeControl {
         this.loaded  = false;
         this.busy    = false;
 
-        this._wireExpand();
+        if (this.toggle) this._wireExpand();
         this._wireControls();
 
-        // Restore the operator's expand/collapse choice, and load state if they
-        // had it open. Same localStorage convention as the spectrum panels.
-        if (localStorage.getItem('ywc.radioScopeOpen') === '1') this._expand();
+        if (this.eager) this.refresh();
+        else if (this.toggle && localStorage.getItem('ywc.radioScopeOpen') === '1') this._expand();
+    }
+
+    _isOpen() {
+        if (this.eager) return true;
+        return this.body && this.body.style.display !== 'none';
     }
 
     // ── expand / collapse ────────────────────────────────────────────────────
@@ -97,7 +115,7 @@ export class RadioScopeControl {
 
     _expand() {
         this.body.style.display = '';
-        this.toggle.setAttribute('aria-expanded', 'true');
+        this.toggle?.setAttribute('aria-expanded', 'true');
         this.chevron?.classList.replace('bi-chevron-down', 'bi-chevron-up');
         localStorage.setItem('ywc.radioScopeOpen', '1');
         if (!this.loaded) this.refresh();
@@ -105,7 +123,7 @@ export class RadioScopeControl {
 
     _collapse() {
         this.body.style.display = 'none';
-        this.toggle.setAttribute('aria-expanded', 'false');
+        this.toggle?.setAttribute('aria-expanded', 'false');
         this.chevron?.classList.replace('bi-chevron-up', 'bi-chevron-down');
         localStorage.setItem('ywc.radioScopeOpen', '0');
     }
@@ -121,6 +139,10 @@ export class RadioScopeControl {
             btn.addEventListener('click', () => this._send('span', btn.dataset.value));
         });
 
+        this.card.querySelectorAll('.scope-speed-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._send('speed', btn.dataset.value));
+        });
+
         // The three mode axes all resolve to one SS write, composed from the
         // current state plus whichever axis the operator just moved.
         this.card.querySelectorAll('.scope-type-btn').forEach(btn => {
@@ -131,6 +153,16 @@ export class RadioScopeControl {
         });
         this.card.querySelectorAll('.scope-size-btn').forEach(btn => {
             btn.addEventListener('click', () => this._sendMode({ size: parseInt(btn.dataset.value, 10) }));
+        });
+
+        this.card.querySelectorAll('.scope-fftatt-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._sendAfFft({ fftAtt: btn.dataset.value }));
+        });
+        this.card.querySelectorAll('.scope-oscatt-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._sendAfFft({ oscAtt: btn.dataset.value }));
+        });
+        this.card.querySelectorAll('.scope-osctime-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._sendAfFft({ oscTime: btn.dataset.value }));
         });
 
         this.card.querySelectorAll('.scope-toggle-btn').forEach(btn => {
@@ -201,7 +233,7 @@ export class RadioScopeControl {
         //    row exists to prevent.
         setTimeout(() => {
             if (this.band !== band) { this._selectBand(band); return; }
-            if (!this.loaded && this.body.style.display !== 'none') this.refresh();
+            if (!this.loaded && this._isOpen()) this.refresh();
         }, 400);
     }
 
@@ -215,7 +247,7 @@ export class RadioScopeControl {
         this.card.querySelectorAll('.scope-band-btn')
             .forEach(b => b.classList.toggle('active', b.dataset.band === band));
         this.loaded = false;
-        if (this.body.style.display !== 'none') {
+        if (this._isOpen()) {
             this.refresh();
         } else {
             // Nothing to read while collapsed — the panel loads lazily on
@@ -281,8 +313,12 @@ export class RadioScopeControl {
                 s.is3dss = m.is3dss; s.placement = m.placement; s.size = m.size;
                 break;
             }
-            // Colour and AF-FFT have no control in this panel. Ignoring them
-            // is correct, not an omission.
+            case '7':
+                s.fftAtt  = v[0];
+                s.oscAtt  = v[1];
+                s.oscTime = v[2];
+                break;
+            // Colour has no control in this panel. Ignoring it is correct.
             default: return;
         }
 
@@ -295,6 +331,14 @@ export class RadioScopeControl {
         const placement = change.placement !== undefined ? change.placement : (s.placement | 0);
         const size      = change.size      !== undefined ? change.size      : (s.size | 0);
         this._send('mode', composeMode(is3dss, placement, size));
+    }
+
+    _sendAfFft(change) {
+        const s = this.state || {};
+        const fftAtt  = change.fftAtt  !== undefined ? change.fftAtt  : (s.fftAtt  ?? '0');
+        const oscAtt  = change.oscAtt  !== undefined ? change.oscAtt  : (s.oscAtt  ?? '0');
+        const oscTime = change.oscTime !== undefined ? change.oscTime : (s.oscTime ?? '0');
+        this._send('affft', `${fftAtt}${oscAtt}${oscTime}`);
     }
 
     // ── transport ────────────────────────────────────────────────────────────
@@ -350,6 +394,10 @@ export class RadioScopeControl {
         this._mark('.scope-type-btn', b => (b.dataset.value === '3dss') === !!state.is3dss);
         this._mark('.scope-place-btn', b => parseInt(b.dataset.value, 10) === (state.placement | 0));
         this._mark('.scope-size-btn', b => parseInt(b.dataset.value, 10) === (state.size | 0));
+        this._mark('.scope-speed-btn', b => b.dataset.value === state.speed);
+        this._mark('.scope-fftatt-btn', b => b.dataset.value === state.fftAtt);
+        this._mark('.scope-oscatt-btn', b => b.dataset.value === state.oscAtt);
+        this._mark('.scope-osctime-btn', b => b.dataset.value === state.oscTime);
 
         this.card.querySelectorAll('.scope-toggle-btn').forEach(btn => {
             btn.classList.toggle('active', state[btn.dataset.setting] === '1');
@@ -380,7 +428,7 @@ export class RadioScopeControl {
     _setStatus(text, cls) {
         if (!this.status) return;
         this.status.textContent = text;
-        this.status.className = `badge ${cls} small`;
+        this.status.className = `badge ${cls} small scope-status`;
     }
 
     _mark(selector, isActive) {
@@ -390,11 +438,14 @@ export class RadioScopeControl {
 
     _summary(state) {
         const spans = ['1k', '2k', '5k', '10k', '20k', '50k', '100k', '200k', '500k', '1M'];
+        const speeds = ['SLOW1', 'SLOW2', 'FAST1', 'FAST2', 'FAST3', 'STOP'];
         const span  = spans[parseInt(state.span, 10)] || '?';
         const type  = state.is3dss ? '3DSS' : 'W/F';
         const place = ['Center', 'Cursor', 'Fix'][state.placement | 0] || '';
+        const speed = speeds[parseInt(state.speed, 10)] || '';
         const hold  = state.hold === '1' ? ' · HOLD' : '';
-        return `${type} ${place} · ${span}${hold}`;
+        const spd   = speed ? ` · ${speed}` : '';
+        return `${type} ${place} · ${span}${spd}${hold}`;
     }
 
     _formatLevel(db) {

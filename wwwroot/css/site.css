@@ -1253,3 +1253,34 @@ fieldset.calibration-card {
 .radio-display-placeholder[hidden] {
     display: none !important;
 }
+
+.radio-display-scope-bar {
+    flex: 0 0 auto;
+    max-height: 40%;
+    overflow-y: auto;
+    background: #1a1a1a;
+    border-top: 1px solid #333;
+    padding: 0.45rem 0.65rem 0.55rem;
+    color: #ddd;
+    text-align: left;
+}
+.radio-display-scope-bar .text-muted {
+    color: #9a9a9a !important;
+}
+.radio-display-scope-bar .btn-outline-secondary {
+    --bs-btn-color: #ccc;
+    --bs-btn-border-color: #555;
+    --bs-btn-hover-bg: #333;
+    --bs-btn-hover-border-color: #777;
+    --bs-btn-hover-color: #fff;
+    --bs-btn-active-bg: #0d6efd;
+    --bs-btn-active-border-color: #0d6efd;
+    --bs-btn-active-color: #fff;
+    --bs-btn-disabled-color: #777;
+    --bs-btn-disabled-border-color: #444;
+}
+.radio-display-scope-bar .btn-outline-secondary.active {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+}

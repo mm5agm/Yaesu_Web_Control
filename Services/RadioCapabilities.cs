@@ -197,16 +197,11 @@ public static class RadioCapabilities
     /// were written and read back on both MAIN and SUB
     /// (scripts/probe/ss-probe.ps1 and ss-write-probe.ps1).
     ///
-    /// Only the FTdx101 pair is enabled, and that is the whole point of this
-    /// switch. The FTdx10 and FT-710 also document SS, and the tables below
-    /// (hold, size labels) carry their values — but nobody has yet sent a Set
-    /// frame to either radio. These are writes: they change what appears on
-    /// somebody's front panel, and the bench run turned up two behaviours the
-    /// manuals do not mention (span is stored per display mode, and a Read
-    /// straight after a Write can come back stale). Shipping manual-derived
-    /// writes to an untested model would find that out on an operator's rig.
-    /// Enabling a model here is a one-line change once someone has run
-    /// scripts/probe/ss-write-probe.ps1 against it and reported the result.
+    /// FTdx10 is enabled on the strength of the same documented SS table as the
+    /// 101 (P1 fixed at 0; HOLD present; L/N/S sizes) so Radio Display can drive
+    /// the captured TFT. FT-710 stays gated: its size labels and SPEED STOP are
+    /// different, and nobody has run ss-write-probe.ps1 on one yet. Enabling a
+    /// model here is a one-line change once that probe has been reported.
     ///
     /// Excluded, and not by oversight: the FTDX3000 has no SS command at all —
     /// its scope lives in EX menu items 124-148, which is writing configuration
@@ -215,7 +210,7 @@ public static class RadioCapabilities
     /// </summary>
     public static bool SupportsSpectrumScopeCat(string radioModel) => radioModel switch
     {
-        "FTdx101MP" or "FTdx101D" => true,
+        "FTdx101MP" or "FTdx101D" or "FTdx10" => true,
         _ => false
     };
 
@@ -225,10 +220,10 @@ public static class RadioCapabilities
     /// functions, not a gap in its manual — so the Hold button is hidden there
     /// rather than sent and silently ignored.
     ///
-    /// The FTdx10 stays listed here even though SupportsSpectrumScopeCat gates
-    /// it off today. That is not an inconsistency to tidy up: this table is
-    /// manual-derived knowledge worth keeping, and it is never consulted unless
-    /// the gate above lets the model through.
+    /// The FT-710 row stays listed here even though SupportsSpectrumScopeCat
+    /// gates it off today. That is not an inconsistency to tidy up: this table
+    /// is manual-derived knowledge worth keeping, and it is never consulted
+    /// unless the gate above lets the model through.
     /// </summary>
     public static bool SupportsScopeHold(string radioModel) => radioModel switch
     {
@@ -258,9 +253,8 @@ public static class RadioCapabilities
     /// does not exist, and sending it would be a guess.
     ///
     /// Returns an empty array for models with no CAT scope control.
-    /// Like the hold table above, the FTdx10 and FT-710 rows are retained
-    /// while SupportsSpectrumScopeCat gates those models off — see the note
-    /// there before deleting them.
+    /// The FT-710 row is retained while SupportsSpectrumScopeCat gates that
+    /// model off — see the note there before deleting it.
     /// </summary>
     public static string[] ScopeSizeLabels(string radioModel) => radioModel switch
     {
@@ -268,6 +262,42 @@ public static class RadioCapabilities
         "FT-710"                              => ["Expand", "Normal"],
         _                                     => []
     };
+
+    /// <summary>
+    /// FFT SPEED labels for SS P2=0, in value order. The FT-710 adds STOP (5);
+    /// FTdx101 and FTdx10 stop at FAST3 (4). Empty when the model has no CAT
+    /// scope control.
+    /// </summary>
+    public static string[] ScopeSpeedLabels(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" => ["SLOW1", "SLOW2", "FAST1", "FAST2", "FAST3"],
+        "FT-710"                              => ["SLOW1", "SLOW2", "FAST1", "FAST2", "FAST3", "STOP"],
+        _                                     => []
+    };
+
+    /// <summary>
+    /// True when SS P2=7 (AF-FFT ATT, OSC ATT, OSC timebase) is documented.
+    /// This does not toggle MULTI — it only sets the attenuators/timebase that
+    /// apply while MULTI is already showing on the TFT.
+    /// </summary>
+    public static bool SupportsScopeAfFft(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" or "FT-710" => true,
+        _ => false
+    };
+
+    /// <summary>
+    /// True when CAT can toggle the radio's MULTI layout (scope + oscilloscope
+    /// + AF-FFT). No supported model exposes this: searched CAT manuals, EX
+    /// DISPLAY/SCOPE menus, Hamlib, and this repo's mnemonic sweep. Kept as a
+    /// flag so a later probe that finds a real frame can enable the button
+    /// without a UI rewrite.
+    /// </summary>
+    public static bool SupportsScopeMulti(string radioModel)
+    {
+        _ = radioModel;
+        return false;
+    }
 
     /// <summary>
     /// Returns the P1 character for a per-VFO CAT command, given the

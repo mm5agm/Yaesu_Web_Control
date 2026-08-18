@@ -382,6 +382,43 @@
             $"{Opcode}{band}{subCommand}{value}0000;";
 
         /// <summary>
+        /// Set frame for AF-FFT / OSCILLOSCOPE (P2=7). Unlike the other
+        /// single-character sub-commands, P3/P4/P5 are three independent axes
+        /// packed into one field: FFT ATT, OSC ATT, OSC timebase. Writing any
+        /// one of them with Set() would zero the other two, so they must go
+        /// out together. P6-P7 are documented as fixed 0.
+        ///
+        /// P3 0/1/2 = AF-FFT ATT 0/10/20 dB
+        /// P4 0/1/2 = OSC level ATT 0/10/20 dB
+        /// P5 0-5   = OSC time 1/3/10/30/100/300 ms
+        /// </summary>
+        public static string SetAfFft(char band, char fftAtt, char oscAtt, char oscTime)
+        {
+            fftAtt  = ClampDigit(fftAtt,  '2');
+            oscAtt  = ClampDigit(oscAtt,  '2');
+            oscTime = ClampDigit(oscTime, '5');
+            return $"{Opcode}{band}{AfFft}{fftAtt}{oscAtt}{oscTime}00;";
+        }
+
+        /// <summary>
+        /// Unpacks the P2=7 five-character field into the three axes the UI
+        /// exposes. "11200" => FFT ATT 10 dB, OSC ATT 10 dB, OSC 10 ms.
+        /// Missing characters default to '0' rather than throwing — a short
+        /// or null field is treated as unknown-but-harmless, same as Value().
+        /// </summary>
+        public static (char FftAtt, char OscAtt, char OscTime) ParseAfFft(string? field)
+        {
+            var f = (field ?? "00000").PadRight(5, '0');
+            return (f[0], f[1], f[2]);
+        }
+
+        private static char ClampDigit(char value, char max)
+        {
+            if (value < '0') return '0';
+            return value > max ? max : value;
+        }
+
+        /// <summary>
         /// Set frame for LEVEL, which is the one sub-command that uses the whole
         /// five-character field: -30.0 to +30.0 in 0.5 dB steps, always signed
         /// and always zero-padded to two integer digits ("+05.0", "-30.0").

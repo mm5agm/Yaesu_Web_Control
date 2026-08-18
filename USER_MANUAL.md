@@ -110,8 +110,9 @@
     - 19.1 [Hardware chain](#191-hardware-chain)
     - 19.2 [Electrical safety](#192-electrical-safety)
     - 19.3 [Settings and Index panel](#193-settings-and-index-panel)
-    - 19.4 [Raspberry Pi and Docker](#194-raspberry-pi-and-docker)
-    - 19.5 [Troubleshooting](#195-troubleshooting)
+    - 19.4 [CAT scope toolbar](#194-cat-scope-toolbar)
+    - 19.5 [Raspberry Pi and Docker](#195-raspberry-pi-and-docker)
+    - 19.6 [Troubleshooting](#196-troubleshooting)
 20. [CW Reader](#20-cw-reader)
     - 20.1 [What to expect from a machine reading Morse](#201-what-to-expect-from-a-machine-reading-morse)
     - 20.2 [Starting it](#202-starting-it)
@@ -1485,6 +1486,8 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 | Enable radio display | Opt-in. When off, capture stays closed and the Index panel is hidden. |
 
 On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close. If the dongle is unplugged, the badge stays **Disconnected** until you refresh the device list and click **Start** — YWC does not reopen whatever camera now sits at the old index. **Auto** and reloading the page do not bypass that halt; only **Start** (after refresh) or choosing a different device clears it.
+
+On **FTdx10** and **FTdx101MP/D**, a CAT toolbar under the picture drives the radio’s own scope (span, 3DSS, Center/Cursor/Fix, FFT speed, AF-FFT/OSC). That is not click-through on the video — HDMI capture is one-way. See [§19.4](#194-cat-scope-toolbar).
 
 ---
 
@@ -3205,7 +3208,19 @@ If the capture dongle is unplugged (or the host cannot open the saved device), t
 
 Capture opens while at least one browser is viewing the stream, and stays open for a couple of seconds after the last viewer disconnects so **Pop out** / **Close** does not tear down the USB capture device mid-handoff. After that idle window the host releases the dongle so an idle Pi pays no capture CPU. Max width stays at **800** (host default) for modest radio panels — except when you have chosen a capture size explicitly, in which case that width is used for the encode too, so a mode you asked for by name is not then quietly scaled back down.
 
-### 19.4 Raspberry Pi and Docker
+### 19.4 CAT scope toolbar
+
+The Radio Display picture is a live capture of the radio’s TFT. Clicks on that image never reach the touchscreen (the dongle is one-way). On radios that expose the spectrum scope over CAT (`SS`), YWC puts a compact toolbar under the picture so you can change what the radio draws — Center / Cursor / Fix, 3DSS vs waterfall, Expand (L / N / S), FFT SPAN, FFT SPEED, and AF-FFT / OSC attenuators and timebase. The same bar is on the **Pop out** window.
+
+**FTdx10** and **FTdx101MP/D** show the toolbar. **FTdx101** also has MAIN / SUB (two independent scopes). **FTdx10** is a single receiver, so that row is omitted. **FT-710** stays off until the `SS` writes have been probed on that radio.
+
+**MULTI** (scope + oscilloscope + AF-FFT on the TFT) has no CAT command on any supported radio. The MULTI button in YWC is disabled; press MULTI on the radio. AF-FFT ATT (0 / 10 / 20 dB) and OSC ATT / timebase still work — they apply once MULTI is already showing.
+
+SPAN, display mode, and SPEED on the front panel live-sync the highlighted buttons.
+
+If Radio Display is **off**, FTdx101 (and FTdx10) still have a standalone **Radio Scope** card above the SDR panels, with the same CAT controls plus Hold / Marker / Level. Enabling Radio Display hides that card so the buttons are not shown twice; **Show Radio Display** brings the video and the toolbar back together. Closing the video panel hides the toolbar with it.
+
+### 19.5 Raspberry Pi and Docker
 
 **Bare metal (Linux / Pi):**
 
@@ -3227,7 +3242,7 @@ UVC dongles typically expose **video0** (capture) and **video1** (metadata). The
 
 See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial driver on the **host** as usual; video uses the kernel UVC/V4L2 stack.
 
-### 19.5 Troubleshooting
+### 19.6 Troubleshooting
 
 | Symptom | What to try |
 |---------|-------------|
@@ -3245,7 +3260,7 @@ See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial
 | Stream stays black / FPS stays 0 after allowing Camera | Quit YWC fully and relaunch via `scripts/macos/run-dev.sh` (or the DMG). The first permission grant must complete before OpenCV can deliver frames; also confirm the HDMI cable is live into the USB capture dongle. |
 | Host app exits when stopping / popping out the stream | USB HDMI dongles crash if the capture graph is closed and immediately reopened. Use a current build — pop-out hands off the live device; Close waits ~2 s before release. |
 
-OCR, click-through of the captured UI, capture-device audio, and WebRTC are **not** in this version.
+OCR, click-through of the captured UI, capture-device audio, and WebRTC are **not** in this version. Drive the radio’s scope from the CAT toolbar under the picture (§19.4), not by clicking the image.
 
 ---
 

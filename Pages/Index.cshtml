@@ -744,17 +744,16 @@
         </div>
     </div>
 
-    @* Controls for the RADIO's own scope, sent over CAT (SS command). Renders
-       only on models that have the command; collapsed by default so the page
-       gains one header row, not a wall of controls.
-
-       Placement is not settled. It sits above YWC's own spectrum panels here
-       because both concern "what am I looking at on which band", but it could
-       equally live beside the meters or behind a toolbar button. It is a
-       partial precisely so that argument can be had by moving one line.
+    @* Controls for the RADIO's own scope, sent over CAT (SS command). Hidden
+       when Radio Display is on — the same buttons sit under the captured
+       picture as a toolbar, so they are not shown twice. CAT-without-video
+       keeps this standalone card.
 
        See docs/design/scope-control-via-cat.md. *@
-    <partial name="_RadioScopePartial" model="@Model.RadioModel" />
+    @if (!Model.VideoDisplayEnabled)
+    {
+        <partial name="_RadioScopePartial" model="@Model.RadioModel" />
+    }
 
     <!-- Radio Display — USB UVC / HDMI capture MJPEG; visible when Settings enable it -->
     <div id="radioDisplayContainer" class="row mt-3" style="display:none;">
@@ -854,6 +853,10 @@
                          class="radio-display-img"
                          style="display:none; max-width:100%; width:auto; height:auto; max-height:50vh; object-fit:contain; background:#000; vertical-align:middle;" />
                 </div>
+                @if (Model.VideoDisplayEnabled)
+                {
+                    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
+                }
             </div>
         </div>
     </div>
@@ -2692,10 +2695,15 @@
             initFreqKeyboard();
             initMemoriesPanel();
 
-            // Radio-scope CAT controls. The constructor no-ops when the card is
-            // absent, which is the case on every model without the SS command,
-            // so there is no capability check to keep in sync here.
-            window.radioScopeControl = new RadioScopeControl();
+            // Radio-scope CAT controls. Bind each host (standalone card and/or
+            // Radio Display toolbar) so SignalR updates reach every instance.
+            // The constructor no-ops when the root is absent.
+            window.radioScopeControls = [];
+            const scopeCard = document.getElementById('radioScopeCard');
+            if (scopeCard) window.radioScopeControls.push(new RadioScopeControl(scopeCard));
+            const scopeBar = document.getElementById('radioDisplayScopeBar');
+            if (scopeBar) window.radioScopeControls.push(new RadioScopeControl(scopeBar));
+            window.radioScopeControl = window.radioScopeControls[0] || null;
 
             // ── UTC clock in the top bar ──────────────────────────────────────
             const utcClockEl = document.getElementById('utcClock');
