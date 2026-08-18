@@ -49,7 +49,16 @@ On macOS, set **Serial Port** to a `/dev/cu.*` device. On Linux, use `/dev/ttyUS
 | Browser auto-open | `OpenBrowserOnStartup` (default true) | Same setting; skipped when `HostRuntime.IsContainer` |
 | Operator-facing docs | `USER_MANUAL.md` §§1–4, 6.2–6.3, 15.10, 17 | Same |
 
-There are no automated tests. Verification is manual via the browser at `http://localhost:8080`.
+Most verification is manual, via the browser at `http://localhost:8080`. There
+is a small unit-test project covering the parts where a wrong answer is silent
+rather than visible — JPEG SOF parsing and the video disconnect/halt logic:
+
+```bash
+dotnet test Tests/YaesuWebControl.Tests/YaesuWebControl.Tests.csproj
+```
+
+It targets `net10.0`, so it runs on any host. Nothing in the UI, CAT, or SDR
+paths is covered by it.
 
 ---
 
