@@ -1,4 +1,4 @@
-namespace Yaesu_Web_Control.Services.Video
+﻿namespace Yaesu_Web_Control.Services.Video
 {
     /// <summary>
     /// Radio Display pin ranking shared by Windows DirectShow MJPEG, Media
@@ -70,6 +70,30 @@ namespace Yaesu_Web_Control.Services.Video
                 ?? PickFormat(pins, 60, MinWidth, target, panelAspectOnly: true)
                 ?? PickFormat(pins, wantFps, MinWidth, target, panelAspectOnly: false)
                 ?? PickFormat(pins, requestedFps, MinWidth, target, panelAspectOnly: false);
+        }
+
+        /// <summary>
+        /// Largest MJPEG mode the device offers — normally the one it passes
+        /// through without its internal scaler. Used after the device is caught
+        /// merging frames in a scaled mode; the picture is scaled down here
+        /// instead, which costs CPU but is the only correct output such a
+        /// device produces.
+        /// </summary>
+        public static Pin? PickNativeMjpeg(IReadOnlyList<Pin> pins)
+        {
+            Pin? best = null;
+            foreach (var p in pins)
+            {
+                if (!p.Jpeg)
+                    continue;
+                if (best is null ||
+                    (long)p.Width * p.Height > (long)best.Value.Width * best.Value.Height ||
+                    ((long)p.Width * p.Height == (long)best.Value.Width * best.Value.Height &&
+                     p.Fps > best.Value.Fps))
+                    best = p;
+            }
+
+            return best;
         }
 
         /// <summary>

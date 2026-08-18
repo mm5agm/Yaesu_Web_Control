@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 
@@ -38,9 +38,20 @@ namespace Yaesu_Web_Control.Services.Video
         private readonly AutoResetEvent _frameReady = new(false);
         private readonly object _frameLock = new();
         private readonly ILogger _logger;
+        /// <summary>Trailing-data samples that together prove the device merges frames.</summary>
+        private const int MergedFrameEvidence = 3;
+
+        private long _trailingSamples;
+        private long _mergedSamples;
+        private int _mergesFrames;
+        private long _unterminatedSamples;
+        private long _imagelessSamples;
         private readonly List<StreamCap> _caps;
         private byte[]? _latestJpeg;
         private bool _disposed;
+
+        public bool DeviceMergesFrames => Volatile.Read(ref _mergesFrames) != 0;
+
 
         public int Width { get; private set; }
         public int Height { get; private set; }
@@ -78,7 +89,8 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         public static WindowsDshowMjpegSession? TryOpen(
-            int dshowIndex, int targetFps, int maxWidth, ILogger logger, out bool noUsableMjpegPin)
+            int dshowIndex, int targetFps, int maxWidth, ILogger logger, out bool noUsableMjpegPin,
+            bool preferNativeMode = false)
         {
             noUsableMjpegPin = false;
             if (!OperatingSystem.IsWindows())
@@ -174,7 +186,9 @@ namespace Yaesu_Web_Control.Services.Video
                     formats.Count == 0 ? "(none reported)" : string.Join(", ", formats));
 
                 var pins = caps.Select(c => c.Pin).ToList();
-                var chosen = VideoCapturePinRank.PickMjpegCapture(pins, targetFps, maxWidth);
+                var chosen = ForcedPin(pins, logger)
+                    ?? (preferNativeMode ? VideoCapturePinRank.PickNativeMjpeg(pins) : null)
+                    ?? VideoCapturePinRank.PickMjpegCapture(pins, targetFps, maxWidth);
                 if (chosen is null)
                 {
                     logger.LogInformation(
@@ -670,24 +684,228 @@ namespace Yaesu_Web_Control.Services.Video
 
                 var bytes = new byte[bufferLen];
                 Marshal.Copy(buffer, bytes, 0, bufferLen);
-                var end = FindJpegEoi(bytes);
-                var jpeg = end >= 0 && end + 1 < bytes.Length
-                    ? bytes.AsSpan(0, end + 1).ToArray()
-                    : bytes;
+
+                // Trim to the end of the FIRST image, found by walking markers.
+                // Scanning backwards for FF D9 takes the LAST EOI in the buffer,
+                // which appends anything sitting past the real frame end — the
+                // decoder then renders that tail as extra image content.
+                var end = FindFirstImageEnd(bytes, out var hasScan);
+                byte[] jpeg;
+                if (end > 0)
+                {
+                    // A terminated image with no scan carries no pixels — some
+                    // grabbers emit a bare FF D8 FF D9 after a replug until the
+                    // source relocks. Publishing those keeps the frame counter
+                    // and the status badge running over a picture that can never
+                    // appear, so drop them and let the stall watchdog say so.
+                    if (!hasScan)
+                    {
+                        owner.NoteImagelessSample(bytes.Length, end);
+                        return 0;
+                    }
+
+                    if (end < bytes.Length)
+                    {
+                        // A tail holding another SOI means the driver put more than
+                        // one picture in this sample, and the first one is itself a
+                        // tiled repeat. Never show those. A tail without an SOI is
+                        // only padding, so trim it and publish as normal.
+                        if (TailHasSoi(bytes, end))
+                        {
+                            owner.NoteMergedSample(bytes, end);
+                            return 0;
+                        }
+
+                        owner.NoteTrailingBytes(bytes, end);
+                    }
+
+                    jpeg = end == bytes.Length ? bytes : bytes.AsSpan(0, end).ToArray();
+                }
+                else
+                {
+                    owner.NoteUnterminatedFrame(bytes.Length);
+                    jpeg = bytes;
+                }
+
                 owner.OnFrame(jpeg);
                 return 0;
             }
         }
 
-        private static int FindJpegEoi(byte[] bytes)
+        /// <summary>True when the bytes after the first image begin another JPEG.</summary>
+        private static bool TailHasSoi(byte[] bytes, int end)
         {
-            for (var i = bytes.Length - 2; i >= 2; i--)
+            for (var i = end; i < bytes.Length - 1; i++)
             {
-                if (bytes[i] == 0xFF && bytes[i + 1] == 0xD9)
-                    return i + 1;
+                if (bytes[i] == 0xFF && bytes[i + 1] == 0xD8)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Diagnostic override: YWC_VIDEO_FORCE_PIN=WxH pins the capture to that
+        /// MJPEG mode instead of the ranked pick. Temporary — it exists to test
+        /// which modes this grabber can actually render cleanly.
+        /// </summary>
+        private static VideoCapturePinRank.Pin? ForcedPin(
+            IReadOnlyList<VideoCapturePinRank.Pin> pins, ILogger logger)
+        {
+            var spec = Environment.GetEnvironmentVariable("YWC_VIDEO_FORCE_PIN");
+            if (string.IsNullOrWhiteSpace(spec))
+                return null;
+
+            var parts = spec.Split('x', 'X');
+            if (parts.Length != 2 ||
+                !int.TryParse(parts[0], out var w) ||
+                !int.TryParse(parts[1], out var h))
+            {
+                logger.LogWarning("Radio Display: YWC_VIDEO_FORCE_PIN='{Spec}' not WxH — ignored", spec);
+                return null;
+            }
+
+            VideoCapturePinRank.Pin? best = null;
+            foreach (var p in pins)
+            {
+                if (!p.Jpeg || p.Width != w || p.Height != h)
+                    continue;
+                if (best is null || p.Fps > best.Value.Fps)
+                    best = p;
+            }
+
+            if (best is null)
+                logger.LogWarning("Radio Display: YWC_VIDEO_FORCE_PIN={Spec} has no MJPEG pin — ignored", spec);
+            else
+                logger.LogWarning("Radio Display: YWC_VIDEO_FORCE_PIN={Spec} — forcing {W}x{H}@{Fps}",
+                    spec, best.Value.Width, best.Value.Height, best.Value.Fps);
+            return best;
+        }
+
+        /// <summary>
+        /// Index just past the EOI of the first complete JPEG in <paramref name="bytes"/>,
+        /// or -1 if the buffer holds no terminated image. Walks the marker structure
+        /// rather than searching for FF D9: that byte pair occurs freely inside marker
+        /// segment payloads (an APPn thumbnail is itself a JPEG and ends in one), so a
+        /// naive search can stop short or run long. <paramref name="hasScan"/> reports
+        /// whether that image actually contained entropy-coded pixel data.
+        /// </summary>
+        private static int FindFirstImageEnd(byte[] bytes, out bool hasScan)
+        {
+            hasScan = false;
+            if (bytes.Length < 2 || bytes[0] != 0xFF || bytes[1] != 0xD8)
+                return -1;
+
+            var i = 2;
+            while (i < bytes.Length - 1)
+            {
+                if (bytes[i] != 0xFF) { i++; continue; }
+
+                var marker = bytes[i + 1];
+                if (marker == 0xFF) { i++; continue; }              // fill byte
+                if (marker == 0xD9) return i + 2;                   // EOI
+                if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7))
+                {
+                    i += 2;                                          // standalone
+                    continue;
+                }
+
+                if (i + 4 > bytes.Length) return -1;
+                var segmentLength = (bytes[i + 2] << 8) | bytes[i + 3];
+                if (segmentLength < 2) return -1;
+
+                if (marker == 0xDA)
+                {
+                    hasScan = true;
+                    // Start of scan: entropy-coded data follows. FF inside it is
+                    // either stuffed (FF 00) or a restart marker; anything else
+                    // ends the scan.
+                    var j = i + 2 + segmentLength;
+                    while (j < bytes.Length - 1)
+                    {
+                        if (bytes[j] == 0xFF)
+                        {
+                            var next = bytes[j + 1];
+                            if (next != 0x00 && !(next >= 0xD0 && next <= 0xD7))
+                                break;
+                        }
+                        j++;
+                    }
+
+                    if (j >= bytes.Length - 1) return -1;
+                    i = j;
+                    continue;
+                }
+
+                i += 2 + segmentLength;
             }
 
             return -1;
+        }
+
+        /// <summary>
+        /// Records a sample that carried bytes past the end of its first image.
+        /// Logged sparsely: this is diagnostic evidence for an intermittent
+        /// corruption, not a per-frame condition worth flooding the log with.
+        /// </summary>
+        private void NoteTrailingBytes(byte[] bytes, int end)
+        {
+            var occurrence = Interlocked.Increment(ref _trailingSamples);
+            if (occurrence != 1 && occurrence % 100 != 0)
+                return;
+
+            _logger.LogWarning(
+                "Radio Display: DirectShow sample carried {Extra} padding bytes past the first JPEG " +
+                "(sample {Total} bytes, occurrence {Occurrence}). Trimmed to the first image.",
+                bytes.Length - end, bytes.Length, occurrence);
+        }
+
+        /// <summary>
+        /// Records a dropped sample that held more than one picture. A mode the
+        /// device renders correctly produces none of these at all, so a handful is
+        /// already conclusive rather than borderline.
+        /// </summary>
+        private void NoteMergedSample(byte[] bytes, int end)
+        {
+            var occurrence = Interlocked.Increment(ref _mergedSamples);
+            if (occurrence >= MergedFrameEvidence)
+                Volatile.Write(ref _mergesFrames, 1);
+
+            if (occurrence != 1 && occurrence % 100 != 0)
+                return;
+
+            _logger.LogWarning(
+                "Radio Display: DirectShow sample held more than one picture " +
+                "(sample {Total} bytes, first image {First} bytes, occurrence {Occurrence}). " +
+                "Dropped — the device is merging frames.",
+                bytes.Length, end, occurrence);
+        }
+
+        /// <summary>Records a dropped sample whose first image held no scan data.</summary>
+        private void NoteImagelessSample(int length, int end)
+        {
+            var occurrence = Interlocked.Increment(ref _imagelessSamples);
+            if (occurrence != 1 && occurrence % 100 != 0)
+                return;
+
+            _logger.LogWarning(
+                "Radio Display: DirectShow sample of {Length} bytes held a {ImageLength}-byte JPEG " +
+                "with no image data (occurrence {Occurrence}). Dropped — the capture device is " +
+                "delivering empty frames.",
+                length, end, occurrence);
+        }
+
+        /// <summary>Records a sample with no terminated image; forwarded unchanged.</summary>
+        private void NoteUnterminatedFrame(int length)
+        {
+            var occurrence = Interlocked.Increment(ref _unterminatedSamples);
+            if (occurrence != 1 && occurrence % 100 != 0)
+                return;
+
+            _logger.LogWarning(
+                "Radio Display: DirectShow sample of {Length} bytes had no complete JPEG " +
+                "(occurrence {Occurrence}). Forwarded unchanged.",
+                length, occurrence);
         }
 
         [StructLayout(LayoutKind.Sequential)]
