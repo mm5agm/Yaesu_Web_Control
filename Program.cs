@@ -706,7 +706,15 @@ try
     // /pictures block for why this is not UseStaticFiles.
     app.MapStaticAssets();
 
-    app.MapRazorPages();
+    // WithStaticAssets is what makes the fingerprinting visible to the page.
+    // MapStaticAssets alone only serves the files; it is this call that hangs
+    // the asset descriptors off the page endpoints, so that asp-append-version
+    // emits the content-hashed filename and the importmap tag has something to
+    // be populated from. Without it both silently fall back: the script tags
+    // keep working with a ?v= query string and the import map renders empty,
+    // which looks fine until a bare module specifier fails to resolve.
+    app.MapRazorPages()
+       .WithStaticAssets();
     app.MapControllers();
 
     // MAP SIGNALR HUB:
