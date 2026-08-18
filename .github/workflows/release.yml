@@ -66,6 +66,11 @@ jobs:
         run: dotnet test Tests/YaesuWebControl.Tests/YaesuWebControl.Tests.csproj --configuration Release --verbosity normal
 
   build-windows:
+    # Unstable snapshots of develop are published by unstable.yml. Creating
+    # that GitHub Release would otherwise re-enter this workflow (on:
+    # release) and the docker job would try to parse unstable-YYYYMMDD as
+    # SemVer.
+    if: github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-')
     runs-on: windows-latest
     permissions:
       contents: write
@@ -184,7 +189,7 @@ jobs:
   # finished. Failing at 20 minutes (~10x the 1m50s normal, so a merely slow
   # runner won't trip it) makes that visible instead of silent.
   build-macos:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-'))
     runs-on: macos-latest
     timeout-minutes: 20
     permissions:
@@ -230,6 +235,7 @@ jobs:
   # Multi-arch CAT-only Linux image → GHCR (amd64 + arm64).
   # workflow_dispatch with empty tag → build only, no push (smoke test).
   build-docker:
+    if: github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -321,7 +327,7 @@ jobs:
     # job, so the check would go silent in precisely the case it exists for.
     # The event guard stays inside the same expression — a dispatch or a PR has
     # no release to inspect.
-    if: ${{ always() && github.event_name == 'release' }}
+    if: ${{ always() && github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'unstable-') }}
     needs: [build-windows, build-macos, build-docker]
     runs-on: ubuntu-latest
     permissions:
