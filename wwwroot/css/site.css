@@ -360,6 +360,15 @@ pre, code { tab-size: 4; }
     font-weight: bold;
 }
 
+/* Slot that absorbs leftover width between the band buttons and the
+   AGC column, then centers the filter/audio-scope stack in that gap. */
+.filter-scope-column-slot {
+    flex: 1 1 auto;
+    display: flex;
+    justify-content: center;
+    min-width: 160px;
+}
+
 /* Right-hand controls column — 2-column grid of label+select pairs */
 .vfo-controls-column {
     flex-shrink: 0;
@@ -367,7 +376,6 @@ pre, code { tab-size: 4; }
     grid-template-columns: repeat(2, minmax(110px, 1fr));
     gap: 0.3rem 0.4rem;
     align-content: start;
-    margin-left: auto;
 }
 
 .vfo-control-item {

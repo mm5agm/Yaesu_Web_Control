@@ -25,7 +25,7 @@
     // agrees with the range check CatController.SetPower applies to the same value.
     int maxPowerWatts = Yaesu_Web_Control.Services.RadioCapabilities.MaxPowerWatts(Model.RadioModel);
     // Quick Memory Bank Store/Recall buttons (Thomas OZ1JTE request) — rendered
-    // once, next to VFO A's band buttons, since QMB is a radio-global function.
+    // once, under VFO A's filter/audio scope, since QMB is a radio-global function.
     bool hasQmb = Yaesu_Web_Control.Services.RadioCapabilities.SupportsQmb(Model.RadioModel);
     // Render VC Tune controls only when both the model supports VC Tune (FTdx101MP)
     // AND the hardware ID is positively confirmed to support VT CAT commands.
@@ -142,7 +142,7 @@
 }
 
 <!-- Cache-busted CSS reference -->
-<link rel="stylesheet" href="~/css/site.css?v=20260520a" />
+<link rel="stylesheet" href="~/css/site.css?v=20260818a" />
 <link rel="stylesheet" href="~/css/closer-to-raw-power.css?v=20260226n" />
 <style>
     #saveMemBtnA, #saveMemBtnB { font-weight: 700 !important; font-size: 0.85rem !important; color: #212529 !important; }
@@ -1016,62 +1016,17 @@
                     </div>
                 </div>
                 <div class="card-body p-2">
-                    <!-- Receiver Controls Group: Save-to-Mem, Band buttons, Mode select.
+                    <!-- Receiver Controls Group: Band buttons, Mode, filter/audio
+                         scope column (canvas + Save-to-Mem + QMB), AGC column.
                          The S-meter and its history strip moved to the top meter row
                          in v2.3.9 (Jacek SP3L #34, Colin's design call) -- the radio
                          has only one calibrated S-meter, so showing it once at the
                          top is honest. -->
                     <div class="receiver-controls-group d-flex flex-nowrap mb-0 gap-2 align-items-start">
-                        <!-- Left: Save-to-Mem button (S-meter moved to top row) -->
-                        <div class="flex-shrink-0">
-                            <button id="saveMemBtnA" type="button"
-                                    class="btn btn-outline-secondary btn-sm"
-                                    style="padding:1px 4px;"
-                                    onclick="saveVfoToMemory('A')"
-                                    aria-label="Save VFO A to memories"
-                                    title="Save VFO A frequency, mode and clarifier to app memories">
-                                Save to Mem
-                            </button>
-                            <span id="saveMemStatusA" class="visually-hidden" role="status" aria-live="polite"></span>
-                        </div>
-                        <!-- Middle: Band buttons + Mode/Antenna below + filter scope -->
-                        <div class="flex-grow-1 d-flex flex-column gap-1">
+                        <!-- Band buttons + Mode/Antenna (sized to content so the
+                             scope column can sit in the leftover middle gap) -->
+                        <div class="flex-shrink-0 d-flex flex-column gap-1">
                             @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", "A", Model.SelectedBandA))
-                            @if (hasQmb)
-                            {
-                                <!-- Quick Memory Bank (QMB) — global radio function, shown once.
-                                     Store (QI;) pushes the current VFO into the QMB stack; Recall
-                                     (QR;) recalls / cycles through the stored slots. Buttons only,
-                                     per Thomas OZ1JTE's request (no stack-contents display). -->
-                                <div class="d-flex align-items-center gap-2 mt-1" id="qmbControls">
-                                    <span class="vfo-control-label" aria-hidden="true">QMB</span>
-                                    <button id="qmbStoreBtn" type="button"
-                                            class="btn btn-outline-secondary btn-sm"
-                                            style="padding:1px 6px;"
-                                            onclick="qmbStore()"
-                                            aria-label="Store current VFO to Quick Memory Bank"
-                                            title="Store the current VFO frequency and mode into the radio's Quick Memory Bank">
-                                        Store
-                                    </button>
-                                    <button id="qmbRecallBtn" type="button"
-                                            class="btn btn-outline-secondary btn-sm"
-                                            style="padding:1px 6px;"
-                                            onclick="qmbRecall()"
-                                            aria-label="Recall from Quick Memory Bank"
-                                            title="Recall from the Quick Memory Bank — the display switches to QMB; repeated presses step through the stored slots. Use V/M to return to VFO.">
-                                        Recall
-                                    </button>
-                                    <button id="qmbVfoBtn" type="button"
-                                            class="btn btn-outline-secondary btn-sm"
-                                            style="padding:1px 6px;"
-                                            onclick="qmbVfo()"
-                                            aria-label="Return to VFO mode (V/M key)"
-                                            title="Return to VFO mode — leaves QMB (mirrors the radio's V/M key).">
-                                        V/M
-                                    </button>
-                                    <span id="qmbStatus" class="visually-hidden" role="status" aria-live="polite"></span>
-                                </div>
-                            }
                             <div class="d-flex align-items-center gap-2 mt-1">
                                 <label class="vfo-control-label" for="modeSelectA">Mode</label>
                                 <select class="form-select form-select-sm vfo-mode-select" id="modeSelectA"
@@ -1137,11 +1092,61 @@
                                  style="font-size:1.1rem; font-weight:700; color:#000; margin-top:0.3rem; max-width:320px; overflow-wrap:break-word;"
                                  aria-live="polite"></div>
                         </div>
-                        <!-- Filter scope display VFO A — sits between band buttons and AGC column -->
-                        <div class="flex-shrink-0" id="filterScopeContainerA" style="width:160px;">
+                        <!-- Filter/audio scope column — canvas with Save-to-Mem and
+                             QMB stacked under it. The slot grows so this stack sits
+                             in the middle of the gap between bands and AGC. -->
+                        <div class="filter-scope-column-slot">
+                        <div class="flex-shrink-0 d-flex flex-column gap-1" id="filterScopeContainerA" style="width:160px;">
                             <canvas id="filterScopeCanvasA" role="img" aria-hidden="true"
                                     aria-label="VFO A filter display" data-a11y-key="filter.scopeA"
                                     style="display:block; height:80px; border-radius:4px;"></canvas>
+                            <button id="saveMemBtnA" type="button"
+                                    class="btn btn-outline-secondary btn-sm w-100"
+                                    style="padding:1px 4px;"
+                                    onclick="saveVfoToMemory('A')"
+                                    aria-label="Save VFO A to memories"
+                                    title="Save VFO A frequency, mode and clarifier to app memories">
+                                Save to Mem
+                            </button>
+                            <span id="saveMemStatusA" class="visually-hidden" role="status" aria-live="polite"></span>
+                            @if (hasQmb)
+                            {
+                                <!-- Quick Memory Bank (QMB) — global radio function, shown once.
+                                     Store (QI;) pushes the current VFO into the QMB stack; Recall
+                                     (QR;) recalls / cycles through the stored slots. Buttons only,
+                                     per Thomas OZ1JTE's request (no stack-contents display). -->
+                                <div class="d-flex flex-column gap-1" id="qmbControls">
+                                    <span class="vfo-control-label" aria-hidden="true">QMB</span>
+                                    <div class="d-flex align-items-stretch gap-1">
+                                        <button id="qmbStoreBtn" type="button"
+                                                class="btn btn-outline-secondary btn-sm flex-fill"
+                                                style="padding:1px 4px;"
+                                                onclick="qmbStore()"
+                                                aria-label="Store current VFO to Quick Memory Bank"
+                                                title="Store the current VFO frequency and mode into the radio's Quick Memory Bank">
+                                            Store
+                                        </button>
+                                        <button id="qmbRecallBtn" type="button"
+                                                class="btn btn-outline-secondary btn-sm flex-fill"
+                                                style="padding:1px 4px;"
+                                                onclick="qmbRecall()"
+                                                aria-label="Recall from Quick Memory Bank"
+                                                title="Recall from the Quick Memory Bank — the display switches to QMB; repeated presses step through the stored slots. Use V/M to return to VFO.">
+                                            Recall
+                                        </button>
+                                        <button id="qmbVfoBtn" type="button"
+                                                class="btn btn-outline-secondary btn-sm flex-fill"
+                                                style="padding:1px 4px;"
+                                                onclick="qmbVfo()"
+                                                aria-label="Return to VFO mode (V/M key)"
+                                                title="Return to VFO mode — leaves QMB (mirrors the radio's V/M key).">
+                                            V/M
+                                        </button>
+                                    </div>
+                                    <span id="qmbStatus" class="visually-hidden" role="status" aria-live="polite"></span>
+                                </div>
+                            }
+                        </div>
                         </div>
                         <!-- Right: Controls column (2-column grid) -->
                         <div class="vfo-controls-column">
@@ -1466,23 +1471,13 @@
                     </div>
                 </div>
                 <div class="card-body p-2">
-                    <!-- Receiver Controls Group: Save-to-Mem, Band buttons, Mode select.
+                    <!-- Receiver Controls Group: Band buttons, Mode, filter/audio
+                         scope column (canvas + Save-to-Mem), AGC column.
                          S-meter moved to top meter row in v2.3.9 (see VFO A panel). -->
                     <div class="receiver-controls-group d-flex flex-nowrap mb-0 gap-2 align-items-start">
-                        <!-- Left: Save-to-Mem button (S-meter moved to top row) -->
-                        <div class="flex-shrink-0">
-                            <button id="saveMemBtnB" type="button"
-                                    class="btn btn-outline-secondary btn-sm"
-                                    style="padding:1px 4px;"
-                                    onclick="saveVfoToMemory('B')"
-                                    aria-label="Save VFO B to memories"
-                                    title="Save VFO B frequency, mode and clarifier to app memories">
-                                Save to Mem
-                            </button>
-                            <span id="saveMemStatusB" class="visually-hidden" role="status" aria-live="polite"></span>
-                        </div>
-                        <!-- Middle: Band buttons + Mode/Antenna below -->
-                        <div class="flex-grow-1 band-buttons-shifted d-flex flex-column gap-1">
+                        <!-- Band buttons + Mode/Antenna (sized to content so the
+                             scope column can sit in the leftover middle gap) -->
+                        <div class="flex-shrink-0 d-flex flex-column gap-1">
                             @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", "B", Model.SelectedBandB))
                             <div class="d-flex align-items-center gap-2 mt-1">
                                 <label class="vfo-control-label" for="modeSelectB">Mode</label>
@@ -1552,11 +1547,23 @@
                                      aria-live="polite"></div>
                             </div>
                         }
-                        <!-- Filter scope display VFO B — sits between band buttons and AGC column -->
-                        <div class="flex-shrink-0" id="filterScopeContainerB" style="width:160px;">
+                        <!-- Filter/audio scope column — canvas with Save-to-Mem stacked
+                             under it (QMB is VFO A only). Slot centers it in the gap. -->
+                        <div class="filter-scope-column-slot">
+                        <div class="flex-shrink-0 d-flex flex-column gap-1" id="filterScopeContainerB" style="width:160px;">
                             <canvas id="filterScopeCanvasB" role="img" aria-hidden="true"
                                     aria-label="VFO B filter display" data-a11y-key="filter.scopeB"
                                     style="display:block; height:80px; border-radius:4px;"></canvas>
+                            <button id="saveMemBtnB" type="button"
+                                    class="btn btn-outline-secondary btn-sm w-100"
+                                    style="padding:1px 4px;"
+                                    onclick="saveVfoToMemory('B')"
+                                    aria-label="Save VFO B to memories"
+                                    title="Save VFO B frequency, mode and clarifier to app memories">
+                                Save to Mem
+                            </button>
+                            <span id="saveMemStatusB" class="visually-hidden" role="status" aria-live="polite"></span>
+                        </div>
                         </div>
                         <!-- Right: Controls column (2-column grid) -->
                         <div class="vfo-controls-column">
