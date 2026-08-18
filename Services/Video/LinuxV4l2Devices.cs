@@ -12,6 +12,7 @@ namespace Yaesu_Web_Control.Services.Video
     internal static class LinuxV4l2Devices
     {
         private const int O_RDONLY = 0;
+        private const int O_RDWR = 2;
         private const int O_NONBLOCK = 0x800;
         private const uint V4L2_CAP_VIDEO_CAPTURE = 0x00000001;
         private const uint V4L2_CAP_VIDEO_CAPTURE_MPLANE = 0x00001000;
@@ -179,6 +180,9 @@ namespace Yaesu_Web_Control.Services.Video
         private static readonly UIntPtr VidIocEnumFramesizes = unchecked((UIntPtr)0xC02C564A);
         // _IOWR('V', 75, struct v4l2_frmivalenum) — 52 bytes
         private static readonly UIntPtr VidIocEnumFrameintervals = unchecked((UIntPtr)0xC034564B);
+        // _IOWR('V', 4/5, struct v4l2_format) — 208 bytes on 64-bit (union 8-aligned)
+        private static readonly UIntPtr VidIocGFmt = unchecked((UIntPtr)0xC0D05604);
+        private static readonly UIntPtr VidIocSFmt = unchecked((UIntPtr)0xC0D05605);
         // _IOWR('V', 21/22, struct v4l2_streamparm) — 204 bytes
         private static readonly UIntPtr VidIocGParm = unchecked((UIntPtr)0xC0CC5615);
         private static readonly UIntPtr VidIocSParm = unchecked((UIntPtr)0xC0CC5616);
@@ -229,16 +233,91 @@ namespace Yaesu_Web_Control.Services.Video
             }
         }
 
+        public static int OpenCaptureFd(int index)
+        {
+            var fd = Open(DevicePath(index), O_RDWR | O_NONBLOCK);
+            return fd;
+        }
+
+        public static void CloseFd(int fd)
+        {
+            if (fd >= 0)
+                _ = Close(fd);
+        }
+
+        public static bool TrySetFrameRateFd(int fd, int fps) =>
+            fd >= 0 && fps >= 1 &&
+            (TrySetFrameRateOnFd(fd, V4l2BufTypeVideoCapture, fps)
+             || TrySetFrameRateOnFd(fd, V4l2BufTypeVideoCaptureMplane, fps));
+
         /// <summary>
-        /// VIDIOC_S_PARM timeperframe. OpenCV's CAP_PROP_FPS often does not
-        /// stick on V4L2 after the first S_FMT.
+        /// VIDIOC_S_FMT MJPEG + VIDIOC_S_PARM on an already-open RDWR fd.
+        /// </summary>
+        public static bool TryConfigureMjpeg(int fd, int width, int height, int fps)
+        {
+            if (fd < 0 || width < 2 || height < 2 || fps < 1)
+                return false;
+
+            return TrySetMjpegFormatOnFd(fd, V4l2BufTypeVideoCapture, width, height, fps)
+                || TrySetMjpegFormatOnFd(fd, V4l2BufTypeVideoCaptureMplane, width, height, fps);
+        }
+
+        /// <summary>
+        /// VIDIOC_S_FMT MJPEG + VIDIOC_S_PARM. Must be RDWR; OpenCV's FPS
+        /// property at 800×600@30 is what UVC turns into YUYV@20 on USB2.
+        /// Call after VideoCapture opens and before the first Read.
+        /// </summary>
+        public static bool TrySetMjpegFormat(int index, int width, int height, int fps)
+        {
+            var fd = OpenCaptureFd(index);
+            if (fd < 0)
+                return false;
+
+            try
+            {
+                return TryConfigureMjpeg(fd, width, height, fps);
+            }
+            finally
+            {
+                _ = Close(fd);
+            }
+        }
+
+        private static bool TrySetMjpegFormatOnFd(int fd, uint bufType, int width, int height, int fps)
+        {
+            var fmt = new V4l2Format { Type = bufType };
+            if (Ioctl(fd, VidIocGFmt, ref fmt) != 0)
+                return false;
+
+            fmt.Width = (uint)width;
+            fmt.Height = (uint)height;
+            fmt.PixelFormat = FourCc('M', 'J', 'P', 'G');
+            fmt.Field = 1; // V4L2_FIELD_NONE
+            fmt.BytesPerLine = 0;
+            fmt.SizeImage = 0;
+            if (Ioctl(fd, VidIocSFmt, ref fmt) != 0)
+                return false;
+
+            TrySetFrameRateOnFd(fd, bufType, fps);
+
+            var check = new V4l2Format { Type = bufType };
+            if (Ioctl(fd, VidIocGFmt, ref check) != 0)
+                return IsJpegPixelFormat(fmt.PixelFormat);
+
+            return IsJpegPixelFormat(check.PixelFormat)
+                && check.Width >= 2
+                && check.Height >= 2;
+        }
+
+        /// <summary>
+        /// VIDIOC_S_PARM timeperframe. Needs a writable fd.
         /// </summary>
         public static bool TrySetFrameRate(int index, int fps)
         {
             if (fps < 1)
                 return false;
 
-            var fd = Open(DevicePath(index), O_RDONLY | O_NONBLOCK);
+            var fd = Open(DevicePath(index), O_RDWR | O_NONBLOCK);
             if (fd < 0)
                 return false;
 
@@ -269,10 +348,12 @@ namespace Yaesu_Web_Control.Services.Video
             for (uint fmtIndex = 0; fmtIndex < EnumCap; fmtIndex++)
             {
                 var fmt = new V4l2FmtDesc { Index = fmtIndex, Type = bufType };
-                if (Ioctl(fd, VidIocEnumFmt, ref fmt) != 0 || fmt.PixelFormat == 0)
+                if (Ioctl(fd, VidIocEnumFmt, ref fmt) != 0)
                     break;
+                if (fmt.PixelFormat == 0)
+                    continue;
 
-                var jpeg = IsJpegPixelFormat(fmt.PixelFormat);
+                var jpeg = IsJpegPixelFormat(fmt.PixelFormat) || (fmt.Flags & 0x0001) != 0;
                 for (uint sizeIndex = 0; sizeIndex < EnumCap; sizeIndex++)
                 {
                     var size = new V4l2FrmSizeEnum
@@ -387,6 +468,9 @@ namespace Yaesu_Web_Control.Services.Video
         [DllImport("libc", EntryPoint = "ioctl", SetLastError = true)]
         private static extern int Ioctl(int fd, UIntPtr request, ref V4l2StreamParm arg);
 
+        [DllImport("libc", EntryPoint = "ioctl", SetLastError = true)]
+        private static extern int Ioctl(int fd, UIntPtr request, ref V4l2Format arg);
+
         [StructLayout(LayoutKind.Sequential, Size = 204)]
         private struct V4l2StreamParm
         {
@@ -397,6 +481,29 @@ namespace Yaesu_Web_Control.Services.Video
             public uint TpfDenominator;
             public uint ExtendedMode;
             public uint ReadBuffers;
+        }
+
+        /// <summary>
+        /// 64-bit v4l2_format: type + 4-byte pad (union contains pointers via
+        /// v4l2_window) + pix (width/height/fourcc…).
+        /// </summary>
+        [StructLayout(LayoutKind.Sequential, Size = 208)]
+        private struct V4l2Format
+        {
+            public uint Type;
+            public uint Pad;
+            public uint Width;
+            public uint Height;
+            public uint PixelFormat;
+            public uint Field;
+            public uint BytesPerLine;
+            public uint SizeImage;
+            public uint Colorspace;
+            public uint Priv;
+            public uint Flags;
+            public uint YcbcrEnc;
+            public uint Quantization;
+            public uint XferFunc;
         }
     }
 }
