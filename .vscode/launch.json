@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Run Yaesu Web Control",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build Yaesu_Web_Control",
+            "program": "${workspaceFolder}/bin/Debug/net10.0-windows/Yaesu_Web_Control.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:8080"
+            }
+        }
+    ]
+}
