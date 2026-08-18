@@ -2111,6 +2111,35 @@
         </div>
     </details>
 
+    <!-- Radio Display (USB UVC / HDMI capture → MJPEG) -->
+    <details class="settings-section" id="radioDisplaySection">
+        <summary><i class="bi bi-display" aria-hidden="true"></i>&nbsp;Radio Display</summary>
+        <div class="section-body">
+            <p class="text-muted">
+                Show the transceiver’s external video output in the browser via a USB webcam or
+                HDMI/DVI capture dongle. Device, frame rate, and image quality are chosen on the Index
+                <strong>Radio Display</strong> panel (or pop-out). The stream starts only when you click
+                <strong>Start</strong> (or enable <strong>Auto</strong>). Off by default.
+            </p>
+            <div class="alert alert-warning" role="alert">
+                <strong>Electrical safety:</strong> verify that any DVI-D→HDMI cable or adapter is
+                suitable for your radio model before connecting. Unsuitable passive adapters can
+                damage the radio. Yaesu Web Control does not supply or electrically protect capture
+                hardware — see the user manual §19.
+            </div>
+            <div class="mb-3 form-check form-switch">
+                <input class="form-check-input" type="checkbox" asp-for="Settings.VideoDisplayEnabled" id="videoDisplayEnabled" />
+                <label class="form-check-label" asp-for="Settings.VideoDisplayEnabled">Enable radio display</label>
+            </div>
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
+        </div>
+    </details>
+
     @if (Model.IsWindowsHost)
     {
     <!-- SDR Spectrum Display -->
@@ -2854,6 +2883,7 @@
             }
 
             document.getElementById('btnRefreshAudioDevices')?.addEventListener('click', loadAudioDevices);
+
             document.getElementById('btnGenerateHttpsCert')?.addEventListener('click', async function () {
                 if (!confirm('Generate a new self-signed certificate? This overwrites any existing one. Restart YWC afterwards if HTTPS is enabled.'))
                     return;

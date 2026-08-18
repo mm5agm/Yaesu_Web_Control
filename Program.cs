@@ -13,6 +13,14 @@ using System.Text.Json;
 using System.Windows.Forms;
 #endif
 
+// OpenCV's AVFoundation backend tries to spin the AppKit run loop to show the
+// Camera TCC prompt. That only works on the main thread; from the Radio Display
+// capture thread it logs "can not spin main run loop" and leaves the device
+// half-open (IsOpened true, Read hangs, black MJPEG). Skip that path — the
+// .app Info.plist + System Settings prompt already handle authorization.
+if (OperatingSystem.IsMacOS())
+    Environment.SetEnvironmentVariable("OPENCV_AVFOUNDATION_SKIP_AUTH", "1");
+
 // ── Single-instance guard ────────────────────────────────────────────────────
 const string MutexName = "Global\\Yaesu_Web_Control_SingleInstance";
 var mutex = new Mutex(initiallyOwned: true, name: MutexName, out bool createdNew);
@@ -440,6 +448,10 @@ builder.Services.AddSingleton<ISettingsService, SettingsService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>());
+
+// Radio Display (USB UVC / HDMI capture → MJPEG) — opt-in; capture opens while viewers connect.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoSessionManager>();
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoCaptureService>();
 
 // Audio filter EX address map — loaded once at startup from
 // wwwroot/data/audio-filter-ex-map.json; used by the Audio Filter popout

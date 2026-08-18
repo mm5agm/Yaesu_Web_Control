@@ -42,6 +42,7 @@
    - 6.6 [DX Cluster](#66-dx-cluster)
    - 6.7 [Backup &amp; Restore](#67-backup--restore)
    - 6.8 [Remote Audio](#68-remote-audio)
+   - 6.9 [Radio Display](#69-radio-display)
 7. [Application Setup](#7-application-setup)
    - 7.1 [External App Buttons](#71-external-app-buttons)
    - 7.2 [WSJT-X UDP Settings](#72-wsjt-x-udp-settings)
@@ -104,6 +105,12 @@
     - 18.4 [Operating](#184-operating)
     - 18.5 [Troubleshooting](#185-troubleshooting)
     - 18.6 [Audio codecs (Opus vs PCM16)](#186-audio-codecs-opus-vs-pcm16)
+19. [Radio Display](#19-radio-display)
+    - 19.1 [Hardware chain](#191-hardware-chain)
+    - 19.2 [Electrical safety](#192-electrical-safety)
+    - 19.3 [Settings and Index panel](#193-settings-and-index-panel)
+    - 19.4 [Raspberry Pi and Docker](#194-raspberry-pi-and-docker)
+    - 19.5 [Troubleshooting](#195-troubleshooting)
 
 ---
 
@@ -126,6 +133,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | CAT + web UI | Yes | Yes | Yes |
 | SDR spectrum / waterfall | Yes | No | No |
 | Voice Control (SAPI mic) | Yes | No | No |
+| Radio Display (USB capture → MJPEG) | Yes | Yes | Yes (map `/dev/video*` in Docker) |
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
@@ -243,10 +251,12 @@ ls /dev/ttyUSB* /dev/ttyACM*
 export YWC_SERIAL_DEVICE=/dev/ttyUSB0   # adjust to match
 
 # Optional — Remote Audio (radio USB codec via ALSA). Compose maps /dev/snd.
-# Confirm GIDs if permission-denied: getent group dialout audio
+# Confirm GIDs if permission-denied: getent group dialout audio video
 # export YWC_DIALOUT_GID=20
 # export YWC_AUDIO_GID=29
+# export YWC_VIDEO_GID=44   # Radio Display (UVC/V4L2); also set YWC_VIDEO_DEVICE=/dev/video0
 # arecord -l && aplay -l   # find the Yaesu USB audio card on the host
+# ls /dev/video*           # find HDMI capture / webcam nodes for Radio Display
 
 # Prefer the published image (pin a release tag instead of :latest if you like)
 docker compose pull
@@ -256,7 +266,7 @@ docker compose up -d
 # docker compose up -d --build
 ```
 
-Open `http://<host>:8080`. Settings and logs persist under `./data/ywc` by default. The container entrypoint fixes ownership of that volume automatically (so a host-created `./data/ywc` does not need a manual `chown`). Auto-exit and local browser-open are disabled in the container. If the serial port is permission-denied, set `YWC_DIALOUT_GID` to the host `dialout` GID (`getent group dialout`). For Remote Audio, compose also maps `/dev/snd` and adds the host `audio` group (`YWC_AUDIO_GID`, often `29`); pick the radio USB codec in **Settings → Remote Audio**. See comments in `docker-compose.yml`.
+Open `http://<host>:8080`. Settings and logs persist under `./data/ywc` by default. The container entrypoint fixes ownership of that volume automatically (so a host-created `./data/ywc` does not need a manual `chown`). Auto-exit and local browser-open are disabled in the container. If the serial port is permission-denied, set `YWC_DIALOUT_GID` to the host `dialout` GID (`getent group dialout`). For Remote Audio, compose also maps `/dev/snd` and adds the host `audio` group (`YWC_AUDIO_GID`, often `29`); pick the radio USB codec in **Settings → Remote Audio**. For Radio Display, map `/dev/video*` (`YWC_VIDEO_DEVICE`) and the host `video` group (`YWC_VIDEO_GID`, often `44`); see [§19](#19-radio-display) and comments in `docker-compose.yml`.
 
 ### 2.4 USB serial driver (Windows / macOS / Linux)
 
@@ -1444,6 +1454,18 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
 
 On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window that owns the audio session. Use this before opening Settings (or any other page) so RX/TX keep running — navigating away from Home otherwise closes the in-page session. While audio is in the pop-out, Home still shows status/levels/mutes, and the filter-scope FFT on Home stays live. Only one audio session is allowed at a time; handing off briefly reconnects.
+
+---
+
+### 6.9 Radio Display
+
+**Settings → Radio Display** enables the feature. Capture device, frame rate, image quality, and **Start / Stop** are on the Index **Radio Display** panel (or pop-out). The stream does not open until you click **Start** (or tick **Auto**). Full setup and electrical-safety notes are in [§19 Radio Display](#19-radio-display).
+
+| Setting | Description |
+|---------|-------------|
+| Enable radio display | Opt-in. When off, capture stays closed and the Index panel is hidden. |
+
+On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close. If the dongle is unplugged, the badge stays **Disconnected** until you refresh the device list and click **Start** — YWC does not reopen whatever camera now sits at the old index. **Auto** and reloading the page do not bypass that halt; only **Start** (after refresh) or choosing a different device clears it.
 
 ---
 
@@ -3032,6 +3054,100 @@ Remote Audio always samples at **48 kHz mono** on the host bridge. What changes 
 **Preference:** YWC offers **Opus first** whenever the browser supports it. Choose **PCM16** only if you need uncompressed audio on a fast LAN, or if Opus is greyed out in your browser.
 
 Both directions use the same codec for a session. Stop remote audio and connect again after changing the selector.
+
+---
+
+## 19. Radio Display
+
+Radio Display captures the radio’s **external video output** (or any USB UVC webcam) on the YWC host and streams it to the browser as **MJPEG**. It complements CAT control when you need to see menus, meters, or status that are not exposed over CAT. No OBS or separate streaming app is required.
+
+### 19.1 Hardware chain
+
+```text
+Radio DVI-D / HDMI video output
+            │
+            ▼
+    Suitable DVI-D→HDMI cable / adapter (model-specific — see §19.2)
+            │
+            ▼
+  HDMI→USB capture dongle (UVC)
+            │
+            ▼
+ Computer / Pi / Docker host running Yaesu Web Control
+            │
+            ▼
+        Web browser (Index panel or /RadioDisplay pop-out)
+```
+
+Typical radio panel resolutions are modest (e.g. FTDX-10 **800×480** or **800×600**). Many cheap capture sticks still open at **720p/1080p** with letterboxing — leave **Max width** at **800** so the host downscales before JPEG encode (important on a Raspberry Pi). On Windows and macOS the host picks **one** capture size for **15 / 30 / 60 fps**: a 4:3 mode at least 800 px wide when the dongle has one (typically **800×600** after scale, or 1024×768 → 800×600). Changing FPS does not jump between 640×480 and 720p. **640×480** is used only if the dongle has nothing ≥800 wide. **60 fps** may stay ~30 if that 4:3 pin cannot run 60 — the size stays put rather than switching to 1080p60. The **15 fps** setting is paced in software even when the pin’s floor is 20.
+
+### 19.2 Electrical safety
+
+Yaesu Web Control does **not** supply or electrically protect video adapters or capture hardware.
+
+- Verify that any **DVI-D→HDMI** cable or adapter is electrically suitable for **your** radio model before connecting.
+- Do **not** assume every passive DVI-D→HDMI adapter is safe on every Yaesu transceiver.
+- Follow the radio manufacturer’s guidance and published investigations of Yaesu video-output interfaces (for example community DVI-D→HDMI risk discussions on YouTube / forums).
+- Treat the capture chain as an external accessory under your responsibility.
+
+### 19.3 Settings and Index panel
+
+1. Open **Settings → Radio Display** and enable **Radio display**, then Save.
+2. On Home, the **Radio Display** card appears. Pick the capture device, then click **Start**. The stream does **not** open until you start it (so a leftover device selection cannot grab the dongle). Tick **Auto** if you want the previous behaviour — start as soon as the panel opens with a device selected. Preference is stored in the browser.
+3. Frame rate (**15 / 30 / 60 fps**; default **15**) and image quality (**Low / Medium / Max** = 40 / 65 / 85; default **Max**) are chosen on the same card. The FPS list is a **target** — USB bandwidth, JPEG encode, and host CPU can still deliver less. Rates above what the capture device advertises (for example **60** on a 30 fps stick) are hidden. **Max** keeps the capture JPEG (least CPU when the dongle already sends MJPEG). **Low** / **Medium** recompress — smaller stream, more CPU. Prefer **15 fps** on a Raspberry Pi; use Low/Medium there only if the link needs a smaller stream. On Windows/macOS, 15 / 30 / 60 share the same panel-sized pin (see §19.1); the badge should track the dropdown (15 via pacing if the pin floor is 20).
+4. Other controls:
+   - **Start / Stop** — attach or release the MJPEG viewer (Stop lets the host drop the dongle after a couple of seconds)
+   - **Fit / Fill** — `object-fit` contain vs cover
+   - **Fullscreen** — fullscreen the card
+   - **Pop out** — opens `/RadioDisplay` in a separate window (closes the Index panel); if you were streaming, the pop-out keeps the stream
+   - **Reattach** (pop-out) — returns the stream to the main window and closes the pop-out
+   - **Close** — stops the stream and closes the panel (Show button restores it); preference stored in the browser
+
+If the capture dongle is unplugged (or the host cannot open the saved device), the badge stays **Disconnected**. Recovery: (1) refresh the device list, (2) confirm the intended capture device is present, (3) click **Start**. Windows camera indexes can move when devices are replugged — do not assume the old index still refers to the same camera. The host does **not** automatically reopen whatever camera now sits at the old index (that would be the laptop webcam on many PCs). **Auto** still means start when the panel opens with a saved device, not retry after an unplug; reloading the page while disconnected also leaves capture halted until you press **Start** or pick a different device.
+
+Capture opens while at least one browser is viewing the stream, and stays open for a couple of seconds after the last viewer disconnects so **Pop out** / **Close** does not tear down the USB capture device mid-handoff. After that idle window the host releases the dongle so an idle Pi pays no capture CPU. Max width stays at **800** (host default) for modest radio panels.
+
+### 19.4 Raspberry Pi and Docker
+
+**Bare metal (Linux / Pi):**
+
+- Plug in the capture dongle; confirm nodes with `ls /dev/video*` and names under `/sys/class/video4linux/*/name`.
+- Ensure the YWC process user can open the device (often membership of the **`video`** group).
+- Keep **Max width ≤ 800** (host default) and prefer **15 fps** on Pi-class CPUs. **Max** quality keeps the capture JPEG (least extra CPU). **Low** / **Medium** recompress and add encode load — use them only if the browser link needs a smaller stream. Raising FPS to 30–60 increases load sharply.
+
+**Docker:** map the V4L2 device and the host **video** group GID, similar to serial/audio:
+
+```yaml
+devices:
+  - ${YWC_VIDEO_DEVICE:-/dev/video0}:${YWC_VIDEO_DEVICE:-/dev/video0}
+  - ${YWC_VIDEO_DEVICE_ALT:-/dev/video1}:${YWC_VIDEO_DEVICE_ALT:-/dev/video1}
+group_add:
+  - "${YWC_VIDEO_GID:-44}"   # host `getent group video`
+```
+
+UVC dongles typically expose **video0** (capture) and **video1** (metadata). The device list is built from `/sys/class/video4linux`, which is visible even when the matching `/dev/videoN` is not mapped into the container — selecting an unmapped or metadata node fails with **Could not open capture device index N**. Map both nodes, add the **video** group, then choose the capture device (usually **USB Video (video0)**).
+
+See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial driver on the **host** as usual; video uses the kernel UVC/V4L2 stack.
+
+### 19.5 Troubleshooting
+
+| Symptom | What to try |
+|---------|-------------|
+| Panel hidden | Enable Radio Display in Settings, then Show Radio Display; check Close was not pressed. |
+| `/api/video/stream` → 403 | Feature disabled or no device key saved. |
+| Black / disconnected | Wrong device index; another app holding the UVC device exclusively; unplug/replug. Unplug is reported as **Disconnected** and the host does **not** reopen that index (Windows may have given it to another camera). Recovery: refresh the device list, confirm the intended device is present, then click **Start**. `/api/video/stream` returns **409** while halted. **Auto** and page reload cannot bypass the halt. |
+| Panel blank while badge says Streaming | The MJPEG `<img>` connection dropped; it should reconnect on its own within a few seconds. Hard-reload if it does not. |
+| High CPU on Pi | Prefer **15 fps**; confirm the dongle is not capturing full 1080p without downscale. **Low** / **Medium** quality add a recompress step. |
+| Resolution jumps when changing FPS (640×480 vs 800×600 vs 720p) | Use a current build. 15 / 30 / 60 share one ≥800 4:3 pin when the dongle has one; **640×480** only if nothing is ≥800 wide. |
+| 15 fps badge shows ~20 | Use a current build — the host paces to 15 even when the pin’s floor is 20. |
+| Device list empty (Linux) | Check `/dev/video*`, `video` group, Docker `devices:` / `group_add`. |
+| Could not open capture device index N (Docker) | That index is listed from sysfs but `/dev/videoN` is not in the container, or it is a metadata/codec node. Map `video0` **and** `video1`, set `YWC_VIDEO_GID` (`getent group video`, often 44), and select the capture node (usually video0). |
+| Device list empty (macOS) | Launch via the `.app` / `scripts/macos/run-dev.sh` (not bare `dotnet run`), then allow **Camera** for Yaesu Web Control. |
+| `Could not open capture device` on Intel Mac | OpenCvSharp’s `osx-x64` native library needs Homebrew **libavif**. Run `brew install libavif`, restart YWC, pick the device again. (Apple Silicon builds do not need this.) |
+| Stream stays black / FPS stays 0 after allowing Camera | Quit YWC fully and relaunch via `scripts/macos/run-dev.sh` (or the DMG). The first permission grant must complete before OpenCV can deliver frames; also confirm the HDMI cable is live into the USB capture dongle. |
+| Host app exits when stopping / popping out the stream | USB HDMI dongles crash if the capture graph is closed and immediately reopened. Use a current build — pop-out hands off the live device; Close waits ~2 s before release. |
+
+OCR, click-through of the captured UI, capture-device audio, and WebRTC are **not** in this version.
 
 ---
 

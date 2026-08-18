@@ -20,6 +20,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>x64</Platforms>
     <UseWindowsForms>true</UseWindowsForms>
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
   <!-- macOS / Linux CAT-only host: console process, no WinForms / voice / SDR worker. -->
@@ -65,6 +66,10 @@
     <Content Remove="core\**" />
     <EmbeddedResource Remove="core\**" />
     <None Remove="core\**" />
+    <Compile Remove="Tests\**" />
+    <Content Remove="Tests\**" />
+    <EmbeddedResource Remove="Tests\**" />
+    <None Remove="Tests\**" />
   </ItemGroup>
 
   <!-- Radio-agnostic code shared with Icom Web Control. Pulled in as a git
@@ -106,9 +111,11 @@
     <Compile Remove="Services\Voice\VoicePhraseValidator.cs" />
   </ItemGroup>
 
-  <!-- Windows TFM does not need the Avalonia-backed macOS tray. -->
+  <!-- Windows TFM does not need the Avalonia-backed macOS tray / capture helpers. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <Compile Remove="Services\MacSystemTrayService.cs" />
+    <Compile Remove="Services\Video\MacAvFoundationCapture.cs" />
+    <Compile Remove="Services\Video\MacJpegEncoder.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -124,6 +131,14 @@
     <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="Markdig" Version="1.2.0" />
     <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+    <PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
+    <!-- Native runtimes: pin to published versions (linux/osx packs skip 4.11). -->
+    <PackageReference Include="OpenCvSharp4.official.runtime.linux-x64.slim" Version="4.13.0.20260225" />
+    <!-- linux-arm (20260211) used RID linux-arm, so linux-arm64 publish omitted natives. -->
+    <PackageReference Include="OpenCvSharp4.runtime.linux-arm64" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.runtime.osx.arm64" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.runtime.osx.x64" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
     <PackageReference Include="PortAudioSharp2" Version="1.0.6" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
@@ -308,6 +323,24 @@
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
     </ItemGroup>
+  </Target>
+
+  <!-- ObjC helper for Radio Display FPS. C# objc_msgSend of CMTime aborts
+       (NSException) on 59.94 fps HDMI pins; this dylib uses @try and the
+       range's own minFrameDuration. -->
+  <Target Name="BuildMacAvFpsDylib"
+          AfterTargets="Build"
+          Condition="'$(TargetFramework)' == 'net10.0' AND $([MSBuild]::IsOSPlatform('OSX'))">
+    <Exec Command="clang -dynamiclib -fobjc-arc -O2 -framework AVFoundation -framework CoreMedia -framework Foundation -o &quot;$(OutputPath)libYwcMacAvFps.dylib&quot; &quot;$(MSBuildProjectDirectory)/Services/Video/MacAvFoundationFps.m&quot;" />
+  </Target>
+
+  <Target Name="PublishMacAvFpsDylib"
+          AfterTargets="Publish"
+          Condition="'$(TargetFramework)' == 'net10.0' AND $([MSBuild]::IsOSPlatform('OSX'))">
+    <Copy SourceFiles="$(OutputPath)libYwcMacAvFps.dylib"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(OutputPath)libYwcMacAvFps.dylib')" />
   </Target>
 
 </Project>
