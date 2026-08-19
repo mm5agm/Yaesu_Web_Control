@@ -23,6 +23,7 @@ namespace Yaesu_Web_Control.Services
         // that false back to true and the UI would stay on TX for several poll cycles.
         private int _txFalseCount = 0;
         private bool _stableIsTransmitting = false;
+        private bool _prevStableIsTransmitting = false;
         private const int TxOffDebounceCount = 2;
 
         // Antenna sync: the radio doesn't broadcast AN auto-information messages when the
@@ -180,6 +181,18 @@ namespace Yaesu_Web_Control.Services
                     bool isTransmitting = _stableIsTransmitting;
                     _stateService.IsTransmitting = isTransmitting;
                     _logger.LogDebug("[MeterPolling] TX poll: raw='{Raw}', rawTX={RawTX}, stableTX={StableTX}", txResponse, rawIsTransmitting, isTransmitting);
+
+                    // TX-off transition: zero all TX-only meters immediately so clients
+                    // never see a stale peak from the last debounce cycle.
+                    if (!isTransmitting && _prevStableIsTransmitting)
+                    {
+                        _stateService.CompressionMeter = 0;
+                        _stateService.ALCMeter         = 0;
+                        _stateService.IDDMeter         = 0;
+                        _stateService.SWRMeter         = 0;
+                        if (_stateService.PowerMeter != 0) _stateService.PowerMeter = 0;
+                    }
+                    _prevStableIsTransmitting = isTransmitting;
 
                     _logger.LogDebug("[MeterPolling][DEBUG] Polling S-Meter A...");
                     var smAResponse = await _multiplexer.SendCommandAsync(CatCommands.SMeterMain + ";", "MeterPoll", stoppingToken);
