@@ -75,4 +75,17 @@ public sealed class ScopeCommandsTests
         Assert.False(RadioCapabilities.SupportsSpectrumScopeCat("FT-710"));
         Assert.False(RadioCapabilities.SupportsScopeMulti("FTdx10"));
     }
+
+    // The FTDX10 CAT manual fixes SS P2=3 P4/P5 at zero, so the NB Col row must
+    // not render there. Gated in _RadioScopeButtonsPartial on this method.
+    [Theory]
+    [InlineData("FTdx101MP", true)]
+    [InlineData("FTdx101D",  true)]
+    [InlineData("FTdx10",    false)]
+    [InlineData("FT-710",    false)]
+    [InlineData("",          false)]
+    public void SupportsScopeNarrowBandColor_IsFtdx101Only(string model, bool expected)
+    {
+        Assert.Equal(expected, RadioCapabilities.SupportsScopeNarrowBandColor(model));
+    }
 }

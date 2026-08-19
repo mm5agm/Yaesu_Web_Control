@@ -14,6 +14,7 @@
     var speedLabels  = Yaesu_Web_Control.Services.RadioCapabilities.ScopeSpeedLabels(radioModel);
     var hasAfFft     = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeAfFft(radioModel);
     var hasMulti     = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeMulti(radioModel);
+    var hasNbColor   = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeNarrowBandColor(radioModel);
     var spans = new (string Value, string Label)[]
     {
         ("0", "1k"), ("1", "2k"), ("2", "5k"), ("3", "10k"), ("4", "20k"),
@@ -135,23 +136,29 @@
     </div>
 </div>
 
-<div class="radio-scope-row">
-    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top"
-          data-bs-title="Narrow-band colour — a second palette drawn only across the IF filter passband, so the slice you are listening to stands out. Off uses the main colour only. 1–7 picks the NB palette when On.">NB Col</span>
-    <div class="btn-group btn-group-sm" role="group" aria-label="Narrow-band colour on or off">
-        <button type="button" class="btn btn-outline-secondary scope-nbon-btn"
-                data-value="0" data-a11y-key="radioScope.nbColorOff">Off</button>
-        <button type="button" class="btn btn-outline-secondary scope-nbon-btn"
-                data-value="1" data-a11y-key="radioScope.nbColorOn">On</button>
+@* Narrow-band colour is an FTdx101-only axis of SS P2=3 -- see
+   RadioCapabilities.SupportsScopeNarrowBandColor. On models without it the
+   manual fixes P4/P5 at zero, and _sendColor already falls back to '0'. *@
+@if (hasNbColor)
+{
+    <div class="radio-scope-row">
+        <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top"
+              data-bs-title="Narrow-band colour — a second palette drawn only across the IF filter passband, so the slice you are listening to stands out. Off uses the main colour only. 1–7 picks the NB palette when On.">NB Col</span>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Narrow-band colour on or off">
+            <button type="button" class="btn btn-outline-secondary scope-nbon-btn"
+                    data-value="0" data-a11y-key="radioScope.nbColorOff">Off</button>
+            <button type="button" class="btn btn-outline-secondary scope-nbon-btn"
+                    data-value="1" data-a11y-key="radioScope.nbColorOn">On</button>
+        </div>
+        <div class="scope-nbcolor-group btn-group btn-group-sm" role="group" aria-label="Narrow-band scope colour">
+            @foreach (var (value, label) in nbColors)
+            {
+                <button type="button" class="btn btn-outline-secondary scope-nbcolor-btn"
+                        data-value="@value" data-a11y-key="radioScope.nbColor@(label)">@label</button>
+            }
+        </div>
     </div>
-    <div class="scope-nbcolor-group btn-group btn-group-sm" role="group" aria-label="Narrow-band scope colour">
-        @foreach (var (value, label) in nbColors)
-        {
-            <button type="button" class="btn btn-outline-secondary scope-nbcolor-btn"
-                    data-value="@value" data-a11y-key="radioScope.nbColor@(label)">@label</button>
-        }
-    </div>
-</div>
+}
 
 @if (hasAfFft)
 {

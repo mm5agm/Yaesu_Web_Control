@@ -242,6 +242,25 @@ public static class RadioCapabilities
         radioModel is "FTdx101MP" or "FTdx101D";
 
     /// <summary>
+    /// True when the scope has a second colour palette drawn across the IF
+    /// filter passband, set by SS P2=3 P4 (palette 1-7) and P5 (on/off).
+    ///
+    /// Only the FTdx101 has it. The FTDX10 CAT manual documents SS P2=3 as
+    /// P3 = "0: COLOR-1 - A: COLOR-11 (DIRECT SAMPLING)" with "P4 - P7: 0:
+    /// Fixed", and its operating manual describes COLOR as choosing from 11
+    /// types for the direct sampling trace only. Fabio Valente confirmed on
+    /// his own FtdX10 that the radio shows no narrow-band region at all
+    /// (#120). So on an FtdX10 the NB Col row would be writing non-zero into
+    /// two parameters the manual fixes at zero -- which is why this is gated
+    /// rather than sent and left to be ignored.
+    ///
+    /// _sendColor falls back to '0' for both axes when the row is hidden, so
+    /// the plain Color buttons still emit exactly what the manual specifies.
+    /// </summary>
+    public static bool SupportsScopeNarrowBandColor(string radioModel) =>
+        radioModel is "FTdx101MP" or "FTdx101D";
+
+    /// <summary>
     /// The size variants of the waterfall scope modes, in SS P2=6 value order.
     ///
     /// The FTdx101 and FTdx10 offer three (Large / Normal / Small); the FT-710
