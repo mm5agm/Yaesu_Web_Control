@@ -1,15 +1,19 @@
 ﻿using System.IO;
 using System.Text.Json;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Hosting;
 
 namespace Yaesu_Web_Control.Services
 {
-    public class RadioStatePersistenceService
+    public class RadioStatePersistenceService : BackgroundService
     {
         private readonly string _filePath;
         private readonly ILogger<RadioStatePersistenceService> _logger;
         private static readonly object _fileLock = new();
+
+        private RadioState? _pendingState;
+        private volatile bool _dirty;
 
         public RadioStatePersistenceService(
             ILogger<RadioStatePersistenceService> logger,
@@ -33,7 +37,7 @@ namespace Yaesu_Web_Control.Services
                     {
                         _logger.LogInformation("Radio state file not found. Creating default state.");
                         var defaultState = CreateDefaultState();
-                        Save(defaultState);
+                        FlushState(defaultState);
                         return defaultState;
                     }
 
@@ -56,25 +60,58 @@ namespace Yaesu_Web_Control.Services
             }
         }
 
-        public void Save(RadioState state)
+        public void MarkDirty(RadioState state)
+        {
+            lock (_fileLock)
+            {
+                _pendingState = state;
+                _dirty = true;
+            }
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            while (await timer.WaitForNextTickAsync(stoppingToken))
+            {
+                if (_dirty)
+                    await FlushAsync();
+            }
+        }
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
+        {
+            await FlushAsync();
+            await base.StopAsync(cancellationToken);
+        }
+
+        private Task FlushAsync()
+        {
+            RadioState? state;
+            lock (_fileLock)
+            {
+                if (!_dirty || _pendingState == null) return Task.CompletedTask;
+                state = _pendingState;
+                _dirty = false;
+            }
+            FlushState(state);
+            return Task.CompletedTask;
+        }
+
+        private void FlushState(RadioState state)
         {
             try
             {
-                lock (_fileLock)
+                var options = new JsonSerializerOptions
                 {
-                    var options = new JsonSerializerOptions
-                    {
-                        WriteIndented = true,
-                        PropertyNamingPolicy = null // Use PascalCase (default)
-                    };
-
-                    var json = JsonSerializer.Serialize(state, options);
-                    File.WriteAllText(_filePath, json);
-                    // Debug: a routine save on a timer, not an event worth a line in
-                    // every user's log. The load at startup stays at Information.
-                    _logger.LogDebug("Radio state saved to {FilePath}: MicGain={MicGain}, Power={Power}",
-                        _filePath, state.MicGain, state.Power);
-                }
+                    PropertyNamingPolicy = null // Use PascalCase (default)
+                };
+                var json = JsonSerializer.Serialize(state, options);
+                var tmp = _filePath + ".tmp";
+                File.WriteAllText(tmp, json);
+                File.Move(tmp, _filePath, overwrite: true);
+                _logger.LogDebug("Radio state saved to {FilePath}: MicGain={MicGain}, Power={Power}",
+                    _filePath, state.MicGain, state.Power);
             }
             catch (Exception ex)
             {

@@ -258,5 +258,5 @@ Index page lays out two card panels (`spectrumContainerA`, `spectrumContainerB`)
 - **IF output:** 9 MHz rear-panel IF fed to RSP1 antenna input for spectrum display.
 - **SDR default sample rate:** 2,048,000 Hz (2 MHz span). Spectrum centred on `SdrIfFrequencyHz` (default 9 MHz); axis labels show RF frequencies derived from VFO-A.
 - **S-meter raw values:** 0–255 → S0 to S9+60 dB via calibration tables.
-- **Meter poll rate:** ~10 Hz via `MeterPollingService`.
+- **Meter poll rate:** ~1.3 Hz via `MeterPollingService` (eight sequential CAT commands per receive cycle, each with a 15 ms post-write settle, then `await Task.Delay(500)`). The `~10 Hz` figure in older comments is wrong and has been removed.
 - **SignalR heartbeat:** `SdrManager` re-broadcasts each worker's "streaming" status every 30 frames (~3 s) so clients that load after startup receive the current per-VFO status.

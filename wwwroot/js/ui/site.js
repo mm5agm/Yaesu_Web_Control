@@ -1460,6 +1460,8 @@ connection.on("RadioStateUpdate", function (update) {
     }
 
     // --- METER UPDATES ---
+    if (update.property === "SMeterA") { window.updateSMeter('A', update.value); }
+    if (update.property === "SMeterB") { window.updateSMeter('B', update.value); }
     if (window.ftdx101Meters) {
         // PowerMeter is sent as { value, isTransmitting } — unpack it and sync TX state.
         let meterValue = update.value;
@@ -3221,29 +3223,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } else updateFrequencyDisplay('B', state.localFreq.B);
 
-            updateSMeter('A', data.vfoA.sMeter);
-            updateSMeter('B', data.vfoB.sMeter);
-
-            if (window.ftdx101Meters) {
-                const metersFromState = {
-                    PowerMeter:       data.powerMeter,
-                    SWRMeter:         data.swrMeter,
-                    CompressionMeter: data.compressionMeter,
-                    ALCMeter:         data.alcMeter,
-                    IDDMeter:         data.iddMeter,
-                    VDDMeter:         data.vddMeter,
-                    // Temperature intentionally omitted — the persisted value in radio_state.json
-                    // can be stale (e.g. from a hot previous session). Live SignalR updates from
-                    // MeterPollingService arrive within ~100ms and provide the first real reading.
-                };
-                for (const [prop, value] of Object.entries(metersFromState)) {
-                    if (value !== undefined) {
-                        const result = window.ftdx101Meters.handleMeterUpdate(prop, value);
-                        updateMeterDomLabel(prop, result);
-                    }
-                }
-            }
-
             // Update band buttons from polling (fixes WSJT-X and radio band changes)
             if (data.vfoA.band) {
                 updateBandButton('A', data.vfoA.band);
@@ -3391,6 +3370,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const sLabel = document.getElementById(labelId);
         if (sLabel) sLabel.textContent = sUnit;
     }
+    window.updateSMeter = updateSMeter;
 
     // Update MIC bar meter (0-255 raw value)
     function updateMICMeter(value) {
