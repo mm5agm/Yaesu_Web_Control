@@ -417,13 +417,20 @@ function updateTxIndicators(isTransmitting) {
         window.ftdx101Meters.setTransmitting(isTransmitting);
     }
     if (!isTransmitting) {
-        // Force gauges to zero immediately when TX stops
+        // Force gauges to zero immediately when TX stops, without waiting for
+        // the next backend broadcast (~200 ms away at the default poll interval).
         if (window.meterPanel) {
             window.meterPanel.update('power', 0);
             window.meterPanel.update('swr', 0);
+            window.meterPanel.update('compression', 0);
+            window.meterPanel.update('alc', 0);
+            window.meterPanel.update('idd', 0);
         }
-        updateMeterDomLabel('PowerMeter', { skip: false, displayValue: { watts: 0, rawAvg: 0 } });
-        updateMeterDomLabel('SWRMeter',   { skip: false, displayValue: { swr: 1.0 } });
+        updateMeterDomLabel('PowerMeter',       { skip: false, displayValue: { watts: 0, rawAvg: 0 } });
+        updateMeterDomLabel('SWRMeter',         { skip: false, displayValue: { swr: 1.0 } });
+        updateMeterDomLabel('CompressionMeter', { skip: false, displayValue: { db: 0 } });
+        updateMeterDomLabel('ALCMeter',         { skip: false, displayValue: { percent: 0, alcVolts: 0, rawValue: 0 } });
+        updateMeterDomLabel('IDDMeter',         { skip: false, displayValue: { amps: 0 } });
     }
 }
 
