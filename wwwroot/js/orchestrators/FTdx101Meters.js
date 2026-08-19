@@ -17,15 +17,14 @@ export class FTdx101Meters {
         this._isTransmitting = false;
 
         // Smoothing: rolling-average windows for power and SWR.
-        // Power uses a longer window (15 samples ≈ 1.5 s at 10 Hz polling)
-        // because the PWR calibration curve gets steep above 100 W — each raw
-        // ADC unit is ~1.6 W there, so even a few units of ADC noise visibly
-        // jolts the gauge needle. SWR stays at 7 samples (~0.7 s) so the
-        // operator sees a high SWR fault quickly enough to react.
+        // TX tier polls at ~2 Hz, so 4 samples ≈ 2 s of smoothing on power
+        // (the PWR calibration curve gets steep above 100 W — even a few ADC
+        // units of noise visibly jolts the needle). SWR stays at 3 samples
+        // (~1.5 s) so the operator sees a high SWR fault quickly enough to react.
         this._powerHistory        = [];
         this._swrHistory          = [];
-        this._powerHistoryLength  = 15;
-        this._swrHistoryLength    = 7;
+        this._powerHistoryLength  = 4;
+        this._swrHistoryLength    = 3;
         this._wasTransmittingPower = false;
         this._wasTransmittingSWR   = false;
 

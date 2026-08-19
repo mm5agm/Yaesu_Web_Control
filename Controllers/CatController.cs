@@ -2093,7 +2093,7 @@ namespace Yaesu_Web_Control.Controllers
             // connect + ~30 read queries + state restoration, takes 5+ seconds).
             // That worked the first time the user clicked it (cold install) but
             // CRASHED YWC entirely when clicked while everything was running:
-            // the deep init races with MeterPollingService at 10 Hz, the SDR
+            // the deep init races with MeterPollingService, the SDR
             // workers, in-flight WebUI commands, etc. Reported by Colin on
             // v2.3.3 — first click reported a false "radio not responding"
             // (from the race), second click hard-crashed the process so the
