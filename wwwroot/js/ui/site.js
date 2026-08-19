@@ -375,11 +375,31 @@ function modelMaxPower(model) {
 }
 window.modelMaxPower = modelMaxPower;
 
+// Server-rendered radio model. window._radioModel is assigned later inside
+// Index.cshtml's module block, so DOMContentLoaded in this file runs first
+// and must not rely on it alone (be48971 regression — FTdx10 slider stuck at 200 W).
+function getConfiguredRadioModel() {
+    return window._radioModel
+        || (window.state && window.state.radioModel)
+        || document.getElementById('vfoRow')?.dataset?.radioModel
+        || null;
+}
+window.getConfiguredRadioModel = getConfiguredRadioModel;
+
+function syncRadioModel(model) {
+    if (!model) return;
+    window.state = window.state || {};
+    window.state.radioModel = model;
+    if (window.radioControl && window.radioControl._state) {
+        window.radioControl._state.radioModel = model;
+    }
+}
+
 // Outer power slider max updater
 function updatePowerSliderMax(maxPower) {
     const slider = document.getElementById('powerSlider');
     const labelMax = document.getElementById('powerMaxLabel');
-    const model = (window.state && window.state.radioModel) || null;
+    const model = getConfiguredRadioModel();
     const actualMax = model
         ? modelMaxPower(model)
         : (typeof maxPower === "number" ? maxPower : 200);
@@ -615,9 +635,9 @@ document.addEventListener('DOMContentLoaded', function() {
     checkRadioPowerStatus();
     checkTxStatus();
     // Seed the power slider max from the server-rendered radio model.
-    if (window._radioModel) {
-        window.state = window.state || {};
-        window.state.radioModel = window._radioModel;
+    const radioModel = getConfiguredRadioModel();
+    if (radioModel) {
+        syncRadioModel(radioModel);
         updatePowerSliderMax();
     }
 
@@ -3139,8 +3159,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function updatePowerSliderMax(maxPower) {
         const slider = document.getElementById('powerSlider');
         const labelMax = document.getElementById('powerMaxLabel');
-        const actualMax = state.radioModel
-            ? window.modelMaxPower(state.radioModel)
+        const model = window.getConfiguredRadioModel
+            ? window.getConfiguredRadioModel()
+            : state.radioModel;
+        const actualMax = model
+            ? window.modelMaxPower(model)
             : (typeof maxPower === "number" ? maxPower : 200);
 
         if (slider) {
