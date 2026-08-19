@@ -1,24 +1,131 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "Build Yaesu_Web_Control",
-			"type": "shell",
-			"command": "dotnet build Yaesu_Web_Control.csproj",
-			"isBackground": false,
-			"problemMatcher": [
-				"$msCompile"
-			],
-			"group": "build"
-		},
-		{
-			"label": "build Yaesu_Web_Control",
-			"type": "shell",
-			"command": "dotnet build Yaesu_Web_Control.csproj",
-			"problemMatcher": [
-				"$msCompile"
-			],
-			"group": "build"
-		}
-	]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/Yaesu_Web_Control.csproj",
+                "-c",
+                "Debug",
+                "-f",
+                "net10.0-windows",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$msCompile",
+            "detail": "Build Windows product TFM (net10.0-windows)"
+        },
+        {
+            "label": "build-release",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/Yaesu_Web_Control.csproj",
+                "-c",
+                "Release",
+                "-f",
+                "net10.0-windows",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "detail": "Release build of Windows product TFM (net10.0-windows)"
+        },
+        {
+            "label": "build-portable",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/Yaesu_Web_Control.csproj",
+                "-c",
+                "Debug",
+                "-f",
+                "net10.0",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "detail": "Build CAT-only portable TFM (net10.0)"
+        },
+        {
+            "label": "publish",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "publish",
+                "${workspaceFolder}/Yaesu_Web_Control.csproj",
+                "-c",
+                "Release",
+                "-f",
+                "net10.0-windows",
+                "-r",
+                "win-x64",
+                "--self-contained",
+                "true",
+                "--output",
+                "${workspaceFolder}/publish",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "detail": "Publish Windows self-contained win-x64 (net10.0-windows)"
+        },
+        {
+            "label": "build-nsis",
+            "type": "shell",
+            "command": "$makensis = (Get-Command makensis.exe -ErrorAction SilentlyContinue).Source; if (-not $makensis) { $makensis = 'C:\\Program Files (x86)\\NSIS\\makensis.exe' }; if (!(Test-Path $makensis)) { Write-Error 'makensis.exe not found. Install NSIS (e.g. choco install nsis).'; exit 1 }; & $makensis installer.nsi; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; $found = Get-ChildItem -Filter '*Setup*.exe' | Select-Object -First 1; if (-not $found) { Write-Error 'No *Setup*.exe found after NSIS ran'; exit 1 }; if ($found.Name -ne 'Yaesu_Web_Control_Setup.exe') { Rename-Item $found.FullName 'Yaesu_Web_Control_Setup.exe' }; Write-Host \"OK: $($found.DirectoryName)\\Yaesu_Web_Control_Setup.exe\"",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": [
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-Command"
+                    ]
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "build-setup",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "publish",
+                "build-nsis"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Publish win-x64 self-contained app, then build Yaesu_Web_Control_Setup.exe"
+        },
+        {
+            "label": "watch",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "watch",
+                "run",
+                "--project",
+                "${workspaceFolder}/Yaesu_Web_Control.csproj",
+                "--framework",
+                "net10.0-windows"
+            ],
+            "problemMatcher": "$msCompile",
+            "isBackground": true,
+            "detail": "dotnet watch run for Windows product TFM (net10.0-windows)"
+        }
+    ]
 }

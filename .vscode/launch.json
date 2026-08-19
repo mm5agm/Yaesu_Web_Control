@@ -1,20 +1,71 @@
 {
     "version": "0.2.0",
     "configurations": [
-        
         {
-            "name": "Run Yaesu Web Control",
+            "name": "Yaesu Web Control (Windows)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build Yaesu_Web_Control",
-            "program": "${workspaceFolder}/bin/Debug/net10.0-windows/Yaesu_Web_Control.exe",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/bin/Debug/net10.0-windows/Yaesu_Web_Control.dll",
             "args": [],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
+            "console": "integratedTerminal",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
-                "ASPNETCORE_URLS": "http://localhost:8080"
+                "DOTNET_ENVIRONMENT": "Development"
             }
+        },
+        {
+            "name": "Yaesu Web Control (Windows, Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-release",
+            "program": "${workspaceFolder}/bin/Release/net10.0-windows/Yaesu_Web_Control.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Production",
+                "DOTNET_ENVIRONMENT": "Production"
+            }
+        },
+        {
+            "name": "Yaesu Web Control (CAT-only / net10.0)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-portable",
+            "program": "${workspaceFolder}/bin/Debug/net10.0/Yaesu_Web_Control.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Attach to Yaesu Web Control",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        },
+        {
+            "name": "Build Setup Installer",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "powershell.exe",
+            "runtimeArgs": [
+                "-NoProfile",
+                "-Command",
+                "Write-Host 'Setup build complete: Yaesu_Web_Control_Setup.exe'; exit 0"
+            ],
+            "preLaunchTask": "build-setup",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
         }
     ]
 }
