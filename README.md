@@ -248,6 +248,14 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 **Store and recall the radio's Quick Memory Bank from the screen.** Next to the band buttons there are now three small buttons — **Store**, **Recall** and **V/M**. Store drops the current frequency and mode into the radio's Quick Memory Bank — the same scratch stack you reach by holding the front-panel QMB key. Recall steps into it and moves through the stored slots, and V/M brings you back to normal VFO tuning. It's the quick "park this frequency somewhere I can jump straight back to" memory, separate from the named channels in the Mem panel. For screen-reader users the buttons speak each action, and re-announce on every Recall press so you can hear yourself stepping through the slots. Confirmed on the FTdx101MP — if you have another Yaesu, I'd like to know whether Store and Recall behave the same on yours.
 
+### Update post-release
+
+- **Quick Memory Bank confirmed on the FTdx10** (Thomas OZ1JTE). Thomas has now tested the QMB buttons on his FTdx10 and reports that Store, Recall and V/M all behave exactly as they do on my FTdx101MP, so the feature is confirmed on two radios rather than one. He also found V/M sitting beside the other two buttons a help rather than clutter.
+
+- **How Recall cycles, which isn't in Yaesu's manual.** Pressing Recall repeatedly steps through the stored slots and then drops back to VFO, with the next press starting the cycle again. That is the radio doing it, not YWC — all YWC sends is a single "step to the next slot" command per press, and it doesn't track which slot you're on. How many slots you get is a radio menu setting: **OPERATION SETTING → GENERAL → QMB CH**, which is five by default and can be set to ten. The FTdx10 manual describes the stepping and the V/M exit but never mentions the return to VFO at the end, so this is worth knowing before it surprises you.
+
+- **Known: screen readers announce the status line twice per Recall** ([#123](https://github.com/mm5agm/Yaesu_Web_Control/issues/123)). Thomas also noticed that his screen reader reads out band, mode, frequency and power twice for each memory he steps to. That one is mine rather than the radio's, and it isn't really a QMB fault — it affects anything that changes several values at once, such as a band change or a VFO swap. It is filed, and it does not affect the QMB buttons themselves.
+
 ## 2026-08-05 - v2.4.3-pre4 (pre-release)
 
 *YWC no longer needs an internet connection. If your shack PC is online, nothing you can see changes and you can safely ignore this one. If it is not, this is the release that makes YWC work at all.*
