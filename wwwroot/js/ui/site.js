@@ -1493,8 +1493,14 @@ connection.on("RadioStateUpdate", function (update) {
     }
 
     // --- METER UPDATES ---
-    if (update.property === "SMeterA") { window.updateSMeter('A', update.value); }
-    if (update.property === "SMeterB") { window.updateSMeter('B', update.value); }
+    if (update.property === "SMeterA") {
+        try { window.updateSMeter?.('A', update.value); }
+        catch (e) { console.error('updateSMeter A error:', e); }
+    }
+    if (update.property === "SMeterB") {
+        try { window.updateSMeter?.('B', update.value); }
+        catch (e) { console.error('updateSMeter B error:', e); }
+    }
     if (window.ftdx101Meters) {
         // PowerMeter is sent as { value, isTransmitting } — unpack it and sync TX state.
         let meterValue = update.value;
@@ -2616,24 +2622,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll(`input[name="antenna${receiver}"]`).forEach(btn => {
             btn.checked = (btn.value === antenna);
         });
-    }
-
-    // Update ONLY mode and antenna selectors (not bands) - used by polling to avoid overwriting user's band selection
-    function updateModeAndAntennaButtons(receiver, mode, antenna) {
-        // Mode dropdown
-        const modeSelect = document.getElementById(`modeSelect${receiver}`);
-        if (modeSelect && mode) {
-            modeSelect.value = mode;
-        }
-
-        // Antenna is a <select> (#antennaSelectA / #antennaSelectB), not a
-        // radio-button group — earlier code queried input[name="antennaA"]
-        // which never matched anything, so polling-based antenna updates
-        // were silently broken.
-        const antennaSelect = document.getElementById(`antennaSelect${receiver}`);
-        if (antennaSelect && antenna) {
-            antennaSelect.value = antenna;
-        }
     }
 
     // Update roofing filter dropdown

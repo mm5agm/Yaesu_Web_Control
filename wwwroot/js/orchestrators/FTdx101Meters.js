@@ -23,10 +23,11 @@ export class FTdx101Meters {
         this._isTransmitting = false;
 
         // Smoothing: rolling-average windows for power and SWR.
-        // TX tier polls at ~2 Hz, so 4 samples ≈ 2 s of smoothing on power
-        // (the PWR calibration curve gets steep above 100 W — even a few ADC
-        // units of noise visibly jolts the needle). SWR stays at 3 samples
-        // (~1.5 s) so the operator sees a high SWR fault quickly enough to react.
+        // TX meters poll every fast cycle (~4–5 Hz at the default 200 ms
+        // MeterPollIntervalMs), so 4 power samples ≈ 0.8 s and 3 SWR samples
+        // ≈ 0.6 s. Window duration scales with MeterPollIntervalMs. Power needs
+        // the longer window because the PWR calibration curve gets steep above
+        // 100 W — even a few ADC units of noise visibly jolts the needle.
         this._powerHistory        = [];
         this._swrHistory          = [];
         this._powerHistoryLength  = 4;

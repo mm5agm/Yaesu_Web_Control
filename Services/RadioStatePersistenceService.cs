@@ -104,7 +104,8 @@ namespace Yaesu_Web_Control.Services
             {
                 var options = new JsonSerializerOptions
                 {
-                    PropertyNamingPolicy = null // Use PascalCase (default)
+                    PropertyNamingPolicy = null, // Use PascalCase (default)
+                    WriteIndented = true
                 };
                 var json = JsonSerializer.Serialize(state, options);
                 var tmp = _filePath + ".tmp";

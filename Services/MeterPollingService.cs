@@ -64,7 +64,7 @@ namespace Yaesu_Web_Control.Services
         // the hold duration has elapsed. Non-zero readings propagate immediately
         // (so the meter remains snappy when signal is actually present).
         private DateTime? _sMeterZeroSinceUtc = null;
-        private static readonly TimeSpan SMeterZeroHold = TimeSpan.FromMilliseconds(2300);
+        private static readonly TimeSpan SMeterZeroHold = TimeSpan.FromMilliseconds(1000);
 
         // Same zero-flash debounce as SMeterA, applied independently to
         // SMeterB (SUB receiver) so a transient zero on one VFO's meter
@@ -392,9 +392,11 @@ namespace Yaesu_Web_Control.Services
                     }
 
                     sw.Stop();
-                    _logger.LogDebug("[MeterPolling] Cycle elapsed: {ElapsedMs} ms, delay: {DelayMs} ms", sw.ElapsedMilliseconds, intervalMs);
+                    var elapsed = (int)sw.ElapsedMilliseconds;
+                    var delay = Math.Max(0, intervalMs - elapsed);
+                    _logger.LogDebug("[MeterPolling] Cycle elapsed: {ElapsedMs} ms, delay: {DelayMs} ms", elapsed, delay);
 
-                    await Task.Delay(intervalMs, stoppingToken);
+                    await Task.Delay(delay, stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
