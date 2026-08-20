@@ -1052,7 +1052,7 @@ namespace Yaesu_Web_Control.Controllers
                 await EnsureConnectedAsync();
 
                 var settings = await _settingsService.GetSettingsAsync();
-                int maxPower = settings.RadioModel == "FTdx101MP" ? 200 : 100;
+                int maxPower = RadioCapabilities.MaxPowerWatts(settings.RadioModel);
 
                 _logger.LogInformation("[API] Received SetPower request: receiver={Receiver}, Watts={Watts}, Model={Model}", receiver, request.Watts, settings.RadioModel);
                 _logger.LogInformation("[API] DEBUG: Received slider value = {Watts}", request.Watts);

@@ -94,6 +94,36 @@ public static class RadioCapabilities
     public static bool IsSingleReceiver(string radioModel) => !IsDualReceiver(radioModel);
 
     /// <summary>
+    /// The radio's maximum TX power in watts. Drives the RF Power slider's
+    /// range, the Power meter's dial scale, and the server-side range check in
+    /// CatController.SetPower.
+    ///
+    /// This exists because the same fact was written down in three places that
+    /// disagreed. CatController read "FTdx101MP ? 200 : 100"; site.js carried
+    /// its own model table (added for #37, when every 100 W radio was falling
+    /// through to a 200 W slider); and the Power gauge was hard-coded 0-200 for
+    /// every model, so a 100 W radio's needle never left the left-hand half of
+    /// the dial. The disagreement was live: the FTDX5000 pair is a 200 W radio
+    /// in README.md and USER_MANUAL.md, but CatController's check rejected
+    /// anything above 100 W on it while the slider happily offered 200 W.
+    ///
+    /// Unlike FrequencyRangeHz above, every supported model is listed here
+    /// rather than left to a default, because the two plausible defaults are
+    /// both wrong for half the range: 200 W re-creates #37 on an unlisted 100 W
+    /// radio, and 100 W silently caps an unlisted 200 W one. The default is the
+    /// generous 200 W for the same reason given there — a cap that is too high
+    /// lets a command through to a radio that will clamp it itself, while one
+    /// that is too low blocks legitimate output with no way for the operator to
+    /// override it. Add new models to the list rather than relying on it.
+    /// </summary>
+    public static int MaxPowerWatts(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTDX5000MP" or "FTDX5000D" => 200,
+        "FTdx101D" or "FTdx10" or "FT-710" or "FTDX3000" or "FT-991A" => 100,
+        _ => 200
+    };
+
+    /// <summary>
     /// True when the radio has more than one antenna jack and YWC should
     /// expose a per-VFO antenna selector. Single-antenna radios get the
     /// selector hidden (Jacek SP3L #34, FTdx10 has one ANT jack — showing

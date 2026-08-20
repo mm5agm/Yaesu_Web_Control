@@ -8,10 +8,16 @@ export class FTdx101Meters {
     /**
      * @param {object} meterPanel        An initialised MeterPanel instance
      * @param {object} calibrationEngine An object exposing calibrateNumeric(key, raw)
+     * @param {number} maxPowerWatts     The radio's rated output, used to clamp the
+     *                                   Power reading to its dial. The shipped
+     *                                   per-model PWR tables are still copies of the
+     *                                   FTdx101MP's and run to 200 W, so without this
+     *                                   a 100 W radio can calibrate past full scale.
      */
-    constructor(meterPanel, calibrationEngine) {
+    constructor(meterPanel, calibrationEngine, maxPowerWatts = 200) {
         this._meterPanel   = meterPanel;
         this._calibration  = calibrationEngine;
+        this._maxPowerWatts = maxPowerWatts;
 
         // TX state
         this._isTransmitting = false;
@@ -109,7 +115,7 @@ export class FTdx101Meters {
         if (this._powerHistory.length > this._powerHistoryLength) this._powerHistory.shift();
         const rawAvg      = this._powerHistory.reduce((s, v) => s + v, 0) / this._powerHistory.length;
         const watts       = this._calibration.calibrateNumeric('PWR', rawAvg);
-        const clampedWatts = Math.round(Math.max(0, Math.min(watts, 200)));
+        const clampedWatts = Math.round(Math.max(0, Math.min(watts, this._maxPowerWatts)));
         this._meterPanel.update('power', clampedWatts);
         return { skip: false, gaugeKey: 'power', displayValue: { watts: clampedWatts, rawAvg } };
     }

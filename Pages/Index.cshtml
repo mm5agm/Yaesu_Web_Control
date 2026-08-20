@@ -25,6 +25,10 @@
     // each VFO is its own physical receiver chain.
     bool isSingleReceiver  = Yaesu_Web_Control.Services.RadioCapabilities.IsSingleReceiver(Model.RadioModel);
     bool hasAntennaSelector = Yaesu_Web_Control.Services.RadioCapabilities.HasAntennaSelector(Model.RadioModel);
+    // Rated TX output. Server-rendered rather than derived in JavaScript so the
+    // slider and the Power dial are right on first paint, and so the browser
+    // agrees with the range check CatController.SetPower applies to the same value.
+    int maxPowerWatts = Yaesu_Web_Control.Services.RadioCapabilities.MaxPowerWatts(Model.RadioModel);
     // Quick Memory Bank Store/Recall buttons (Thomas OZ1JTE request) — rendered
     // once, next to VFO A's band buttons, since QMB is a radio-global function.
     bool hasQmb = Yaesu_Web_Control.Services.RadioCapabilities.SupportsQmb(Model.RadioModel);
@@ -623,7 +627,7 @@
                         <input type="range" class="flex-shrink-0" id="powerSlider"
                                aria-label="Transmit power"
                                title="Transmit power"
-                               min="5" max="200" step="5"
+                               min="5" max="@maxPowerWatts" step="5"
                                value="@Model.RadioState.Power"
                                style="width: clamp(80px, 10vw, 150px); height: 18px;"
                                oninput="window.radioControl.updatePowerDisplay(window.txVfo === 1 ? 'B' : 'A', this.value)"
@@ -1004,7 +1008,7 @@
         </div>
     </div>
 
-    <div class="row g-3 flex-wrap" id="vfoRow" data-radio-model="@Model.RadioModel" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
+    <div class="row g-3 flex-wrap" id="vfoRow" data-radio-model="@Model.RadioModel" data-max-power="@maxPowerWatts" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
         <!-- VFO A Panel -->
         <div class="col-lg-6 col-12" id="vfoACol">
             <div class="card border-primary h-100 receiver-card">
@@ -2595,7 +2599,7 @@
                 // no-ops) — no isSingleReceiver check needed here.
                 smeter:      { type: 'smeter', canvasId: 'sMeterCanvas' },
                 smeterB:     { type: 'smeter', canvasId: 'sMeterCanvasB', gaugeTitleId: 'sMeterValueB' },
-                power:       { canvasId: 'powerMeterCanvas' },
+                power:       { canvasId: 'powerMeterCanvas', maxValue: @maxPowerWatts },
                 swr:         { canvasId: 'swrMeterCanvas' },
                 compression: { canvasId: 'compressionMeterCanvas' },
                 alc:         { canvasId: 'alcMeterCanvas' },
@@ -2603,7 +2607,7 @@
                 idd:         { canvasId: 'iddMeterCanvas' },
                 vdd:         { canvasId: 'vddMeterCanvas' }
             });
-            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine);
+            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine, @maxPowerWatts);
 
             // ── S-meter history strips ───────────────────────────────────────
             // Hidden by default. Toggle via the "S-hist" button in the top

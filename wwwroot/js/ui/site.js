@@ -386,6 +386,20 @@ function getConfiguredRadioModel() {
 }
 window.getConfiguredRadioModel = getConfiguredRadioModel;
 
+// Rated TX output for the configured radio. Prefer the figure the server
+// rendered into #vfoRow: it comes from RadioCapabilities.MaxPowerWatts, which
+// is the same value CatController.SetPower validates against, so the slider
+// cannot offer a wattage the API will reject. modelMaxPower is the fallback for
+// pages that don't render the VFO row.
+function configuredMaxPower(fallback) {
+    const rendered = Number(document.getElementById('vfoRow')?.dataset?.maxPower);
+    if (Number.isFinite(rendered) && rendered > 0) return rendered;
+    const model = getConfiguredRadioModel();
+    if (model) return modelMaxPower(model);
+    return typeof fallback === "number" ? fallback : 200;
+}
+window.configuredMaxPower = configuredMaxPower;
+
 function syncRadioModel(model) {
     if (!model) return;
     window.state = window.state || {};
@@ -399,10 +413,7 @@ function syncRadioModel(model) {
 function updatePowerSliderMax(maxPower) {
     const slider = document.getElementById('powerSlider');
     const labelMax = document.getElementById('powerMaxLabel');
-    const model = getConfiguredRadioModel();
-    const actualMax = model
-        ? modelMaxPower(model)
-        : (typeof maxPower === "number" ? maxPower : 200);
+    const actualMax = configuredMaxPower(maxPower);
 
     if (slider) {
         slider.max = actualMax;
@@ -635,11 +646,8 @@ document.addEventListener('DOMContentLoaded', function() {
     checkRadioPowerStatus();
     checkTxStatus();
     // Seed the power slider max from the server-rendered radio model.
-    const radioModel = getConfiguredRadioModel();
-    if (radioModel) {
-        syncRadioModel(radioModel);
-        updatePowerSliderMax();
-    }
+    syncRadioModel(getConfiguredRadioModel());
+    updatePowerSliderMax();
 
     // Update powerValue label live as slider moves (outer/global version).
     // NOTE: deliberately no longer initialises the label from slider.value
@@ -3159,11 +3167,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function updatePowerSliderMax(maxPower) {
         const slider = document.getElementById('powerSlider');
         const labelMax = document.getElementById('powerMaxLabel');
-        const model = window.getConfiguredRadioModel
-            ? window.getConfiguredRadioModel()
-            : state.radioModel;
-        const actualMax = model
-            ? window.modelMaxPower(model)
+        const actualMax = window.configuredMaxPower
+            ? window.configuredMaxPower(maxPower)
             : (typeof maxPower === "number" ? maxPower : 200);
 
         if (slider) {
