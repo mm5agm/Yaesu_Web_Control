@@ -5,6 +5,11 @@
         // Connection Settings
         public string SerialPort { get; set; } = "COM3";
         public int BaudRate { get; set; } = 38400;
+
+        // Delay between meter-poll cycles in milliseconds. Lower gives a faster
+        // S-meter but increases CAT traffic on a bus shared with rigctld/WSJT-X.
+        // Valid range: 50–1000. Default 200.
+        public int MeterPollIntervalMs { get; set; } = 200;
         public string WebAddress { get; set; } = "0.0.0.0"; // Bind to all interfaces
 
         // HTTP port the web server listens on. Default 8080. If that port is

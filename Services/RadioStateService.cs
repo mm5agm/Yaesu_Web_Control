@@ -88,6 +88,9 @@ namespace Yaesu_Web_Control.Services
 
         public RadioState InitialState => _initialState;
 
+        private static readonly HashSet<string> _persistedPropertyNames =
+            typeof(RadioState).GetProperties().Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+
         private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {
             if (!EqualityComparer<T>.Default.Equals(field, value))
@@ -106,7 +109,8 @@ namespace Yaesu_Web_Control.Services
                 if (IsInitialized)
                 {
                     _logger.LogDebug("[SetField] Persisting state (IsInitialized=true, {Property}={Value})", propertyName, value);
-                    _statePersistence.Save(this.ToRadioState());
+                    if (_persistedPropertyNames.Contains(propertyName!))
+                        _statePersistence.MarkDirty(this.ToRadioState());
                 }
                 else
                 {
@@ -664,7 +668,10 @@ namespace Yaesu_Web_Control.Services
         // property not server-rendered in Index.cshtml — most visibly
         // ActiveVfo/TxVfo/SplitMode, which made VFO A always look active on
         // late-joining clients. Property names must match the handlers in
-        // wwwroot/js/ui/site.js. Meters are excluded (they stream at ~10 Hz).
+        // wwwroot/js/ui/site.js. Meters are included so a late-joining client
+        // receives the last-known values immediately rather than waiting for the
+        // next ~10 Hz poll cycle. Temperature is intentionally excluded (see
+        // the matching comment in site.js).
         public IReadOnlyList<KeyValuePair<string, object>> GetClientStateSnapshot()
         {
             return new List<KeyValuePair<string, object>>
@@ -746,6 +753,14 @@ namespace Yaesu_Web_Control.Services
                 new("FmOffsetHz", FmOffsetHz),
                 new("CtcssMode", CtcssMode),
                 new("CtcssTone", CtcssTone),
+                new("SMeterA", SMeterA ?? 0),
+                new("SMeterB", SMeterB ?? 0),
+                new("PowerMeter", new { value = PowerMeter ?? 0, isTransmitting = IsTransmitting }),
+                new("SWRMeter", SWRMeter ?? 0),
+                new("CompressionMeter", CompressionMeter ?? 0),
+                new("ALCMeter", ALCMeter ?? 0),
+                new("IDDMeter", IDDMeter ?? 0),
+                new("VDDMeter", VDDMeter ?? 0),
             };
         }
 

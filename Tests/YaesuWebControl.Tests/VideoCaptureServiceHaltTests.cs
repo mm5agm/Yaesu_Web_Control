@@ -61,5 +61,7 @@ public sealed class VideoCaptureServiceHaltTests
         public string GetSettingsFilePath() => Path.Combine(Path.GetTempPath(), "ywc-test-settings.json");
 
         public void InvalidateCache() { }
+
+        public void Dispose() { }
     }
 }

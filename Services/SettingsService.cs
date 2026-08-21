@@ -3,12 +3,13 @@ using Yaesu_Web_Control.Models;
 
 namespace Yaesu_Web_Control.Services
 {
-    public class SettingsService : ISettingsService
+    public class SettingsService : ISettingsService, IDisposable
     {
         private readonly string _settingsFilePath;
         private readonly ILogger<SettingsService> _logger;
         private readonly SemaphoreSlim _semaphore = new(1, 1);
         private volatile ApplicationSettings? _cachedSettings;
+        private readonly FileSystemWatcher _watcher;
 
         public SettingsService(IWebHostEnvironment environment, ILogger<SettingsService> logger)
         {
@@ -20,7 +21,19 @@ namespace Yaesu_Web_Control.Services
             _settingsFilePath = Path.Combine(appData, "appsettings.user.json");
             _logger = logger;
             _logger.LogInformation("SettingsService initialized. File path: {Path}", _settingsFilePath);
+
+            var watcher = new FileSystemWatcher(Path.GetDirectoryName(_settingsFilePath)!, Path.GetFileName(_settingsFilePath))
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
+                EnableRaisingEvents = true
+            };
+            watcher.Changed += (_, _) => InvalidateCache();
+            watcher.Created += (_, _) => InvalidateCache();
+            watcher.Renamed += (_, _) => InvalidateCache();
+            _watcher = watcher;
         }
+
+        public void Dispose() => _watcher.Dispose();
 
         public ApplicationSettings GetCachedSettings() =>
             _cachedSettings ?? new ApplicationSettings();
@@ -30,6 +43,8 @@ namespace Yaesu_Web_Control.Services
             await _semaphore.WaitAsync();
             try
             {
+                if (_cachedSettings != null) return _cachedSettings;
+
                 // These fire on every meter-poll cycle (GetSettingsAsync is
                 // called ~2 Hz). At Information level — and especially dumping
                 // the entire settings JSON — they were a major contributor to

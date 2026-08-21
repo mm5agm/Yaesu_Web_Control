@@ -2,7 +2,7 @@
 
 namespace Yaesu_Web_Control.Services
 {
-    public interface ISettingsService
+    public interface ISettingsService : IDisposable
     {
         Task<ApplicationSettings> GetSettingsAsync();
         Task SaveSettingsAsync(ApplicationSettings settings);

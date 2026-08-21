@@ -1893,6 +1893,15 @@
                             <span asp-validation-for="Settings.BaudRate" class="text-danger"></span>
                         </div>
                         <div class="mb-3">
+                            <label asp-for="Settings.MeterPollIntervalMs" class="form-label">Meter Poll Interval (ms)</label>
+                            <input asp-for="Settings.MeterPollIntervalMs" class="form-control" type="number" min="50" max="1000" />
+                            <div class="form-text">
+                                Minimum cycle period for S-meter / power polls (delay between cycle starts) in milliseconds. The next cycle starts after this interval minus the time the previous cycle took. Lower values give a faster S-meter but increase CAT bus traffic.
+                                <br /><strong>Default:</strong> 200 ms &nbsp;|&nbsp; <strong>Valid range:</strong> 50–1000
+                            </div>
+                            <span asp-validation-for="Settings.MeterPollIntervalMs" class="text-danger"></span>
+                        </div>
+                        <div class="mb-3">
                             <label asp-for="Settings.BandPlan" class="form-label">Band Plan / IARU Region</label>
                             <select asp-for="Settings.BandPlan" class="form-select">
                                 <option value="Region1">IARU Region 1 — Europe, Africa, Middle East (includes 4m)</option>

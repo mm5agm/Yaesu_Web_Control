@@ -188,16 +188,10 @@ namespace Yaesu_Web_Control.Services
                 // fast burst, and again in readQueries below) populate YWC's UI
                 // with whatever the radio currently has. Same anti-pattern as
                 // RF Power (#35), MIC GAIN / Speech Processor / PROC LEVEL (#16).
-                if (!string.IsNullOrEmpty(persistedState.AntennaA))
-                {
-                    stateTasks.Add(multiplexer.SendCommandAsync($"AN0{persistedState.AntennaA};", "Initialization", stoppingToken)
-                        .ContinueWith(t => { if (!t.IsFaulted) radioStateService.AntennaA = persistedState.AntennaA; }));
-                }
-                if (!string.IsNullOrEmpty(persistedState.AntennaB))
-                {
-                    stateTasks.Add(multiplexer.SendCommandAsync($"AN1{persistedState.AntennaB};", "Initialization", stoppingToken)
-                        .ContinueWith(t => { if (!t.IsFaulted) radioStateService.AntennaB = persistedState.AntennaB; }));
-                }
+                // Antenna (AN) is deliberately NOT restored from persisted state on
+                // connect (radio wins). AN0;/AN1; are sent during InitializeRadioAsync's
+                // fast burst and re-polled every fourth meter cycle by MeterPollingService,
+                // so the radio's actual selection is reflected without YWC overwriting it.
                 // Restore AF Gain — only on dual-receiver radios. On
                 // single-receiver the radio is the source of truth (same
                 // precedent as Mode #38, RF Power #35, MIC Gain #16); the

@@ -413,6 +413,7 @@ builder.Services.AddSignalR();
 
 // Register the persistence service (no hub dependency)
 builder.Services.AddSingleton<RadioStatePersistenceService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<RadioStatePersistenceService>());
 
 // Band edges for the operator's own IARU region, read from
 // wwwroot/bandplan.default.json — the same file the browser overlays at
