@@ -2822,13 +2822,12 @@
                 const txSel = document.getElementById('audioRadioTxDevice');
                 if (!rxSel || !txSel) return;
                 try {
-                    const statusRes = await fetch('/api/audio/status');
-                    if (statusRes.ok) {
-                        const status = await statusRes.json();
-                        // Never touch portaudio.dll from Settings while a stream is
-                        // live — enumeration during WASAPI callbacks crashes the host.
-                        if (status.sessionActive || status.devicesOpen) return;
-                    }
+                    // Always fill the selects — including while a remote-audio
+                    // session is live. /api/audio/devices returns the enumerator
+                    // cache when PortAudio streams are open (cachedWhileStreaming),
+                    // so Settings never triggers a live GetDeviceInfo. Skipping
+                    // the fetch left both dropdowns blank on pop-out / refresh
+                    // and Save could wipe AudioRadioRxDevice / AudioRadioTxDevice.
                     const res = await fetch('/api/audio/devices');
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     const data = await res.json();

@@ -449,8 +449,9 @@ function bindRemoteAudioControls(role) {
     const streaming = streamStatus === 'streaming';
     if (micMute) micMute.disabled = !streaming;
     if (rxMute) rxMute.disabled = !streaming;
-    // Index locks the mic picker only while the popout is actively streaming.
-    if (micSelect) micSelect.disabled = role === 'index' && remoteOwned && streaming;
+    // Mic and codec are chosen at session start only — changing either mid-stream
+    // would only update localStorage / preference, not the live capture or wire codec.
+    if (micSelect) micSelect.disabled = streaming;
     if (codecSelect) codecSelect.disabled = streaming;
     if (!streaming) {
       setMicMuteUi(micMute, micMuteIcon, micMuteTip, false);
