@@ -447,7 +447,7 @@ A scrollable row of meters is displayed above the VFO panels. The leftmost slots
 
 **FTdx10, FT-710** — single S-meter (VFO A) plus four TX meters (SWR, Power, Compression, ALC). The Temp, IDD, and VDD meters are not shown because those radios have a different power amplifier design that runs on 13.8 V; the high-voltage PA meters do not apply.
 
-All meters update in real time at approximately 10 times per second. Meters that only apply to transmit automatically read zero when the radio is receiving. The S-meter(s) are always live.
+All meters update in real time — about five times a second at the default 200 ms **Meter Poll Interval** (Settings → Radio Connection). Not everything is read on every cycle: the S-meter(s) and transmit state are, while PA temperature, IDD, VDD and the antenna selection are read every two seconds, because they change slowly and reading them costs bus time the meters need. Meters that only apply to transmit automatically read zero when the radio is receiving. The S-meter(s) are always live.
 
 > **Reading the SWR meter above 3:1.** The SWR dial is marked 1.0 to 3.0, so the
 > needle stops climbing once the SWR passes 3:1 — a 3:1 match and a 10:1 match
