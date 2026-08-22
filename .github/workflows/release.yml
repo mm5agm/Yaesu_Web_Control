@@ -38,6 +38,33 @@ on:
         type: string
 
 jobs:
+  # Runs on every trigger, including pull requests. Until this existed the
+  # workflow only ran `dotnet publish`, so a green tick meant "it compiles and
+  # packages" and said nothing about the tests -- a PR could break every test in
+  # the suite and still show all checks passed.
+  #
+  # The test project targets net10.0 only, so ubuntu is the cheapest host for it.
+  # It is a standalone job rather than a gate on the build jobs: a failure should
+  # be loud on the PR without adding its runtime to the front of every release
+  # build. To make it actually block a merge, add "Build / test" to the required
+  # status checks on develop -- none are configured at present.
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run unit tests
+        run: dotnet test Tests/YaesuWebControl.Tests/YaesuWebControl.Tests.csproj --configuration Release --verbosity normal
+
   build-windows:
     runs-on: windows-latest
     permissions:
