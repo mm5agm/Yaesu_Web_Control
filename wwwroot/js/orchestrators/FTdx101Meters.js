@@ -159,7 +159,10 @@ export class FTdx101Meters {
         const rawAvg    = this._swrHistory.reduce((s, v) => s + v, 0) / this._swrHistory.length;
         const swr       = this._calibration.calibrateNumeric('SWR', rawAvg);
         const swrClamped = Math.min(swr, 10.0);
-        this._meterPanel.update('swr', (swrClamped - 1.0) * 127.5);
+        // The face stops at 3.0, so pin the needle there rather than handing the
+        // gauge library a value off the end of its own range and trusting it to
+        // clamp. The true ratio still reaches the readout below (issue #128).
+        this._meterPanel.update('swr', Math.min(255, (swrClamped - 1.0) * 127.5));
         return { skip: false, gaugeKey: 'swr', displayValue: { swr: swrClamped } };
     }
 
