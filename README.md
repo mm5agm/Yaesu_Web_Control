@@ -615,7 +615,7 @@ First arrow-press with no digit selected just highlights the kHz digit — a sec
 
 Optional on-screen **▲/▼ buttons** sit next to each VFO's frequency display when **Settings → Accessibility → Show frequency up/down arrow buttons** is on. Each click steps the selected digit by 1, the same as a single ArrowUp/ArrowDown. Off by default so users with mouse wheels see the uncluttered default. Useful for head-tracking input, on-screen keyboard users, and reduced-dexterity operators.
 
-The selected digit highlights yellow. Selection persists across the ~10 Hz polling cycles so you can press ArrowUp ten times in a row and the selection stays put. Click outside the display + ▲/▼ controls to deselect.
+The selected digit highlights yellow. Selection persists across the meter polling cycles so you can press ArrowUp ten times in a row and the selection stays put. Click outside the display + ▲/▼ controls to deselect.
 
 USER_MANUAL chapter 13 (Keyboard Shortcuts) has the full reference table; §16.7 covers the accessibility-focused summary.
 
@@ -846,7 +846,7 @@ Critical hotfix on v2.3.3. **If you have v2.3.3 installed, please update.**
   initialization sequence the app uses on launch (multiplexer connect
   + ~30 CAT read queries + state restoration). That's safe at startup
   when nothing else is running yet — but on a running system it races
-  with the 10 Hz meter poller, the SDR workers, and any in-flight
+  with the meter poller, the SDR workers, and any in-flight
   WebUI commands, and on my bench it consistently crashed the
   YWC process on the first or second click.
 
@@ -1220,8 +1220,8 @@ report rather than from me hypothesising.
   (#17, SP3L-Jacek)
 
 - **Power gauge jitter during transmit.** Smoothing window extended from
-  7 to 15 samples (≈1.5 s at 10 Hz polling) to handle the steepness of
-  the PWR calibration curve above 100 W. SWR smoothing stays at 7 samples
+  7 to 15 samples to handle the steepness of the PWR calibration curve
+  above 100 W. SWR smoothing stays at 7 samples
   so high-SWR faults are still seen quickly.
 
 ### Documentation
