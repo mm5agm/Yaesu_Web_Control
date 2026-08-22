@@ -482,11 +482,26 @@ function updateMeterDomLabel(property, result) {
             break;
         }
         case 'SWRMeter': {
+            const offScale = window.MeterFormatters.swrIsOffScale(dv.swr);
             const formatted = window.MeterFormatters.swr(dv.swr);
             const el = document.getElementById('swrMeterValue');
-            if (el) el.textContent = formatted;
+            if (el) {
+                el.textContent = formatted;
+                // The badge is the <div> the gauge builds around this span
+                // (gauge.js, gaugeTitle block). Its background is set inline
+                // there, so it has to be overridden inline here — a CSS class
+                // would lose to the inline style.
+                const badge = el.parentElement;
+                if (badge) {
+                    badge.style.background = offScale ? '#ffc107' : '#dc3545';
+                    badge.style.color      = offScale ? '#000000' : '#ffffff';
+                }
+            }
             const canvas = document.getElementById('swrMeterCanvas');
-            if (canvas) canvas.dataset.reading = formatted;
+            if (canvas) {
+                canvas.dataset.reading = window.MeterFormatters.swrAnnouncement(dv.swr);
+                canvas.dataset.offScale = offScale ? 'true' : 'false';
+            }
             break;
         }
         case 'CompressionMeter': {

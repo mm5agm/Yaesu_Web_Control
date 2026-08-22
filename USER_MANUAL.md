@@ -449,6 +449,14 @@ A scrollable row of meters is displayed above the VFO panels. The leftmost slots
 
 All meters update in real time at approximately 10 times per second. Meters that only apply to transmit automatically read zero when the radio is receiving. The S-meter(s) are always live.
 
+> **Reading the SWR meter above 3:1.** The SWR dial is marked 1.0 to 3.0, so the
+> needle stops climbing once the SWR passes 3:1 — a 3:1 match and a 10:1 match
+> park it in exactly the same place. When that happens the readout under the dial
+> turns amber, shows the true ratio, and adds a **▲** marker: for example
+> **SWR 5.4:1 ▲** means the needle is against the stop and the real figure is
+> 5.4:1. Trust the number, not the needle position, whenever the marker is showing.
+> A screen reader announces the same reading as "5.4:1 - off scale".
+
 The meter scales are calibrated to show meaningful units rather than raw ADC values. See Section 10 (Meter Calibration) if you want to adjust the calibration for your specific radio. Both S-meter gauges share the same calibration table — there's no separate MAIN/SUB calibration.
 
 **S-meter history strip.** A small 30-second strip-chart can be shown to the left of each S-meter gauge in the top meter row (one per VFO on dual-receiver radios). Click the **S-hist** button in the top toolbar to toggle both on or off together (off by default; the choice is remembered between sessions). Each strip shows three things at once:
