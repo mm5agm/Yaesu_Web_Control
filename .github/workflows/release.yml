@@ -1,4 +1,14 @@
-name: Build and Release Installer
+# Named "Build" rather than "Build and Release Installer" because it runs on
+# every PR into develop as a build-only smoke test, and the old name made a
+# routine PR check look like it was about to publish a release. Nothing is
+# released except on the `release` event -- see the guards on each upload step.
+name: Build
+
+# Retitles the run itself, so the Actions list says what a given run was for.
+run-name: >-
+  ${{ github.event_name == 'pull_request' && format('Smoke build - PR #{0} (nothing published)', github.event.number)
+   || github.event_name == 'release' && format('Release {0} - building and publishing installers', github.event.release.tag_name)
+   || 'Manual build' }}
 
 on:
   release:
