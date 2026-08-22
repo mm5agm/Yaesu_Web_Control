@@ -286,6 +286,7 @@ namespace Yaesu_Web_Control.Services
                         bool useRm0Pair = settings.RadioModel is "FTdx101MP" or "FTdx101D";
                         int compression;
                         int swr;
+                        bool discardThisRead = false;
                         if (useRm0Pair)
                         {
                             _lastTxSeenUtc = DateTime.UtcNow;
@@ -303,15 +304,34 @@ namespace Yaesu_Web_Control.Services
 
                             var compSwrResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterBoth + ";", "MeterPoll", stoppingToken);
                             _logger.LogDebug("[MeterPolling][DEBUG] RM0 response: '{Raw}'", compSwrResponse);
-                            compression = CatCommands.ParseRm0LeftMeter(compSwrResponse ?? "");
-                            swr         = CatCommands.ParseRm0RightMeter(compSwrResponse ?? "");
+                            int? compRaw = CatCommands.ParseRm0LeftMeter(compSwrResponse ?? "");
+                            int? swrRaw  = CatCommands.ParseRm0RightMeter(compSwrResponse ?? "");
+                            compression = compRaw ?? 0;
+                            swr         = swrRaw  ?? 0;
+
+                            // A dropped or malformed RM0 is not a reading of zero.
+                            // Publishing it as one made the SWR needle dip to 1.0
+                            // for a single poll cycle in the middle of a genuinely
+                            // bad load (issue #124) -- so hold the last value and
+                            // wait for the next poll instead.
+                            if (compRaw is null || swrRaw is null)
+                            {
+                                _logger.LogDebug("[MeterPolling] RM0 read dropped ('{Raw}') — holding previous meter values", compSwrResponse);
+                                discardThisRead = true;
+                            }
 
                             if (DateTime.UtcNow < _borrowSettleUntilUtc)
                             {
                                 // Meters have only just switched — this read may still
-                                // describe the operator's previous selection.
-                                compression = 0;
-                                swr         = 0;
+                                // describe the operator's previous selection. Drop it
+                                // rather than publishing a zero: a fabricated zero is
+                                // indistinguishable from a real reading downstream, and
+                                // FTdx101Meters averages the last three SWR readings, so
+                                // it dragged the needle to half scale on a genuine 10:1
+                                // load for the rest of the over (issue #124). Skipping
+                                // the write leaves the zero the RX branch already
+                                // published, which looks the same and lies to no one.
+                                discardThisRead = true;
                             }
                         }
                         else
@@ -323,11 +343,24 @@ namespace Yaesu_Web_Control.Services
                             var swrResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterSWR + ";", "MeterPoll", stoppingToken);
                             _logger.LogDebug("[MeterPolling][DEBUG] RM6 response: '{Raw}'", swrResponse);
                             swr = CatCommands.ParseMeterReading(swrResponse ?? "");
+
+                            // Same reasoning as the RM0 branch above: a missing or
+                            // malformed answer must not be published as a zero.
+                            // ParseMeterReading is shared with seven other callers,
+                            // so the check is here rather than in its return value.
+                            if (string.IsNullOrEmpty(swrResponse) || !swrResponse.StartsWith("RM"))
+                            {
+                                _logger.LogDebug("[MeterPolling] RM6 read dropped ('{Raw}') — holding previous meter values", swrResponse);
+                                discardThisRead = true;
+                            }
                         }
 
-                        _stateService.SWRMeter = swr;
-                        _stateService.CompressionMeter = compression;
-                        _logger.LogDebug("[MeterPolling][DEBUG] TX Compression={Comp} SWR={SWR}", compression, swr);
+                        if (!discardThisRead)
+                        {
+                            _stateService.SWRMeter = swr;
+                            _stateService.CompressionMeter = compression;
+                            _logger.LogDebug("[MeterPolling][DEBUG] TX Compression={Comp} SWR={SWR}", compression, swr);
+                        }
                     }
                     else
                     {
@@ -338,7 +371,8 @@ namespace Yaesu_Web_Control.Services
                             _stateService.ALCMeter = 0;
                         if (_stateService.CompressionMeter != 0)
                             _stateService.CompressionMeter = 0;
-                        _stateService.SWRMeter = 0;
+                        if (_stateService.SWRMeter != 0)
+                            _stateService.SWRMeter = 0;
 
                         // Return borrowed meters once TX has been quiet for MeterReturnDelay.
                         bool useRm0Pair = settings.RadioModel is "FTdx101MP" or "FTdx101D";

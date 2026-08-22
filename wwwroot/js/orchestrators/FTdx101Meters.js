@@ -132,10 +132,30 @@ export class FTdx101Meters {
             this._swrHistory = [];
         }
         this._wasTransmittingSWR = true;
+
+        // A raw zero is not a measurement to be averaged in -- it is the server
+        // saying the over has ended (MeterPollingService zeroes the TX-only
+        // meters on the TX-off edge). Averaging it against the readings from the
+        // over invented a value that was never measured: one real 255 and one
+        // terminal zero average to 127.5, which the SWR table maps to exactly
+        // 3.0, and that is the 3.0 the needle used to stick at (issue #124).
+        // Resetting here is right under either reading of the value, because a
+        // raw zero genuinely is 1.0:1 -- no reflected power.
+        if (raw === 0) {
+            this._swrHistory = [];
+            this._meterPanel.update('swr', 0);
+            return { skip: false, gaugeKey: 'swr', displayValue: { swr: 1.0 } };
+        }
+
         this._swrHistory.push(raw);
         if (this._swrHistory.length > this._swrHistoryLength) this._swrHistory.shift();
-        // Require at least 2 readings before displaying — single-reading bursts are likely noise.
-        if (this._swrHistory.length < 2) return { skip: true };
+        // Draw on the first reading of the over. There used to be a "wait for 2
+        // readings, single bursts are likely noise" gate here, and it made the
+        // gauge dead exactly when it mattered: SWRMeter is broadcast on change
+        // only, so an over that sits at a steady value -- a genuinely bad load
+        // pinned at 255, say -- delivers exactly one update and the gate never
+        // opened. The needle stayed at 0 through a 10:1 SWR (issue #124). Noise
+        // is still handled, by averaging the last three readings below.
         const rawAvg    = this._swrHistory.reduce((s, v) => s + v, 0) / this._swrHistory.length;
         const swr       = this._calibration.calibrateNumeric('SWR', rawAvg);
         const swrClamped = Math.min(swr, 10.0);
