@@ -200,12 +200,18 @@
             return 0;
         }
 
-        public static int ParseRm0LeftMeter(string response)
+        // Returns null when the response is missing or malformed -- NOT zero.
+        // These used to return 0 on every failure path, which made "the radio
+        // did not answer" indistinguishable from "the SWR is 1.0:1". A single
+        // dropped CAT response mid-over published a fabricated zero, and on a
+        // genuinely bad load the meter dipped to perfect for one poll cycle
+        // (issue #124). The caller skips the update when it gets null.
+        public static int? ParseRm0LeftMeter(string response)
         {
             // Parse left-side meter from RM0 response: RM0LLLRRR;
             // Positions 3-5 are the left meter value (0-255).
             if (string.IsNullOrEmpty(response) || !response.StartsWith("RM0"))
-                return 0;
+                return null;
             int semicolonIndex = response.IndexOf(';');
             if (semicolonIndex > 0)
                 response = response.Substring(0, semicolonIndex);
@@ -214,15 +220,16 @@
                 if (int.TryParse(response.Substring(3, 3), out int value))
                     return value;
             }
-            return 0;
+            return null;
         }
 
-        public static int ParseRm0RightMeter(string response)
+        // Null on a missing or malformed response -- see ParseRm0LeftMeter.
+        public static int? ParseRm0RightMeter(string response)
         {
             // Parse right-side meter from RM0 response: RM0LLLRRR;
             // Positions 6-8 are the right meter value (0-255).
             if (string.IsNullOrEmpty(response) || !response.StartsWith("RM0"))
-                return 0;
+                return null;
             int semicolonIndex = response.IndexOf(';');
             if (semicolonIndex > 0)
                 response = response.Substring(0, semicolonIndex);
@@ -231,7 +238,7 @@
                 if (int.TryParse(response.Substring(6, 3), out int value))
                     return value;
             }
-            return 0;
+            return null;
         }
 
         public static int ParseMeterReading(string response)

@@ -509,6 +509,14 @@ namespace Yaesu_Web_Control.Services
         }
 
         private int? _swrMeter;
+        // No spike filter here -- see issue #124. A "reject anything more than 30
+        // from the last value" test made the first reading of an over the anchor
+        // and then rejected every correction to it, so a genuine 255 latched for
+        // the rest of the over. Worse, a rejected write is not a write, so
+        // SetField never fired and the client stopped receiving SWRMeter updates
+        // altogether -- the gauge froze rather than reading high. Smoothing is
+        // the client's job: FTdx101Meters._processSWR averages the last 3
+        // readings and will not draw until it has 2 of them.
         public int? SWRMeter
         {
             get => _swrMeter;
@@ -516,11 +524,6 @@ namespace Yaesu_Web_Control.Services
             {
                 if (value == null) return;
                 int clamped = Math.Clamp(value.Value, 0, 255);
-                if (_swrMeter.HasValue && _swrMeter.Value != 0 && clamped != 0 && Math.Abs(clamped - _swrMeter.Value) > 30)
-                {
-                    _logger.LogWarning("[SWRMeter] Ignored spike: {Old} -> {New}", _swrMeter, clamped);
-                    return;
-                }
                 SetField(ref _swrMeter, clamped);
             }
         }
