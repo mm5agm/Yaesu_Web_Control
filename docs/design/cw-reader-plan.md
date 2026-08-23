@@ -34,6 +34,20 @@ Neither has a command that reads the decoded **characters** back. Icom's
 USB (B) port can be switched to emit decode text (`1A 05 00 94`), but the
 setting is `00=RTTY Decode, 01=CI-V` — RTTY only, not CW.
 
+The MkII's `[LAN]` port does not change this, which I checked on 2026-08-23
+because it looked like it might. LAN is a *transport* for the same CI-V command
+set, not an extension of it: `SET > Connectors > USB/LAN REMOTE Transceive
+Address` sets "the address used to remotely control the transceiver using the
+optional RS-BA1 software, through the [USB] port or the [LAN] port". Everything
+above applies to LAN unchanged.
+
+Nor does the radio write CW to a file. RTTY does — `02 44` Decode Log on/off,
+`02 45` Text/HTML, `02 46`-`02 48` timestamps, straight to the SD card. The
+`CW DECODE SET` block has no equivalent; it is colour settings from `02 49` on.
+The only CW-decode commands anywhere are `02 26` Decode Display on/off and
+`02 27` Japanese Morse Decode on/off, and both read a *setting*, never a
+character.
+
 **So we write a real DSP decoder.** There is no passthrough shortcut, on either
 brand. This was worth confirming: a passthrough would have been a fraction of
 the work.
@@ -79,6 +93,24 @@ is lower than it looks, but it should be raised with him before Phase 2 lands.
 `Services/Audio/` does not exist in IWC. The whole PortAudio/Opus/WebSocket
 stack is YWC-only. IWC needs a capture path built — capture only, no Opus and no
 WebSocket, so it is a small fraction of what YWC has.
+
+There are two candidate sources, and the default is the boring one:
+
+| Source | What it gives | Cost |
+|---|---|---|
+| **USB CODEC** (default) | Filtered receive audio off the USB sound device, exactly what the decoder wants | The known path; mirrors what YWC already does |
+| **LAN AF** | The same audio over Ethernet, no sound card in the chain, and it works *remotely* | Icom do not document the wire protocol |
+
+`SET > Connectors > LAN AF/IF Output > Output Select` (default AF) chooses what
+leaves the `[LAN]` port: "AF: An AF signal is output. IF: A 12 kHz IF signal is
+output", with an `AF SQL` option to gate it on squelch. The 12 kHz IF is more
+interesting for a panadapter than for CW — the decoder wants the filtered AF.
+
+The LAN protocol is RS-BA1's, and Icom publish nothing about it. It *has* been
+reverse-engineered publicly — wfview implements Icom LAN control and audio — so
+it is not a closed door, but I have not costed it and will not pretend it is
+cheap. **Phase 2 uses the USB CODEC.** LAN is a later upgrade whose real prize
+is remote operation, not decoding.
 
 ### 1.5 The two radios' own decoders, measured
 
