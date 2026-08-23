@@ -253,7 +253,25 @@ namespace Yaesu_Web_Control.Services.Video
                 }
 
                 grabber.SetOneShot(0);
-                grabber.SetBufferSamples(1);
+
+                // #132. SampleCB takes the length from
+                // IMediaSample.GetActualDataLength rather than trusting the
+                // buffer the grabber hands back, so it was the obvious suspect
+                // for the merged samples - ffmpeg reads this same dongle that
+                // way and sees no corruption in 360 frames across six cold
+                // opens. Measured on my VIXLW: it makes no difference. The
+                // opening session merges 12 for 12 either way, with the sample
+                // and first-image lengths identical to the byte, which means
+                // the extra ~818 bytes really are in the sample and not an
+                // artefact of how its length is reported. So BufferCB stays the
+                // default - the corruption is not what this changes, and every
+                // Windows user runs this path. YWC_VIDEO_GRABBER=sample opts in
+                // for anyone whose dongle behaves differently.
+                var useSampleCb = string.Equals(
+                    Environment.GetEnvironmentVariable("YWC_VIDEO_GRABBER"),
+                    "sample",
+                    StringComparison.OrdinalIgnoreCase);
+                grabber.SetBufferSamples(useSampleCb ? 0 : 1);
 
                 var grabberIn = FindPin(grabberFilter, PinDirInput, requireStreamConfig: false);
                 var grabberOut = FindPin(grabberFilter, PinDirOutput, requireStreamConfig: false);
@@ -294,7 +312,10 @@ namespace Yaesu_Web_Control.Services.Video
                     return null;
 
                 var callback = new GrabberCallback();
-                hr = grabber.SetCallback(callback, 1);
+                hr = grabber.SetCallback(callback, useSampleCb ? 0 : 1);
+                logger.LogInformation(
+                    "Radio Display: DirectShow grabber using {Which}",
+                    useSampleCb ? "SampleCB (actual data length)" : "BufferCB (buffered)");
                 if (hr < 0)
                 {
                     logger.LogWarning("Radio Display: ISampleGrabber.SetCallback hr=0x{Hr:X8}", hr);
@@ -692,10 +713,42 @@ namespace Yaesu_Web_Control.Services.Video
             public WindowsDshowMjpegSession? Owner;
 
             [PreserveSig]
-            public int SampleCB(double sampleTime, IntPtr sample) => 0;
+            public int SampleCB(double sampleTime, IntPtr sample)
+            {
+                if (sample == IntPtr.Zero)
+                    return 0;
+
+                object? obj = null;
+                try
+                {
+                    obj = Marshal.GetObjectForIUnknown(sample);
+                    if (obj is not IMediaSample ms)
+                        return 0;
+                    if (ms.GetPointer(out var buffer) < 0 || buffer == IntPtr.Zero)
+                        return 0;
+
+                    // The authoritative length. GetSize() is the allocator's
+                    // buffer, which for MJPEG is sized for the largest frame and
+                    // is exactly what makes BufferCB report an overrun.
+                    var length = ms.GetActualDataLength();
+                    return length <= 0 ? 0 : Process(sampleTime, buffer, length);
+                }
+                catch (InvalidCastException)
+                {
+                    return 0;
+                }
+                finally
+                {
+                    if (obj is not null)
+                        Marshal.ReleaseComObject(obj);
+                }
+            }
 
             [PreserveSig]
-            public int BufferCB(double sampleTime, IntPtr buffer, int bufferLen)
+            public int BufferCB(double sampleTime, IntPtr buffer, int bufferLen) =>
+                Process(sampleTime, buffer, bufferLen);
+
+            private int Process(double sampleTime, IntPtr buffer, int bufferLen)
             {
                 var owner = Owner;
                 if (owner is null || buffer == IntPtr.Zero || bufferLen < 4)
@@ -1193,6 +1246,30 @@ namespace Yaesu_Web_Control.Services.Video
             [PreserveSig] int GetCurrentBuffer(ref int pBufferSize, IntPtr pBuffer);
             [PreserveSig] int GetCurrentSample(out IntPtr ppSample);
             [PreserveSig] int SetCallback(ISampleGrabberCB? callback, int whichMethodToCallback);
+        }
+
+        /// <summary>
+        /// Only as far as GetActualDataLength is needed, but the vtable order
+        /// above it must be exact.
+        /// </summary>
+        [ComImport]
+        [Guid("56a8689a-0ad4-11ce-b03a-0020af0ba770")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IMediaSample
+        {
+            [PreserveSig] int GetPointer(out IntPtr ppBuffer);
+            [PreserveSig] int GetSize();
+            [PreserveSig] int GetTime(out long start, out long end);
+            [PreserveSig] int SetTime(IntPtr start, IntPtr end);
+            [PreserveSig] int IsSyncPoint();
+            [PreserveSig] int SetSyncPoint(bool isSyncPoint);
+            [PreserveSig] int IsPreroll();
+            [PreserveSig] int SetPreroll(bool isPreroll);
+            [PreserveSig] int GetActualDataLength();
+            [PreserveSig] int SetActualDataLength(int length);
+            [PreserveSig] int GetMediaType(out IntPtr ppMediaType);
+            [PreserveSig] int SetMediaType(IntPtr pMediaType);
+            [PreserveSig] int IsDiscontinuity();
         }
 
         [ComImport]
