@@ -3090,7 +3090,56 @@ Radio DVI-D / HDMI video output
         Web browser (Index panel or /RadioDisplay pop-out)
 ```
 
-Typical radio panel resolutions are modest (e.g. FTDX-10 **800×480** or **800×600**). Many cheap capture sticks still open at **720p/1080p** with letterboxing — leave **Max width** at **800** so the host downscales before JPEG encode (important on a Raspberry Pi). On Windows and macOS the host picks **one** capture size for **15 / 30 / 60 fps**: a 4:3 mode at least 800 px wide when the dongle has one (typically **800×600** after scale, or 1024×768 → 800×600). Changing FPS does not jump between 640×480 and 720p. **640×480** is used only if the dongle has nothing ≥800 wide. **60 fps** may stay ~30 if that 4:3 pin cannot run 60 — the size stays put rather than switching to 1080p60. The **15 fps** setting is paced in software even when the pin’s floor is 20.
+Typical radio panel resolutions are modest (e.g. FTDX-10 **800×480** or **800×600**). Many cheap capture sticks still open at **720p/1080p** — leave **Max width** at **800** so the host downscales before JPEG encode (important on a Raspberry Pi). On Windows and macOS the host picks **one** capture size for **15 / 30 / 60 fps**: a 4:3 mode at least 800 px wide when the dongle has one (typically **800×600** after scale, or 1024×768 → 800×600). Changing FPS does not jump between 640×480 and 720p. **640×480** is used only if the dongle has nothing ≥800 wide. **60 fps** may stay ~30 if that 4:3 pin cannot run 60 — the size stays put rather than switching to 1080p60. The **15 fps** setting is paced in software even when the pin’s floor is 20.
+
+#### Set the radio's output resolution first
+
+Before touching anything in Yaesu Web Control, check what the radio is actually
+sending. All three radios with a DVI-D output have the same menu item, and it
+matters more than any setting on my side:
+
+| Radio | Menu path | Values |
+|---|---|---|
+| FTDX101MP / D | DISPLAY SETTING → EXT MONITOR → **PIXEL** | 800×480 / 800×600 |
+| FTDX10 | DISPLAY SETTING → EXT MONITOR → **PIXEL** | 800×480 / 800×600 |
+| FT-710 | Menu **04 (EXT-MONITOR) → 02 PIXEL** | 800×480 / 800×600 |
+
+**The factory default is 800×480, and I recommend changing it to 800×600.**
+
+Here is why. At the default **Max width** of 800 the host picks an 800×600
+capture, because that is the 4:3 mode most dongles offer — almost none of them
+offer 800×480 at all. If the radio is still set to 800×480, the dongle has to
+turn 480 lines into 600, and on the two dongles I have measured it does that by
+**stretching the picture to fill the frame rather than adding black bars**. The
+result is a silently squashed display, about 25% too tall, with nothing on
+screen to tell you it has happened. Setting the radio to 800×600 makes the whole
+chain pixel-for-pixel with no scaling at either end.
+
+If you would rather leave the radio on 800×480, raise **Max width** to 1280 so
+the host picks a 16:9 mode instead — 1280×720 is within about 7% of 5:3, which
+is far closer than 4:3 is. It costs more bandwidth for no extra detail, but the
+geometry will look right.
+
+#### Bigger is not better
+
+It is tempting to raise **Max width** for a sharper picture. It does the
+opposite. The radio only ever sends 800 pixels across, so every larger capture
+mode is the dongle's own scaler inventing pixels — no additional detail exists
+to recover. I measured this on my FTDX101MP by comparing the spatial frequency
+content of native and upscaled captures: the 800×600 capture carries real
+detail all the way to the limit, while a 1920×1080 capture of the same screen
+has had its fine detail attenuated by more than 25 dB by the interpolation. The
+larger frames are both **softer** and considerably more expensive:
+
+| Capture mode | Mean frame | At 15 fps |
+|---|---|---|
+| 800×600 (native) | 78 KB | 1.2 MB/s |
+| 1280×960 | 114 KB | 1.7 MB/s |
+| 1920×1080 | 158 KB | 2.4 MB/s |
+
+So leave **Max width** at **800** unless you have a specific reason not to. It
+gives the best picture *and* the lowest load — which is unusual enough to be
+worth stating plainly.
 
 ### 19.2 Electrical safety
 
