@@ -1041,6 +1041,7 @@ namespace Yaesu_Web_Control.Services.Video
             var emptySince = new Stopwatch();
             var fpsCollapseStreak = 0;
             var loggedFormat = false;
+            var deliveredFrame = false;
             using var resizedScratch = new Mat();
 
             while (!ct.IsCancellationRequested)
@@ -1078,27 +1079,36 @@ namespace Yaesu_Web_Control.Services.Video
                 // waiting for a frame here would stall until the unplug watchdog.
                 if (session.DeviceMergesFrames && !_dshowPreferNativeMjpeg)
                 {
-                    // Only when the size is automatic. If the operator picked
-                    // this mode by name, reopening on a different one would
-                    // undo their choice behind their back and leave the
-                    // dropdown looking broken; say so once and carry on, with
-                    // the merged samples dropped as usual.
-                    if (!string.IsNullOrEmpty(captureSize))
+                    // A size the operator picked by name is kept, but only
+                    // while it is still producing pictures. Some samples
+                    // merging costs a frame each; every sample merging means
+                    // every frame is dropped, and then honouring the choice
+                    // shows a black panel and trips the stall watchdog into
+                    // reporting an unplug that never happened. My VIXLW dongle
+                    // does exactly that at 800x600. A preference is not worth
+                    // a dead display, so reopen anyway and say why.
+                    _dshowPreferNativeMjpeg = true; // do not repeat this every loop
+                    if (!string.IsNullOrEmpty(captureSize) && deliveredFrame)
                     {
                         _logger.LogWarning(
                             "Radio Display: {Via} device is merging frames at {W}x{H}, which you " +
                             "selected as the capture size. Keeping it — switch to Auto size to let " +
                             "the host reopen on the device's native mode instead",
                             via, session.Width, session.Height);
-                        _dshowPreferNativeMjpeg = true; // do not repeat this every loop
                     }
                     else
                     {
-                        _dshowPreferNativeMjpeg = true;
-                        _logger.LogWarning(
-                            "Radio Display: {Via} device is merging frames at {W}x{H} — reopening on its " +
-                            "native mode and scaling here instead",
-                            via, session.Width, session.Height);
+                        if (!string.IsNullOrEmpty(captureSize))
+                            _logger.LogWarning(
+                                "Radio Display: {Via} device merges every sample at {W}x{H}, the capture " +
+                                "size you selected, so no picture can come out of it — reopening on the " +
+                                "device's native mode. Choose another size, or Auto, to stop this recurring",
+                                via, session.Width, session.Height);
+                        else
+                            _logger.LogWarning(
+                                "Radio Display: {Via} device is merging frames at {W}x{H} — reopening on its " +
+                                "native mode and scaling here instead",
+                                via, session.Width, session.Height);
                         break;
                     }
                 }
@@ -1122,6 +1132,7 @@ namespace Yaesu_Web_Control.Services.Video
                 }
 
                 emptySince.Reset();
+                deliveredFrame = true;
                 if (!loggedFormat)
                 {
                     loggedFormat = true;
