@@ -1,6 +1,7 @@
 # A CW reader for YWC and IWC
 
-**Status:** agreed in outline, 2026-08-18. Not started.
+**Status:** revisited 2026-08-23 after an afternoon on the bench with both
+radios. Confirmed wanted on **both**. Still not started — Phase 0 only.
 **Branches:** `feature/cw-reader` in all three repos (YWC, IWC, Radio_Web_Control_Core).
 
 The reader decodes received CW to on-screen text in a pop-out window, keeps a
@@ -9,9 +10,13 @@ rolling transcript, and offers a pre-filled QSO save. Most of it lives in
 
 It also closes a gap in IWC: the zero-in that YWC gets free from the radio.
 
+On 2026-08-18 the case for this was an assumption — that a radio's built-in
+decoder is mediocre. §1.5 replaces that with what I measured on 2026-08-23, and
+it is a stronger case than I expected.
+
 ---
 
-## 1. Four findings that set the design
+## 1. Five findings that set the design
 
 These were checked against the manuals and the code before anything was
 decided. They are the reason the plan looks the way it does.
@@ -22,7 +27,7 @@ Both radios decode CW themselves, and both expose the *settings* over the wire:
 
 | | |
 |---|---|
-| FTdx101 CAT | menu `01 CW DECODE BW`, `01 DECODE RX SELECT`, `02 DECODE AFC RANGE` |
+| FTdx101 CAT | `EX020301` CW DECODE BW (0:25 1:50 2:100 3:250 Hz), `DECODE RX SELECT` (MAIN/SUB) |
 | IC-7300 MkII CI-V | `02 49`-`02 51` under `KEYER/DECODE > CW DECODE > SET` |
 
 Neither has a command that reads the decoded **characters** back. Icom's
@@ -74,6 +79,54 @@ is lower than it looks, but it should be raised with him before Phase 2 lands.
 `Services/Audio/` does not exist in IWC. The whole PortAudio/Opus/WebSocket
 stack is YWC-only. IWC needs a capture path built — capture only, no Opus and no
 WebSocket, so it is a small fraction of what YWC has.
+
+### 1.5 The two radios' own decoders, measured
+
+Bench session 2026-08-23, one QSO, both radios on the same signal.
+
+**The FTdx101's decoder takes a hand-set speed.** Operating Manual p.59, step 2
+of the CW Decode procedure: *"Turn the [MIC/SPEED] knob to closely match the
+speed of the received CW signal. If the speed is significantly different, it may
+not be deciphered correctly."* Its reference is the **transmit keyer speed**,
+4-60 WPM. It does not track the sender. Yaesu give no tolerance figure.
+
+It has two further manual controls:
+
+- **CW DECODE BW** — the AFC capture window, how far off the operator's CW pitch
+  it will still chase a tone. 25 / 50 / 100 / 250 Hz, default 100. Reachable
+  over CAT as `EX020301n;`.
+- **DEC LVL** — a fixed audio threshold, adjusted by touching `[DEC LVL]` on the
+  decode screen and turning `[MULTI]`. **There is no CAT command for it** —
+  checked against the whole of Table 2 and the two-letter command set. Set too
+  high, a weak signal decodes as nothing; too low, noise generates junk.
+
+**The IC-7300 MkII's decoder has no settings at all.** Its CW DECODE SET screen
+(Advanced manual p.2-15) contains four items and all four are colours: FFT
+waveform, signal level, receive font, transmit font. No threshold, no speed, no
+bandwidth. The only functional option nearby is Japanese Morse Decode ON/OFF.
+
+**The decisive observation.** In one QSO the two operators were sending at
+noticeably different speeds. The MkII decoded both reasonably well, untouched.
+The '101 was set to 27 WPM, matching the fast operator only — and **no value of
+that knob copies both**, because the knob is one number and there are two
+senders. Mixed-speed QSOs are ordinary. So the '101's decoder is not merely
+fiddly to set up; it is structurally unsuited to following a QSO, which is the
+whole point of a decoder.
+
+**What this changes:**
+
+1. Adaptive speed tracking and adaptive thresholding are not refinements, they
+   are the feature. Icom already ship both in a radio costing a fraction of the
+   '101, so this is engineering, not research.
+2. Being CAT-connected is an advantage the radios' own decoders do not exploit:
+   we can read the operator's CW pitch (`KP;` / `1A 05`) and filter width (`SH`)
+   and configure the tone detector from the rig's own state. See §3.3.
+3. **The bar differs per app.** Against the '101 we are beating a weak decoder.
+   Against the MkII we are matching one that already works with nothing to
+   configure. Phase 1 has to clear the second bar, not the first.
+4. **Colin owns a reference decoder.** Two radios, one antenna, one signal — so
+   Phase 1 can be scored against real off-air CW through the MkII as well as
+   against synthetic audio. Very few decoder projects have that.
 
 ---
 
@@ -138,8 +191,16 @@ Goertzel above *and* zero-in.
 compared against a fixed WPM: an exponential moving average of the short-mark
 length sets the dit, dah is anything over ~2 dits, and WPM falls out as
 `1200 / dit_ms`. Gaps of 1/3/7 dits split elements, characters and words, with
-tolerance windows either side. This is what lets it follow a bad fist, which is
-most of the value.
+tolerance windows either side. This is what lets it follow a bad fist, and it is
+what lets it follow the *other* operator when the over changes hands.
+
+**Re-acquisition is a hard requirement, not a nice-to-have.** §1.5 showed a real
+QSO with the two operators at very different speeds. The tracker must converge
+on a new speed within the first few characters of an over — a decoder that
+settles over thirty seconds would pass a steady-state test and still be useless
+on the air. The EMA time constant is the knob that decides this, and it trades
+against stability on a ragged fist; Phase 1 measures the trade rather than
+guessing it.
 
 **Output** is a stream of characters with timestamps, plus current WPM, tone Hz,
 and an SNR estimate. `MorseTable` covers letters, digits, punctuation and the
@@ -151,6 +212,20 @@ project generates synthetic Morse — known text, set WPM, set SNR, optional QSB
 and a deliberately uneven fist — and asserts character accuracy. That gives a
 number to regress against rather than an impression. Core already has xUnit
 under `tests/RadioWebControl.Core.Tests`.
+
+Three cases carry more weight than overall accuracy:
+
+- **Mixed-speed QSO** — audio alternating between two speeds (say 27 and 16 WPM)
+  at over boundaries, scored on **characters lost per transition**. This is the
+  case the '101 cannot do at all, so it is the one that justifies the feature.
+- **Ragged fist** — deliberately uneven weighting and spacing, of the kind a bug
+  or a straight key produces.
+- **QSB** — amplitude fading, which is what an adaptive threshold buys over the
+  '101's fixed `DEC LVL`.
+
+**Exit criterion for Phase 1:** accuracy comparable to the IC-7300 MkII on the
+same off-air signal, not merely better than the '101. If it cannot reach that,
+say so and stop — the finding is worth having, and no UI exists yet to unpick.
 
 ### 3.2 Capture extraction (YWC)
 
@@ -181,6 +256,22 @@ decoder; 250 Hz with APF on will make a mediocre one look good.
 So a single **Reader Mode** button sets, over CAT/CI-V: CW mode, narrow filter
 (default 250 Hz, configurable), APF on, then zero-in. One click, and it restores
 the previous settings when the reader closes.
+
+**It also reads back, and configures the decoder from the rig.** CW pitch
+(`KP;` on Yaesu, `1A 05` on Icom) sets the tone detector's search centre;
+filter width (`SH`) sets how wide it may search. The operator sets nothing.
+This is the advantage in §1.5 point 2, and it is the direct answer to the '101's
+three manual controls:
+
+| FTdx101 control | our equivalent |
+|---|---|
+| MIC/SPEED must match the sender | adaptive dit tracking — nothing to set |
+| `DEC LVL` audio threshold | adaptive noise floor + hysteresis — **removed**, not reimplemented |
+| `CW DECODE BW` capture window | read `KP;` and `SH`, size the search window from them |
+
+The measured case for this is §1.5: the '101's decoder failed on a signal the
+operator could copy by ear, with the filters at 3 kHz, and stayed poor after
+they were narrowed to 600 Hz.
 
 This is per-radio code and stays in the apps.
 
@@ -242,7 +333,7 @@ Each phase is independently verifiable, and nothing before Phase 4 touches IWC.
 | | | |
 |---|---|---|
 | **0** | branches + this document | done |
-| **1** | **Core:** decoder engine, `CwZeroIn`, Morse table, synthetic-audio test suite. No app wiring at all. | `dotnet test` gives an accuracy number vs WPM and SNR |
+| **1** | **Core:** decoder engine, `CwZeroIn`, Morse table, synthetic-audio test suite. No app wiring at all. | `dotnet test` gives accuracy vs WPM and SNR, **plus characters lost per speed transition** |
 | **2** | **YWC:** capture extraction, `CwReaderService`, SignalR, pop-out page | real CW off the FTdx101MP, on the bench |
 | **3** | **YWC:** Reader Mode, transcript, ADIF QSO save | as above |
 | **4** | **Core -> IWC:** subtree push, IWC capture service, reader UI, software ZIN | real CW off the IC-7300 MkII |
@@ -250,6 +341,15 @@ Each phase is independently verifiable, and nothing before Phase 4 touches IWC.
 
 Phase 1 is the one that decides whether this is worth shipping. If the accuracy
 numbers are poor at realistic SNR, that is known before any UI exists.
+
+**Phase 1 needs no radio, no audio capture and nothing from anyone else** — it is
+pure DSP against generated audio. That is why it goes first regardless of how the
+rest is scheduled.
+
+**Bench validation, once Phase 1 has numbers:** run the same off-air signal
+through the MkII and through our decoder and compare. Synthetic audio proves the
+algorithm; the MkII proves it against a decoder that demonstrably works on real
+signals. Do both before committing to Phase 2.
 
 **No version bump, no release notes, no `finish-release.ps1` without Colin's
 explicit go.**
@@ -260,6 +360,9 @@ explicit go.**
 |---|---|
 | Capture refactor touches Fabio's audio code | It is on `develop`, not in flight. Raise before Phase 2 lands; his TX/playback path is untouched. |
 | Decoder accuracy disappoints | Phase 1 measures it before any UI is built. Reader Mode does most of the practical work. Manual sets honest expectations. |
+| Matching the MkII is a higher bar than beating the '101 | Acknowledged in §1.5. The exit criterion is the MkII, so a decoder that only beats the '101 does not pass. Better to find that in Phase 1 than after the UI is written. |
+| Adaptive tracking is the whole value, and it is the hard part | It is also well-trodden — fldigi, CW Skimmer and MRP40 all do it, and Icom ship it. The mixed-speed test case is what stops it being quietly wrong. |
+| Fast re-acquisition trades against stability on a bad fist | Both are measured in Phase 1, on separate test cases, so the trade is visible rather than discovered on the air. |
 | Zero-in sign convention wrong | Bench-verify on both rigs. Deadband and clamp mean a wrong sign fails visibly and harmlessly rather than running away. |
 | Core picks up a package dependency | It cannot: the decoder takes samples, the apps open devices. Keeps YWC's `net10.0` CAT-only target building. |
 | Bug reports interrupt | That is what the separate branches are for. `develop` stays releasable throughout. |
