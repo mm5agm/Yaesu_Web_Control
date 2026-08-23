@@ -18,7 +18,11 @@
         /// sample. Some HDMI grabbers do this in every mode that runs through
         /// their internal scaler: the JPEG is well formed but its scan holds more
         /// than one frame, which renders as a tiled, repeated picture. Capture
-        /// switches to the device's native mode when this is reported.
+        /// rebuilds the graph on the same mode when this is reported, and only
+        /// falls back to the device's native mode if the rebuilt one merges too
+        /// (#132: the fault is usually the first graph, not the mode).
+        /// Implemented by the Windows DirectShow session only; the AVFoundation
+        /// and V4L2 sessions have never been seen to do it.
         /// </summary>
         bool DeviceMergesFrames => false;
     }
