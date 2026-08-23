@@ -408,7 +408,7 @@ Each phase is independently verifiable, and nothing before Phase 4 touches IWC.
 | | | |
 |---|---|---|
 | **0** | branches + this document | done |
-| **1** | **Core:** decoder engine, `CwZeroIn`, Morse table, synthetic-audio test suite. No app wiring at all. | `dotnet test` gives accuracy vs WPM and SNR, **plus characters lost per speed transition** |
+| **1** | **Core:** decoder engine, `CwZeroIn`, Morse table, synthetic-audio test suite. No app wiring at all. | done 2026-08-23 - 69 tests, numbers in §4.1 |
 | **2** | **YWC:** capture extraction, `CwReaderService`, SignalR, pop-out page | real CW off the FTdx101MP, on the bench |
 | **3** | **YWC:** Reader Mode, transcript, ADIF QSO save | as above |
 | **4** | **Core -> IWC:** `git subtree push` from YWC then pull into IWC (§2.1), IWC capture service, reader UI, software ZIN | real CW off the IC-7300 MkII |
@@ -428,6 +428,62 @@ signals. Do both before committing to Phase 2.
 
 **No version bump, no release notes, no `finish-release.ps1` without Colin's
 explicit go.**
+
+### 4.1 Phase 1 results, measured 2026-08-23
+
+69 tests, all passing, in `core/tests/RadioWebControl.Core.Tests/Cw/`. Every case
+prints its score as well as asserting on it, so `dotnet test -l "console;verbosity=detailed"`
+is a report on the decoder rather than a pass/fail. Text is 24-56 characters of
+ordinary QSO traffic; SNR is quoted in a 500 Hz bandwidth, which is what an
+operator reads off a scope.
+
+| case | result |
+|---|---|
+| 12 / 20 / 27 / 35 WPM at 20 dB | **100%** at all four |
+| 30 / 20 / 12 dB SNR at 20 WPM | **100%** |
+| 6 dB SNR at 20 WPM | **91.7%** |
+| **27 -> 16 WPM at the over** | **100%, 0 characters lost to the change** |
+| **14 -> 30 WPM at the over** | **96.3%** - 3 characters lost re-acquiring |
+| ragged fist, 20% timing jitter | **100%** |
+| QSB 10 dB at 0.05 / 0.10 / 0.25 Hz | **100%** at all three |
+| QSB 20 dB at 0.10 Hz, 20 dB signal | 62.5% |
+| QSB 20 dB at 0.10 Hz, strong signal | **100%** |
+| five seconds of pure noise | **0 characters** |
+| 22 WPM sent | reported 21.6 WPM |
+| tone at 715 Hz, pitch set to 600 | tracked 708.6 Hz, zero-in offered +109 Hz |
+
+**The mixed-speed case passes with nothing lost.** That was the case that
+justified the feature (§1.5) and the one the FTdx101 cannot do at all. Going the
+other way - a jump from 14 to 30 WPM, more than double - costs three characters
+while the tracker re-acquires, which is inside the "first few characters"
+requirement but is the honest worst case and is now a standing test.
+
+**The 20 dB QSB row needs reading carefully.** A 20 dB fade takes a 20 dB signal
+to nothing at the bottom of the cycle, so 62.5% is the band, not the decoder. The
+row underneath is the control: the same 20 dB fade on a strong signal decodes
+100%, which says the threshold tracker follows the fade and the losses above are
+lost to noise. That control is a permanent test, because it is the one that would
+catch the tracker regressing into something DEC LVL-shaped.
+
+**Where the numbers came from.** Two findings worth keeping:
+
+- **A floor-referenced presence gate does not work.** Narrowband noise is
+  Rayleigh, so its envelope peak sits several times its own minimum; gating on
+  peak-over-minimum called five seconds of hiss a signal and produced 29
+  characters of nonsense. Gating on peak-over-*mean* produces zero. 
+- **The threshold has to be referenced to a mark level, not to a peak.** The peak
+  tracker is deliberately slow, which is right for deciding whether a signal is
+  there and wrong for setting a threshold: during a fade a slow peak leaves the
+  threshold stranded above the signal, which is exactly the failure mode a fixed
+  DEC LVL has. Tracking a separate mark level, updated only while the key is
+  down, took 10 dB QSB at 0.25 Hz from 54% to 100%.
+
+**Not yet done, and the plan says do it before Phase 2:** the bench comparison.
+Synthetic audio proves the algorithm; the IC-7300 MkII proves it against a
+decoder that demonstrably works on real signals. Same off-air signal through
+both.
+
+---
 
 ## 5. Risks
 
