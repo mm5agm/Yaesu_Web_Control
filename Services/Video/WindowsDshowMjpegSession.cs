@@ -856,8 +856,12 @@ namespace Yaesu_Web_Control.Services.Video
 
             _logger.LogWarning(
                 "Radio Display: DirectShow sample carried {Extra} padding bytes past the first JPEG " +
-                "(sample {Total} bytes, occurrence {Occurrence}). Trimmed to the first image.",
-                bytes.Length - end, bytes.Length, occurrence);
+                "(sample {Total} bytes, occurrence {Occurrence}). Trimmed to the first image. " +
+                "Tail starts {Tail}",
+                bytes.Length - end, bytes.Length, occurrence, TailPreview(bytes, end));
+
+            if (occurrence == 1)
+                DumpSample(bytes, end, "padded");
         }
 
         /// <summary>
@@ -876,9 +880,77 @@ namespace Yaesu_Web_Control.Services.Video
 
             _logger.LogWarning(
                 "Radio Display: DirectShow sample held more than one picture " +
-                "(sample {Total} bytes, first image {First} bytes, occurrence {Occurrence}). " +
-                "Dropped — the device is merging frames.",
-                bytes.Length, end, occurrence);
+                "(sample {Total} bytes, first image {First} bytes, tail {Tail} bytes, " +
+                "occurrence {Occurrence}). Dropped — the device is merging frames. " +
+                "Tail starts {Preview}",
+                bytes.Length, end, bytes.Length - end, occurrence, TailPreview(bytes, end));
+
+            if (occurrence == 1)
+                DumpSample(bytes, end, "merged");
+        }
+
+        /// <summary>
+        /// First bytes of whatever followed the first image, as hex.
+        /// </summary>
+        /// <remarks>
+        /// Dumped and decoded on 2026-08-23 (issue #132). The tail is a real
+        /// second image: a complete JPEG header — DQT, DQT, SOF0 at the same
+        /// size as the frame in front of it, four DHTs, SOS — followed by
+        /// scan data and no EOI. So it is the *beginning of the next frame,
+        /// truncated*, and <see cref="TailHasSoi"/> is right to treat the
+        /// sample as unusable. Decoding the leading image confirmed it too:
+        /// it renders as the green striped corruption users report.
+        ///
+        /// The tail size is constant per mode — 2618 bytes at 1280x960 and
+        /// 1920x1080, 1827 at 1280x720, 825 at 800x600 — while the image in
+        /// front of it varies by 10 KB. ffmpeg reading the same device in the
+        /// same modes saw no merged sample in 360 frames across six cold
+        /// opens, and no corruption. Working theory is therefore that the
+        /// sample buffer is being torn: the driver is still writing the next
+        /// frame while <c>BufferCB</c> copies, and 2618 bytes is simply how
+        /// far ahead the writer is. If that holds, <see cref="TailHasSoi"/>
+        /// only catches a torn frame when the torn-in region happens to begin
+        /// with an SOI, and the rest reach the browser unflagged.
+        /// </remarks>
+        private static string TailPreview(byte[] bytes, int end, int count = 32)
+        {
+            var available = Math.Min(count, bytes.Length - end);
+            return available <= 0 ? "(none)" : Convert.ToHexString(bytes, end, available);
+        }
+
+        /// <summary>
+        /// Writes the whole sample and its tail to the user data folder, but
+        /// only when YWC_VIDEO_DUMP_TAIL is set. Off by default: this is a few
+        /// hundred kilobytes a call and is only ever wanted while diagnosing.
+        /// Fires once per session, on the first occurrence.
+        /// </summary>
+        private void DumpSample(byte[] bytes, int end, string kind)
+        {
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("YWC_VIDEO_DUMP_TAIL")))
+                return;
+
+            try
+            {
+                var folder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "MM5AGM",
+                    "Yaesu Web Control");
+                Directory.CreateDirectory(folder);
+
+                var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss-fff");
+                var samplePath = Path.Combine(folder, $"video-{kind}-{stamp}-sample.bin");
+                var tailPath = Path.Combine(folder, $"video-{kind}-{stamp}-tail.bin");
+                File.WriteAllBytes(samplePath, bytes);
+                File.WriteAllBytes(tailPath, bytes[end..]);
+
+                _logger.LogWarning(
+                    "Radio Display: wrote {Sample} and {Tail} for diagnosis",
+                    samplePath, tailPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Radio Display: could not write the sample dump");
+            }
         }
 
         /// <summary>Records a dropped sample whose first image held no scan data.</summary>
