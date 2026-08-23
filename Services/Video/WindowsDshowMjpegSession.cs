@@ -43,11 +43,15 @@ namespace Yaesu_Web_Control.Services.Video
         private const int MergedFrameEvidence = 3;
 
         /// <summary>Opening samples traced when YWC_VIDEO_TRACE_SAMPLES is set.</summary>
-        private const int SampleTraceCount = 30;
+        private static readonly int SampleTraceCount =
+            int.TryParse(Environment.GetEnvironmentVariable("YWC_VIDEO_TRACE_SAMPLES"), out var n) && n > 1
+                ? n
+                : 30;
 
         private long _trailingSamples;
         private long _mergedSamples;
         private long _samplesSeen;
+        private long _sampleStart;
         private readonly Stopwatch _sinceOpen = Stopwatch.StartNew();
         private readonly bool _traceSamples =
             !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("YWC_VIDEO_TRACE_SAMPLES"));
@@ -483,6 +487,16 @@ namespace Yaesu_Web_Control.Services.Video
                     return false;
                 }
 
+                // #132: the rate the pin actually settled on, not the rate we
+                // asked for. The bad opening session timestamps its samples
+                // 64 ms apart while the clean reopen uses 16 ms, so this says
+                // whether the two sessions negotiate different media types or
+                // the same one behaves differently.
+                if (TryReadVideo(mt, out var cw, out var ch, out var cfps))
+                    logger.LogInformation(
+                        "Radio Display: grabber connected {W}x{H} MJPG, media type says {Fps:0.##} fps",
+                        cw, ch, cfps);
+
                 return true;
             }
             finally
@@ -753,6 +767,7 @@ namespace Yaesu_Web_Control.Services.Video
                 var owner = Owner;
                 if (owner is null || buffer == IntPtr.Zero || bufferLen < 4)
                     return 0;
+                owner._sampleStart = Stopwatch.GetTimestamp();
                 if (Marshal.ReadByte(buffer) != 0xFF || Marshal.ReadByte(buffer, 1) != 0xD8)
                 {
                     owner.NoteSampleTrace(sampleTime, bufferLen, 0, "no SOI, dropped");
@@ -981,10 +996,15 @@ namespace Yaesu_Web_Control.Services.Video
             if (n > SampleTraceCount)
                 return;
 
+            // Time spent inside the callback matters as much as the outcome.
+            // The grabber serialises these, so a callback that overruns the
+            // device's frame period is one the driver can overwrite underneath.
+            var us = (Stopwatch.GetTimestamp() - _sampleStart) * 1_000_000L / Stopwatch.Frequency;
+
             _logger.LogInformation(
                 "Radio Display trace: sample {N} at {Elapsed} ms, stamp {Stamp} s, " +
-                "{Length} bytes, first image {End} bytes, {Outcome}",
-                n, _sinceOpen.ElapsedMilliseconds, sampleTime.ToString("F4"), bufferLen, end, outcome);
+                "{Length} bytes, first image {End} bytes, cb {Us} us, {Outcome}",
+                n, _sinceOpen.ElapsedMilliseconds, sampleTime.ToString("F4"), bufferLen, end, us, outcome);
         }
 
         private void NoteTrailingBytes(byte[] bytes, int end)

@@ -21,6 +21,21 @@ namespace Yaesu_Web_Control.Services.Video
         /// </summary>
         private const int IdleReleaseDelayMs = 2000;
 
+        /// <summary>Recovery this many reopens in switches to the native mode.</summary>
+        private const int NativeModeAfterRecoveries = 2;
+
+        /// <summary>Reopens allowed before merges are simply reported.</summary>
+        private const int MaxMergeRecoveries = 2;
+
+        /// <summary>
+        /// #132 diagnostic. Suppresses the merge-recovery reopen so the opening
+        /// session can be watched for as long as it likes, to see whether a
+        /// device that merges every sample settles by itself. Not for normal
+        /// use — with this set, a device that never settles shows nothing.
+        /// </summary>
+        private static readonly bool NoReopen =
+            Environment.GetEnvironmentVariable("YWC_VIDEO_NO_REOPEN") == "1";
+
         /// <summary>Settle time after Release before the next Open.</summary>
         private static int ReopenSettleMs => OperatingSystem.IsMacOS() ? 1500 : 500;
 
@@ -76,7 +91,21 @@ namespace Yaesu_Web_Control.Services.Video
         private int _deviceOpenFlag;
         private bool _mfUnavailable;
         private bool _dshowMjpegUnavailable;
-        private bool _dshowPreferNativeMjpeg;
+        /// <summary>
+        /// How many times this process has torn down a capture graph because
+        /// the device was merging pictures into one sample. Recovery one
+        /// rebuilds the graph on the same mode, which is what actually cures
+        /// #132; recovery two falls back to the device's native mode, for a
+        /// dongle whose chosen mode really is at fault.
+        /// </summary>
+        private int _dshowMergeRecoveries;
+
+        /// <summary>
+        /// Set once merges are something to live with rather than reopen for —
+        /// either the session is delivering pictures anyway, or reopening has
+        /// already been tried and the device still merges.
+        /// </summary>
+        private bool _dshowAcceptsMerges;
         private bool _linuxMjpegUnavailable;
         /// <summary>
         /// Set by <see cref="MarkDisconnected"/>. The outer loop must exit so
@@ -961,7 +990,7 @@ namespace Yaesu_Web_Control.Services.Video
             {
                 ds = WindowsDshowMjpegSession.TryOpen(
                     index, targetFps, maxWidth, _logger, out var noUsableMjpegPin,
-                    _dshowPreferNativeMjpeg, deviceKey, captureSize);
+                    _dshowMergeRecoveries >= NativeModeAfterRecoveries, deviceKey, captureSize);
                 if (ds is null)
                 {
                     if (noUsableMjpegPin)
@@ -1073,41 +1102,56 @@ namespace Yaesu_Web_Control.Services.Video
 
                 // The device is packing several pictures into one sample, which
                 // renders as a tiled repeat. Nothing downstream can undo that —
-                // the merge is inside a single JPEG scan — so drop the session and
-                // reopen on the device's native mode. Checked before the read: the
+                // the merge is inside a single JPEG scan — so drop the session
+                // and build the graph again. Checked before the read: the
                 // session stops publishing merged samples once it is sure, so
-                // waiting for a frame here would stall until the unplug watchdog.
-                if (session.DeviceMergesFrames && !_dshowPreferNativeMjpeg)
+                // waiting for a frame here would stall until the unplug
+                // watchdog.
+                //
+                // #132, measured on my VIXLW dongle: the first graph a process
+                // builds merges every sample, 90 for 90 across six seconds, and
+                // never settles — so discarding samples until the stream
+                // steadies does not work. Building the graph a second time on
+                // the *identical* mode comes up clean and stays clean. The
+                // fault is the first instantiation, not the mode, which is why
+                // recovery one keeps the mode and only recovery two reaches for
+                // the native one.
+                if (session.DeviceMergesFrames && !_dshowAcceptsMerges && !NoReopen)
                 {
-                    // A size the operator picked by name is kept, but only
-                    // while it is still producing pictures. Some samples
-                    // merging costs a frame each; every sample merging means
-                    // every frame is dropped, and then honouring the choice
-                    // shows a black panel and trips the stall watchdog into
-                    // reporting an unplug that never happened. My VIXLW dongle
-                    // does exactly that at 800x600. A preference is not worth
-                    // a dead display, so reopen anyway and say why.
-                    _dshowPreferNativeMjpeg = true; // do not repeat this every loop
-                    if (!string.IsNullOrEmpty(captureSize) && deliveredFrame)
+                    if (deliveredFrame)
                     {
+                        // Pictures are coming out, so only some samples merge.
+                        // Each one costs a frame and nothing else; a reopen
+                        // would cost the whole display for a second to fix a
+                        // stutter. Leave it alone.
+                        _dshowAcceptsMerges = true;
                         _logger.LogWarning(
-                            "Radio Display: {Via} device is merging frames at {W}x{H}, which you " +
-                            "selected as the capture size. Keeping it — switch to Auto size to let " +
-                            "the host reopen on the device's native mode instead",
+                            "Radio Display: {Via} device merges some samples at {W}x{H} — each one costs " +
+                            "a frame. Keeping the session, since it is still producing pictures",
                             via, session.Width, session.Height);
+                    }
+                    else if (_dshowMergeRecoveries >= MaxMergeRecoveries)
+                    {
+                        // Out of moves. Say so plainly rather than cycling the
+                        // graph forever behind a black panel.
+                        _dshowAcceptsMerges = true;
+                        _logger.LogWarning(
+                            "Radio Display: {Via} device still merges every sample at {W}x{H} after {N} " +
+                            "reopens, so no picture can come out of it. Try another capture size, or Auto",
+                            via, session.Width, session.Height, _dshowMergeRecoveries);
                     }
                     else
                     {
-                        if (!string.IsNullOrEmpty(captureSize))
+                        _dshowMergeRecoveries++;
+                        if (_dshowMergeRecoveries >= NativeModeAfterRecoveries)
                             _logger.LogWarning(
-                                "Radio Display: {Via} device merges every sample at {W}x{H}, the capture " +
-                                "size you selected, so no picture can come out of it — reopening on the " +
-                                "device's native mode. Choose another size, or Auto, to stop this recurring",
+                                "Radio Display: {Via} device merged every sample at {W}x{H} again after a " +
+                                "reopen — trying its native mode and scaling here instead",
                                 via, session.Width, session.Height);
                         else
-                            _logger.LogWarning(
-                                "Radio Display: {Via} device is merging frames at {W}x{H} — reopening on its " +
-                                "native mode and scaling here instead",
+                            _logger.LogInformation(
+                                "Radio Display: {Via} device merged every sample at {W}x{H} — rebuilding " +
+                                "the capture graph on the same mode",
                                 via, session.Width, session.Height);
                         break;
                     }
