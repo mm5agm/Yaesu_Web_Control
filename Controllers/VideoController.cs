@@ -103,6 +103,7 @@ namespace Yaesu_Web_Control.Controllers
             var s = await _settings.GetSettingsAsync();
             var rates = VideoDeviceFpsCaps.RatesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
             var targetFps = VideoFpsOptions.Normalize(s.VideoTargetFps, rates);
+            var sizes = VideoDeviceSizeCaps.SizesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
             return Ok(new
             {
                 enabled = s.VideoDisplayEnabled,
@@ -119,6 +120,8 @@ namespace Yaesu_Web_Control.Controllers
                 targetFps,
                 maxFps = VideoFpsOptions.Max(rates),
                 rates,
+                captureSize = VideoSizeOptions.Normalize(s.VideoCaptureSize, sizes),
+                sizes,
                 jpegQuality = VideoJpegQualityOptions.Normalize(s.VideoJpegQuality)
             });
         }
@@ -168,6 +171,45 @@ namespace Yaesu_Web_Control.Controllers
             s.VideoTargetFps = VideoFpsOptions.Normalize(body?.Fps ?? s.VideoTargetFps, rates);
             await _settings.SaveSettingsAsync(s);
             return Ok(new { targetFps = s.VideoTargetFps, maxFps = VideoFpsOptions.Max(rates), rates });
+        }
+
+        public sealed class SizeRequest
+        {
+            public string? Size { get; set; }
+        }
+
+        /// <summary>
+        /// Persist the capture size ("" = automatic). Unlike fps and quality
+        /// this cannot be applied to a running graph — the pin is chosen when
+        /// the device is opened — so it restarts the capture.
+        /// </summary>
+        [HttpPost("size")]
+        public async Task<IActionResult> SetSize([FromBody] SizeRequest? body)
+        {
+            var s = await _settings.GetSettingsAsync();
+            if (!s.VideoDisplayEnabled)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
+
+            var sizes = VideoDeviceSizeCaps.SizesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
+            var requested = (body?.Size ?? "").Trim();
+            var normalized = VideoSizeOptions.Normalize(requested, sizes);
+            if (requested.Length > 0 && normalized.Length == 0)
+                return BadRequest(new { error = "This device does not offer that capture size.", sizes });
+
+            var changed = !string.Equals(s.VideoCaptureSize ?? "", normalized, StringComparison.Ordinal);
+            s.VideoCaptureSize = normalized;
+            await _settings.SaveSettingsAsync(s);
+
+            if (changed)
+            {
+                _capture.ClearDisconnectHalt();
+                _capture.RequestRestart();
+                _logger.LogInformation(
+                    "Radio Display capture size set to {Size}",
+                    normalized.Length == 0 ? "automatic" : normalized);
+            }
+
+            return Ok(new { captureSize = normalized, sizes, status = _capture.Status });
         }
 
         public sealed class JpegQualityRequest

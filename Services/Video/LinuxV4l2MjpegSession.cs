@@ -52,11 +52,15 @@ namespace Yaesu_Web_Control.Services.Video
         public double DeviceFps { get; private set; }
 
         public static LinuxV4l2MjpegSession? TryOpen(
-            int index, int targetFps, int maxWidth, ILogger logger, out bool noUsableMjpegPin)
+            int index, int targetFps, int maxWidth, ILogger logger, out bool noUsableMjpegPin,
+            string? deviceKey = null, string? requestedSize = null)
         {
             noUsableMjpegPin = false;
             var pins = LinuxV4l2Devices.TryQueryPins(index);
-            var pick = VideoCapturePinRank.PickMjpegCaptureMeetingFps(pins, targetFps, maxWidth);
+            VideoDeviceSizeCaps.RememberPins(deviceKey, pins);
+
+            var pick = VideoCapturePinRank.PickRequestedSize(pins, requestedSize, targetFps)
+                ?? VideoCapturePinRank.PickMjpegCaptureMeetingFps(pins, targetFps, maxWidth);
             if (pick is null)
             {
                 noUsableMjpegPin = !pins.Any(p => p.Jpeg);

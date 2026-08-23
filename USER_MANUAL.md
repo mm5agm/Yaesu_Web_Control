@@ -1470,7 +1470,7 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 
 ### 6.9 Radio Display
 
-**Settings → Radio Display** enables the feature. Capture device, frame rate, image quality, and **Start / Stop** are on the Index **Radio Display** panel (or pop-out). The stream does not open until you click **Start** (or tick **Auto**). Full setup and electrical-safety notes are in [§19 Radio Display](#19-radio-display).
+**Settings → Radio Display** enables the feature. Capture device, capture size, frame rate, image quality, and **Start / Stop** are on the Index **Radio Display** panel (or pop-out). The stream does not open until you click **Start** (or tick **Auto**). Full setup and electrical-safety notes are in [§19 Radio Display](#19-radio-display).
 
 | Setting | Description |
 |---------|-------------|
@@ -3090,7 +3090,7 @@ Radio DVI-D / HDMI video output
         Web browser (Index panel or /RadioDisplay pop-out)
 ```
 
-Typical radio panel resolutions are modest (e.g. FTDX-10 **800×480** or **800×600**). Many cheap capture sticks still open at **720p/1080p** — leave **Max width** at **800** so the host downscales before JPEG encode (important on a Raspberry Pi). On Windows and macOS the host picks **one** capture size for **15 / 30 / 60 fps**: a 4:3 mode at least 800 px wide when the dongle has one (typically **800×600** after scale, or 1024×768 → 800×600). Changing FPS does not jump between 640×480 and 720p. **640×480** is used only if the dongle has nothing ≥800 wide. **60 fps** may stay ~30 if that 4:3 pin cannot run 60 — the size stays put rather than switching to 1080p60. The **15 fps** setting is paced in software even when the pin’s floor is 20.
+Typical radio panel resolutions are modest (e.g. FTDX-10 **800×480** or **800×600**). Many cheap capture sticks still open at **720p/1080p** — leave **Max width** at **800** so the host downscales before JPEG encode (important on a Raspberry Pi). On Windows and macOS the host picks **one** capture size for **15 / 30 / 60 fps** (this is what **Auto size** on the panel does; you can override it — see §19.3): a 4:3 mode at least 800 px wide when the dongle has one (typically **800×600** after scale, or 1024×768 → 800×600). Changing FPS does not jump between 640×480 and 720p. **640×480** is used only if the dongle has nothing ≥800 wide. **60 fps** may stay ~30 if that 4:3 pin cannot run 60 — the size stays put rather than switching to 1080p60. The **15 fps** setting is paced in software even when the pin’s floor is 20.
 
 #### Set the radio's output resolution first
 
@@ -3115,9 +3115,9 @@ result is a silently squashed display, about 25% too tall, with nothing on
 screen to tell you it has happened. Setting the radio to 800×600 makes the whole
 chain pixel-for-pixel with no scaling at either end.
 
-If you would rather leave the radio on 800×480, raise **Max width** to 1280 so
-the host picks a 16:9 mode instead — 1280×720 is within about 7% of 5:3, which
-is far closer than 4:3 is. It costs more bandwidth for no extra detail, but the
+If you would rather leave the radio on 800×480, set the **capture size**
+dropdown to a 16:9 mode instead — 1280×720 is within about 7% of 5:3, which is
+far closer than 4:3 is. It costs more bandwidth for no extra detail, but the
 geometry will look right.
 
 #### Bigger is not better
@@ -3137,9 +3137,11 @@ larger frames are both **softer** and considerably more expensive:
 | 1280×960 | 114 KB | 1.7 MB/s |
 | 1920×1080 | 158 KB | 2.4 MB/s |
 
-So leave **Max width** at **800** unless you have a specific reason not to. It
-gives the best picture *and* the lowest load — which is unusual enough to be
-worth stating plainly.
+So leave the capture size on **Auto** unless you have a specific reason not to.
+It gives the best picture *and* the lowest load — which is unusual enough to be
+worth stating plainly. If you want to see this for yourself, the **capture
+size** dropdown on the Radio Display panel lets you switch modes and compare
+(§19.3).
 
 ### 19.2 Electrical safety
 
@@ -3154,8 +3156,21 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
 
 1. Open **Settings → Radio Display** and enable **Radio display**, then Save.
 2. On Home, the **Radio Display** card appears. Pick the capture device, then click **Start**. The stream does **not** open until you start it (so a leftover device selection cannot grab the dongle). Tick **Auto** if you want the previous behaviour — start as soon as the panel opens with a device selected. Preference is stored in the browser.
-3. Frame rate (**15 / 30 / 60 fps**; default **15**) and image quality (**Low / Medium / Max** = 40 / 65 / 85; default **Max**) are chosen on the same card. The FPS list is a **target** — USB bandwidth, JPEG encode, and host CPU can still deliver less. Rates above what the capture device advertises (for example **60** on a 30 fps stick) are hidden. **Max** keeps the capture JPEG (least CPU when the dongle already sends MJPEG). **Low** / **Medium** recompress — smaller stream, more CPU. Prefer **15 fps** on a Raspberry Pi; use Low/Medium there only if the link needs a smaller stream. On Windows/macOS, 15 / 30 / 60 share the same panel-sized pin (see §19.1); the badge should track the dropdown (15 via pacing if the pin floor is 20).
-4. Other controls:
+3. **Capture size** — the dropdown between the device list and the frame rate.
+   **Auto size** (the default) lets the host rank the dongle's modes and pick
+   the one that matches a radio panel, which is the right answer for almost
+   everyone; read §19.1 before overriding it, because a larger mode is nearly
+   always the dongle upscaling the same 800-pixel-wide picture rather than
+   showing you more of it. The list contains only the **MJPEG** modes the
+   device actually advertises — an uncompressed mode at the same size is the
+   USB2 low-frame-rate trap and is never offered. Changing this **restarts the
+   capture** (the pin is chosen when the device is opened), so the picture
+   drops for a second or two. A size you picked that a later dongle does not
+   offer silently reverts to Auto rather than leaving the panel unable to open.
+   The dropdown is hidden when the host cannot enumerate modes — on macOS, and
+   on any device with no MJPEG mode at all.
+4. Frame rate (**15 / 30 / 60 fps**; default **15**) and image quality (**Low / Medium / Max** = 40 / 65 / 85; default **Max**) are chosen on the same card. The FPS list is a **target** — USB bandwidth, JPEG encode, and host CPU can still deliver less. Rates above what the capture device advertises (for example **60** on a 30 fps stick) are hidden. **Max** keeps the capture JPEG (least CPU when the dongle already sends MJPEG). **Low** / **Medium** recompress — smaller stream, more CPU. Prefer **15 fps** on a Raspberry Pi; use Low/Medium there only if the link needs a smaller stream. On Windows/macOS, 15 / 30 / 60 share the same panel-sized pin (see §19.1); the badge should track the dropdown (15 via pacing if the pin floor is 20).
+5. Other controls:
    - **Start / Stop** — attach or release the MJPEG viewer (Stop lets the host drop the dongle after a couple of seconds)
    - **Fit / Fill** — `object-fit` contain vs cover
    - **Fullscreen** — fullscreen the card
@@ -3165,7 +3180,7 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
 
 If the capture dongle is unplugged (or the host cannot open the saved device), the badge stays **Disconnected**. Recovery: (1) refresh the device list, (2) confirm the intended capture device is present, (3) click **Start**. Windows camera indexes can move when devices are replugged — do not assume the old index still refers to the same camera. The host does **not** automatically reopen whatever camera now sits at the old index (that would be the laptop webcam on many PCs). **Auto** still means start when the panel opens with a saved device, not retry after an unplug; reloading the page while disconnected also leaves capture halted until you press **Start** or pick a different device.
 
-Capture opens while at least one browser is viewing the stream, and stays open for a couple of seconds after the last viewer disconnects so **Pop out** / **Close** does not tear down the USB capture device mid-handoff. After that idle window the host releases the dongle so an idle Pi pays no capture CPU. Max width stays at **800** (host default) for modest radio panels.
+Capture opens while at least one browser is viewing the stream, and stays open for a couple of seconds after the last viewer disconnects so **Pop out** / **Close** does not tear down the USB capture device mid-handoff. After that idle window the host releases the dongle so an idle Pi pays no capture CPU. Max width stays at **800** (host default) for modest radio panels — except when you have chosen a capture size explicitly, in which case that width is used for the encode too, so a mode you asked for by name is not then quietly scaled back down.
 
 ### 19.4 Raspberry Pi and Docker
 

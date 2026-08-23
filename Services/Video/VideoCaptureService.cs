@@ -436,7 +436,10 @@ namespace Yaesu_Web_Control.Services.Video
                 _dshowMjpegUnavailable = false;
                 _linuxMjpegUnavailable = false;
 
-                var maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
+                var deviceKey = settings.VideoCaptureDeviceKey;
+                var captureSize = VideoSizeOptions.Normalize(
+                    settings.VideoCaptureSize, VideoDeviceSizeCaps.PeekSizes(deviceKey));
+                var maxWidth = EffectiveMaxWidth(settings, captureSize);
                 var rates = VideoDeviceFpsCaps.PeekRates(settings.VideoCaptureDeviceKey);
                 var targetFps = VideoFpsOptions.Normalize(settings.VideoTargetFps, rates);
                 var jpegQuality = VideoJpegQualityOptions.Normalize(settings.VideoJpegQuality);
@@ -447,7 +450,7 @@ namespace Yaesu_Web_Control.Services.Video
                 try
                 {
                     if (OperatingSystem.IsLinux() && !_linuxMjpegUnavailable &&
-                        RunLinuxMjpegSession(index, maxWidth, targetFps, ct))
+                        RunLinuxMjpegSession(index, maxWidth, targetFps, deviceKey, captureSize, ct))
                     {
                         if (ct.IsCancellationRequested || ShouldHaltAfterDisconnect())
                             break;
@@ -457,7 +460,7 @@ namespace Yaesu_Web_Control.Services.Video
                     }
 
                     if (OperatingSystem.IsWindows() && !_dshowMjpegUnavailable &&
-                        RunDshowMjpegSession(index, maxWidth, targetFps, ct))
+                        RunDshowMjpegSession(index, maxWidth, targetFps, deviceKey, captureSize, ct))
                     {
                         if (ct.IsCancellationRequested || ShouldHaltAfterDisconnect())
                             break;
@@ -466,7 +469,8 @@ namespace Yaesu_Web_Control.Services.Video
                         continue;
                     }
 
-                    if (OperatingSystem.IsWindows() && !_mfUnavailable && RunMfSession(index, maxWidth, targetFps, ct))
+                    if (OperatingSystem.IsWindows() && !_mfUnavailable &&
+                        RunMfSession(index, maxWidth, targetFps, deviceKey, captureSize, ct))
                     {
                         if (ct.IsCancellationRequested || ShouldHaltAfterDisconnect())
                             break;
@@ -591,7 +595,7 @@ namespace Yaesu_Web_Control.Services.Video
                         if (settingsAge.ElapsedMilliseconds >= SettingsRefreshMs)
                         {
                             settings = ReadSettings();
-                            maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
+                            maxWidth = EffectiveMaxWidth(settings, captureSize);
                             var newFps = VideoFpsOptions.Normalize(settings.VideoTargetFps, VideoDeviceFpsCaps.PeekRates(settings.VideoCaptureDeviceKey));
                             jpegQuality = VideoJpegQualityOptions.Normalize(settings.VideoJpegQuality);
                             encodeParams = new[] { new ImageEncodingParam(ImwriteFlags.JpegQuality, jpegQuality) };
@@ -893,7 +897,8 @@ namespace Yaesu_Web_Control.Services.Video
         /// falls back to the OpenCV decode-and-encode path.
         /// </summary>
         [SupportedOSPlatform("windows")]
-        private bool RunMfSession(int index, int maxWidth, int targetFps, CancellationToken ct)
+        private bool RunMfSession(
+            int index, int maxWidth, int targetFps, string? deviceKey, string? captureSize, CancellationToken ct)
         {
             var opened = false;
             var noUsableMjpegPin = false;
@@ -903,7 +908,7 @@ namespace Yaesu_Web_Control.Services.Video
                 try
                 {
                     mf = WindowsMfMjpegSession.TryOpen(
-                        index, targetFps, maxWidth, _logger, out var noMjpeg);
+                        index, targetFps, maxWidth, _logger, out var noMjpeg, deviceKey, captureSize);
                     noUsableMjpegPin = noMjpeg;
                     if (mf is null)
                         return;
@@ -911,7 +916,7 @@ namespace Yaesu_Web_Control.Services.Video
                     opened = true;
                     Volatile.Write(ref _openDeviceIndex, index);
                     Volatile.Write(ref _deviceOpenFlag, 1);
-                    RunJpegPassthroughLoop(mf, index, maxWidth, targetFps, "Media Foundation", ct);
+                    RunJpegPassthroughLoop(mf, index, maxWidth, targetFps, "Media Foundation", captureSize, ct);
                 }
                 catch (Exception ex)
                 {
@@ -947,7 +952,8 @@ namespace Yaesu_Web_Control.Services.Video
         /// failed to connect without a decoder, so the caller can fall back.
         /// </summary>
         [SupportedOSPlatform("windows")]
-        private bool RunDshowMjpegSession(int index, int maxWidth, int targetFps, CancellationToken ct)
+        private bool RunDshowMjpegSession(
+            int index, int maxWidth, int targetFps, string? deviceKey, string? captureSize, CancellationToken ct)
         {
             WindowsDshowMjpegSession? ds = null;
             var opened = false;
@@ -955,7 +961,7 @@ namespace Yaesu_Web_Control.Services.Video
             {
                 ds = WindowsDshowMjpegSession.TryOpen(
                     index, targetFps, maxWidth, _logger, out var noUsableMjpegPin,
-                    _dshowPreferNativeMjpeg);
+                    _dshowPreferNativeMjpeg, deviceKey, captureSize);
                 if (ds is null)
                 {
                     if (noUsableMjpegPin)
@@ -966,7 +972,7 @@ namespace Yaesu_Web_Control.Services.Video
                 opened = true;
                 Volatile.Write(ref _openDeviceIndex, index);
                 Volatile.Write(ref _deviceOpenFlag, 1);
-                RunJpegPassthroughLoop(ds, index, maxWidth, targetFps, "DirectShow", ct);
+                RunJpegPassthroughLoop(ds, index, maxWidth, targetFps, "DirectShow", captureSize, ct);
                 return true;
             }
             catch (Exception ex)
@@ -983,14 +989,15 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         [SupportedOSPlatform("linux")]
-        private bool RunLinuxMjpegSession(int index, int maxWidth, int targetFps, CancellationToken ct)
+        private bool RunLinuxMjpegSession(
+            int index, int maxWidth, int targetFps, string? deviceKey, string? captureSize, CancellationToken ct)
         {
             LinuxV4l2MjpegSession? session = null;
             var opened = false;
             try
             {
                 session = LinuxV4l2MjpegSession.TryOpen(
-                    index, targetFps, maxWidth, _logger, out var noUsableMjpegPin);
+                    index, targetFps, maxWidth, _logger, out var noUsableMjpegPin, deviceKey, captureSize);
                 if (session is null)
                 {
                     if (noUsableMjpegPin)
@@ -1001,7 +1008,7 @@ namespace Yaesu_Web_Control.Services.Video
                 opened = true;
                 Volatile.Write(ref _openDeviceIndex, index);
                 Volatile.Write(ref _deviceOpenFlag, 1);
-                RunJpegPassthroughLoop(session, index, maxWidth, targetFps, "V4L2", ct);
+                RunJpegPassthroughLoop(session, index, maxWidth, targetFps, "V4L2", captureSize, ct);
                 return true;
             }
             catch (Exception ex)
@@ -1018,7 +1025,8 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         private void RunJpegPassthroughLoop(
-            IJpegCaptureSession session, int index, int maxWidth, int targetFps, string via, CancellationToken ct)
+            IJpegCaptureSession session, int index, int maxWidth, int targetFps, string via,
+            string? captureSize, CancellationToken ct)
         {
             SetStatus("streaming");
             _lastError = null;
@@ -1040,7 +1048,7 @@ namespace Yaesu_Web_Control.Services.Video
                 if (settingsAge.ElapsedMilliseconds >= SettingsRefreshMs)
                 {
                     settings = ReadSettings();
-                    maxWidth = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
+                    maxWidth = EffectiveMaxWidth(settings, captureSize);
                     jpegQuality = VideoJpegQualityOptions.Normalize(settings.VideoJpegQuality);
                     var newFps = VideoFpsOptions.Normalize(
                         settings.VideoTargetFps, VideoDeviceFpsCaps.PeekRates(settings.VideoCaptureDeviceKey));
@@ -1070,12 +1078,29 @@ namespace Yaesu_Web_Control.Services.Video
                 // waiting for a frame here would stall until the unplug watchdog.
                 if (session.DeviceMergesFrames && !_dshowPreferNativeMjpeg)
                 {
-                    _dshowPreferNativeMjpeg = true;
-                    _logger.LogWarning(
-                        "Radio Display: {Via} device is merging frames at {W}x{H} — reopening on its " +
-                        "native mode and scaling here instead",
-                        via, session.Width, session.Height);
-                    break;
+                    // Only when the size is automatic. If the operator picked
+                    // this mode by name, reopening on a different one would
+                    // undo their choice behind their back and leave the
+                    // dropdown looking broken; say so once and carry on, with
+                    // the merged samples dropped as usual.
+                    if (!string.IsNullOrEmpty(captureSize))
+                    {
+                        _logger.LogWarning(
+                            "Radio Display: {Via} device is merging frames at {W}x{H}, which you " +
+                            "selected as the capture size. Keeping it — switch to Auto size to let " +
+                            "the host reopen on the device's native mode instead",
+                            via, session.Width, session.Height);
+                        _dshowPreferNativeMjpeg = true; // do not repeat this every loop
+                    }
+                    else
+                    {
+                        _dshowPreferNativeMjpeg = true;
+                        _logger.LogWarning(
+                            "Radio Display: {Via} device is merging frames at {W}x{H} — reopening on its " +
+                            "native mode and scaling here instead",
+                            via, session.Width, session.Height);
+                        break;
+                    }
                 }
 
                 var tick = Stopwatch.StartNew();
@@ -1279,6 +1304,18 @@ namespace Yaesu_Web_Control.Services.Video
         /// </summary>
         private static (int Width, int Height) PreferredCaptureSize(int maxWidth) =>
             VideoCapturePinRank.PreferredUncompressedSize(maxWidth);
+
+        /// <summary>
+        /// Encode width for this open. An explicit Radio Display capture size
+        /// sets its own width, so a mode the operator picked by name is not
+        /// then quietly scaled back down by <c>VideoMaxWidth</c> — which is a
+        /// JSON-only setting they never saw. Auto keeps the clamped default.
+        /// </summary>
+        private static int EffectiveMaxWidth(ApplicationSettings settings, string? captureSize)
+        {
+            var configured = settings.VideoMaxWidth < 0 ? 0 : Math.Clamp(settings.VideoMaxWidth, 0, 1920);
+            return VideoSizeOptions.TryParse(captureSize, out var w, out _) ? w : configured;
+        }
 
         /// <summary>
         /// On macOS, open the AVFoundation device on Avalonia's UI thread so

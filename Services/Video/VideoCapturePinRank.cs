@@ -97,6 +97,22 @@
         }
 
         /// <summary>
+        /// The MJPEG pin at exactly the size the operator chose in the Radio
+        /// Display panel, at the frame rate nearest <paramref name="requestedFps"/>.
+        /// Null when the spec is auto/unparseable or the device has no
+        /// compressed pin that size, in which case the caller falls back to the
+        /// ranked pick rather than failing to open.
+        /// </summary>
+        public static Pin? PickRequestedSize(
+            IReadOnlyList<Pin> pins, string? requestedSize, int requestedFps)
+        {
+            if (!VideoSizeOptions.TryParse(requestedSize, out var w, out var h))
+                return null;
+
+            return NearestFps(pins, w, h, jpeg: true, requestedFps);
+        }
+
+        /// <summary>
         /// Compressed MJPEG pin only. Never prefer 4:3 YUY2 over JPEG — that
         /// is the USB2 ~22 fps trap. 800×600 JPEG wins when the dongle has it
         /// (OBS); otherwise any JPEG ≥800 (16:9 720p/1080p).

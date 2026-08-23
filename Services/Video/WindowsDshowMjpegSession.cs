@@ -90,7 +90,7 @@ namespace Yaesu_Web_Control.Services.Video
 
         public static WindowsDshowMjpegSession? TryOpen(
             int dshowIndex, int targetFps, int maxWidth, ILogger logger, out bool noUsableMjpegPin,
-            bool preferNativeMode = false)
+            bool preferNativeMode = false, string? deviceKey = null, string? requestedSize = null)
         {
             noUsableMjpegPin = false;
             if (!OperatingSystem.IsWindows())
@@ -186,7 +186,20 @@ namespace Yaesu_Web_Control.Services.Video
                     formats.Count == 0 ? "(none reported)" : string.Join(", ", formats));
 
                 var pins = caps.Select(c => c.Pin).ToList();
+                VideoDeviceSizeCaps.RememberPins(deviceKey, pins);
+
+                // Order matters. The env var is the diagnostic override and
+                // outranks everything. The operator's chosen size comes next —
+                // above preferNativeMode, the automatic recovery from a device
+                // caught merging frames. That looks backwards until you try it:
+                // the latch is process-lifetime and my VIXLW dongle trips it on
+                // the first open, after which every mode in the dropdown
+                // reopened as 1920x1080 and the control did nothing but move
+                // the downscale width. A control that silently ignores you is
+                // worse than one that lets you pick a mode that merges — and
+                // the merged samples are dropped either way.
                 var chosen = ForcedPin(pins, logger)
+                    ?? RequestedPin(pins, requestedSize, targetFps, logger)
                     ?? (preferNativeMode ? VideoCapturePinRank.PickNativeMjpeg(pins) : null)
                     ?? VideoCapturePinRank.PickMjpegCapture(pins, targetFps, maxWidth);
                 if (chosen is null)
@@ -742,6 +755,35 @@ namespace Yaesu_Web_Control.Services.Video
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// The operator's Radio Display capture size, if they set one and the
+        /// device still offers it as MJPEG. A stale choice logs and falls
+        /// through to the ranked pick rather than refusing to open.
+        /// </summary>
+        private static VideoCapturePinRank.Pin? RequestedPin(
+            IReadOnlyList<VideoCapturePinRank.Pin> pins,
+            string? requestedSize,
+            int targetFps,
+            ILogger logger)
+        {
+            if (string.IsNullOrWhiteSpace(requestedSize))
+                return null;
+
+            var pick = VideoCapturePinRank.PickRequestedSize(pins, requestedSize, targetFps);
+            if (pick is null)
+            {
+                logger.LogWarning(
+                    "Radio Display: capture size {Size} has no MJPEG pin on this device — using automatic",
+                    requestedSize);
+                return null;
+            }
+
+            logger.LogInformation(
+                "Radio Display: capture size {W}x{H}@{Fps} selected in Settings",
+                pick.Value.Width, pick.Value.Height, pick.Value.Fps);
+            return pick;
         }
 
         /// <summary>

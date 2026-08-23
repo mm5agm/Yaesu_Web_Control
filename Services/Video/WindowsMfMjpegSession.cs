@@ -94,7 +94,8 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         public static WindowsMfMjpegSession? TryOpen(
-            int dshowIndex, int targetFps, int maxWidth, ILogger logger, out bool noUsableMjpegPin)
+            int dshowIndex, int targetFps, int maxWidth, ILogger logger, out bool noUsableMjpegPin,
+            string? deviceKey = null, string? requestedSize = null)
         {
             noUsableMjpegPin = false;
             if (!OperatingSystem.IsWindows())
@@ -142,7 +143,8 @@ namespace Yaesu_Web_Control.Services.Video
                     var formats = new List<string>();
                     var selected = SelectRankedMjpegType(
                         reader, formats, targetFps, maxWidth,
-                        out var width, out var height, out var deviceFps);
+                        out var width, out var height, out var deviceFps,
+                        deviceKey, requestedSize);
                     logger.LogInformation(
                         "Radio Display: '{Name}' Media Foundation formats: {Formats}",
                         friendly,
@@ -272,6 +274,64 @@ namespace Yaesu_Web_Control.Services.Video
 
         public static int QueryMaxFrameRate(int dshowIndex) =>
             VideoFpsOptions.Max(QueryFrameRates(dshowIndex));
+
+        /// <summary>
+        /// Native media types as pins, for the Radio Display capture-size
+        /// list. Same open-but-do-not-stream contract as
+        /// <see cref="QueryFrameRates"/>: empty if MF is unavailable or the
+        /// capture loop already holds the device.
+        /// </summary>
+        public static List<VideoCapturePinRank.Pin> QueryPins(int dshowIndex)
+        {
+            if (!OperatingSystem.IsWindows())
+                return [];
+            if (!EnsureStartup())
+                return [];
+
+            try
+            {
+                var symlink = ResolveSymbolicLinkQuiet(dshowIndex);
+                if (string.IsNullOrEmpty(symlink))
+                    return [];
+
+                var source = CreateDeviceSource(symlink);
+                if (source is null)
+                    return [];
+
+                IMFSourceReader? reader = null;
+                try
+                {
+                    reader = CreateReader(source);
+                    if (reader is null)
+                        return [];
+
+                    var natives = EnumerateNativeTypes(reader, formats: null);
+                    try
+                    {
+                        return natives.Select(n => n.ToPin()).ToList();
+                    }
+                    finally
+                    {
+                        foreach (var n in natives)
+                            SafeRelease(n.Type);
+                    }
+                }
+                finally
+                {
+                    SafeRelease(source);
+                    if (reader != null)
+                        SafeRelease(reader);
+                }
+            }
+            catch
+            {
+                return [];
+            }
+            finally
+            {
+                ReleaseStartup();
+            }
+        }
 
         private static string? ResolveSymbolicLinkQuiet(int dshowIndex)
         {
@@ -609,7 +669,9 @@ namespace Yaesu_Web_Control.Services.Video
             int maxWidth,
             out int width,
             out int height,
-            out double deviceFps)
+            out double deviceFps,
+            string? deviceKey = null,
+            string? requestedSize = null)
         {
             width = 0;
             height = 0;
@@ -621,7 +683,10 @@ namespace Yaesu_Web_Control.Services.Video
                     return false;
 
                 var pins = natives.Select(n => n.ToPin()).ToList();
-                var passthrough = VideoCapturePinRank.PickMjpegPassthrough(pins, targetFps, maxWidth);
+                VideoDeviceSizeCaps.RememberPins(deviceKey, pins);
+
+                var passthrough = VideoCapturePinRank.PickRequestedSize(pins, requestedSize, targetFps)
+                    ?? VideoCapturePinRank.PickMjpegPassthrough(pins, targetFps, maxWidth);
                 if (passthrough is null)
                     return false;
 

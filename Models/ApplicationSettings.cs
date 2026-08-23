@@ -328,6 +328,16 @@
         public int VideoMaxWidth { get; set; } = 800;
 
         /// <summary>
+        /// Capture size for the Radio Display, as <c>"WxH"</c>. Empty (the
+        /// default) means automatic — the ranked pin pick, which is right for
+        /// almost everyone. An explicit value pins the capture to that MJPEG
+        /// mode and becomes the encode width, overriding
+        /// <see cref="VideoMaxWidth"/>. A value the current device does not
+        /// offer falls back to automatic rather than failing to open.
+        /// </summary>
+        public string? VideoCaptureSize { get; set; } = "";
+
+        /// <summary>
         /// Target encode rate. Allowed: 15, 30, 60 (Radio Display panel).
         /// Rates above the capture device's advertised maximum are hidden.
         /// </summary>

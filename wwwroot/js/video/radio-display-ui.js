@@ -32,6 +32,8 @@ let currentDeviceKey = '';
 let currentTargetFps = 15;
 let currentJpegQuality = 85;
 let deviceRates = [];
+let currentCaptureSize = '';
+let deviceSizes = [];
 let controlsBound = false;
 let channel = null;
 
@@ -108,6 +110,44 @@ function syncFpsSelect(fps) {
   applyDeviceFpsCap(deviceRates, fps);
 }
 
+/**
+ * Rebuild the capture-size list. Hidden entirely when the host reports no
+ * sizes — macOS and the OpenCV fallback cannot enumerate pins, and an
+ * Auto-only dropdown is just a control that does nothing.
+ */
+function applyDeviceSizes(sizes, selected) {
+  const wrap = document.getElementById('radioDisplaySizeWrap');
+  const sel = document.getElementById('radioDisplaySizeSelect');
+  if (Array.isArray(sizes)) deviceSizes = sizes.slice();
+  const want = deviceSizes.includes(selected ?? currentCaptureSize)
+    ? (selected ?? currentCaptureSize)
+    : '';
+  currentCaptureSize = want;
+  if (wrap) wrap.hidden = deviceSizes.length === 0;
+  if (!sel) return;
+
+  const signature = deviceSizes.join(',');
+  if (sel.dataset.sizes !== signature) {
+    sel.dataset.sizes = signature;
+    sel.replaceChildren();
+    const auto = document.createElement('option');
+    auto.value = '';
+    auto.textContent = 'Auto size';
+    sel.appendChild(auto);
+    for (const s of deviceSizes) {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s.replace('x', '×');
+      sel.appendChild(opt);
+    }
+  }
+  if (sel.value !== want && document.activeElement !== sel) sel.value = want;
+}
+
+function syncSizeSelect(size) {
+  applyDeviceSizes(deviceSizes, size);
+}
+
 function normalizeQuality(q) {
   const n = Number(q);
   if (!Number.isFinite(n)) return 85;
@@ -156,8 +196,10 @@ function syncDisconnectedControls() {
   const held = holdDisconnected;
   const fpsSel = document.getElementById('radioDisplayFpsSelect');
   const qualSel = document.getElementById('radioDisplayQualitySelect');
+  const sizeSel = document.getElementById('radioDisplaySizeSelect');
   const autoEl = document.getElementById('radioDisplayAutoStart');
   const devSel = document.getElementById('radioDisplayDeviceSelect');
+  if (sizeSel) sizeSel.disabled = held;
   if (fpsSel) fpsSel.disabled = held;
   if (qualSel) qualSel.disabled = held;
   if (autoEl) autoEl.disabled = held;
@@ -422,6 +464,9 @@ async function setDeviceKey(key) {
     clearDisconnectedHold();
     currentDeviceKey = data.deviceKey || '';
     if (data.rates) applyDeviceFpsCap(data.rates, currentTargetFps);
+    // Sizes belong to the old device. Blank the list; the next status poll
+    // repopulates it from whatever the new one advertises.
+    applyDeviceSizes([], '');
     syncStreamButton();
     syncDisconnectedControls();
     if (wantStream && currentDeviceKey && !panel.isHiddenByUser()) {
@@ -457,6 +502,28 @@ async function setTargetFps(fps) {
   }
 }
 
+/**
+ * Persist the capture size. The pin is chosen when the device is opened, so
+ * the host restarts the capture; a running stream drops for a second or two.
+ */
+async function setCaptureSize(size) {
+  const want = deviceSizes.includes(size) ? size : '';
+  try {
+    const res = await fetch('/api/video/size', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size: want })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    applyDeviceSizes(data.sizes ?? deviceSizes, data.captureSize ?? want);
+  } catch (e) {
+    console.warn('Radio Display capture size change failed', e);
+    alert('Could not change capture size: ' + (e.message || e));
+    syncSizeSelect(currentCaptureSize);
+  }
+}
+
 async function setJpegQuality(quality) {
   const want = normalizeQuality(quality);
   try {
@@ -489,6 +556,7 @@ async function pollStatus(options = {}) {
     currentDeviceKey = data.deviceKey || '';
     currentJpegQuality = normalizeQuality(data.jpegQuality);
     applyDeviceFpsCap(data.rates, data.targetFps);
+    applyDeviceSizes(data.sizes, data.captureSize ?? '');
 
     if (!panel) return;
 
@@ -508,6 +576,7 @@ async function pollStatus(options = {}) {
     }
     syncFpsSelect(currentTargetFps);
     syncQualitySelect(currentJpegQuality);
+    syncSizeSelect(currentCaptureSize);
     syncStreamButton();
 
     if (!currentDeviceKey) {
@@ -691,6 +760,9 @@ function bindControls() {
     });
     document.getElementById('radioDisplayQualitySelect')?.addEventListener('change', (ev) => {
       setJpegQuality(ev.target.value);
+    });
+    document.getElementById('radioDisplaySizeSelect')?.addEventListener('change', (ev) => {
+      setCaptureSize(ev.target.value || '');
     });
     document.getElementById('radioDisplayStreamBtn')?.addEventListener('click', () => {
       if (wantStream) requestStop();
