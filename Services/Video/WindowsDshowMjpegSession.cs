@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 
@@ -41,8 +42,15 @@ namespace Yaesu_Web_Control.Services.Video
         /// <summary>Trailing-data samples that together prove the device merges frames.</summary>
         private const int MergedFrameEvidence = 3;
 
+        /// <summary>Opening samples traced when YWC_VIDEO_TRACE_SAMPLES is set.</summary>
+        private const int SampleTraceCount = 30;
+
         private long _trailingSamples;
         private long _mergedSamples;
+        private long _samplesSeen;
+        private readonly Stopwatch _sinceOpen = Stopwatch.StartNew();
+        private readonly bool _traceSamples =
+            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("YWC_VIDEO_TRACE_SAMPLES"));
         private int _mergesFrames;
         private long _unterminatedSamples;
         private long _imagelessSamples;
@@ -693,7 +701,10 @@ namespace Yaesu_Web_Control.Services.Video
                 if (owner is null || buffer == IntPtr.Zero || bufferLen < 4)
                     return 0;
                 if (Marshal.ReadByte(buffer) != 0xFF || Marshal.ReadByte(buffer, 1) != 0xD8)
+                {
+                    owner.NoteSampleTrace(sampleTime, bufferLen, 0, "no SOI, dropped");
                     return 0;
+                }
 
                 var bytes = new byte[bufferLen];
                 Marshal.Copy(buffer, bytes, 0, bufferLen);
@@ -713,6 +724,7 @@ namespace Yaesu_Web_Control.Services.Video
                     // appear, so drop them and let the stall watchdog say so.
                     if (!hasScan)
                     {
+                        owner.NoteSampleTrace(sampleTime, bufferLen, end, "no scan, dropped");
                         owner.NoteImagelessSample(bytes.Length, end);
                         return 0;
                     }
@@ -725,17 +737,24 @@ namespace Yaesu_Web_Control.Services.Video
                         // only padding, so trim it and publish as normal.
                         if (TailHasSoi(bytes, end))
                         {
+                            owner.NoteSampleTrace(sampleTime, bufferLen, end, "MERGED, dropped");
                             owner.NoteMergedSample(bytes, end);
                             return 0;
                         }
 
+                        owner.NoteSampleTrace(sampleTime, bufferLen, end, "padded tail, trimmed");
                         owner.NoteTrailingBytes(bytes, end);
+                    }
+                    else
+                    {
+                        owner.NoteSampleTrace(sampleTime, bufferLen, end, "clean");
                     }
 
                     jpeg = end == bytes.Length ? bytes : bytes.AsSpan(0, end).ToArray();
                 }
                 else
                 {
+                    owner.NoteSampleTrace(sampleTime, bufferLen, 0, "no EOI, published whole");
                     owner.NoteUnterminatedFrame(bytes.Length);
                     jpeg = bytes;
                 }
@@ -890,6 +909,31 @@ namespace Yaesu_Web_Control.Services.Video
         /// Logged sparsely: this is diagnostic evidence for an intermittent
         /// corruption, not a per-frame condition worth flooding the log with.
         /// </summary>
+        /// <summary>
+        /// Traces the opening <see cref="SampleTraceCount"/> samples of a session,
+        /// only when YWC_VIDEO_TRACE_SAMPLES is set. #132: merged samples always
+        /// start within ~3 s of the graph running and stop on their own, and the
+        /// byte counts repeat exactly across independent cold opens - 29087 /
+        /// 28262 / 825 at 800x600, 110480 / 107862 / 2618 at 1280x960. A copy race
+        /// would tear at a different point every time, so this says whether the
+        /// burst is literally the first N samples in sequence, which is what a
+        /// priming or stale buffer looks like.
+        /// </summary>
+        private void NoteSampleTrace(double sampleTime, int bufferLen, int end, string outcome)
+        {
+            if (!_traceSamples)
+                return;
+
+            var n = Interlocked.Increment(ref _samplesSeen);
+            if (n > SampleTraceCount)
+                return;
+
+            _logger.LogInformation(
+                "Radio Display trace: sample {N} at {Elapsed} ms, stamp {Stamp} s, " +
+                "{Length} bytes, first image {End} bytes, {Outcome}",
+                n, _sinceOpen.ElapsedMilliseconds, sampleTime.ToString("F4"), bufferLen, end, outcome);
+        }
+
         private void NoteTrailingBytes(byte[] bytes, int end)
         {
             var occurrence = Interlocked.Increment(ref _trailingSamples);
