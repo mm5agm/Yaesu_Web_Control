@@ -69,6 +69,9 @@ namespace Yaesu_Web_Control.Services.Video
         private const int SlowReadMs = 750;
         private const int SlowReadGiveUp = 4;
         private const int FpsCollapseWindows = 3;
+
+        /// <summary>Rebuilds allowed before tiled frames are only reported.</summary>
+        private const int MaxTiledRecoveries = 2;
         private const int FpsWarmupMs = 2500;
 
         private readonly ISettingsService _settings;
@@ -106,6 +109,13 @@ namespace Yaesu_Web_Control.Services.Video
         /// already been tried and the device still merges.
         /// </summary>
         private bool _dshowAcceptsMerges;
+
+        /// <summary>
+        /// #132. Rebuilds triggered by tiled frames. Capped so a device that
+        /// simply produces big pictures cannot cycle the graph forever behind a
+        /// black panel.
+        /// </summary>
+        private int _tiledRecoveries;
         private bool _linuxMjpegUnavailable;
         /// <summary>
         /// Set by <see cref="MarkDisconnected"/>. The outer loop must exit so
@@ -1071,6 +1081,7 @@ namespace Yaesu_Web_Control.Services.Video
             var fpsCollapseStreak = 0;
             var loggedFormat = false;
             var deliveredFrame = false;
+            var tiled = new VideoTiledFrameDetector();
             using var resizedScratch = new Mat();
 
             while (!ct.IsCancellationRequested)
@@ -1230,6 +1241,45 @@ namespace Yaesu_Web_Control.Services.Video
                         _logger.LogInformation(
                             "Radio Display first JPEG published ({Bytes} bytes, {W}x{H})",
                             jpegBytes.Length, outW, outH);
+                    }
+
+                    // #132. Every frame is measured, but nothing acts on the
+                    // verdict until the stream is warm - the opening frames of a
+                    // session are the least representative ones there are.
+                    //
+                    // Not reproducible on demand: I have caught this fault once,
+                    // mid-session, and cleared it by cycling the device by hand.
+                    // So the recovery is reasoned from that single measurement
+                    // rather than proven against a repeatable fault, and the log
+                    // line matters as much as the rebuild does - today this
+                    // produces no log at all and the operator just sees a wrong
+                    // picture.
+                    if (tiled.Observe(jpegBytes.Length) &&
+                        streamStarted.ElapsedMilliseconds >= FpsWarmupMs)
+                    {
+                        if (_tiledRecoveries < MaxTiledRecoveries)
+                        {
+                            _tiledRecoveries++;
+                            _logger.LogWarning(
+                                "Radio Display: {Via} frames jumped to {Bytes} bytes against a median of " +
+                                "{Median} at {W}x{H} — the device looks to be tiling several pictures into " +
+                                "one. Rebuilding the capture graph",
+                                via, jpegBytes.Length, tiled.Median, outW, outH);
+                            break;
+                        }
+
+                        if (_tiledRecoveries == MaxTiledRecoveries)
+                        {
+                            // Out of moves. An oversize picture is still a
+                            // picture, so keep publishing rather than cycle the
+                            // graph a third time to no effect.
+                            _tiledRecoveries++;
+                            _logger.LogWarning(
+                                "Radio Display: {Via} frames still {Bytes} bytes against a median of " +
+                                "{Median} after {N} rebuilds. Leaving the session alone — if the picture " +
+                                "is tiled, set the video device to None and back",
+                                via, jpegBytes.Length, tiled.Median, MaxTiledRecoveries);
+                        }
                     }
 
                     framesInWindow++;
