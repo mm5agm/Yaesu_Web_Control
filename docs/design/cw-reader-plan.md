@@ -163,6 +163,49 @@ package) and sending anything over CAT or CI-V.
 Core stays `net10.0` with no package references, so YWC's CAT-only macOS/Linux
 target keeps building.
 
+### 2.1 Where the files actually go
+
+Core is vendored into both apps as a **`git subtree` at `core/`** — not a
+submodule and not a NuGet package, so a plain `git clone` of either app still
+builds with no extra steps. The workflow is already written down in
+`core/README.md` (add / pull / push commands) and is not repeated here. Two
+things from it that bite:
+
+- work happens **inside `core/` in whichever app repo you are in**, and is
+  pushed up with `git subtree push --prefix=core ... main`. Then the *other* app
+  pulls it down. Do not edit the standalone `Radio_Web_Control_Core` clone and
+  expect either app to see it;
+- each app removes `core\**` from `Compile`, `Content`, `EmbeddedResource` and
+  `None` alongside the `ProjectReference`, because both use the Web SDK and its
+  globs would otherwise pull every Core file in twice. Verified present in both
+  `Yaesu_Web_Control.csproj` and IWC's — it only matters if a new project ever
+  picks Core up.
+
+New files, all under `core/`:
+
+```
+core/Services/Cw/CwDecoderEngine.cs      decoder, owns the two paths below
+core/Services/Cw/CwToneDetector.cs       Goertzel envelope + FFT pitch track
+core/Services/Cw/CwElementDecoder.cs     adaptive dit/dah timing -> characters
+core/Services/Cw/MorseTable.cs           letters, digits, punctuation, prosigns
+core/Services/Cw/CwZeroIn.cs             pure: measured Hz + target Hz -> delta
+core/Services/Cw/ICwAudioSource.cs       the seam the apps implement
+core/Services/CwTranscriptWriter.cs      rolling timestamped transcript
+core/Services/AdifRecordWriter.cs        next to the existing AdifParser.cs
+core/js/cw/cw-reader-panel.js            shared reader UI (see note below)
+tests/RadioWebControl.Core.Tests/Cw/     synthetic-audio suite (§3.1)
+```
+
+`core/Services/` currently holds one file (`AdifParser.cs`), so `Services/Cw/`
+is a new directory rather than a change to an established layout.
+
+**Shared JS needs no csproj change.** Both apps have a `CopySharedCoreJs` target
+that globs `core\js\**\*.js` and copies it into `wwwroot\js\` before
+`AssignTargetPaths`, preserving the subdirectory. So `core/js/cw/cw-reader-panel.js`
+arrives at `wwwroot/js/cw/cw-reader-panel.js` automatically, in both apps, and
+the copies are git-ignored so `core/js` stays the single source of truth. Author
+it in `core/js` and nowhere else.
+
 ---
 
 ## 3. The pieces
@@ -336,7 +379,7 @@ Each phase is independently verifiable, and nothing before Phase 4 touches IWC.
 | **1** | **Core:** decoder engine, `CwZeroIn`, Morse table, synthetic-audio test suite. No app wiring at all. | `dotnet test` gives accuracy vs WPM and SNR, **plus characters lost per speed transition** |
 | **2** | **YWC:** capture extraction, `CwReaderService`, SignalR, pop-out page | real CW off the FTdx101MP, on the bench |
 | **3** | **YWC:** Reader Mode, transcript, ADIF QSO save | as above |
-| **4** | **Core -> IWC:** subtree push, IWC capture service, reader UI, software ZIN | real CW off the IC-7300 MkII |
+| **4** | **Core -> IWC:** `git subtree push` from YWC then pull into IWC (§2.1), IWC capture service, reader UI, software ZIN | real CW off the IC-7300 MkII |
 | **5** | `USER_MANUAL.md` section, README notes | — |
 
 Phase 1 is the one that decides whether this is worth shipping. If the accuracy
