@@ -496,6 +496,13 @@
     </div>
 
     <!-- (Status line moved inside each VFO panel — see #vfoAStatusLine / #vfoBStatusLine) -->
+    @* Single live region for BOTH status lines. One region means one utterance:
+       two polite regions changing in the same tick are not reliably read one after
+       the other, which is why a change on VFO B could go unheard. Emptied a couple
+       of seconds after speaking so its text is not met a second time when the page
+       is browsed. *@
+    <span id="vfoStatusAnnounce" class="visually-hidden" role="status"
+          aria-live="polite" aria-atomic="true"></span>
 
     <!-- Power and SWR Meters -->
     <div class="row mt-3">
@@ -1457,10 +1464,13 @@
                     </div>
 
                     <!-- VFO A status line — live band/mode/freq/power summary, banner-coloured -->
+                    @* Deliberately NOT a live region — see #123. Announcing from here
+                       read the whole line once per property update rather than once per
+                       operator action. #vfoStatusAnnounce does the speaking now; this
+                       line stays plainly readable so it can still be reviewed on demand. *@
                     <div id="vfoAStatusLine"
                          class="bg-primary text-white px-2 py-1 mt-1 font-monospace rounded"
-                         style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;"
-                         aria-live="polite" aria-atomic="true">—</div>
+                         style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;">—</div>
                             </div>
                         </div>
                     </div>
@@ -1869,10 +1879,10 @@
                     </div>
 
                     <!-- VFO B status line — live band/mode/freq summary, banner-coloured -->
+                    @* Announced through #vfoStatusAnnounce, not from here — see VFO A above. *@
                     <div id="vfoBStatusLine"
                          class="bg-success text-white px-2 py-1 mt-1 font-monospace rounded"
-                         style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;"
-                         aria-live="polite" aria-atomic="true">—</div>
+                         style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;">—</div>
                                 </div>
                             </div>
                         </div>
@@ -4421,7 +4431,83 @@
             return `${parseInt(s.slice(0,3),10)}.${s.slice(3,6)}.${s.slice(6,9)}`;
         }
 
-        function _renderToolbarStatus() {
+        // How long the announcement waits for a burst of updates to settle. One
+        // operator action - a QMB recall, a band change, a VFO swap - reaches the
+        // browser as several separate RadioStateUpdate messages, roughly a poll
+        // interval apart (~100 ms at the 10 Hz meter poll), so anything arriving
+        // within this window of the last change belongs to the same event and is
+        // announced once (#123). Same technique as the v2.3.7 ARIA work.
+        const STATUS_ANNOUNCE_DELAY_MS = 250;
+        // ...but never stay silent longer than this while changes keep arriving.
+        // Turning the VFO knob produces a change every few tens of milliseconds,
+        // and a plain trailing timer would be pushed back indefinitely and say
+        // nothing at all for as long as the operator kept tuning.
+        const STATUS_ANNOUNCE_MAX_WAIT_MS = 1200;
+        // How long the spoken text lingers before the region is emptied.
+        const STATUS_ANNOUNCE_CLEAR_MS = 2000;
+
+        let _statusAnnounceTimer      = null;
+        let _statusAnnounceClearTimer = null;
+        let _statusAnnounceWaitingSince = 0;
+        let _statusLineA = '';
+        let _statusLineB = '';
+        let _statusAnnouncedA = null;
+        let _statusAnnouncedB = null;
+
+        // Speak whichever lines have actually changed since the last time we
+        // spoke. Naming the VFO matters once both can appear in one message, but
+        // a single-receiver radio has no VFO B panel and no ambiguity, so it is
+        // left off there and those users hear exactly what they heard before.
+        function _announceToolbarStatus() {
+            const out = document.getElementById('vfoStatusAnnounce');
+            if (!out) return;
+
+            const hasB = !!document.getElementById('vfoBStatusLine');
+            const parts = [];
+
+            if (_statusLineA !== _statusAnnouncedA) {
+                _statusAnnouncedA = _statusLineA;
+                parts.push(hasB ? `VFO A ${_statusLineA}` : _statusLineA);
+            }
+            if (hasB && _statusLineB !== _statusAnnouncedB) {
+                _statusAnnouncedB = _statusLineB;
+                parts.push(`VFO B ${_statusLineB}`);
+            }
+            if (parts.length === 0) return;
+
+            const text = parts.join('. ');
+
+            // Empty the region, then fill it on the next frame rather than
+            // writing straight over what is there. This is the same idiom as
+            // qmbAnnounce() in site.js, which is the one announcement on this
+            // page confirmed to speak reliably on the bench.
+            if (_statusAnnounceClearTimer) {
+                clearTimeout(_statusAnnounceClearTimer);
+                _statusAnnounceClearTimer = null;
+            }
+            out.textContent = '';
+            requestAnimationFrame(function () {
+                const el = document.getElementById('vfoStatusAnnounce');
+                if (!el) return;
+                el.textContent = text;
+
+                // Empty it again shortly afterwards. A live region keeps its
+                // text in the accessibility tree, so without this the same
+                // words are met a second time by anyone reading down the page.
+                // Clearing is not itself announced, and it means an identical
+                // reading later still speaks.
+                _statusAnnounceClearTimer = setTimeout(function () {
+                    _statusAnnounceClearTimer = null;
+                    const e2 = document.getElementById('vfoStatusAnnounce');
+                    if (e2) e2.textContent = '';
+                }, STATUS_ANNOUNCE_CLEAR_MS);
+            });
+        }
+
+        // immediate = true is for the initial server-rendered values, which run
+        // while the page is still parsing. Seeding the live region then counts as
+        // its starting content, so nothing is spoken on load.
+        function _renderToolbarStatus(immediate) {
             // Per-VFO status lines now live inside each VFO panel under the
             // IF Width row, banner-coloured to match each receiver. Each line
             // shows band / mode / frequency, with power and SPLIT/TX flags
@@ -4431,22 +4517,56 @@
             const txVfoIsB = _statusState.txVfo === 1;
             const splitOn  = _statusState.split > 0;
 
-            if (a) {
-                let line = `${_statusState.bandA || '—'} / ${_statusState.modeA || '—'} / ${_fmtFreq(_statusState.freqHzA)}`;
-                if (_statusState.power > 0) line += ` / ${_statusState.power}W`;
-                if (splitOn) line += '   SPLIT';
-                if (splitOn || txVfoIsB === false) {
-                    // VFO A is the TX vfo (default, or split with A receive)
-                    if (splitOn) line += '   RX';
+            let lineA = `${_statusState.bandA || '—'} / ${_statusState.modeA || '—'} / ${_fmtFreq(_statusState.freqHzA)}`;
+            if (_statusState.power > 0) lineA += ` / ${_statusState.power}W`;
+            if (splitOn) lineA += '   SPLIT';
+            if (splitOn || txVfoIsB === false) {
+                // VFO A is the TX vfo (default, or split with A receive)
+                if (splitOn) lineA += '   RX';
+            }
+
+            let lineB = `${_statusState.bandB || '—'} / ${_statusState.modeB || '—'} / ${_fmtFreq(_statusState.freqHzB)}`;
+            if (splitOn) lineB += '   TX';
+            else if (txVfoIsB) lineB += '   TX';
+
+            // Visible text first and always, so nothing lags on screen.
+            if (a) a.textContent = lineA;
+            if (b) b.textContent = lineB;
+
+            const changed = (lineA !== _statusLineA) || (lineB !== _statusLineB);
+            _statusLineA = lineA;
+            _statusLineB = lineB;
+
+            if (immediate) {
+                // Initial server-rendered values, while the page is still parsing.
+                _statusAnnouncedA = lineA;
+                _statusAnnouncedB = lineB;
+                return;
+            }
+
+            // An update that leaves both lines reading the same must not restart
+            // the timer, or a radio that re-sends unchanged values would hold the
+            // announcement off for ever.
+            if (!changed) return;
+
+            const now = Date.now();
+            if (!_statusAnnounceTimer) _statusAnnounceWaitingSince = now;
+
+            if (now - _statusAnnounceWaitingSince >= STATUS_ANNOUNCE_MAX_WAIT_MS) {
+                if (_statusAnnounceTimer) {
+                    clearTimeout(_statusAnnounceTimer);
+                    _statusAnnounceTimer = null;
                 }
-                a.textContent = line;
+                _statusAnnounceWaitingSince = now;
+                _announceToolbarStatus();
+                return;
             }
-            if (b) {
-                let line = `${_statusState.bandB || '—'} / ${_statusState.modeB || '—'} / ${_fmtFreq(_statusState.freqHzB)}`;
-                if (splitOn) line += '   TX';
-                else if (txVfoIsB) line += '   TX';
-                b.textContent = line;
-            }
+
+            if (_statusAnnounceTimer) clearTimeout(_statusAnnounceTimer);
+            _statusAnnounceTimer = setTimeout(function () {
+                _statusAnnounceTimer = null;
+                _announceToolbarStatus();
+            }, STATUS_ANNOUNCE_DELAY_MS);
         }
 
         // Public setters that site.js calls from its SignalR handlers.
@@ -4465,7 +4585,8 @@
         _statusState.bandB   = '@(Model.State.vfoB.band ?? "")';
         _statusState.modeB   = '@(Model.State.vfoB.mode ?? "")';
         _statusState.power   = @Model.State.vfoA.power;
-        _renderToolbarStatus();
+        _renderToolbarStatus(true);
+        console.log('[a11y] toolbar status announcer: single shared region, debounced (#123)');
 
         // --- VOX ---
         async function toggleVox() {
