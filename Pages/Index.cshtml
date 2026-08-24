@@ -1457,10 +1457,17 @@
                     </div>
 
                     <!-- VFO A status line — live band/mode/freq/power summary, banner-coloured -->
+                    @* The visible line is aria-hidden and the announcer below carries the
+                       same text to screen readers, debounced. See #123: as a live region
+                       it was announced once per property update rather than once per
+                       event, so a QMB recall or a band change read the whole line
+                       several times over. *@
                     <div id="vfoAStatusLine"
                          class="bg-primary text-white px-2 py-1 mt-1 font-monospace rounded"
                          style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;"
-                         aria-live="polite" aria-atomic="true">—</div>
+                         aria-hidden="true">—</div>
+                    <span id="vfoAStatusAnnounce" class="visually-hidden"
+                          role="status" aria-live="polite" aria-atomic="true"></span>
                             </div>
                         </div>
                     </div>
@@ -1869,10 +1876,13 @@
                     </div>
 
                     <!-- VFO B status line — live band/mode/freq summary, banner-coloured -->
+                    @* Announced through #vfoBStatusAnnounce, not from here — see VFO A above. *@
                     <div id="vfoBStatusLine"
                          class="bg-success text-white px-2 py-1 mt-1 font-monospace rounded"
                          style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;"
-                         aria-live="polite" aria-atomic="true">—</div>
+                         aria-hidden="true">—</div>
+                    <span id="vfoBStatusAnnounce" class="visually-hidden"
+                          role="status" aria-live="polite" aria-atomic="true"></span>
                                 </div>
                             </div>
                         </div>
@@ -4421,7 +4431,44 @@
             return `${parseInt(s.slice(0,3),10)}.${s.slice(3,6)}.${s.slice(6,9)}`;
         }
 
-        function _renderToolbarStatus() {
+        // How long the announcement waits for a burst of updates to finish.
+        // One operator action - a QMB recall, a band change, a VFO swap - reaches
+        // the browser as several separate RadioStateUpdate messages, roughly a
+        // poll interval apart (~100 ms at the 10 Hz meter poll). Anything that
+        // arrives within this window of the last change is treated as part of the
+        // same event and announced once. Same technique as the v2.3.7 ARIA work.
+        const STATUS_ANNOUNCE_DELAY_MS = 250;
+        let _statusAnnounceTimer = null;
+        let _statusAnnouncedA = null;
+        let _statusAnnouncedB = null;
+
+        // Copy the settled text into the live regions. Only on a real change,
+        // so an update that leaves the line reading the same says nothing.
+        function _announceToolbarStatus() {
+            const pairs = [
+                ['vfoAStatusLine', 'vfoAStatusAnnounce', 'A'],
+                ['vfoBStatusLine', 'vfoBStatusAnnounce', 'B'],
+            ];
+            for (const [lineId, announceId, which] of pairs) {
+                const line = document.getElementById(lineId);
+                const out  = document.getElementById(announceId);
+                if (!line || !out) continue;
+                const text = line.textContent;
+                if (which === 'A') {
+                    if (text === _statusAnnouncedA) continue;
+                    _statusAnnouncedA = text;
+                } else {
+                    if (text === _statusAnnouncedB) continue;
+                    _statusAnnouncedB = text;
+                }
+                out.textContent = text;
+            }
+        }
+
+        // immediate = true is for the initial server-rendered values, which run
+        // while the page is still parsing. Seeding the live region then counts as
+        // its starting content, so nothing is spoken on load.
+        function _renderToolbarStatus(immediate) {
             // Per-VFO status lines now live inside each VFO panel under the
             // IF Width row, banner-coloured to match each receiver. Each line
             // shows band / mode / frequency, with power and SPLIT/TX flags
@@ -4447,6 +4494,21 @@
                 else if (txVfoIsB) line += '   TX';
                 b.textContent = line;
             }
+
+            // The visible text above is already up to date. Only the speaking
+            // waits, so sighted users see no lag.
+            if (_statusAnnounceTimer) {
+                clearTimeout(_statusAnnounceTimer);
+                _statusAnnounceTimer = null;
+            }
+            if (immediate) {
+                _announceToolbarStatus();
+            } else {
+                _statusAnnounceTimer = setTimeout(function () {
+                    _statusAnnounceTimer = null;
+                    _announceToolbarStatus();
+                }, STATUS_ANNOUNCE_DELAY_MS);
+            }
         }
 
         // Public setters that site.js calls from its SignalR handlers.
@@ -4465,7 +4527,7 @@
         _statusState.bandB   = '@(Model.State.vfoB.band ?? "")';
         _statusState.modeB   = '@(Model.State.vfoB.mode ?? "")';
         _statusState.power   = @Model.State.vfoA.power;
-        _renderToolbarStatus();
+        _renderToolbarStatus(true);
 
         // --- VOX ---
         async function toggleVox() {
