@@ -879,7 +879,7 @@ search window found and copied a station **223 Hz from the configured pitch** at
 the MkII's first attempt was `N4IYO` (`-.` for `..-.`) and only its second was
 right. That is a real, self-contained result.
 
-### 4.10b The controlled test could not be run, and the tuning SIGN is now in doubt
+### 4.10b The controlled test could not be run. The sign scare was mine, and the sign is fine.
 
 The test §4.10a specifies was attempted the same afternoon and is **void**. Worth
 recording why, because the reason will recur.
@@ -922,16 +922,31 @@ three captures 200 Hz apart, cross-correlating the whole spectrum, which a pileu
 should make easy - and the band went quiet during the thirty seconds it took:
 flatness 0.40, 0.74, 0.64, the last two effectively empty. Inconclusive.
 
-**This is now the highest-priority open item in §4**, ahead of the speed tracker
-and ahead of gating. It is cheap to settle - one station, narrow filter, one
-known VFO step, watch which way the tone moves - and until it is settled the
-§3.4 convention is an assumption wearing the word "confirmed".
+**SETTLED, minutes later, and the convention is right.** The band came back, and
+the measurement is unambiguous - same 800 Hz filter, same conditions, twelve
+seconds each, one 200 Hz step:
 
-Note what went wrong in the earlier confirmations: the offset was checked against
-the CI-V pitch reading and against Colin's ear, both of which validate the
-*magnitude*. The two checks that would have caught a sign error - tuning by it
-and watching the tone - were read as successes because the radio started
-decoding, which §4.10a has already shown proves nothing.
+| VFO | strongest bin | flatness |
+|---|---|---|
+| 18,086,576 | **500 Hz** | 0.07 |
+| 18,086,776 (**+200**) | **300 Hz** | 0.07 |
+
+VFO **up** 200 Hz, tone **down** exactly 200 Hz. That is §3.4 working: a tone
+200 Hz above the pitch is brought onto the pitch by adding 200 to the VFO.
+**`ZeroInOffsetHz` is not backwards, and there is no bug here.**
+
+The scare came entirely from taking a measurement through a widened filter. With
+the IF at 2400 Hz the passband held several stations and the decoder locked a
+different one, which read as the tone moving the wrong way. **Never measure a
+tone shift with the filter wider than the one the operator uses** - the filter is
+what makes "the signal" a single thing.
+
+It also means the retunes made earlier today did put their stations on the pitch,
+so §4.10's observation is at least coherent. §4.10a's refutation is untouched by
+this: the callsign the radio printed still came from a station at 388 Hz, which
+before that retune sat near 667 Hz - close to the pitch, and undecoded. Zero-beat
+remains **one uncontrolled observation** awaiting the §4.10a test on a quiet
+frequency.
 
 ### 4.11 The MkII emits noise junk too, and the gate has a number
 
