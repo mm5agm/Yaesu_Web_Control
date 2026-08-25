@@ -696,7 +696,58 @@ what Reader Mode's "find the signal" wants to do:
 Steps 3 and 4 are `ZeroInOffsetHz` doing its job before a single character has
 been decoded, which is a use for it the plan had not anticipated.
 
-### 4.8 Still outstanding
+### 4.8 The bench rig can record the app instead of the band
+
+Colin: "radio is jumping to VFO B every so often and i can't remember how to
+stop that". It was not a radio setting. It was IWC's **cross-band peek**
+(`PseudoDualCrossBandEnabled`), which on a single-receiver radio is the only way
+to show a watch panel on a different band: select VFO B, take one sweep, hand
+the receiver back. His was on, with the interval at 5 s - the minimum the UI
+allows.
+
+VFO A was on 17m and VFO B on 20m, so it fired throughout every 17m recording
+made that morning. At the keyed bin the two-minute comparison capture reads:
+
+```
+00:01  -43.5 dB  spread 124.5
+00:06  -48.7 dB  spread  84.9
+00:12  -43.8 dB  spread  80.2
+00:18  -42.7 dB  spread  75.0
+00:23  -44.4 dB  spread  55.4
+00:29  -41.9 dB  spread  51.3
+```
+
+A burst every 5-6 seconds, 14 dB above its surroundings, flat between. **That is
+the app, not the band** - what it caught each time was the DATA signal on VFO B
+at 14.079. `--spectrum` duly reported "most keyed 1725 Hz, keying ratio 5.9",
+which is to say it identified IWC's own polling loop as the strongest station on
+17m.
+
+Two things follow.
+
+**For the bench: cross-band peek must be off before recording anything**, or the
+VFOs must be on the same band. This is now the first line of the procedure. The
+recording it spoiled is discarded.
+
+**For §4.6: the band sweep ran under the same conditions.** VFO B sat on 20m
+while VFO A stepped across eight bands, so every non-20m sample could have
+caught a burst - and the 20m rows, the only same-band ones, are the only clean
+readings in the table. The conclusion survives, because Colin reported CW on
+7.035 and 18 MHz independently and blind, and those were the two lowest-flatness
+non-20m readings. But the individual flatness figures for the other bands are no
+longer clean evidence and should not be quoted as such. The sweep wants
+re-running with the peek off before that table means anything.
+
+There is a general lesson under it, and it is not really about CW. **A bench rig
+that records the radio through the app records the app as well.** The dropouts
+left no trace in the audio envelope - retuning to another band produces
+different noise, not silence, so the level never falls - and they were invisible
+to every whole-file statistic. Only the per-second timeline from §4.5 showed
+them, and only because it was pointed at the right bin. A five-second period is
+also long enough to look like a slow fist and short enough to sit inside a call
+sign.
+
+### 4.9 Still outstanding
 
 The MkII's own decode of the same signal. HB9DAX was on the air for about
 twenty-five seconds and the recording was started immediately, which left no
