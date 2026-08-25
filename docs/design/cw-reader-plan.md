@@ -807,7 +807,11 @@ signal a human was copying comfortably and which our detector locked at
 confidence 0.98. Tuning up 179 Hz to put him on the pitch, the radio immediately
 put **OH3MMF** on its screen.
 
-**That is the first measured advantage in our favour, and it is not a small
+**Read §4.10a before relying on this.** A second attempt to reproduce it the
+same day was confounded, and what looked like a clean result is really n=1 with
+an obvious alternative explanation.
+
+**If it holds, it is the first measured advantage in our favour, and not a small
 one.** `CwDecoderEngine` hunts a search window - 200 Hz here, 300 Hz earlier -
 and found him without being told where he was. The reference decoder requires
 the operator to zero-beat first. In practice that means the MkII's decoder is
@@ -829,6 +833,51 @@ It also re-reads §4.9's `DM4EA` / `SM4EA` result. That capture was made at
 outside its own comfortable range, and `DM4EA` was it doing well rather than it
 doing its best. The element-decoding comparison there should be treated as
 provisional until it is repeated on the pitch.
+
+### 4.10a The reproduction failed, and 4.10 is n=1
+
+Same session, a couple of hours later. Colin: "very strong cw now but radio not
+decoding it" - the same symptom, which looked like a free replication.
+
+Measured: tone ~890 Hz against the 611 Hz pitch, +279 out, strong at -24 dB
+against a -36.5 dB floor. Tuned VFO A up 279 Hz. The radio started decoding and
+printed `N4IYO` then `F4IYO`. On the face of it, confirmation.
+
+It is not. Decoding `bench/ve2mf.wav` shows **the callsign came from a station at
+388 Hz**, not from the one I had measured and tuned for:
+
+```
+[00:05] T TT TTTT TM F4I
+           . 00:10  20.5 wpm   387.2 Hz   17.2 dB  signal  locked
+[00:10] YO
+```
+
+388 Hz is 223 Hz **below** the pitch. And before the retune that station sat at
+about 667 Hz, which is nearly on the pitch - and the radio was not decoding then
+either. So the retune moved him *away* from the pitch and the radio then read
+him, which is the opposite of what the hypothesis predicts.
+
+**The parsimonious explanation is that F4IYO started sending during the window
+and the retune was irrelevant.** That explanation also fits §4.10: OH3MMF may
+simply have sent his callsign at the moment I finished tuning.
+
+So the zero-beat claim is **one uncontrolled observation**, not a finding, and
+§4.10 is marked accordingly. What is needed is a controlled test, which is easy
+and has not been done:
+
+> With a station sending steadily and the radio decoding him, tune 200-300 Hz
+> off the pitch and back, several times, watching the screen. Same station, same
+> propagation, one variable. If the screen stops and starts with the tuning, the
+> claim is real.
+
+Until that is run, do not cite zero-beat as an advantage in the manual, in a
+release note, or to a user.
+
+**What this capture does show, and does not depend on the radio at all:** our
+search window found and copied a station **223 Hz from the configured pitch** at
+18 dB without being told he was there, and got `F4IYO` correct first time where
+the MkII's first attempt was `N4IYO` (`-.` for `..-.`) and only its second was
+right. That is a real, self-contained result.
 
 ### 4.11 The MkII emits noise junk too, and the gate has a number
 
