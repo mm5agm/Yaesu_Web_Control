@@ -478,10 +478,89 @@ catch the tracker regressing into something DEC LVL-shaped.
   DEC LVL has. Tracking a separate mark level, updated only while the key is
   down, took 10 dB QSB at 0.25 Hz from 54% to 100%.
 
-**Not yet done, and the plan says do it before Phase 2:** the bench comparison.
-Synthetic audio proves the algorithm; the IC-7300 MkII proves it against a
-decoder that demonstrably works on real signals. Same off-air signal through
-both.
+### 4.2 Bench rig, built 2026-08-25
+
+The bench comparison needs the app wiring that Phase 2 has not built yet, so the
+harness stands in for it. `tools/CwBench` runs the Core decoder over a `.wav`
+and prints a transcript, telemetry and a summary; `scripts/cw-bench-record.ps1`
+records from a capture device and hands the file straight to it, so a run is one
+command and the `.wav` survives to be re-decoded after any change without going
+back to the air.
+
+Three things the rig had to answer before it could be trusted:
+
+- **Which device is the radio.** Windows names capture endpoints things like
+  "Microphone (3- USB Audio Device)", which identifies nothing. The USB topology
+  does: each radio presents an internal hub with its CAT interface on port 1 and
+  its audio codec on port 2. Hub #9 carries `VID_0C26&PID_0052`
+  (`IC-7300MK2_13004393`, COM8 CI-V) and a C-Media codec - so **the MkII is
+  "Microphone (3- USB Audio Device)"**. Hub #8 carries the CP2105 that is COM3 /
+  COM4 and a TI codec - so "Line (2- USB AUDIO  CODEC)" is the FTdx101MP.
+  `-Probe` reports the level of every device, which is the quick version of the
+  same answer: with both radios on, the silent ones are not the one you want.
+
+- **Whether the level is usable.** The MkII's capture level sat at 72%, which
+  clipped at 0.0 dBFS with a mean of -8 dB, and clipped audio decodes as noise
+  whatever the decoder does. `scripts/set-capture-level.ps1` sets it from the
+  command line - Windows only offers a slider in Sound Settings, which makes
+  "record, check, adjust, record again" a trip through the GUI each time. **25%
+  gives peak -7.8 dBFS, mean -19.7 dB**, which is the number to set before a run.
+
+- **Whether there is a signal in the recording at all.** A transcript of
+  "EEEIS EEE" is either a weak signal half-copied or it is hiss, and those want
+  opposite responses. `--spectrum` measures it instead of guessing: per-bin mean
+  level, and a keying ratio of the loud frames to the typical frame. Steady
+  energy sits near 1; a keyed tone spends more time off than on and so scores
+  high. Known-good synthetic CW reads **353 at 600 Hz**; the first real
+  recording read **4.2, flatness 0.65** - a flat spectrum with nothing keyed.
+
+### 4.3 What the rig found before the radio was even tuned
+
+The first recording was 20 seconds of ordinary receiver noise, no CW on the
+frequency. **The decoder produced 42 characters from it** - about 126 a minute of
+`E`, `I` and `S`. §4.1 records "five seconds of pure noise -> 0 characters", so
+that result does not survive contact with a real receiver.
+
+The reason is in the test's noise, not in the decoder. `CwSignalGenerator.AddNoise`
+adds white Gaussian noise across the full 24 kHz, so a narrowband detector at
+600 Hz sees a sliver of it. Real receiver audio is band-limited to the SSB filter
+and held at a constant level by AGC, so all of that energy is inside the
+passband and the detector sees the lot. The synthetic test is not wrong, it is
+just not this.
+
+**But it is only an idle problem, and that matters.** Mixing the known-text
+synthetic CW into 20 seconds of the MkII's own receiver noise, tiled to length:
+
+| noise bed | characters | copy | confidence |
+|---|---|---|---|
+| real receiver noise, 20 dB broadband SNR | 61 | 2 characters wrong | **0.71** |
+| real receiver noise, 12 dB | 61 | 2 wrong | **0.71** |
+| real receiver noise, 6 dB | 62 | 3 wrong | **0.71** |
+| real receiver noise, 0 dB | 62 | 3 wrong | **0.70** |
+| real receiver noise, no signal | 42 of junk | - | **0.18** |
+
+(Broadband SNR, not the 500 Hz reference figure §4.1 uses - the bed is real
+band-limited receiver noise, so a 500 Hz number would be a fiction.)
+
+So the decoder copies through real receiver noise down to 0 dB with two or three
+characters wrong out of sixty, which is the result that matters, and **the
+confidence figure separates the two cases cleanly: 0.70-0.71 with a signal at
+any of those levels, 0.18-0.20 with none.** No overlap, and the engine already
+computes and exposes it. A gate somewhere around 0.4 would suppress the idle
+chatter without touching copy at 0 dB.
+
+Where that gate belongs - in `CwDecoderEngine` suppressing output, or in the
+Reader window showing low-confidence text differently - is a Phase 2 decision
+and is not made here. **Nothing has been changed in the decoder on the strength
+of this.** The measurement is the deliverable.
+
+### 4.4 Still outstanding
+
+The comparison itself. The rig is proved, the radio is identified and its level
+is set, but the first recording had no CW on it. What is needed is a recording
+made while the MkII is copying real CW on its own screen, and a note of what
+that screen said over the same period. Nothing else is blocking it.
+
 
 ---
 

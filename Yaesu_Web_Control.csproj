@@ -65,6 +65,15 @@
     <Content Remove="core\**" />
     <EmbeddedResource Remove="core\**" />
     <None Remove="core\**" />
+    <!-- tools/ holds standalone bench utilities, each its own .csproj (CwBench
+         is a console harness that runs the Core CW decoder over a .wav file).
+         Same reason as core/ above: the Web SDK globs **/*.cs, and a second
+         Program.cs in this assembly is an error that names neither the file
+         nor the cause. -->
+    <Compile Remove="tools\**" />
+    <Content Remove="tools\**" />
+    <EmbeddedResource Remove="tools\**" />
+    <None Remove="tools\**" />
   </ItemGroup>
 
   <!-- Radio-agnostic code shared with Icom Web Control. Pulled in as a git
