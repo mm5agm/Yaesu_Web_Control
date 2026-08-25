@@ -554,12 +554,92 @@ Reader window showing low-confidence text differently - is a Phase 2 decision
 and is not made here. **Nothing has been changed in the decoder on the strength
 of this.** The measurement is the deliverable.
 
-### 4.4 Still outstanding
+### 4.4 First real off-air signal, 2026-08-25
 
-The comparison itself. The rig is proved, the radio is identified and its level
-is set, but the first recording had no CW on it. What is needed is a recording
-made while the MkII is copying real CW on its own screen, and a note of what
-that screen said over the same period. Nothing else is blocking it.
+20m was almost dead all morning, then HB9DAX came up on 14.0239 calling CQ and
+stayed for about twenty-five seconds. That recording is `bench/`, and it is the
+first time any of this has seen a signal that was not synthesised. Radio on
+CW-U, 800 Hz IF width, its own CW pitch 611 Hz.
+
+What we copied, at 25.8 wpm:
+
+```
+ TCQCQD EHB D A SEI TS 9 D AX CQCQD EH6ECATEE MKE IT TU HB9 D
+```
+
+The call is in there three times over, so the element decoder is doing its job;
+what is wrong is where the spaces fall. They land inside words rather than
+between them. That is not random damage and it is not two bugs - a missing word
+space and a spurious one are the same fault seen twice, because `OnGap` scales
+both the 2-dit and the 5-dit boundary off the tracked dit estimate, so any error
+in the speed estimate mis-splits everything until it recovers.
+
+Sampling the tracker once a second says exactly that. HB9DAX sent a steady
+25-26 wpm throughout, and the tone detector held ~555 Hz without wandering:
+
+```
+00:04 - 00:09   25-27 wpm    good copy
+00:11           42.4 wpm     <-- "HB D A SEI T"
+00:14 - 00:20   25-26 wpm    good copy: "S 9 D AX CQCQD E"
+00:21 - 00:23   34 -> 47 -> 60 wpm   <-- "H6ECATEE MKE IT TU"
+00:24           26.6 wpm     recovers
+```
+
+Every garbled run coincides with an excursion, and every excursion goes the same
+way - the dit estimate is dragged *short* during weak or quiet passages, never
+long. **That is the Phase 2 defect, and it is in the speed tracker, not in the
+gap classifier and not in the tone detector.** Pinning the pitch with
+`--no-track` changes the tail but not the spacing, which rules the tone
+detector out directly.
+
+**Zero-in, validated against an ear.** Colin's words on hearing it were "good
+signal now although low in tone". Given the radio's own 611 Hz pitch as the
+reference, the decoder measured the station at 556.8 Hz and offered **-54 Hz**.
+That is a second independent confirmation of `ZeroInOffsetHz` including the CW-U
+sign convention - the first was against the CI-V pitch reading earlier the same
+morning - and this one was cross-checked by a human listening to it.
+
+### 4.5 The confidence gate proposed in 4.3 does not work
+
+§4.3 proposed gating idle chatter on `Confidence` at around 0.4, on the strength
+of 0.18 for the synthetic noise bed against 0.71 for the mixes. Real receiver
+audio does not behave that way:
+
+| recording | what it is | keying ratio | confidence |
+|---|---|---|---|
+| 0-30 s of the HB9DAX capture | receiver noise, 800 Hz filter | 2.9 | **0.74** |
+| 33-60 s of the same capture | HB9DAX, readable | 4.7 | 0.93 |
+| a 90 s capture minutes later | receiver noise, same settings | 3.2 | **0.17** |
+
+Noise scored 0.74 in one block and 0.17 in another, same receiver, same filter,
+minutes apart. A 0.4 gate passes the first straight through, and no other
+threshold does better. **Confidence is not usable as an idle gate**, and the
+reason is worth keeping: the narrower the IF filter, the more the noise looks
+like a tone to a narrowband detector, so confidence degrades exactly when the
+operator does the right thing and narrows down on a weak signal. The synthetic
+test could not show this because `AddNoise` is white across 24 kHz.
+
+The keying ratio - how much more energy a bin carries at its 95th percentile
+than at its median - is the right *kind* of measure, because it looks at on/off
+behaviour rather than tone quality, and it does order the three correctly. But
+2.9 and 3.2 against 4.7 is a thin margin, and `--spectrum` duly called the
+90 s noise capture "something is keyed around 600 Hz, but weakly" - a false
+positive. The `<3` / `<8` verdict thresholds in `tools/CwBench/Spectrum.cs` are
+too generous at the bottom.
+
+The likely fix is window size rather than threshold. A station keying for 25 s
+inside a 90 s file has its ratio averaged down by the 65 s of silence either
+side; measured over a few seconds at a time it would stand out. That is untested
+and is not being built here.
+
+### 4.6 Still outstanding
+
+The MkII's own decode of the same signal. HB9DAX was on the air for about
+twenty-five seconds and the recording was started immediately, which left no
+opportunity to also read and write down what the radio's screen said. Both
+recordings are kept, so our side can be re-run after any change without going
+back to the air, but the radio's side has to be captured live and has not been.
+Nothing else blocks the comparison.
 
 
 ---
