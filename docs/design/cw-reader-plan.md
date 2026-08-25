@@ -796,23 +796,128 @@ gating is the whole gap" is not supported by anything measured here.
 screen over a known recorded window, rather than the callsign read off it. That
 is one more bench run, and it needs nothing that is not already set up.
 
-### 4.10 Still outstanding
+### 4.10 The MkII's decoder needs zero-beat. Ours does not.
 
-The element-decoding half of the comparison is done. The noise-output half is
-not: it needs the MkII's whole screen over a recorded window, not the readable
-part of it. Until then the output-gating decision has our own numbers behind it
-but no reference to measure against.
+Colin, mid-session: "I'm hearing CQ but the radio isn't showing that."
 
-The §4.6 band sweep also wants re-running with cross-band peek off before its
-per-band figures mean anything.
+He had tuned by ear to a comfortable tone, 18,086.118, which put the station at
+**790 Hz** against the radio's CW pitch of **611 Hz**. The MkII's decoder works
+off the audio at the pitch, so 179 Hz out and it showed nothing at all, on a
+signal a human was copying comfortably and which our detector locked at
+confidence 0.98. Tuning up 179 Hz to put him on the pitch, the radio immediately
+put **OH3MMF** on its screen.
 
-The MkII's own decode of the same signal. HB9DAX was on the air for about
-twenty-five seconds and the recording was started immediately, which left no
-opportunity to also read and write down what the radio's screen said. Both
-recordings are kept, so our side can be re-run after any change without going
-back to the air, but the radio's side has to be captured live and has not been.
-Nothing else blocks the comparison.
+**That is the first measured advantage in our favour, and it is not a small
+one.** `CwDecoderEngine` hunts a search window - 200 Hz here, 300 Hz earlier -
+and found him without being told where he was. The reference decoder requires
+the operator to zero-beat first. In practice that means the MkII's decoder is
+only useful once you have already done the work of tuning him in, which for a
+partially sighted or blind operator is exactly the work that is hardest.
 
+Two consequences worth carrying into Phase 2:
+
+- **§3.4 zero-in is not a nicety, it is the feature that makes the radio's own
+  decoder usable.** It has now been confirmed three times on real signals
+  (-54 Hz against Colin's ear, +19 Hz on 17m, +179 Hz here), and this is the
+  first time its output was applied and the effect observed on the radio.
+- **Reader Mode should not assume the operator has zero-beat anything.** The
+  search window is doing real work. Pinning the detector to the configured pitch
+  would throw away the one thing we demonstrably do better.
+
+It also re-reads §4.9's `DM4EA` / `SM4EA` result. That capture was made at
+810 Hz against a 611 Hz pitch - 199 Hz off - so the MkII was decoding a signal
+outside its own comfortable range, and `DM4EA` was it doing well rather than it
+doing its best. The element-decoding comparison there should be treated as
+provisional until it is repeated on the pitch.
+
+### 4.11 The MkII emits noise junk too, and the gate has a number
+
+`bench/oh3mmf.wav`, 120 s on 18,086.297, the station now on the pitch, both
+decoders watching the same audio. Colin read out the MkII's **whole** screen,
+which is the thing §4.9 was missing:
+
+> `OH3MMF OH3MMF H E IHVAIE EEET EEEEITT` ... then later, live, `R3EV`
+
+Ours over the same window, 318 characters:
+
+> `ISS EIEEE 5EEIEEII SEIIE EH S E EEEEE TTTTT TTTM TT TT EEHNB= E SEE EI ...`
+> `... SEEII N 3EV I 3E V NTF N3EV E N3EV N3E`
+
+**The reference decoder does not gate its output either.** `H E IHVAIE EEET
+EEEEITT` is the same failure signature as our `EEEEE TTTTT TTT` - single-element
+characters, E and I and T, noise crossing the threshold and being classified as
+dits and dahs. Icom did not solve this; they shipped it. The §4.9 worry that
+"output gating is the whole gap" is now refuted twice over, and the real position
+is that the two decoders fail the same way on noise and succeed about equally on
+signal.
+
+One thing that cannot be compared is volume. The MkII's screen is one scrolling
+line - Colin's note was "RAN OF SCREEN NOW" - so the radio has no character
+count to set against our 318. It discards its own junk by running out of room.
+Whatever we do about gating, we cannot claim the MkII does better at it, only
+that it hides it.
+
+**How much of the window was signal.** The per-second timeline at 658 Hz says
+about **nine seconds of the 120** - 01:38-01:41 and 01:48-01:52. Everything else
+is receiver noise. So 318 characters came out of nine seconds of sending and 111
+seconds of hiss, and both decoders spent almost all of their output on nothing.
+
+**And the gate finally has a measurement behind it.** Over those 119 one-second
+windows, `spread` (p95/p10 in the tone bin) separates cleanly:
+
+| | min | median | p95 | max |
+|---|---|---|---|---|
+| noise seconds (110) | 3.5 | 6.0 | 8.8 | 12.7 |
+| signal seconds (9) | 9.5 | 19.9 | - | 27.2 |
+
+| threshold | seconds kept | signal caught | false |
+|---|---|---|---|
+| >= 8 | 18 | 9/9 | 9 |
+| >= 10 | 12 | 8/9 | 4 |
+| >= 12 | 10 | 8/9 | 2 |
+| >= 14 | 7 | 7/9 | 0 |
+
+`spread >= 12` keeps ten seconds out of 119 and catches eight of the nine, which
+would have turned 318 characters into roughly the callsign runs and nothing else.
+That is the first gating criterion in this whole exercise with real numbers under
+it, and it is worth noting what it is **not**: not confidence, which §4.5 showed
+inverts on a narrow filter; not absolute level, which §4.6 showed reads high on a
+dead band; not keying ratio, which §4.4 showed is duty-cycle dependent. It is a
+relative measure inside one bin over a short window, so it needs no calibration
+and no noise-floor estimate.
+
+This is a Phase 2 decision and it is not authorised. But it no longer needs
+another bench session to make - the measurement is here and the recording is
+kept, so any threshold can be re-tested offline.
+
+**Both got the callsign.** On the strongest four seconds ours reads `N3EV`
+twice at 18-19 dB; the radio read `R3EV`. One dot apart, `-.` against `.-.`,
+and there is nothing in this recording that settles which of us is right.
+
+### 4.12 Still outstanding
+
+The comparison §4 asks for is **done**. Element decoding is level (§4.9,
+provisionally - see the caveat in §4.10 about that capture being 199 Hz off the
+pitch); noise output is level and neither decoder gates (§4.11); and we hold one
+demonstrated advantage, the search window that finds a station the MkII cannot
+see until the operator has zero-beat it (§4.10).
+
+What is left before Phase 2 is our own work, not more measurement against the
+radio:
+
+- **The speed tracker (§4.4).** Still the one located defect. `_ditMs` excursions
+  go short and drag both gap boundaries with them; every garbled run in every
+  recording so far coincides with one. This capture shows it again - 60.0 wpm at
+  00:10 and 01:30, both on low-spread noise seconds, the tracker being pulled
+  about by hiss.
+- **Output gating.** §4.11 gives the criterion and a threshold; where it lives in
+  the pipeline, and whether it suppresses or merely marks, is undecided.
+- **Repeat §4.9 on the pitch**, so the element comparison stops being provisional.
+- **Re-run the §4.6 band sweep with cross-band peek off**, so its per-band
+  flatness figures mean something.
+- **`docs/design/cw-bench-procedure.md`**, which CwBench's usage text already
+  points at and which does not exist. First line: cross-band peek off before
+  recording.
 
 ---
 
