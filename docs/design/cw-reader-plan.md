@@ -632,7 +632,71 @@ inside a 90 s file has its ratio averaged down by the 65 s of silence either
 side; measured over a few seconds at a time it would stand out. That is untested
 and is not being built here.
 
-### 4.6 Still outstanding
+### 4.6 Flatness finds a band; the keying ratio does not
+
+Asked which band had any CW on it, the honest answer from a cluster is other
+people's antennas. With the bench rig already built the question can be answered
+from this one instead: tune each CW segment, take four seconds of audio, and
+measure it. Twenty-four points across eight bands takes about three minutes.
+
+The metric that worked was not the one built for the job. **Flatness** - the
+median bin divided by the strongest bin, over 100-3000 Hz - was added to
+`--spectrum` only as a sanity line, but it is the cleanest band-activity
+indicator measured so far:
+
+| | flatness |
+|---|---|
+| empty segment | 0.84 - 0.93 |
+| something present | 0.30 - 0.59 |
+
+An empty passband is flat by definition, because filter-shaped hiss has no peak
+in it. Anything at all - keyed or not - puts a peak in and drives the ratio
+down. It says nothing about *what* is there, which is the point: it is a cheap
+first pass that says where to look properly.
+
+The sweep called 17m the liveliest band on this antenna (0.41 - 0.44) and picked
+7035 out as the one live spot on 40m (0.59 against 0.84 - 0.92 elsewhere).
+Colin, listening, independently reported CW on 7.035 and on 18 MHz within a
+minute of the sweep finishing, having not seen the output. Two confirmations,
+both blind.
+
+**The keying ratio produced two false positives in the same sweep**, and the
+reason matters for anything built on it later:
+
+```
+15m  21005    keying  7.2    level -42.7 dB
+10m  28005    keying 16.5    level -49.2 dB
+```
+
+Sixteen is a higher ratio than the real HB9DAX signal scored. But the levels are
+15 dB below the live bands: these are dead bands whose noise floor is so low
+that the p95/median ratio inflates on nothing at all. **A keying ratio is
+meaningless without a level qualifier** - it is a shape measurement, and shape
+is all it measures. Anything that gates on it must require the level to be above
+the band's own floor first.
+
+### 4.7 Finding one station inside a segment
+
+Flatness locates a busy 3 kHz window; it does not locate a station. That took a
+second pass, and the technique is worth recording because it will be exactly
+what Reader Mode's "find the signal" wants to do:
+
+1. Open the IF filter to 3 kHz. Wide is for finding, narrow is for copying.
+2. Step the VFO in 3 kHz windows across the segment, four to six seconds each,
+   and take the flatness of each.
+3. In the best window, take the strongest bin *that also has a keying ratio* -
+   the strongest bin alone is often a carrier or a data signal. On 17m the
+   strongest energy sat at 350-500 Hz with a keying ratio of **1.9**, steadier
+   than the noise around it; the actual CW was at 2700 Hz with a ratio of 5.9
+   and 4 dB less level.
+4. The station's RF is VFO + tone. Subtract the radio's own CW pitch to get the
+   VFO setting that puts him in the middle of the filter.
+5. Narrow back down and copy.
+
+Steps 3 and 4 are `ZeroInOffsetHz` doing its job before a single character has
+been decoded, which is a use for it the plan had not anticipated.
+
+### 4.8 Still outstanding
 
 The MkII's own decode of the same signal. HB9DAX was on the air for about
 twenty-five seconds and the recording was started immediately, which left no
