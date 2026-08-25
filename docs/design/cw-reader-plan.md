@@ -747,7 +747,64 @@ them, and only because it was pointed at the right bin. A five-second period is
 also long enough to look like a slow fist and short enough to sit inside a call
 sign.
 
-### 4.9 Still outstanding
+### 4.9 The comparison, done - 2026-08-25, SM4EA on 17m
+
+The bench comparison §4 has been asking for since it was written. Colin tuned
+17m by ear to 18,086.118, the radio decoded on its own screen, and 120 s of the
+audio it was decoding went to `bench/cw-compare-clean.wav`. Cross-band peek off,
+so the recording is clean. Station tone 810 Hz, sending in short bursts with
+long listening gaps - about 25 s of transmission in the 120 s.
+
+**The radio's screen: `DM4EA`, then on a later over `SM4EA`.** It wobbled on the
+first character itself, which is worth noting before ours is judged.
+
+**Ours, handed the same bursts:**
+
+| burst | ours | the MkII |
+|---|---|---|
+| 103 s | `DW4EA` | `DM4EA` |
+| 116 s | `DMEAEI` | `SM4EA` |
+
+`W` is `.--` where `M` is `--`: one dit too many. Four characters of five, on a
+signal 10 dB above the noise floor that the radio itself only managed five of
+five once out of twice. **On element decoding we are level with the MkII here.**
+That is the first evidence either way, and it is better news than §1.5 assumed.
+
+**On noise output the two are closer than first thought, and the first reading
+of this was wrong.** Over the 120 s we emitted 453 characters, most of it
+`E I S T` chatter filling the gaps between his bursts. The initial write-up of
+this section concluded the radio emitted five, and that the whole gap to the
+MkII was output gating. That was an inference from Colin reporting the *readable*
+part of the radio's screen, not a report of what the screen held. Asked, he said
+the MkII was "only showing garbage" as well.
+
+So the honest position is:
+
+- **Element decoding: level.** `DW4EA` against `DM4EA`, and the radio's own
+  second attempt was `SM4EA`. Both drop one character of five on this signal.
+- **Noise output: unmeasured.** Both decoders print junk between bursts. Which
+  prints more, and whether the MkII gates at all or merely gates better, is not
+  known and was not captured. Our 453 has no counterpart figure to sit beside.
+
+That is a smaller and less flattering result than the first draft claimed, and
+it leaves the §4.3 / §4.5 output-gating question genuinely open rather than
+confirmed against the reference. The gating problem is still real - 453
+characters for 25 s of signal is unusable however the MkII behaves - but "output
+gating is the whole gap" is not supported by anything measured here.
+
+**What would settle it** is a photograph or transcription of the MkII's full
+screen over a known recorded window, rather than the callsign read off it. That
+is one more bench run, and it needs nothing that is not already set up.
+
+### 4.10 Still outstanding
+
+The element-decoding half of the comparison is done. The noise-output half is
+not: it needs the MkII's whole screen over a recorded window, not the readable
+part of it. Until then the output-gating decision has our own numbers behind it
+but no reference to measure against.
+
+The §4.6 band sweep also wants re-running with cross-band peek off before its
+per-band figures mean anything.
 
 The MkII's own decode of the same signal. HB9DAX was on the air for about
 twenty-five seconds and the recording was started immediately, which left no
