@@ -44,6 +44,8 @@ internal static class Program
         var telemetry = 5.0;
         var raw       = false;
         var spectrum  = false;
+        var timeline  = false;
+        var timelineHz = 0.0;
         string? path  = null;
         string? selftest = null;
 
@@ -57,6 +59,11 @@ internal static class Program
                 case "--no-track":  track     = false; break;
                 case "--raw":       raw       = true;  break;
                 case "--spectrum":  spectrum  = true;  break;
+                case "--timeline":  timeline  = true;
+                                    if (i + 1 < args.Length && double.TryParse(args[i + 1],
+                                        NumberStyles.Float, CultureInfo.InvariantCulture, out var thz))
+                                    { timelineHz = thz; i++; }
+                                    break;
                 case "--selftest":  selftest  = i + 1 < args.Length && !args[i + 1].StartsWith('-')
                                                 ? args[++i] : "selftest.wav"; break;
                 default:
@@ -105,6 +112,7 @@ internal static class Program
         Console.WriteLine();
 
         if (spectrum) Spectrum.Report(samples, rate);
+        if (timeline) Spectrum.Timeline(samples, rate, timelineHz);
 
         var engine = new CwDecoderEngine(new CwDecoderOptions
         {
@@ -304,6 +312,9 @@ internal static class Program
               --spectrum        say what is in the recording before decoding it,
                                 so a transcript of noise is not mistaken for a
                                 transcript of a signal
+              --timeline [Hz]   the same, but a second at a time, so a fading
+                                signal is not averaged away and the fades can be
+                                lined up against --telemetry 1
 
             Record mono, 48 kHz, from the radio's USB CODEC — see
             docs/design/cw-bench-procedure.md.

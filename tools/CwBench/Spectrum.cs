@@ -70,6 +70,85 @@ internal static class Spectrum
         return bins;
     }
 
+    /// <summary>
+    /// The same two figures, but a second at a time.
+    ///
+    /// A whole-file keying ratio is the wrong window for a fading signal: a
+    /// station who is up for twenty seconds of a ninety second recording has his
+    /// ratio averaged down by the seventy seconds of hiss around him, and the
+    /// verdict comes out "weak" or "noise" for a signal that was perfectly
+    /// readable while it lasted. Worse, it hides exactly the thing worth
+    /// looking at - lining the fades up against what the decoder's speed
+    /// tracker was doing at the same moment, which is how the tracker was
+    /// caught being dragged short during weak passages.
+    ///
+    /// So: pick the bin the signal actually lives in, then walk it in one
+    /// second steps and print level and keying for each. Read this alongside
+    /// the decoder's own per-second telemetry (--telemetry 1).
+    /// </summary>
+    public static void Timeline(float[] samples, int rate, double hz = 0, double windowS = 1.0)
+    {
+        if (hz <= 0)
+        {
+            var bins = Analyse(samples, rate);
+            if (bins.Count == 0) { Console.WriteLine("timeline: recording too short"); return; }
+            hz = bins.MaxBy(b => b.Keying).Hz;
+        }
+
+        var frame   = rate / 100;                       // 10 ms, as the decoder uses
+        var perWin  = Math.Max(10, (int)(windowS * 100));
+        var windows = samples.Length / frame / perWin;
+        if (windows == 0) { Console.WriteLine("timeline: recording too short"); return; }
+
+        Console.WriteLine();
+        Console.WriteLine($"--- timeline at {hz:F0} Hz, {windowS:F0} s windows --------------------");
+        Console.WriteLine("  time   level    keying   spread");
+
+        var k = 2 * Math.Cos(2 * Math.PI * hz / rate);
+
+        for (var w = 0; w < windows; w++)
+        {
+            var mags = new double[perWin];
+            for (var f = 0; f < perWin; f++)
+            {
+                double s1 = 0, s2 = 0;
+                var at = (w * perWin + f) * frame;
+                for (var i = 0; i < frame; i++)
+                {
+                    var v = samples[at + i] + k * s1 - s2;
+                    s2 = s1;
+                    s1 = v;
+                }
+                mags[f] = Math.Sqrt(s1 * s1 + s2 * s2 - k * s1 * s2) / frame;
+            }
+
+            var sorted = (double[])mags.Clone();
+            Array.Sort(sorted);
+            var median = sorted[sorted.Length / 2];
+            var loud   = sorted[(int)(sorted.Length * 0.95)];
+            var quiet  = sorted[(int)(sorted.Length * 0.10)];
+            var keying = loud / Math.Max(median, 1e-9);
+
+            // p95/median is duty-cycle dependent, and over a window this short
+            // it fails on exactly the signals it is meant to find: a second of
+            // 25 wpm sending can be more mark than space, which puts the median
+            // up among the marks and collapses the ratio. p95/p10 asks a
+            // different question - does this window contain both loud and quiet
+            // moments - which is true of keying at any duty cycle and false of
+            // hiss and of a steady carrier alike.
+            var spread = loud / Math.Max(quiet, 1e-9);
+            var mean   = mags.Average();
+
+            var t    = TimeSpan.FromSeconds((w + 1) * windowS).ToString(@"mm\:ss");
+            var mark = spread >= 8 ? "CW" : spread >= 4 ? "..." : "";
+            Console.WriteLine($"  {t}  {Db(mean),9}  {keying,6:F1}  {spread,7:F1}  {Bar(Math.Min(1, spread / 30)),-24} {mark}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Read against --telemetry 1: a speed excursion that lands on a low-keying");
+        Console.WriteLine("row is the tracker being pulled about by a fade, not by the operator.");
+    }
+
     public static void Report(float[] samples, int rate)
     {
         var bins = Analyse(samples, rate);
