@@ -879,6 +879,60 @@ search window found and copied a station **223 Hz from the configured pitch** at
 the MkII's first attempt was `N4IYO` (`-.` for `..-.`) and only its second was
 right. That is a real, self-contained result.
 
+### 4.10b The controlled test could not be run, and the tuning SIGN is now in doubt
+
+The test §4.10a specifies was attempted the same afternoon and is **void**. Worth
+recording why, because the reason will recur.
+
+**A pileup is the one environment where it cannot work.** Baseline was clean -
+EA3NY on the pitch at 621.7 Hz, confidence 0.86, radio copying him. I widened the
+IF to 2400 Hz so the filter could not be the explanation, moved the VFO 250 Hz,
+and asked what the screen did. It said `RI1FJL RI1FJL UP` - Franz Josef Land,
+working split, which is what the whole pileup was there for.
+
+That is not the radio decoding an off-pitch station. **Moving the VFO in a pileup
+does not take a station off the pitch; it swaps which of the dozens of callers is
+sitting on it.** The spectrum confirms it: strongest bin 300 Hz, most-keyed bin
+1000 Hz, energy at every tone. There is no "the station" to move.
+
+> **Precondition for the §4.10a test: one station, on a quiet frequency, sending
+> steadily.** Not a pileup, not a DXpedition, not a contest. Widening the filter
+> to remove the filter confound makes this worse, not better.
+
+**And it turned up something more serious.** Our own captures of the move say the
+audio tone went the *wrong way*:
+
+| | VFO | strongest bin | decoder lock |
+|---|---|---|---|
+| before | 18,086,576 | 725 Hz | 621.7 Hz |
+| after (VFO **-250**) | 18,086,326 | 450 Hz | 434.6 Hz |
+
+The VFO went **down** 250 Hz and the tone went **down** ~200-275 Hz. §3.4's
+convention - `offset = tone - pitch`, add to the VFO - predicts the tone rises.
+If the measured direction is right, then every zero-in retune made today pushed
+the station *further* off the pitch, and the radio decoded anyway. That would
+explain §4.10 and §4.10a at a stroke, and it would mean **`ZeroInOffsetHz` tells
+the operator to tune the wrong way** - which for the accessibility case this
+feature exists for is worse than not offering it at all.
+
+It is **not established.** The "after" capture was taken with the filter widened
+to 2400 Hz, so several stations were in the passband and the decoder may simply
+have locked a different one. A clean sign measurement was attempted immediately -
+three captures 200 Hz apart, cross-correlating the whole spectrum, which a pileup
+should make easy - and the band went quiet during the thirty seconds it took:
+flatness 0.40, 0.74, 0.64, the last two effectively empty. Inconclusive.
+
+**This is now the highest-priority open item in §4**, ahead of the speed tracker
+and ahead of gating. It is cheap to settle - one station, narrow filter, one
+known VFO step, watch which way the tone moves - and until it is settled the
+§3.4 convention is an assumption wearing the word "confirmed".
+
+Note what went wrong in the earlier confirmations: the offset was checked against
+the CI-V pitch reading and against Colin's ear, both of which validate the
+*magnitude*. The two checks that would have caught a sign error - tuning by it
+and watching the tone - were read as successes because the radio started
+decoding, which §4.10a has already shown proves nothing.
+
 ### 4.11 The MkII emits noise junk too, and the gate has a number
 
 `bench/oh3mmf.wav`, 120 s on 18,086.297, the station now on the pitch, both
