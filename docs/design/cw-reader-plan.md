@@ -935,13 +935,66 @@ dead band; not keying ratio, which §4.4 showed is duty-cycle dependent. It is a
 relative measure inside one bin over a short window, so it needs no calibration
 and no noise-floor estimate.
 
-This is a Phase 2 decision and it is not authorised. But it no longer needs
-another bench session to make - the measurement is here and the recording is
-kept, so any threshold can be re-tested offline.
+This is a Phase 2 decision and it is not authorised. **And within the hour it was
+refuted - see §4.11a. The table above is correct and useless.**
 
 **Both got the callsign.** On the strongest four seconds ours reads `N3EV`
 twice at 18-19 dB; the radio read `R3EV`. One dot apart, `-.` against `.-.`,
 and there is nothing in this recording that settles which of us is right.
+
+### 4.11a A tune-up carrier breaks every frame-level gate
+
+Colin, minutes after §4.11 was written: "strong tune signal". Someone tuning up
+on frequency - a steady carrier, keyed on once and off once. `bench/tuneup.wav`.
+
+It is the case §4.11 never considered, and it walks straight through the gate:
+
+```
+  00:04   -21.4 dB   keying  1.7   spread 51.3   CW
+  00:06   -20.1 dB   keying  1.2   spread 30.1   CW
+  00:09   -21.7 dB   keying  1.1   spread 49.1   CW
+  00:10   -20.2 dB   keying  1.1   spread 37.2   CW
+```
+
+Median spread **37.2**, against 19.9 for the real QSO. The gate does not merely
+pass a tune-up, it rates it **more confidently than actual CW**.
+
+Adding the keying ratio back as a second condition does not rescue it:
+
+| gate | noise | CW | carrier |
+|---|---|---|---|
+| spread >= 12 | 2/110 | 8/9 | **11/11** |
+| spread >= 12 & keying >= 1.8 | 1/110 | 8/9 | **6/11** |
+| spread >= 12 & keying >= 2.2 | 0/110 | 7/9 | **5/11** |
+| spread >= 14 & keying >= 2.0 | 0/110 | 6/9 | **6/11** |
+
+The second condition halves the carrier and costs real CW to do it. There is no
+corner of this table that is usable.
+
+**This is not a threshold problem, and no amount of further tuning will fix it.**
+A tune-up *is* a very slow dah - on, held, off. At a one-second timescale it is
+not different from keying, so no statistic computed over one-second frames in one
+bin can separate them. Every candidate this exercise has produced now has a
+counter-case:
+
+| candidate | fails on | recorded in |
+|---|---|---|
+| confidence | narrow IF filter inverts it | §4.5 |
+| absolute level | reads high on a dead band | §4.6 |
+| keying ratio (p95/median) | duty-cycle dependent | §4.4 |
+| spread (p95/p10) | tune-up carrier | §4.11a |
+| spread & keying together | tune-up carrier | §4.11a |
+
+**The gate belongs downstream, on decoded structure, not on frame statistics.**
+A ten-second mark is not a dit and not a dah, and `CwElementDecoder` already has
+everything needed to know that: element durations that refuse to cluster into two
+groups, and characters that do not resolve to valid symbols. That is where the
+next attempt should look, and it is the first time in this exercise that the
+answer has pointed at the decoder rather than at the detector.
+
+Worth keeping in mind that §4.11's other finding stands untouched: the MkII does
+not gate either, and prints the same junk. Whatever we build here, we are ahead
+of the reference the moment it does anything at all.
 
 ### 4.12 Still outstanding
 
