@@ -1065,6 +1065,89 @@ Worth keeping in mind that §4.11's other finding stands untouched: the MkII doe
 not gate either, and prints the same junk. Whatever we build here, we are ahead
 of the reference the moment it does anything at all.
 
+### 4.11b The rematch: the MkII won, and the search window is why
+
+The §4.9 rematch finally happened, on the cleanest data of the whole exercise -
+Colin narrowed the IF to **200 Hz**, one station, flatness 0.03, tone 626.6 Hz
+(16 Hz off the pitch), our confidence 1.00. `bench/cw200.wav`, 60 s.
+
+**The MkII won this one, clearly.** Its screen - Colin's words, "TOO MUCH
+GARBAGE", then:
+
+> `DM4EA E DM4EA DM4EA EB  EI M4EA ITEEE TDM4EA E DM4EA`
+
+Five clean `DM4EA` and one partial. Ours at the default ±250 Hz search:
+
+> ` F5NNTU HW4E E E M 4EU E HH IMTT T TT EMT TT 4EAR E E LW4EMH2`
+
+**Not one clean callsign.** `HW4E`, `4EU`, `4EA`, `LW4EMH2` are all the same
+callsign mangled. Same station as §4.9, so this is a direct rematch, and §4.9's
+"element decoding is level" does not survive it.
+
+**The cause is the search window, and it is fixable.** Sweeping it over the same
+recording:
+
+| search | chars | confidence | clean `DM4EA` |
+|---|---|---|---|
+| ±20 | 255 | 0.29 | 0 |
+| ±40 | 69 | 0.66 | 1 |
+| **±60** | **51** | 0.75 | **2** |
+| ±80 | 46 | 0.90 | 1 |
+| ±120 | 57 | 0.99 | 1 |
+| ±250 (default) | 61 | 1.00 | **0** |
+
+A 200 Hz filter is **±100 Hz around the pitch**. The best decodes sit at ±60-80,
+just inside that half-width; the default ±250 hunts 150 Hz *outside* the
+passband, where there is nothing but noise, and it costs the callsign outright.
+Too narrow is bad as well - ±20 collapses to 255 characters of junk - so this is
+a genuine optimum, not a monotonic "narrower is better".
+
+> **Design rule for Phase 2: derive the search window from the IF filter width,
+> not from a constant.** Something like half-width, clamped to a sane floor.
+
+**And this is a thing we can do that our competition cannot.** YWC and IWC read
+the IF filter width over CAT/CI-V - it is in the status payload already
+(`vfoA.ifWidth`). A standalone decoder listening to a soundcard has no idea how
+wide the operator's filter is and must guess a fixed window. We do not have to
+guess. That is a structural advantage of living inside the radio-control app, and
+it is the first one this exercise has found that does not depend on an
+uncontrolled observation.
+
+**Two side findings:**
+
+- **`--no-track` was far worse here**, the opposite of the HB9DAX case in §4.4.
+  So the speed tracker is not simply broken; it helps on a clean signal and hurts
+  on a fading one. Whatever is done to it must not be "turn it off".
+- **Confidence rises monotonically to 1.00 as the decode gets worse** across that
+  sweep. That is the fifth independent way this figure misleads, after §4.5. It
+  should not be shown to an operator as a quality indicator, and it must not gate
+  anything.
+
+### 4.11c FT8 is the fourth reference class, and it buries the gate
+
+Colin put the radio on an FT8 signal by accident (`bench/narrow200.wav`, 60 s),
+which handed us the signal class none of the recordings had. Set against the
+others, with the best gate §4.11a could offer:
+
+| class | n | median keying | median spread | passes `spread>=12 & keying>=2.2` |
+|---|---|---|---|---|
+| receiver noise | 110 | 2.1 | 6.0 | 0% |
+| CW (800 Hz filter) | 9 | 3.6 | 19.9 | **78%** |
+| CW (200 Hz filter) | 59 | 2.2 | 6.1 | **24%** |
+| tune-up carrier | 11 | 2.0 | 37.2 | 45% |
+| **FT8** | 59 | 2.3 | 9.0 | **27%** |
+
+**FT8 passes the gate more often than real CW through the operator's own narrow
+filter.** So does a tune-up. The gate is not merely imperfect, it is
+anti-correlated with what we want on two of five classes, and §4.11a's conclusion
+- that frame statistics in one bin cannot do this job - is now supported by four
+independent signal classes rather than two.
+
+Note the third row as well: **narrowing the IF changed CW's own statistics
+completely**, median spread 19.9 down to 6.1. Any threshold calibrated at one
+filter width is wrong at another. That alone would sink a fixed frame-level gate
+even without FT8.
+
 ### 4.12 Still outstanding
 
 The comparison §4 asks for is **done**. Element decoding is level (§4.9,
