@@ -1148,6 +1148,83 @@ completely**, median spread 19.9 down to 6.1. Any threshold calibrated at one
 filter width is wrong at another. That alone would sink a fixed frame-level gate
 even without FT8.
 
+### 4.11d The runs of TTTT are the speed tracker, and both decoders have the bug
+
+Colin called a signal that sounded clean and printed garbage, twice in ten
+minutes. Then he read the radio's own display out: **AUTO, 22 wpm - "but that
+was 29 a second ago"**. That is the MkII's speed tracker swinging 7 wpm on a
+steady sender. It is not a detail about his rig; it is the same failure we have
+been calling ours since §4.4, seen from the other side of the comparison, and it
+is the reason the radio was printing garbage on a signal his ear said was fine.
+
+CwBench could watch our tracker move but not stop it, so `--wpm <n>` (seed the
+tracker) and `--pin-wpm <n>` (clamp `MinWpm` and `MaxWpm` onto the seed so it
+cannot move at all) were added. `CwElementDecoderOptions` already exposed all
+three fields, so this is bench plumbing only - no Core change. Pinning separates
+"the tracker is wrong" from "the elements are wrong" on a recording where both
+look identical.
+
+Run over three recordings, counting runs of four or more identical
+single-element characters - the `TTTTTTTTT` and `EEEEE` strings that dominate
+every bad transcript:
+
+| recording | tracking (default) | `--pin-wpm 22` | `--pin-wpm 25` |
+|---|---|---|---|
+| `goodcw` (200 Hz IF, on pitch) | 118 chars, **8 runs**, longest 11 | 35 chars, **0 runs** | 36 chars, **0 runs** |
+| `cw200` (the §4.11b rematch) | 61 chars, 0 runs | 43 chars, 0 runs | 45 chars, 0 runs |
+| `oh3mmf` (the original 120 s) | 506 chars, **18 runs**, longest 9 | 131 chars, **1 run**, longest 4 | 164 chars, **1 run**, longest 4 |
+
+**The runs are an artefact of the tracker, not of the signal.** Freeze the speed
+and they stop. The pinned *value* barely matters - 18, 22, 25 and 28 wpm all
+produce the same collapse - only that it stops moving. Junk output falls two to
+four times over.
+
+On `goodcw` the pinned sweep at `--pitch 560 --search 60`:
+
+```
+tracking      58 chars   HI ETT TTTTTETTTS R2WBR RB E EE ETT ETT TTTTTTTTTEI E FTSH
+--wpm 25      57 chars    I ETT TTTTTETTTS R2WBR RB E EE ETT ETT TTTTTTTTTEI E FTSH
+--pin-wpm 18  20 chars     R RR  E EE R  E FBH
+--pin-wpm 22  22 chars     R RR R E EE R R E FBH
+--pin-wpm 25  23 chars    R2 RR R E EE R R E FBH
+--pin-wpm 28  28 chars    R2WB RBRB RB E EE R R E FBH
+```
+
+Two things in that table matter beyond the run count.
+
+**`--wpm` alone does nothing.** Seeding the tracker at the right speed and
+letting it run gives 57 characters against tracking's 58 - the same transcript
+minus one character. The tracker walks straight back off the seeded value.
+Whatever is pulling `_ditMs` about is doing it within seconds, so an initial
+estimate cannot help; only the clamp does.
+
+**`FTSH` becomes `FBH`.** `FB` is what a CW operator actually sends. The real
+elements were being recovered all along and the tracker was inserting extra
+symbols between them. `RB` and `R2WB` persist at every pinned speed, so there is
+still structure we are mis-slicing - pinning does not hand us a callsign, and no
+pinned speed on this recording produces one.
+
+What this changes:
+
+- **§4.4 is promoted from "the one located defect" to a measured cause with a
+  reproduction.** Any future change to the tracker has three recordings and a
+  run-count to be judged against, without going back to the air.
+- **A pinned speed is not the fix.** It cannot be: the operator does not know
+  the sender's speed, and §4.1's mixed-speed case exists precisely because it
+  changes mid-QSO. What the clamp shows is that the tracker's *excursion range*
+  is the problem, not its centre. A tracker that moved slowly, or that refused
+  to move on frames that failed a spread test, would get most of this back
+  without pinning anything. That is Phase 2 work and is not authorised.
+- **Show the tracked speed in the UI.** Icom do, and it is why Colin could tell
+  us the radio was confused rather than the band. `CwDecoderEngine` already
+  exposes `WordsPerMinute`; not surfacing it is a gap. It is also the honest
+  version of the confidence figure §4.11b killed - a number the operator can
+  sanity-check against their own ear, rather than one that rose to 1.00 while the
+  decode fell apart.
+- **We are not behind the MkII on this one.** §4.11b left us behind on clean
+  data and that stands. But the tracker instability is not our defect alone;
+  Icom ship it too, on the same signal, in the same minute.
+
 ### 4.12 Still outstanding
 
 The comparison §4 asks for is **done**. Element decoding is level (§4.9,
@@ -1159,11 +1236,13 @@ see until the operator has zero-beat it (§4.10).
 What is left before Phase 2 is our own work, not more measurement against the
 radio:
 
-- **The speed tracker (§4.4).** Still the one located defect. `_ditMs` excursions
-  go short and drag both gap boundaries with them; every garbled run in every
-  recording so far coincides with one. This capture shows it again - 60.0 wpm at
-  00:10 and 01:30, both on low-spread noise seconds, the tracker being pulled
-  about by hiss.
+- **The speed tracker (§4.4).** Still the one located defect, and now a
+  *measured* one: §4.11d shows the `TTTTTTTTT` runs stop dead when the speed is
+  clamped, on all three recordings. The fix is to bound the excursion, not to
+  pin a value. The MkII has the same bug (AUTO 22 wpm, 29 a second earlier), so
+  fixing it is where we get ahead rather than catch up.
+- **Surface `WordsPerMinute` in the UI.** Icom show it; it is what let Colin
+  tell a confused decoder from a bad band. See §4.11d.
 - **Output gating.** §4.11 gives the criterion and a threshold; where it lives in
   the pipeline, and whether it suppresses or merely marks, is undecided.
 - **Repeat §4.9 on the pitch**, so the element comparison stops being provisional.

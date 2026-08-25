@@ -44,6 +44,8 @@ internal static class Program
         var telemetry = 5.0;
         var raw       = false;
         var spectrum  = false;
+        var wpm       = 0.0;                   // 0 = leave the decoder's own default
+        var pinWpm    = false;
         var timeline  = false;
         var timelineHz = 0.0;
         string? path  = null;
@@ -57,6 +59,8 @@ internal static class Program
                 case "--search":    search    = Arg(args, ++i); break;
                 case "--telemetry": telemetry = Arg(args, ++i); break;
                 case "--no-track":  track     = false; break;
+                case "--wpm":       wpm       = Arg(args, ++i); break;
+                case "--pin-wpm":   wpm       = Arg(args, ++i); pinWpm = true; break;
                 case "--raw":       raw       = true;  break;
                 case "--spectrum":  spectrum  = true;  break;
                 case "--timeline":  timeline  = true;
@@ -109,6 +113,8 @@ internal static class Program
         if (peak >= 0.999f)  Console.WriteLine("WARNING   the recording clips — turn the capture level down and record again");
         if (peak <  0.02f)   Console.WriteLine("WARNING   the recording is very quiet — check the capture device and level");
         Console.WriteLine($"decoder   pitch {pitch:F0} Hz ±{search:F0} Hz, tracking {(track ? "on" : "off")}");
+        if (wpm > 0)
+            Console.WriteLine($"speed     {(pinWpm ? "pinned at" : "starting from")} {wpm:F0} wpm");
         Console.WriteLine();
 
         if (spectrum) Spectrum.Report(samples, rate);
@@ -120,6 +126,19 @@ internal static class Program
             PitchHz         = pitch,
             SearchWindowHz  = search,
             TrackPitch      = track,
+            // The speed tracker is the one located defect (plan §4.4), and until
+            // now the bench could only watch it move. --wpm seeds it; --pin-wpm
+            // clamps Min and Max onto the same value so it cannot move at all,
+            // which is what separates "the tracker is wrong" from "the elements
+            // are wrong" on a recording where both look the same.
+            Element         = wpm > 0
+                ? new CwElementDecoderOptions
+                  {
+                      InitialWpm = wpm,
+                      MinWpm     = pinWpm ? wpm : new CwElementDecoderOptions().MinWpm,
+                      MaxWpm     = pinWpm ? wpm : new CwElementDecoderOptions().MaxWpm,
+                  }
+                : new CwElementDecoderOptions(),
         });
 
         var frame      = rate / 100;            // 10 ms, the frame size the apps produce
@@ -307,6 +326,10 @@ internal static class Program
               --pitch <Hz>      CW pitch, centre of the tone search (default 600)
               --search <Hz>     half-width of the tone search      (default 250)
               --no-track        pin the detector to --pitch instead of hunting
+              --wpm <n>         start the speed tracker at n wpm instead of 20
+              --pin-wpm <n>     hold the speed at n wpm so it cannot track at
+                                all — tells a tracker fault apart from an
+                                element-timing fault on the same recording
               --telemetry <s>   seconds between telemetry lines    (default 5, 0 = off)
               --raw             transcript only, no timestamps or telemetry
               --spectrum        say what is in the recording before decoding it,
