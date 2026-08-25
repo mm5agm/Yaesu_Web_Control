@@ -1225,6 +1225,52 @@ What this changes:
   data and that stands. But the tracker instability is not our defect alone;
   Icom ship it too, on the same signal, in the same minute.
 
+#### 4.11d.1 It rails at MaxWpm on noise - and the fix is already in the pipeline
+
+`yu1eu.wav` (60 s, 18 MHz, CW-U, 200 Hz IF, one station at 650 Hz, flatness
+0.04 - the cleanest single-signal capture of the day) makes the mechanism
+exact. The tracked speed through the recording:
+
+```
+00:05  60.0 wpm  quiet      00:25  60.0 wpm  quiet
+00:10  60.0 wpm  quiet      00:30  60.0 wpm  quiet
+00:15  60.0 wpm  quiet      00:35  60.0 wpm  quiet
+00:20  60.0 wpm  quiet      00:40  36.4 wpm  signal
+```
+
+**It is not wandering. It is railing at 60.0 wpm, which is `MaxWpm` exactly.**
+Noise pushes `_ditMs` to the floor, the clamp catches it, and it sits pegged
+there until real signal arrives to drag it back. Only about 20 of these 60
+seconds carried signal; the tracker spent the other 40 pinned at its ceiling
+turning hiss into characters.
+
+That also explains §4.11d's otherwise odd result that `--wpm` alone does
+nothing. Seeding the tracker at the right speed cannot survive the first few
+seconds of hiss - the rail is reached from any starting value.
+
+| | chars | runs >=4 | output |
+|---|---|---|---|
+| tracking | 108 | 2 (longest 9) | `EEI 5I EE ETIIM (TTE AAA  I E E E E E EEEH DMANEE EEESSENE I E E ESEI IEEEIEEEE IE SSAT V MIESI O  E W EW EW` |
+| pin 20 | 27 | 1 | `H I<HH>A IE EEEEIIH WEWEWEW` |
+| pin 25 | 28 | 1 | `II IA IE E E EEIEESH WEWEWEW` |
+| pin 28 | 31 | 1 | `II IA IE E E EEIEE5ISH WEWEW EW` |
+
+Neither setting copies YU1EU, so this is not the whole gap. But the shape of
+the fix is now specific rather than a guess: **do not update the speed estimate
+on frames where no signal is present.**
+
+The discriminator for that already exists and is already wired. `CwToneDetector`
+computes `SignalPresent` per frame (`CwToneDetector.cs:261`), and
+`CwDecoderEngine` already reads it into `_signalPresent`
+(`CwDecoderEngine.cs:106`) - it is what the bench prints as `quiet` / `signal`
+in the table above. Nothing consumes it in `CwElementDecoder`, which updates
+`_ditMs` from every mark and gap it is handed regardless. The change is to hold
+`_ditMs` while `SignalPresent` is false.
+
+This is **Phase 2 and is not authorised.** It is written down here so it is not
+re-derived, and so it is judged against the run-count table in §4.11d rather
+than against whether the next recording happens to look better.
+
 ### 4.12 Still outstanding
 
 The comparison §4 asks for is **done**. Element decoding is level (§4.9,
@@ -1238,8 +1284,9 @@ radio:
 
 - **The speed tracker (§4.4).** Still the one located defect, and now a
   *measured* one: §4.11d shows the `TTTTTTTTT` runs stop dead when the speed is
-  clamped, on all three recordings. The fix is to bound the excursion, not to
-  pin a value. The MkII has the same bug (AUTO 22 wpm, 29 a second earlier), so
+  clamped, on all four recordings, and §4.11d.1 shows it railing at `MaxWpm`
+  through 40 s of noise. The fix is to hold `_ditMs` while `SignalPresent` is
+  false, not to pin a value. The MkII has the same bug (AUTO 22 wpm, 29 a second earlier), so
   fixing it is where we get ahead rather than catch up.
 - **Surface `WordsPerMinute` in the UI.** Icom show it; it is what let Colin
   tell a confused decoder from a bad band. See §4.11d.
