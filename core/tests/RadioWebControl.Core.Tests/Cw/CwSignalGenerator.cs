@@ -28,6 +28,17 @@ namespace RadioWebControl.Core.Tests.Cw
 
         public float[] Silence(double seconds) => new float[(int)(seconds * SampleRate)];
 
+        /// <summary>
+        /// Audio before the transmission starts, which every capture has and
+        /// which the detector needs: its noise floor is an EMA with a quarter
+        /// second time constant, and it reports nothing keyed until that has
+        /// settled (CwToneDetectorOptions.WarmupSeconds). A real decoder is
+        /// switched on before the other operator starts sending; a test that
+        /// begins keying in the first frame is the only place that does not
+        /// happen.
+        /// </summary>
+        public float[] LeadIn() => Silence(1.0);
+
         /// <summary>Noise-free Morse at the given speed.</summary>
         public float[] Generate(string text, double wpm)
         {

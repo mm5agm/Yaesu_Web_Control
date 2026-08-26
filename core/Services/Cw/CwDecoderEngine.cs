@@ -13,12 +13,42 @@ namespace RadioWebControl.Core.Services.Cw
         /// <summary>Half-width of the tone search, Hz.</summary>
         public double SearchWindowHz { get; set; } = 250.0;
 
+        /// <summary>Narrowest search half-width worth using, Hz.</summary>
+        public const double MinSearchWindowHz = 100.0;
+
+        /// <summary>Widest search half-width worth using, Hz.</summary>
+        public const double MaxSearchWindowHz = 500.0;
+
+        /// <summary>
+        /// The tone search half-width the radio's own IF filter implies. A
+        /// signal the operator cannot hear is not one to hunt for, and what
+        /// they can hear is the passband: half the filter width either side of
+        /// the pitch covers exactly that and nothing beyond it.
+        ///
+        /// Measured 2026-08-26 on bench/sp5xoc.wav, a station 232 Hz off the
+        /// 610 Hz pitch inside a 500 Hz filter. At the implied 250 Hz the
+        /// decoder finds it and prints "FM 5NN TU ... CQCQDE"; at 150 it
+        /// transcribes the noise beside it; at 300 it reaches past the skirt
+        /// and starts chasing energy the filter has already thrown away.
+        ///
+        /// Clamped at both ends, where the mapping stops meaning anything. A
+        /// 3.6 kHz SSB filter would otherwise licence a lock 1.8 kHz off the
+        /// pitch, which is a different QSO, not a mistuned one; and the
+        /// narrowest CW filters leave a window smaller than the error in the
+        /// tone estimate itself.
+        /// </summary>
+        public static double SearchWindowForFilterWidth(int filterWidthHz)
+            => Math.Clamp(filterWidthHz / 2.0, MinSearchWindowHz, MaxSearchWindowHz);
+
         /// <summary>
         /// False pins the detector to PitchHz instead of hunting for the tone.
         /// Reader Mode wants this: the operator has already tuned the signal in,
         /// so hunting can only find the wrong one.
         /// </summary>
         public bool TrackPitch { get; set; } = true;
+
+        /// <summary>Detector settling time before anything is reported as keyed, seconds.</summary>
+        public double WarmupSeconds { get; set; } = new CwToneDetectorOptions().WarmupSeconds;
 
         public CwElementDecoderOptions Element { get; set; } = new();
     }
@@ -56,6 +86,7 @@ namespace RadioWebControl.Core.Services.Cw
                 PitchHz         = _opt.PitchHz,
                 SearchWindowHz  = _opt.SearchWindowHz,
                 TrackPitch      = _opt.TrackPitch,
+                WarmupSeconds   = _opt.WarmupSeconds,
             });
             _elements = new CwElementDecoder(_opt.Element);
         }

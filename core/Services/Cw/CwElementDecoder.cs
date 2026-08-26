@@ -21,6 +21,28 @@ namespace RadioWebControl.Core.Services.Cw
 
         /// <summary>Flush a part-built character after this much silence.</summary>
         public double IdleFlushMs { get; set; } = 1500.0;
+
+        /// <summary>
+        /// How far above the tracked noise floor a mark's peak must sit before
+        /// it may train the speed, as a multiple.
+        ///
+        /// Not the presence gate, which cannot do this job: the detector
+        /// already forces key-up when the gate says absent, so every mark the
+        /// element decoder ever sees arrives with SignalPresent true - measured,
+        /// 509 of 509 across three recordings. Noise marks live inside presence
+        /// excursions. What separates them is level. Measured over four
+        /// recordings, marks that are really elements sit at five to seven
+        /// times the noise floor and noise blips at two to three, which is
+        /// what puts the line here.
+        /// </summary>
+        public double MinTrainNoiseMultiple { get; set; } = 3.5;
+
+        /// <summary>
+        /// Allow the hard re-seed that fires after three marks in a row miss
+        /// their centroid. Off is a measurement setting: it separates the
+        /// re-seed from the EMA when the tracked speed runs away.
+        /// </summary>
+        public bool EnableResync { get; set; } = true;
     }
 
     /// <summary>
@@ -54,6 +76,10 @@ namespace RadioWebControl.Core.Services.Cw
         private bool   _keyDown;
         private double _edgeTimeMs;          // when the current run started
         private bool   _started;
+
+        private double _runPeakMag;          // loudest sample of the run in progress
+        private double _runNoiseSum;
+        private int    _runNoiseCount;
 
         private int  _marksSeen;
         private int  _recentCount;
@@ -99,6 +125,13 @@ namespace RadioWebControl.Core.Services.Cw
             }
 
 
+            if (_keyDown)
+            {
+                if (sample.Magnitude > _runPeakMag) _runPeakMag = sample.Magnitude;
+                _runNoiseSum += sample.NoiseLevel;
+                _runNoiseCount++;
+            }
+
             if (sample.KeyDown == _keyDown)
             {
                 // Still in the same run. The only thing that can happen mid-run is
@@ -126,7 +159,13 @@ namespace RadioWebControl.Core.Services.Cw
                 return string.Empty;
             }
 
-            return wasKeyDown ? OnMark(durationMs) : OnGap(durationMs);
+            double peak  = _runPeakMag;
+            double noise = _runNoiseCount > 0 ? _runNoiseSum / _runNoiseCount : 0.0;
+            _runPeakMag    = sample.Magnitude;
+            _runNoiseSum   = sample.NoiseLevel;
+            _runNoiseCount = 1;
+
+            return wasKeyDown ? OnMark(durationMs, peak, noise) : OnGap(durationMs);
         }
 
         /// <summary>
@@ -136,18 +175,38 @@ namespace RadioWebControl.Core.Services.Cw
         public string Flush()
             => _symbol.Length > 0 ? FlushCharacter() : string.Empty;
 
-        private string OnMark(double markMs)
+        private string OnMark(double markMs, double peakMag, double noiseLevel)
         {
             bool isDah = ClassifyMark(markMs, out double distance);
             _symbol.Append(isDah ? '-' : '.');
 
-            TrackResync(markMs, distance);
-            UpdateCentroids(markMs, isDah);
-            _marksSeen++;
+            // The symbol still goes out - whether to suppress text is a separate
+            // question - but a mark far below the level real elements have been
+            // arriving at does not get a vote on how fast the other operator is
+            // sending. Those are the ones that rail the estimate at MaxWpm.
+            if (TrainOn(peakMag, noiseLevel))
+            {
+                if (_opt.EnableResync) TrackResync(markMs, distance);
+                UpdateCentroids(markMs, isDah);
+                _marksSeen++;
+            }
+
             _pendingCharGap = false;
 
             return string.Empty;
         }
+
+        /// <summary>
+        /// Is this mark far enough above the noise floor to be worth learning
+        /// the speed from? Marks that are really elements measured five to
+        /// seven times the noise floor across four off-air recordings; noise
+        /// blips measured two to three, and a relative test against other marks
+        /// measured no better once this one was in.
+        /// </summary>
+        private bool TrainOn(double peakMag, double noiseLevel)
+            => _opt.MinTrainNoiseMultiple <= 0.0
+            || noiseLevel <= 1e-12
+            || peakMag >= _opt.MinTrainNoiseMultiple * noiseLevel;
 
         private string OnGap(double gapMs)
         {

@@ -23,6 +23,14 @@ namespace RadioWebControl.Core.Services.Cw
 
         /// <summary>True while the presence gate says there is a signal at all.</summary>
         public bool SignalPresent { get; init; }
+
+        /// <summary>
+        /// The tracked noise floor at this instant, in the same units as
+        /// Magnitude. Carried so that consumers can ask how far above the noise
+        /// one particular element sat, which SnrDb cannot answer: SnrDb is built
+        /// from the slow peak tracker and describes the signal, not the mark.
+        /// </summary>
+        public double NoiseLevel { get; init; }
     }
 
     public sealed class CwToneDetectorOptions
@@ -38,6 +46,20 @@ namespace RadioWebControl.Core.Services.Cw
 
         /// <summary>False pins the Goertzel to PitchHz, which is what Reader Mode wants.</summary>
         public bool TrackPitch { get; set; } = true;
+
+        /// <summary>
+        /// Report nothing keyed for this long after the first audio, while the
+        /// noise and peak estimates settle, seconds.
+        ///
+        /// The noise mean is an EMA with a quarter-second time constant and the
+        /// peak tracker rises four times faster, so for the first second after
+        /// audio starts their ratio is meaningless - it reads as tens of dB of
+        /// signal-to-noise on plain hiss. Left alone it produces a burst of very
+        /// short marks in the first two seconds of every session, which is
+        /// exactly long enough to drag the speed tracker onto its MaxWpm clamp
+        /// before a single real element has arrived (plan section 4.11d.1).
+        /// </summary>
+        public double WarmupSeconds { get; set; } = 0.5;
     }
 
     /// <summary>
@@ -114,6 +136,7 @@ namespace RadioWebControl.Core.Services.Cw
         private bool   _present;
         private double _confidence;
         private bool   _primed;
+        private readonly long _warmupHops;
 
         public CwToneDetector(CwToneDetectorOptions? options = null)
         {
@@ -130,6 +153,8 @@ namespace RadioWebControl.Core.Services.Cw
 
             for (int i = 0; i < FftSize; i++)
                 _fftWin[i] = 0.5 - 0.5 * Math.Cos(2.0 * Math.PI * i / (FftSize - 1));
+
+            _warmupHops = (long)Math.Round(Math.Max(0.0, _opt.WarmupSeconds) * WorkRate / EnvHop);
 
             SetTone(_opt.PitchHz);
         }
@@ -250,6 +275,15 @@ namespace RadioWebControl.Core.Services.Cw
                 _keyDown = false;
             }
 
+            // Warm-up. The estimators above have been updating all along; what
+            // is suppressed is any claim that something is keyed while they are
+            // still converging.
+            if (_sampleIndex8k < _warmupHops * EnvHop)
+            {
+                _present = false;
+                _keyDown = false;
+            }
+
             return new CwToneSample
             {
                 TimeSeconds = (_sampleIndex8k - EnvWindow / 2.0) / WorkRate,
@@ -259,6 +293,7 @@ namespace RadioWebControl.Core.Services.Cw
                 SnrDb         = 20.0 * Math.Log10(Math.Max(snrLin, 1e-6)),
                 Confidence    = _confidence,
                 SignalPresent = _present,
+                NoiseLevel    = _noiseMean,
             };
         }
 

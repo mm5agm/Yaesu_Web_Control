@@ -1,4 +1,4 @@
-using RadioWebControl.Core.Services.Cw;
+﻿using RadioWebControl.Core.Services.Cw;
 using Xunit.Abstractions;
 
 namespace RadioWebControl.Core.Tests.Cw
@@ -43,7 +43,7 @@ namespace RadioWebControl.Core.Tests.Cw
         public void Decodes_across_the_speeds_people_actually_send(double wpm)
         {
             var gen   = new CwSignalGenerator();
-            var audio = CwSignalGenerator.Concat(gen.Silence(0.3), gen.Generate(Over1, wpm), gen.Silence(0.3));
+            var audio = CwSignalGenerator.Concat(gen.LeadIn(), gen.Generate(Over1, wpm), gen.Silence(0.3));
             gen.AddNoise(audio, 20.0);
 
             var decoded = Decode(audio);
@@ -63,7 +63,7 @@ namespace RadioWebControl.Core.Tests.Cw
         public void Degrades_gracefully_as_the_signal_gets_weaker(double snrDb, double floor)
         {
             var gen   = new CwSignalGenerator();
-            var audio = CwSignalGenerator.Concat(gen.Silence(0.3), gen.Generate(Over1, 20), gen.Silence(0.3));
+            var audio = CwSignalGenerator.Concat(gen.LeadIn(), gen.Generate(Over1, 20), gen.Silence(0.3));
             gen.AddNoise(audio, snrDb);
 
             var decoded = Decode(audio);
@@ -85,7 +85,7 @@ namespace RadioWebControl.Core.Tests.Cw
             var over1 = gen.Generate(Over1, 27);
             var over2 = gen.Generate(Over2, 16);
 
-            var mixed = CwSignalGenerator.Concat(gen.Silence(0.3), over1, gen.Silence(1.5), over2, gen.Silence(0.3));
+            var mixed = CwSignalGenerator.Concat(gen.LeadIn(), over1, gen.Silence(1.5), over2, gen.Silence(0.3));
             gen.AddNoise(mixed, 20.0);
 
             var mixedDecoded = Decode(mixed);
@@ -94,8 +94,8 @@ namespace RadioWebControl.Core.Tests.Cw
 
             // Each over on its own, so the transition can be charged only for the
             // errors it actually caused rather than for the decoder's baseline.
-            var a1 = CwSignalGenerator.Concat(gen.Silence(0.3), gen.Generate(Over1, 27), gen.Silence(0.3));
-            var a2 = CwSignalGenerator.Concat(gen.Silence(0.3), gen.Generate(Over2, 16), gen.Silence(0.3));
+            var a1 = CwSignalGenerator.Concat(gen.LeadIn(), gen.Generate(Over1, 27), gen.Silence(0.3));
+            var a2 = CwSignalGenerator.Concat(gen.LeadIn(), gen.Generate(Over2, 16), gen.Silence(0.3));
             gen.AddNoise(a1, 20.0);
             gen.AddNoise(a2, 20.0);
 
@@ -119,7 +119,7 @@ namespace RadioWebControl.Core.Tests.Cw
             var gen = new CwSignalGenerator();
 
             var audio = CwSignalGenerator.Concat(
-                gen.Silence(0.3), gen.Generate(Over1, 14),
+                gen.LeadIn(), gen.Generate(Over1, 14),
                 gen.Silence(1.5), gen.Generate(Over2, 30),
                 gen.Silence(0.3));
             gen.AddNoise(audio, 20.0);
@@ -137,7 +137,7 @@ namespace RadioWebControl.Core.Tests.Cw
         public void Copes_with_a_ragged_fist()
         {
             var gen = new CwSignalGenerator(seed: 7) { FistJitter = 0.20 };
-            var audio = CwSignalGenerator.Concat(gen.Silence(0.3), gen.Generate(Over1, 18), gen.Silence(0.3));
+            var audio = CwSignalGenerator.Concat(gen.LeadIn(), gen.Generate(Over1, 18), gen.Silence(0.3));
             gen.AddNoise(audio, 20.0);
 
             var decoded = Decode(audio);
@@ -167,7 +167,7 @@ namespace RadioWebControl.Core.Tests.Cw
             double fadeHz, double depthDb, double snrDb, double floor)
         {
             var gen   = new CwSignalGenerator();
-            var audio = CwSignalGenerator.Concat(gen.Silence(0.3), gen.Generate(Over1, 20), gen.Silence(0.3));
+            var audio = CwSignalGenerator.Concat(gen.LeadIn(), gen.Generate(Over1, 20), gen.Silence(0.3));
             gen.ApplyQsb(audio, fadeHz, depthDb);
             gen.AddNoise(audio, snrDb);
 
@@ -185,7 +185,7 @@ namespace RadioWebControl.Core.Tests.Cw
         public void Finds_a_tone_that_is_not_on_the_configured_pitch()
         {
             var gen   = new CwSignalGenerator { ToneHz = 715.0 };
-            var audio = CwSignalGenerator.Concat(gen.Silence(0.3), gen.Generate(Over1, 20), gen.Silence(0.3));
+            var audio = CwSignalGenerator.Concat(gen.LeadIn(), gen.Generate(Over1, 20), gen.Silence(0.3));
             gen.AddNoise(audio, 20.0);
 
             var engine = new CwDecoderEngine(new CwDecoderOptions { PitchHz = 600.0 });
@@ -208,7 +208,7 @@ namespace RadioWebControl.Core.Tests.Cw
         public void Reports_the_speed_it_is_tracking()
         {
             var gen   = new CwSignalGenerator();
-            var audio = CwSignalGenerator.Concat(gen.Silence(0.3), gen.Generate(Over2, 22), gen.Silence(0.3));
+            var audio = CwSignalGenerator.Concat(gen.LeadIn(), gen.Generate(Over2, 22), gen.Silence(0.3));
             gen.AddNoise(audio, 25.0);
 
             var engine = new CwDecoderEngine();
@@ -230,6 +230,24 @@ namespace RadioWebControl.Core.Tests.Cw
             var decoded = CwAccuracy.Normalise(Decode(audio));
             _out.WriteLine($"five seconds of noise produced \"{decoded}\" ({decoded.Length} characters)");
             Assert.True(decoded.Length <= 3, $"noise produced {decoded.Length} characters: {decoded}");
+        }
+
+        /// <summary>
+        /// The tone search should cover the passband the operator is listening
+        /// to and stop there. Measured on bench/sp5xoc.wav, where a station
+        /// 232 Hz off the 610 Hz pitch inside a 500 Hz filter is found at the
+        /// implied 250 Hz and missed at 150 - see the plan's section 4.11b.
+        /// </summary>
+        [Theory]
+        [InlineData(500,  250.0)]   // the common CW filter; the old fixed constant
+        [InlineData(250,  125.0)]   // narrow CW: do not hunt outside what is audible
+        [InlineData(2400, 500.0)]   // SSB: clamped, or it locks the next QSO along
+        [InlineData(3600, 500.0)]
+        [InlineData(100,  100.0)]   // clamped up: narrower than the tone estimate's own error
+        [InlineData(50,   100.0)]
+        public void Tone_search_covers_the_passband_and_no_more(int filterHz, double expected)
+        {
+            Assert.Equal(expected, CwDecoderOptions.SearchWindowForFilterWidth(filterHz));
         }
     }
 }
