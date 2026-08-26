@@ -55,6 +55,22 @@ namespace Yaesu_Web_Control.Services.Audio
             _sessions = sessions;
         }
 
+        /// <summary>
+        /// Raised for each frame of RX audio, mono float at
+        /// AudioConstants.SampleRate and AudioConstants.FrameSamples long,
+        /// after RX gain has been applied.
+        ///
+        /// This exists so the CW decoder can listen to the radio without
+        /// opening the capture device a second time. Two PortAudio streams on
+        /// one USB codec is a fight nobody wins, and the bridge already
+        /// produces exactly the frames Core's ICwAudioSource documents.
+        ///
+        /// Raised ON THE PORTAUDIO CALLBACK THREAD. Handlers must return
+        /// promptly - copy the frame and get off this thread. Anything that
+        /// blocks here is an audio dropout for the listening operator.
+        /// </summary>
+        public event Action<ReadOnlyMemory<float>>? RxFrameCaptured;
+
         public float RxLevel => _rxLevel;
         public float TxLevel => _txLevel;
         public bool DevicesOpen => _devicesOpen;
@@ -552,6 +568,26 @@ namespace Yaesu_Web_Control.Services.Audio
                         if (a > peak) peak = a;
                     }
                     _rxLevel = peak;
+
+                    // Fan the frame out to the CW decoder, if anything is
+                    // listening. One array copy on the audio thread; the
+                    // listener is responsible for getting off it.
+                    var rxListeners = RxFrameCaptured;
+                    if (rxListeners is not null)
+                    {
+                        var copy = new float[AudioConstants.FrameSamples];
+                        frame.CopyTo(copy);
+                        try
+                        {
+                            rxListeners(copy);
+                        }
+                        catch (Exception ex)
+                        {
+                            // A broken listener must never take the audio
+                            // bridge down with it.
+                            _logger.LogDebug(ex, "RxFrameCaptured listener threw - ignoring");
+                        }
+                    }
 
                     byte[] packet;
                     byte msgType;

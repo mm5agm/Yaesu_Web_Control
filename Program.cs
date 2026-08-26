@@ -441,6 +441,12 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioSessionManag
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>());
 
+// The CW reader listens to the audio bridge rather than opening the capture
+// device itself, so it must be a singleton alongside it: one decoder, one
+// subscription, one piece of decoded text however many browser tabs are open.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.BridgeCwAudioSource>();
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderService>();
+
 // Audio filter EX address map — loaded once at startup from
 // wwwroot/data/audio-filter-ex-map.json; used by the Audio Filter popout
 // controller endpoints to translate per-radio menu addresses.

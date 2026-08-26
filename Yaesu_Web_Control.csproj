@@ -74,6 +74,16 @@
     <Content Remove="tools\**" />
     <EmbeddedResource Remove="tools\**" />
     <None Remove="tools\**" />
+    <!-- Tests/ holds the YWC test project (Tests/Yaesu_Web_Control.Tests),
+         which ProjectReferences this one. Same reason as core/ and tools/
+         above: the Web SDK globs **/*.cs, so without this removal the test
+         classes compile into the app as well, where the xunit attributes they
+         carry cannot resolve because the app has no xunit reference. The
+         error that produces names the attributes, not the glob. -->
+    <Compile Remove="Tests\**" />
+    <Content Remove="Tests\**" />
+    <EmbeddedResource Remove="Tests\**" />
+    <None Remove="Tests\**" />
   </ItemGroup>
 
   <!-- Radio-agnostic code shared with Icom Web Control. Pulled in as a git
