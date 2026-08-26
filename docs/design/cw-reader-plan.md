@@ -1714,6 +1714,227 @@ free; it decodes the one that is there and prints noise on the rest. Whatever
 4.13 builds needs a per-channel presence gate before it is worth showing
 anyone, and that gate is the unsolved problem, not the channelising.
 
+#### 4.11h DK9PY and I1YRL, 2026-08-26 - the first easy signal, and what tracking costs on it
+
+Two recordings made from Colin's live reports at the end of the CWT hour, one
+during and one after. They are the first bench material where the answer is not
+in doubt, and between them they overturn a working assumption.
+
+| file | freq | length | radio state | what it is |
+|---|---|---|---|---|
+| `bench/mkii-dk9py.wav` | 14,027.100 | 180 s | CW, 500 Hz, pitch 610 | DK9PY running a CWT. Colin reported the MkII printing it **perfectly**. |
+| `bench/mkii-i1yrl.wav` | 14,045.100 | 240 s | CW, 500 Hz, pitch 610 | I1YRL, recorded after 14:00 UTC - an ordinary QSO, not contest traffic. |
+
+Both have sidecar `.txt` files carrying the CI-V read taken at the start, so the
+radio state is recorded rather than remembered.
+
+**Why they matter.** Every recording before these is marginal: all three
+decoders disagree and none can be shown right. A signal the radio copies
+perfectly tests the opposite way round - it can show *our* decoder failing on
+easy copy, which no marginal file can.
+
+##### DK9PY: the signal was 115 Hz from where the operator was listening
+
+Run as configured - pitch 610 Hz, search window from the 500 Hz filter:
+
+```
+dotnet run --project tools/CwBench -c Release -- bench/mkii-dk9py.wav --pitch 610 --filter 500
+```
+
+```
+ 1 AC1D ARMIN 2T62 G I C EDE 5I EHEHSSE EIE EII I III E5EFQ CWT DK9PY RVM
+ EN4PVM ARMIN 2T62 UEE ERQ CWT DK9PY ZA E ZA1EM ARMIN 2T62 E E F 3T6 X RQ
+ CWT E I2WIJ E EFQ CWT DK9PY I2WIJ RQ CWT DK9PY I?WIJE EE 2 E EE2WIJ ARMIN
+ 2T62 BOB 24T6 EEU EFQ N EQ CWT DK9PY EQ E
+```
+
+262 characters, the callsigns mostly there, and shot through with junk. Against
+a radio that printed the same over cleanly, that is a plain failure on easy
+copy - the first one section 4 has been able to demonstrate.
+
+`--spectrum` says why:
+
+```
+strongest    725 Hz   -29.4 dB
+most keyed   725 Hz   keying ratio 10.3
+flatness     0.04
+
+   725   -29.4 dB    10.3  ##############################
+   750   -29.7 dB    10.1  ############################
+   700   -30.1 dB     8.6  ###########################
+   775   -31.3 dB     7.8  #######################
+   675   -32.0 dB     5.6  ######################
+   800   -34.1 dB     4.7  #################
+   650   -35.0 dB     2.9  ###############
+   600   -36.0 dB     2.3  #############
+```
+
+One keyed tone, unambiguous - keying ratio 10.3 at 725 Hz against 2.3 at the
+operator's own 610 Hz pitch. **DK9PY was 115 Hz off zero-beat**, and the bins
+around 610 hold nothing but noise.
+
+So the search window earned its keep for the first time on a real recording.
+`SearchWindowForFilterWidth(500)` gives +/-250 Hz, which reaches 725; the old
+fixed +/-250 would have too, but a narrower filter would not have, and this is
+the mechanism section 4.11b measured and section 4.10 claimed as our advantage
+over the radio.
+
+##### And then the tracker threw it away
+
+The per-sample tone readout alternates across the file - 640, 732, 651, 730,
+674, 731, 652 - between the real tone near 730 and an excursion near 650 that
+is not a station at all. Pinning proves which is which:
+
+| run | chars | runs >=4 | confidence | transcript |
+|---|---|---|---|---|
+| tracking, pitch 610, filter 500 | 262 | 0 | **0.23** | readable, corrupted |
+| `--no-track --pitch 725` | 219 | 0 | 1.00 | **near-clean** |
+| `--no-track --pitch 650` | 592 | 5 (longest 7) | 1.00 | pure junk |
+| `--no-track --pitch 610 --search 100` | 290 | 1 | 1.00 | pure junk |
+
+Pinned on the actual tone:
+
+```
+ EE ARMIN 2T62 G I C EDE ESE IEE HE E CQ CWT DK9PY PVM G4PVM ARMIN 2T62 TU
+ EE CQ CWT DK9PY ZA E ZA1EM ARMIN 2T62 TU CQ CWT E I2WIJ CQ CWT DK9PY I2WIJ
+ CQ CWT DK9PY I?WI I 2 I2WIJ ARMIN 2T62 BOB 24T6 TU CQ N CQ CWT DK9PY CQ
+```
+
+That is a CWT run, readable end to end: `CQ CWT DK9PY` repeated, callers
+answered, `ARMIN 2T62` sent to each, `TU`. Set against the tracking run,
+**every `CQ` had been corrupted into `EFQ`, `ERQ` or `RQ`**, and `TU` into
+`UEE`. Fewer characters, far more of them right.
+
+The 650 Hz row is the important control. Pinning is not what helped: pinning on
+the *wrong* tone is the worst run in the table. What helped was holding still on
+the right one.
+
+##### This reconciles 4.11f, and the fix is neither tracking nor pinning
+
+Section 4.11f found tracking beating a pinned pitch outright; this finds pinning
+beating tracking by a wide margin. Both are true and they are not in conflict:
+
+- In 4.11f the target **drifted**, and a pinned detector was left behind.
+- Here the target **did not move**, and re-picking the spectral peak every frame
+  let noise pull the estimate off a perfectly steady tone.
+
+The tracker has no memory. It answers "where is the strongest keyed bin right
+now", and during an inter-character gap the honest answer is "nowhere", so it
+wanders. What both cases want is the same thing: **acquire wide, then hold** -
+use the filter-derived search window to find the tone, then follow it with a
+rate limit of a few Hz per second and a requirement that the new peak actually
+be keyed. That tracks a drifting sender and ignores a gap, which is exactly the
+split between 4.11f and this section.
+
+This is now the most valuable single change available to the decoder, ahead of
+the word-gap work, because it is worth whole words rather than spaces.
+
+##### Confidence is not merely uninformative, it is inverted
+
+The table above is the sharpest instance yet. Confidence reports **1.00 on 592
+characters of junk** and **0.23 on the best copy of the day**. It is not a weak
+signal, it is an anti-signal, and 4.11d's note that it cannot be used as a gate
+should be read as the stronger statement: anything gated on it would suppress
+good copy and pass rubbish. This is why the UI panel deliberately shows
+everything and reports signal presence, SNR and lock instead.
+
+##### Cut numbers: `2T62` is not a defect
+
+`ARMIN 2T62` appears five times in the tracking run and three in the pinned one,
+and `BOB 24T6` once in each. These are **cut numbers**, the contest abbreviation
+where a shortened Morse character stands in for a digit:
+
+| sent | is | why |
+|---|---|---|
+| `T` | 0 | `-` instead of `-----` |
+| `N` | 9 | `-.` instead of `-----.` |
+| `A` | 1 | `.-` instead of `.----` |
+
+So `2T62` is CWops member **2062** and `24T6` is **2406**. The decoder is
+transcribing correctly and must go on doing so: anything that "corrects" a `T`
+to a `0` would be wrong the moment a `T` is a `T`, and would silently corrupt
+callsigns. If cut numbers are ever expanded it belongs in a display layer that
+can be turned off, next to the raw text, and never in `CwElementDecoder`.
+
+This also explains a run of earlier decodes. `5NN` for `599` in section 4.11g
+and in the I1YRL file below is the same convention, not a decoder fault.
+
+##### The speed tracker still rails on quiet
+
+Both DK9PY runs end at 46.2 wpm (tracking) and 53.5 wpm (pinned at 610), reached
+during eight consecutive `quiet` samples with no signal present - and the
+readout still says `locked` throughout. The warm-up and training threshold from
+4.11d.2 stopped the *output* runs (`runs >=4` is 0 on the good runs), but the
+speed estimate itself is still free to climb on noise, and still advertises
+itself as locked while doing it.
+
+That matters now in a way it did not on the bench, because the UI panel shows
+`wpm` and shows `locked`. A reader that says "46 wpm, locked" at a dead band is
+worse than one that says nothing. The estimate should hold its last value, and
+`IsLocked` should go false, once `SignalPresent` has been false for a second.
+
+##### I1YRL: the first plain QSO, and it is the best copy we have
+
+Recorded after the contest ended, so no exchanges and no repetition to average
+over. Tone at 625 Hz against a 610 Hz pitch - 15 Hz, effectively zero-beat, the
+opposite of the DK9PY case:
+
+```
+strongest    625 Hz   -27.9 dB
+most keyed   625 Hz   keying ratio 8.8
+flatness     0.03
+```
+
+Tracking, as configured:
+
+```
+ II4DOEI 4DODE I1L GA TFORCALLURRST5995NN5 U BFB QTHNRTIN NRTA TURIN=NAME LUC
+ LUC LUC E I 4DO DEI1YRLD K SKBKE I 5 N N E I4DODEI1YRLFBOKBILL TKSFORINFOAND
+ O MYINFOWITHPHO TOSINQRZ.COM=HOAI PECUAGNBILL 73 DE I1YRL TUEE GLTUEE
+ CQCQCQDE I1YRL I1YRL I1YRL I16EEHIISI5SHQCQCT
+```
+
+The QSO reads: *II4DO de I1YRL, GA [good afternoon], TNX for call, ur RST 599,
+QTH Torino, name Luc* ... *FB OK Bill, TKS for info, and [here is] my info with
+photos in QRZ.COM, hope CU agn Bill, 73 de I1YRL, TU, GL* and then a closing CQ.
+That is readable copy of a conversation, which is a first.
+
+Pinned at 625 Hz gives 275 characters against tracking's 280 and the same text
+to within two characters (`54DOEI` for `II4DOEI`, `6KBKE` for `SKBKE`). **When
+the signal is near zero-beat and alone, tracking and pinning agree** - tracking
+only costs anything when there is somewhere wrong for it to go. Third
+confirmation of the acquire-then-hold argument above.
+
+Three things to take from it:
+
+- **The errors are spacing, not letters.** `QTHNRTIN NRTA TURIN`,
+  `TKSFORINFOAND`, `WITHPHO TOSIN`, `CQCQCQDE`. Almost every fault above is a
+  missing or spurious word gap with the characters themselves correct. On a
+  plain QSO this is far more damaging than it was on contest traffic, where the
+  tokens are short and the reader knows the format. It promotes the word-gap
+  item in 4.12 from cosmetic to real - though still behind the tone-hold fix,
+  which costs whole words.
+- **Repetition is what carried the contest files.** `LUC LUC LUC`, `I1YRL I1YRL
+  I1YRL` and the three-times `Torino` are the only reason those tokens are
+  certain. Strip the repetition and the same decoder gives one shot per word.
+  Every accuracy claim drawn from contest recordings is flattered by this.
+- **The tail is the signature failure.** `I16EEHIISI5SHQCQCT` - clean copy right
+  up to the point the signal fades, then plausible-looking rubbish with nothing
+  marking the join. This is the case the panel's status line exists for, and the
+  case no amount of decoder work removes.
+
+##### One caveat entered against section 4.10
+
+Section 4.10 is titled *"The MkII's decoder needs zero-beat. Ours does not."*
+Colin reported the MkII printing DK9PY perfectly, and the recording shows that
+signal sitting 115 Hz from the radio's own CW pitch. That is a data point
+against 4.10, from the radio's screen rather than from anyone's ear.
+
+It does not overturn it - 4.10a already records that 4.10 is n=1 and that its
+reproduction failed - but 4.10 should not be cited as settled. The honest
+position is that we have one recording where the MkII wanted zero-beat and one
+where it did not, and no controlled test of either.
+
 ### 4.13 Multi-signal: one decoder, many stations
 
 Raised by Colin 2026-08-26, watching Fldigi put every signal in the passband on
@@ -1747,78 +1968,268 @@ This changes the output contract from "a transcript" to "a transcript per
 channel", so it reaches the UI as well as the core. It is a Phase 3 item, not a
 tweak to Phase 2.
 
+### 4.15 The decoder reaches the application, 2026-08-26
+
+Until this session the decoder had no caller. Core had `CwDecoderEngine`, the
+tests exercised it, `tools/CwBench` fed it wav files - and neither application
+ever handed it a sample. `SearchWindowForFilterWidth`, measured in 4.11b and
+committed in `4eb9416`, was dead code outside the bench.
+
+Section 4.12 asked to "wire the IF filter width through to the decoder". That
+turned out to be three problems wearing one coat:
+
+- IWC reads `1A 03` into `IfWidthA` and has **no CW decoder at all** to wire it
+  to. Nothing to do there yet beyond the core port.
+- YWC has no application-side consumer of the decoder either, so there was
+  nothing for the width to arrive at.
+- The Yaesu SH code to Hz mapping existed **only in JavaScript**, in
+  `wwwroot/js/ui/if-width-tables.js`, and it is mode-dependent - code 8 is
+  1650 Hz in SSB and 400 Hz in CW. A server-side decoder cannot reach it.
+
+So the order was: port the table, build a consumer, then wire the width. Colin
+chose the full slice through to the UI rather than stopping at the service.
+
+#### What was built
+
+| file | what it is |
+|---|---|
+| `Services/YaesuIfWidth.cs` | The SH code to Hz tables in C#. `HzFor(model, mode, code)` returns `int?`. |
+| `Tests/Yaesu_Web_Control.Tests/YaesuIfWidthTests.cs` | 14 tests. |
+| `Services/Audio/RadioAudioBridgeService.cs` | `RxFrameCaptured` event, raised on the capture path. |
+| `Services/Cw/BridgeCwAudioSource.cs` | `ICwAudioSource` over that event. |
+| `Services/Cw/CwReaderService.cs` | The decoder's owner: builds it from the radio's pitch and filter, rebuilds it when either moves, holds the text. |
+| `Controllers/CwController.cs` | `POST start`, `POST stop`, `POST clear`, `GET poll?since=N`. |
+| `core/js/cw/cw-reader-panel.js` | The panel. In the core, so IWC gets it (2.1). |
+| `Pages/Index.cshtml`, `Program.cs` | Toolbar button, dialog, module import, DI. |
+
+Four decisions in there are worth the ink, because each had a cheaper option
+that would have been wrong.
+
+**The table is duplicated, and a test stops it drifting.** Two copies of a
+lookup table is normally a refactor waiting to happen, and the refactor here -
+serve the JS from the C#, or generate one from the other - is real work for a
+static table that changes when Yaesu ship a radio. Instead
+`YaesuIfWidthTests.cs` *parses* `if-width-tables.js` and compares every model,
+mode and code 0-40 against the C# copy. The duplication stays; silent divergence
+cannot. If someone edits the JS the build goes red and names the cell.
+
+This also keeps the table out of `core/`. Core is radio-agnostic by design -
+IWC's filter codes are a formula (`0-9` is `(c+1)*50`, `>=10` is
+`600+(c-10)*100`), not a table, and it computes them itself.
+
+**Code 0 deliberately returns null.** It is the radio's own mode-dependent
+default and the radio does not report what it resolved to. AM and FM return null
+too. `CwReaderService` then keeps the decoder's default search window rather
+than being handed a guess, and the panel prints `filter unknown` instead of a
+number - because a wrong width silently narrows the window onto the wrong part
+of the passband, and 4.11h is a demonstration of what that costs.
+
+**The decoder taps the existing capture; it does not open a device.** A second
+PortAudio stream on the same USB codec either fails or fights the first for
+buffers, and the operator listening to the radio is the one who would notice.
+The consequence is that the reader only hears anything while an audio session is
+live, so the snapshot carries `AudioDevicesOpen` and the panel says so in
+words - otherwise the panel looks healthy and prints nothing, which is the worst
+of both.
+
+Frames cross from the PortAudio callback thread to the decoder through a bounded
+channel with `FullMode = DropOldest`, capacity 100 - one second. The callback
+does `TryWrite` and nothing else. If the decoder ever falls behind, the channel
+drops the oldest frame rather than stalling the audio thread: dropped CW audio
+is a few lost characters, a blocked audio callback is a click in the operator's
+headphones. Dropped frames are counted and shown.
+
+**Polling, not a WebSocket.** Decoded CW arrives a few characters at a time at a
+handful of characters a second. A poll every 500 ms reads as live, costs
+nothing, and needs none of the reconnection handling a socket does. Each poll
+sends back the cursor from the previous reply and receives only what is new; the
+server keeps 8000 characters and reports `Truncated` if the client's cursor has
+fallen off the back, so the panel can mark the join rather than splicing
+non-contiguous text silently.
+
+#### What the panel shows, and why it shows all of it
+
+The output pane prints everything the decoder produces, ungated. That is a
+decision, not an omission: 4.11h measured confidence at **1.00 on 592 characters
+of junk and 0.23 on the best copy of the day**, so any gate built on it would
+suppress good copy and pass rubbish.
+
+Instead the status line carries the readouts that *are* informative - signal
+present, tone, pitch, filter width, search window, wpm, lock, SNR, dropped
+frames - and the panel says in as many words that on a strong clean signal the
+decoder is close to perfect and on a marginal one it prints plausible-looking
+rubbish that looks no different. The operator is given the means to tell them
+apart rather than a transcript that pretends the difference does not exist.
+
+The dialog is non-modal and draggable, like DX Spots: the point of reading CW is
+to work the station, and a modal would lock the operator out of the VFO and the
+keyer while the text was on screen. Closing it stops the polling but leaves the
+decoder running, so closing the panel mid-QSO by accident does not throw the
+copy away.
+
+#### Not yet tested against a radio
+
+It builds, the tests pass, the JS parses. No part of it has seen an antenna.
+That is item 2 of the running order in 4.14.
+
 ### 4.14 Where to pick this up
 
 Written at the end of the 2026-08-26 session, cold-start notes. Section 4.12 is
 the backlog; this is the running order and the state to resume from.
 
-#### Nothing is committed
+#### What is committed, and what is not
 
-Branch `feature/cw-reader`, seven modified files, all of today's work:
+Branch `feature/cw-reader`. The bench and core work of 2026-08-26 went in as two
+commits; the application slice that followed is still loose in the tree.
+
+| commit | what |
+|---|---|
+| `4eb9416` | **core** - `CwToneDetector` warm-up and `NoiseLevel`; `CwElementDecoder` `MinTrainNoiseMultiple` 3.5; `CwDecoderEngine.SearchWindowForFilterWidth`; the tests for all three, plus `CwSignalGenerator.LeadIn()`. 75 tests pass. |
+| `7416bb3` | **bench** - `tools/CwBench` gains `--marks`, `--warmup`, `--train-noise`, `--no-resync`, `--filter`, `runs >=4`; plan sections 4.11d.2, 4.11e, 4.11f, 4.11g, 4.13, 4.14. |
+
+Nothing is pushed.
+
+`4eb9416` touches `core/`, so it owes a trip back to `Radio_Web_Control_Core`
+and forward into IWC. IWC has no CW core at all yet, so that is a port rather
+than a merge. See below - the trip back was rehearsed on 2026-08-26 and not made.
+
+**Uncommitted: the whole application slice** (see 4.15). Eight files, four of
+them new, plus the plan sections above this one:
 
 | file | change |
 |---|---|
-| `core/Services/Cw/CwToneDetector.cs` | `WarmupSeconds`; `NoiseLevel` on `CwToneSample` (4.11d.2) |
-| `core/Services/Cw/CwElementDecoder.cs` | `MinTrainNoiseMultiple` 3.5 (4.11d.2) |
-| `core/Services/Cw/CwDecoderEngine.cs` | `SearchWindowForFilterWidth` and its clamps (4.11b) |
-| `core/tests/.../CwDecoderTests.cs` | the search-window theory; 75 tests pass |
-| `core/tests/.../CwSignalGenerator.cs` | `LeadIn()`, so tests do not key in the first frame |
-| `tools/CwBench/Program.cs` | `--marks`, `--warmup`, `--train-noise`, `--no-resync`, `--filter`, `runs >=4` |
-| `docs/design/cw-reader-plan.md` | 4.11d.2, 4.11e, 4.11f, 4.13, this section |
+| `Services/YaesuIfWidth.cs` | new - C# port of the SH code to Hz tables |
+| `Tests/Yaesu_Web_Control.Tests/` | new - 14 tests, holds the port to the JS |
+| `Services/Audio/RadioAudioBridgeService.cs` | `RxFrameCaptured` event on the capture path |
+| `Services/Cw/BridgeCwAudioSource.cs` | new - `ICwAudioSource` over that event |
+| `Services/Cw/CwReaderService.cs` | new - the caller `SearchWindowForFilterWidth` never had |
+| `Controllers/CwController.cs` | new - start/stop/clear/poll |
+| `core/js/cw/cw-reader-panel.js` | new - the panel, in the core per 2.1 |
+| `Pages/Index.cshtml`, `Program.cs`, `Yaesu_Web_Control.csproj` | wiring |
 
-The three `core/` files are shared-core changes and eventually have to go back
-to `Radio_Web_Control_Core` and forward into IWC. Decide commit-or-continue
-before touching anything else, because the bench work below keeps editing the
-same files.
+Builds clean, 14 tests pass, panel JS parses. **Never yet run against a radio.**
+
+#### The core work has never gone back to the core, and today it was proved it can
+
+Every CW file in `core/` - all six services and all five test files - exists in
+exactly one place: this branch, in YWC's subtree copy. `Radio_Web_Control_Core`
+does not have them on `main` or on its own (empty) `feature/cw-reader`, and IWC
+does not have them on any of its seven branches. There is no second copy of any
+of it.
+
+That is what section 2.1 prescribes - author inside `core/` in whichever app you
+are in, push up afterwards - and the phase table schedules the push as row 4. So
+it is the plan working, not a slip. But the push half of that loop had never once
+been run: every subtree commit in YWC's history is a pull ("Squashed 'core/'
+changes from X..Y"), and an unexercised mechanism in a plan is a guess.
+
+It was exercised on 2026-08-26, locally and reversibly, with no GitHub involved:
+
+```
+git subtree split --prefix=core -b tmp/core-split      # in YWC
+git fetch <ywc> tmp/core-split:tmp/ywc-core-split      # in the core clone
+git merge-tree --write-tree main tmp/ywc-core-split
+```
+
+Four things came out of it.
+
+- **The split is slow enough to look broken.** It walks all 1033 commits of YWC
+  history and took over two minutes, silently. It is not hung. Give it a long
+  timeout.
+- **It applies clean:** 11 files, 1756 insertions, nothing modified, no conflicts.
+  Built and tested standalone in a throwaway worktree - **75 tests pass in the
+  core repo on its own**, which is the thing that actually needed proving, since
+  the core targets `net10.0` while YWC builds `net10.0-windows` as well.
+- **It will not fast-forward.** The split forks from `c91dabc`; core `main` is at
+  `765619f`, one commit ahead (the `Backup*.ps1` gitignore rule). A plain
+  `git subtree push` is rejected non-fast-forward. Pull the core into YWC's
+  subtree first, then re-split. Worth knowing before the first real push rather
+  than during it.
+- **No line-ending damage.** The incoming files are LF, matching the core. The
+  core still has no `.gitattributes` of its own, which is a hazard for whoever
+  clones it directly rather than through a subtree, but it did not bite here.
+
+The branches `tmp/core-split` (YWC) and `tmp/ywc-core-split` (core) are the dry
+run's leftovers and are safe to delete; regenerating them is one command.
+
+**The push itself has not been done.** Nothing is on GitHub.
+
+#### The reader panel was in the wrong place, and is now in the right one
+
+Section 2.1 puts the shared reader UI at `core/js/cw/cw-reader-panel.js`. It was
+first written to `wwwroot/js/ui/cw-reader-panel.js`, which builds and runs
+identically in YWC and would have given IWC nothing. Moved on 2026-08-26:
+
+| | |
+|---|---|
+| file | `core/js/cw/cw-reader-panel.js` |
+| import in `Index.cshtml` | `/js/cw/cw-reader-panel.js` |
+| `.gitignore` | `/wwwroot/js/cw/cw-reader-panel.js` - generated, per-file, beside the calibration engine |
+
+No csproj change was needed: `CopySharedCoreJs` globs `core\js\**\*.js` and
+preserves the subdirectory, so the file arrives at `wwwroot/js/cw/` in both apps
+by itself. That is section 2.1's claim about the target, and this is the first
+time anything has tested it. Verified by deleting the generated copy and
+rebuilding - it comes back, and it is ignored.
 
 #### The running order
 
-1. **The Fldigi reference run.** Blocked on a human at a GUI, which is why it is
-   first - everything else in section 4 is two decoders arguing with no umpire.
-   Everything is cut and waiting:
+1. **Acquire wide, then hold the tone (4.11h).** Newly the top item, and by
+   some distance. The DK9PY recording shows the tracker finding a signal
+   115 Hz off pitch and then corrupting every `CQ` in the file by re-picking
+   the peak during inter-character gaps; pinned on the same tone the over is
+   readable end to end. This is worth whole words, where the word-gap item is
+   worth spaces. Wanted: keep the filter-derived search window for acquisition,
+   then rate-limit the tone estimate to a few Hz per second and require the new
+   peak to be keyed. Reproduce with:
 
-   | file | tone to click on the waterfall | what is in it |
-   |---|---|---|
-   | `bench/fldigi/strong23-8k.wav` | 538 Hz | 22 s, strong, `GI3UBA DE SM5O...` |
-   | `bench/fldigi/qso2-clip-8k.wav` | 529 Hz | 72 s, the sign-off over, the 4.11f head-to-head |
-   | `bench/fldigi/ft-14040-90-8k.wav` | 538 Hz | 120 s, the slow-sender speed-tracker case |
-   | `bench/fldigi/sp5xoc-8k.wav` | 842 Hz | 120 s, weak, far off pitch |
+   `dotnet run --project tools/CwBench -c Release -- bench/mkii-dk9py.wav --pitch 610 --filter 500`
 
-   Run `bench/fldigi/fldigi-bench.cmd`. It starts Fldigi 4.2.11 against
-   `C:\Users\colin\fldigi-bench.files`, a throwaway copy of the live config
-   pre-set to **File I/O only**, **CW**, cursor 538 Hz - so the real
-   `fldigi.files` and its rig control cannot be damaged by any of this. Then
-   **File > Audio > Playback...**, pick the wav, click the waterfall on the
-   tone, and save the RX panel. Drop the squelch if nothing prints.
+   and compare against `--no-track --pitch 725`.
 
-   The 8 kHz copies exist because that is Fldigi's native rate. Same audio, same
-   level, resampled, nothing else.
+2. **Bench the panel against the radio (4.15).** The whole vertical slice is
+   written and has never seen an antenna. It needs remote audio running, since
+   the decoder taps the bridge rather than opening its own stream. Check in
+   particular that the search window shown in the status line matches the
+   filter actually set, and that changing the filter or the CW pitch on the
+   radio rebuilds the decoder without losing the text.
 
-2. **Word spacing (4.11f).** The newest defect and the most concrete. On
-   `bench/strong23.wav` and `bench/qso2-clip.wav` - strong, locked, steady tone,
-   characters correct - `GI3UBA DE` runs together as `GI3UBADE` while `SM5O`
-   splits into `S M 5 O`, in the same over. Both directions at once, so it is
-   not one threshold mis-set; it is how the gap thresholds adapt in
-   `CwElementDecoder`. Reproduce with:
+3. **Speed and lock must not rail on quiet (4.11h).** `wpm` climbing to 46-60
+   on eight consecutive silent samples while still reporting `locked` was
+   tolerable on the bench and is not, now that the panel puts both on screen.
+   Hold the last estimate and drop `IsLocked` after a second of
+   `SignalPresent == false`.
 
-   `dotnet run --project tools/CwBench -c Release -- bench/strong23.wav --pitch 610 --filter 500`
+4. **Word spacing (4.11f, 4.11g, 4.11h).** Promoted from cosmetic by the I1YRL
+   recording, where nearly every error in otherwise correct copy is a missing
+   or spurious word gap - `TKSFORINFOAND`, `CQCQCQDE`. Still behind items 1-3.
+   Reproduce with:
 
-3. **Wire the CAT filter width through (4.11b).** `SearchWindowForFilterWidth`
-   is written, tested, and called by nothing but the bench. IWC already reads
-   `1A 03` into `IfWidthA`; YWC needs its equivalent. Until this lands the
-   shipped decoder still uses the fixed 250 Hz and the measurement in 4.11b is
-   unspent.
+   `dotnet run --project tools/CwBench -c Release -- bench/mkii-i1yrl.wav --pitch 625 --no-track`
 
-4. **Why the MkII went quiet on `strong23.wav`.** The offset theory is dead
-   (4.11f). Run the auto-tune experiment anyway, and look at the radio's own CW
-   decode threshold setting while doing it.
+5. **Why the MkII went quiet on `strong23.wav`.** The offset theory is dead
+   (4.11f), and 4.11h now has the MkII copying a signal 115 Hz off pitch
+   perfectly, which weakens 4.10 as well. Run the auto-tune experiment anyway,
+   and look at the radio's own CW decode threshold setting while doing it.
 
-5. **The 3.5-vs-4.0 `MinTrainNoiseMultiple` question (4.11d.2).** Needs more
+6. **The 3.5-vs-4.0 `MinTrainNoiseMultiple` question (4.11d.2).** Needs more
    weak-signal captures than we have. `bench/mkii-nodecode.wav` is the one
    recording that separates them.
 
-6. **`docs/design/cw-bench-procedure.md`**, still unwritten. First line:
-   cross-band peek off before recording.
+7. **Check the CWops roster.** `ARMIN 2062` (DK9PY), `BOB 2406`, `DAN 1854`.
+   Offline, no radio needed, and it would turn three plausible decodes into
+   three confirmed ones - including the `1854`-versus-`1584` argument in 4.11g,
+   which is currently settled on internal evidence alone.
+
+8. **Push the core up, then into IWC.** Rehearsed and proved above; not done.
+   Order: pull core `main` into YWC's subtree (to clear the non-fast-forward),
+   commit the slice, `git subtree split`, `git subtree push --prefix=core`, then
+   pull into IWC. Needs Colin's word, because it puts code on GitHub. Until it
+   happens the CW core exists in one branch of one repo with no second copy, and
+   IWC cannot start its half of Phase 4.
+
+`docs/design/cw-bench-procedure.md` is **written** as of 2026-08-26 - it was
+item 6 on the previous list.
 
 Then the rest of 4.12, and 4.13 for Phase 3.
 
@@ -1834,6 +2245,8 @@ filter, 610 Hz pitch, mono 48 kHz from the USB CODEC:
 | `ft-14040-90.wav` | 120 s, same operator earlier, the slow-sender case |
 | `sp5xoc.wav` | 120 s, 14,027.70, weak, tone 842 Hz - the 4.11b search-window case |
 | `mkii-nodecode.wav` | the weak signal the MkII would not print at all |
+| `mkii-dk9py.wav` | 180 s, 14,027.10 - DK9PY running a CWT, tone 725 Hz, the easy signal of 4.11h; sidecar `.txt` |
+| `mkii-i1yrl.wav` | 240 s, 14,045.10 - I1YRL after the contest, tone 625 Hz, the only plain QSO we hold; sidecar `.txt` |
 | `mkii-14040-slow.wav`, `mkii-14045-92.wav`, `mkii-14045-83-weak.wav` | noise; keep as negative controls |
 
 `bench/` is gitignored, so none of this is in version control and none of it is
@@ -1864,9 +2277,24 @@ see until the operator has zero-beat it (§4.10).
 What is left before Phase 2 is our own work, not more measurement against the
 radio:
 
-- **The inter-word gap (§4.11f, §4.11g) - now an improvement, not a bug.**
-  Fldigi welds words together too (`DE0KDAN`), so this is no longer a defect
-  against the reference; it is an attempt to beat it. Weight it accordingly.
+- **Acquire wide, then hold the tone (§4.11h). The top item, by some distance.**
+  On `mkii-dk9py.wav` the tracker finds a signal 115 Hz off the operator's pitch
+  - which is the search window doing exactly its job - and then corrupts every
+  `CQ` in the file by re-picking the spectral peak during inter-character gaps.
+  Pinned on the same tone the over reads end to end. The fix is neither
+  tracking nor pinning: keep the filter-derived window for acquisition, then
+  rate-limit the tone estimate to a few Hz per second and require the new peak
+  to be keyed. That also reconciles §4.11f, where tracking beat pinning because
+  the sender drifted. Worth whole words, where the word-gap item is worth spaces.
+
+- **The inter-word gap (§4.11f, §4.11g, §4.11h) - an improvement, but now a
+  worthwhile one.** Fldigi welds words together too (`DE0KDAN`), so this is not
+  a defect against the reference; it is an attempt to beat it. What raised its
+  priority is §4.11h: on `mkii-i1yrl.wav`, the only plain-QSO recording we hold,
+  nearly every error in otherwise correct copy is a missing or spurious word gap
+  (`TKSFORINFOAND`, `QTHNRTIN`, `CQCQCQDE`). Contest traffic hid this behind
+  short tokens and a format the reader already knows. Still behind the tone-hold
+  fix, which costs whole words rather than spaces.
   Original note: On `bench/strong23.wav` the decoder
   runs `GI3UBA DE` together as `GI3UBADE` where Fldigi separates the `DE`.
   Narrowed by the Fldigi reference: the `S M 5 O` split that looked like the
@@ -1884,26 +2312,70 @@ radio:
   What remains open is the 3.5-vs-4.0 threshold in §4.11d.2, which needs more
   weak-signal captures, and whether the MkII's own tracker (AUTO 22 wpm, 29 a
   second earlier) is beatable on a signal it fails to print at all.
-- **Surface `WordsPerMinute` in the UI.** Icom show it; it is what let Colin
-  tell a confused decoder from a bad band. See §4.11d.
+  **And one part is not fixed (§4.11h):** the *output* no longer runs away, but
+  the speed estimate still climbs to 46-60 wpm across silent samples and still
+  reports `locked` while doing it. That was harmless on the bench and is not now
+  the panel puts both figures on screen. Hold the last estimate and drop
+  `IsLocked` after a second without signal.
+- **Surface `WordsPerMinute` in the UI. Done 2026-08-26 - see §4.15.** It is in
+  the reader panel's status line with tone, pitch, filter width, search window,
+  SNR and lock. Icom show it; it is what let Colin tell a confused decoder from
+  a bad band. See §4.11d - and see the railing caveat above, which this now
+  makes visible to the operator.
 - **Output gating.** §4.11 gives the criterion and a threshold; where it lives in
-  the pipeline, and whether it suppresses or merely marks, is undecided.
+  the pipeline, and whether it suppresses or merely marks, is undecided. One
+  thing is now decided: **it will not be built on `Confidence`.** §4.11h measured
+  that figure at 1.00 on 592 characters of junk and 0.23 on the best copy of the
+  day - it is not weak, it is inverted, and a gate on it would suppress good copy
+  and pass rubbish. The panel shipped ungated for that reason (§4.15).
 - **Repeat §4.9 on the pitch**, so the element comparison stops being provisional.
 - **Get an independent reference (§4.11e). Done 2026-08-26 - see §4.11g.**
   Fldigi over the same wavs, driven from `bench/fldigi/fldigi-bench.cmd` and
   read back over XML-RPC. It has already corrected two claims in §4.11f and
   confirmed SM5OMP, SN5N, CT7AUP and the CWT exchange format. Repeat it on
   every new bench recording before drawing conclusions from one.
-- **Wire the IF filter width through to the decoder.** The mapping exists and is
-  tested (§4.11e); nothing reads the radio's actual filter width yet. Both apps
-  already have it over CAT - IWC reads `1A 03`, and it is in `IfWidthA`.
+- **Wire the IF filter width through to the decoder. Done for YWC 2026-08-26 -
+  see §4.15.** `CwReaderService` reads the radio's CW pitch and SH filter code,
+  converts the code with the new `Services/YaesuIfWidth.cs`, and builds the
+  decoder's search window from it - the first caller `SearchWindowForFilterWidth`
+  has ever had. **IWC is still outstanding**, and is a larger job than it sounds:
+  it has `IfWidthA` from `1A 03` but no CW decoder at all to give it to, so it
+  needs the core port first.
 - **Multi-signal decoding (§4.13).** Phase 3. Until then the decoder is
   single-signal and does not say so, which is the part worth fixing first.
 - **Re-run the §4.6 band sweep with cross-band peek off**, so its per-band
   flatness figures mean something.
-- **`docs/design/cw-bench-procedure.md`**, which CwBench's usage text already
-  points at and which does not exist. First line: cross-band peek off before
-  recording.
+- **Cut numbers must stay literal (§4.11h).** `2T62` is 2062 and `24T6` is 2406;
+  `T` is 0, `N` is 9, `A` is 1, and `5NN` is 599. The decoder transcribes these
+  correctly today and must go on doing so - anything that "corrects" a `T` to a
+  `0` is wrong the moment a `T` is a `T`, and would silently corrupt callsigns.
+  If cut numbers are ever expanded, it belongs in a display layer that can be
+  turned off, alongside the raw text, never in `CwElementDecoder`.
+- **Check the CWops roster.** `ARMIN 2062` (DK9PY), `BOB 2406` and `DAN 1854`.
+  Offline, no radio needed. It would turn three plausible decodes into three
+  confirmed ones, including the `1854`-versus-`1584` argument in §4.11g, which
+  currently rests on internal evidence alone.
+- **CwBench dies on an unfinalised wav header.** `bench/mkii-14040-qso3.wav` has
+  a RIFF size of `0xFFFFFFFF` - ffmpeg was killed before it could rewrite the
+  header - and CwBench computes a negative sample count and exits with
+  `count ('-1') must be a non-negative value`, which names neither the file nor
+  the cause. It is the only affected recording of the twenty-odd in `bench/`.
+  Treat an overlong or `0xFFFFFFFF` data chunk as "read to end of file", and say
+  so.
+- **The search window clamps at 500 Hz, so wide filters get no benefit from it.**
+  `SearchWindowForFilterWidth` is `width / 2` clamped to 100..500, so a 2.4 kHz
+  or 2.8 kHz SSB filter implies +/-1200 or +/-1425 and receives +/-500. That is
+  the right conservative answer for a single-signal decoder - a wider window
+  only offers more wrong tones to lock onto - but it means the filter width
+  stops informing the decoder above 1 kHz. The regime above the clamp is what
+  §4.13 multi-signal is actually for; until that exists, the clamp should stay
+  and the panel should say the window is clamped rather than implying the width
+  set it.
+- **`docs/design/cw-bench-procedure.md`. Written 2026-08-26.** CwBench's usage
+  text pointed at it for two sessions before it existed. It carries the three
+  lessons that cost the most time: cross-band peek off before recording; sweep
+  levels drift about 10 dB over a session, so never compare a level across one;
+  and read the poller log, not the screenshot.
 
 ---
 
