@@ -52,6 +52,19 @@ namespace Yaesu_Web_Control.Services
 
                 var settings = await settingsService.GetSettingsAsync();
 
+                // Publish the radio model before anything that can return
+                // early. It is a settings fact, not something discovered by
+                // talking to the radio, and the three failure paths below - no
+                // COM port, COM port will not open, radio not answering FA; -
+                // all used to leave it empty. Anything reading it then behaves
+                // as though no radio were configured: ScopeController answers
+                // "No radio model is configured, so scope control is
+                // unavailable" even though Settings plainly names one, and it
+                // stays that way until the application is restarted. Powering
+                // the radio on after YWC is enough to trigger it.
+                radioStateService.IsSingleReceiver = RadioCapabilities.IsSingleReceiver(settings.RadioModel);
+                radioStateService.RadioModel = settings.RadioModel;
+
                 // Check if COM port is configured - if not, redirect to Settings
                 if (string.IsNullOrWhiteSpace(settings.SerialPort) || settings.SerialPort == "Not Set")
                 {
@@ -124,13 +137,11 @@ namespace Yaesu_Web_Control.Services
 
                 // Radio responded - it's ON
                 radioStateService.RadioPowerOn = true;
-                // Tell RadioStateService whether this is a single-receiver
-                // model. The dispatcher uses this to route P1=0 ("Fixed" on
-                // single-receiver radios) responses to whichever VFO is
-                // currently active per VS, instead of always writing to *A
-                // state. See #34 R2 controls-bleed fix.
-                radioStateService.IsSingleReceiver = RadioCapabilities.IsSingleReceiver(settings.RadioModel);
-                radioStateService.RadioModel = settings.RadioModel;
+                // IsSingleReceiver and RadioModel are set above, as soon as
+                // settings are read. IsSingleReceiver tells the dispatcher to
+                // route P1=0 ("Fixed" on single-receiver radios) responses to
+                // whichever VFO is active per VS rather than always writing to
+                // *A state. See #34 R2 controls-bleed fix.
                 logger.LogInformation("[RadioInitializationService] Radio responded to FA;: {Response}", faResponse);
 
                 // Safety: force the radio into RX before doing anything else.
