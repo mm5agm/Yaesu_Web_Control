@@ -9,3 +9,7 @@ obj/
 .idea/
 *.user
 *.suo
+
+# Local backup scripts (machine-specific paths to my LAN server; never
+# committed, so they never ride the subtree into either application).
+Backup*.ps1
