@@ -1271,6 +1271,588 @@ This is **Phase 2 and is not authorised.** It is written down here so it is not
 re-derived, and so it is judged against the run-count table in §4.11d rather
 than against whether the next recording happens to look better.
 
+#### 4.11d.2 The prescription in 4.11d.1 was wrong, and the measurement says why
+
+Written 2026-08-26, with the IC-7300 MkII live on the bench.
+
+**Holding `_ditMs` while `SignalPresent` is false is a no-op.** Implemented as
+written, it produced byte-identical transcripts on all four recordings. The
+reason is in `CwToneDetector`: when the presence gate says absent it forces
+`_keyDown = false`, so a mark can only exist inside a presence excursion. Every
+mark the element decoder is ever handed arrives with `SignalPresent` true -
+measured, 509 of 509 across `goodcw`, `oh3mmf` and `yu1eu`, gate true at the
+closing edge and true for the whole mark in every case. The gate cannot
+discriminate because the gate has already had its say. Section 4.11d.1 was right
+that nothing consumed `SignalPresent` and wrong about what would happen if
+something did.
+
+`--no-resync` (a new bench flag) clears the other suspect: with the hard re-seed
+disabled entirely, `yu1eu` still walks to 58.9 wpm through the quiet. It is the
+EMA in `UpdateCentroids`, fed short marks, and not `TrackResync`.
+
+**What actually rails it.** A new `--marks` report drives the detector directly
+and prints every run the element decoder would be handed. On `yu1eu`:
+
+```
+ at        ms     SNR      peak   x noise
+  0.27    250    41.7    0.0672       3.1
+  0.43    135    26.1    0.0670       2.8
+  0.69     25    19.6    0.0720       2.6
+  0.82     15    18.3    0.0707       2.4
+  ...  (twenty more, all 15-35 ms, all inside the first two seconds)
+  2.00     20     7.3    0.0595       2.3
+ 36.38     15     9.3    0.0605       2.3
+```
+
+Two sources, neither of them the band:
+
+1. **Detector warm-up.** The noise mean is an EMA with a quarter-second time
+   constant; the peak tracker rises four times faster. For the first second
+   after audio starts their ratio reads as tens of dB of SNR on plain hiss, the
+   presence gate opens, and a burst of 15-35 ms marks arrives before a single
+   real element. That is enough to peg `_ditMs` at `MaxWpm` in the first two
+   seconds of every session. `yu1eu` had reached 60.0 wpm by 00:05 - its signal
+   did not start until 00:45.
+2. **Noise bursts mid-recording.** The 36-42 s group above, same shape.
+
+**What separates them from elements is level, not presence.** Per-mark peak as a
+multiple of the tracked noise floor, medians by duration bucket:
+
+| recording | marks under 20 ms | marks 40-160 ms |
+|---|---|---|
+| `yu1eu` | 2.3x noise | 6.3-7.3x |
+| `goodcw` | 2.7x | 5.1-5.6x |
+| `oh3mmf` | 2.4x | 5.1-7.0x |
+| `cw200` | 3.8x | 4.9-5.2x |
+
+Real elements sit at five to seven times the noise floor and noise blips at two
+to three, on every recording, at any speed. `SnrDb` does not separate them - it
+is built from the slow peak tracker and describes the signal, not the mark - so
+`CwToneSample` now carries `NoiseLevel` as well.
+
+**The fix is two lines of policy and no new machinery:**
+
+- `CwToneDetectorOptions.WarmupSeconds` (0.5). Report nothing keyed until the
+  estimators have settled. They run throughout; only the claim that something is
+  keyed is suppressed.
+- `CwElementDecoderOptions.MinTrainNoiseMultiple` (3.5). A mark trains the speed
+  only if its peak reached that multiple of the noise floor at the time. It
+  still prints - output gating remains a separate question (section 4.12).
+
+Judged against section 4.11d's run-count table, same invocation before and
+after, tracking on and nothing pinned:
+
+| recording | before | after |
+|---|---|---|
+| `goodcw` | 78 chars, 2 runs, 52.4 wpm | **35 chars, 0 runs, 24.9 wpm** |
+| `cw200` (clean control) | 61 chars, 0 runs, 25.9 wpm | 48 chars, 0 runs, 23.3 wpm |
+| `oh3mmf` | 308 chars, 12 runs, 36.4 wpm | **126 chars, 5 runs, 36.4 wpm** |
+| `yu1eu` | 101 chars, 1 run, 34.7 wpm | **34 chars, 0 runs, 29.4 wpm** |
+
+Section 4.11d's point was that pinning the speed collapsed the junk: `--pin-wpm
+22` gave `goodcw` 35 characters and 0 runs, `yu1eu` 27 and 1. **The adaptive
+tracker now matches the pinned numbers without being pinned** - 35 and 0 on
+`goodcw`, 34 and 0 on `yu1eu` - which is what section 4.11d said a tracker that
+refused to move on bad frames would do. The tracked speed is no longer absurd
+either: `goodcw` reads 24.9 wpm where it read 52.4, and `yu1eu` holds its
+initial 20 wpm through 45 seconds of quiet instead of railing at 60.
+
+A relative test - train only on marks reaching half the level of recent marks,
+against a decaying reference - was implemented and measured first, then removed:
+with warm-up and the noise multiple in place it changed nothing at all
+(identical output at every ratio and decay setting), and its reference has to be
+bootstrapped, which noise does when the band is quiet at startup.
+
+**One threshold is still unsettled: 3.5 or 4.0.** They differ on exactly one
+recording, `mkii-nodecode.wav` (2026-08-26, a signal Colin could hear and the
+MkII would not print): 3.5 gives 97 characters and 2 runs at a railed 57.8 wpm;
+4.0 gives 42 characters, 0 runs and a plausible 26.5 wpm. That signal is weak
+enough to sit on the threshold itself. Against that, 4.0 fails one synthetic
+case in `Rides_through_QSB_without_a_threshold_control` (0.25 Hz, 20 dB fade
+depth: 37.5% against a 40% floor), because a station fading 20 dB stops clearing
+the bar and the tracker stops following its elements down. 3.5 passes all 69
+tests, so 3.5 ships. A hysteretic version - strict while unlocked, relaxed once
+locked - was tried and measured worse on three recordings, so it is not that
+either. Settling this needs more weak-signal captures.
+
+**A test change came with it.** The Phase 1 accuracy tests began keying in the
+first audio frame after 0.3 s of silence, which no real capture does - a decoder
+is switched on before the other operator starts sending. They now open with
+`CwSignalGenerator.LeadIn()`, one second. The accuracy floors are untouched, and
+all 69 tests pass.
+
+**New bench instrumentation**, all in `CwBench`:
+
+- `--marks [n]` - the run-by-run report above, with per-bucket SNR, level and
+  noise multiple, plus the first n marks listed individually.
+- `runs >=4` in the summary - the section 4.11d metric counted mechanically
+  rather than by eye: maximal runs of four or more identical single-element
+  characters (`E T I M S O H 5 0`).
+- `--warmup <s>`, `--train-noise <x>`, `--no-resync` - each of the settings
+  above, so any of them can be turned off on a recording without a rebuild.
+
+#### 4.11e SP5XOC, 2026-08-26 - and the hole in the whole of section 4
+
+Colin tuned to a station calling CQ on 14,027.70 (CW, FIL2, 500 Hz, pitch
+610 Hz, AGC MID, NR/NB/notch off). `bench/sp5xoc.wav` is 120 s of it.
+
+**Read the next paragraph before trusting any comparison in this section.**
+Colin does not read CW beyond recognising the sound of a CQ. Everything he
+reported during the session - "SP5XOC", "CFM 5NN TU", the sign-off on 14,040.90 -
+came off the MkII's decoder screen, not off his ear. **There was no independent
+ground truth for any live recording made on 2026-08-26.** Scoring the Core
+decoder against those strings scores it against the decoder we are trying to
+beat, which can show agreement and disagreement but never correctness. An
+earlier draft of this section claimed a first win over the radio on
+`sp5xoc.wav`; that claim was unsupported and is withdrawn.
+
+What the recordings do support:
+
+- On `sp5xoc.wav` the MkII printed the callsign and `CFM 5NN TU` early and then
+  degraded to garbage. The Core decoder printed `EFM 5NN TU` - agreeing with the
+  radio, one character worse - and later `CQCQCQDE` with a callsign attempt,
+  confidence 0.96. Neither decoder produced a transcript an operator could work
+  a station from.
+- On `bench/ft-14040-90.wav` (14,040.90, a slow sender at 13.7 wpm) both
+  decoders worked. 118 characters, 0 junk runs, confidence 0.85, tone locked at
+  537.9 Hz from a 610 Hz pitch - 72 Hz off, handled by the derived window. The
+  Core transcript ends `MY BEST 73 AND HAVE NICE RADIO DAY`, matching the MkII
+  verbatim. Through the stretch Colin logged as the radio producing garbage, the
+  Core decoder printed `MY QSL 4IA BO OK` - plausible English where the MkII had
+  none, which is the one place today's evidence favours us, and it rests on
+  Colin's approximate report of where that stretch was.
+
+**This is a hole in the bench method, not just in one session.** Section 4 has
+been comparing two decoders with no reference. Fixing it needs a source whose
+text is known independently of either radio. Three options, cheapest first:
+
+1. **Fldigi on the same `.wav`.** It is already installed and already wired into
+   both apps' launcher buttons. A third decoder does not give truth, but three
+   disagreeing decoders localise the disagreement, and Fldigi is the reference
+   implementation everything else is measured against.
+2. **A known-text transmission** - W1AW code practice, or a beacon - where the
+   sent text is published.
+3. **Colin's own keyer into a dummy load**, which gives exact text at a chosen
+   speed, at the cost of not being an off-air signal.
+
+Until one of those is in place, every "the MkII got it wrong" in section 4
+should be read as "the MkII and the Core decoder disagreed".
+
+**It also caught a mistake worth recording.** The first decode of that file
+found nothing, because it was run with `--search 150` and the station's tone was
+at 842 Hz - 232 Hz off the radio's own CW pitch, sitting on the top skirt of the
+500 Hz filter. The shipped default of 250 Hz finds it; the bad invocation was
+mine. Measured on the file:
+
+| tone search | transcript |
+|---|---|
+| +/-150 Hz | junk - it transcribed the noise beside the signal |
+| +/-200 Hz | `FM 5NN TU` plus fragments |
+| **+/-250 Hz (the default)** | `FM 5NN TU ISEI SK ... CQCQDE ...` |
+| +/-300 Hz | worse - it reaches past the skirt and chases attenuated energy |
+
+The right window is not a constant that happens to suit one filter. It is the
+passband: **half the IF filter width either side of the pitch**, which is 250 Hz
+for the 500 Hz filter and something else for every other filter the operator can
+select. `CwDecoderOptions.SearchWindowForFilterWidth` does that mapping, clamped
+to 100-500 Hz - a 250 Hz filter must not licence a hunt 250 Hz wide, and a
+2.4 kHz SSB filter must not licence a lock 1.2 kHz off the pitch, which would be
+a different QSO rather than a mistuned one. `CwBench --filter <Hz>` sets it, and
+six cases are pinned in `Tone_search_covers_the_passband_and_no_more`.
+
+Deriving the window from the 500 Hz filter reproduces the previous numbers
+exactly on all four earlier recordings (35/0/24.9, 48/0/23.3, 126/5/36.4,
+34/0/29.4), so this is a generalisation rather than a change of behaviour. On
+`sp5xoc.wav` it locks 827.7 Hz from a 610 Hz pitch at confidence 0.95, and the
+tracked speed reads a plausible 20.8 wpm where the too-narrow window produced
+40.0.
+
+**Still open on this recording:** we did not get the callsign, and neither did
+Colin's ear. 237 characters with real fragments in them is not yet a transcript
+an operator would work a station from.
+
+#### 4.11f SM5OMP, 2026-08-26 - what tone tracking is worth, and a theory that died the same hour
+
+The best signal of the session, and the cleanest experiment in it.
+
+`bench/strong23.wav`: 22 s trimmed out of a 180 s capture (the sender stopped at
+00:22 and the rest is noise floor at -35 dB). 14,040.900, CW, 500 Hz filter,
+610 Hz pitch. Strong - the tone sits 15-19 dB above the floor for the whole
+clip, the element decoder stays locked throughout, 0 junk runs, speed tracked
+steady at 15 wpm. Colin described the audio as really good copy. **The MkII's
+own decoder printed very little of it.**
+
+The tone is at **538 Hz**, 72 Hz below the configured pitch. Same tone, to
+within a Hz, as `bench/ft-14040-90.wav` recorded fifteen minutes earlier: the
+same operator, working someone else.
+
+Three runs over the same 22 seconds, changing nothing but where the detector
+looks:
+
+| detector | transcript |
+|---|---|
+| tracking, as shipped | ` C -H GI3UBADE S M 5 O (` |
+| pinned to the 610 Hz pitch | ` SI IE E S 5I EIEEHEI ESIIIIE SE H I EIEIH E` |
+| pinned to 538 Hz, where the station is | ` C -H GI3UBADE S M 5 O (` |
+
+Pinning to the pitch converts a readable transcript into exactly the class of
+output Colin calls garbage - single-element characters, `E I S H T`, the same
+shape as section 4.11's noise junk. It is not a weak signal, it is a signal the
+detector is not pointed at. 72 Hz is a fifth of the way to the filter skirt and
+it is already fatal.
+
+**What this does and does not establish.** It establishes that tone tracking is
+worth having, measured on a real signal: it is the difference between the two
+rows above, in our own decoder, with everything else held constant. It does
+*not* establish that the MkII fails for the same reason - the MkII's decoder is
+a black box and nobody here has read its internals. The hypothesis is that it
+decodes at the pitch because that is what the pitch is for, and that a station
+72 Hz off is off its detector in the same way it was off ours. **That
+hypothesis is testable live and has not been tested**: the IC-7300 MkII has CW
+auto-tuning, which zero-beats the signal onto the pitch. Next strong off-pitch
+signal, decode it first, then auto-tune, then decode again. If the radio starts
+printing, the hypothesis holds.
+
+**Amended the same hour: the hypothesis failed its first test.**
+`bench/qso2-clip.wav` is the same operator eleven minutes later, tone
+**528.9 Hz** - 81 Hz off the pitch, *further* off than `strong23.wav` - and the
+MkII decoded that one well. Colin relayed off its screen:
+
+| decoder | transcript |
+|---|---|
+| MkII (relayed off the screen) | `all info g ood rig fb my best 73^ar gi3uba de o m 5` then garbage |
+| Core | ` T ALL IN EGO  E MYEST 73+ GI3UBADEE S M5O 5 EJ <SK> EE   DE S M 5 OS M 5` |
+
+Same station, same offset, opposite outcome. Whatever silenced the radio on
+`strong23.wav`, it was not the 72 Hz. The pinning experiment above is untouched
+by this - it is our decoder against itself with everything else held constant,
+and it says tone tracking earns its place - but the extrapolation to the MkII
+does not survive contact with the next recording. The auto-tune experiment in
+section 4.12 is still worth running; it is no longer an explanation waiting to
+be confirmed.
+
+The head-to-head above is also the closest thing to a fair comparison in
+section 4 so far - one over, both decoders on it - and it is still not fair:
+the MkII text is what Colin read off a screen, the windows are not guaranteed
+identical, and neither column is ground truth. What it does show is where each
+one is strong. The radio reads the plain language better (`all info good rig fb`
+against our `ALL IN EGO`); we get further into the callsigns (`GI3UBA DE SM5O`
+against its `gi3uba de o m 5`); and both stop short of the full suffix. The
+agreements - `MY BEST 73`, `<AR>`, `GI3UBA DE` - are worth more than either
+column alone.
+
+This is also the first thing in section 4 with a check outside the two
+decoders. Both recordings, decoded independently, produce `SM5O` next to `HEJ`
+(Swedish) and, here, `GI3UBA` (Northern Ireland) in front of a `DE`. Two
+well-formed callsigns and a plain-language word in the right language is not
+ground truth, but it is evidence of a kind section 4.11e says we have never
+had. `bench/fldigi/strong23-8k.wav` is cut and waiting for the Fldigi run.
+
+**A second fault is visible in the good transcript - and Fldigi has since cut
+it in half.** The first draft of this paragraph said `GI3UBADE` should be
+`GI3UBA DE` and `S M 5 O` should be `SM5O`, both directions wrong, all of it
+ours. Fldigi over the same wav (section 4.11g) says otherwise:
+
+| | |
+|---|---|
+| Fldigi | `* 2C -HI GI 3UBA DE S M 5 O* <KN>` |
+| Core | ` C -H GI3UBADE S M 5 O (` |
+
+Fldigi splits `S M 5 O` in exactly the same places we do. Two decoders sharing
+an error that specific are not both mis-thresholding; the operator is sending
+his own call with inter-character gaps wide enough to read as word gaps. That
+half of the claim is withdrawn.
+
+The other half stands and is now better evidenced: Fldigi separated `DE` and we
+ran it into the callsign. `GI3UBADE` is ours alone. So the inter-word gap in
+`CwElementDecoder` does have a fault, and the bench case for it is the joined
+`DE`, not the split call.
+
+Also withdrawn: the trailing `(` was never a stray. `(` and `<KN>` are the same
+Morse, `-.--.`. Fldigi renders the prosign, we render the character. Identical
+copy.
+
+#### 4.11g Fldigi, 2026-08-26 - section 4 finally gets a reference
+
+Section 4.11e's complaint was that every comparison in section 4 scored the
+Core decoder against the MkII's screen, which cannot show either of them
+correct. This is the fix.
+
+**Method, and it is repeatable without touching the live setup.** Fldigi 4.2.11
+runs against `C:\Users\colin\fldigi-bench.files`, a throwaway copy of the real
+config with `AUDIOIO` set to 3 (**File I/O only**), mode CW, carrier 500 Hz -
+so the operating Fldigi, its sound card and its rig control cannot be disturbed
+by any of it. `bench/fldigi/fldigi-bench.cmd` launches it. Recordings are
+resampled to 8 kHz mono, Fldigi's native rate, same audio and same level.
+Playback is **File > Audio > Playback...**, the one step that needs a human,
+because Fldigi exposes no wav decode on the command line and none over
+XML-RPC. Everything else is driven over XML-RPC on 127.0.0.1:7362:
+`modem.set_by_name("CW")`, `modem.set_carrier`, `main.set_squelch(False)`, and
+`text.get_rx` polled into `bench/fldigi/rx-capture.log`.
+
+**`strong23.wav` - 22 s, strong, one station.**
+
+| | |
+|---|---|
+| Fldigi | `* 2C -HI GI 3UBA DE S M 5 O* <KN>` |
+| Core | ` C -H GI3UBADE S M 5 O (` |
+| MkII | printed almost nothing |
+
+Near-identical copy. Two corrections to earlier sections came out of it, both
+in 4.11f: the trailing `(` was never a stray character (`(` and `<KN>` are the
+same Morse, `-.--.`), and the `S M 5 O` split is the sender's fist, not our
+threshold, because Fldigi splits it in the same places. What survives as ours
+is `GI3UBADE`, where Fldigi separated the `DE`.
+
+**`f-14028900.wav` - 46 s, 14.0289, contest traffic.**
+
+| | |
+|---|---|
+| Fldigi | `K E7AUP UP CHRIS SP D M V ID 3356 CT7AUP TU SN5N CWT SN5N 6T CWT SN5N 6T CWT SN5N 6T CWT SN5N 6T` |
+| Core | ` <CT> H EAUP JUPCHRISSP DAVID 3356 AUPTUSN5N CWTSN5N- CWTSN5N- CWTSN5N- CWT SN5N-` |
+
+Agreement on `CWT SN5N` four times, on `CT7AUP`, `TU`, `CHRIS` and `3356`. One
+clear win for the Core decoder: **`DAVID 3356` against Fldigi's `D M V ID
+3356`** - and it is corroborated, because `qso4`, a different recording on a
+different frequency twenty minutes earlier, has the same operator's number in
+it. This is the first claim of the kind in section 4 that rests on something
+other than our own output.
+
+**What is now established, and not by us.** The contest is **CWT**, the CWops
+Mini-Test - Wednesdays, and these recordings were made just after 13:00 UTC on
+a Wednesday. That fixes the exchange format as name plus CWops member number,
+which is exactly the shape of everything section 4.11f and `qso4` pulled out of
+the noise: `DAN 1854`, `KJELL 3865`, `DAVID 3356`, `CHRIS`. **SM5OMP** is
+confirmed by two decoders on two recordings, **SN5N** and **CT7AUP** by two
+decoders on one. None of this came from our decoder alone.
+
+Still open from this session and now decidable: the MkII read `DAN 1584` where
+we read `DAN 1854`, five times. CWops member numbers are published, so this one
+is checkable offline against the roster.
+
+**`qso4.wav` - 5 min, 14.0409, several stations interleaved.** This one was run
+to settle a disagreement. Signal browser channel ~700 Hz:
+
+```
+T DTWETETA DE0KDAN 1854 TU E T TTST SM5IMO TEST SM5IMO E EE E T IE T NEE T G
+IN T I I A SA E A TM 5JO E EI E TEST SM5IMO TEST SM5IMO TEST NM5IMO SM7T SM7T
+DAN 1854 KJELL 3865 TU SM5IMO TEST SM5IMO TEST S
+```
+
+**`DAN 1854`.** We read `DAN 1854` five times; the MkII's screen read
+`DAN 1584` five times; the third decoder, with no stake in either, reads
+`DAN 1854` five times over, plus a sixth garbled instance that is reachable
+from `1854` and unreachable from `1584` (below). Two of three, and the
+internal evidence favours ours. The CWops roster still settles it absolutely
+and that check is cheap. `KJELL 3865` is character-for-character ours, and
+`TEST SM5IMO` five times matches what the MkII showed. On this file all three
+decoders agree on every callsign and every exchange number.
+
+Further down the same channel:
+
+```
+T SM5IMO RU0LA E RUT E TLL E E -TMA N 5 E RU0LL DAN 18II4 AI E T Q V AI91 EU E
+T ET I <KN>1YBN DAN 1854 E E T E TK Z E E E NOBK DAN 1854 E E E E E T E GE T
+M6N MAUP SN SN5 N DAN 1854 CHRIS SP TU TU T5IMO C IAUP
+```
+
+Five clean `DAN 1854` in all, and one garbled `DAN 18II4` which is the strongest
+single piece of evidence in the file. `5` is `.....`; drop one dot and insert
+one gap and it becomes `..` `..`, which is `II`. So `1854` -> `18II4` is a
+one-fault degradation. `1584` cannot reach `18II4` at all: corrupting the `5`
+in second position yields `1II84`, putting the `8` **after** the damage. Fldigi
+puts the `8` before it. The bad instance excludes the alternative more firmly
+than the five good ones confirm it.
+
+**The two recordings are linked.** `SN5N`, `CT7AUP` and `CHRIS SP` all appear in
+both `qso4` (14.0409) and `f-14028900` (14.0289) - twenty minutes and 12 kHz
+apart - in the reference decoder's output, not just ours. Operators working up
+and down the band inside one contest period, which is what a CWT is. The
+identification no longer rests on our decode at all. `RU0LA`/`RU0LL` is a new
+station, Asiatic Russian prefix.
+
+Two findings here outrank the callsigns.
+
+**The inter-word gap is not our defect alone.** Fldigi printed `DE0KDAN 1854` -
+`DE0K` and `DAN` welded together, the same failure section 4.11f logged against
+us as `GI3UBADE`. It should still be fixed, but it stops being a bug report
+against our decoder and becomes an attempt to beat the reference. Different
+task, different standard of proof.
+
+**Tracking versus pinning - a difference of degree, not of kind.** The main
+pane ran AFC on from a 675 Hz start; the signal browser's ~700 Hz channel was
+fixed. Both decoded the same station. The pinned channel gave much the cleaner
+copy; the tracking pane's full text (from `bench/fldigi/qso4-rx.log`, not the
+visible pane, which shows only its tail) was:
+
+```
+NAUP <VE> N5EDAN 1854 EI TU<BT>T5IMO CTIUP CT7AUP DAN1854 AVIDE3356 X SM5IMO
+*HTSM5MO SS
+```
+
+`CT7AUP` clean, `DAN 1854` twice, `DAVID 3356` and `SM5IMO` recoverable. So
+tracking was not defeated here - it returned the same callsigns at a far worse
+signal-to-junk ratio and later in the file. Set against 4.11f, where tracking
+beat a pinned pitch outright, the pattern is that tracking costs accuracy when
+competing signals are near enough to pull it about, and buys copy when the
+target drifts alone. Neither is right unconditionally, and `CwDecoderEngine`
+has no way at present to tell which regime it is in. That, rather than a
+choice between the two, is the thing worth building.
+
+**Count.** `DAN 1854` now stands at seven clean instances across two
+independent Fldigi decoders plus our own five, against `1584` on the MkII
+screen. `DAVID 3356` also appears in `qso4`, making four stations - SN5N,
+CT7AUP, CHRIS SP, DAVID 3356 - common to both recordings, and confirming our
+own `qso4` read of it.
+
+**One observation for section 4.13.** Fldigi's signal browser - the "all the
+signals, one to a line" display - was running throughout. On both files exactly
+one channel row carried the copy and every other row carried
+`EE TEEET EE EJ TMN AET`, single-element junk of the same kind section 4.11
+spent so long on. Channelising the passband does not decode more stations for
+free; it decodes the one that is there and prints noise on the rest. Whatever
+4.13 builds needs a per-channel presence gate before it is worth showing
+anyone, and that gate is the unsolved problem, not the channelising.
+
+### 4.13 Multi-signal: one decoder, many stations
+
+Raised by Colin 2026-08-26, watching Fldigi put every signal in the passband on
+its own line.
+
+**We decode exactly one signal** - the strongest tone inside the search window -
+and we do it silently. If a second station is louder for part of an over, the
+tracker walks to it and the transcript becomes a splice of two QSOs with nothing
+marking the join. At a 500 Hz filter this rarely bites: `sp5xoc.wav` holds one
+keyed tone (825-900 Hz, keying ratio 7.7-9.7, everything else at the 2.5 noise
+level). At 2.4 kHz it would bite immediately.
+
+The architecture is well placed for the fix, which is why this is worth writing
+down now rather than discovering later:
+
+- `CwToneDetector` and `CwElementDecoder` are already per-tone objects with no
+  shared state. One instance per signal is their natural use.
+- The 1024-point FFT already has the whole passband and currently only picks its
+  peak. Peak-picking it for several tones separated by roughly 60 Hz, each
+  passing a keying-ratio test to reject carriers and steady noise, gives the
+  channel list.
+- Each channel then runs pinned (`TrackPitch = false`) on its own tone, with its
+  own element decoder and its own speed estimate. That last point is not a
+  detail: two operators at 18 and 28 wpm are exactly what wrecks a single shared
+  tracker today.
+- Channels age out when their tone stops keying and appear when one starts. The
+  envelope path is 80 samples per 5 ms hop, so eight channels cost nothing and
+  the FFT is shared.
+
+This changes the output contract from "a transcript" to "a transcript per
+channel", so it reaches the UI as well as the core. It is a Phase 3 item, not a
+tweak to Phase 2.
+
+### 4.14 Where to pick this up
+
+Written at the end of the 2026-08-26 session, cold-start notes. Section 4.12 is
+the backlog; this is the running order and the state to resume from.
+
+#### Nothing is committed
+
+Branch `feature/cw-reader`, seven modified files, all of today's work:
+
+| file | change |
+|---|---|
+| `core/Services/Cw/CwToneDetector.cs` | `WarmupSeconds`; `NoiseLevel` on `CwToneSample` (4.11d.2) |
+| `core/Services/Cw/CwElementDecoder.cs` | `MinTrainNoiseMultiple` 3.5 (4.11d.2) |
+| `core/Services/Cw/CwDecoderEngine.cs` | `SearchWindowForFilterWidth` and its clamps (4.11b) |
+| `core/tests/.../CwDecoderTests.cs` | the search-window theory; 75 tests pass |
+| `core/tests/.../CwSignalGenerator.cs` | `LeadIn()`, so tests do not key in the first frame |
+| `tools/CwBench/Program.cs` | `--marks`, `--warmup`, `--train-noise`, `--no-resync`, `--filter`, `runs >=4` |
+| `docs/design/cw-reader-plan.md` | 4.11d.2, 4.11e, 4.11f, 4.13, this section |
+
+The three `core/` files are shared-core changes and eventually have to go back
+to `Radio_Web_Control_Core` and forward into IWC. Decide commit-or-continue
+before touching anything else, because the bench work below keeps editing the
+same files.
+
+#### The running order
+
+1. **The Fldigi reference run.** Blocked on a human at a GUI, which is why it is
+   first - everything else in section 4 is two decoders arguing with no umpire.
+   Everything is cut and waiting:
+
+   | file | tone to click on the waterfall | what is in it |
+   |---|---|---|
+   | `bench/fldigi/strong23-8k.wav` | 538 Hz | 22 s, strong, `GI3UBA DE SM5O...` |
+   | `bench/fldigi/qso2-clip-8k.wav` | 529 Hz | 72 s, the sign-off over, the 4.11f head-to-head |
+   | `bench/fldigi/ft-14040-90-8k.wav` | 538 Hz | 120 s, the slow-sender speed-tracker case |
+   | `bench/fldigi/sp5xoc-8k.wav` | 842 Hz | 120 s, weak, far off pitch |
+
+   Run `bench/fldigi/fldigi-bench.cmd`. It starts Fldigi 4.2.11 against
+   `C:\Users\colin\fldigi-bench.files`, a throwaway copy of the live config
+   pre-set to **File I/O only**, **CW**, cursor 538 Hz - so the real
+   `fldigi.files` and its rig control cannot be damaged by any of this. Then
+   **File > Audio > Playback...**, pick the wav, click the waterfall on the
+   tone, and save the RX panel. Drop the squelch if nothing prints.
+
+   The 8 kHz copies exist because that is Fldigi's native rate. Same audio, same
+   level, resampled, nothing else.
+
+2. **Word spacing (4.11f).** The newest defect and the most concrete. On
+   `bench/strong23.wav` and `bench/qso2-clip.wav` - strong, locked, steady tone,
+   characters correct - `GI3UBA DE` runs together as `GI3UBADE` while `SM5O`
+   splits into `S M 5 O`, in the same over. Both directions at once, so it is
+   not one threshold mis-set; it is how the gap thresholds adapt in
+   `CwElementDecoder`. Reproduce with:
+
+   `dotnet run --project tools/CwBench -c Release -- bench/strong23.wav --pitch 610 --filter 500`
+
+3. **Wire the CAT filter width through (4.11b).** `SearchWindowForFilterWidth`
+   is written, tested, and called by nothing but the bench. IWC already reads
+   `1A 03` into `IfWidthA`; YWC needs its equivalent. Until this lands the
+   shipped decoder still uses the fixed 250 Hz and the measurement in 4.11b is
+   unspent.
+
+4. **Why the MkII went quiet on `strong23.wav`.** The offset theory is dead
+   (4.11f). Run the auto-tune experiment anyway, and look at the radio's own CW
+   decode threshold setting while doing it.
+
+5. **The 3.5-vs-4.0 `MinTrainNoiseMultiple` question (4.11d.2).** Needs more
+   weak-signal captures than we have. `bench/mkii-nodecode.wav` is the one
+   recording that separates them.
+
+6. **`docs/design/cw-bench-procedure.md`**, still unwritten. First line:
+   cross-band peek off before recording.
+
+Then the rest of 4.12, and 4.13 for Phase 3.
+
+#### Bench state as of 2026-08-26
+
+Recordings from today. All IC-7300 MkII, 14,040.900 unless noted, CW, 500 Hz
+filter, 610 Hz pitch, mono 48 kHz from the USB CODEC:
+
+| file | what it is |
+|---|---|
+| `strong23.wav` | 22 s of SM5OMP at 538 Hz, 15 wpm, the cleanest signal of the day |
+| `qso2-clip.wav` | 72 s, same operator, 529 Hz, the sign-off; the 4.11f head-to-head |
+| `ft-14040-90.wav` | 120 s, same operator earlier, the slow-sender case |
+| `sp5xoc.wav` | 120 s, 14,027.70, weak, tone 842 Hz - the 4.11b search-window case |
+| `mkii-nodecode.wav` | the weak signal the MkII would not print at all |
+| `mkii-14040-slow.wav`, `mkii-14045-92.wav`, `mkii-14045-83-weak.wav` | noise; keep as negative controls |
+
+`bench/` is gitignored, so none of this is in version control and none of it is
+backed up.
+
+`bench/civ.ps1` is the CI-V helper written during the session - `freq=`,
+`readfreq`, `readmode`, `mode=cw`, `width=`, `readwidth`, `readpitch`,
+`smeter`, `readnr/nb/agc/notch/apf`, `raw=` - talking to the MkII directly on
+COM8 at 19200, address 0xB6. It lives in `bench/` because that is ignored and
+durable; it was written in a temp scratchpad that will not survive. Two things
+it does badly: the radio broadcasts `27` scope frames unsolicited and a naive
+"first frame addressed to E0" read picks one of those up instead of the answer,
+so re-read on a surprising result; and `smeter` returns a constant `00 00`,
+which may be the same fault.
+
+Recording, for the record:
+
+`ffmpeg -f dshow -i audio="Microphone (3- USB Audio Device)" -ac 1 -ar 48000 -c:a pcm_s16le -t 180 bench/out.wav`
+
 ### 4.12 Still outstanding
 
 The comparison §4 asks for is **done**. Element decoding is level (§4.9,
@@ -1282,17 +1864,41 @@ see until the operator has zero-beat it (§4.10).
 What is left before Phase 2 is our own work, not more measurement against the
 radio:
 
-- **The speed tracker (§4.4).** Still the one located defect, and now a
-  *measured* one: §4.11d shows the `TTTTTTTTT` runs stop dead when the speed is
-  clamped, on all four recordings, and §4.11d.1 shows it railing at `MaxWpm`
-  through 40 s of noise. The fix is to hold `_ditMs` while `SignalPresent` is
-  false, not to pin a value. The MkII has the same bug (AUTO 22 wpm, 29 a second earlier), so
-  fixing it is where we get ahead rather than catch up.
+- **The inter-word gap (§4.11f, §4.11g) - now an improvement, not a bug.**
+  Fldigi welds words together too (`DE0KDAN`), so this is no longer a defect
+  against the reference; it is an attempt to beat it. Weight it accordingly.
+  Original note: On `bench/strong23.wav` the decoder
+  runs `GI3UBA DE` together as `GI3UBADE` where Fldigi separates the `DE`.
+  Narrowed by the Fldigi reference: the `S M 5 O` split that looked like the
+  other half of the same bug is in the sender's fist, because Fldigi splits it
+  identically. One direction, not two.
+- **Why the MkII went quiet on `strong23.wav` (§4.11f).** Open, and the first
+  theory is dead: it is not the tuning offset, because the next over was
+  further off pitch and decoded fine. Run the auto-tune experiment anyway
+  (record, note what the radio prints, hit CW auto-tuning, record again), and
+  look at the MkII's own decode threshold setting while doing it.
+- **The speed tracker (§4.4). Fixed 2026-08-26 - see §4.11d.1 and §4.11d.2.**
+  Not by holding `_ditMs` on `SignalPresent`, which measured inert, but by a
+  detector warm-up and a training test on how far a mark sits above the noise
+  floor. The runs collapse to the pinned-speed numbers without pinning anything.
+  What remains open is the 3.5-vs-4.0 threshold in §4.11d.2, which needs more
+  weak-signal captures, and whether the MkII's own tracker (AUTO 22 wpm, 29 a
+  second earlier) is beatable on a signal it fails to print at all.
 - **Surface `WordsPerMinute` in the UI.** Icom show it; it is what let Colin
   tell a confused decoder from a bad band. See §4.11d.
 - **Output gating.** §4.11 gives the criterion and a threshold; where it lives in
   the pipeline, and whether it suppresses or merely marks, is undecided.
 - **Repeat §4.9 on the pitch**, so the element comparison stops being provisional.
+- **Get an independent reference (§4.11e). Done 2026-08-26 - see §4.11g.**
+  Fldigi over the same wavs, driven from `bench/fldigi/fldigi-bench.cmd` and
+  read back over XML-RPC. It has already corrected two claims in §4.11f and
+  confirmed SM5OMP, SN5N, CT7AUP and the CWT exchange format. Repeat it on
+  every new bench recording before drawing conclusions from one.
+- **Wire the IF filter width through to the decoder.** The mapping exists and is
+  tested (§4.11e); nothing reads the radio's actual filter width yet. Both apps
+  already have it over CAT - IWC reads `1A 03`, and it is in `IfWidthA`.
+- **Multi-signal decoding (§4.13).** Phase 3. Until then the decoder is
+  single-signal and does not say so, which is the part worth fixing first.
 - **Re-run the §4.6 band sweep with cross-band peek off**, so its per-band
   flatness figures mean something.
 - **`docs/design/cw-bench-procedure.md`**, which CwBench's usage text already
