@@ -65,13 +65,21 @@ read the text.
 ### The command
 
 ```
-ffmpeg -f dshow -i audio="Microphone (3- USB Audio Device)" \
+ffmpeg -f dshow -i audio="$(bash scripts/find-cw-device.sh)" \
        -ac 1 -ar 48000 -c:a pcm_s16le -t 180 bench/out.wav
 ```
 
 Mono, 48 kHz, 16-bit PCM, from the radio's USB CODEC. 48 kHz because that is
 `AudioConstants.SampleRate` and what `ICwAudioSource` documents, so the bench
 sees exactly what the application will see.
+
+**Do not hardcode the device name.** It carries a Windows enumeration number -
+it was `Microphone (3- USB Audio Device)` and is now `Line (2- USB AUDIO
+CODEC)` (with a double space) - which changes when the radio is re-plugged or
+another USB audio device appears. ffmpeg then fails with "Could not find audio
+only device", which reads like a driver fault rather than a renamed device, and
+the failure lands in the middle of a band opening. `scripts/find-cw-device.sh`
+asks the machine instead.
 
 **Use `-t` and let ffmpeg finish.** Killing it leaves the RIFF header
 unfinalised - size `0xFFFFFFFF` - and CwBench then computes a negative sample
@@ -118,6 +126,31 @@ dotnet run --project tools/CwBench -c Release -- bench/out.wav --pitch 610 --fil
 window is then derived exactly as the application derives it, so the bench and
 the shipped decoder agree.
 
+### Probe for 30 seconds before committing to three minutes
+
+Recording blind for three minutes and then discovering there was no keyed
+signal in it wastes the operator's time, not the machine's - they have to sit
+there not touching the dial for the whole of it. On 2026-08-26 three files were
+made this way and two were duds:
+
+| file | most keyed | ratio | verdict |
+|---|---|---|---|
+| `ywc-40m-cw.wav`  | 675 Hz  | 3.2 | keyed but weakly, spread over five bins - several stations |
+| `ywc-40m-cw2.wav` | 2950 Hz | 2.9 | nothing keyed at all - noise |
+
+In both cases **the operator's ear called it before the software did** ("lots
+of signals on top of each other", "might be RTTY", "it's gone"). Three for
+three that session. The keying-ratio test agrees with a listener, so use it as
+a gate rather than a post-mortem:
+
+```
+ffmpeg ... -t 30 bench/probe.wav        # half a minute, not three
+dotnet run --project tools/CwBench -c Release -- bench/probe.wav \
+    --pitch <hz> --filter <hz> --spectrum
+```
+
+Keep going to 180 s only if some bin shows a keying ratio of 5 or better.
+
 ### Always run `--spectrum` first
 
 ```
@@ -139,6 +172,14 @@ not mistaken for a transcript of a signal. Look for:
 
 `--timeline [Hz]` does the same a second at a time, so a signal that fades is
 not averaged away.
+
+**Pass the Hz explicitly whenever the spectrum verdict is doubtful.** With no
+argument `--timeline` uses whatever `--spectrum` called the most keyed bin, and
+on a file with no keyed signal that choice is meaningless - on `ywc-40m-cw2.wav`
+it picked 2950 Hz, outside the passband, at -68 dB, and produced 180 rows of
+noise measured against noise with `CW` printed beside half of them. The
+automatic choice is only trustworthy when there is a real peak for it to find,
+which is exactly the case where you did not need the timeline.
 
 ### Useful flags, and what each one is for
 

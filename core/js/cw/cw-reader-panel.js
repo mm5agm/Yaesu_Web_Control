@@ -183,18 +183,49 @@ export class CwReaderPanel {
             return;
         }
 
-        // The decoder cannot hear anything unless the audio bridge has the
-        // capture device open, which happens when remote audio is running.
-        // Without this the panel would look healthy and print nothing, and
-        // the operator would have no way to tell why.
+        // The decoder listens to the remote-audio capture rather than opening
+        // a device of its own, so it hears nothing until an audio session is
+        // actually connected. Without saying so the panel looks healthy and
+        // prints nothing, and the operator has no way to tell why.
+        //
+        // Two different states, and telling them apart matters. Enabling
+        // Remote Audio in Settings only makes the Remote Audio bar appear; it
+        // does not connect anything. Saying 'start remote audio' to an
+        // operator who has already switched it on sends them back to the
+        // setting they have already set, which is exactly what happened the
+        // first time this panel met a radio.
+        if (!snap.audioSessionActive) {
+            this._status.textContent =
+                'Running, but no audio is reaching it. The decoder listens to the '
+                + 'remote audio stream: press the green telephone button on the Remote '
+                + 'Audio bar to connect. (If that bar is not showing, switch Remote '
+                + 'Audio on in Settings first.)';
+            return;
+        }
+
+        // Session connected but no device open is a genuine fault rather than
+        // something the operator has left undone.
         if (!snap.audioDevicesOpen) {
             this._status.textContent =
-                'Running, but the radio audio device is not open - start remote audio to give the decoder something to hear.';
+                'Remote audio is connected but no capture device opened - check the '
+                + 'audio device selection in Settings.';
             return;
         }
 
         const bits = [];
-        bits.push(snap.signalPresent ? 'signal' : 'no signal');
+
+        // The decoder shows no text when the marks arriving cannot be Morse,
+        // so the panel has to say why. A blank transcript sitting beside a
+        // healthy SNR and a confident tone reading is precisely what sent the
+        // operator looking for a fault in the radio, when the radio was fine
+        // and the band was not.
+        if (snap.readability === 'Chatter') {
+            bits.push('nothing readable - the tone is breaking up, not keying');
+        } else if (snap.readability === 'Jumbled') {
+            bits.push('nothing readable - more than one signal in the passband');
+        } else {
+            bits.push(snap.signalPresent ? 'signal' : 'no signal');
+        }
         if (snap.toneHz)        bits.push(`tone ${Math.round(snap.toneHz)} Hz`);
         bits.push(`pitch ${Math.round(snap.pitchHz)} Hz`);
 
@@ -205,7 +236,12 @@ export class CwReaderPanel {
             : 'filter unknown');
         bits.push(`search +/-${Math.round(snap.searchWindowHz)} Hz`);
 
-        if (snap.wordsPerMinute) bits.push(`${snap.wordsPerMinute.toFixed(0)} wpm${snap.isLocked ? '' : ' (unlocked)'}`);
+        // Speed is left out when nothing is readable. It is the reading that
+        // misleads most: with the detector chattering it rails at the maximum
+        // and reports a locked 60 wpm, which looks like a very fast operator
+        // rather than a decoder with nothing to decode.
+        const readable = snap.readability !== 'Chatter' && snap.readability !== 'Jumbled';
+        if (snap.wordsPerMinute && readable) bits.push(`${snap.wordsPerMinute.toFixed(0)} wpm${snap.isLocked ? '' : ' (unlocked)'}`);
         if (Number.isFinite(snap.snrDb)) bits.push(`SNR ${snap.snrDb.toFixed(0)} dB`);
         if (snap.droppedFrames)  bits.push(`${snap.droppedFrames} frames dropped`);
 

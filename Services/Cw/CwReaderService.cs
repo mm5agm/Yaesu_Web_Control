@@ -41,6 +41,7 @@ namespace Yaesu_Web_Control.Services.Cw
         private const int MaxTextLength = 8000;
 
         private readonly BridgeCwAudioSource _source;
+        private readonly AudioSessionManager _sessions;
         private readonly RadioStateService _state;
         private readonly ISettingsService _settings;
         private readonly ILogger<CwReaderService> _logger;
@@ -60,11 +61,13 @@ namespace Yaesu_Web_Control.Services.Cw
 
         public CwReaderService(
             BridgeCwAudioSource source,
+            AudioSessionManager sessions,
             RadioStateService state,
             ISettingsService settings,
             ILogger<CwReaderService> logger)
         {
             _source = source;
+            _sessions = sessions;
             _state = state;
             _settings = settings;
             _logger = logger;
@@ -155,8 +158,9 @@ namespace Yaesu_Web_Control.Services.Cw
 
                 return new CwReaderSnapshot
                 {
-                    Running          = IsRunning,
-                    AudioDevicesOpen = _source.AudioDevicesOpen,
+                    Running            = IsRunning,
+                    AudioSessionActive = _sessions.HasActiveSession,
+                    AudioDevicesOpen   = _source.AudioDevicesOpen,
                     Text             = text,
                     Cursor           = _totalChars,
                     Truncated        = truncated,
@@ -169,6 +173,7 @@ namespace Yaesu_Web_Control.Services.Cw
                     SnrDb            = _engine?.SnrDb ?? 0,
                     SignalPresent    = _engine?.SignalPresent ?? false,
                     IsLocked         = _engine?.IsLocked ?? false,
+                    Readability      = (_engine?.Readability ?? CwReadability.Unknown).ToString(),
                     DroppedFrames    = _source.DroppedFrames,
                 };
             }
@@ -279,9 +284,23 @@ namespace Yaesu_Web_Control.Services.Cw
         public bool Running { get; init; }
 
         /// <summary>
+        /// False means no browser is holding the remote-audio WebSocket, so
+        /// nothing has asked the bridge to open a device and the decoder is
+        /// being fed silence. This is not the same as the Remote Audio
+        /// *setting*: enabling it in Settings only reveals the Remote Audio
+        /// bar. Something still has to press connect, and until it does this
+        /// stays false. Distinguishing the two is the whole point of
+        /// carrying it - a reader that says "start remote audio" to an
+        /// operator who already has it enabled sends them looking in the
+        /// wrong place.
+        /// </summary>
+        public bool AudioSessionActive { get; init; }
+
+        /// <summary>
         /// False means the audio bridge has no capture device open, so there
-        /// is nothing to decode however healthy the rest looks. The UI should
-        /// say so rather than show an empty pane.
+        /// is nothing to decode however healthy the rest looks. With a
+        /// session active this means the devices failed to open, which is a
+        /// real fault; with no session it simply means nobody has connected.
         /// </summary>
         public bool AudioDevicesOpen { get; init; }
 
@@ -305,6 +324,20 @@ namespace Yaesu_Web_Control.Services.Cw
         public double SnrDb { get; init; }
         public bool SignalPresent { get; init; }
         public bool IsLocked { get; init; }
+
+        /// <summary>
+        /// Whether the marks arriving can be Morse at all: Unknown, Readable,
+        /// Chatter or Jumbled. Not the same question as the tone confidence,
+        /// and the two disagree exactly when it matters - a detector
+        /// chattering on a near-threshold carrier tracks the tone perfectly
+        /// and copies nothing.
+        ///
+        /// The reader shows no text in Chatter or Jumbled, so without this the
+        /// panel would sit blank with a healthy SNR beside it and no
+        /// explanation, which is the reading that sent the operator looking
+        /// for a fault in the radio in the first place.
+        /// </summary>
+        public string Readability { get; init; } = "Unknown";
         public long DroppedFrames { get; init; }
     }
 }

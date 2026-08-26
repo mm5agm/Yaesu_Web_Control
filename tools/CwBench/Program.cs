@@ -178,10 +178,12 @@ internal static class Program
         var lastWpm    = 0.0;
         var lastTone   = 0.0;
 
+        var readTally = new int[4];
         for (var offset = 0; offset < samples.Length; offset += frame)
         {
             var n    = Math.Min(frame, samples.Length - offset);
             var text = engine.ProcessFrame(samples.AsSpan(offset, n));
+            readTally[(int)engine.Readability]++;
             var t    = (offset + n) / (double)rate;
 
             if (text.Length > 0)
@@ -226,6 +228,13 @@ internal static class Program
         Console.WriteLine($"tone         {lastTone:F1} Hz  (configured pitch {pitch:F0} Hz)");
         Console.WriteLine($"zero-in      {(zero is null ? "not offered" : $"{zero:+#;-#;0} Hz")}");
         Console.WriteLine($"confidence   {engine.Confidence:F2}");
+        {
+            double tot = Math.Max(1, readTally.Sum());
+            Console.WriteLine($"readability  Readable {readTally[(int)CwReadability.Readable] / tot * 100.0:F0}%  "
+                            + $"Chatter {readTally[(int)CwReadability.Chatter] / tot * 100.0:F0}%  "
+                            + $"Jumbled {readTally[(int)CwReadability.Jumbled] / tot * 100.0:F0}%  "
+                            + $"Unknown {readTally[(int)CwReadability.Unknown] / tot * 100.0:F0}%");
+        }
         Console.WriteLine();
         Console.WriteLine("--- transcript ----------------------------------------------");
         Console.WriteLine(transcript.ToString());
@@ -339,6 +348,19 @@ internal static class Program
         Console.WriteLine($"marks        {markMs.Count} at or over 12 ms, median {median:F0} ms");
         Console.WriteLine($"             gate true at the closing edge: {endPresent}, false: {markMs.Count - endPresent}");
         Console.WriteLine($"             gate true for the whole mark:  {solid}, patchy: {markMs.Count - solid}");
+        // Shape of the mark population. Real Morse has two lengths in a 3:1
+        // ratio, so p90/p10 sits near 3; a detector chattering on a
+        // near-threshold tone produces one length and a spread under 2.
+        if (sorted.Count >= 10)
+        {
+            double Pct(double q) => sorted[Math.Clamp((int)(q * (sorted.Count - 1)), 0, sorted.Count - 1)];
+            double p10 = Pct(0.10), p90 = Pct(0.90);
+            double markSecs = markMs.Sum() / 1000.0;
+            Console.WriteLine($"             p10 {p10,4:F0} ms   p50 {median,4:F0} ms   p90 {p90,4:F0} ms   "
+                            + $"spread {(p10 > 0 ? p90 / p10 : 0),4:F2}");
+            Console.WriteLine($"             key-down {markSecs / (samples.Length / (double)rate) * 100.0,4:F1}% of the file");
+        }
+
         if (listCount > 0)
         {
             Console.WriteLine("             at        ms     SNR      peak   x noise");
