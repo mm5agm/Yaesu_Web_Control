@@ -8,6 +8,85 @@ Before making any changes, read and follow all rules in `.claude/rules.md` and `
 
 ---
 
+## Shared code lives in Radio_Web_Control_Core. This is a hard rule.
+
+`core/` is a **git subtree** of
+[Radio_Web_Control_Core](https://github.com/mm5agm/Radio_Web_Control_Core),
+shared with Icom Web Control. It is not a vendored copy and it is not a snapshot.
+
+**If code is radio-agnostic, it belongs in `core/`.** Not in this repo's own
+tree "for now", not "until it settles", not "until the other app needs it".
+The exception is code that genuinely cannot be shared - see the table.
+
+This rule exists because it was broken. The whole CW decoder - six services and
+five test files - was authored inside `core/` and then sat in one branch of one
+repo for weeks with no second copy anywhere, and the reader panel was written
+straight into `wwwroot/js/ui/` where the other app could never see it. Nobody
+decided that; it just never got pushed.
+
+### Does it belong in core?
+
+| goes in `core/` | stays in this repo |
+|---|---|
+| Signal processing, decoders, DSP | CAT / CI-V framing and addressing |
+| Data models exchanged with other tools (ADIF, DX spots) | Anything reading a radio-specific register or code |
+| Pure algorithms with no radio in them | Per-radio lookup tables and calibration numbers |
+| Browser modules that only talk to an HTTP API | Anything touching this app's DI, hubs or Razor pages |
+| Tests for all of the above | Tests for this app's own wiring |
+
+The seam is the radio. `CwDecoderEngine` takes samples and a pitch, so it is
+core. `YaesuIfWidth` maps a Yaesu SH code to Hz, so it is not - and Icom's
+widths are a formula rather than a table, which is the proof that it never
+could have been.
+
+A shared browser module goes in `core/js/<area>/`. The `CopySharedCoreJs`
+target copies `core\js\**\*.js` into `wwwroot\js\` preserving the subdirectory,
+so `core/js/cw/x.js` is served at `/js/cw/x.js` with **no csproj change**. That
+target also writes the `.gitignore` for what it generated, so the copies never
+need a hand-written ignore rule either.
+
+C# under `core/` is excluded from this project's compile globs
+(`<Compile Remove="core\**" />` and friends) and consumed as a project
+reference. That exclusion is mandatory - the Web SDK globs `**/*.cs`.
+
+### The workflow, and the step that gets forgotten
+
+Authoring happens **inside `core/` in whichever app you are working in**. The
+push up to Radio_Web_Control_Core is a **separate command**, and it is the one
+that gets missed.
+
+```powershell
+./scripts/core-sync.ps1 -Check   # is anything owed upstream?
+./scripts/core-sync.ps1 -Push    # send core/ commits up (pulls first)
+./scripts/core-sync.ps1 -Pull    # bring the sibling's core work down
+```
+
+`-Push` refuses on a dirty tree, because `git subtree split` only sees
+committed content and would silently leave uncommitted `core/` work behind.
+The split walks the whole repo history and prints nothing for a couple of
+minutes; it is not hung.
+
+### Claude: your standing instructions
+
+1. Before writing any new file, ask whether it is radio-agnostic. If it is, it
+   goes under `core/`. Say so at the time rather than moving it later.
+2. **Run `./scripts/core-sync.ps1 -Check` at the end of any session in which
+   anything under `core/` changed.** Do not wait to be asked. The point of this
+   rule is that Colin does not have to remember it.
+3. If `-Check` reports work owed upstream, **push it without asking.** Colin
+   gave standing authorisation for this on 2026-08-26, in as many words:
+   *"I want ALL shared code to be in Radio_Web_Control_Core without me having
+   to remember to specifically ask for that to happen."*
+4. **This authorisation is narrow.** It covers pushing `core/` to
+   Radio_Web_Control_Core and nothing else. Pushing this repo to its own
+   origin, tagging, releasing and opening PRs all still need Colin's explicit
+   word, as before.
+5. After a successful `-Push`, run `-Pull` in Icom Web Control so both carry the
+   same core. A push that only one app has is half a job.
+
+
+---
+
 ## Build & Run
 
 **Targets:** multi-TFM — Windows product (`net10.0-windows`, WinExe + WinForms tray/voice/SDR) and CAT-only host (`net10.0`, console; macOS/Linux).

@@ -321,6 +321,18 @@
     <Copy SourceFiles="@(_SharedCoreJs)"
           DestinationFiles="@(_SharedCoreJs->'wwwroot\js\%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
+    <!-- Write the ignore rule for what we just generated, so nobody has to
+         remember to. Adding a file under core/js used to mean hand-editing
+         .gitignore in both apps as well, and that step was missed for
+         core/js/cw the first time round - the generated copy showed up as
+         untracked in IWC. This target knows exactly what it produced, so it
+         emits one .gitignore per destination directory naming only those
+         files (plus itself). App-authored siblings such as
+         calibration-tables.js are deliberately not covered. -->
+    <WriteLinesToFile File="wwwroot\js\%(_SharedCoreJs.RecursiveDir).gitignore"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true"
+                      Lines="# Generated at build time from the Radio_Web_Control_Core subtree.;# core/js is the single source of truth - see core/js/README.md.;# Edit these in core/js and push the subtree. Never edit the copy here.;.gitignore;@(_SharedCoreJs-&gt;'%(Filename)%(Extension)')" />
     <ItemGroup>
       <Content Include="@(_SharedCoreJs->'wwwroot\js\%(RecursiveDir)%(Filename)%(Extension)')"
                Exclude="@(Content)">
