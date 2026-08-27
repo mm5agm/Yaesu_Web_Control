@@ -22,4 +22,11 @@
     <ProjectReference Include="..\..\RadioWebControl.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Recorded off-air fixtures. Binary, and deliberately so: the empty-band
+         regression cannot be reproduced with synthesised noise (see
+         CwNoiseIsNotASignalTests), so the recording is the test asset. -->
+    <Content Include="Cw/Fixtures/*.wav" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
