@@ -104,10 +104,10 @@ namespace RadioWebControl.Core.Tests.Cw
         }
 
         [Fact]
-        public void Off_by_default_so_nothing_changes_until_it_is_asked_for()
+        public void On_by_default_at_ten_milliseconds()
         {
-            Assert.Equal(0.0, new CwToneDetectorOptions().KeyDebounceMs);
-            Assert.Equal(0.0, new CwDecoderOptions().KeyDebounceMs);
+            Assert.Equal(10.0, new CwToneDetectorOptions().KeyDebounceMs);
+            Assert.Equal(10.0, new CwDecoderOptions().KeyDebounceMs);
         }
     }
 }
