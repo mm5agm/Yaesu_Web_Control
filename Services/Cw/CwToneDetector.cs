@@ -153,13 +153,91 @@ namespace RadioWebControl.Core.Services.Cw
         // Presence gate, as peak over the mean noise level, with hysteresis.
         // Measured against the mean and not against a minimum tracker on purpose:
         // narrowband noise is Rayleigh, so its peak sits several times its own
-        // minimum and a floor-referenced gate calls pure hiss a signal. It does
-        // not sit far above its mean, which is what makes this test work.
+        // minimum and a floor-referenced gate calls pure hiss a signal.
+        //
+        // Referencing the mean narrows that gap but does not close it. _peakEst
+        // is a multi-second max-hold and _noiseMean a quarter-second mean, so
+        // the two are not the same statistic and their ratio carries the peak
+        // factor of the noise on its own: stationary hiss already measures 2.1
+        // against a 3.0 gate, leaving 3.5 dB of margin, and any wander in the
+        // level - AGC breathing, QSB, atmospheric crashes - spends it. This is
+        // why the ratio cannot be the whole test; see the keying gate below.
         private const double PresentRatio = 3.0;
         private const double AbsentRatio  = 2.2;
 
         /// <summary>Lowest the mark reference may sit, as a multiple of the noise mean.</summary>
         private const double MarkFloorRatio = 2.5;
+
+        // Keying gate. On 2026-08-27 an empty 15m, with nothing audible on it,
+        // read 13.7 dB, "signal", "locked" and 60 wpm, and turned bare hiss
+        // into 93% chatter. Amplitude-modulated noise reproduces it exactly:
+        // at 0.9 depth and 1 Hz, pure noise reads 13.3 dB and keys a third of
+        // the time. No level test separates those, because nothing about the
+        // level is different - what differs is duration.
+        //
+        // A dit is 20 ms even at 60 wpm, which is four hops, and its envelope
+        // holds a flat top for all of them; a dah holds one three times longer
+        // at any speed. A Rayleigh spike lasts one or two hops and has no top
+        // at all. So a tone counts as present only once the envelope has
+        // lately made several sustained excursions, which noise cannot fake.
+        //
+        // Acquiring is deliberately stricter than holding. Presence gates
+        // KeyDown, so dropping it mid-over costs characters outright - which
+        // is why the window is long and RunsOff is 1: a signal that has proved
+        // itself keyed keeps presence across the gaps between overs, and only
+        // a window with no sustained excursion at all in it gives presence up.
+        //
+        // Calibrated against three minutes of empty 15m and the bench corpus:
+        // the empty band holds at 0% presence and 0 characters, while
+        // mkii-dk9py keeps all 241 of its characters at 95% readable, which is
+        // exactly its score before the gate existed. The margin is real but it
+        // is not large - at a 12 s window the empty band breaks back through
+        // at 17%, so lengthening this further needs re-measuring, not just a
+        // bigger number.
+        private const int MarkRunHops      = 6;     // 30 ms: every dah to 90 wpm, dits to 40
+        private const int KeyingWindowHops = 2000;  // 10 s of history
+        private const int KeyingRunsOn     = 6;
+        // The hold count is what actually rejects an empty band, and it was
+        // the token 1 that let noise through: once grace had granted presence,
+        // a single qualified run inside the ten-second window held it forever,
+        // and noise reliably makes several. Swept 2026-08-27 against three
+        // minutes of recorded empty 15m, with on in {6,16} and off in
+        // {1,10,25,40}; on barely moved anything, off decided everything:
+        //
+        //   off :  noise3min   dead    dk9py        cq-then-qso
+        //     1 :    70%       100%    242 chars    118 chars
+        //    10 :    11%        17%    240 chars    114 chars
+        //    25 :    11%        17%    230 chars     86 chars
+        //    40 :    11%        17%    167 chars     29 chars
+        //
+        // 10 is the knee: noise collapses and the signals keep all but a
+        // couple of characters, while 25 and beyond starts eating QSOs for
+        // no further gain. The 11% and 17% that remain are the grace burst
+        // itself - 2 s of a 12 s file is 16.7% - and emit no characters.
+        private const int KeyingRunsOff    = 10;
+
+        // Grace. The gate cannot be the first thing that decides presence, or
+        // it eats the start of every transmission: it needs several marks to
+        // make up its mind and the first of them are the callsign. So the
+        // level test opens the gate immediately and the keying gate is given
+        // this long to confirm, taking presence away again if it cannot. On a
+        // real signal confirmation arrives inside a couple of characters and
+        // nothing is lost. On an empty band the cost is one burst of chatter
+        // at the top of the session, after which the level test never falls
+        // back below AbsentRatio, so the grace never re-arms and the band
+        // stays quiet.
+        private const int GraceHops = 1100;   // 5.5 s
+
+        // How long the level has to stay down before the grace re-arms. A
+        // momentary dip must not count: on an empty band snrLin crosses the
+        // gate constantly, and re-arming on each dip hands noise a fresh grace
+        // period every time. Three minutes of recorded empty 15m measured 94%
+        // present with no delay at all and 23% at 3 s, because the grace kept
+        // re-arming through the session; at 6 s it is 3%, which is the opening
+        // burst and nothing after it. The cost is four characters on one bench
+        // QSO. Between two overs the band goes properly quiet for longer than
+        // this, so a real signal still re-arms for the next over.
+        private const int ReArmHops = 1200;   // 6 s
 
         private readonly CwToneDetectorOptions _opt;
         private readonly int      _decimation;
@@ -192,6 +270,15 @@ namespace RadioWebControl.Core.Services.Cw
         private int  _debounceHops;
         private bool _committedKey;
         private int  _runHops;
+        // Rolling record of which hops ended a sustained excursion, and how
+        // many are still inside the window, for the keying gate.
+        private readonly bool[] _markRuns = new bool[KeyingWindowHops];
+        private int _markRunPos;
+        private int _markRunCount;
+        private int _aboveRun;
+        private int _levelHops;
+        private int _quietHops;
+
         private bool   _present;
         private double _confidence;
         private bool   _primed;
@@ -356,7 +443,22 @@ namespace RadioWebControl.Core.Services.Cw
             // Noise: tracked while the key is up, where the only thing present is
             // noise. A slow creep while the key is down stops a very long mark
             // freezing the estimate entirely.
-            _noiseMean += (_keyDown ? 0.0005 : 0.02) * (mag - _noiseMean);
+            //
+            // _keyDown alone is not a safe test for "the key is up", because it
+            // is forced false whenever presence is false - so before the gate
+            // opens, the signal gets averaged into the noise estimate at the
+            // fast rate. That is self-sealing: a rising _noiseMean lifts midThr
+            // below, mark runs stop qualifying, and the keying gate can never
+            // reach the count that would grant presence. It is why no value of
+            // KeyingRunsOn worked, and why the opening lost whole callsigns
+            // rather than the handful of marks the gate nominally costs.
+            //
+            // So an unconfirmed sustained excursion protects the estimate too.
+            // On noise this costs nothing - excursions that survive MarkRunHops
+            // are exactly what noise does not produce, which is the premise of
+            // the gate - so the estimate stays unbiased on an empty band.
+            bool inMark = _keyDown || _aboveRun >= MarkRunHops;
+            _noiseMean += (inMark ? 0.0005 : 0.02) * (mag - _noiseMean);
 
             // Mark level: updated only while the key is down, so it follows the
             // signal itself rather than the duty cycle. This is what rides QSB.
@@ -369,8 +471,50 @@ namespace RadioWebControl.Core.Services.Cw
             double noise = Math.Max(_noiseMean, 1e-12);
             double snrLin = _peakEst / noise;
 
-            if (!_present && snrLin >= PresentRatio) _present = true;
-            else if (_present && snrLin < AbsentRatio) _present = false;
+            // Sustained-excursion count. The threshold sits midway between the
+            // noise mean and the peak, which is where a mark's flat top lies
+            // and where the tip of a noise spike does not.
+            // Referenced to the mark level and not to the peak, for the same
+            // reason _markLevel exists at all: _peakEst is a multi-second
+            // max-hold, so through a fade it strands the threshold above the
+            // signal that is still there. That cost 20 dB QSB tests whole
+            // callsigns - the marks stopped qualifying, the window emptied and
+            // presence dropped mid-transmission. The peak is still the ceiling,
+            // so a stale mark level cannot lower the bar below what is real.
+            //
+            // The floor matters just as much as the ceiling. Grace grants a
+            // couple of seconds of presence before the gate has decided, and
+            // in those seconds _markLevel is learned from whatever is there -
+            // on an empty band, noise. Left unfloored that pulls the bar down
+            // to the noise, every hiss excursion qualifies, and the gate holds
+            // presence on nothing: measured 99% on three minutes of empty 15m.
+            // Floored at MarkFloorRatio the ceiling takes over instead, since
+            // hiss peaks at about 2.1x its mean and the floor asks for 2.5x,
+            // so on noise this collapses back to the strict peak reference.
+            double markRef   = Math.Min(
+                                   Math.Max(_markLevel, MarkFloorRatio * _noiseMean),
+                                   _peakEst);
+            double midThr    = _noiseMean + 0.5 * (markRef - _noiseMean);
+            bool   qualified = false;
+            if (mag >= midThr) _aboveRun++;
+            else
+            {
+                if (_aboveRun >= MarkRunHops) qualified = true;
+                _aboveRun = 0;
+            }
+            if (_markRuns[_markRunPos]) _markRunCount--;
+            _markRuns[_markRunPos] = qualified;
+            if (qualified) _markRunCount++;
+            _markRunPos = (_markRunPos + 1) % KeyingWindowHops;
+
+            bool levelOk = snrLin >= (_present ? AbsentRatio : PresentRatio);
+            if (levelOk) { _levelHops++; _quietHops = 0; }
+            else if (++_quietHops >= ReArmHops) _levelHops = 0;
+
+            bool keying = _markRunCount >= (_present ? KeyingRunsOff : KeyingRunsOn);
+            bool grace  = _levelHops <= GraceHops;
+
+            _present = levelOk && (keying || grace);
 
             if (_present)
             {
