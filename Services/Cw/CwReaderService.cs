@@ -173,6 +173,7 @@ namespace Yaesu_Web_Control.Services.Cw
                     SnrDb            = _engine?.SnrDb ?? 0,
                     SignalPresent    = _engine?.SignalPresent ?? false,
                     IsLocked         = _engine?.IsLocked ?? false,
+                    ZeroInOffsetHz   = _engine?.ZeroInOffsetHz(IsLowerSideband(_state.ModeA)),
                     Readability      = (_engine?.Readability ?? CwReadability.Unknown).ToString(),
                     DroppedFrames    = _source.DroppedFrames,
                 };
@@ -208,6 +209,15 @@ namespace Yaesu_Web_Control.Services.Cw
         /// KP is a code, 0-75, for 300-1050 Hz in 10 Hz steps.
         /// </summary>
         private double PitchHzFromRadio() => 300.0 + (Math.Clamp(_state.CwPitch, 0, 75) * 10.0);
+
+        /// <summary>
+        /// Which way a tuning correction has to go. On CW-L the audio tone
+        /// moves opposite to the dial, so the offset the reader suggests has
+        /// to be negated or it sends the operator the wrong way. CW-R is the
+        /// same reversed sideband under another name.
+        /// </summary>
+        private static bool IsLowerSideband(string? mode) =>
+            mode is "CW-L" or "CW-R";
 
         /// <summary>
         /// Null when the radio has not said, which is a real answer: code 0 is
@@ -324,6 +334,20 @@ namespace Yaesu_Web_Control.Services.Cw
         public double SnrDb { get; init; }
         public bool SignalPresent { get; init; }
         public bool IsLocked { get; init; }
+
+        /// <summary>
+        /// How far to move the dial, in Hz, to bring the signal onto the
+        /// operator's own CW pitch - positive meaning tune up. Null when the
+        /// tone confidence is too low to be worth acting on, or when the
+        /// offset is so large that the detector has almost certainly locked
+        /// onto a different signal.
+        ///
+        /// On 2026-08-27 a station on 12m was reported as very quiet. It was
+        /// 120 Hz above the pitch, out on the skirt of a 300 Hz filter, and
+        /// everything needed to say so was already being computed - it simply
+        /// never reached the panel. That is what this carries.
+        /// </summary>
+        public long? ZeroInOffsetHz { get; init; }
 
         /// <summary>
         /// Whether the marks arriving can be Morse at all: Unknown, Readable,
