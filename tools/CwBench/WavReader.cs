@@ -23,7 +23,12 @@ public sealed class WavFile
 
     public static WavFile Read(string path)
     {
-        using var fs = File.OpenRead(path);
+        // FileShare.ReadWrite, not File.OpenRead's FileShare.Read: a capture
+        // that is still running holds the file open for writing, and the whole
+        // point of being able to read a half-written wav is to look at it
+        // before the recorder has finished with it.
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read,
+                                      FileShare.ReadWrite | FileShare.Delete);
         using var br = new BinaryReader(fs);
 
         if (new string(br.ReadChars(4)) != "RIFF") throw new InvalidDataException("Not a RIFF file.");
@@ -60,7 +65,16 @@ public sealed class WavFile
             }
             else if (id == "data")
             {
-                data = br.ReadBytes((int)size);
+                // A recorder writes the data size when it closes the file, so
+                // while it is still recording the size is a placeholder - zero,
+                // or 0xFFFFFFFF, or simply larger than what has been written so
+                // far. In any of those cases take everything actually present
+                // and stop, which is exactly the audio captured up to now.
+                long available = fs.Length - fs.Position;
+                bool unfinalised = size == 0 || size == 0xFFFFFFFF || size > available;
+
+                data = br.ReadBytes((int)(unfinalised ? available : size));
+                if (unfinalised) break;
             }
 
             if (fs.Position != next)
@@ -72,6 +86,12 @@ public sealed class WavFile
 
         if (data == null)   throw new InvalidDataException("No 'data' chunk.");
         if (channels == 0)  throw new InvalidDataException("No 'fmt ' chunk.");
+
+        // A capture read mid-write can end part way through a frame. Trim
+        // rather than let Decode read past the end of the last one.
+        int frameBytes = Math.Max(1, (bits / 8) * channels);
+        if (data.Length % frameBytes != 0)
+            Array.Resize(ref data, data.Length - (data.Length % frameBytes));
 
         var mono = Decode(data, format, bits, channels);
         return new WavFile
