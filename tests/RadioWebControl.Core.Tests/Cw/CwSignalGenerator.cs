@@ -41,9 +41,48 @@ namespace RadioWebControl.Core.Tests.Cw
 
         /// <summary>Noise-free Morse at the given speed.</summary>
         public float[] Generate(string text, double wpm)
+            => Generate(text, wpm, wpm);
+
+        /// <summary>
+        /// Noise-free Morse with Farnsworth spacing: elements sent at
+        /// <paramref name="characterWpm"/>, gaps stretched so the whole
+        /// transmission comes out at <paramref name="wpm"/>.
+        ///
+        /// This is how every code practice recording below walking pace is
+        /// actually sent, and the decoder had never seen it. A learner at 5 WPM
+        /// is not listening to 240 ms dits - the ARRL files send 85 ms dits, a
+        /// hair under 15 WPM, and leave a second and a half between characters.
+        /// A decoder that derives its character gap from its measured dit reads
+        /// every one of those gaps as a word gap and returns each character as
+        /// its own word.
+        ///
+        /// The stretch follows the usual PARIS bookkeeping: a word is 50 units,
+        /// 31 of them keying and 19 of them spacing, and the extra time goes
+        /// into the 19 in the same three-to-seven proportion, so the ratio
+        /// between a character gap and a word gap stays at the textbook 2.33
+        /// however far the two speeds are pulled apart.
+        ///
+        /// Worth knowing when comparing against W1AW: their files stretch the
+        /// word gaps further still - measured 3.68 at 5 WPM, not 2.33 - so this
+        /// generator is the easier of the two cases, not the harder one.
+        /// </summary>
+        public float[] Generate(string text, double wpm, double characterWpm)
         {
-            double ditMs = 1200.0 / wpm;
-            var timeline = BuildTimeline(text, ditMs);
+            if (characterWpm < wpm) characterWpm = wpm;
+
+            double ditMs = 1200.0 / characterWpm;
+
+            double charGapMs = ditMs * 3.0;
+            double wordGapMs = ditMs * 7.0;
+            if (characterWpm > wpm)
+            {
+                double totalDelayMs =
+                    (60.0 * characterWpm - 37.2 * wpm) / (characterWpm * wpm) * 1000.0;
+                charGapMs = 3.0 * totalDelayMs / 19.0;
+                wordGapMs = 7.0 * totalDelayMs / 19.0;
+            }
+
+            var timeline = BuildTimeline(text, ditMs, charGapMs, wordGapMs);
 
             int total = 0;
             foreach (var (ms, _) in timeline) total += MsToSamples(ms);
@@ -112,7 +151,8 @@ namespace RadioWebControl.Core.Tests.Cw
             return result;
         }
 
-        private List<(double Ms, bool KeyDown)> BuildTimeline(string text, double ditMs)
+        private List<(double Ms, bool KeyDown)> BuildTimeline(
+            string text, double ditMs, double charGapMs, double wordGapMs)
         {
             var timeline = new List<(double, bool)>();
             string encoded = MorseTable.EncodeText(text);
@@ -124,8 +164,8 @@ namespace RadioWebControl.Core.Tests.Cw
                 {
                     case '.': timeline.Add((Jitter(ditMs), true)); break;
                     case '-': timeline.Add((Jitter(ditMs * 3.0), true)); break;
-                    case ' ': timeline.Add((Jitter(ditMs * 3.0), false)); continue;
-                    case '/': timeline.Add((Jitter(ditMs * 7.0), false)); continue;
+                    case ' ': timeline.Add((Jitter(charGapMs), false)); continue;
+                    case '/': timeline.Add((Jitter(wordGapMs), false)); continue;
                 }
 
                 // Inter-element gap, unless the next thing is a separator.

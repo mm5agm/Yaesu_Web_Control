@@ -28,6 +28,8 @@ const POLL_MS      = 500;
 const LS_KEY       = 'cwReaderPanel';
 const MAX_RENDERED = 20000;   // characters kept in the pane
 
+import { cwPhasor } from './cw-phasor.js';
+
 export class CwReaderPanel {
     constructor() {
         this._dialog   = null;
@@ -61,6 +63,15 @@ export class CwReaderPanel {
 
         this._startBtn?.addEventListener('click', () => this._toggleRunning());
         this._clearBtn?.addEventListener('click', () => this._clear());
+
+        // The tuning figure. Off by default: it is a thing you reach for while
+        // hunting for a signal, not something to leave spinning all session.
+        this._phasorBox = document.getElementById('cwPhasorBox');
+        this._phasorTgl = document.getElementById('cwPhasorToggle');
+        this._phasorTgl?.addEventListener('change', () => {
+            this._applyPhasor();
+            this._saveSettings();
+        });
 
         // Stopping the decoder when the dialog closes would throw away the
         // operator's copy mid-QSO if they closed it by accident. The decoder
@@ -120,15 +131,28 @@ export class CwReaderPanel {
     // ── Polling ─────────────────────────────────────────────────────────────
 
     _startPolling() {
+        // Re-apply here rather than only on the toggle, so a panel reopened
+        // with the figure remembered comes back with it running.
+        this._applyPhasor();
         if (this._timer) return;
         this._poll();
         this._timer = setInterval(() => this._poll(), POLL_MS);
     }
 
     _stopPolling() {
+        cwPhasor.stop();
         if (!this._timer) return;
         clearInterval(this._timer);
         this._timer = null;
+    }
+
+    /// Show or hide the figure, and start or stop its own polling with it.
+    _applyPhasor() {
+        const on = !!this._phasorTgl?.checked;
+        if (this._phasorBox) this._phasorBox.style.display = on ? '' : 'none';
+
+        if (!on) { cwPhasor.stop(); return; }
+        if (cwPhasor.attach('cwPhasorCanvas', 'cwPhasorInfo')) cwPhasor.start();
     }
 
     async _poll() {
@@ -274,6 +298,9 @@ export class CwReaderPanel {
             const raw = localStorage.getItem(LS_KEY);
             if (!raw) return;
             const s = JSON.parse(raw);
+            if (this._phasorTgl && typeof s.phasor === 'boolean') {
+                this._phasorTgl.checked = s.phasor;
+            }
             if (this._autoScrl && typeof s.autoScroll === 'boolean') {
                 this._autoScrl.checked = s.autoScroll;
             }
@@ -292,6 +319,7 @@ export class CwReaderPanel {
             const rect = this._dialog?.getBoundingClientRect();
             localStorage.setItem(LS_KEY, JSON.stringify({
                 autoScroll: this._autoScrl ? this._autoScrl.checked : true,
+                phasor:     this._phasorTgl ? this._phasorTgl.checked : false,
                 left: rect ? Math.round(rect.left) : undefined,
                 top:  rect ? Math.round(rect.top)  : undefined,
             }));
