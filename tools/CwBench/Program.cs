@@ -54,6 +54,7 @@ internal static class Program
         var traceFrom = double.MaxValue;
         var traceTo   = double.MinValue;
         var minElement = -1.0;
+        var debounce   = -1.0;
         var resync    = true;
         var warmup     = -1.0;                 // -1 = leave the decoder's own default
         var trainNoise = -1.0;
@@ -80,6 +81,7 @@ internal static class Program
                 case "--trace":     traceFrom = Arg(args, ++i);
                                     traceTo   = Arg(args, ++i); break;
                 case "--min-element": minElement = Arg(args, ++i); break;
+                case "--debounce":    debounce   = Arg(args, ++i); break;
                 case "--no-resync": resync    = false; break;
                 case "--train-noise": trainNoise = Arg(args, ++i); break;
                 case "--warmup":    warmup   = Arg(args, ++i); break;
@@ -149,7 +151,8 @@ internal static class Program
         Console.WriteLine();
 
         if (marks) MarksReport(samples, rate, pitch, search, track, markList,
-                               warmup >= 0.0 ? warmup : new CwDecoderOptions().WarmupSeconds, traceFrom, traceTo);
+                               warmup >= 0.0 ? warmup : new CwDecoderOptions().WarmupSeconds, traceFrom, traceTo,
+                               debounce >= 0.0 ? debounce : new CwDecoderOptions().KeyDebounceMs);
         if (spectrum) Spectrum.Report(samples, rate);
         if (timeline) Spectrum.Timeline(samples, rate, timelineHz);
 
@@ -160,6 +163,7 @@ internal static class Program
             SearchWindowHz  = search,
             TrackPitch      = track,
             WarmupSeconds   = warmup >= 0.0 ? warmup : new CwDecoderOptions().WarmupSeconds,
+            KeyDebounceMs   = debounce >= 0.0 ? debounce : new CwDecoderOptions().KeyDebounceMs,
             // The speed tracker is the one located defect (plan §4.4), and until
             // now the bench could only watch it move. --wpm seeds it; --pin-wpm
             // clamps Min and Max onto the same value so it cannot move at all,
@@ -260,7 +264,8 @@ internal static class Program
     /// decoder sees. The excursions themselves are the noise.
     /// </summary>
     private static void MarksReport(float[] samples, int rate, double pitch, double search, bool track, int listCount, double warmupSeconds,
-                                    double traceFrom = double.MaxValue, double traceTo = double.MinValue)
+                                    double traceFrom = double.MaxValue, double traceTo = double.MinValue,
+                                    double keyDebounceMs = 0.0)
     {
         var detector = new CwToneDetector(new CwToneDetectorOptions
         {
@@ -269,6 +274,7 @@ internal static class Program
             SearchWindowHz  = search,
             TrackPitch      = track,
             WarmupSeconds   = warmupSeconds,
+            KeyDebounceMs   = keyDebounceMs,
         });
 
         var buffer = new List<CwToneSample>();
