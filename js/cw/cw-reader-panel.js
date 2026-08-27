@@ -229,6 +229,21 @@ export class CwReaderPanel {
         if (snap.toneHz)        bits.push(`tone ${Math.round(snap.toneHz)} Hz`);
         bits.push(`pitch ${Math.round(snap.pitchHz)} Hz`);
 
+        // Both numbers have been shown side by side all along, and it still
+        // took a bench session to notice that one was 120 Hz above the other:
+        // a station reported as very quiet turned out to be sitting on the
+        // skirt of a 300 Hz filter. The reader already computes the
+        // correction, so say it in words rather than leaving it to be
+        // inferred from two readings that look equally healthy.
+        //
+        // Below about 25 Hz this is tracker jitter rather than mistuning -
+        // the tone wanders that much on a perfectly centred signal - so
+        // saying nothing is the honest answer there.
+        if (Number.isFinite(snap.zeroInOffsetHz) && Math.abs(snap.zeroInOffsetHz) >= 25) {
+            const hz = Math.round(snap.zeroInOffsetHz);
+            bits.push(`off pitch - tune ${hz > 0 ? '+' : ''}${hz} Hz`);
+        }
+
         // Say plainly when the radio has not told us a width, because the
         // search window is then a default rather than the passband.
         bits.push(snap.filterWidthHz
