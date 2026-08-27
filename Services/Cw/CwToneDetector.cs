@@ -239,6 +239,35 @@ namespace RadioWebControl.Core.Services.Cw
         // this, so a real signal still re-arms for the next over.
         private const int ReArmHops = 1200;   // 6 s
 
+        // Once a lock is this confident, the tone search stops roaming the
+        // passband and follows the tone it has.
+        //
+        // Presence is the primary guard - an absent signal never tracks - and
+        // this is the second one, because the grace period grants presence on
+        // sight for several seconds and would otherwise pin acquisition to the
+        // configured pitch at the start of every session.
+        //
+        // Measured 2026-08-27 over the bench recordings, per 5 s block:
+        //
+        //     empty band   noise-15m-long  median 0.61, max 0.75
+        //                  probe15c        median 0.56, max 0.66
+        //                  diag-dead       median 0.51, max 0.69
+        //     real signal  mkii-dk9py      median 0.89
+        //                  sp5xoc          median 0.91
+        //                  cq-then-qso     median 0.83
+        //
+        // So 0.80: above everything an empty band reached, below what a
+        // readable signal sits at. The distributions overlap at their tails,
+        // and the overlap is deliberately resolved towards staying wide -
+        // failing to narrow only means the search keeps hunting, which is what
+        // it did before any of this existed.
+        private const double TrackHoldConfidence = 0.80;
+
+        // How far a tracked tone may be followed per FFT frame's search. Wide
+        // enough for drift, QSB and a hand on the dial; far narrower than the
+        // spacing between two stations sharing a passband.
+        private const double TrackBandHz = 150.0;
+
         private readonly CwToneDetectorOptions _opt;
         private readonly int      _decimation;
         private readonly double[] _fir;
@@ -570,9 +599,27 @@ namespace RadioWebControl.Core.Services.Cw
             for (int i = 0; i < half; i++)
                 _mag[i] = Math.Sqrt(_re[i] * _re[i] + _im[i] * _im[i]);
 
-            double binHz = (double)WorkRate / FftSize;
-            int lo = Math.Max(1,        (int)Math.Floor((_opt.PitchHz - _opt.SearchWindowHz) / binHz));
-            int hi = Math.Min(half - 2, (int)Math.Ceiling((_opt.PitchHz + _opt.SearchWindowHz) / binHz));
+            // Acquire across everything the filter passes; track narrowly once
+            // there is something to track. The wide search is what stops an
+            // audible signal being invisible because it is not near the pitch,
+            // and the narrow track is what stops a louder station elsewhere in
+            // the passband stealing a lock that is already established - which
+            // is the risk that wide searching would otherwise carry, and the
+            // reason the search window used to be capped instead.
+            //
+            // Confidence, not presence, decides which mode this is in. Presence
+            // is granted on sight for a couple of seconds while the keying gate
+            // makes up its mind, so on an empty band it would pin acquisition
+            // to the pitch for the first few seconds of every session.
+            double binHz    = (double)WorkRate / FftSize;
+            bool   tracking = _present && _confidence >= TrackHoldConfidence;
+            double centre   = tracking ? _toneHz : _opt.PitchHz;
+            double halfBand = tracking
+                            ? Math.Min(TrackBandHz, _opt.SearchWindowHz)
+                            : _opt.SearchWindowHz;
+
+            int lo = Math.Max(1,        (int)Math.Floor((centre - halfBand) / binHz));
+            int hi = Math.Min(half - 2, (int)Math.Ceiling((centre + halfBand) / binHz));
             if (hi <= lo) { _confidence = 0.0; return; }
 
             int    peakBin = lo;
@@ -633,9 +680,7 @@ namespace RadioWebControl.Core.Services.Cw
             shift = Math.Clamp(shift, -1.0, 1.0);
 
             double measured = (peakBin + shift) * binHz;
-            measured = Math.Clamp(measured,
-                                  _opt.PitchHz - _opt.SearchWindowHz,
-                                  _opt.PitchHz + _opt.SearchWindowHz);
+            measured = Math.Clamp(measured, centre - halfBand, centre + halfBand);
 
             // Weight the move by confidence, so a marginal frame nudges the tone
             // rather than jumping it.

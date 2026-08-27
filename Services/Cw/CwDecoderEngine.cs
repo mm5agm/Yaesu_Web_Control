@@ -17,7 +17,7 @@ namespace RadioWebControl.Core.Services.Cw
         public const double MinSearchWindowHz = 100.0;
 
         /// <summary>Widest search half-width worth using, Hz.</summary>
-        public const double MaxSearchWindowHz = 500.0;
+        public const double MaxSearchWindowHz = 1800.0;
 
         /// <summary>
         /// The tone search half-width the radio's own IF filter implies. A
@@ -31,11 +31,25 @@ namespace RadioWebControl.Core.Services.Cw
         /// transcribes the noise beside it; at 300 it reaches past the skirt
         /// and starts chasing energy the filter has already thrown away.
         ///
-        /// Clamped at both ends, where the mapping stops meaning anything. A
-        /// 3.6 kHz SSB filter would otherwise licence a lock 1.8 kHz off the
-        /// pitch, which is a different QSO, not a mistuned one; and the
-        /// narrowest CW filters leave a window smaller than the error in the
-        /// tone estimate itself.
+        /// Clamped at the bottom, where the narrowest CW filters leave a window
+        /// smaller than the error in the tone estimate itself.
+        ///
+        /// The top clamp used to be 500, on the reasoning that a 3.6 kHz SSB
+        /// filter would otherwise licence a lock 1.8 kHz off the pitch, which
+        /// is a different QSO rather than a mistuned one. That reasoning was
+        /// sound and the consequence was still wrong. On 2026-08-27 a station
+        /// on 40 m sat at 1640 Hz in the audio with a 3.2 kHz filter open -
+        /// loud, clean, and plainly audible - and the reader never saw it,
+        /// because 500 pinned the search to 450-950 Hz. An operator who can
+        /// hear a signal and watches the reader ignore it is being told the
+        /// decoder is broken, and from where they sit that is a fair reading.
+        ///
+        /// So the window now follows the filter out to a full SSB passband,
+        /// and the "different QSO" problem is answered where it actually
+        /// arises instead: CwToneDetector acquires across this whole window
+        /// but, once it has a confident lock, tracks within a narrow band of
+        /// the tone it found. A louder neighbour cannot steal an established
+        /// lock, and nothing audible is invisible any more.
         /// </summary>
         public static double SearchWindowForFilterWidth(int filterWidthHz)
             => Math.Clamp(filterWidthHz / 2.0, MinSearchWindowHz, MaxSearchWindowHz);
