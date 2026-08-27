@@ -13,7 +13,7 @@ namespace Yaesu_Web_Control.Services.Audio
 
         public bool HasActiveSession
         {
-            get { lock (_lock) return _socket is { State: WebSocketState.Open }; }
+            get { lock (_lock) return _connectionId != null; }
         }
 
         public string? ActiveConnectionId

@@ -203,19 +203,23 @@ namespace Yaesu_Web_Control.Services.Audio
 
             EnsureCodec();
 
-            if (CanReuseDevices(settings))
+            bool reused = AudioDeviceEnumerator.Invoke(() =>
+            {
+                if (CanReuseDevices(settings)) return true;
+                if (_devicesOpen)
+                {
+                    _logger.LogInformation("Audio device selection changed — reopening PortAudio streams");
+                    CloseDevicesAndCodecOnAudioThread();
+                }
+                return false;
+            });
+            if (reused)
             {
                 _logger.LogInformation("Reusing open audio devices (session handoff within grace window)");
             }
             else
             {
-                if (_devicesOpen)
-                {
-                    _logger.LogInformation("Audio device selection changed — reopening PortAudio streams");
-                    AudioDeviceEnumerator.Invoke(CloseDevicesAndCodecOnAudioThread);
-                    EnsureCodec();
-                }
-
+                EnsureCodec();
                 string? openError = OpenDevices(settings);
                 if (openError != null)
                 {
@@ -409,11 +413,14 @@ namespace Yaesu_Web_Control.Services.Audio
                 try
                 {
                     await Task.Delay(DeviceCloseGrace, token);
-                    if (token.IsCancellationRequested) return;
-                    _logger.LogInformation(
-                        "Audio device grace ({Seconds}s) elapsed — closing PortAudio streams",
-                        DeviceCloseGrace.TotalSeconds);
-                    AudioDeviceEnumerator.Invoke(CloseDevicesAndCodecOnAudioThread);
+                    AudioDeviceEnumerator.Invoke(() =>
+                    {
+                        if (token.IsCancellationRequested) return;
+                        _logger.LogInformation(
+                            "Audio device grace ({Seconds}s) elapsed — closing PortAudio streams",
+                            DeviceCloseGrace.TotalSeconds);
+                        CloseDevicesAndCodecOnAudioThread();
+                    });
                 }
                 catch (OperationCanceledException) { }
             }, token);
@@ -639,8 +646,11 @@ namespace Yaesu_Web_Control.Services.Audio
 
         private static void EnsureCallbackBuffer(ref float[] buffer, int length)
         {
-            if (buffer.Length < length)
-                buffer = new float[length];
+            if (buffer.Length >= length) return;
+            var next = new float[length];
+            if (buffer.Length > 0)
+                Array.Copy(buffer, next, buffer.Length);
+            buffer = next;
         }
 
         /// <summary>Linear resample into a reusable scratch buffer; returns output length.</summary>
