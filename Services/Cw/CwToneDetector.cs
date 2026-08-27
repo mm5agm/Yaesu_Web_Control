@@ -31,6 +31,15 @@ namespace RadioWebControl.Core.Services.Cw
         /// from the slow peak tracker and describes the signal, not the mark.
         /// </summary>
         public double NoiseLevel { get; init; }
+
+        /// <summary>
+        /// The adaptive mark reference at this instant, same units as Magnitude.
+        /// With NoiseLevel this pins down both thresholds exactly - on at half
+        /// way from the noise up to the reference, off at 35% - so a trace can
+        /// show what the detector decided and why, rather than leaving it to be
+        /// inferred from where KeyDown happened to flip.
+        /// </summary>
+        public double MarkLevel { get; init; }
     }
 
     public sealed class CwToneDetectorOptions
@@ -294,6 +303,7 @@ namespace RadioWebControl.Core.Services.Cw
                 Confidence    = _confidence,
                 SignalPresent = _present,
                 NoiseLevel    = _noiseMean,
+                MarkLevel     = Math.Max(_markLevel, MarkFloorRatio * _noiseMean),
             };
         }
 
