@@ -50,6 +50,9 @@ namespace RadioWebControl.Core.Services.Cw
         /// <summary>Detector settling time before anything is reported as keyed, seconds.</summary>
         public double WarmupSeconds { get; set; } = new CwToneDetectorOptions().WarmupSeconds;
 
+        /// <summary>Erase key-state runs shorter than this, ms. 0 disables it.</summary>
+        public double KeyDebounceMs { get; set; } = new CwToneDetectorOptions().KeyDebounceMs;
+
         /// <summary>
         /// How long the marks may stay unreadable before text held from before
         /// the bad patch is thrown away rather than kept waiting, seconds.
@@ -112,6 +115,7 @@ namespace RadioWebControl.Core.Services.Cw
                 SearchWindowHz  = _opt.SearchWindowHz,
                 TrackPitch      = _opt.TrackPitch,
                 WarmupSeconds   = _opt.WarmupSeconds,
+                KeyDebounceMs   = _opt.KeyDebounceMs,
             });
             _elements = new CwElementDecoder(_opt.Element);
         }

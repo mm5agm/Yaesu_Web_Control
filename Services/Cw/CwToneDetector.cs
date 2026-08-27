@@ -69,6 +69,27 @@ namespace RadioWebControl.Core.Services.Cw
         /// before a single real element has arrived (plan section 4.11d.1).
         /// </summary>
         public double WarmupSeconds { get; set; } = 0.5;
+
+        /// <summary>
+        /// Erase key-state runs shorter than this, milliseconds. 0 disables it.
+        ///
+        /// A mark that dips below the off threshold for one or two hops is
+        /// reported as two marks with a gap, and the element decoder has no way
+        /// to tell that from a genuine dit-dit. On the bench the bad files are
+        /// not fast, they are fragmented: median mark 15-20 ms where the good
+        /// files sit at 50-85 ms.
+        ///
+        /// The transition is backdated to where the run actually began, not to
+        /// where it was confirmed, so suppressing a dropout costs no timing
+        /// accuracy - which is the whole reason this is not a plain hold-off.
+        /// The cost is latency: samples are held for this long before they can
+        /// be emitted.
+        ///
+        /// Keep it well under a dit or it will merge real elements. A dit is
+        /// 30 ms at 40 wpm and 25 ms at 47 wpm, so 10 ms is about the ceiling
+        /// for the speeds this decoder claims to reach.
+        /// </summary>
+        public double KeyDebounceMs { get; set; } = 0.0;
     }
 
     /// <summary>
@@ -142,6 +163,13 @@ namespace RadioWebControl.Core.Services.Cw
         private double _peakEst;
         private double _markLevel;
         private bool   _keyDown;
+
+        // Debounce. _pending holds samples that cannot be emitted yet because a
+        // later hop may still backdate their key state.
+        private readonly List<CwToneSample> _pending = new();
+        private int  _debounceHops;
+        private bool _committedKey;
+        private int  _runHops;
         private bool   _present;
         private double _confidence;
         private bool   _primed;
@@ -164,6 +192,7 @@ namespace RadioWebControl.Core.Services.Cw
                 _fftWin[i] = 0.5 - 0.5 * Math.Cos(2.0 * Math.PI * i / (FftSize - 1));
 
             _warmupHops = (long)Math.Round(Math.Max(0.0, _opt.WarmupSeconds) * WorkRate / EnvHop);
+            _debounceHops = (int)Math.Round(Math.Max(0.0, _opt.KeyDebounceMs) * WorkRate / (1000.0 * EnvHop));
 
             SetTone(_opt.PitchHz);
         }
@@ -224,12 +253,65 @@ namespace RadioWebControl.Core.Services.Cw
             _envBuf[_envFill++] = x;
             if (_envFill == EnvWindow)
             {
-                output.Add(MakeSample());
-                produced++;
+                produced += Emit(MakeSample(), output);
                 Array.Copy(_envBuf, EnvHop, _envBuf, 0, EnvWindow - EnvHop);
                 _envFill = EnvWindow - EnvHop;
             }
 
+            return produced;
+        }
+
+        /// <summary>
+        /// Hold each sample for <c>_debounceHops</c> hops, so that a key-state
+        /// run which turns out to be too short can be erased before anything
+        /// downstream sees it - and a run which turns out to be real can have
+        /// its transition backdated to the hop where it actually began.
+        /// </summary>
+        private int Emit(CwToneSample s, IList<CwToneSample> output)
+        {
+            int d = _debounceHops;
+            if (d <= 0) { output.Add(s); return 1; }
+
+            if (s.KeyDown == _committedKey) _runHops = 0;
+            else _runHops++;
+
+            // Queued carrying the committed state rather than its own. A run
+            // that never reaches d hops is therefore never visible at all.
+            _pending.Add(s with { KeyDown = _committedKey });
+
+            if (_runHops >= d)
+            {
+                _committedKey = !_committedKey;
+
+                // Backdate. The qualifying run is the last _runHops entries and
+                // is still inside the buffer, so the flip lands on the first hop
+                // that crossed rather than on the one that confirmed it.
+                for (int k = _pending.Count - _runHops; k < _pending.Count; k++)
+                    _pending[k] = _pending[k] with { KeyDown = _committedKey };
+
+                _runHops = 0;
+            }
+
+            int produced = 0;
+            while (_pending.Count > d)
+            {
+                output.Add(_pending[0]);
+                _pending.RemoveAt(0);
+                produced++;
+            }
+            return produced;
+        }
+
+        /// <summary>
+        /// Emit whatever the debounce is still holding. Call at end of stream;
+        /// without it the last few hops never appear.
+        /// </summary>
+        public int Flush(IList<CwToneSample> output)
+        {
+            int produced = _pending.Count;
+            foreach (var p in _pending) output.Add(p);
+            _pending.Clear();
+            _runHops = 0;
             return produced;
         }
 
