@@ -185,6 +185,17 @@ namespace RadioWebControl.Core.Services.Cw
 
         /// <summary>Characters needed before that ceiling is applied at all.</summary>
         public int DitOnlyMinChars { get; set; } = 24;
+
+        /// <summary>
+        /// How long <see cref="CwElementDecoder.IsLocked"/> keeps believing the
+        /// speed estimate after the marks stop looking like Morse.
+        ///
+        /// Long enough to ride out a fade, short enough that a band which has
+        /// gone dead stops claiming a speed. Matched to the engine's
+        /// HoldStaleSeconds so held text and the speed reading give up together
+        /// rather than the panel showing a speed for something it will not print.
+        /// </summary>
+        public double LockHoldMs { get; set; } = 5000.0;
     }
 
     /// <summary>
@@ -294,6 +305,9 @@ namespace RadioWebControl.Core.Services.Cw
         /// </summary>
         private const double MinElementDits = 0.40;
 
+        /// <summary>Trained marks needed before the speed estimate means anything. See <see cref="IsLocked"/>.</summary>
+        private const int LockMarks = 6;
+
         private double _minDitMs;
         private double _maxDitMs;
 
@@ -331,6 +345,11 @@ namespace RadioWebControl.Core.Services.Cw
         private int _ditOnlyCount;
         private int _ditOnlyNext;
 
+        // Clock and lock state. _lastReadableMs is the last time the marks
+        // behind the speed estimate looked like Morse; see IsLocked.
+        private double _nowMs;
+        private double _lastReadableMs = double.NegativeInfinity;
+
         public CwElementDecoder(CwElementDecoderOptions? options = null)
         {
             _opt = options ?? new CwElementDecoderOptions();
@@ -349,8 +368,30 @@ namespace RadioWebControl.Core.Services.Cw
         /// <summary>Current dit estimate, milliseconds.</summary>
         public double DitMs => _ditMs;
 
-        /// <summary>True once enough elements have been seen for the speed to mean something.</summary>
-        public bool IsLocked => _marksSeen >= 6;
+        /// <summary>
+        /// True once the speed estimate is worth reporting.
+        ///
+        /// This used to be "six marks have trained the estimate", which is a
+        /// statement about how much evidence there is and not about whether
+        /// the evidence was worth anything. On an empty band the noise blips
+        /// that survive de-glitch train it too: three minutes of recorded
+        /// empty 15 m reported 51.4 wpm and "locked", which reads as a very
+        /// fast operator rather than as a decoder with nothing to decode. A
+        /// speed measured from marks that do not have the shape of Morse is
+        /// not a speed, and printing it is worse than printing nothing,
+        /// because the operator has no way to tell the two apart.
+        ///
+        /// So the lock also asks the readability question - but with a hold,
+        /// rather than instant by instant. Readability dips through Chatter on
+        /// any deep fade, and a lock that drops there would blink the speed
+        /// off and on across normal QSB. What actually distinguishes a fade
+        /// from a dead band is how long the dip lasts: a fade comes back,
+        /// and a band with nothing on it never does. The hold is the same
+        /// <see cref="CwElementDecoderOptions.LockHoldMs"/> horizon the engine
+        /// uses to give up on held text, for the same reason.
+        /// </summary>
+        public bool IsLocked
+            => _marksSeen >= LockMarks && _nowMs - _lastReadableMs <= _opt.LockHoldMs;
 
         /// <summary>
         /// Whether the recent marks can be Morse at all. See
@@ -375,6 +416,7 @@ namespace RadioWebControl.Core.Services.Cw
         public string Push(in CwToneSample sample)
         {
             double tMs = sample.TimeSeconds * 1000.0;
+            _nowMs = tMs;
 
             if (!_started)
             {
@@ -502,6 +544,11 @@ namespace RadioWebControl.Core.Services.Cw
             }
 
             _pendingCharGap = false;
+
+            // Refresh the lock here rather than on every 5 ms hop: the answer
+            // can only change when a mark arrives, and this sorts the window.
+            if (_marksSeen >= LockMarks && AssessReadability(out _) == CwReadability.Readable)
+                _lastReadableMs = _nowMs;
 
             return string.Empty;
         }

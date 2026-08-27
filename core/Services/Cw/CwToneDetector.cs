@@ -346,6 +346,13 @@ namespace RadioWebControl.Core.Services.Cw
         // spacing between two stations sharing a passband.
         private const double TrackBandHz = 150.0;
 
+        /// <summary>
+        /// How much wider than the search window the spectrum display reaches,
+        /// so a station just outside the range the reader will chase is still
+        /// on screen as the explanation for why it is not being read.
+        /// </summary>
+        private const double SpectrumMargin = 1.5;
+
         private readonly CwToneDetectorOptions _opt;
         private readonly int      _decimation;
         private readonly double[] _fir;
@@ -391,6 +398,13 @@ namespace RadioWebControl.Core.Services.Cw
         private int _levelHops;
         private int _quietHops;
 
+        // Last passband spectrum, in dB above the median of its own span, for
+        // the tuning display. See SpectrumMargin and CopySpectrum.
+        private readonly double[] _specDb;
+        private readonly int _specLo;
+        private readonly int _specHi;
+        private bool _specReady;
+
         private bool   _present;
         private double _confidence;
         private bool   _primed;
@@ -414,6 +428,21 @@ namespace RadioWebControl.Core.Services.Cw
 
             _warmupHops = (long)Math.Round(Math.Max(0.0, _opt.WarmupSeconds) * WorkRate / EnvHop);
             _debounceHops = (int)Math.Round(Math.Max(0.0, _opt.KeyDebounceMs) * WorkRate / (1000.0 * EnvHop));
+
+            // The span the spectrum display covers, fixed at construction.
+            //
+            // Deliberately the whole acquire range plus a margin, and not the
+            // range actually being searched: that narrows to TrackBandHz the
+            // moment a lock is confident, and a display whose axis moves under
+            // the operator while they are tuning is worse than no display. The
+            // margin is there so a station just outside the search range is
+            // still visible as the reason the reader is not hearing it.
+            double binHz = (double)WorkRate / FftSize;
+            double halfSpan = _opt.SearchWindowHz * SpectrumMargin;
+            _specLo = Math.Max(1,             (int)Math.Floor((_opt.PitchHz - halfSpan) / binHz));
+            _specHi = Math.Min(FftSize / 2 - 1, (int)Math.Ceiling((_opt.PitchHz + halfSpan) / binHz));
+            if (_specHi < _specLo) _specHi = _specLo;
+            _specDb = new double[_specHi - _specLo + 1];
 
             SetTone(_opt.PitchHz);
         }
@@ -719,6 +748,8 @@ namespace RadioWebControl.Core.Services.Cw
             for (int i = 0; i < half; i++)
                 _mag[i] = Math.Sqrt(_re[i] * _re[i] + _im[i] * _im[i]);
 
+            CaptureSpectrum();
+
             // Acquire across everything the filter passes; track narrowly once
             // there is something to track. The wide search is what stops an
             // audible signal being invisible because it is not near the pitch,
@@ -806,6 +837,60 @@ namespace RadioWebControl.Core.Services.Cw
             // rather than jumping it.
             SetTone(_toneHz + 0.35 * frameConfidence * (measured - _toneHz));
         }
+
+        /// <summary>
+        /// Take a copy of the display span of the current FFT frame, in dB
+        /// relative to the median of that span.
+        ///
+        /// Relative to the median rather than to an absolute level, because
+        /// nothing upstream of here has a calibrated scale - the audio has
+        /// been through the radio's AF gain, the codec and the browser - so an
+        /// absolute dB figure would be a number with no units. The median is
+        /// used rather than the mean because a strong carrier drags a mean up
+        /// and flattens itself against its own noise floor; half the bins in a
+        /// CW passband are floor even with a signal in it.
+        /// </summary>
+        private void CaptureSpectrum()
+        {
+            int n = _specHi - _specLo + 1;
+
+            Span<double> sorted = stackalloc double[n];
+            for (int i = 0; i < n; i++) sorted[i] = _mag[_specLo + i];
+            sorted.Sort();
+            double median = sorted[n / 2];
+            if (median < 1e-12) median = 1e-12;
+
+            for (int i = 0; i < n; i++)
+                _specDb[i] = 20.0 * Math.Log10(Math.Max(_mag[_specLo + i], 1e-12) / median);
+
+            _specReady = true;
+        }
+
+        /// <summary>
+        /// The most recent passband spectrum, oldest-to-highest frequency, in
+        /// dB above its own median. Returns 0 before the first FFT frame has
+        /// been gathered, or when pitch tracking is off and no FFT is run.
+        /// </summary>
+        /// <param name="dest">
+        /// Filled with up to its own length of bins. <see cref="SpectrumBins"/>
+        /// is how many there are.
+        /// </param>
+        /// <param name="firstHz">Centre frequency of the first bin written.</param>
+        /// <param name="binHz">Spacing between bins.</param>
+        public int CopySpectrum(Span<double> dest, out double firstHz, out double binHz)
+        {
+            binHz   = (double)WorkRate / FftSize;
+            firstHz = _specLo * binHz;
+
+            if (!_specReady) return 0;
+
+            int n = Math.Min(dest.Length, _specDb.Length);
+            _specDb.AsSpan(0, n).CopyTo(dest);
+            return n;
+        }
+
+        /// <summary>How many bins <see cref="CopySpectrum"/> will write.</summary>
+        public int SpectrumBins => _specDb.Length;
 
         private void SetTone(double hz)
         {
