@@ -218,7 +218,8 @@ internal static class Program
                 nextTele += telemetry;
                 if (line.Length > 0) { Console.WriteLine(line.ToString().TrimEnd()); line.Clear(); }
                 Console.WriteLine($"           . {Stamp(t)}  {lastWpm,4:F1} wpm  {lastTone,6:F1} Hz  "
-                                + $"{engine.SnrDb,5:F1} dB  {(engine.SignalPresent ? "signal" : "quiet ")}"
+                                + $"{engine.SnrDb,5:F1} dB  {engine.Confidence,4:F2} cf  "
+                                + $"{(engine.SignalPresent ? "signal" : "quiet ")}"
                                 + $"  {(engine.IsLocked ? "locked" : "      ")}");
             }
         }
