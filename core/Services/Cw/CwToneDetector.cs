@@ -75,9 +75,17 @@ namespace RadioWebControl.Core.Services.Cw
         ///
         /// A mark that dips below the off threshold for one or two hops is
         /// reported as two marks with a gap, and the element decoder has no way
-        /// to tell that from a genuine dit-dit. On the bench the bad files are
-        /// not fast, they are fragmented: median mark 15-20 ms where the good
-        /// files sit at 50-85 ms.
+        /// to tell that from a genuine dit-dit.
+        ///
+        /// What this actually removes is not what it was built for. The first
+        /// reading was that the bad files were fragmented marks, but turning
+        /// the debounce on barely moves their mark histogram while very nearly
+        /// doubling the decode. The histogram only counts runs of 12 ms and
+        /// up; what goes away is the key-down blips below that, which never
+        /// appeared in it and which the element decoder was reading as dits.
+        /// That is where the E/I/S/H chatter came from. Speed is not the
+        /// discriminator either - 21, 25, 30, 32 and 47 wpm all decode well,
+        /// and the worst files still measure 42-46 wpm with this switched on.
         ///
         /// The transition is backdated to where the run actually began, not to
         /// where it was confirmed, so suppressing a dropout costs no timing
@@ -88,8 +96,22 @@ namespace RadioWebControl.Core.Services.Cw
         /// Keep it well under a dit or it will merge real elements. A dit is
         /// 30 ms at 40 wpm and 25 ms at 47 wpm, so 10 ms is about the ceiling
         /// for the speeds this decoder claims to reach.
+        ///
+        /// 10 ms is the default, chosen on the bench on 2026-08-27. Readable
+        /// characters, off against 10 ms against 15 ms:
+        ///
+        ///     strong-fast-2   83 / 46%    157 / 50%    185 / 63%
+        ///     strong-fast-1   59 / 53%     66 / 56%    107 / 62%
+        ///     mkii-dk9py     261 / 95%    248 / 95%    225 / 96%
+        ///     strong-sig-1    81 / 91%     72 / 92%     71 / 92%
+        ///     cq-then-qso    119 / 98%    119 / 98%    119 / 98%
+        ///
+        /// 15 ms scores better on the broken files but it is 0.58 of a dit at
+        /// 46 wpm and starts eating real elements - AC1D disappears out of
+        /// mkii-dk9py. 10 ms is 0.38 of a dit. It is not free even so:
+        /// strong-sig-1 loses nine characters and a correct SM6M becomes V36M.
         /// </summary>
-        public double KeyDebounceMs { get; set; } = 0.0;
+        public double KeyDebounceMs { get; set; } = 10.0;
     }
 
     /// <summary>
