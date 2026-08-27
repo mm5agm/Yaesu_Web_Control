@@ -20,9 +20,9 @@ namespace Yaesu_Web_Control.Services.Audio
             _encoder = OpusCodecFactory.CreateEncoder(
                 AudioConstants.SampleRate,
                 AudioConstants.Channels,
-                OpusApplication.OPUS_APPLICATION_VOIP);
+                OpusApplication.OPUS_APPLICATION_AUDIO);
             _encoder.Bitrate = AudioConstants.OpusBitrate;
-            _encoder.Complexity = 5;
+            _encoder.Complexity = 10;
 
             _decoder = OpusCodecFactory.CreateDecoder(
                 AudioConstants.SampleRate,
