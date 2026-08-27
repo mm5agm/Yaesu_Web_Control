@@ -50,6 +50,22 @@ namespace RadioWebControl.Core.Services.Cw
         /// <summary>Detector settling time before anything is reported as keyed, seconds.</summary>
         public double WarmupSeconds { get; set; } = new CwToneDetectorOptions().WarmupSeconds;
 
+        /// <summary>
+        /// How long the marks may stay unreadable before text held from before
+        /// the bad patch is thrown away rather than kept waiting, seconds.
+        ///
+        /// Held text is released when the signal proves readable again, which
+        /// is what carries a station across a fade. Without a bound that same
+        /// mechanism dumps a bufferful of chatter the moment a marginal signal
+        /// manages one readable window. Measured on bench/probe15c.wav - a
+        /// signal the operator described as "in and out" - an unbounded hold
+        /// leaked 247 characters where the bound lets through far less.
+        ///
+        /// It must comfortably exceed a deep fade, or it undoes the point of
+        /// holding at all.
+        /// </summary>
+        public double HoldStaleSeconds { get; set; } = 5.0;
+
         public CwElementDecoderOptions Element { get; set; } = new();
     }
 
@@ -77,6 +93,15 @@ namespace RadioWebControl.Core.Services.Cw
         private bool   _signalPresent;
         private double _snrDb;
 
+        // Text decoded before the readability test has enough marks to judge.
+        // Held rather than emitted, so that a signal which turns out to be
+        // readable does not lose its opening characters to the wait, and one
+        // which turns out to be chatter never shows them at all.
+        private readonly StringBuilder _pending = new();
+        private const int PendingCap = 64;
+        private double _badSinceSeconds = double.NaN;
+        private double _nowSeconds;
+
         public CwDecoderEngine(CwDecoderOptions? options = null)
         {
             _opt = options ?? new CwDecoderOptions();
@@ -100,6 +125,18 @@ namespace RadioWebControl.Core.Services.Cw
         public double SnrDb          => _snrDb;
         public bool   SignalPresent  => _signalPresent;
         public bool   IsLocked       => _elements.IsLocked;
+
+        /// <summary>
+        /// Whether what is arriving can be Morse at all. Applications should
+        /// show <see cref="CwReadability.Chatter"/> and
+        /// <see cref="CwReadability.Jumbled"/> to the operator as "nothing
+        /// readable here" rather than printing the text, which is why no text
+        /// is emitted in those states.
+        /// </summary>
+        public CwReadability Readability => _elements.Readability;
+
+        /// <summary>p90/p10 of recent mark lengths. Near 3 on readable Morse.</summary>
+        public double MarkSpread => _elements.MarkSpread;
 
         /// <summary>
         /// The VFO offset that would put the tone we are hearing onto the pitch we
@@ -135,8 +172,9 @@ namespace RadioWebControl.Core.Services.Cw
                 var last = _samples[^1];
                 _snrDb         = last.SnrDb;
                 _signalPresent = last.SignalPresent;
+                _nowSeconds    = last.TimeSeconds;
 
-                text = sb.ToString();
+                text = Gate(sb.ToString());
             }
 
             if (text.Length > 0) TextDecoded?.Invoke(text);
@@ -144,13 +182,59 @@ namespace RadioWebControl.Core.Services.Cw
         }
 
         /// <summary>
+        /// Decide what of the freshly decoded text may be shown.
+        ///
+        /// The rule is that text becomes visible only once the marks behind it
+        /// have shown they can be Morse. Anything decoded before that is held,
+        /// not dropped, and released the moment the signal proves readable -
+        /// which is what stops a station losing its callsign to the wait, and
+        /// what carries a fading signal across the fade rather than throwing
+        /// away the characters either side of it.
+        ///
+        /// Discarding on the first bad assessment was the obvious
+        /// implementation and it was wrong: a real signal dips through Chatter
+        /// on any deep fade, and wiping the buffer there cost the QSB tests
+        /// most of their text - 4.2% on a 20 dB fade at 0.25 Hz, against a
+        /// 40% floor. Holding costs nothing, because held text that never
+        /// becomes readable is never shown.
+        /// </summary>
+        private string Gate(string produced)
+        {
+            if (_elements.Readability == CwReadability.Readable)
+            {
+                _badSinceSeconds = double.NaN;
+                if (_pending.Length == 0) return produced;
+                _pending.Append(produced);
+                var released = _pending.ToString();
+                _pending.Clear();
+                return released;
+            }
+
+            if (double.IsNaN(_badSinceSeconds)) _badSinceSeconds = _nowSeconds;
+            else if (_nowSeconds - _badSinceSeconds > _opt.HoldStaleSeconds) _pending.Clear();
+
+            _pending.Append(produced);
+            if (_pending.Length > PendingCap)
+                _pending.Remove(0, _pending.Length - PendingCap);
+            return string.Empty;
+        }
+
+        /// <summary>
         /// Emit any part-built character. Call when capture stops, so the last
         /// letter of the last over is not silently dropped.
+        ///
+        /// Held text is released here only if the signal was readable: a
+        /// capture that stops while the decoder is still undecided has, by
+        /// definition, never shown that it was copying anything.
         /// </summary>
         public string Flush()
         {
             string text;
-            lock (_gate) text = _elements.Flush();
+            lock (_gate)
+            {
+                text = Gate(_elements.Flush());
+                _pending.Clear();
+            }
             if (text.Length > 0) TextDecoded?.Invoke(text);
             return text;
         }

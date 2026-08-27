@@ -43,6 +43,79 @@ namespace RadioWebControl.Core.Services.Cw
         /// re-seed from the EMA when the tracked speed runs away.
         /// </summary>
         public bool EnableResync { get; set; } = true;
+
+        /// <summary>
+        /// How many recent marks the readability test looks at.
+        ///
+        /// Long enough that a genuine run of one element type cannot fill it -
+        /// the longest all-one-element characters are 5 and 0, at five marks
+        /// each - and short enough that the test recovers promptly once a
+        /// signal comes back out of a fade. That second requirement is what
+        /// set it: at 32 the window was still full of the fade when the signal
+        /// returned, and the QSB tests lost most of their text. Characters
+        /// surviving the gate on the two recordings the operator reported good
+        /// copy on, against what the decoder produced ungated:
+        ///
+        ///   window   dk9py (262)   i1yrl (270)
+        ///      32     217 (83%)     256 (95%)
+        ///      16     261 (99%)     266 (98%)
+        /// </summary>
+        public int ReadabilityWindow { get; set; } = 16;
+
+        /// <summary>
+        /// Fewest marks in the window before readability is judged at all.
+        /// Below this there is not enough evidence either way, and the answer
+        /// is "not yet", not "unreadable" - a decoder that said "nothing
+        /// readable" the instant it started would be lying.
+        /// </summary>
+        public int ReadabilityMinMarks { get; set; } = 10;
+
+        /// <summary>
+        /// The p90/p10 band of recent mark lengths that can be Morse.
+        ///
+        /// Morse has two lengths in a 3:1 ratio, so this number sits near 3 on
+        /// anything readable, and it does so without knowing the speed - which
+        /// is the point, because the speed estimate is one of the first things
+        /// to fail. Measured 2026-08-26 over whole files in the bench corpus:
+        ///
+        ///   mkii-dk9py     3.00   operator reported good copy
+        ///   mkii-i1yrl     3.33   operator reported good copy
+        ///   probe15        1.33   all-dit garbage
+        ///   probe15b       1.33   all-dit garbage
+        ///   ywc-40m-cw     8.67   several stations in the passband
+        ///
+        /// Below the floor there is only one mark length, so nothing can ever
+        /// be classified as a dah and every character comes out of the all-dit
+        /// set - E I S H 5. That is the tone detector chattering across its
+        /// hysteresis on a near-threshold carrier, not a fist. Both probe
+        /// files sat at a 15 ms median, which is the de-glitch floor itself:
+        /// the decoder was counting its own glitches.
+        ///
+        /// The floor is the log-space midpoint between the good files at 3.0
+        /// and the chattering ones at 1.33, which lands on 2.0. It does all
+        /// the work: it takes probe15 and probe15b from 160 and 211 characters
+        /// of garbage to none at all, and costs the good files one character
+        /// and four.
+        ///
+        /// The ceiling is meant for the other failure, several stations in one
+        /// passband, where the marks have no two-length structure at all. Be
+        /// aware that at the current window size it is very nearly inert -
+        /// swept over the corpus it moved one file by two characters:
+        ///
+        ///   ceiling   dk9py   i1yrl   40m QRM   probe15
+        ///       6.0     261     266       165         0
+        ///       8.0     261     266       165         0
+        ///      12.0     261     266       167         0
+        ///
+        /// It is kept because it costs nothing and names the second failure
+        /// explicitly, not because it has been shown to earn its place. If a
+        /// heavy or swinging fist is ever reported as Jumbled, loosen it
+        /// without hesitation.
+        /// </summary>
+        public double ReadabilitySpreadFloor { get; set; } = 2.0;
+
+        /// <inheritdoc cref="ReadabilitySpreadFloor"/>
+        public double ReadabilitySpreadCeiling { get; set; } = 8.0;
     }
 
     /// <summary>
@@ -62,6 +135,40 @@ namespace RadioWebControl.Core.Services.Cw
     /// A hard resync catches the case where the speed jumps far enough that the
     /// EMA would crawl.
     /// </summary>
+    /// <summary>
+    /// Whether the marks arriving can be Morse at all - a question separate
+    /// from whether the tone is being tracked well, which is what
+    /// <c>Confidence</c> answers.
+    ///
+    /// The two came apart on bench/probe15.wav: pinning the tone raised
+    /// confidence to 1.00 while the transcript stayed a stream of E I S H 5.
+    /// Confidence was right - the tone was exactly where it said - and the
+    /// text was still worthless, because there was no keying behind it. An
+    /// application that shows text whenever confidence is high will show that
+    /// stream, and an operator has no way to tell it from a bad copy of a real
+    /// station.
+    /// </summary>
+    public enum CwReadability
+    {
+        /// <summary>Not enough marks yet to say. Show nothing rather than guess.</summary>
+        Unknown,
+
+        /// <summary>Mark lengths have the two-length structure Morse has.</summary>
+        Readable,
+
+        /// <summary>
+        /// One mark length only. Nothing can be a dah, so every character
+        /// falls in the all-dit set. The detector is chattering, not copying.
+        /// </summary>
+        Chatter,
+
+        /// <summary>
+        /// Mark lengths are scattered far wider than one fist produces -
+        /// several stations inside the passband, most likely.
+        /// </summary>
+        Jumbled,
+    }
+
     public sealed class CwElementDecoder
     {
         private readonly CwElementDecoderOptions _opt;
@@ -87,9 +194,14 @@ namespace RadioWebControl.Core.Services.Cw
         private bool _pendingCharGap;        // a character has been flushed, awaiting word gap
         private int  _unknownSymbols;
 
+        private readonly double[] _markWindow;
+        private int _markWindowCount;
+        private int _markWindowNext;
+
         public CwElementDecoder(CwElementDecoderOptions? options = null)
         {
             _opt = options ?? new CwElementDecoderOptions();
+            _markWindow = new double[Math.Max(4, _opt.ReadabilityWindow)];
             _ditMs    = 1200.0 / _opt.InitialWpm;
             _dahMs    = _ditMs * 3.0;
             _minDitMs = 1200.0 / _opt.MaxWpm;
@@ -104,6 +216,19 @@ namespace RadioWebControl.Core.Services.Cw
 
         /// <summary>True once enough elements have been seen for the speed to mean something.</summary>
         public bool IsLocked => _marksSeen >= 6;
+
+        /// <summary>
+        /// Whether the recent marks can be Morse at all. See
+        /// <see cref="CwReadability"/> - this is not the same question as
+        /// <c>Confidence</c>, and on a chattering detector the two disagree.
+        /// </summary>
+        public CwReadability Readability => AssessReadability(out _);
+
+        /// <summary>
+        /// p90/p10 of the recent mark lengths, or 0 before there are enough.
+        /// Near 3 on readable Morse, because that is the dah:dit ratio.
+        /// </summary>
+        public double MarkSpread { get { AssessReadability(out double spread); return spread; } }
 
         /// <summary>Symbols that timed out into something not in the Morse table.</summary>
         public int UnknownSymbolCount => _unknownSymbols;
@@ -177,6 +302,14 @@ namespace RadioWebControl.Core.Services.Cw
 
         private string OnMark(double markMs, double peakMag, double noiseLevel)
         {
+            // Every mark goes into the readability window, including ones too
+            // weak to train the speed. The question the window answers is
+            // "what shape is the thing arriving", and marks excluded from
+            // training are exactly the ones that give the fault away.
+            _markWindow[_markWindowNext] = markMs;
+            _markWindowNext = (_markWindowNext + 1) % _markWindow.Length;
+            if (_markWindowCount < _markWindow.Length) _markWindowCount++;
+
             bool isDah = ClassifyMark(markMs, out double distance);
             _symbol.Append(isDah ? '-' : '.');
 
@@ -295,6 +428,31 @@ namespace RadioWebControl.Core.Services.Cw
             _dahMs = shortest * 3.0;
             _consecutiveOutliers = 0;
             Clamp();
+        }
+
+        /// <summary>
+        /// Sort the recent marks and compare the 90th percentile with the
+        /// 10th. Percentiles rather than min and max because a single glitch
+        /// at either end would otherwise decide the answer, and the whole
+        /// point is to characterise the population.
+        /// </summary>
+        private CwReadability AssessReadability(out double spread)
+        {
+            spread = 0.0;
+            if (_markWindowCount < _opt.ReadabilityMinMarks) return CwReadability.Unknown;
+
+            Span<double> sorted = stackalloc double[_markWindowCount];
+            for (int i = 0; i < _markWindowCount; i++) sorted[i] = _markWindow[i];
+            sorted.Sort();
+
+            double p10 = sorted[(int)(0.10 * (_markWindowCount - 1))];
+            double p90 = sorted[(int)(0.90 * (_markWindowCount - 1))];
+            if (p10 <= 0.0) return CwReadability.Unknown;
+
+            spread = p90 / p10;
+            if (spread < _opt.ReadabilitySpreadFloor)   return CwReadability.Chatter;
+            if (spread > _opt.ReadabilitySpreadCeiling) return CwReadability.Jumbled;
+            return CwReadability.Readable;
         }
 
         private void Clamp()
