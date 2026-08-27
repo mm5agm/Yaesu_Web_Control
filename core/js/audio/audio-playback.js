@@ -78,6 +78,7 @@ export class AudioPlayback {
           this.maxFrames = ${maxFrames};
           this.prefillFrames = ${prefillFrames};
           this.priming = true;
+          this.lastSample = 0;
           this.port.onmessage = (ev) => {
             if (!ev.data || !ev.data.length) return;
             this.queue.push(ev.data);
@@ -97,9 +98,14 @@ export class AudioPlayback {
           let i = 0;
           while (i < out.length) {
             if (!this.queue.length) {
-              // Ran dry. Refill before playing again, so the gap costs one
-              // splice rather than one per render quantum until frames return.
-              out.fill(0, i);
+              // Ran dry. Decay to silence rather than cutting to hard zero -
+              // a step to 0 mid-waveform clicks. Then refill before playing
+              // again, so the gap costs one splice rather than one per render
+              // quantum until frames return.
+              for (; i < out.length; i++) {
+                this.lastSample *= 0.85;
+                out[i] = this.lastSample;
+              }
               this.priming = true;
               break;
             }
@@ -108,6 +114,7 @@ export class AudioPlayback {
             const need = out.length - i;
             const take = Math.min(avail, need);
             out.set(cur.subarray(this.offset, this.offset + take), i);
+            this.lastSample = out[i + take - 1];
             i += take;
             this.offset += take;
             if (this.offset >= cur.length) {
