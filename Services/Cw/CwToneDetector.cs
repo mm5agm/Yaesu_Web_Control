@@ -429,8 +429,31 @@ namespace RadioWebControl.Core.Services.Cw
             // Quick to believe a good frame, slow to forget one. Otherwise the
             // silence between overs would drag confidence to zero and zero-in
             // would refuse to answer at exactly the moment somebody presses it.
-            _confidence += (frameConfidence > _confidence ? 0.5 : 0.02)
-                         * (frameConfidence - _confidence);
+            //
+            // Only while a tone is actually present, though. Prominence is a
+            // shape measure - it says the peak stands clear of the rest of the
+            // search window, not that there is anything in the window to begin
+            // with. Flat noise has a peak too, and across a narrow window its
+            // upper tail clears the mean often enough that the fast attack
+            // ratchets confidence up and the slow decay then holds it there.
+            // Three minutes of an empty 20m settled at 0.41 with not one
+            // character decoded, which is a number an operator would read as
+            // "nearly half sure" about a station that does not exist.
+            //
+            // Between overs _present is false and confidence decays slowly,
+            // which is exactly what the asymmetry above was for. On an empty
+            // band it never rises in the first place. Tone tracking below is
+            // deliberately left alone: it keys off frameConfidence, not this,
+            // so acquisition still works before presence is established.
+            if (_present)
+            {
+                _confidence += (frameConfidence > _confidence ? 0.5 : 0.02)
+                             * (frameConfidence - _confidence);
+            }
+            else if (frameConfidence < _confidence)
+            {
+                _confidence += 0.02 * (frameConfidence - _confidence);
+            }
 
             if (frameConfidence <= 0.0) return;
 
