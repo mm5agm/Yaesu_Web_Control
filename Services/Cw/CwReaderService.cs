@@ -142,6 +142,34 @@ namespace Yaesu_Web_Control.Services.Cw
         /// only matter while the aid is on screen, so the display polls for
         /// them separately and the main reader poll stays small.
         /// </summary>
+        /// <summary>
+        /// A snapshot of the passband for the spectrum display.
+        ///
+        /// Unlike the phasor this carries no cursor: it is a picture of now,
+        /// not a stream, so a caller that misses a poll has missed nothing.
+        /// </summary>
+        public CwSpectrumView Spectrum()
+        {
+            lock (_gate)
+            {
+                var eng = _engine;
+                if (eng is null)
+                    return new CwSpectrumView { PitchHz = _pitchHz, BinHz = 0.0 };
+
+                var f = eng.Spectrum();
+                return new CwSpectrumView
+                {
+                    FirstHz       = f.FirstHz,
+                    BinHz         = f.BinHz,
+                    Db            = f.Db ?? Array.Empty<double>(),
+                    PitchHz       = f.PitchHz,
+                    ToneHz        = f.ToneHz,
+                    Confidence    = f.Confidence,
+                    SignalPresent = f.SignalPresent,
+                };
+            }
+        }
+
         public CwPhasorFrame Phasor(long since)
         {
             lock (_gate)
@@ -408,6 +436,30 @@ namespace Yaesu_Web_Control.Services.Cw
     }
 
     /// <summary>One poll's worth of the tuning figure.</summary>
+    /// <summary>
+    /// The passband as the reader sees it, for the tuning display.
+    /// </summary>
+    public sealed class CwSpectrumView
+    {
+        /// <summary>Centre frequency of the first bin, Hz.</summary>
+        public double FirstHz { get; init; }
+
+        /// <summary>Bin spacing, Hz.</summary>
+        public double BinHz { get; init; }
+
+        /// <summary>One value per bin, dB above the median of the span. Empty before the first frame.</summary>
+        public double[] Db { get; init; } = Array.Empty<double>();
+
+        /// <summary>Where the operator asked to listen - the marker on the display.</summary>
+        public double PitchHz { get; init; }
+
+        /// <summary>Where the reader believes the tone is.</summary>
+        public double ToneHz { get; init; }
+
+        public double Confidence { get; init; }
+        public bool   SignalPresent { get; init; }
+    }
+
     public sealed class CwPhasorFrame
     {
         /// <summary>Pass back as "since" on the next poll.</summary>

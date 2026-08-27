@@ -2395,6 +2395,16 @@
         padding: 8px 10px;
         color: #dfe;
     }
+    /* Tokens that have the shape of QSO traffic. Colour is the only change -
+       nothing is added, removed or reordered - and it means "this looks like
+       something an operator sends", not "this is right". A callsign seen only
+       once is dimmed rather than hidden, because garble finds callsign shape
+       by chance and the first sighting of a real call looks identical. */
+    #cwReaderDialog .cw-tok-proc { color:#8fd0ff; }
+    #cwReaderDialog .cw-tok-rst  { color:#c9a6ff; }
+    #cwReaderDialog .cw-tok-call { color:#ffd24a; font-weight:600; }
+    #cwReaderDialog .cw-tok-call1 { color:#a08a3c; }
+    .cwr-legend { font-size: 0.72rem; color:#89a; }
     #cwReaderStatus { font-family: ui-monospace, Consolas, monospace; font-size: 0.78rem; color:#9ab; }
 </style>
 <dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:620px; max-width:95vw;" aria-labelledby="cwReaderTitle">
@@ -2421,8 +2431,22 @@
         <div class="d-flex gap-2 align-items-start">
             <div class="flex-grow-1" style="min-width:0;">
                 <div id="cwReaderOut" role="log" aria-live="polite" aria-label="Decoded CW text"></div>
+                <div class="cwr-legend mt-1">
+                    Colour marks what <em>looks like</em> QSO traffic, and nothing is hidden or corrected:
+                    <span class="cw-tok-proc">CQ DE 73</span>,
+                    <span class="cw-tok-rst">5NN</span>,
+                    <span class="cw-tok-call">a call heard more than once</span>,
+                    <span class="cw-tok-call1">a call heard once</span>.
+                </div>
             </div>
             <div id="cwPhasorBox" style="display:none; flex:0 0 auto; width:200px;">
+                <canvas id="cwSpectrumCanvas" width="200" height="90"
+                        style="width:200px; height:90px; display:block; border:1px solid #444; border-radius:6px;"
+                        aria-label="CW passband spectrum with a marker at the wanted pitch"></canvas>
+                <div id="cwSpectrumInfo" class="mb-1"
+                     style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
+                    Waiting.
+                </div>
                 <canvas id="cwPhasorCanvas" width="200" height="200"
                         style="width:200px; display:block; border:1px solid #444; border-radius:6px;"
                         aria-label="CW tuning phasor"></canvas>

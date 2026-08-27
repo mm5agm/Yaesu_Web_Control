@@ -83,5 +83,16 @@ namespace Yaesu_Web_Control.Controllers
         [HttpGet("phasor")]
         public IActionResult Phasor([FromQuery] long since = 0)
             => Ok(_reader.Phasor(since));
+
+        /// <summary>
+        /// The passband spectrum for the tuning display.
+        ///
+        /// No cursor, unlike phasor: this is a picture of the moment rather
+        /// than a stream, so a dropped poll costs nothing and the caller never
+        /// has to catch up.
+        /// </summary>
+        [HttpGet("spectrum")]
+        public IActionResult Spectrum()
+            => Ok(_reader.Spectrum());
     }
 }
