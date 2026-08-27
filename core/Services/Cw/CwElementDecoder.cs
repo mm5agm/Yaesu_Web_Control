@@ -116,6 +116,75 @@ namespace RadioWebControl.Core.Services.Cw
 
         /// <inheritdoc cref="ReadabilitySpreadFloor"/>
         public double ReadabilitySpreadCeiling { get; set; } = 8.0;
+
+        /// <summary>
+        /// Fraction of recent key-down runs that may be thrown out as too short
+        /// to be an element before the copy is called
+        /// <see cref="CwReadability.Jumbled"/> whatever its spread says.
+        ///
+        /// This exists because the spread on its own can be fooled. The
+        /// de-glitch removes exactly the short outliers that make p10 small,
+        /// so a channel full of blips gets its evidence cleaned away and comes
+        /// out looking like tidy sending; measured on 2026-08-27, 20 WPM at
+        /// 3 dB went from 43% Jumbled to 99% "Readable" while the copy was
+        /// still wrong. Feeding the discarded blips back into the spread was
+        /// tried first and is worse: p90/p10 is a ratio, and a noise blip
+        /// population spanning one to four hops has the same 3:1 ratio a
+        /// dit-and-dah population does, so an empty band decoded as
+        /// "II EIES&lt;HH&gt; IEE" and called it Readable. Counting the
+        /// discards instead cannot be imitated by scale.
+        /// </summary>
+        public double ReadabilityDirtyCeiling { get; set; } = 0.35;
+
+        /// <summary>
+        /// Share of recent characters that may be built from dits alone -
+        /// E, I, S, H and 5 - before the copy is called
+        /// <see cref="CwReadability.Jumbled"/>.
+        ///
+        /// This is the only check here that looks at what came out rather than
+        /// at the timing that produced it, and it is here because the timing
+        /// checks share a blind spot: a detector emitting spurious short marks
+        /// produces marks that are individually plausible, in a population
+        /// with a plausible spread, and the only place the fault is visible is
+        /// in the text. Spurious short marks can only ever assemble into
+        /// dit-only letters, so a stretch of copy that is nearly all E/I/S/H
+        /// is the detector counting the band.
+        ///
+        /// The threshold is set from the ten ARRL W1AW practice files, whose
+        /// sent text is known. Real traffic sits in a remarkably tight band -
+        /// 23.3, 26.5, 27.2, 27.2, 27.5, 28.1, 28.6, 28.6, 28.7 and 30.8 per
+        /// cent over 360 to 3097 letters. At the window below that is about
+        /// five standard deviations from the ceiling, so ordinary text does
+        /// not trip it.
+        ///
+        /// The ceiling was swept on 2026-08-27 against the cases where the
+        /// timing checks are blind, reading accuracy and Readable/Jumbled:
+        ///
+        ///   ceiling   40 WPM 0 dB      30 WPM 0 dB      40 WPM 3 dB    5/20/40 clean
+        ///     off     15.6%  64%/22%   15.8%  58%/26%   85.3% 98%/0%   untouched
+        ///     0.70    11.6%  19%/66%    9.4%  45%/39%   85.3% 98%/0%   untouched
+        ///     0.60     4.2%   3%/83%    2.4%  24%/60%   85.3% 98%/0%   untouched
+        ///     0.50     0.4%   1%/85%    1.9%  22%/62%   85.3% 97%/1%   untouched
+        ///
+        /// 0.60 condemns the junk without touching a single case that copies
+        /// well; 0.50 starts eating into 40 WPM at 3 dB, which is 85% correct
+        /// and must be shown. Every clean file is identical at every setting,
+        /// and so is mkii-dk9py at 275 characters.
+        ///
+        /// It scores, it never edits. Deleting suspect letters individually
+        /// was considered and rejected: nothing distinguishes a spurious S
+        /// from the S in a callsign, and a callsign is the one thing that has
+        /// to be exact. Copy that has been quietly corrected into something
+        /// plausible is worse than copy that is visibly wrong, because only
+        /// the second tells the operator not to trust it.
+        /// </summary>
+        public double ReadabilityDitOnlyCeiling { get; set; } = 0.60;
+
+        /// <summary>Characters remembered for <see cref="ReadabilityDitOnlyCeiling"/>.</summary>
+        public int DitOnlyWindow { get; set; } = 48;
+
+        /// <summary>Characters needed before that ceiling is applied at all.</summary>
+        public int DitOnlyMinChars { get; set; } = 24;
     }
 
     /// <summary>
@@ -177,6 +246,54 @@ namespace RadioWebControl.Core.Services.Cw
 
         private double _ditMs;
         private double _dahMs;
+        /// <summary>
+        /// How far above the character gap a gap has to be before it is a word
+        /// gap. Textbook timing puts the two at seven and three dits, a ratio
+        /// of 2.33, and Farnsworth keeps that ratio while stretching both - the
+        /// three ARRL files above measure 3.68, 2.34 and 2.35. Splitting at
+        /// 1.8 leaves room on both sides of every one of those, and still sits
+        /// under the seven dits a textbook sender leaves, so an operator who
+        /// runs their word gaps short is not punished for it.
+        /// </summary>
+        private const double WordGapRatio = 1.8;
+
+        /// <summary>
+        /// The de-glitch floor as a fraction of the tracked dit, taking over
+        /// from the fixed MinElementMs wherever it is the larger of the two.
+        /// See the de-glitch itself for what it is protecting against.
+        ///
+        /// Swept 2026-08-27 against the ARRL files with noise added in 500 Hz,
+        /// and against a recorded QSO. "n3" is 3 dB SNR:
+        ///
+        ///   frac : 05n6   13n3   20n3   30n3   40cl   dk9py
+        ///   0.00 : 68.9%  30.0%  61.3%  79.8%  99.4%   247
+        ///   0.30 : 68.7%  41.0%  65.1%    -    99.4%   257
+        ///   0.40 : 79.6%  58.2%  72.5%  82.0%  99.4%   257
+        ///   0.45 : 79.8%  59.7%  73.8%  82.7%  99.7%   252
+        ///   0.50 : 79.8%  61.0%  74.2%  83.4%  99.2%   222
+        ///   0.65 : 80.5%  62.1%  74.5%  85.2%  99.0%   208
+        ///
+        /// The synthetic noise keeps rewarding a bigger floor all the way up,
+        /// and the recorded QSO is what says where to stop: dk9py peaks at 0.40
+        /// and has shed 49 characters by 0.65, with the fast clean files
+        /// starting to slip alongside it. Past 0.40 the floor is eating real
+        /// dits, and a sweep run only against generated noise would have walked
+        /// straight past that and picked 0.65.
+        ///
+        /// Every clean column is flat across the whole range - 97.1% at 5 WPM,
+        /// 96.3% at 10, 99.4% at 20 - so none of this is bought from the
+        /// undegraded case.
+        ///
+        /// One file dissents: 10 WPM at 3 dB reads 26.3% with no adaptive floor
+        /// and 12.4% here, recovering to 23.0% by 0.65. It is not weighed
+        /// heavily, because every one of those numbers is an unreadable decode
+        /// and choosing between two unreadable decodes is not worth a real
+        /// QSO's characters. It is recorded rather than tidied away because it
+        /// is unexplained, and an unexplained dissent is worth more written
+        /// down than forgotten.
+        /// </summary>
+        private const double MinElementDits = 0.40;
+
         private double _minDitMs;
         private double _maxDitMs;
 
@@ -192,16 +309,34 @@ namespace RadioWebControl.Core.Services.Cw
         private int  _recentCount;
         private int  _consecutiveOutliers;
         private bool _pendingCharGap;        // a character has been flushed, awaiting word gap
+        private bool _idleFlushed;           // this gap has already had its idle flush
+
+        private readonly double[] _gapWindow = new double[48];
+        private int _gapWindowCount;
+        private int _gapWindowNext;
         private int  _unknownSymbols;
 
         private readonly double[] _markWindow;
         private int _markWindowCount;
         private int _markWindowNext;
 
+        // Parallel to _markWindow but over every key-down run, element or not:
+        // true where the run was discarded as too short. See ReadabilityDirtyCeiling.
+        private readonly bool[] _runWindow;
+        private int _runWindowCount;
+        private int _runWindowNext;
+
+        // Recent decoded characters, true where the symbol held no dah.
+        private readonly bool[] _ditOnly;
+        private int _ditOnlyCount;
+        private int _ditOnlyNext;
+
         public CwElementDecoder(CwElementDecoderOptions? options = null)
         {
             _opt = options ?? new CwElementDecoderOptions();
             _markWindow = new double[Math.Max(4, _opt.ReadabilityWindow)];
+            _runWindow  = new bool[Math.Max(4, _opt.ReadabilityWindow)];
+            _ditOnly    = new bool[Math.Max(4, _opt.DitOnlyWindow)];
             _ditMs    = 1200.0 / _opt.InitialWpm;
             _dahMs    = _ditMs * 3.0;
             _minDitMs = 1200.0 / _opt.MaxWpm;
@@ -261,24 +396,67 @@ namespace RadioWebControl.Core.Services.Cw
             {
                 // Still in the same run. The only thing that can happen mid-run is
                 // a long silence deciding that the transmission has ended.
-                if (!_keyDown && _symbol.Length > 0 && tMs - _edgeTimeMs >= _opt.IdleFlushMs)
+                //
+                // Flushing early is about latency - getting the character on
+                // screen rather than holding it until the operator sends again -
+                // so it must not disturb the measurement of the gap it happens
+                // in. Moving _edgeTimeMs here to stop a repeat flush did disturb
+                // it, and expensively: a Farnsworth sender at 5 WPM leaves 1498
+                // ms between characters, a hair under this 1500 ms, so the flush
+                // fired inside the gaps and OnGap was handed what was left of
+                // them instead of their real length. Every word gap in the ARRL
+                // 5 WPM file then measured short of the threshold and no space
+                // was emitted anywhere: 381 characters, all of them correct, run
+                // together as "THELETTERKMEANSTHATSTHEENDOFMYMESSAGE". Leaving
+                // the edge alone and latching a flag instead scores 97.1% where
+                // that scored 79.0%.
+                if (!_keyDown && _symbol.Length > 0 && !_idleFlushed
+                    && tMs - _edgeTimeMs >= _opt.IdleFlushMs)
                 {
-                    var flushed = FlushCharacter();
-                    _edgeTimeMs = tMs;          // do not flush again on the next sample
-                    return flushed;
+                    _idleFlushed = true;
+                    return FlushCharacter();
                 }
                 return string.Empty;
             }
 
             double durationMs = tMs - _edgeTimeMs;
             _edgeTimeMs = tMs;
+            _idleFlushed = false;
             bool wasKeyDown = _keyDown;
             _keyDown = sample.KeyDown;
 
             // De-glitch. A run too short to be an element is noise; undo the edge
             // so the two runs either side of it join up.
-            if (durationMs < _opt.MinElementMs)
+            //
+            // "Too short" has to be read against the speed being sent, not as a
+            // constant. A fixed 12 ms floor is a fifth of a dit at 20 WPM and a
+            // seventh of one at 14.6, which leaves plenty of room for a noise
+            // blip to pass as an element - and an element that should not be
+            // there is more expensive than a missing one, because it corrupts
+            // the symbol rather than shortening it, MorseTable.Decode returns
+            // null and the whole character disappears with no mark on the page.
+            // That is the shape of the low-SNR failure measured on 2026-08-27:
+            // going from 6 dB to 3 dB in 500 Hz, the 20 WPM file gained 157
+            // marks and lost 192 characters, with p10 of the mark lengths
+            // falling from 60 ms to 55 while p90 stayed at 180 - dits
+            // fragmenting and dahs untouched.
+            //
+            // Scaling with the tracked dit only bites where there is headroom.
+            // At 40 WPM a dit is 30 ms and this asks for 10, under the floor, so
+            // fast sending is left exactly as it was; at 14.6 WPM it asks for 29
+            // and throws out blips a fixed floor waved through.
+            double minElementMs = Math.Max(_opt.MinElementMs, MinElementDits * _ditMs);
+            if (durationMs < minElementMs)
             {
+                // The blip is not an element, but it is still evidence, and
+                // throwing it away silently launders the channel: the de-glitch
+                // removes exactly the short outliers the readability spread is
+                // measured from, so the copy improves and the warning that the
+                // copy is bad disappears with it. It is counted as a dirty run
+                // rather than fed back into the spread - see
+                // ReadabilityDirtyCeiling for why the obvious version is wrong.
+                if (wasKeyDown) RecordRun(tooShort: true);
+
                 _keyDown = wasKeyDown;
                 _edgeTimeMs = tMs - durationMs;
                 return string.Empty;
@@ -306,9 +484,8 @@ namespace RadioWebControl.Core.Services.Cw
             // weak to train the speed. The question the window answers is
             // "what shape is the thing arriving", and marks excluded from
             // training are exactly the ones that give the fault away.
-            _markWindow[_markWindowNext] = markMs;
-            _markWindowNext = (_markWindowNext + 1) % _markWindow.Length;
-            if (_markWindowCount < _markWindow.Length) _markWindowCount++;
+            RecordForReadability(markMs);
+            RecordRun(tooShort: false);
 
             bool isDah = ClassifyMark(markMs, out double distance);
             _symbol.Append(isDah ? '-' : '.');
@@ -341,24 +518,95 @@ namespace RadioWebControl.Core.Services.Cw
             || noiseLevel <= 1e-12
             || peakMag >= _opt.MinTrainNoiseMultiple * noiseLevel;
 
+        /// <summary>
+        /// A gap under two dits is inside a character. Past that it separates
+        /// either two characters or two words, and which one is a question the
+        /// element dit cannot answer.
+        ///
+        /// The rule here used to be "a word gap is five dits or more", from the
+        /// textbook 1 / 3 / 7 timing. That is only true when the sender uses
+        /// textbook timing. Under Farnsworth - characters sent at a readable
+        /// speed and the gaps stretched to bring the overall rate down - the
+        /// two scales come apart, and every practice recording below about
+        /// 15 WPM is sent that way. All ten ARRL W1AW files send their elements
+        /// at the same 14.6 WPM, an 85 ms dit, and vary only the gaps:
+        ///
+        ///     file      character gap   word gap
+        ///      5 WPM        1498 ms      5506 ms
+        ///     10 WPM         552 ms      1293 ms
+        ///     13 WPM         333 ms       783 ms
+        ///
+        /// Five dits is 425 ms, so on all three every gap between characters
+        /// cleared the bar. The decoder had the Morse right and printed
+        /// "2 0 2 4  Q S T", a space wedged between every letter, which reads
+        /// as broken even though nothing was misread.
+        ///
+        /// So the character gap is measured rather than derived, as a low
+        /// percentile of the gaps recently seen. English runs about four
+        /// characters to a word, so the great majority of separators are
+        /// character gaps and the lower quartile lands inside that cluster
+        /// wherever it happens to sit.
+        ///
+        /// A percentile rather than the tracked pair of centroids that marks
+        /// use, because centroids have a wrong answer they will not leave. Seed
+        /// them from the element dit, feed them Farnsworth gaps, and every gap
+        /// starts out above the split; the pull toward 7:3 then holds the
+        /// character estimate at three sevenths of the word estimate, which
+        /// keeps the split above the character gaps forever. Measured on the
+        /// 10 WPM file that fixed point is exactly what happened, and the score
+        /// did not move.
+        /// </summary>
         private string OnGap(double gapMs)
         {
-            // 1 / 3 / 7 dits, split at the midpoints in log-ish terms: anything
-            // under 2 units is inside a character, under 5 units is between
-            // characters, beyond that is between words.
-            double unit = _ditMs;
-
-            if (gapMs < 2.0 * unit) return string.Empty;
+            if (gapMs < 2.0 * _ditMs) return string.Empty;
 
             var text = FlushCharacter();
 
-            if (gapMs >= 5.0 * unit && !_pendingCharGap)
+            _gapWindow[_gapWindowNext] = gapMs;
+            _gapWindowNext = (_gapWindowNext + 1) % _gapWindow.Length;
+            if (_gapWindowCount < _gapWindow.Length) _gapWindowCount++;
+
+            if (gapMs >= WordGapRatio * CharacterGapMs() && !_pendingCharGap)
             {
                 text += " ";
                 _pendingCharGap = true;
             }
 
             return text;
+        }
+
+        /// <summary>
+        /// The lower quartile of the separator gaps seen lately, floored at the
+        /// textbook three dits so it can be stretched but never squeezed.
+        ///
+        /// The window is used from the very first gap rather than waiting for
+        /// enough of them to make a respectable percentile, and that is
+        /// deliberate. The caller records the gap before asking about it, so on
+        /// the first one the estimate is that gap itself and the ratio test
+        /// cannot fire: the decoder declines to split until it has seen a
+        /// second, longer gap to compare against. Falling back to the textbook
+        /// three dits instead - the obvious reading of "not enough data yet" -
+        /// picks the one answer that is definitely wrong on a Farnsworth
+        /// sender, and picks it for the opening of the transmission, which is
+        /// the callsign. Waiting for eight gaps turned "CQ CQ DE MM5AGM" into
+        /// "C Q D E MM5AGM": every character correct and the first third of the
+        /// message split into letters.
+        ///
+        /// Erring towards not splitting is the cheap direction. A missed word
+        /// gap costs one edit once per word; a wrongly split one costs an edit
+        /// on every character, and reads as gibberish rather than as running
+        /// text.
+        /// </summary>
+        private double CharacterGapMs()
+        {
+            double textbook = 3.0 * _ditMs;
+            if (_gapWindowCount < 6) return textbook;
+
+            Span<double> sorted = stackalloc double[_gapWindowCount];
+            for (int i = 0; i < _gapWindowCount; i++) sorted[i] = _gapWindow[i];
+            sorted.Sort();
+
+            return Math.Max(textbook, sorted[(int)(0.25 * (_gapWindowCount - 1))]);
         }
 
         private string FlushCharacter()
@@ -370,6 +618,11 @@ namespace RadioWebControl.Core.Services.Cw
 
             var decoded = MorseTable.Decode(sym);
             if (decoded is null) { _unknownSymbols++; return string.Empty; }
+
+            _ditOnly[_ditOnlyNext] = sym.IndexOf('-') < 0;
+            _ditOnlyNext = (_ditOnlyNext + 1) % _ditOnly.Length;
+            if (_ditOnlyCount < _ditOnly.Length) _ditOnlyCount++;
+
             return decoded;
         }
 
@@ -430,11 +683,29 @@ namespace RadioWebControl.Core.Services.Cw
             Clamp();
         }
 
+        private void RecordForReadability(double markMs)
+        {
+            _markWindow[_markWindowNext] = markMs;
+            _markWindowNext = (_markWindowNext + 1) % _markWindow.Length;
+            if (_markWindowCount < _markWindow.Length) _markWindowCount++;
+        }
+
+        /// <summary>Every key-down run, whether or not it survived the de-glitch.</summary>
+        private void RecordRun(bool tooShort)
+        {
+            _runWindow[_runWindowNext] = tooShort;
+            _runWindowNext = (_runWindowNext + 1) % _runWindow.Length;
+            if (_runWindowCount < _runWindow.Length) _runWindowCount++;
+        }
+
         /// <summary>
         /// Sort the recent marks and compare the 90th percentile with the
         /// 10th. Percentiles rather than min and max because a single glitch
         /// at either end would otherwise decide the answer, and the whole
         /// point is to characterise the population.
+        ///
+        /// The spread is then overruled by the share of runs the de-glitch
+        /// threw away, which the spread cannot see by construction.
         /// </summary>
         private CwReadability AssessReadability(out double spread)
         {
@@ -452,6 +723,23 @@ namespace RadioWebControl.Core.Services.Cw
             spread = p90 / p10;
             if (spread < _opt.ReadabilitySpreadFloor)   return CwReadability.Chatter;
             if (spread > _opt.ReadabilitySpreadCeiling) return CwReadability.Jumbled;
+
+            if (_runWindowCount >= _opt.ReadabilityMinMarks)
+            {
+                int dirty = 0;
+                for (int i = 0; i < _runWindowCount; i++) if (_runWindow[i]) dirty++;
+                if ((double)dirty / _runWindowCount > _opt.ReadabilityDirtyCeiling)
+                    return CwReadability.Jumbled;
+            }
+
+            if (_ditOnlyCount >= _opt.DitOnlyMinChars)
+            {
+                int ditOnly = 0;
+                for (int i = 0; i < _ditOnlyCount; i++) if (_ditOnly[i]) ditOnly++;
+                if ((double)ditOnly / _ditOnlyCount > _opt.ReadabilityDitOnlyCeiling)
+                    return CwReadability.Jumbled;
+            }
+
             return CwReadability.Readable;
         }
 

@@ -40,6 +40,24 @@ namespace RadioWebControl.Core.Services.Cw
         /// inferred from where KeyDown happened to flip.
         /// </summary>
         public double MarkLevel { get; init; }
+
+        /// <summary>
+        /// In-phase part of the audio at the operator's <em>configured</em>
+        /// pitch - not the tracked tone. Referenced to a phase that runs
+        /// continuously from the start of the stream, so a tone sitting exactly
+        /// on the pitch holds a fixed angle and a tone off by dF rotates at
+        /// exactly dF turns per second, anticlockwise when it is high.
+        ///
+        /// That is the whole point: referenced to the tracked tone it would be
+        /// stationary by construction and would show the operator nothing.
+        /// Units are the same as Magnitude, and unnormalised - the level here
+        /// follows the AGC, so a display wanting a constant-size figure has to
+        /// scale it itself.
+        /// </summary>
+        public double PhasorI { get; init; }
+
+        /// <summary>Quadrature part. See <see cref="PhasorI"/>.</summary>
+        public double PhasorQ { get; init; }
     }
 
     public sealed class CwToneDetectorOptions
@@ -168,6 +186,34 @@ namespace RadioWebControl.Core.Services.Cw
         /// <summary>Lowest the mark reference may sit, as a multiple of the noise mean.</summary>
         private const double MarkFloorRatio = 2.5;
 
+        /// <summary>
+        /// How fast the mark level is allowed to fall while the key is up,
+        /// in dB per second, floored at <see cref="MarkFloorRatio"/> x noise.
+        ///
+        /// Without this the mark level is a latch. It only updates while the
+        /// key is down, and the key only goes down at half way from the noise
+        /// up to it, so once a fade takes the signal more than 6 dB below the
+        /// last mark nothing can key again and nothing can lower the bar. A
+        /// 20 dB fade at 0.05 Hz falls at up to 3 dB/s, and at 5 WPM the word
+        /// gaps are 5.5 s long, so one gap is enough to strand it - which is
+        /// why fading alone cost 5 WPM 29 points of copy while 10 WPM, whose
+        /// longest gap is 1.3 s, got through it almost untouched.
+        /// </summary>
+        private const double MarkDecayDbPerSec = 4.0;
+
+        /// <summary>
+        /// Bottom stop for that decay, as a multiple of the mean noise, and it
+        /// is deliberately higher than <see cref="MarkFloorRatio"/>.
+        ///
+        /// The decay must not sink the bar under the noise. Keying turns on at
+        /// half way from the noise up to the mark level, so a bottom stop of
+        /// 2.5 puts the on-threshold at 1.75x the mean noise while hiss peaks
+        /// at about 2.1x - the gate then keys on the band itself. Measured on
+        /// 2026-08-27: at 4 dB/s with the 2.5 stop, 20 WPM at 3 dB fell from
+        /// 72.5% to 65.5% and 5 WPM faded-and-noisy from 41.8% to 29.6%.
+        /// </summary>
+        private const double MarkDecayFloorRatio = 6.0;
+
         // Keying gate. On 2026-08-27 an empty 15m, with nothing audible on it,
         // read 13.7 dB, "signal", "locked" and 60 wpm, and turned bare hiss
         // into 93% chatter. Amplitude-modulated noise reproduces it exactly:
@@ -194,27 +240,59 @@ namespace RadioWebControl.Core.Services.Cw
         // is not large - at a 12 s window the empty band breaks back through
         // at 17%, so lengthening this further needs re-measuring, not just a
         // bigger number.
+        // What the window holds is the total length of the qualified runs, not
+        // how many of them there were. Counting runs sounds like the same
+        // question and is not: it measures how fast the other operator is
+        // sending, and a fixed count in a fixed window therefore encodes a
+        // minimum speed. At 5 WPM with Farnsworth spacing - which is how every
+        // practice recording below about 15 WPM is sent - the ARRL W1AW file
+        // produces almost exactly 10 qualified runs per ten seconds, sitting
+        // on the old hold count of 10. Presence flapped, and because presence
+        // forces the key up it took whole characters with it: of the 1012
+        // marks in that file the detector reported 631, missing dits and dahs
+        // at the same rate and in contiguous clumps rather than singly, which
+        // is the signature of a gate opening and closing rather than of marks
+        // being too weak.
+        //
+        // Time separates the two cases far better than count does, because a
+        // qualified noise run is barely over MarkRunHops while a real mark is
+        // several times it. Measured per ten-second window: three minutes of
+        // empty 15m accumulates around 70 hops, the 5 WPM file around 320, and
+        // anything faster very much more.
         private const int MarkRunHops      = 6;     // 30 ms: every dah to 90 wpm, dits to 40
         private const int KeyingWindowHops = 2000;  // 10 s of history
-        private const int KeyingRunsOn     = 6;
-        // The hold count is what actually rejects an empty band, and it was
-        // the token 1 that let noise through: once grace had granted presence,
-        // a single qualified run inside the ten-second window held it forever,
-        // and noise reliably makes several. Swept 2026-08-27 against three
-        // minutes of recorded empty 15m, with on in {6,16} and off in
-        // {1,10,25,40}; on barely moved anything, off decided everything:
+        private const int KeyingOpenHops   = 40;
+        // The hold threshold is what actually rejects an empty band. Swept
+        // 2026-08-27 in hops of qualified run inside the ten-second window,
+        // against three minutes of recorded empty 15m, two dead-band probes,
+        // and the signals the previous calibration used:
         //
-        //   off :  noise3min   dead    dk9py        cq-then-qso
-        //     1 :    70%       100%    242 chars    118 chars
-        //    10 :    11%        17%    240 chars    114 chars
-        //    25 :    11%        17%    230 chars     86 chars
-        //    40 :    11%        17%    167 chars     29 chars
+        //   hops : probe15c   dk9py   cq-qso   5 wpm   10 wpm   40 wpm
+        //     20 :   13 ch     246     118     79.0%   95.9%    99.4%
+        //     30 :   13 ch     246     118     79.0%   95.9%    99.4%
+        //     40 :   13 ch     246     118     79.0%   95.9%    99.4%
+        //     50 :   13 ch     246     114     79.0%   95.9%    99.4%
+        //     70 :    0 ch     246     113     79.0%   95.9%    99.4%
         //
-        // 10 is the knee: noise collapses and the signals keep all but a
-        // couple of characters, while 25 and beyond starts eating QSOs for
-        // no further gain. The 11% and 17% that remain are the grace burst
-        // itself - 2 s of a 12 s file is 16.7% - and emit no characters.
-        private const int KeyingRunsOff    = 10;
+        // noise-15m-long, diag-dead, diag-strong and probe15d emit nothing
+        // anywhere in that range, and the ARRL files do not move at all: the
+        // whole range is flat on accuracy and the only thing being traded is
+        // a real QSO against a dead band. 30 sits in the middle of the flat
+        // stretch rather than on either edge. Past 40 the QSO starts paying -
+        // by 70, cq-then-qso has lost five characters - which is the same
+        // "eating QSOs for no further gain" the old run-count sweep found at
+        // its top end.
+        //
+        // The one recording that is not silent below 70 is probe15c, and it is
+        // worth being precise about what it emits rather than reading 13 as a
+        // failure. Over 65 seconds it produces "NA 3IEEE I HI" at confidence
+        // 0.17, with no run of four characters anywhere and readability calling
+        // it 92% Chatter. That is the classifier doing its job: the reader is
+        // saying it can hear something and cannot read it, which is true, and
+        // is a different thing from claiming a decode. Buying that last 13
+        // characters costs a real QSO characters it currently gets right, so
+        // it is not bought here.
+        private const int KeyingHoldHops   = 30;
 
         // Grace. The gate cannot be the first thing that decides presence, or
         // it eats the start of every transmission: it needs several marks to
@@ -286,11 +364,16 @@ namespace RadioWebControl.Core.Services.Cw
         private int _fftFill;
 
         private long   _sampleIndex8k;
+        private double _phasorPhase;
         private double _toneHz;
         private double _goertzelCoeff;
         private double _noiseMean;
         private double _peakEst;
         private double _markLevel;
+
+        /// <summary>Amplitude factor per envelope hop for <see cref="MarkDecayDbPerSec"/>.</summary>
+        private static readonly double MarkDecayPerHop =
+            Math.Pow(10.0, -MarkDecayDbPerSec * (EnvHop / (double)WorkRate) / 20.0);
         private bool   _keyDown;
 
         // Debounce. _pending holds samples that cannot be emitted yet because a
@@ -301,9 +384,9 @@ namespace RadioWebControl.Core.Services.Cw
         private int  _runHops;
         // Rolling record of which hops ended a sustained excursion, and how
         // many are still inside the window, for the keying gate.
-        private readonly bool[] _markRuns = new bool[KeyingWindowHops];
+        private readonly int[] _markRuns = new int[KeyingWindowHops];
         private int _markRunPos;
-        private int _markRunCount;
+        private int _markRunHops;
         private int _aboveRun;
         private int _levelHops;
         private int _quietHops;
@@ -456,6 +539,7 @@ namespace RadioWebControl.Core.Services.Cw
         private CwToneSample MakeSample()
         {
             double mag = Goertzel(_envBuf, EnvWindow, _goertzelCoeff);
+            Phasor(out double phI, out double phQ);
 
             if (!_primed)
             {
@@ -483,9 +567,32 @@ namespace RadioWebControl.Core.Services.Cw
             // rather than the handful of marks the gate nominally costs.
             //
             // So an unconfirmed sustained excursion protects the estimate too.
-            // On noise this costs nothing - excursions that survive MarkRunHops
-            // are exactly what noise does not produce, which is the premise of
-            // the gate - so the estimate stays unbiased on an empty band.
+            //
+            // The wait for MarkRunHops is deliberate, and the obvious tightening
+            // of it is a trap worth recording.
+            //
+            // The first six hops - 30 ms - of every mark are still averaged in
+            // at the fast rate, aimed at the full signal level. On the ARRL
+            // W1AW practice files, where the tone runs 85 dB over the floor,
+            // each leading edge drags the estimate around 11% of the way to the
+            // signal, so it looks like it has to be costing marks. Dropping the
+            // wait to "_aboveRun > 0" to close that hole was tried on
+            // 2026-08-27 and is wrong twice over.
+            //
+            // It bought nothing. The 5 WPM file reported the same 631 marks out
+            // of 1012 either way, so the leading edges were never the limiting
+            // factor. The keying gate was - see MarkRunHops below.
+            //
+            // And it wrecks the empty band. On noise the magnitude crosses the
+            // mid threshold on roughly half of all hops, so "_aboveRun > 0" is
+            // true almost continuously, and the estimate freezes at the slow
+            // rate instead of climbing to the noise it exists to measure. Every
+            // hop then reads as signal. probe15c went from silent to 130
+            // characters and its presence from 20% to 91%.
+            //
+            // Requiring a qualified run is exactly what separates the two
+            // cases: a real mark's leading edge is followed by a run that goes
+            // on to qualify, and a hiss peak's is not.
             bool inMark = _keyDown || _aboveRun >= MarkRunHops;
             _noiseMean += (inMark ? 0.0005 : 0.02) * (mag - _noiseMean);
 
@@ -496,6 +603,17 @@ namespace RadioWebControl.Core.Services.Cw
             // during a fade a slow peak leaves the threshold stranded above the
             // signal, which is precisely the failure a fixed DEC LVL has.
             if (_keyDown) _markLevel += 0.05 * (mag - _markLevel);
+            else if (MarkDecayDbPerSec > 0.0)
+            {
+                // Falls only. Math.Max against the floor on its own does not
+                // stop the level dropping, it lifts it whenever the noise is
+                // high relative to the last mark, which raises the keying bar
+                // on exactly the noisy band that can least afford it - that
+                // read as the floor sweep running backwards on 2026-08-27.
+                double stop = MarkDecayFloorRatio * _noiseMean;
+                if (_markLevel > stop)
+                    _markLevel = Math.Max(_markLevel * MarkDecayPerHop, stop);
+            }
 
             double noise = Math.Max(_noiseMean, 1e-12);
             double snrLin = _peakEst / noise;
@@ -524,23 +642,23 @@ namespace RadioWebControl.Core.Services.Cw
                                    Math.Max(_markLevel, MarkFloorRatio * _noiseMean),
                                    _peakEst);
             double midThr    = _noiseMean + 0.5 * (markRef - _noiseMean);
-            bool   qualified = false;
+            int qualifiedHops = 0;
             if (mag >= midThr) _aboveRun++;
             else
             {
-                if (_aboveRun >= MarkRunHops) qualified = true;
+                if (_aboveRun >= MarkRunHops) qualifiedHops = _aboveRun;
                 _aboveRun = 0;
             }
-            if (_markRuns[_markRunPos]) _markRunCount--;
-            _markRuns[_markRunPos] = qualified;
-            if (qualified) _markRunCount++;
+            _markRunHops -= _markRuns[_markRunPos];
+            _markRuns[_markRunPos] = qualifiedHops;
+            _markRunHops += qualifiedHops;
             _markRunPos = (_markRunPos + 1) % KeyingWindowHops;
 
             bool levelOk = snrLin >= (_present ? AbsentRatio : PresentRatio);
             if (levelOk) { _levelHops++; _quietHops = 0; }
             else if (++_quietHops >= ReArmHops) _levelHops = 0;
 
-            bool keying = _markRunCount >= (_present ? KeyingRunsOff : KeyingRunsOn);
+            bool keying = _markRunHops >= (_present ? KeyingHoldHops : KeyingOpenHops);
             bool grace  = _levelHops <= GraceHops;
 
             _present = levelOk && (keying || grace);
@@ -581,6 +699,8 @@ namespace RadioWebControl.Core.Services.Cw
                 SignalPresent = _present,
                 NoiseLevel    = _noiseMean,
                 MarkLevel     = Math.Max(_markLevel, MarkFloorRatio * _noiseMean),
+                PhasorI       = phI,
+                PhasorQ       = phQ,
             };
         }
 
@@ -691,6 +811,54 @@ namespace RadioWebControl.Core.Services.Cw
         {
             _toneHz = hz;
             _goertzelCoeff = 2.0 * Math.Cos(2.0 * Math.PI * hz / WorkRate);
+        }
+
+        /// <summary>
+        /// Project the envelope window onto the operator's configured pitch and
+        /// keep both parts, which the Goertzel above throws away when it takes
+        /// a magnitude.
+        ///
+        /// The reference phase is anchored to the absolute sample index rather
+        /// than to the start of the window, so it runs continuously across
+        /// hops. That is what makes the result a tuning aid instead of noise: a
+        /// tone exactly on the pitch holds one angle hop after hop, and a tone
+        /// dF away advances by 2*pi*dF*hop each time, so it walks round the
+        /// circle dF times a second - anticlockwise if it is above the pitch.
+        ///
+        /// Rotation faster than half the hop rate aliases, which here is 100 Hz
+        /// - far outside the range anyone tunes by eye, and the FFT path
+        /// reports the offset numerically anyway.
+        /// </summary>
+        private void Phasor(out double i, out double q)
+        {
+            double w = 2.0 * Math.PI * _opt.PitchHz / WorkRate;
+
+            // _phasorPhase is the reference angle at the first sample of this
+            // window, carried forward hop by hop. Accumulating it beats deriving
+            // it from the absolute sample index, which is only the same angle
+            // modulo 2*pi when the pitch is a whole number of Hz.
+            double cr = Math.Cos(_phasorPhase), sr = Math.Sin(_phasorPhase);
+            double cd = Math.Cos(w),            sd = Math.Sin(w);
+            double si = 0.0, sq = 0.0;
+            for (int k = 0; k < EnvWindow; k++)
+            {
+                double x = _envBuf[k];
+                si += x * cr;
+                sq -= x * sr;
+
+                double nr = cr * cd - sr * sd;
+                sr        = sr * cd + cr * sd;
+                cr        = nr;
+            }
+
+            // Same 2/N scaling the Goertzel uses, so the phasor's radius is
+            // comparable with Magnitude.
+            i = si * 2.0 / EnvWindow;
+            q = sq * 2.0 / EnvWindow;
+
+            // On to the next window. Wrapped so it cannot drift off into the
+            // range where a double stops resolving small angles.
+            _phasorPhase = (_phasorPhase + w * EnvHop) % (2.0 * Math.PI);
         }
 
         private static double Goertzel(double[] buf, int n, double coeff)
