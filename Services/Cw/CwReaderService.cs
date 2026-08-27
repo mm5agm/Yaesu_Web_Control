@@ -136,6 +136,48 @@ namespace Yaesu_Web_Control.Services.Cw
         }
 
         /// <summary>
+        /// Phasor points for the tuning aid, drained from the engine's ring.
+        ///
+        /// Deliberately not folded into Snapshot: these arrive 200 a second and
+        /// only matter while the aid is on screen, so the display polls for
+        /// them separately and the main reader poll stays small.
+        /// </summary>
+        public CwPhasorFrame Phasor(long since)
+        {
+            lock (_gate)
+            {
+                var eng = _engine;
+                if (eng is null)
+                    return new CwPhasorFrame { Cursor = 0, PitchHz = _pitchHz };
+
+                var pts = eng.PhasorSince(since, out long cursor);
+
+                // Flattened to a plain number array. At 200 points a second an
+                // object per point costs several times the bytes for nothing
+                // the display can use.
+                var xy = new double[pts.Length * 2];
+                var key = new bool[pts.Length];
+                for (int k = 0; k < pts.Length; k++)
+                {
+                    xy[k * 2]     = pts[k].I;
+                    xy[k * 2 + 1] = pts[k].Q;
+                    key[k]        = pts[k].KeyDown;
+                }
+
+                return new CwPhasorFrame
+                {
+                    Cursor      = cursor,
+                    PitchHz     = _pitchHz,
+                    ToneHz      = eng.ToneHz,
+                    Confidence  = eng.Confidence,
+                    SignalPresent = eng.SignalPresent,
+                    Points      = xy,
+                    KeyDown     = key,
+                };
+            }
+        }
+
+        /// <summary>
         /// Everything the UI needs in one read, including the text decoded
         /// since the caller's cursor.
         /// </summary>
@@ -363,5 +405,27 @@ namespace Yaesu_Web_Control.Services.Cw
         /// </summary>
         public string Readability { get; init; } = "Unknown";
         public long DroppedFrames { get; init; }
+    }
+
+    /// <summary>One poll's worth of the tuning figure.</summary>
+    public sealed class CwPhasorFrame
+    {
+        /// <summary>Pass back as "since" on the next poll.</summary>
+        public long Cursor { get; init; }
+
+        /// <summary>The pitch the figure is referenced to, Hz.</summary>
+        public double PitchHz { get; init; }
+
+        /// <summary>Where the detector thinks the tone actually is, Hz.</summary>
+        public double ToneHz { get; init; }
+
+        public double Confidence { get; init; }
+        public bool   SignalPresent { get; init; }
+
+        /// <summary>I,Q,I,Q... oldest first.</summary>
+        public double[] Points { get; init; } = Array.Empty<double>();
+
+        /// <summary>One flag per point, so the display can lift the pen between characters.</summary>
+        public bool[] KeyDown { get; init; } = Array.Empty<bool>();
     }
 }

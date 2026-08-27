@@ -61,11 +61,19 @@ internal static class Program
         var timelineHz = 0.0;
         string? path  = null;
         string? selftest = null;
+        string? expectPath = null;             // --expect: score against known text
+        var addNoiseDb = double.NaN;           // --noise: SNR to degrade a clean file to
+        var fadeDepthDb = double.NaN;          // --fade: QSB depth in dB
+        var fadeHz      = 0.05;                // --fade-hz: QSB rate, 20 s period
 
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
             {
+                case "--expect":    expectPath = args[++i]; break;
+                case "--noise":     addNoiseDb = Arg(args, ++i); break;
+                case "--fade":      fadeDepthDb = Arg(args, ++i); break;
+                case "--fade-hz":   fadeHz      = Arg(args, ++i); break;
                 case "--pitch":     pitch     = Arg(args, ++i); break;
                 case "--search":    search    = Arg(args, ++i); break;
                 case "--filter":    filterHz  = (int)Arg(args, ++i); break;
@@ -115,6 +123,22 @@ internal static class Program
         var wav     = WavFile.Read(path);
         var samples = wav.Mono;
         var rate    = wav.SampleRate;
+
+        // Fade first, then noise: the path fades the signal, the receiver adds
+        // the band noise afterwards. See ApplyFade.
+        if (!double.IsNaN(fadeDepthDb))
+        {
+            ApplyFade(samples, rate, fadeDepthDb, fadeHz);
+            Console.WriteLine($"fade      {fadeDepthDb:F0} dB QSB at {fadeHz:F3} Hz " +
+                              $"({1.0 / Math.Max(fadeHz, 1e-9):F0} s period)");
+        }
+
+        if (!double.IsNaN(addNoiseDb))
+        {
+            double sigRms = AddNoise(samples, addNoiseDb, rate);
+            Console.WriteLine($"noise     added to {addNoiseDb:F0} dB SNR in 500 Hz " +
+                              $"(mark level {20.0 * Math.Log10(Math.Max(sigRms, 1e-9)):F1} dBFS)");
+        }
 
         // The decoder wants a whole multiple of 8 kHz. Recorders default to
         // 44.1 kHz often enough that refusing outright would just waste a trip
@@ -249,9 +273,175 @@ internal static class Program
                             + $"Unknown {readTally[(int)CwReadability.Unknown] / tot * 100.0:F0}%");
         }
         Console.WriteLine();
+        if (expectPath != null)
+        {
+            if (!File.Exists(expectPath)) throw new FileNotFoundException($"no such file: {expectPath}");
+            var (acc, sent, got) = Score(File.ReadAllText(expectPath), transcript.ToString());
+            Console.WriteLine();
+            Console.WriteLine("--- against the known text ----------------------------------");
+            Console.WriteLine($"sent         {sent} characters");
+            Console.WriteLine($"copied       {got} characters");
+            Console.WriteLine($"accuracy     {acc * 100.0:F1}%");
+        }
+
+        Console.WriteLine();
         Console.WriteLine("--- transcript ----------------------------------------------");
         Console.WriteLine(transcript.ToString());
         return 0;
+    }
+
+    /// <summary>
+    /// Mix white noise in at a stated SNR, in the 500 Hz reference bandwidth a
+    /// CW operator would quote.
+    ///
+    /// Two things here are easy to get wrong and were, first time round.
+    ///
+    /// The signal reference is the marks, not the file. A Farnsworth practice
+    /// recording is mostly silence - the 5 WPM file keys down about a tenth of
+    /// the time - so whole-file RMS understates the tone by around 10 dB and
+    /// every quoted SNR is that much too pessimistic, by a margin that changes
+    /// with the sending speed. That makes the ten ARRL files incomparable to
+    /// each other, which is the one thing a sweep across them needs. The level
+    /// taken here is the 90th percentile of a 10 ms sliding RMS: high enough to
+    /// sit inside the marks, low enough not to chase a single sample.
+    ///
+    /// The bandwidth is stated. White noise has no SNR until you say over what
+    /// bandwidth, and the honest number for a receiver is its filter - the
+    /// detector's own bin is only about 8 Hz wide, so it enjoys roughly 27 dB
+    /// of processing gain over a 4 kHz Nyquist and "0 dB" broadband is still a
+    /// perfectly solid signal. That is why the first sweep here was inert from
+    /// clean all the way to 0 dB. Quoting in 500 Hz matches both the receiver
+    /// the recordings came off and CwSignalGenerator.AddNoise in the core
+    /// tests, so a number here means the same as a number there.
+    /// </summary>
+    private static double AddNoise(float[] samples, double snrDb, int rate)
+    {
+        double markRms = MarkLevel(samples, rate);
+
+        const double RefBw = 500.0;
+        double fullBw   = rate / 2.0;
+        double sigma    = markRms / Math.Pow(10.0, snrDb / 20.0) * Math.Sqrt(fullBw / RefBw);
+
+        // Fixed seed: a sweep that moves because the noise moved is not a sweep.
+        var rnd = new Random(20260827);
+        for (int i = 0; i < samples.Length; i++)
+        {
+            // Box-Muller, so the noise is Gaussian rather than uniform - a
+            // uniform "hiss" has the wrong peak statistics and the detector's
+            // presence gate is built on exactly those.
+            double u1 = 1.0 - rnd.NextDouble(), u2 = rnd.NextDouble();
+            double g  = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
+            samples[i] = (float)Math.Clamp(samples[i] + g * sigma, -1.0, 1.0);
+        }
+        return markRms;
+    }
+
+    /// <summary>
+    /// The level of the tone while the key is down, as the 90th percentile of a
+    /// 10 ms sliding RMS. Ten milliseconds is under a dit at any speed these
+    /// files reach, so a window sits wholly inside a mark rather than straddling
+    /// its edges.
+    /// </summary>
+    private static double MarkLevel(float[] samples, int rate)
+    {
+        int win = Math.Max(1, rate / 100);
+        if (samples.Length < win) return 0.0;
+
+        var levels = new List<double>(samples.Length / win + 1);
+        for (int start = 0; start + win <= samples.Length; start += win)
+        {
+            double sum = 0;
+            for (int i = start; i < start + win; i++) sum += (double)samples[i] * samples[i];
+            levels.Add(Math.Sqrt(sum / win));
+        }
+        if (levels.Count == 0) return 0.0;
+
+        levels.Sort();
+        return levels[(int)(0.90 * (levels.Count - 1))];
+    }
+
+    /// <summary>
+    /// Sinusoidal QSB, as a depth in dB and a fade rate in Hz.
+    ///
+    /// Applied before the noise, because that is the order the ionosphere and
+    /// the receiver work in: the path fades the signal, and the band noise the
+    /// receiver adds afterwards stays where it is. Fading the sum instead would
+    /// fade the noise too, which no operator has ever heard, and would leave the
+    /// SNR constant through the fade - hiding the very effect being tested.
+    ///
+    /// The envelope matches CwSignalGenerator.ApplyQsb: a raised cosine that
+    /// touches 0 dB at the peak and -depth at the trough, so "20 dB QSB" means
+    /// the signal is full strength at its best and 20 dB down at its worst.
+    /// </summary>
+    private static void ApplyFade(float[] samples, int rate, double depthDb, double fadeHz)
+    {
+        for (int i = 0; i < samples.Length; i++)
+        {
+            double t  = (double)i / rate;
+            double dB = -0.5 * depthDb * (1.0 - Math.Cos(2.0 * Math.PI * fadeHz * t));
+            samples[i] = (float)(samples[i] * Math.Pow(10.0, dB / 20.0));
+        }
+    }
+
+    /// <summary>
+    /// Score a transcript against the text that was actually sent.
+    ///
+    /// Levenshtein over a normalised form, reported as 1 - distance/length, so
+    /// an insertion of rubbish costs as much as a dropped character. Both sides
+    /// are upper-cased and run-length collapsed on whitespace; the ARRL files
+    /// carry a "= NOW 20 WPM =" header the decoder never hears, so anything
+    /// before the last '=' on the first line is dropped.
+    /// </summary>
+    private static (double accuracy, int sent, int got) Score(string expected, string actual)
+    {
+        expected = StripHeader(expected);
+        string a = Normalise(expected), b = Normalise(actual);
+        if (a.Length == 0) return (0.0, 0, b.Length);
+
+        int d = Levenshtein(a, b);
+        return (Math.Max(0.0, 1.0 - (double)d / a.Length), a.Length, b.Length);
+    }
+
+    private static readonly char[] NewlineChars = { (char)13, (char)10 };
+
+    private static string StripHeader(string text)
+    {
+        int nl = text.IndexOfAny(NewlineChars);
+        if (nl < 0) return text;
+        string first = text[..nl];
+        return first.Contains("WPM") ? text[(nl + 1)..] : text;
+    }
+
+    private static string Normalise(string s)
+    {
+        var sb = new StringBuilder(s.Length);
+        bool space = true;
+        foreach (char c in s.ToUpperInvariant())
+        {
+            if (char.IsWhiteSpace(c)) { if (!space) { sb.Append(' '); space = true; } continue; }
+            sb.Append(c);
+            space = false;
+        }
+        return sb.ToString().Trim();
+    }
+
+    private static int Levenshtein(string a, string b)
+    {
+        var prev = new int[b.Length + 1];
+        var cur  = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++) prev[j] = j;
+
+        for (int i = 1; i <= a.Length; i++)
+        {
+            cur[0] = i;
+            for (int j = 1; j <= b.Length; j++)
+            {
+                int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+            }
+            (prev, cur) = (cur, prev);
+        }
+        return prev[b.Length];
     }
 
     /// <summary>

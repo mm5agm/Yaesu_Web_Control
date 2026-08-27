@@ -71,5 +71,17 @@ namespace Yaesu_Web_Control.Controllers
         [HttpGet("poll")]
         public IActionResult Poll([FromQuery] long since = 0)
             => Ok(_reader.Snapshot(since));
+
+        /// <summary>
+        /// Points for the phasor tuning aid since the caller's cursor.
+        ///
+        /// Separate from poll because it is only wanted while the aid is
+        /// visible, and it carries roughly two hundred points a second when it
+        /// is. Pass the Cursor from the previous reply; 0 asks for whatever the
+        /// ring still holds.
+        /// </summary>
+        [HttpGet("phasor")]
+        public IActionResult Phasor([FromQuery] long since = 0)
+            => Ok(_reader.Phasor(since));
     }
 }
