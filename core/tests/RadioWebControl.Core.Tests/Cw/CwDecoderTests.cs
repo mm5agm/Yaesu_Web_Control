@@ -234,15 +234,21 @@ namespace RadioWebControl.Core.Tests.Cw
 
         /// <summary>
         /// The tone search should cover the passband the operator is listening
-        /// to and stop there. Measured on bench/sp5xoc.wav, where a station
-        /// 232 Hz off the 610 Hz pitch inside a 500 Hz filter is found at the
-        /// implied 250 Hz and missed at 150 - see the plan's section 4.11b.
+        /// to, and stop at its skirt. Measured on bench/sp5xoc.wav, where a
+        /// station 232 Hz off the 610 Hz pitch inside a 500 Hz filter is found
+        /// at the implied 250 Hz and missed at 150 - see the plan's section
+        /// 4.11b. The wide end used to be clamped to 500 as well, on the
+        /// argument that a lock 1.8 kHz off the pitch is a different QSO rather
+        /// than a mistuned one. That cost a real signal on 2026-08-27, and the
+        /// neighbouring-QSO risk is now answered where it belongs - see
+        /// CwOffPitchSearchTests.
         /// </summary>
         [Theory]
         [InlineData(500,  250.0)]   // the common CW filter; the old fixed constant
         [InlineData(250,  125.0)]   // narrow CW: do not hunt outside what is audible
-        [InlineData(2400, 500.0)]   // SSB: clamped, or it locks the next QSO along
-        [InlineData(3600, 500.0)]
+        [InlineData(2400, 1200.0)]  // SSB: the whole passband is searchable
+        [InlineData(3600, 1800.0)]
+        [InlineData(6000, 1800.0)]  // clamped: wider than any real CW passband
         [InlineData(100,  100.0)]   // clamped up: narrower than the tone estimate's own error
         [InlineData(50,   100.0)]
         public void Tone_search_covers_the_passband_and_no_more(int filterHz, double expected)
