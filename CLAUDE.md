@@ -75,6 +75,16 @@ a formula rather than a table, which is why it never could have been.
   `js/**/*.js` into its `wwwroot/js/` preserving the subdirectory, and writes
   the `.gitignore` for the copies. Edit here; never edit a `wwwroot` copy.
 
+- **Moving a file *into* `js/` can silently delete someone's work.** Once it
+  moves, the old `wwwroot/js/...` path becomes a generated, gitignored build
+  artefact. Any PR still open against that path then merges as *modify/delete*,
+  and resolving it as a delete - the tempting reading, since the path is
+  generated now - drops that PR's change with no conflict marker, no build
+  error and nothing in the diff to notice. Before moving a file here, check
+  `gh pr list` for open PRs touching it, and if there are any, fold their
+  changes into the core copy first and say so in the commit. This happened on
+  2026-08-27 with `audio-playback.js` and PR #112.
+
 ## Build & test
 
 ```powershell
