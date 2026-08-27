@@ -51,6 +51,9 @@ internal static class Program
         var timeline  = false;
         var marks     = false;
         var markList  = 0;
+        var traceFrom = double.MaxValue;
+        var traceTo   = double.MinValue;
+        var minElement = -1.0;
         var resync    = true;
         var warmup     = -1.0;                 // -1 = leave the decoder's own default
         var trainNoise = -1.0;
@@ -74,6 +77,9 @@ internal static class Program
                                     if (i + 1 < args.Length && !args[i + 1].StartsWith('-')
                                         && int.TryParse(args[i + 1], out var ml)) { markList = ml; i++; }
                                     break;
+                case "--trace":     traceFrom = Arg(args, ++i);
+                                    traceTo   = Arg(args, ++i); break;
+                case "--min-element": minElement = Arg(args, ++i); break;
                 case "--no-resync": resync    = false; break;
                 case "--train-noise": trainNoise = Arg(args, ++i); break;
                 case "--warmup":    warmup   = Arg(args, ++i); break;
@@ -143,7 +149,7 @@ internal static class Program
         Console.WriteLine();
 
         if (marks) MarksReport(samples, rate, pitch, search, track, markList,
-                               warmup >= 0.0 ? warmup : new CwDecoderOptions().WarmupSeconds);
+                               warmup >= 0.0 ? warmup : new CwDecoderOptions().WarmupSeconds, traceFrom, traceTo);
         if (spectrum) Spectrum.Report(samples, rate);
         if (timeline) Spectrum.Timeline(samples, rate, timelineHz);
 
@@ -167,6 +173,8 @@ internal static class Program
                 // --no-speed-hold restores the pre-fix behaviour so the two can
                 // be run back to back over the same recording.
                 EnableResync        = resync,
+                MinElementMs        = minElement >= 0.0
+                                    ? minElement : new CwElementDecoderOptions().MinElementMs,
                 MinTrainNoiseMultiple = trainNoise >= 0.0 ? trainNoise : new CwElementDecoderOptions().MinTrainNoiseMultiple,
             },
         });
@@ -251,7 +259,8 @@ internal static class Program
     /// a presence excursion and the gate reads true at almost every edge the
     /// decoder sees. The excursions themselves are the noise.
     /// </summary>
-    private static void MarksReport(float[] samples, int rate, double pitch, double search, bool track, int listCount, double warmupSeconds)
+    private static void MarksReport(float[] samples, int rate, double pitch, double search, bool track, int listCount, double warmupSeconds,
+                                    double traceFrom = double.MaxValue, double traceTo = double.MinValue)
     {
         var detector = new CwToneDetector(new CwToneDetectorOptions
         {
@@ -295,6 +304,20 @@ internal static class Program
                 lastPresent = s.SignalPresent;
 
                 double tMs = s.TimeSeconds * 1000.0;
+
+                if (s.TimeSeconds >= traceFrom && s.TimeSeconds <= traceTo)
+                {
+                    // on at half way from the noise up to the mark reference,
+                    // off at 35% - the same shaping the detector applies.
+                    double span   = s.MarkLevel - s.NoiseLevel;
+                    double onThr  = s.NoiseLevel + 0.50 * span;
+                    double offThr = s.NoiseLevel + 0.35 * span;
+                    Console.WriteLine(
+                        $"{s.TimeSeconds,8:F3}  mag {Db(s.Magnitude),7:F1}  noise {Db(s.NoiseLevel),7:F1}" +
+                        $"  mark {Db(s.MarkLevel),7:F1}  on {Db(onThr),7:F1}  off {Db(offThr),7:F1}" +
+                        $"  {(s.KeyDown ? "DOWN" : "  up")}  {(s.SignalPresent ? "P" : " ")}" +
+                        $"  {new string('#', (int)Math.Clamp((Db(s.Magnitude) - Db(onThr)) * 2.0 + 20, 0, 60))}");
+                }
 
                 if (!started)
                 {
@@ -422,6 +445,8 @@ internal static class Program
 
     private static string Linear(float v)
         => v <= 0 ? "-inf dBFS" : $"{20 * Math.Log10(v):F1} dBFS";
+
+    private static double Db(double v) => 20.0 * Math.Log10(Math.Max(v, 1e-12));
 
     private static double Arg(string[] args, int i)
         => i < args.Length
