@@ -3,6 +3,10 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- Same reason as the main project: a Mac/Linux `dotnet restore` of the
+         Windows TFM graph must be allowed to evaluate this companion exe
+         even though it is never published there. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <Nullable>enable</Nullable>
