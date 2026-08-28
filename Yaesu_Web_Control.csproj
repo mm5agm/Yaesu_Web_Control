@@ -191,8 +191,17 @@
     worker is an .exe, not a library — we don't want to link against it,
     we just want MSBuild to build it before us and the post-build copy
     target below to land its output next to YWC's exe.
+
+    `dotnet publish -f net10.0 -r osx-*` (macOS DMGs) still restores every
+    TFM, so the Windows inner graph would otherwise pull this worker and
+    forward RuntimeIdentifier=osx-arm64 / SelfContained into a
+    net10.0-windows + PlatformTarget=x64 project. That restore fails in
+    milliseconds with MSB4181 and no inner error (SDK 10.0.400 on
+    macos-latest). Restrict the reference to an empty RID (local
+    `dotnet build`) or a win-* RID (Windows publish); CAT-only osx/linux
+    publishes never ship the worker.
   -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows' AND ('$(RuntimeIdentifier)' == '' OR $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win')))">
     <ProjectReference Include="Workers\Yaesu_Sdr_Worker\Yaesu_Sdr_Worker.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <Private>false</Private>
