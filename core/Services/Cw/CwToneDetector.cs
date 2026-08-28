@@ -102,8 +102,12 @@ namespace RadioWebControl.Core.Services.Cw
         /// up; what goes away is the key-down blips below that, which never
         /// appeared in it and which the element decoder was reading as dits.
         /// That is where the E/I/S/H chatter came from. Speed is not the
-        /// discriminator either - 21, 25, 30, 32 and 47 wpm all decode well,
-        /// and the worst files still measure 42-46 wpm with this switched on.
+        /// discriminator either - 21, 25, 30, 32 and 47 wpm all decode well.
+        /// (The "worst files still measure 42-46 wpm" that once supported this
+        /// was itself an artefact: at 10 ms the speed tracker was training on
+        /// fragments. At 18 ms strong-fast-1/2 report 39 wpm and decode far
+        /// better. Speed is still not the discriminator, but that particular
+        /// number was measuring the defect, not the fist.)
         ///
         /// The transition is backdated to where the run actually began, not to
         /// where it was confirmed, so suppressing a dropout costs no timing
@@ -112,24 +116,55 @@ namespace RadioWebControl.Core.Services.Cw
         /// be emitted.
         ///
         /// Keep it well under a dit or it will merge real elements. A dit is
-        /// 30 ms at 40 wpm and 25 ms at 47 wpm, so 10 ms is about the ceiling
-        /// for the speeds this decoder claims to reach.
+        /// 30 ms at 40 wpm and 25 ms at 47 wpm, so this cannot go far above
+        /// 18 ms without eating elements at the top of the range.
         ///
-        /// 10 ms is the default, chosen on the bench on 2026-08-27. Readable
-        /// characters, off against 10 ms against 15 ms:
+        /// 18 ms is the default, chosen on the bench on 2026-08-28. It replaced
+        /// 10 ms, which had been picked on 2026-08-27 against a 15 ms
+        /// alternative rejected for two named costs. Both were re-tested at
+        /// 18 ms on the same files and neither survives:
         ///
-        ///     strong-fast-2   83 / 46%    157 / 50%    185 / 63%
-        ///     strong-fast-1   59 / 53%     66 / 56%    107 / 62%
-        ///     mkii-dk9py     261 / 95%    248 / 95%    225 / 96%
-        ///     strong-sig-1    81 / 91%     72 / 92%     71 / 92%
-        ///     cq-then-qso    119 / 98%    119 / 98%    119 / 98%
+        ///     mkii-dk9py    AC1D 0 hits at 10 ms AND at 18 ms - it reads MC1D
+        ///                   either way, so it cannot be evidence for 10 ms.
+        ///                   DK9PY 5, ARMIN 4, I2WIJ 4, identical at both.
+        ///     strong-sig-1  SM6M 4 hits, V36M 0, PETER 2, 2663 2 - identical
+        ///                   at both. The feared SM6M -> V36M does not happen.
         ///
-        /// 15 ms scores better on the broken files but it is 0.58 of a dit at
-        /// 46 wpm and starts eating real elements - AC1D disappears out of
-        /// mkii-dk9py. 10 ms is 0.38 of a dit. It is not free even so:
-        /// strong-sig-1 loses nine characters and a correct SM6M becomes V36M.
+        /// Readable characters and readability, 10 ms against 18 ms, over every
+        /// corpus file that has a sidecar and is admissible as evidence.
+        /// ywc-40m-cw and ywc-40m-cw4 are both excluded: each sidecar says its
+        /// own recording is several stations overlapping rather than one
+        /// station to decode, so no conclusion about the decoder may be drawn
+        /// from either, in this direction or the other one:
+        ///
+        ///     strong-fast-2     6 /  5%    168 / 73%
+        ///     strong-fast-1     0 /  0%     34 / 19%
+        ///     cq-qso           72 / 49%     77 / 91%
+        ///     cq-then-qso     126 / 78%    129 / 99%
+        ///     mkii-dk9py      275 / 70%    249 / 98%
+        ///     12m-cq-rkou      54 / 71%     55 / 98%
+        ///     lone-strong-1    43 / 53%     45 / 83%
+        ///     mkii-i1yrl      242 / 90%    247 / 92%
+        ///     cwt-so5o-1      274 / 65%    273 / 66%
+        ///     cq-solo          46 / 92%     46 / 92%
+        ///     strong-sig-1     80 / 92%     74 / 92%
+        ///
+        /// Better or equal on all eleven, no regressions, across 21 to 46 wpm.
+        /// The empty-band files emit fewer spurious characters, not more
+        /// (noise 24 -> 17, mkii-nodecode 26 -> 19, noise-15m-long 0 -> 0).
+        ///
+        /// The gain is flat from 18 to 26 ms on both slow and fast files, which
+        /// is why this stays a fixed number rather than becoming adaptive as
+        /// bench/NEXT.txt once proposed: the blips being suppressed are a fixed
+        /// duration, not a fraction of a dit. 18 ms is 0.69 of a dit at 47 wpm
+        /// and 0.31 at 21 wpm, and both ends measure better than they did.
+        ///
+        /// This does NOT touch the first-character-after-a-gap fault, which is
+        /// the pitch tracker rather than the keying gate. See
+        /// bench/live-ly-oe3wma.txt - 10 ms and 18 ms give a byte-identical
+        /// transcript on that file.
         /// </summary>
-        public double KeyDebounceMs { get; set; } = 10.0;
+        public double KeyDebounceMs { get; set; } = 18.0;
     }
 
     /// <summary>
