@@ -88,6 +88,9 @@ namespace Yaesu_Web_Control.Services
 
         public RadioState InitialState => _initialState;
 
+        private static readonly HashSet<string> _persistedPropertyNames =
+            typeof(RadioState).GetProperties().Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+
         private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {
             if (!EqualityComparer<T>.Default.Equals(field, value))
@@ -106,7 +109,8 @@ namespace Yaesu_Web_Control.Services
                 if (IsInitialized)
                 {
                     _logger.LogDebug("[SetField] Persisting state (IsInitialized=true, {Property}={Value})", propertyName, value);
-                    _statePersistence.Save(this.ToRadioState());
+                    if (_persistedPropertyNames.Contains(propertyName!))
+                        _statePersistence.MarkDirty(this.ToRadioState());
                 }
                 else
                 {
@@ -505,6 +509,14 @@ namespace Yaesu_Web_Control.Services
         }
 
         private int? _swrMeter;
+        // No spike filter here -- see issue #124. A "reject anything more than 30
+        // from the last value" test made the first reading of an over the anchor
+        // and then rejected every correction to it, so a genuine 255 latched for
+        // the rest of the over. Worse, a rejected write is not a write, so
+        // SetField never fired and the client stopped receiving SWRMeter updates
+        // altogether -- the gauge froze rather than reading high. Smoothing is
+        // the client's job: FTdx101Meters._processSWR averages the last 3
+        // readings and will not draw until it has 2 of them.
         public int? SWRMeter
         {
             get => _swrMeter;
@@ -512,11 +524,6 @@ namespace Yaesu_Web_Control.Services
             {
                 if (value == null) return;
                 int clamped = Math.Clamp(value.Value, 0, 255);
-                if (_swrMeter.HasValue && _swrMeter.Value != 0 && clamped != 0 && Math.Abs(clamped - _swrMeter.Value) > 30)
-                {
-                    _logger.LogWarning("[SWRMeter] Ignored spike: {Old} -> {New}", _swrMeter, clamped);
-                    return;
-                }
                 SetField(ref _swrMeter, clamped);
             }
         }
@@ -664,7 +671,10 @@ namespace Yaesu_Web_Control.Services
         // property not server-rendered in Index.cshtml — most visibly
         // ActiveVfo/TxVfo/SplitMode, which made VFO A always look active on
         // late-joining clients. Property names must match the handlers in
-        // wwwroot/js/ui/site.js. Meters are excluded (they stream at ~10 Hz).
+        // wwwroot/js/ui/site.js. Meters are included so a late-joining client
+        // receives the last-known values immediately rather than waiting for the
+        // next ~10 Hz poll cycle. Temperature is intentionally excluded (see
+        // the matching comment in site.js).
         public IReadOnlyList<KeyValuePair<string, object>> GetClientStateSnapshot()
         {
             return new List<KeyValuePair<string, object>>
@@ -746,6 +756,14 @@ namespace Yaesu_Web_Control.Services
                 new("FmOffsetHz", FmOffsetHz),
                 new("CtcssMode", CtcssMode),
                 new("CtcssTone", CtcssTone),
+                new("SMeterA", SMeterA ?? 0),
+                new("SMeterB", SMeterB ?? 0),
+                new("PowerMeter", new { value = PowerMeter ?? 0, isTransmitting = IsTransmitting }),
+                new("SWRMeter", SWRMeter ?? 0),
+                new("CompressionMeter", CompressionMeter ?? 0),
+                new("ALCMeter", ALCMeter ?? 0),
+                new("IDDMeter", IDDMeter ?? 0),
+                new("VDDMeter", VDDMeter ?? 0),
             };
         }
 

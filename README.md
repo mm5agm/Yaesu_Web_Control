@@ -69,11 +69,12 @@ dotnet run --project Yaesu_Web_Control.csproj --framework net10.0
 # Linux Docker (x64 or arm64 / Raspberry Pi) — published multi-arch image
 export YWC_SERIAL_DEVICE=/dev/ttyUSB0
 # Optional Remote Audio: compose maps /dev/snd; override YWC_AUDIO_GID if needed
+# Optional Radio Display: map YWC_VIDEO_DEVICE (/dev/video*) + YWC_VIDEO_GID (video group)
 docker compose pull && docker compose up -d
 # Local rebuild: docker compose up -d --build
 ```
 
-On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`.
+On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`. Radio Display (optional USB webcam / HDMI capture → MJPEG) needs `/dev/video*` + the `video` group — see USER_MANUAL §19.
 
 ## Main Page
 ![Yaesu Web Control Main Page](pictures/DevelopScreen.png)
@@ -246,6 +247,14 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 *A small tester build adding Quick Memory Bank buttons to the main screen, aimed especially at operators working entirely from the browser. Highlights:*
 
 **Store and recall the radio's Quick Memory Bank from the screen.** Next to the band buttons there are now three small buttons — **Store**, **Recall** and **V/M**. Store drops the current frequency and mode into the radio's Quick Memory Bank — the same scratch stack you reach by holding the front-panel QMB key. Recall steps into it and moves through the stored slots, and V/M brings you back to normal VFO tuning. It's the quick "park this frequency somewhere I can jump straight back to" memory, separate from the named channels in the Mem panel. For screen-reader users the buttons speak each action, and re-announce on every Recall press so you can hear yourself stepping through the slots. Confirmed on the FTdx101MP — if you have another Yaesu, I'd like to know whether Store and Recall behave the same on yours.
+
+### Update post-release
+
+- **Quick Memory Bank confirmed on the FTdx10** (Thomas OZ1JTE). Thomas has now tested the QMB buttons on his FTdx10 and reports that Store, Recall and V/M all behave exactly as they do on my FTdx101MP, so the feature is confirmed on two radios rather than one. He also found V/M sitting beside the other two buttons a help rather than clutter.
+
+- **How Recall cycles, which isn't in Yaesu's manual.** Pressing Recall repeatedly steps through the stored slots and then drops back to VFO, with the next press starting the cycle again. That is the radio doing it, not YWC — all YWC sends is a single "step to the next slot" command per press, and it doesn't track which slot you're on. How many slots you get is a radio menu setting: **OPERATION SETTING → GENERAL → QMB CH**, which is five by default and can be set to ten. The FTdx10 manual describes the stepping and the V/M exit but never mentions the return to VFO at the end, so this is worth knowing before it surprises you.
+
+- **Known: screen readers announce the status line twice per Recall** ([#123](https://github.com/mm5agm/Yaesu_Web_Control/issues/123)). Thomas also noticed that his screen reader reads out band, mode, frequency and power twice for each memory he steps to. That one is mine rather than the radio's, and it isn't really a QMB fault — it affects anything that changes several values at once, such as a band change or a VFO swap. It is filed, and it does not affect the QMB buttons themselves.
 
 ## 2026-08-05 - v2.4.3-pre4 (pre-release)
 
@@ -606,7 +615,7 @@ First arrow-press with no digit selected just highlights the kHz digit — a sec
 
 Optional on-screen **▲/▼ buttons** sit next to each VFO's frequency display when **Settings → Accessibility → Show frequency up/down arrow buttons** is on. Each click steps the selected digit by 1, the same as a single ArrowUp/ArrowDown. Off by default so users with mouse wheels see the uncluttered default. Useful for head-tracking input, on-screen keyboard users, and reduced-dexterity operators.
 
-The selected digit highlights yellow. Selection persists across the ~10 Hz polling cycles so you can press ArrowUp ten times in a row and the selection stays put. Click outside the display + ▲/▼ controls to deselect.
+The selected digit highlights yellow. Selection persists across the meter polling cycles so you can press ArrowUp ten times in a row and the selection stays put. Click outside the display + ▲/▼ controls to deselect.
 
 USER_MANUAL chapter 13 (Keyboard Shortcuts) has the full reference table; §16.7 covers the accessibility-focused summary.
 
@@ -837,7 +846,7 @@ Critical hotfix on v2.3.3. **If you have v2.3.3 installed, please update.**
   initialization sequence the app uses on launch (multiplexer connect
   + ~30 CAT read queries + state restoration). That's safe at startup
   when nothing else is running yet — but on a running system it races
-  with the 10 Hz meter poller, the SDR workers, and any in-flight
+  with the meter poller, the SDR workers, and any in-flight
   WebUI commands, and on my bench it consistently crashed the
   YWC process on the first or second click.
 
@@ -1211,8 +1220,8 @@ report rather than from me hypothesising.
   (#17, SP3L-Jacek)
 
 - **Power gauge jitter during transmit.** Smoothing window extended from
-  7 to 15 samples (≈1.5 s at 10 Hz polling) to handle the steepness of
-  the PWR calibration curve above 100 W. SWR smoothing stays at 7 samples
+  7 to 15 samples to handle the steepness of the PWR calibration curve
+  above 100 W. SWR smoothing stays at 7 samples
   so high-SWR faults are still seen quickly.
 
 ### Documentation

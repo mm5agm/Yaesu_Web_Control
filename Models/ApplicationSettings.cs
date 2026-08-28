@@ -5,6 +5,11 @@
         // Connection Settings
         public string SerialPort { get; set; } = "COM3";
         public int BaudRate { get; set; } = 38400;
+
+        // Delay between meter-poll cycles in milliseconds. Lower gives a faster
+        // S-meter but increases CAT traffic on a bus shared with rigctld/WSJT-X.
+        // Valid range: 50–1000. Default 200.
+        public int MeterPollIntervalMs { get; set; } = 200;
         public string WebAddress { get; set; } = "0.0.0.0"; // Bind to all interfaces
 
         // HTTP port the web server listens on. Default 8080. If that port is
@@ -303,6 +308,46 @@
 
         public float AudioRxGain { get; set; } = 1.0f;
         public float AudioTxGain { get; set; } = 1.0f;
+
+        // ── Radio Display (USB UVC / HDMI capture → MJPEG) ────────────────
+        // Opt-in panel that grabs frames from a USB webcam or HDMI capture
+        // dongle and serves them as MJPEG. Off by default. Tuned for Pi-class
+        // hosts and ~800×480/600 radio panels (see VideoMaxWidth / FPS / quality).
+        public bool VideoDisplayEnabled { get; set; } = false;
+
+        /// <summary>
+        /// Capture device key from <c>/api/video/devices</c>
+        /// (<c>index:N</c>, or macOS <c>uid:…</c>). Empty = no device selected.
+        /// </summary>
+        public string? VideoCaptureDeviceKey { get; set; } = "";
+
+        /// <summary>
+        /// Downscale frames wider than this before JPEG encode. 0 = no downscale.
+        /// Default 800 matches FTDX-10-class panels and avoids 1080p encode cost on a Pi.
+        /// </summary>
+        public int VideoMaxWidth { get; set; } = 800;
+
+        /// <summary>
+        /// Capture size for the Radio Display, as <c>"WxH"</c>. Empty (the
+        /// default) means automatic — the ranked pin pick, which is right for
+        /// almost everyone. An explicit value pins the capture to that MJPEG
+        /// mode and becomes the encode width, overriding
+        /// <see cref="VideoMaxWidth"/>. A value the current device does not
+        /// offer falls back to automatic rather than failing to open.
+        /// </summary>
+        public string? VideoCaptureSize { get; set; } = "";
+
+        /// <summary>
+        /// Target encode rate. Allowed: 15, 30, 60 (Radio Display panel).
+        /// Rates above the capture device's advertised maximum are hidden.
+        /// </summary>
+        public int VideoTargetFps { get; set; } = 15;
+
+        /// <summary>
+        /// JPEG quality. Allowed: 40, 65, 85 (Low / Medium / Max on the Radio Display panel).
+        /// Default 85 (Max): keep the capture JPEG. Low/Medium recompress.
+        /// </summary>
+        public int VideoJpegQuality { get; set; } = 85;
 
         // ── Optional HTTPS (self-signed; restart to apply) ────────────────
         // Required for getUserMedia from a remote browser (secure context).

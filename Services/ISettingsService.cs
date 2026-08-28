@@ -2,10 +2,16 @@
 
 namespace Yaesu_Web_Control.Services
 {
-    public interface ISettingsService
+    public interface ISettingsService : IDisposable
     {
         Task<ApplicationSettings> GetSettingsAsync();
         Task SaveSettingsAsync(ApplicationSettings settings);
+
+        /// <summary>
+        /// Last in-memory snapshot from load/save. Never hits disk — safe on
+        /// the Radio Display STA capture thread.
+        /// </summary>
+        ApplicationSettings GetCachedSettings();
 
         /// <summary>Absolute path to the user settings file on disk.</summary>
         string GetSettingsFilePath();

@@ -182,7 +182,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- SignalR connection setup and disconnect on page unload ---
     if (window.signalRConnection === undefined) {
         window.signalRConnection = new signalR.HubConnectionBuilder().withUrl("/radioHub").withAutomaticReconnect().build();
-        window.signalRConnection.start().catch(function (err) { });
+        window.signalRConnection.start().then(function () {
+            window.signalRConnection.invoke("Heartbeat").catch(function () { });
+        }).catch(function (err) { });
         // Heartbeat: send every 5 seconds
         window.signalRHeartbeatInterval = setInterval(function () {
             if (window.signalRConnection && window.signalRConnection.invoke) {
@@ -256,30 +258,6 @@ document.addEventListener('DOMContentLoaded', function () {
 // only from aria-valuenow, which this debounce gates.
 const _ariaDebounceTimers = {};
 
-// Frequency display renderer (outer version, used by outer updateFrequencyDisplay)
-function updateFrequencyDisplay(receiver, freqHz) {
-    const display = document.getElementById('freq' + receiver);
-    if (!display) {
-        return;
-    }
-    let selIdx = window.radioControl && window.radioControl._state ? window.radioControl._state.selectedIdx[receiver] : null;
-    let editing = window.radioControl && window.radioControl._state ? window.radioControl._state.editing[receiver] : false;
-    let localFreq = window.radioControl && window.radioControl._state ? window.radioControl._state.localFreq[receiver] : null;
-    let lastBackendFreq = window.radioControl && window.radioControl._state ? window.radioControl._state.lastBackendFreq[receiver] : null;
-    let freqToShow = (!editing || localFreq === null)
-        ? lastBackendFreq
-        : localFreq;
-    display.innerHTML = renderFrequencyDigits(freqToShow, selIdx);
-    if (freqToShow && freqToShow > 0) {
-        const mhz = String(parseFloat((freqToShow / 1e6).toFixed(6)));
-        clearTimeout(_ariaDebounceTimers[receiver]);
-        _ariaDebounceTimers[receiver] = setTimeout(() => {
-            display.setAttribute('aria-valuenow', mhz);
-            display.setAttribute('aria-label', `VFO ${receiver}: ${mhz} MHz`);
-            display.setAttribute('title', `VFO ${receiver}: ${mhz} MHz`);
-        }, 500);
-    }
-}
 
 function renderFrequencyDigits(freq, selIdx) {
     // Show dashes if no valid frequency yet
@@ -366,7 +344,6 @@ window.setMode = async function (receiver, mode) {
 
 // Outer antenna setter - called from Razor inline onchange on antenna buttons
 window.setAntenna = async function (receiver, antenna) {
-    if (window.pausePolling) pausePolling();
     try {
         if (window.highlightButtons) highlightButtons(receiver, state.lastBand ? state.lastBand[receiver] : undefined, state.lastMode ? state.lastMode[receiver] : undefined, antenna);
         if (state.lastAntenna) state.lastAntenna[receiver] = antenna;
@@ -400,14 +377,45 @@ function modelMaxPower(model) {
 }
 window.modelMaxPower = modelMaxPower;
 
+// Server-rendered radio model. window._radioModel is assigned later inside
+// Index.cshtml's module block, so DOMContentLoaded in this file runs first
+// and must not rely on it alone (be48971 regression — FTdx10 slider stuck at 200 W).
+function getConfiguredRadioModel() {
+    return window._radioModel
+        || (window.state && window.state.radioModel)
+        || document.getElementById('vfoRow')?.dataset?.radioModel
+        || null;
+}
+window.getConfiguredRadioModel = getConfiguredRadioModel;
+
+// Rated TX output for the configured radio. Prefer the figure the server
+// rendered into #vfoRow: it comes from RadioCapabilities.MaxPowerWatts, which
+// is the same value CatController.SetPower validates against, so the slider
+// cannot offer a wattage the API will reject. modelMaxPower is the fallback for
+// pages that don't render the VFO row.
+function configuredMaxPower(fallback) {
+    const rendered = Number(document.getElementById('vfoRow')?.dataset?.maxPower);
+    if (Number.isFinite(rendered) && rendered > 0) return rendered;
+    const model = getConfiguredRadioModel();
+    if (model) return modelMaxPower(model);
+    return typeof fallback === "number" ? fallback : 200;
+}
+window.configuredMaxPower = configuredMaxPower;
+
+function syncRadioModel(model) {
+    if (!model) return;
+    window.state = window.state || {};
+    window.state.radioModel = model;
+    if (window.radioControl && window.radioControl._state) {
+        window.radioControl._state.radioModel = model;
+    }
+}
+
 // Outer power slider max updater
 function updatePowerSliderMax(maxPower) {
     const slider = document.getElementById('powerSlider');
     const labelMax = document.getElementById('powerMaxLabel');
-    const model = (window.state && window.state.radioModel) || null;
-    const actualMax = model
-        ? modelMaxPower(model)
-        : (typeof maxPower === "number" ? maxPower : 200);
+    const actualMax = configuredMaxPower(maxPower);
 
     if (slider) {
         slider.max = actualMax;
@@ -442,13 +450,20 @@ function updateTxIndicators(isTransmitting) {
         window.ftdx101Meters.setTransmitting(isTransmitting);
     }
     if (!isTransmitting) {
-        // Force gauges to zero immediately when TX stops
+        // Force gauges to zero immediately when TX stops, without waiting for
+        // the next backend broadcast (~200 ms away at the default poll interval).
         if (window.meterPanel) {
             window.meterPanel.update('power', 0);
             window.meterPanel.update('swr', 0);
+            window.meterPanel.update('compression', 0);
+            window.meterPanel.update('alc', 0);
+            window.meterPanel.update('idd', 0);
         }
-        updateMeterDomLabel('PowerMeter', { skip: false, displayValue: { watts: 0, rawAvg: 0 } });
-        updateMeterDomLabel('SWRMeter',   { skip: false, displayValue: { swr: 1.0 } });
+        updateMeterDomLabel('PowerMeter',       { skip: false, displayValue: { watts: 0, rawAvg: 0 } });
+        updateMeterDomLabel('SWRMeter',         { skip: false, displayValue: { swr: 1.0 } });
+        updateMeterDomLabel('CompressionMeter', { skip: false, displayValue: { db: 0 } });
+        updateMeterDomLabel('ALCMeter',         { skip: false, displayValue: { percent: 0, alcVolts: 0, rawValue: 0 } });
+        updateMeterDomLabel('IDDMeter',         { skip: false, displayValue: { amps: 0 } });
     }
 }
 
@@ -469,11 +484,26 @@ function updateMeterDomLabel(property, result) {
             break;
         }
         case 'SWRMeter': {
+            const offScale = window.MeterFormatters.swrIsOffScale(dv.swr);
             const formatted = window.MeterFormatters.swr(dv.swr);
             const el = document.getElementById('swrMeterValue');
-            if (el) el.textContent = formatted;
+            if (el) {
+                el.textContent = formatted;
+                // The badge is the <div> the gauge builds around this span
+                // (gauge.js, gaugeTitle block). Its background is set inline
+                // there, so it has to be overridden inline here — a CSS class
+                // would lose to the inline style.
+                const badge = el.parentElement;
+                if (badge) {
+                    badge.style.background = offScale ? '#ffc107' : '#dc3545';
+                    badge.style.color      = offScale ? '#000000' : '#ffffff';
+                }
+            }
             const canvas = document.getElementById('swrMeterCanvas');
-            if (canvas) canvas.dataset.reading = formatted;
+            if (canvas) {
+                canvas.dataset.reading = window.MeterFormatters.swrAnnouncement(dv.swr);
+                canvas.dataset.offScale = offScale ? 'true' : 'false';
+            }
             break;
         }
         case 'CompressionMeter': {
@@ -632,15 +662,9 @@ async function checkRadioPowerStatus() {
 document.addEventListener('DOMContentLoaded', function() {
     checkRadioPowerStatus();
     checkTxStatus();
-    // Fetch radio status and update slider max / model-dependent UI
-    fetch('/api/cat/status')
-        .then(response => response.json())
-        .then(data => {
-            if (data && data.radioModel && window.state) {
-                window.state.radioModel = data.radioModel;
-                updatePowerSliderMax();
-            }
-        });
+    // Seed the power slider max from the server-rendered radio model.
+    syncRadioModel(getConfiguredRadioModel());
+    updatePowerSliderMax();
 
     // Update powerValue label live as slider moves (outer/global version).
     // NOTE: deliberately no longer initialises the label from slider.value
@@ -1262,6 +1286,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeA', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('A', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('A', update.value);
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastMode.A = update.value;
     }
     if (update.property === "ModeB") {
         updateModeSelect('B', update.value);
@@ -1275,6 +1300,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeB', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('B', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('B', update.value);
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastMode.B = update.value;
     }
 
     // --- ANTENNA CHANGE ---
@@ -1286,10 +1312,12 @@ connection.on("RadioStateUpdate", function (update) {
     if (update.property === "AntennaA") {
         const sel = document.getElementById('antennaSelectA');
         if (sel) sel.value = update.value;
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastAntenna.A = update.value;
     }
     if (update.property === "AntennaB") {
         const sel = document.getElementById('antennaSelectB');
         if (sel) sel.value = update.value;
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastAntenna.B = update.value;
     }
 
     // --- PROC ---
@@ -1314,13 +1342,23 @@ connection.on("RadioStateUpdate", function (update) {
     // frequency display fresh independently, so losing this write isn't fatal.
     if (update.property === "FrequencyA") {
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('freqHzA', update.value);
-        try { state.lastBackendFreq.A = update.value; } catch (_) { /* state lives in IIFE scope only */ }
+        if (window.radioControl && window.radioControl._state) {
+            window.radioControl._state.lastBackendFreq.A = update.value;
+        }
         // BandA only broadcasts when the band *changes*, so an operator who is
         // already out of band at page load would never get the red marker from
         // updateBandButton alone. Re-apply it whenever the frequency moves.
         lastVfoHz.A = update.value;
         try { applyBandOutOfBand('A'); } catch (e) { console.error('applyBandOutOfBand A error:', e); }
-        try { updateFrequencyDisplay('A', update.value); } catch (e) { console.error('updateFrequencyDisplay A error:', e); }
+        try { window.updateFrequencyDisplay('A', update.value); } catch (e) { console.error('updateFrequencyDisplay A error:', e); }
+        // Clear editing mode once the radio echoes back our sent frequency.
+        if (window.radioControl && window.radioControl._state) {
+            const s = window.radioControl._state;
+            if (s.editing.A && s.lastSentFreq.A !== null && s.localFreq.A === null
+                && update.value === s.lastSentFreq.A) {
+                s.editing.A = false;
+            }
+        }
         try { window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'A', hz: update.value } })); }
         catch (e) { console.error('radioFrequencyUpdate dispatch error:', e); }
         try { if (window.syncSegmentSelectToFrequency) window.syncSegmentSelectToFrequency('A', update.value); }
@@ -1328,10 +1366,20 @@ connection.on("RadioStateUpdate", function (update) {
     }
     if (update.property === "FrequencyB") {
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('freqHzB', update.value);
-        try { state.lastBackendFreq.B = update.value; } catch (_) { /* state lives in IIFE scope only */ }
+        if (window.radioControl && window.radioControl._state) {
+            window.radioControl._state.lastBackendFreq.B = update.value;
+        }
         lastVfoHz.B = update.value;
         try { applyBandOutOfBand('B'); } catch (e) { console.error('applyBandOutOfBand B error:', e); }
-        try { updateFrequencyDisplay('B', update.value); } catch (e) { console.error('updateFrequencyDisplay B error:', e); }
+        try { window.updateFrequencyDisplay('B', update.value); } catch (e) { console.error('updateFrequencyDisplay B error:', e); }
+        // Clear editing mode once the radio echoes back our sent frequency.
+        if (window.radioControl && window.radioControl._state) {
+            const s = window.radioControl._state;
+            if (s.editing.B && s.lastSentFreq.B !== null && s.localFreq.B === null
+                && update.value === s.lastSentFreq.B) {
+                s.editing.B = false;
+            }
+        }
         try { window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'B', hz: update.value } })); }
         catch (e) { console.error('radioFrequencyUpdate dispatch error:', e); }
         try { if (window.syncSegmentSelectToFrequency) window.syncSegmentSelectToFrequency('B', update.value); }
@@ -1344,12 +1392,14 @@ connection.on("RadioStateUpdate", function (update) {
         updateBandButton('A', update.value);
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('bandA', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayBand('A', update.value);
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastBand.A = update.value;
     }
     if (update.property === "BandB") {
         // ...removed debug logging...
         updateBandButton('B', update.value);
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('bandB', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayBand('B', update.value);
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastBand.B = update.value;
     }
 
     // --- POWER CHANGE ---
@@ -1460,6 +1510,14 @@ connection.on("RadioStateUpdate", function (update) {
     }
 
     // --- METER UPDATES ---
+    if (update.property === "SMeterA") {
+        try { window.updateSMeter?.('A', update.value); }
+        catch (e) { console.error('updateSMeter A error:', e); }
+    }
+    if (update.property === "SMeterB") {
+        try { window.updateSMeter?.('B', update.value); }
+        catch (e) { console.error('updateSMeter B error:', e); }
+    }
     if (window.ftdx101Meters) {
         // PowerMeter is sent as { value, isTransmitting } — unpack it and sync TX state.
         let meterValue = update.value;
@@ -1948,26 +2006,6 @@ window.radioControl = {
     }
 };
 
-// Fetch and apply band button state from the backend on page load
-async function updateBandButtonsFromBackend() {
-    try {
-        const response = await fetch('/api/cat/status');
-        if (!response.ok) return;
-        const data = await response.json();
-        // Update global radioModel if present
-        if (data.radioModel) {
-            state.radioModel = data.radioModel;
-            // Always call updatePowerSliderMax to use latest radioModel
-            updatePowerSliderMax();
-        }
-        // Route through updateBandButton so the out-of-band marker is applied
-        // on first paint too, not only on later SignalR band changes.
-        if (data.vfoA && data.vfoA.band) updateBandButton('A', data.vfoA.band);
-        if (data.vfoB && data.vfoB.band) updateBandButton('B', data.vfoB.band);
-    } catch (error) {
-        // ...removed debug logging...
-    }
-}
 
 
 // Out-of-band marker state.
@@ -2077,7 +2115,6 @@ function syncBandAriaChecked(receiver) {
 // Outer DOMContentLoaded - initial UI wiring
 window.addEventListener('DOMContentLoaded', () => {
     pollInitStatus();
-        updateBandButtonsFromBackend();
 
     // VFO-B show/hide toggle — click handler is in Index.cshtml (applyVisibility).
     // Only set the aria-label here; do not add a second click listener.
@@ -2538,8 +2575,6 @@ document.addEventListener('DOMContentLoaded', function() {
         lastPower: { A: 100, B: 100 },
         maxPower: 200,
         radioModel: 'FTdx101MP',
-        pollingInterval: null,
-        operationInProgress: false,
         isTransmitting: false  // Track TX state for meter display
     };
 
@@ -2582,6 +2617,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 300);
         }
     }
+    window.updateFrequencyDisplay = updateFrequencyDisplay;
 
     // Update band, mode, and antenna radio/toggle buttons to reflect current state.
     // NOTE: The Razor page renders mode buttons as <input type="radio" name="modeA" value="USB">
@@ -2603,24 +2639,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll(`input[name="antenna${receiver}"]`).forEach(btn => {
             btn.checked = (btn.value === antenna);
         });
-    }
-
-    // Update ONLY mode and antenna selectors (not bands) - used by polling to avoid overwriting user's band selection
-    function updateModeAndAntennaButtons(receiver, mode, antenna) {
-        // Mode dropdown
-        const modeSelect = document.getElementById(`modeSelect${receiver}`);
-        if (modeSelect && mode) {
-            modeSelect.value = mode;
-        }
-
-        // Antenna is a <select> (#antennaSelectA / #antennaSelectB), not a
-        // radio-button group — earlier code queried input[name="antennaA"]
-        // which never matched anything, so polling-based antenna updates
-        // were silently broken.
-        const antennaSelect = document.getElementById(`antennaSelect${receiver}`);
-        if (antennaSelect && antenna) {
-            antennaSelect.value = antenna;
-        }
     }
 
     // Update roofing filter dropdown
@@ -2921,7 +2939,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function setBand(receiver, band) {
-        const didPause = pausePolling();
         try {
             highlightButtons(receiver, band, state.lastMode[receiver], state.lastAntenna[receiver]);
             state.lastBand[receiver] = band;
@@ -2931,10 +2948,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({ band })
             });
         } catch (error) {
-        } finally {
-            if (didPause) {
-                resumePolling();
-            }
         }
     }
 
@@ -2951,7 +2964,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function setAntenna(receiver, antenna) {
-        const didPause = pausePolling();
         try {
             highlightButtons(receiver, state.lastBand[receiver], state.lastMode[receiver], antenna);
             state.lastAntenna[receiver] = antenna;
@@ -2961,10 +2973,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({ antenna })
             });
         } catch (error) {
-        } finally {
-            if (didPause) {
-                resumePolling();
-            }
         }
     }
 
@@ -3093,8 +3101,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function setRoofingFilter(receiver, filter) {
-        const didPause = pausePolling();
-
         try {
             const response = await fetch(`/api/cat/roofingfilter/${receiver.toLowerCase()}`, {
                 method: 'POST',
@@ -3120,157 +3126,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             showMessageBox('Error setting roofing filter. Check console for details.', 'Error');
-        } finally {
-            if (didPause) {
-                resumePolling();
-            }
-        }
-    }
-
-    function pausePolling() {
-        if (state.pollingInterval && !state.operationInProgress) {
-            state.operationInProgress = true;
-            return true;
-        }
-        return false;
-    }
-
-    function resumePolling() {
-        if (state.operationInProgress) {
-            state.operationInProgress = false;
-            setTimeout(fetchRadioStatus, 500);
-        }
-    }
-
-    // Full status poll - updates frequencies, S-meter, band/mode/antenna buttons, and power
-    async function fetchRadioStatus() {
-        if (state.operationInProgress) {
-            return;
-        }
-        try {
-            const response = await fetch('/api/cat/status');
-            if (!response.ok) {
-                return;
-            }
-            const data = await response.json();
-
-            if (data.radioModel !== undefined) {
-                state.radioModel = data.radioModel;
-            }
-            // Always call updatePowerSliderMax to use latest radioModel
-            if (state.radioModel) {
-                const model = state.radioModel.toLowerCase();
-                if (model === "ftdx101d") {
-                    state.maxPower = 100;
-                } else if (model === "ftdx101mp") {
-                    state.maxPower = 200;
-                } else {
-                    const maxPower = (data.maxPower !== undefined) ? data.maxPower : 200;
-                    state.maxPower = maxPower;
-                }
-            } else {
-                const maxPower = (data.maxPower !== undefined) ? data.maxPower : 200;
-                state.maxPower = maxPower;
-            }
-            updatePowerSliderMax();
-
-            state.lastMode.A = data.vfoA.mode;
-            state.lastMode.B = data.vfoB.mode;
-            state.lastAntenna.A = data.vfoA.antenna;
-            state.lastAntenna.B = data.vfoB.antenna;
-
-            // Show set power value (not meter reading) when not transmitting
-            let powerValue = 100;
-            if (data.vfoA && data.vfoA.power !== undefined) {
-                powerValue = data.vfoA.power;
-                state.lastPower.A = data.vfoA.power;
-            } else if (state.lastPower && typeof state.lastPower === 'object' && state.lastPower.A !== undefined) {
-                powerValue = state.lastPower.A;
-            }
-            updatePowerSlider(null, powerValue);
-            // TX meter (updatePowerMeter) will use RM5 during transmit only
-
-            // Stop showing local frequency once backend confirms our sent value.
-            // IMPORTANT: do NOT clear state.selectedIdx here. The user's
-            // digit selection should survive a successful step so the next
-            // ArrowUp / ▲ press acts on the same digit -- accessibility
-            // users press these in rapid sequence and re-selecting every
-            // time would be unusable. Selection is cleared explicitly when
-            // the user clicks outside the display (see the document.click
-            // handler inside initializeDigitInteraction).
-            if (state.editing.A && state.lastSentFreq.A !== null && state.localFreq.A === null && data.vfoA.frequency === state.lastSentFreq.A) {
-                state.editing.A = false;
-            }
-            if (state.editing.B && state.lastSentFreq.B !== null && state.localFreq.B === null && data.vfoB.frequency === state.lastSentFreq.B) {
-                state.editing.B = false;
-            }
-
-            if (!state.editing.A) {
-                updateFrequencyDisplay('A', data.vfoA.frequency);
-                if (data.vfoA.frequency !== state.lastBackendFreq.A) {
-                    state.lastBackendFreq.A = data.vfoA.frequency;
-                    window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'A', hz: data.vfoA.frequency } }));
-                }
-            } else updateFrequencyDisplay('A', state.localFreq.A);
-
-            if (!state.editing.B) {
-                updateFrequencyDisplay('B', data.vfoB.frequency);
-                if (data.vfoB.frequency !== state.lastBackendFreq.B) {
-                    state.lastBackendFreq.B = data.vfoB.frequency;
-                    window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'B', hz: data.vfoB.frequency } }));
-                }
-            } else updateFrequencyDisplay('B', state.localFreq.B);
-
-            updateSMeter('A', data.vfoA.sMeter);
-            updateSMeter('B', data.vfoB.sMeter);
-
-            if (window.ftdx101Meters) {
-                const metersFromState = {
-                    PowerMeter:       data.powerMeter,
-                    SWRMeter:         data.swrMeter,
-                    CompressionMeter: data.compressionMeter,
-                    ALCMeter:         data.alcMeter,
-                    IDDMeter:         data.iddMeter,
-                    VDDMeter:         data.vddMeter,
-                    // Temperature intentionally omitted — the persisted value in radio_state.json
-                    // can be stale (e.g. from a hot previous session). Live SignalR updates from
-                    // MeterPollingService arrive within ~100ms and provide the first real reading.
-                };
-                for (const [prop, value] of Object.entries(metersFromState)) {
-                    if (value !== undefined) {
-                        const result = window.ftdx101Meters.handleMeterUpdate(prop, value);
-                        updateMeterDomLabel(prop, result);
-                    }
-                }
-            }
-
-            // Update band buttons from polling (fixes WSJT-X and radio band changes)
-            if (data.vfoA.band) {
-                updateBandButton('A', data.vfoA.band);
-                state.lastBand.A = data.vfoA.band;
-            }
-            if (data.vfoB.band) {
-                updateBandButton('B', data.vfoB.band);
-                state.lastBand.B = data.vfoB.band;
-            }
-
-            // Update mode and antenna buttons from polling
-            updateModeAndAntennaButtons('A', data.vfoA.mode, data.vfoA.antenna);
-            updateModeAndAntennaButtons('B', data.vfoB.mode, data.vfoB.antenna);
-
-            // Update roofing filter dropdowns
-            if (data.vfoA.roofingFilter) {
-                updateRoofingFilterSelect('A', data.vfoA.roofingFilter);
-            }
-            if (data.vfoB.roofingFilter) {
-                updateRoofingFilterSelect('B', data.vfoB.roofingFilter);
-            }
-
-            // Update MIC Gain / Data Out Gain label based on current mode (VFO A is main)
-            updateMicGainLabel(data.vfoA.mode);
-
-
-        } catch (error) {
         }
     }
 
@@ -3317,8 +3172,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function updatePowerSliderMax(maxPower) {
         const slider = document.getElementById('powerSlider');
         const labelMax = document.getElementById('powerMaxLabel');
-        const actualMax = state.radioModel
-            ? window.modelMaxPower(state.radioModel)
+        const actualMax = window.configuredMaxPower
+            ? window.configuredMaxPower(maxPower)
             : (typeof maxPower === "number" ? maxPower : 200);
 
         if (slider) {
@@ -3391,6 +3246,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const sLabel = document.getElementById(labelId);
         if (sLabel) sLabel.textContent = sUnit;
     }
+    window.updateSMeter = updateSMeter;
 
     // Update MIC bar meter (0-255 raw value)
     function updateMICMeter(value) {
@@ -3417,8 +3273,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeDigitInteraction('A');
     initializeDigitInteraction('B');
     const s = document.getElementById('powerSlider'); if (s) updateSliderFill(s);
-    fetchRadioStatus();
-    state.pollingInterval = setInterval(fetchRadioStatus, 500);
 
     // Robustly track editing state for the power slider to prevent backend/UI jumps
     const powerSlider = document.getElementById('powerSlider');

@@ -28,8 +28,11 @@ bld/
 # Visual Studio cache/options directory
 .vs/
 
-# Visual Studio Code
-.vscode/
+# Visual Studio Code — keep shared run/debug profiles tracked
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
 *.code-workspace
 
 # Rider

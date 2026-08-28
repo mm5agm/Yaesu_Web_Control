@@ -17,7 +17,7 @@
 //    refuses a value should look refused rather than accepted.
 //
 //  * The panel reads state lazily, on first expand, not at page load. Six SS
-//    reads on a port shared with the ~10 Hz meter poll is not a cost worth
+//    reads on a port shared with the meter poll is not a cost worth
 //    paying for a panel most users will never open.
 //
 //  * SPAN IS STORED PER MODE on the radio, which is why the highlighted span
@@ -219,7 +219,7 @@ export class RadioScopeControl {
             this.refresh();
         } else {
             // Nothing to read while collapsed — the panel loads lazily on
-            // expand, and this port is shared with the ~10 Hz meter poll. But
+            // expand, and this port is shared with the meter poll. But
             // the badge stays visible in the header when collapsed, so leaving
             // the previous band's summary sitting under the new band's name
             // would be an outright lie. Blank it; expanding reloads it.
@@ -253,7 +253,7 @@ export class RadioScopeControl {
     // Called from site.js for each unsolicited SS the radio sends when someone
     // works its front panel. Patches the one sub-command that changed and
     // repaints, rather than re-reading all six over a port shared with the
-    // ~10 Hz meter poll: the radio has just told us the value, so asking it
+    // meter poll: the radio has just told us the value, so asking it
     // again would be both slower and no more truthful.
     //
     // { band: "main"|"sub", setting: "0".."8", field: 5 chars }

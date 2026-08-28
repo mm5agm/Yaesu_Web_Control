@@ -1,4 +1,14 @@
-name: Build and Release Installer
+# Named "Build" rather than "Build and Release Installer" because it runs on
+# every PR into develop as a build-only smoke test, and the old name made a
+# routine PR check look like it was about to publish a release. Nothing is
+# released except on the `release` event -- see the guards on each upload step.
+name: Build
+
+# Retitles the run itself, so the Actions list says what a given run was for.
+run-name: >-
+  ${{ github.event_name == 'pull_request' && format('Smoke build - PR #{0} (nothing published)', github.event.number)
+   || github.event_name == 'release' && format('Release {0} - building and publishing installers', github.event.release.tag_name)
+   || 'Manual build' }}
 
 on:
   release:
@@ -28,6 +38,33 @@ on:
         type: string
 
 jobs:
+  # Runs on every trigger, including pull requests. Until this existed the
+  # workflow only ran `dotnet publish`, so a green tick meant "it compiles and
+  # packages" and said nothing about the tests -- a PR could break every test in
+  # the suite and still show all checks passed.
+  #
+  # The test project targets net10.0 only, so ubuntu is the cheapest host for it.
+  # It is a standalone job rather than a gate on the build jobs: a failure should
+  # be loud on the PR without adding its runtime to the front of every release
+  # build. To make it actually block a merge, add "Build / test" to the required
+  # status checks on develop -- none are configured at present.
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run unit tests
+        run: dotnet test Tests/YaesuWebControl.Tests/YaesuWebControl.Tests.csproj --configuration Release --verbosity normal
+
   build-windows:
     runs-on: windows-latest
     permissions:

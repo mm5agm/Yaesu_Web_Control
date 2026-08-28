@@ -312,6 +312,11 @@ namespace Yaesu_Web_Control.Pages
                 current.AudioRadioTxDevice = Settings.AudioRadioTxDevice ?? "";
                 // AudioRxGain / AudioTxGain are live-only (Mic & Gain / pop-out → /api/audio/gain).
                 // Do not overwrite them from this form — the inputs were removed from Settings.
+
+                // Radio Display — Settings only toggles the feature. Device / FPS /
+                // quality / max-width are owned by the Radio Display panel APIs.
+                current.VideoDisplayEnabled = Settings.VideoDisplayEnabled;
+
                 current.HttpsEnabled = Settings.HttpsEnabled;
                 current.HttpsPort = (Settings.HttpsPort >= 1 && Settings.HttpsPort <= 65535)
                     ? Settings.HttpsPort

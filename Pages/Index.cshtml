@@ -25,6 +25,10 @@
     // each VFO is its own physical receiver chain.
     bool isSingleReceiver  = Yaesu_Web_Control.Services.RadioCapabilities.IsSingleReceiver(Model.RadioModel);
     bool hasAntennaSelector = Yaesu_Web_Control.Services.RadioCapabilities.HasAntennaSelector(Model.RadioModel);
+    // Rated TX output. Server-rendered rather than derived in JavaScript so the
+    // slider and the Power dial are right on first paint, and so the browser
+    // agrees with the range check CatController.SetPower applies to the same value.
+    int maxPowerWatts = Yaesu_Web_Control.Services.RadioCapabilities.MaxPowerWatts(Model.RadioModel);
     // Quick Memory Bank Store/Recall buttons (Thomas OZ1JTE request) — rendered
     // once, next to VFO A's band buttons, since QMB is a radio-global function.
     bool hasQmb = Yaesu_Web_Control.Services.RadioCapabilities.SupportsQmb(Model.RadioModel);
@@ -492,6 +496,13 @@
     </div>
 
     <!-- (Status line moved inside each VFO panel — see #vfoAStatusLine / #vfoBStatusLine) -->
+    @* Single live region for BOTH status lines. One region means one utterance:
+       two polite regions changing in the same tick are not reliably read one after
+       the other, which is why a change on VFO B could go unheard. Emptied a couple
+       of seconds after speaking so its text is not met a second time when the page
+       is browsed. *@
+    <span id="vfoStatusAnnounce" class="visually-hidden" role="status"
+          aria-live="polite" aria-atomic="true"></span>
 
     <!-- Power and SWR Meters -->
     <div class="row mt-3">
@@ -623,7 +634,7 @@
                         <input type="range" class="flex-shrink-0" id="powerSlider"
                                aria-label="Transmit power"
                                title="Transmit power"
-                               min="5" max="200" step="5"
+                               min="5" max="@maxPowerWatts" step="5"
                                value="@Model.RadioState.Power"
                                style="width: clamp(80px, 10vw, 150px); height: 18px;"
                                oninput="window.radioControl.updatePowerDisplay(window.txVfo === 1 ? 'B' : 'A', this.value)"
@@ -805,6 +816,119 @@
        See docs/design/scope-control-via-cat.md. *@
     <partial name="_RadioScopePartial" model="@Model.RadioModel" />
 
+    <!-- Radio Display — USB UVC / HDMI capture MJPEG; visible when Settings enable it -->
+    <div id="radioDisplayContainer" class="row mt-3" style="display:none;">
+        <div class="col-12">
+            <div class="card border-dark">
+                <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center gap-2 py-2">
+                    <strong class="me-1"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
+                    <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
+                    <select id="radioDisplayDeviceSelect" class="form-select form-select-sm"
+                            style="width:14rem; max-width:min(14rem, 40vw); min-width:0;"
+                            aria-label="Capture device">
+                        <option value="">(None)</option>
+                    </select>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Refresh capture device list" aria-label="Refresh capture device list">
+                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayRefreshDevicesBtn"
+                                aria-label="Refresh capture device list">
+                            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" id="radioDisplaySizeWrap"
+                          data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Capture size. Auto picks the best mode for this dongle. Larger modes are usually the dongle upscaling the same picture — no more detail, softer, and about twice the bandwidth."
+                          aria-label="Capture size" hidden>
+                        <select id="radioDisplaySizeSelect" class="form-select form-select-sm"
+                                style="width:7.5rem; max-width:7.5rem;" aria-label="Capture size">
+                            <option value="">Auto size</option>
+                        </select>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="How fast the picture updates" aria-label="Stream frame rate">
+                        <select id="radioDisplayFpsSelect" class="form-select form-select-sm"
+                                style="width:5.5rem; max-width:5.5rem;" aria-label="Stream frame rate">
+                            <option value="15">15 fps</option>
+                            <option value="30">30 fps</option>
+                            <option value="60">60 fps</option>
+                        </select>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Max keeps the image as captured. Low and Medium recompress — smaller stream (saves bandwidth), more CPU."
+                          aria-label="Image quality">
+                        <select id="radioDisplayQualitySelect" class="form-select form-select-sm"
+                                style="width:6.5rem; max-width:6.5rem;" aria-label="Image quality">
+                            <option value="40">Low</option>
+                            <option value="65">Medium</option>
+                            <option value="85" selected>Max</option>
+                        </select>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Start or stop the video stream" aria-label="Start or stop the video stream">
+                        <button type="button" class="btn btn-sm btn-outline-success" id="radioDisplayStreamBtn"
+                                aria-label="Start stream">
+                            <i class="bi bi-play-fill" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Start the stream automatically when the panel opens"
+                          aria-label="Auto-start stream">
+                        <label class="form-check-label small d-flex align-items-center gap-1 mb-0 user-select-none">
+                            <input class="form-check-input mt-0" type="checkbox" id="radioDisplayAutoStart" />
+                            Auto
+                        </label>
+                    </span>
+                    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn"
+                                    aria-label="Toggle fit / fill">Fit</button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Fullscreen" aria-label="Fullscreen">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFullscreenBtn"
+                                    aria-label="Fullscreen">
+                                <i class="bi bi-fullscreen" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Pop out Radio Display into a separate window"
+                              aria-label="Pop out Radio Display into a separate window">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayPopoutBtn"
+                                    aria-label="Pop out Radio Display into a separate window">
+                                <i class="bi bi-window-plus" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Close Radio Display panel" aria-label="Close Radio Display panel">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayCloseBtn"
+                                    aria-label="Close Radio Display panel">Close</button>
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body p-0 bg-black radio-display-body" style="text-align:center; overflow:hidden; position:relative; min-height:240px;">
+                    <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
+                        <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
+                    </div>
+                    <img id="radioDisplayImg" alt="Radio display" decoding="async"
+                         class="radio-display-img"
+                         style="display:none; max-width:100%; width:auto; height:auto; max-height:50vh; object-fit:contain; background:#000; vertical-align:middle;" />
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mb-1" id="radioDisplayShowRow" style="display:none;">
+        <div class="col-12">
+            <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                  data-bs-title="Show Radio Display panel" aria-label="Show Radio Display panel">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="radioDisplayShowBtn"
+                        aria-label="Show Radio Display panel">
+                    <i class="bi bi-display" aria-hidden="true"></i> Show Radio Display
+                </button>
+            </span>
+        </div>
+    </div>
+
     <!-- Spectrum Display — dual-VFO layout (v2.3.0+).
          Each panel has its own canvas. Mono A / Mono B / Multi toggle below
          hides/shows individual panels. Outer container hides itself when no
@@ -904,7 +1028,7 @@
         </div>
     </div>
 
-    <div class="row g-3 flex-wrap" id="vfoRow" data-radio-model="@Model.RadioModel" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
+    <div class="row g-3 flex-wrap" id="vfoRow" data-radio-model="@Model.RadioModel" data-max-power="@maxPowerWatts" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
         <!-- VFO A Panel -->
         <div class="col-lg-6 col-12" id="vfoACol">
             <div class="card border-primary h-100 receiver-card">
@@ -1344,10 +1468,13 @@
                     </div>
 
                     <!-- VFO A status line — live band/mode/freq/power summary, banner-coloured -->
+                    @* Deliberately NOT a live region — see #123. Announcing from here
+                       read the whole line once per property update rather than once per
+                       operator action. #vfoStatusAnnounce does the speaking now; this
+                       line stays plainly readable so it can still be reviewed on demand. *@
                     <div id="vfoAStatusLine"
                          class="bg-primary text-white px-2 py-1 mt-1 font-monospace rounded"
-                         style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;"
-                         aria-live="polite" aria-atomic="true">—</div>
+                         style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;">—</div>
                             </div>
                         </div>
                     </div>
@@ -1756,10 +1883,10 @@
                     </div>
 
                     <!-- VFO B status line — live band/mode/freq summary, banner-coloured -->
+                    @* Announced through #vfoStatusAnnounce, not from here — see VFO A above. *@
                     <div id="vfoBStatusLine"
                          class="bg-success text-white px-2 py-1 mt-1 font-monospace rounded"
-                         style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;"
-                         aria-live="polite" aria-atomic="true">—</div>
+                         style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;">—</div>
                                 </div>
                             </div>
                         </div>
@@ -2240,13 +2367,14 @@
         <div>
             <label class="mb-0 fw-semibold" for="remoteAudioMicSelect">Browser microphone</label>
             <select id="remoteAudioMicSelect" class="form-select form-select-sm mt-1"
-                    title="Browser microphone sent to the radio (TX)"
+                    title="Browser microphone sent to the radio (TX). Stop and reconnect to apply a change."
                     aria-label="Browser microphone for remote audio TX">
                 <option value="">Default microphone</option>
             </select>
             <div class="form-text text-muted mt-1 mb-0">
                 Which mic on <strong>this computer/browser</strong> is sent to the radio over remote audio.
                 Device names appear after the first time you grant microphone permission.
+                Stop and reconnect remote audio for a mic change to apply.
             </div>
         </div>
         <div>
@@ -2522,6 +2650,8 @@
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
+
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -2547,6 +2677,7 @@
 
         loadLabels();
         initRemoteAudioUi();
+        initRadioDisplayUi('index');
         // loadLabels() rewrites every title from labels.json on each focus,
         // wiping the "out of band" title suffix; restore it once that has run.
         window.addEventListener('focus', async () => {
@@ -2584,7 +2715,7 @@
                 // no-ops) — no isSingleReceiver check needed here.
                 smeter:      { type: 'smeter', canvasId: 'sMeterCanvas' },
                 smeterB:     { type: 'smeter', canvasId: 'sMeterCanvasB', gaugeTitleId: 'sMeterValueB' },
-                power:       { canvasId: 'powerMeterCanvas' },
+                power:       { canvasId: 'powerMeterCanvas', maxValue: @maxPowerWatts },
                 swr:         { canvasId: 'swrMeterCanvas' },
                 compression: { canvasId: 'compressionMeterCanvas' },
                 alc:         { canvasId: 'alcMeterCanvas' },
@@ -2592,7 +2723,7 @@
                 idd:         { canvasId: 'iddMeterCanvas' },
                 vdd:         { canvasId: 'vddMeterCanvas' }
             });
-            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine);
+            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine, @maxPowerWatts);
 
             // ── S-meter history strips ───────────────────────────────────────
             // Hidden by default. Toggle via the "S-hist" button in the top
@@ -4403,7 +4534,83 @@
             return `${parseInt(s.slice(0,3),10)}.${s.slice(3,6)}.${s.slice(6,9)}`;
         }
 
-        function _renderToolbarStatus() {
+        // How long the announcement waits for a burst of updates to settle. One
+        // operator action - a QMB recall, a band change, a VFO swap - reaches the
+        // browser as several separate RadioStateUpdate messages, roughly a poll
+        // interval apart (~100 ms at the 10 Hz meter poll), so anything arriving
+        // within this window of the last change belongs to the same event and is
+        // announced once (#123). Same technique as the v2.3.7 ARIA work.
+        const STATUS_ANNOUNCE_DELAY_MS = 250;
+        // ...but never stay silent longer than this while changes keep arriving.
+        // Turning the VFO knob produces a change every few tens of milliseconds,
+        // and a plain trailing timer would be pushed back indefinitely and say
+        // nothing at all for as long as the operator kept tuning.
+        const STATUS_ANNOUNCE_MAX_WAIT_MS = 1200;
+        // How long the spoken text lingers before the region is emptied.
+        const STATUS_ANNOUNCE_CLEAR_MS = 2000;
+
+        let _statusAnnounceTimer      = null;
+        let _statusAnnounceClearTimer = null;
+        let _statusAnnounceWaitingSince = 0;
+        let _statusLineA = '';
+        let _statusLineB = '';
+        let _statusAnnouncedA = null;
+        let _statusAnnouncedB = null;
+
+        // Speak whichever lines have actually changed since the last time we
+        // spoke. Naming the VFO matters once both can appear in one message, but
+        // a single-receiver radio has no VFO B panel and no ambiguity, so it is
+        // left off there and those users hear exactly what they heard before.
+        function _announceToolbarStatus() {
+            const out = document.getElementById('vfoStatusAnnounce');
+            if (!out) return;
+
+            const hasB = !!document.getElementById('vfoBStatusLine');
+            const parts = [];
+
+            if (_statusLineA !== _statusAnnouncedA) {
+                _statusAnnouncedA = _statusLineA;
+                parts.push(hasB ? `VFO A ${_statusLineA}` : _statusLineA);
+            }
+            if (hasB && _statusLineB !== _statusAnnouncedB) {
+                _statusAnnouncedB = _statusLineB;
+                parts.push(`VFO B ${_statusLineB}`);
+            }
+            if (parts.length === 0) return;
+
+            const text = parts.join('. ');
+
+            // Empty the region, then fill it on the next frame rather than
+            // writing straight over what is there. This is the same idiom as
+            // qmbAnnounce() in site.js, which is the one announcement on this
+            // page confirmed to speak reliably on the bench.
+            if (_statusAnnounceClearTimer) {
+                clearTimeout(_statusAnnounceClearTimer);
+                _statusAnnounceClearTimer = null;
+            }
+            out.textContent = '';
+            requestAnimationFrame(function () {
+                const el = document.getElementById('vfoStatusAnnounce');
+                if (!el) return;
+                el.textContent = text;
+
+                // Empty it again shortly afterwards. A live region keeps its
+                // text in the accessibility tree, so without this the same
+                // words are met a second time by anyone reading down the page.
+                // Clearing is not itself announced, and it means an identical
+                // reading later still speaks.
+                _statusAnnounceClearTimer = setTimeout(function () {
+                    _statusAnnounceClearTimer = null;
+                    const e2 = document.getElementById('vfoStatusAnnounce');
+                    if (e2) e2.textContent = '';
+                }, STATUS_ANNOUNCE_CLEAR_MS);
+            });
+        }
+
+        // immediate = true is for the initial server-rendered values, which run
+        // while the page is still parsing. Seeding the live region then counts as
+        // its starting content, so nothing is spoken on load.
+        function _renderToolbarStatus(immediate) {
             // Per-VFO status lines now live inside each VFO panel under the
             // IF Width row, banner-coloured to match each receiver. Each line
             // shows band / mode / frequency, with power and SPLIT/TX flags
@@ -4413,22 +4620,56 @@
             const txVfoIsB = _statusState.txVfo === 1;
             const splitOn  = _statusState.split > 0;
 
-            if (a) {
-                let line = `${_statusState.bandA || '—'} / ${_statusState.modeA || '—'} / ${_fmtFreq(_statusState.freqHzA)}`;
-                if (_statusState.power > 0) line += ` / ${_statusState.power}W`;
-                if (splitOn) line += '   SPLIT';
-                if (splitOn || txVfoIsB === false) {
-                    // VFO A is the TX vfo (default, or split with A receive)
-                    if (splitOn) line += '   RX';
+            let lineA = `${_statusState.bandA || '—'} / ${_statusState.modeA || '—'} / ${_fmtFreq(_statusState.freqHzA)}`;
+            if (_statusState.power > 0) lineA += ` / ${_statusState.power}W`;
+            if (splitOn) lineA += '   SPLIT';
+            if (splitOn || txVfoIsB === false) {
+                // VFO A is the TX vfo (default, or split with A receive)
+                if (splitOn) lineA += '   RX';
+            }
+
+            let lineB = `${_statusState.bandB || '—'} / ${_statusState.modeB || '—'} / ${_fmtFreq(_statusState.freqHzB)}`;
+            if (splitOn) lineB += '   TX';
+            else if (txVfoIsB) lineB += '   TX';
+
+            // Visible text first and always, so nothing lags on screen.
+            if (a) a.textContent = lineA;
+            if (b) b.textContent = lineB;
+
+            const changed = (lineA !== _statusLineA) || (lineB !== _statusLineB);
+            _statusLineA = lineA;
+            _statusLineB = lineB;
+
+            if (immediate) {
+                // Initial server-rendered values, while the page is still parsing.
+                _statusAnnouncedA = lineA;
+                _statusAnnouncedB = lineB;
+                return;
+            }
+
+            // An update that leaves both lines reading the same must not restart
+            // the timer, or a radio that re-sends unchanged values would hold the
+            // announcement off for ever.
+            if (!changed) return;
+
+            const now = Date.now();
+            if (!_statusAnnounceTimer) _statusAnnounceWaitingSince = now;
+
+            if (now - _statusAnnounceWaitingSince >= STATUS_ANNOUNCE_MAX_WAIT_MS) {
+                if (_statusAnnounceTimer) {
+                    clearTimeout(_statusAnnounceTimer);
+                    _statusAnnounceTimer = null;
                 }
-                a.textContent = line;
+                _statusAnnounceWaitingSince = now;
+                _announceToolbarStatus();
+                return;
             }
-            if (b) {
-                let line = `${_statusState.bandB || '—'} / ${_statusState.modeB || '—'} / ${_fmtFreq(_statusState.freqHzB)}`;
-                if (splitOn) line += '   TX';
-                else if (txVfoIsB) line += '   TX';
-                b.textContent = line;
-            }
+
+            if (_statusAnnounceTimer) clearTimeout(_statusAnnounceTimer);
+            _statusAnnounceTimer = setTimeout(function () {
+                _statusAnnounceTimer = null;
+                _announceToolbarStatus();
+            }, STATUS_ANNOUNCE_DELAY_MS);
         }
 
         // Public setters that site.js calls from its SignalR handlers.
@@ -4447,7 +4688,8 @@
         _statusState.bandB   = '@(Model.State.vfoB.band ?? "")';
         _statusState.modeB   = '@(Model.State.vfoB.mode ?? "")';
         _statusState.power   = @Model.State.vfoA.power;
-        _renderToolbarStatus();
+        _renderToolbarStatus(true);
+        console.log('[a11y] toolbar status announcer: single shared region, debounced (#123)');
 
         // --- VOX ---
         async function toggleVox() {

@@ -46,6 +46,7 @@ help:
 	@echo "  make restore              Restore NuGet packages"
 	@echo "  make build                Build CAT-only host ($(CONFIG))"
 	@echo "  make run                  Run CAT-only host → http://localhost:8080"
+	@echo "                            (on macOS: wraps as .app for Camera/Mic TCC)"
 	@echo "  make publish              Publish for this host (RID=$(HOST_RID))"
 	@echo "  make publish-osx-arm64    Publish osx-arm64 (framework-dependent)"
 	@echo "  make publish-osx-x64      Publish osx-x64 (framework-dependent)"
@@ -77,7 +78,13 @@ build:
 	dotnet build $(PROJ) -c $(CONFIG) -f $(TFM)
 
 run:
+ifeq ($(UNAME_S),Darwin)
+	@# Bare `dotnet run` has no Info.plist — macOS never prompts for Camera /
+	@# Microphone, so Radio Display and Remote Audio device lists stay empty.
+	scripts/macos/run-dev.sh
+else
 	dotnet run --project $(PROJ) --framework $(TFM) -c $(CONFIG)
+endif
 
 publish: publish-$(RID)
 

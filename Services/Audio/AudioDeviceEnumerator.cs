@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Text;
 using PortAudioSharp;
@@ -9,10 +10,22 @@ namespace Yaesu_Web_Control.Services.Audio
     /// <c>{name} [{hostApi}]</c>. On Windows only <strong>WASAPI</strong>
     /// endpoints are listed (MME / DirectSound / WDM-KS duplicates are hidden).
     /// Legacy name-only settings still resolve.
+    /// <para>
+    /// All PortAudio control-plane calls (Initialize, GetDeviceInfo, Open/Start/Stop
+    /// stream) run on one dedicated thread. PortAudio is not thread-safe: Settings
+    /// enumerating devices on a Kestrel thread while a capture callback is running
+    /// native-crashes the host (no managed exception). Stream callbacks still run
+    /// on PortAudio's own WASAPI/ALSA threads — that is unavoidable — but they
+    /// must not call PortAudio APIs.
+    /// </para>
     /// </summary>
     public static class AudioDeviceEnumerator
     {
-        private static readonly object Sync = new();
+        private static readonly object ThreadSync = new();
+        private static readonly BlockingCollection<Action> AudioQueue = new();
+        private static Thread? _audioThread;
+        private static volatile IReadOnlyList<AudioDeviceInfo>? _cachedDevices;
+        private static int _openStreamCount;
         private static bool _initialized;
 
         // Prefer shared-mode / modern APIs when a legacy name matches several entries
@@ -28,47 +41,74 @@ namespace Yaesu_Web_Control.Services.Audio
             "MME",
         };
 
+        /// <summary>
+        /// Run <paramref name="action"/> on the PortAudio control thread.
+        /// Re-entrant when already on that thread (OpenDevices → ListDevices).
+        /// </summary>
+        public static void Invoke(Action action)
+        {
+            Invoke(() => { action(); return 0; });
+        }
+
+        /// <summary>
+        /// Run <paramref name="func"/> on the PortAudio control thread and return its result.
+        /// </summary>
+        public static T Invoke<T>(Func<T> func)
+        {
+            EnsureAudioThread();
+            if (Thread.CurrentThread == _audioThread)
+                return func();
+
+            T result = default!;
+            Exception? error = null;
+            using var done = new ManualResetEventSlim(false);
+            AudioQueue.Add(() =>
+            {
+                try { result = func(); }
+                catch (Exception ex) { error = ex; }
+                finally { done.Set(); }
+            });
+            if (!done.Wait(TimeSpan.FromSeconds(15)))
+                throw new TimeoutException("PortAudio control thread did not respond within 15 s.");
+            if (error != null)
+                throw error;
+            return result;
+        }
+
+        /// <summary>
+        /// Mark that a PortAudio stream is (about to be) running. While this
+        /// count is non-zero, <see cref="ListDevices"/> returns the last
+        /// snapshot instead of calling into portaudio.dll.
+        /// </summary>
+        public static void AddOpenStream() => Interlocked.Increment(ref _openStreamCount);
+
+        public static void ReleaseOpenStream() => Interlocked.Decrement(ref _openStreamCount);
+
         public static void EnsureInitialized()
         {
-            lock (Sync)
+            Invoke(() =>
             {
                 if (_initialized) return;
                 PortAudio.Initialize();
                 _initialized = true;
-            }
+            });
         }
 
         public static IReadOnlyList<AudioDeviceInfo> ListDevices()
         {
-            EnsureInitialized();
-            var hostApiNames = LoadHostApiNames();
-            var list = new List<AudioDeviceInfo>();
-            int count = PortAudio.DeviceCount;
-            for (int i = 0; i < count; i++)
+            // Live GetDeviceInfo while WASAPI streams are running is the crash
+            // we saw: Settings (and rapid navbar clicks that load it) enumerate
+            // on a thread-pool thread concurrently with the capture callback.
+            if (Volatile.Read(ref _openStreamCount) > 0)
             {
-                try
-                {
-                    DeviceInfo info = PortAudio.GetDeviceInfo(i);
-                    if (string.IsNullOrWhiteSpace(info.name)) continue;
-                    string hostApiName = hostApiNames.TryGetValue(info.hostApi, out var n) && !string.IsNullOrEmpty(n)
-                        ? n
-                        : $"HostApi {info.hostApi}";
-                    list.Add(new AudioDeviceInfo(
-                        i,
-                        info.name.Trim(),
-                        hostApiName,
-                        info.hostApi,
-                        info.maxInputChannels,
-                        info.maxOutputChannels,
-                        info.defaultSampleRate));
-                }
-                catch
-                {
-                    // Skip devices that won't describe themselves.
-                }
+                var cached = _cachedDevices;
+                if (cached != null) return cached;
+                // Stream is up but we have no snapshot — do not call into
+                // portaudio.dll from this request thread.
+                return Array.Empty<AudioDeviceInfo>();
             }
 
-            return FilterForHost(list);
+            return Invoke(ListDevicesCore);
         }
 
         public static IReadOnlyList<AudioDeviceInfo> ListInputs() =>
@@ -125,6 +165,71 @@ namespace Yaesu_Web_Control.Services.Audio
 
             if (candidates.Count == 1) return candidates[0].Index;
             return PreferHostApi(candidates).Index;
+        }
+
+        private static void EnsureAudioThread()
+        {
+            if (_audioThread != null) return;
+            lock (ThreadSync)
+            {
+                if (_audioThread != null) return;
+                var thread = new Thread(AudioThreadLoop)
+                {
+                    IsBackground = true,
+                    Name = "YWC-PortAudio",
+                };
+                thread.Start();
+                _audioThread = thread;
+            }
+        }
+
+        private static void AudioThreadLoop()
+        {
+            foreach (var work in AudioQueue.GetConsumingEnumerable())
+            {
+                try { work(); }
+                catch { /* each work item catches; this is a last-resort net */ }
+            }
+        }
+
+        private static IReadOnlyList<AudioDeviceInfo> ListDevicesCore()
+        {
+            if (!_initialized)
+            {
+                PortAudio.Initialize();
+                _initialized = true;
+            }
+
+            var hostApiNames = LoadHostApiNames();
+            var list = new List<AudioDeviceInfo>();
+            int count = PortAudio.DeviceCount;
+            for (int i = 0; i < count; i++)
+            {
+                try
+                {
+                    DeviceInfo info = PortAudio.GetDeviceInfo(i);
+                    if (string.IsNullOrWhiteSpace(info.name)) continue;
+                    string hostApiName = hostApiNames.TryGetValue(info.hostApi, out var n) && !string.IsNullOrEmpty(n)
+                        ? n
+                        : $"HostApi {info.hostApi}";
+                    list.Add(new AudioDeviceInfo(
+                        i,
+                        info.name.Trim(),
+                        hostApiName,
+                        info.hostApi,
+                        info.maxInputChannels,
+                        info.maxOutputChannels,
+                        info.defaultSampleRate));
+                }
+                catch
+                {
+                    // Skip devices that won't describe themselves.
+                }
+            }
+
+            var filtered = FilterForHost(list);
+            _cachedDevices = filtered;
+            return filtered;
         }
 
         /// <summary>

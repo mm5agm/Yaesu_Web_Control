@@ -34,7 +34,7 @@ public class ScopeController : ControllerBase
     private readonly ILogger<ScopeController> _logger;
 
     // SS frames are short and the radio answers them promptly, but they share
-    // the port with the ~10 Hz meter poll. One at a time, same as CatController.
+    // the port with the meter poll. One at a time, same as CatController.
     private static readonly SemaphoreSlim _gate = new(1, 1);
 
     // How long to let the radio redraw before reading a setting back after a
