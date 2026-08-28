@@ -26,7 +26,8 @@ on:
   # gets version=smoke, push=false, the GHCR login skips and the image is built
   # and discarded.
   #
-  # build-macos is deliberately excluded (see its `if:`).
+  # build-macos is normally skipped on PRs (wall-clock; see its comment).
+  # Temporarily enabled for #133 so the RID-split can be verified on the PR.
   pull_request:
     branches: [develop]
 
@@ -168,10 +169,10 @@ jobs:
   # Unsigned CAT-only .app DMGs (arm64 + x64). No Apple Developer ID / notarization.
   # workflow_dispatch with empty tag → artifacts only (safe branch smoke test).
   #
-  # Skipped on pull requests, on wall-clock grounds rather than cost — both
-  # repos are public, so Actions minutes are free. build-windows and
-  # build-docker cover the same compile, and macOS still runs on dispatch and
-  # on release. If a change is macOS-specific, hit "Run workflow" on the branch.
+  # Normally skipped on pull requests, on wall-clock grounds rather than
+  # cost — both repos are public, so Actions minutes are free. Temporarily
+  # running on PRs for #133 to prove the RID-split; restore
+  # `github.event_name != 'pull_request' &&` on the `if:` after that.
   #
   # One RID per matrix leg (fresh VM). Sequential `build-dmg.sh all` on a
   # hosted arm64 runner hangs the SECOND publish after restore — VBCSCompiler
@@ -187,7 +188,7 @@ jobs:
   # and the Docker image while the DMGs never upload, and the release looks
   # finished. Failing at 10 minutes makes that visible instead of silent.
   build-macos:
-    if: github.event_name != 'pull_request' && (github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-'))
+    if: github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-')
     runs-on: macos-latest
     timeout-minutes: 10
     permissions:
