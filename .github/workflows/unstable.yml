@@ -113,13 +113,20 @@ jobs:
           name: windows-installer
           path: Yaesu_Web_Control_Setup.exe
 
-  # Same timeout rationale as release.yml (hosted arm64 macOS runners can stall).
+  # One RID per VM — see release.yml build-macos (sequential second-RID hang).
   build-macos:
     needs: prep
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [osx-arm64, osx-x64]
+    env:
+      MSBUILDDISABLENODEREUSE: 1
+      DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: 1
 
     steps:
       - name: Checkout
@@ -135,18 +142,18 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Build macOS DMGs (arm64 + x64)
+      - name: Build macOS DMG (${{ matrix.rid }})
         env:
           VERSION: ${{ needs.prep.outputs.version }}
         run: |
           chmod +x scripts/macos/build-dmg.sh
-          ./scripts/macos/build-dmg.sh all
+          ./scripts/macos/build-dmg.sh "${{ matrix.rid }}"
           ls -lh publish/dmg/*.dmg
 
-      - name: Upload DMGs as workflow artifacts
+      - name: Upload DMG as workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: macos-dmgs
+          name: macos-dmg-${{ matrix.rid }}
           path: publish/dmg/*.dmg
 
   build-docker:
