@@ -70,6 +70,10 @@
     <Content Remove="core\**" />
     <EmbeddedResource Remove="core\**" />
     <None Remove="core\**" />
+    <!-- Tests/ holds a separate xUnit project (and leftover bin/obj from it).
+         The Web SDK still globs **/*.cs, so without this removal a previous
+         test build's copied Pages/*.cshtml.cs and generated AssemblyInfo
+         compile into this assembly and collide with the real page models. -->
     <Compile Remove="Tests\**" />
     <Content Remove="Tests\**" />
     <EmbeddedResource Remove="Tests\**" />

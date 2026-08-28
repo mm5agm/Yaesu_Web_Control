@@ -976,57 +976,72 @@ namespace Yaesu_Web_Control.Controllers
                 if (recv != "A" && recv != "B")
                     return BadRequest(new { error = "Invalid receiver specified" });
 
-                await _catClient.SendCommandAsync($"MD{VfoP1Outgoing(recv)}{request.Mode};", "User");
-                if (VfoIsB(recv)) _radioStateService.ModeB = displayMode;
-                else               _radioStateService.ModeA = displayMode;
+                // MD is per-VFO even on single-receiver radios (FTdx10 CAT
+                // manual: P1 0=MAIN/VFO-A, 1=SUB/VFO-B). VfoP1Outgoing would
+                // send MD0 for both panels and change the active VFO's mode
+                // when the operator edited the inactive one.
+                bool requestedB = recv == "B";
+                string mdP1 = RadioCapabilities.ModeP1(recv);
+                await _catClient.SendCommandAsync($"MD{mdP1}{request.Mode};", "User");
+                if (requestedB) _radioStateService.ModeB = displayMode;
+                else            _radioStateService.ModeA = displayMode;
 
-                // Re-apply Contour and APF state — mode changes on the FTdx101 cause the
-                // radio to restore its per-mode Contour/APF settings, overriding what we have set.
-                var modeSettings = await _settingsService.GetSettingsAsync();
-                bool isFtdx3000 = modeSettings.RadioModel == "FTDX3000";
-                bool targetB = VfoIsB(recv);
-                // P1=0 on FTDX3000 (special CO format) and on every single-receiver
-                // model (P1 Fixed=0). Dual-receiver -> P1 by VFO.
-                string p1 = isFtdx3000 ? "0" : VfoP1Outgoing(recv);
+                // Re-apply Contour and APF state — a mode change on the live
+                // receiver causes the radio to restore its per-mode Contour/APF
+                // settings, overriding what we have set. Skip when the mode
+                // change was on the inactive VFO of a single-receiver radio:
+                // CO is P1=0-Fixed there, so re-applying would write the other
+                // panel's contour onto the live VFO.
+                bool liveReceiverChanged = !_radioStateService.IsSingleReceiver
+                    || (_radioStateService.ActiveVfo == 1) == requestedB;
 
-                if (isFtdx3000)
+                if (liveReceiverChanged)
                 {
-                    bool cOn = _radioStateService.ContourOnA;
-                    bool aOn = _radioStateService.ApfOnA;
-                    if (cOn)
+                    var modeSettings = await _settingsService.GetSettingsAsync();
+                    bool isFtdx3000 = modeSettings.RadioModel == "FTDX3000";
+                    // P1=0 on FTDX3000 (special CO format) and on every single-receiver
+                    // model (P1 Fixed=0). Dual-receiver -> P1 by VFO.
+                    string p1 = isFtdx3000 ? "0" : VfoP1Outgoing(recv);
+
+                    if (isFtdx3000)
                     {
-                        await _catClient.SendCommandAsync("CO0001;", "User");
-                        int vv = Math.Max(1, Math.Min(40, _radioStateService.ContourFreqA / 100));
-                        await _catClient.SendCommandAsync($"CO01{vv:D2};", "User");
-                    }
-                    else if (aOn)
-                    {
-                        await _catClient.SendCommandAsync("CO0002;", "User");
-                        int vv = Math.Max(0, Math.Min(20, (_radioStateService.ApfFreqA / 25) + 10));
-                        await _catClient.SendCommandAsync($"CO02{vv:D2};", "User");
+                        bool cOn = _radioStateService.ContourOnA;
+                        bool aOn = _radioStateService.ApfOnA;
+                        if (cOn)
+                        {
+                            await _catClient.SendCommandAsync("CO0001;", "User");
+                            int vv = Math.Max(1, Math.Min(40, _radioStateService.ContourFreqA / 100));
+                            await _catClient.SendCommandAsync($"CO01{vv:D2};", "User");
+                        }
+                        else if (aOn)
+                        {
+                            await _catClient.SendCommandAsync("CO0002;", "User");
+                            int vv = Math.Max(0, Math.Min(20, (_radioStateService.ApfFreqA / 25) + 10));
+                            await _catClient.SendCommandAsync($"CO02{vv:D2};", "User");
+                        }
+                        else
+                        {
+                            await _catClient.SendCommandAsync("CO0000;", "User");
+                        }
                     }
                     else
                     {
-                        await _catClient.SendCommandAsync("CO0000;", "User");
+                        bool contourOn  = requestedB ? _radioStateService.ContourOnB  : _radioStateService.ContourOnA;
+                        int  contourHz  = requestedB ? _radioStateService.ContourFreqB : _radioStateService.ContourFreqA;
+                        bool apfOn      = requestedB ? _radioStateService.ApfOnB       : _radioStateService.ApfOnA;
+                        int  apfHz      = requestedB ? _radioStateService.ApfFreqB     : _radioStateService.ApfFreqA;
+
+                        int  cFreq = Math.Max(100, Math.Min(3200, contourHz));
+                        await _catClient.SendCommandAsync($"CO{p1}0000{(contourOn ? 1 : 0)};", "User");
+                        await _catClient.SendCommandAsync($"CO{p1}1{cFreq:D4};", "User");
+
+                        int  aVvvv = Math.Max(0, Math.Min(50, (apfHz / 10) + 25));
+                        await _catClient.SendCommandAsync($"CO{p1}2000{(apfOn ? 1 : 0)};", "User");
+                        await _catClient.SendCommandAsync($"CO{p1}3{aVvvv:D4};", "User");
                     }
                 }
-                else
-                {
-                    bool contourOn  = targetB ? _radioStateService.ContourOnB  : _radioStateService.ContourOnA;
-                    int  contourHz  = targetB ? _radioStateService.ContourFreqB : _radioStateService.ContourFreqA;
-                    bool apfOn      = targetB ? _radioStateService.ApfOnB       : _radioStateService.ApfOnA;
-                    int  apfHz      = targetB ? _radioStateService.ApfFreqB     : _radioStateService.ApfFreqA;
 
-                    int  cFreq = Math.Max(100, Math.Min(3200, contourHz));
-                    await _catClient.SendCommandAsync($"CO{p1}0000{(contourOn ? 1 : 0)};", "User");
-                    await _catClient.SendCommandAsync($"CO{p1}1{cFreq:D4};", "User");
-
-                    int  aVvvv = Math.Max(0, Math.Min(50, (apfHz / 10) + 25));
-                    await _catClient.SendCommandAsync($"CO{p1}2000{(apfOn ? 1 : 0)};", "User");
-                    await _catClient.SendCommandAsync($"CO{p1}3{aVvvv:D4};", "User");
-                }
-
-                _logger.LogInformation("Sending CAT command: MD{Vfo}{Mode}; for Receiver {Receiver}", VfoP1Outgoing(recv), request.Mode, recv);
+                _logger.LogInformation("Sending CAT command: MD{Vfo}{Mode}; for Receiver {Receiver}", mdP1, request.Mode, recv);
                 return Ok(new { message = $"Mode {displayMode} selected for Receiver {receiver}" });
             }
             catch (Exception ex)
@@ -1921,6 +1936,10 @@ namespace Yaesu_Web_Control.Controllers
                 var rxSettings = await _settingsService.GetSettingsAsync();
                 var rx = v == "B" ? 1 : 0;
 
+                // Capture TX before ActiveVfo moves — EffectiveTxVfo() depends on it.
+                var wasSplit = _radioStateService.SplitMode > 0;
+                var previousTx = EffectiveTxVfo();
+
                 // The FTDX3000 selects the RX VFO via FR, and uses 0/4 (NOT 0/1):
                 // FR0; = VFO-A RX, FR4; = VFO-B RX. Confirmed from a real FTDX3000
                 // in daily use by iu1teu (#78) — it does not use VS for this. The
@@ -1932,9 +1951,62 @@ namespace Yaesu_Web_Control.Controllers
                     await _catClient.SendCommandAsync($"VS{rx};", "WebUI", CancellationToken.None);
 
                 _radioStateService.ActiveVfo = rx;
-                _radioStateService.SplitMode = _radioStateService.TxVfo != rx ? 1 : 0;
-                _logger.LogInformation("RX VFO set to {Vfo} (split={Split})", v, _radioStateService.SplitMode);
-                return Ok(new { rxVfo = rx, splitMode = _radioStateService.SplitMode });
+
+                // On single-receiver radios FT often stays at 0 when the operating
+                // VFO moves (same root cause as the Index TX-button effective-VFO
+                // rule). Deriving split from raw TxVfo made "RX B, both on B"
+                // look like reverse split (RX B / TX A red). Keep non-split
+                // moves coherent: TX follows RX. When already split, TX stays
+                // put and split clears only if RX lands on that TX VFO.
+                if (_radioStateService.IsSingleReceiver)
+                {
+                    if (!wasSplit)
+                    {
+                        _radioStateService.TxVfo = rx;
+                        _radioStateService.SplitMode = 0;
+                        if (rxSettings.RadioModel == "FTDX3000")
+                        {
+                            // FTDX3000: FT2; = TX with VFO A (no split). For
+                            // both-on-B there is no "FT no-split on B" opcode —
+                            // FR already steers the operating VFO; leave FT alone
+                            // unless we need A. FT3; would force split onto B.
+                            if (rx == 0)
+                                await _catClient.SendCommandAsync("FT2;", "WebUI", CancellationToken.None);
+                        }
+                        else
+                        {
+                            // FTdx10 / FT-710 / FT-991A: nudge FT to match so a
+                            // later SetTxVfo / split derive sees a coherent value.
+                            // Harmless when the radio ignores FT outside split.
+                            await _catClient.SendCommandAsync($"FT{rx};", "WebUI", CancellationToken.None);
+                        }
+                    }
+                    else
+                    {
+                        _radioStateService.TxVfo = previousTx;
+                        _radioStateService.SplitMode = previousTx != rx ? 1 : 0;
+                        if (_radioStateService.SplitMode == 0)
+                        {
+                            // Cleared split by moving RX onto the TX VFO.
+                            if (rxSettings.RadioModel == "FTDX3000")
+                                await _catClient.SendCommandAsync("FT2;", "WebUI", CancellationToken.None);
+                            else
+                                await _catClient.SendCommandAsync("ST0;", "WebUI", CancellationToken.None);
+                        }
+                    }
+                }
+                else
+                {
+                    _radioStateService.SplitMode = _radioStateService.TxVfo != rx ? 1 : 0;
+                }
+
+                _logger.LogInformation("RX VFO set to {Vfo} (tx={Tx}, split={Split})",
+                    v, _radioStateService.TxVfo == 1 ? "B" : "A", _radioStateService.SplitMode);
+                return Ok(new {
+                    rxVfo = rx,
+                    txVfo = EffectiveTxVfo(),
+                    splitMode = _radioStateService.SplitMode
+                });
             }
             catch (Exception ex)
             {
@@ -1957,16 +2029,23 @@ namespace Yaesu_Web_Control.Controllers
             {
                 await EnsureConnectedAsync();
                 var tx = v == "B" ? 1 : 0;
+                var txSettings = await _settingsService.GetSettingsAsync();
+                var splitOn = tx != _radioStateService.ActiveVfo;
 
-                // FT selects the transmit VFO on all supported models: FT0; = TX on
-                // VFO A, FT1; = TX on VFO B. Already proven driving the FTDX3000
-                // Split button (#78).
+                // FT selects the transmit VFO: FT0; = TX on A, FT1; = TX on B.
+                // Proven on FTDX3000 for the independent TX selector (#78).
+                // (The Split button path on FTDX3000 uses FT2/FT3 instead.)
                 await _catClient.SendCommandAsync($"FT{tx};", "WebUI", CancellationToken.None);
 
+                // FTdx10 / FT-710 / FT-991A also need ST to engage/clear split;
+                // FTDX3000 has no ST (FT alone is enough for its firmware).
+                if (_radioStateService.IsSingleReceiver && txSettings.RadioModel != "FTDX3000")
+                    await _catClient.SendCommandAsync(splitOn ? "ST1;" : "ST0;", "WebUI", CancellationToken.None);
+
                 _radioStateService.TxVfo = tx;
-                _radioStateService.SplitMode = tx != _radioStateService.ActiveVfo ? 1 : 0;
+                _radioStateService.SplitMode = splitOn ? 1 : 0;
                 _logger.LogInformation("TX VFO set to {Vfo} (split={Split})", v, _radioStateService.SplitMode);
-                return Ok(new { txVfo = tx, splitMode = _radioStateService.SplitMode });
+                return Ok(new { txVfo = EffectiveTxVfo(), splitMode = _radioStateService.SplitMode });
             }
             catch (Exception ex)
             {
