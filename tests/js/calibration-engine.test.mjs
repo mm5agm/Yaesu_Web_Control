@@ -10,7 +10,9 @@
 // the engine's module-level `tables` state, so loadFromBackend mutations in one
 // test can't leak into another.
 //
-// Run from the core repo root:  node --test tests/js/
+// Run from the core repo root:  node --test "tests/js/*.test.mjs"
+// (the bare directory form fails on Node 24 under Windows - it tries to load
+//  the directory itself as a module.)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

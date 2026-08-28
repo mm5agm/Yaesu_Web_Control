@@ -104,6 +104,36 @@ namespace RadioWebControl.Core.Services.Cw
     }
 
     /// <summary>
+    /// One frame of the passband spectrum, for the tuning display. See
+    /// <see cref="CwDecoderEngine.Spectrum"/>.
+    /// </summary>
+    public readonly struct CwSpectrumFrame
+    {
+        /// <summary>Centre frequency of the first bin in <see cref="Db"/>.</summary>
+        public double FirstHz { get; init; }
+
+        /// <summary>Spacing between bins, in Hz.</summary>
+        public double BinHz { get; init; }
+
+        /// <summary>
+        /// One value per bin, in dB above the median of this span. Empty until
+        /// the first FFT frame has been gathered. Relative, not absolute:
+        /// nothing upstream of the reader has a calibrated level.
+        /// </summary>
+        public double[] Db { get; init; }
+
+        /// <summary>Where the operator asked to listen - the marker on the display.</summary>
+        public double PitchHz { get; init; }
+
+        /// <summary>Where the reader believes the tone actually is.</summary>
+        public double ToneHz { get; init; }
+
+        public double Confidence { get; init; }
+
+        public bool SignalPresent { get; init; }
+    }
+
+    /// <summary>
     /// The decoder, assembled: audio in, characters out.
     ///
     /// It owns a <see cref="CwToneDetector"/> (tone tracking and an adaptive
@@ -188,6 +218,38 @@ namespace RadioWebControl.Core.Services.Cw
                 for (int k = 0; k < n; k++)
                     outp[k] = _phasor[(int)((from + k) % PhasorRing)];
                 return outp;
+            }
+        }
+
+        /// <summary>
+        /// The passband as the reader sees it, for the tuning display: one
+        /// value per FFT bin in dB above the span's own median, plus where the
+        /// span starts and how wide a bin is.
+        ///
+        /// This is the finding aid the phasor is not. The phasor answers "am I
+        /// on the tone" once you are near it; the spectrum answers "where is
+        /// the tone", which is the question you have when the reader is quiet
+        /// and you cannot tell whether the band is empty or the dial is off.
+        /// Drawn with a marker at the operator's pitch, the gap between the
+        /// marker and the peak is the tuning error, read directly.
+        /// </summary>
+        public CwSpectrumFrame Spectrum()
+        {
+            lock (_gate)
+            {
+                var db = new double[_tone.SpectrumBins];
+                int n  = _tone.CopySpectrum(db, out double firstHz, out double binHz);
+
+                return new CwSpectrumFrame
+                {
+                    FirstHz = firstHz,
+                    BinHz   = binHz,
+                    Db      = n == db.Length ? db : db.AsSpan(0, n).ToArray(),
+                    PitchHz = _opt.PitchHz,
+                    ToneHz  = _tone.ToneHz,
+                    Confidence    = _tone.Confidence,
+                    SignalPresent = _signalPresent,
+                };
             }
         }
 
