@@ -382,6 +382,41 @@ namespace RadioWebControl.Core.Services.Cw
         private const double TrackBandHz = 150.0;
 
         /// <summary>
+        /// How long a lock stays "fresh" with nothing keyed, in seconds.
+        ///
+        /// While it is fresh the tone is held through gaps instead of being
+        /// dragged onto whatever the FFT finds in the silence. Once it goes
+        /// stale the search opens up again, so a station that has genuinely
+        /// gone away does not hold the tone hostage and a new one can be
+        /// acquired. 10 s survives a turn-round without doing that.
+        /// </summary>
+        private const double TrackHoldSeconds = 10.0;
+
+        /// <summary>
+        /// Confidence needed to LATCH the gap hold, as opposed to the lower
+        /// TrackHoldConfidence that merely narrows the search.
+        ///
+        /// Deliberately stricter, and the gap between the two numbers is the
+        /// whole point. Narrowing the search around a half-believed peak is
+        /// cheap - it is wrong for one frame and corrects itself. Latching is
+        /// not: it stops the tone moving at all until the lock goes stale, so
+        /// it must only ever happen on a signal that is really there.
+        ///
+        /// 0.80 is not strict enough. bench/noise.wav is an empty band - its
+        /// strongest bin keys at 2.9, under the 3.0 floor - and it still
+        /// reaches 0.85, so at 0.80 it latched onto a noise peak and the frozen
+        /// tone gave the threshold a steadier fake to work on: 19 -> 26
+        /// characters of junk, one of them a spurious CQ. At 0.92 it does not
+        /// latch and the transcript is byte-identical to no hold at all.
+        ///
+        /// Nothing real is lost by the stricter number. Across the corpus it
+        /// scores 69 correct CQ against 68 at 0.80, the same 4 mangled, and
+        /// bench/live-ly-oe3wma.wav resolves CQ DE LY/OE3WMA on all six overs
+        /// either way.
+        /// </summary>
+        private const double LatchConfidence = 0.92;
+
+        /// <summary>
         /// How much wider than the search window the spectrum display reaches,
         /// so a station just outside the range the reader will chase is still
         /// on screen as the explanation for why it is not being read.
@@ -417,6 +452,14 @@ namespace RadioWebControl.Core.Services.Cw
         private static readonly double MarkDecayPerHop =
             Math.Pow(10.0, -MarkDecayDbPerSec * (EnvHop / (double)WorkRate) / 20.0);
         private bool   _keyDown;
+
+        /// Sample index the key was last down at, for the gap hold above.
+        private long   _lastKeyDownAt8k = long.MinValue / 2;
+
+        /// True once this tone has been held with real confidence while a
+        /// signal was present - that is, once there is a lock worth protecting
+        /// through the gaps. Cleared when the lock goes stale.
+        private bool   _lockLatched;
 
         // Debounce. _pending holds samples that cannot be emitted yet because a
         // later hop may still backdate their key state.
@@ -743,6 +786,8 @@ namespace RadioWebControl.Core.Services.Cw
                 _keyDown = false;
             }
 
+            if (_keyDown) _lastKeyDownAt8k = _sampleIndex8k;
+
             // Warm-up. The estimators above have been updating all along; what
             // is suppressed is any claim that something is keyed while they are
             // still converging.
@@ -841,9 +886,15 @@ namespace RadioWebControl.Core.Services.Cw
             //
             // Between overs _present is false and confidence decays slowly,
             // which is exactly what the asymmetry above was for. On an empty
-            // band it never rises in the first place. Tone tracking below is
-            // deliberately left alone: it keys off frameConfidence, not this,
-            // so acquisition still works before presence is established.
+            // band it never rises in the first place.
+            //
+            // The tone MOVE below still keys off frameConfidence rather than
+            // this, so acquisition works before presence is established. What
+            // this number now gates is the gap hold: narrowing the search at
+            // TrackHoldConfidence, and latching the hold at LatchConfidence.
+            // Both need presence, and the paragraph above is why - without it
+            // an empty band would ratchet up to 0.41 and hold there, which is
+            // easily enough to freeze the tone onto noise.
             if (_present)
             {
                 _confidence += (frameConfidence > _confidence ? 0.5 : 0.02)
@@ -855,6 +906,62 @@ namespace RadioWebControl.Core.Services.Cw
             }
 
             if (frameConfidence <= 0.0) return;
+
+            // A tone measured while nothing is keyed is a measurement of noise,
+            // not of the station, and moving towards it walks the tone off the
+            // signal during the silence between overs. That is what corrupted
+            // the first character of the next over: the Goertzel was still
+            // mis-tuned when the opening dah arrived, so the dah was detected
+            // late, came out short, and C (-.-.) was read as F (..-.), R (.-.)
+            // or N (-.). Measured on bench/live-ly-oe3wma.wav, where the tone
+            // walked from a true 649 Hz out to 894 Hz between overs.
+            //
+            // TrackBandHz alone does not prevent this - it is 150 Hz wide, so
+            // most of the observed drift fits inside the narrow track. The
+            // discriminator has to be whether anything was keyed, not how far
+            // the peak is.
+            //
+            // Held only while the lock is fresh. If nothing has been keyed for
+            // TrackHoldSeconds the hold lifts and the search opens up again,
+            // because by then the station really has gone and acquiring a new
+            // one matters more than protecting a stale tone. That also keeps
+            // first acquisition working: with nothing ever keyed the hold has
+            // never applied, which it must not, since _keyDown cannot become
+            // true until the Goertzel is already near the signal.
+            // The hold applies only to a lock worth protecting. A weak or
+            // half-acquired signal keys intermittently, and holding its tone
+            // would stop it ever converging - applied unconditionally, ve2mf
+            // goes from 20 characters to none and m17 from 3 to none. So it is
+            // latched on a confident lock and released when the lock goes
+            // stale, which leaves acquisition and weak-signal tracking as they
+            // were.
+            //
+            // Scored on what the fault actually damages rather than on
+            // character count, over every corpus recording that produces a CQ
+            // or a near miss of one, hold off against hold on:
+            //
+            //     correct CQ                        45 -> 68
+            //     RQ / NQ / EQ / FQ before CWT,
+            //     DE or TEST (a mangled leading C)  22 ->  4
+            //
+            // No recording loses a CQ or gains a mangle. Character count falls
+            // on some files precisely because it is working: mkii-dk9py goes
+            // 249 -> 233 characters while its CQ CWT goes 1 -> 5 and its
+            // mangles 5 -> 1, at 98% readability either way and with DK9PY,
+            // ARMIN and I2WIJ unchanged. Counting characters would have scored
+            // that as a regression.
+            //
+            // The empty band is unchanged, which took a second number to
+            // achieve - see LatchConfidence. noise, noise-15m-long, diag-dead
+            // and find17 all give byte-identical transcripts with the hold on
+            // and off.
+            double sinceKeyDownSec = (_sampleIndex8k - _lastKeyDownAt8k) / (double)WorkRate;
+            bool   keyedInWindow   = sinceKeyDownSec <= FftSize / (double)WorkRate;
+
+            if (sinceKeyDownSec > TrackHoldSeconds) _lockLatched = false;
+            else if (_present && _confidence >= LatchConfidence) _lockLatched = true;
+
+            if (_lockLatched && !keyedInWindow) return;
 
             // Parabolic interpolation on the log magnitudes, which is the right
             // curve for a windowed peak and gets well inside one bin.
