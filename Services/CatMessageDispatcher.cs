@@ -153,9 +153,13 @@
                         HandleInitialization(message);
                         break;
                     case "MD":
-                        // Example: MD01; (VFO A, LSB), MD12; (VFO B, USB)
-                        // Single-receiver: P1 is "0 Fixed" — routes via SetPerVfo's
-                        // 300 ms buffer so A/B-press broadcasts land on ActiveVfo.
+                        // Example: MD01; (VFO A, LSB), MD12; (VFO B, USB).
+                        // MD is per-VFO at CAT level on every supported model
+                        // (FTdx10 manual: P1 0=MAIN, 1=SUB) — not P1=0-Fixed
+                        // like GT/PA/SH. Route by P1 the same way AN does,
+                        // including on single-receiver: using SetPerVfo here
+                        // wrote an inactive-VFO mode change onto the active
+                        // VFO's slot.
                         if (message.Length >= 5)
                         {
                             var modeCode = message[3];
@@ -180,10 +184,8 @@
                             };
                             if (mode != null)
                             {
-                                SetPerVfo(message[2], routeB => {
-                                    if (routeB) _stateService.ModeB = mode;
-                                    else        _stateService.ModeA = mode;
-                                });
+                                if (message[2] == '1') _stateService.ModeB = mode;
+                                else                   _stateService.ModeA = mode;
                             }
                         }
                         break;

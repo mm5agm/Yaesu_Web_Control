@@ -976,57 +976,72 @@ namespace Yaesu_Web_Control.Controllers
                 if (recv != "A" && recv != "B")
                     return BadRequest(new { error = "Invalid receiver specified" });
 
-                await _catClient.SendCommandAsync($"MD{VfoP1Outgoing(recv)}{request.Mode};", "User");
-                if (VfoIsB(recv)) _radioStateService.ModeB = displayMode;
-                else               _radioStateService.ModeA = displayMode;
+                // MD is per-VFO even on single-receiver radios (FTdx10 CAT
+                // manual: P1 0=MAIN/VFO-A, 1=SUB/VFO-B). VfoP1Outgoing would
+                // send MD0 for both panels and change the active VFO's mode
+                // when the operator edited the inactive one.
+                bool requestedB = recv == "B";
+                string mdP1 = RadioCapabilities.ModeP1(recv);
+                await _catClient.SendCommandAsync($"MD{mdP1}{request.Mode};", "User");
+                if (requestedB) _radioStateService.ModeB = displayMode;
+                else            _radioStateService.ModeA = displayMode;
 
-                // Re-apply Contour and APF state — mode changes on the FTdx101 cause the
-                // radio to restore its per-mode Contour/APF settings, overriding what we have set.
-                var modeSettings = await _settingsService.GetSettingsAsync();
-                bool isFtdx3000 = modeSettings.RadioModel == "FTDX3000";
-                bool targetB = VfoIsB(recv);
-                // P1=0 on FTDX3000 (special CO format) and on every single-receiver
-                // model (P1 Fixed=0). Dual-receiver -> P1 by VFO.
-                string p1 = isFtdx3000 ? "0" : VfoP1Outgoing(recv);
+                // Re-apply Contour and APF state — a mode change on the live
+                // receiver causes the radio to restore its per-mode Contour/APF
+                // settings, overriding what we have set. Skip when the mode
+                // change was on the inactive VFO of a single-receiver radio:
+                // CO is P1=0-Fixed there, so re-applying would write the other
+                // panel's contour onto the live VFO.
+                bool liveReceiverChanged = !_radioStateService.IsSingleReceiver
+                    || (_radioStateService.ActiveVfo == 1) == requestedB;
 
-                if (isFtdx3000)
+                if (liveReceiverChanged)
                 {
-                    bool cOn = _radioStateService.ContourOnA;
-                    bool aOn = _radioStateService.ApfOnA;
-                    if (cOn)
+                    var modeSettings = await _settingsService.GetSettingsAsync();
+                    bool isFtdx3000 = modeSettings.RadioModel == "FTDX3000";
+                    // P1=0 on FTDX3000 (special CO format) and on every single-receiver
+                    // model (P1 Fixed=0). Dual-receiver -> P1 by VFO.
+                    string p1 = isFtdx3000 ? "0" : VfoP1Outgoing(recv);
+
+                    if (isFtdx3000)
                     {
-                        await _catClient.SendCommandAsync("CO0001;", "User");
-                        int vv = Math.Max(1, Math.Min(40, _radioStateService.ContourFreqA / 100));
-                        await _catClient.SendCommandAsync($"CO01{vv:D2};", "User");
-                    }
-                    else if (aOn)
-                    {
-                        await _catClient.SendCommandAsync("CO0002;", "User");
-                        int vv = Math.Max(0, Math.Min(20, (_radioStateService.ApfFreqA / 25) + 10));
-                        await _catClient.SendCommandAsync($"CO02{vv:D2};", "User");
+                        bool cOn = _radioStateService.ContourOnA;
+                        bool aOn = _radioStateService.ApfOnA;
+                        if (cOn)
+                        {
+                            await _catClient.SendCommandAsync("CO0001;", "User");
+                            int vv = Math.Max(1, Math.Min(40, _radioStateService.ContourFreqA / 100));
+                            await _catClient.SendCommandAsync($"CO01{vv:D2};", "User");
+                        }
+                        else if (aOn)
+                        {
+                            await _catClient.SendCommandAsync("CO0002;", "User");
+                            int vv = Math.Max(0, Math.Min(20, (_radioStateService.ApfFreqA / 25) + 10));
+                            await _catClient.SendCommandAsync($"CO02{vv:D2};", "User");
+                        }
+                        else
+                        {
+                            await _catClient.SendCommandAsync("CO0000;", "User");
+                        }
                     }
                     else
                     {
-                        await _catClient.SendCommandAsync("CO0000;", "User");
+                        bool contourOn  = requestedB ? _radioStateService.ContourOnB  : _radioStateService.ContourOnA;
+                        int  contourHz  = requestedB ? _radioStateService.ContourFreqB : _radioStateService.ContourFreqA;
+                        bool apfOn      = requestedB ? _radioStateService.ApfOnB       : _radioStateService.ApfOnA;
+                        int  apfHz      = requestedB ? _radioStateService.ApfFreqB     : _radioStateService.ApfFreqA;
+
+                        int  cFreq = Math.Max(100, Math.Min(3200, contourHz));
+                        await _catClient.SendCommandAsync($"CO{p1}0000{(contourOn ? 1 : 0)};", "User");
+                        await _catClient.SendCommandAsync($"CO{p1}1{cFreq:D4};", "User");
+
+                        int  aVvvv = Math.Max(0, Math.Min(50, (apfHz / 10) + 25));
+                        await _catClient.SendCommandAsync($"CO{p1}2000{(apfOn ? 1 : 0)};", "User");
+                        await _catClient.SendCommandAsync($"CO{p1}3{aVvvv:D4};", "User");
                     }
                 }
-                else
-                {
-                    bool contourOn  = targetB ? _radioStateService.ContourOnB  : _radioStateService.ContourOnA;
-                    int  contourHz  = targetB ? _radioStateService.ContourFreqB : _radioStateService.ContourFreqA;
-                    bool apfOn      = targetB ? _radioStateService.ApfOnB       : _radioStateService.ApfOnA;
-                    int  apfHz      = targetB ? _radioStateService.ApfFreqB     : _radioStateService.ApfFreqA;
 
-                    int  cFreq = Math.Max(100, Math.Min(3200, contourHz));
-                    await _catClient.SendCommandAsync($"CO{p1}0000{(contourOn ? 1 : 0)};", "User");
-                    await _catClient.SendCommandAsync($"CO{p1}1{cFreq:D4};", "User");
-
-                    int  aVvvv = Math.Max(0, Math.Min(50, (apfHz / 10) + 25));
-                    await _catClient.SendCommandAsync($"CO{p1}2000{(apfOn ? 1 : 0)};", "User");
-                    await _catClient.SendCommandAsync($"CO{p1}3{aVvvv:D4};", "User");
-                }
-
-                _logger.LogInformation("Sending CAT command: MD{Vfo}{Mode}; for Receiver {Receiver}", VfoP1Outgoing(recv), request.Mode, recv);
+                _logger.LogInformation("Sending CAT command: MD{Vfo}{Mode}; for Receiver {Receiver}", mdP1, request.Mode, recv);
                 return Ok(new { message = $"Mode {displayMode} selected for Receiver {receiver}" });
             }
             catch (Exception ex)
