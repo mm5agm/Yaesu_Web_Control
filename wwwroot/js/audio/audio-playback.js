@@ -17,8 +17,8 @@ export class AudioPlayback {
     this._decoder = null;
     this._codec = 'pcm16';
     this._muted = false;
-    /** Max queued frames in the worklet (~3 × 10 ms). */
-    this._maxQueueFrames = 3;
+    /** ~60 ms jitter buffer (6 × 10 ms frames) — absorbs host load while navigating. */
+    this._maxQueueFrames = 6;
   }
 
   get muted() { return this._muted; }
@@ -64,6 +64,7 @@ export class AudioPlayback {
           this.queue = [];
           this.offset = 0;
           this.maxFrames = ${maxFrames};
+          this.lastSample = 0;
           this.port.onmessage = (ev) => {
             if (!ev.data || !ev.data.length) return;
             this.queue.push(ev.data);
@@ -79,7 +80,12 @@ export class AudioPlayback {
           let i = 0;
           while (i < out.length) {
             if (!this.queue.length) {
-              out.fill(0, i);
+              // Soft tail on underrun — hard zeros click when the host hiccups
+              // during main-window navigation (CAT poll / page load contention).
+              for (; i < out.length; i++) {
+                this.lastSample *= 0.85;
+                out[i] = this.lastSample;
+              }
               break;
             }
             const cur = this.queue[0];
@@ -87,6 +93,7 @@ export class AudioPlayback {
             const need = out.length - i;
             const take = Math.min(avail, need);
             out.set(cur.subarray(this.offset, this.offset + take), i);
+            this.lastSample = out[i + take - 1];
             i += take;
             this.offset += take;
             if (this.offset >= cur.length) {

@@ -41,9 +41,27 @@ namespace Yaesu_Web_Control.Services.Audio
         private int _playbackRead;
         private int _playbackCount;
         private readonly object _playbackLock = new();
+        private readonly object _graceLock = new();
         private bool _devicesOpen;
         private float _rxLevel;
         private float _txLevel;
+        private string? _openRxDeviceKey;
+        private string? _openTxDeviceKey;
+        private CancellationTokenSource? _deviceCloseCts;
+        private float[] _cbCapRaw = Array.Empty<float>();
+        private float[] _cbCapMono = Array.Empty<float>();
+        private float[] _cbCapResampled = Array.Empty<float>();
+        private float[] _cbPlayBridge = Array.Empty<float>();
+        private float[] _cbPlayMono = Array.Empty<float>();
+        private float[] _cbPlayInterleaved = Array.Empty<float>();
+        private readonly SemaphoreSlim _wsSendLock = new(1, 1);
+
+        /// <summary>
+        /// Pop-out handoff closes the Index WebSocket then immediately opens
+        /// /RemoteAudio. Without a grace window, WASAPI teardown + reopen on
+        /// the same USB codec native-crashes the host (no managed exception).
+        /// </summary>
+        private static readonly TimeSpan DeviceCloseGrace = TimeSpan.FromSeconds(3);
 
         public RadioAudioBridgeService(
             ILogger<RadioAudioBridgeService> logger,
@@ -73,7 +91,8 @@ namespace Yaesu_Web_Control.Services.Audio
 
         public async Task StopAsync(CancellationToken cancellationToken)
         {
-            await StopSessionAsync();
+            CancelScheduledDeviceClose();
+            await StopSessionAsync(forceCloseDevices: true);
         }
 
         public async Task HandleWebSocketAsync(HttpContext context)
@@ -117,7 +136,7 @@ namespace Yaesu_Web_Control.Services.Audio
             }
             finally
             {
-                await StopSessionAsync();
+                await StopSessionAsync(socket);
                 _sessions.Release(connectionId);
                 if (socket.State == WebSocketState.Open)
                 {
@@ -131,10 +150,11 @@ namespace Yaesu_Web_Control.Services.Audio
 
         private async Task RunSessionAsync(WebSocket socket, ApplicationSettings settings, CancellationToken ct)
         {
+            CancelScheduledDeviceClose();
+
             _rxGain = Math.Clamp(settings.AudioRxGain, 0.05f, 4f);
             _txGain = Math.Clamp(settings.AudioTxGain, 0.05f, 4f);
             _codecName = AudioConstants.CodecOpus;
-            _codec = new OpusCodec();
 
             using var helloCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             helloCts.CancelAfter(TimeSpan.FromSeconds(10));
@@ -181,11 +201,31 @@ namespace Yaesu_Web_Control.Services.Audio
                 }
             }
 
-            string? openError = OpenDevices(settings);
-            if (openError != null)
+            EnsureCodec();
+
+            bool reused = AudioDeviceEnumerator.Invoke(() =>
             {
-                await SendControlAsync(socket, new { cmd = "error", message = openError });
-                return;
+                if (CanReuseDevices(settings)) return true;
+                if (_devicesOpen)
+                {
+                    _logger.LogInformation("Audio device selection changed — reopening PortAudio streams");
+                    CloseDevicesAndCodecOnAudioThread();
+                }
+                return false;
+            });
+            if (reused)
+            {
+                _logger.LogInformation("Reusing open audio devices (session handoff within grace window)");
+            }
+            else
+            {
+                EnsureCodec();
+                string? openError = OpenDevices(settings);
+                if (openError != null)
+                {
+                    await SendControlAsync(socket, new { cmd = "error", message = openError });
+                    return;
+                }
             }
 
             await SendControlAsync(socket, new
@@ -204,7 +244,11 @@ namespace Yaesu_Web_Control.Services.Audio
             });
 
             _pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            _sendTask = Task.Run(() => SendPumpAsync(socket, _pumpCts.Token), _pumpCts.Token);
+            _sendTask = Task.Factory.StartNew(
+                () => SendPumpAsync(socket, _pumpCts.Token),
+                _pumpCts.Token,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default).Unwrap();
             _levelsTask = Task.Run(() => LevelsPumpAsync(socket, _pumpCts.Token), _pumpCts.Token);
 
             var buffer = new byte[64 * 1024];
@@ -331,7 +375,71 @@ namespace Yaesu_Web_Control.Services.Audio
             }
         }
 
-        private string? OpenDevices(ApplicationSettings settings)
+        private bool CanReuseDevices(ApplicationSettings settings) =>
+            _devicesOpen
+            && string.Equals(_openRxDeviceKey, settings.AudioRadioRxDevice, StringComparison.Ordinal)
+            && string.Equals(_openTxDeviceKey, settings.AudioRadioTxDevice, StringComparison.Ordinal);
+
+        private void EnsureCodec()
+        {
+            if (_codecName == AudioConstants.CodecOpus)
+                _codec ??= new OpusCodec();
+            else
+            {
+                _codec?.Dispose();
+                _codec = null;
+            }
+        }
+
+        private void CancelScheduledDeviceClose()
+        {
+            lock (_graceLock)
+            {
+                if (_deviceCloseCts == null) return;
+                try { _deviceCloseCts.Cancel(); } catch { /* ignore */ }
+                _deviceCloseCts.Dispose();
+                _deviceCloseCts = null;
+            }
+        }
+
+        private void ScheduleDeviceClose()
+        {
+            CancelScheduledDeviceClose();
+            var cts = new CancellationTokenSource();
+            lock (_graceLock) _deviceCloseCts = cts;
+            var token = cts.Token;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(DeviceCloseGrace, token);
+                    AudioDeviceEnumerator.Invoke(() =>
+                    {
+                        if (token.IsCancellationRequested) return;
+                        _logger.LogInformation(
+                            "Audio device grace ({Seconds}s) elapsed — closing PortAudio streams",
+                            DeviceCloseGrace.TotalSeconds);
+                        CloseDevicesAndCodecOnAudioThread();
+                    });
+                }
+                catch (OperationCanceledException) { }
+            }, token);
+        }
+
+        private void CloseDevicesAndCodecOnAudioThread()
+        {
+            CloseDevicesOnAudioThread();
+            var codec = _codec;
+            _codec = null;
+            try { codec?.Dispose(); } catch { /* ignore */ }
+            _openRxDeviceKey = null;
+            _openTxDeviceKey = null;
+        }
+
+        private string? OpenDevices(ApplicationSettings settings) =>
+            AudioDeviceEnumerator.Invoke(() => OpenDevicesOnAudioThread(settings));
+
+        private string? OpenDevicesOnAudioThread(ApplicationSettings settings)
         {
             lock (_deviceLock)
             {
@@ -399,54 +507,80 @@ namespace Yaesu_Web_Control.Services.Audio
                     PortAudioSharp.Stream.Callback captureCb = (IntPtr input, IntPtr output, uint frameCount,
                         ref StreamCallbackTimeInfo timeInfo, StreamCallbackFlags statusFlags, IntPtr userData) =>
                     {
-                        if (input == IntPtr.Zero) return StreamCallbackResult.Continue;
-                        int interleaved = (int)frameCount * inCh;
-                        var raw = new float[interleaved];
-                        Marshal.Copy(input, raw, 0, interleaved);
-                        var mono = new float[frameCount];
-                        if (inCh == 1)
+                        // An exception escaping into portaudio.dll kills the process
+                        // with no managed log — wrap the whole callback.
+                        try
                         {
-                            Array.Copy(raw, mono, (int)frameCount);
+                            if (!_devicesOpen || input == IntPtr.Zero) return StreamCallbackResult.Continue;
+                            int interleaved = (int)frameCount * inCh;
+                            EnsureCallbackBuffer(ref _cbCapRaw, interleaved);
+                            Marshal.Copy(input, _cbCapRaw, 0, interleaved);
+                            EnsureCallbackBuffer(ref _cbCapMono, (int)frameCount);
+                            if (inCh == 1)
+                            {
+                                Array.Copy(_cbCapRaw, _cbCapMono, (int)frameCount);
+                            }
+                            else
+                            {
+                                for (int i = 0; i < (int)frameCount; i++)
+                                    _cbCapMono[i] = 0.5f * (_cbCapRaw[i * inCh] + _cbCapRaw[i * inCh + 1]);
+                            }
+                            int resampledLen = ResampleInto(
+                                _cbCapMono.AsSpan(0, (int)frameCount),
+                                rxRate,
+                                AudioConstants.SampleRate,
+                                ref _cbCapResampled);
+                            OnCaptureSamples(_cbCapResampled.AsSpan(0, resampledLen));
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            for (int i = 0; i < (int)frameCount; i++)
-                                mono[i] = 0.5f * (raw[i * inCh] + raw[i * inCh + 1]);
+                            _logger.LogDebug(ex, "Audio capture callback dropped a buffer");
                         }
-                        OnCaptureSamples(Resample(mono, rxRate, AudioConstants.SampleRate));
                         return StreamCallbackResult.Continue;
                     };
 
                     PortAudioSharp.Stream.Callback playbackCb = (IntPtr input, IntPtr output, uint frameCount,
                         ref StreamCallbackTimeInfo timeInfo, StreamCallbackFlags statusFlags, IntPtr userData) =>
                     {
-                        if (output == IntPtr.Zero) return StreamCallbackResult.Continue;
-                        int bridgeCount = Math.Max(1,
-                            (int)Math.Round(frameCount * (double)AudioConstants.SampleRate / txRate));
-                        var bridge = new float[bridgeCount];
-                        PullPlayback(bridge);
-                        var mono = Resample(bridge, AudioConstants.SampleRate, txRate);
-                        // Callback asked for frameCount samples; pad/truncate if rounding drifted.
-                        if (mono.Length != frameCount)
+                        try
                         {
-                            var adjusted = new float[frameCount];
-                            Array.Copy(mono, adjusted, Math.Min(mono.Length, (int)frameCount));
-                            mono = adjusted;
-                        }
-                        if (outCh == 1)
-                        {
-                            Marshal.Copy(mono, 0, output, (int)frameCount);
-                        }
-                        else
-                        {
-                            var interleaved = new float[frameCount * outCh];
-                            for (int i = 0; i < (int)frameCount; i++)
+                            if (output == IntPtr.Zero) return StreamCallbackResult.Continue;
+                            int bridgeCount = Math.Max(1,
+                                (int)Math.Round(frameCount * (double)AudioConstants.SampleRate / txRate));
+                            EnsureCallbackBuffer(ref _cbPlayBridge, bridgeCount);
+                            PullPlayback(_cbPlayBridge.AsSpan(0, bridgeCount));
+                            int monoLen = ResampleInto(
+                                _cbPlayBridge.AsSpan(0, bridgeCount),
+                                AudioConstants.SampleRate,
+                                txRate,
+                                ref _cbPlayMono);
+                            if (monoLen != frameCount)
                             {
-                                float s = mono[i];
-                                interleaved[i * outCh] = s;
-                                interleaved[i * outCh + 1] = s;
+                                EnsureCallbackBuffer(ref _cbPlayMono, (int)frameCount);
+                                if (monoLen < frameCount)
+                                    _cbPlayMono.AsSpan(monoLen, (int)frameCount - monoLen).Clear();
+                                monoLen = (int)frameCount;
                             }
-                            Marshal.Copy(interleaved, 0, output, interleaved.Length);
+                            if (outCh == 1)
+                            {
+                                Marshal.Copy(_cbPlayMono, 0, output, (int)frameCount);
+                            }
+                            else
+                            {
+                                int interleaved = (int)frameCount * outCh;
+                                EnsureCallbackBuffer(ref _cbPlayInterleaved, interleaved);
+                                for (int i = 0; i < (int)frameCount; i++)
+                                {
+                                    float s = _cbPlayMono[i];
+                                    _cbPlayInterleaved[i * outCh] = s;
+                                    _cbPlayInterleaved[i * outCh + 1] = s;
+                                }
+                                Marshal.Copy(_cbPlayInterleaved, 0, output, interleaved);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Audio playback callback dropped a buffer");
                         }
                         return StreamCallbackResult.Continue;
                     };
@@ -469,9 +603,15 @@ namespace Yaesu_Web_Control.Services.Audio
                         callback: playbackCb,
                         userData: IntPtr.Zero);
 
+                    // Claim the stream slot before Start so a concurrent Settings
+                    // /api/audio/devices call cannot GetDeviceInfo while WASAPI
+                    // callbacks are already running.
+                    AudioDeviceEnumerator.AddOpenStream();
+                    _devicesOpen = true;
                     _captureStream.Start();
                     _playbackStream.Start();
-                    _devicesOpen = true;
+                    _openRxDeviceKey = settings.AudioRadioRxDevice;
+                    _openTxDeviceKey = settings.AudioRadioTxDevice;
                     _logger.LogInformation(
                         "Audio devices open — RX '{Rx}' (#{RxI}, {InCh}ch @{RxRate} Hz), TX '{Tx}' (#{TxI}, {OutCh}ch @{TxRate} Hz), codec={Codec}, bridge={Bridge} Hz, frame={Frame} samples",
                         rxInfo.name, rxIndex, inCh, rxRate, txInfo.name, txIndex, outCh, txRate, _codecName, AudioConstants.SampleRate, AudioConstants.FrameSamples);
@@ -504,13 +644,28 @@ namespace Yaesu_Web_Control.Services.Audio
         private static uint DeviceFramesPerBuffer(int deviceRate) =>
             (uint)Math.Max(64, (int)Math.Round(deviceRate * AudioConstants.FrameSamples / (double)AudioConstants.SampleRate));
 
-        private static float[] Resample(ReadOnlySpan<float> input, int inRate, int outRate)
+        private static void EnsureCallbackBuffer(ref float[] buffer, int length)
         {
-            if (inRate == outRate || input.Length == 0)
-                return input.ToArray();
+            if (buffer.Length >= length) return;
+            var next = new float[length];
+            if (buffer.Length > 0)
+                Array.Copy(buffer, next, buffer.Length);
+            buffer = next;
+        }
+
+        /// <summary>Linear resample into a reusable scratch buffer; returns output length.</summary>
+        private static int ResampleInto(ReadOnlySpan<float> input, int inRate, int outRate, ref float[] scratch)
+        {
+            if (input.Length == 0) return 0;
+            if (inRate == outRate)
+            {
+                EnsureCallbackBuffer(ref scratch, input.Length);
+                input.CopyTo(scratch);
+                return input.Length;
+            }
 
             int outLen = Math.Max(1, (int)Math.Round(input.Length * (double)outRate / inRate));
-            var output = new float[outLen];
+            EnsureCallbackBuffer(ref scratch, outLen);
             double ratio = (double)inRate / outRate;
             int last = input.Length - 1;
             for (int i = 0; i < outLen; i++)
@@ -519,16 +674,28 @@ namespace Yaesu_Web_Control.Services.Audio
                 int i0 = (int)src;
                 if (i0 >= last)
                 {
-                    output[i] = input[last];
+                    scratch[i] = input[last];
                     continue;
                 }
                 double frac = src - i0;
-                output[i] = (float)(input[i0] + (input[i0 + 1] - input[i0]) * frac);
+                scratch[i] = (float)(input[i0] + (input[i0 + 1] - input[i0]) * frac);
             }
+            return outLen;
+        }
+
+        private static float[] Resample(ReadOnlySpan<float> input, int inRate, int outRate)
+        {
+            if (inRate == outRate || input.Length == 0)
+                return input.ToArray();
+
+            var scratch = Array.Empty<float>();
+            int len = ResampleInto(input, inRate, outRate, ref scratch);
+            var output = new float[len];
+            scratch.AsSpan(0, len).CopyTo(output);
             return output;
         }
 
-        private void OnCaptureSamples(float[] samples)
+        private void OnCaptureSamples(ReadOnlySpan<float> samples)
         {
             Span<float> frame = stackalloc float[AudioConstants.FrameSamples];
             int offset = 0;
@@ -536,7 +703,7 @@ namespace Yaesu_Web_Control.Services.Audio
             {
                 int space = _captureAccum.Length - _captureAccumLen;
                 int take = Math.Min(space, samples.Length - offset);
-                Array.Copy(samples, offset, _captureAccum, _captureAccumLen, take);
+                samples.Slice(offset, take).CopyTo(_captureAccum.AsSpan(_captureAccumLen, take));
                 _captureAccumLen += take;
                 offset += take;
 
@@ -605,7 +772,7 @@ namespace Yaesu_Web_Control.Services.Audio
                 await foreach (var frame in channel.Reader.ReadAllAsync(ct))
                 {
                     if (socket.State != WebSocketState.Open) break;
-                    await socket.SendAsync(frame, WebSocketMessageType.Binary, true, ct);
+                    await SendWebSocketAsync(socket, frame, ct);
                 }
             }
             catch (OperationCanceledException) { }
@@ -621,12 +788,12 @@ namespace Yaesu_Web_Control.Services.Audio
             {
                 try
                 {
-                    await Task.Delay(100, ct);
+                    await Task.Delay(200, ct);
                     if (socket.State != WebSocketState.Open) break;
                     var levels = AudioWireProtocol.FrameControl(
                         (uint)Interlocked.Increment(ref _rxSeq),
                         new { cmd = "levels", rx = _rxLevel, tx = _txLevel });
-                    await socket.SendAsync(levels, WebSocketMessageType.Binary, true, ct);
+                    await SendWebSocketAsync(socket, levels, ct);
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
@@ -637,10 +804,24 @@ namespace Yaesu_Web_Control.Services.Audio
             }
         }
 
-        private async Task StopSessionAsync()
+        private async Task StopSessionAsync(WebSocket? sessionSocket = null, bool forceCloseDevices = false)
         {
+            // A pop-out reconnect can finish RunSessionAsync on connection B while
+            // connection A is still in this finally block. Only tear down shared
+            // bridge state when this socket still owns it (or on host shutdown).
+            bool ownsBridge = forceCloseDevices
+                || sessionSocket == null
+                || ReferenceEquals(_activeSocket, sessionSocket);
+
+            if (!ownsBridge)
+                return;
+
             try { _outChannel?.Writer.TryComplete(); } catch { /* ignore */ }
             try { _pumpCts?.Cancel(); } catch { /* ignore */ }
+            if (ReferenceEquals(_activeSocket, sessionSocket))
+            {
+                try { sessionSocket?.Abort(); } catch { /* ignore */ }
+            }
             if (_sendTask != null)
             {
                 try { await _sendTask; } catch { /* ignore */ }
@@ -654,9 +835,6 @@ namespace Yaesu_Web_Control.Services.Audio
             _pumpCts?.Dispose();
             _pumpCts = null;
             _outChannel = null;
-            CloseDevices();
-            _codec?.Dispose();
-            _codec = null;
             _activeSocket = null;
             lock (_playbackLock)
             {
@@ -667,19 +845,49 @@ namespace Yaesu_Web_Control.Services.Audio
             _captureAccumLen = 0;
             _rxLevel = 0;
             _txLevel = 0;
+
+            if (forceCloseDevices)
+            {
+                CancelScheduledDeviceClose();
+                AudioDeviceEnumerator.Invoke(CloseDevicesAndCodecOnAudioThread);
+            }
+            else if (_devicesOpen)
+            {
+                ScheduleDeviceClose();
+            }
         }
 
-        private void CloseDevices()
+        private void CloseDevices() =>
+            AudioDeviceEnumerator.Invoke(CloseDevicesOnAudioThread);
+
+        private void CloseDevicesOnAudioThread()
         {
             lock (_deviceLock)
             {
+                bool wasOpen = _devicesOpen;
+                _devicesOpen = false;
                 try { _captureStream?.Stop(); } catch { /* ignore */ }
                 try { _captureStream?.Dispose(); } catch { /* ignore */ }
                 _captureStream = null;
                 try { _playbackStream?.Stop(); } catch { /* ignore */ }
                 try { _playbackStream?.Dispose(); } catch { /* ignore */ }
                 _playbackStream = null;
-                _devicesOpen = false;
+                if (wasOpen)
+                    AudioDeviceEnumerator.ReleaseOpenStream();
+            }
+        }
+
+        private async Task SendWebSocketAsync(WebSocket socket, byte[] frame, CancellationToken ct)
+        {
+            await _wsSendLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                if (socket.State != WebSocketState.Open) return;
+                await socket.SendAsync(frame, WebSocketMessageType.Binary, true, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _wsSendLock.Release();
             }
         }
 
@@ -710,7 +918,9 @@ namespace Yaesu_Web_Control.Services.Audio
 
         public void Dispose()
         {
-            StopSessionAsync().GetAwaiter().GetResult();
+            CancelScheduledDeviceClose();
+            StopSessionAsync(forceCloseDevices: true).GetAwaiter().GetResult();
+            _wsSendLock.Dispose();
         }
     }
 }

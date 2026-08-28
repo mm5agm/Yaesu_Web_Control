@@ -28,40 +28,38 @@ namespace Yaesu_Web_Control.Controllers
         [HttpGet("devices")]
         public IActionResult ListDevices()
         {
+            bool cachedWhileStreaming = _bridge.DevicesOpen;
             try
             {
-                var inputs = AudioDeviceEnumerator.ListInputs()
-                    .Select(d => new
-                    {
-                        d.Index,
-                        d.Name,
-                        d.HostApiName,
-                        d.HostApiIndex,
-                        displayName = d.DisplayName,
-                        key = d.PersistenceKey,
-                        d.DefaultSampleRate,
-                        likelyRadio = AudioDeviceEnumerator.LooksLikeRadioUsbCodec(d.Name)
-                    });
-                var outputs = AudioDeviceEnumerator.ListOutputs()
-                    .Select(d => new
-                    {
-                        d.Index,
-                        d.Name,
-                        d.HostApiName,
-                        d.HostApiIndex,
-                        displayName = d.DisplayName,
-                        key = d.PersistenceKey,
-                        d.DefaultSampleRate,
-                        likelyRadio = AudioDeviceEnumerator.LooksLikeRadioUsbCodec(d.Name)
-                    });
+                var inputs = AudioDeviceEnumerator.ListInputs().Select(FormatDevice);
+                var outputs = AudioDeviceEnumerator.ListOutputs().Select(FormatDevice);
+                if (cachedWhileStreaming)
+                    return Ok(new { inputs, outputs, cachedWhileStreaming = true });
                 return Ok(new { inputs, outputs });
             }
             catch (Exception ex)
             {
+                if (cachedWhileStreaming)
+                {
+                    _logger.LogWarning(ex, "Cached audio device list unavailable while streaming");
+                    return Ok(new { inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), cachedWhileStreaming = true });
+                }
                 _logger.LogError(ex, "Failed to enumerate audio devices");
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
+        private static object FormatDevice(AudioDeviceInfo d) => new
+        {
+            d.Index,
+            d.Name,
+            d.HostApiName,
+            d.HostApiIndex,
+            displayName = d.DisplayName,
+            key = d.PersistenceKey,
+            d.DefaultSampleRate,
+            likelyRadio = AudioDeviceEnumerator.LooksLikeRadioUsbCodec(d.Name)
+        };
 
         [HttpGet("status")]
         public async Task<IActionResult> Status()

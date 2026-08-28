@@ -11,6 +11,8 @@ const POPOUT_FEATURES = 'width=780,height=380,resizable=yes,scrollbars=no';
 const SPECTRUM_HZ = 15;
 const HEARTBEAT_MS = 2000;
 const HEARTBEAT_STALE_MS = 6000;
+const INDEX_STATUS_DEBOUNCE_MS = 2500;
+let _lastIndexStatusRequest = 0;
 
 const TIP_CONNECT = 'Connect to transceiver audio';
 const TIP_DISCONNECT = 'Disconnect transceiver audio';
@@ -447,8 +449,9 @@ function bindRemoteAudioControls(role) {
     const streaming = streamStatus === 'streaming';
     if (micMute) micMute.disabled = !streaming;
     if (rxMute) rxMute.disabled = !streaming;
-    // Index locks the mic picker only while the popout is actively streaming.
-    if (micSelect) micSelect.disabled = role === 'index' && remoteOwned && streaming;
+    // Mic and codec are chosen at session start only — changing either mid-stream
+    // would only update localStorage / preference, not the live capture or wire codec.
+    if (micSelect) micSelect.disabled = streaming;
     if (codecSelect) codecSelect.disabled = streaming;
     if (!streaming) {
       setMicMuteUi(micMute, micMuteIcon, micMuteTip, false);
@@ -473,6 +476,13 @@ function bindRemoteAudioControls(role) {
 
   function post(msg) {
     try { channel?.postMessage(msg); } catch { /* ignore */ }
+  }
+
+  function requestPopoutStatusDebounced() {
+    const now = Date.now();
+    if (now - _lastIndexStatusRequest < INDEX_STATUS_DEBOUNCE_MS) return;
+    _lastIndexStatusRequest = now;
+    post({ type: 'requestStatus' });
   }
 
   function attachLocalSpectrum() {
@@ -638,7 +648,7 @@ function bindRemoteAudioControls(role) {
           // Don't lock Start until the popout is actually streaming.
           setStatusText('In pop-out window');
           setPopoutHints(true);
-          post({ type: 'requestStatus' });
+          requestPopoutStatusDebounced();
           window.publishTxState?.();
           updateLocalButtons();
           return;
@@ -841,8 +851,9 @@ function bindRemoteAudioControls(role) {
   popoutBtn?.addEventListener('click', async () => {
     const wasStreaming = !!session?.running;
     if (wasStreaming) {
+      // Close the Index WebSocket only — the host keeps PortAudio open for
+      // a few seconds so the pop-out can reconnect without WASAPI teardown.
       await stopLocal();
-      await new Promise((r) => setTimeout(r, 150));
     }
     const win = openPopoutWindow(!!wasStreaming);
     if (!win) {
@@ -914,7 +925,7 @@ function bindRemoteAudioControls(role) {
     if (remoteOwned) {
       setStatusText('In pop-out window');
       setPopoutHints(true);
-      post({ type: 'requestStatus' });
+      requestPopoutStatusDebounced();
       window.publishTxState?.();
     }
     staleTimer = setInterval(() => {
