@@ -94,20 +94,34 @@ namespace RadioWebControl.Core.Tests.Cw
         [Fact]
         public void A_real_element_space_is_not_swallowed()
         {
-            // 10 ms of suppression must not merge dit-space-dit at 40 wpm, where
-            // the space is 30 ms. This is the constraint that caps how large the
+            // Suppression must not merge dit-space-dit at 40 wpm, where the
+            // space is 30 ms. This is the constraint that caps how large the
             // debounce can safely be.
+            //
+            // Asserted at the shipped default rather than at a literal, so that
+            // raising the default re-checks this constraint automatically
+            // instead of leaving a stale number guarding nothing.
             var gen   = new CwSignalGenerator();
             var audio = CwSignalGenerator.Concat(gen.LeadIn(), gen.Generate("I", 40.0), gen.Silence(0.5));
 
-            Assert.Equal(2, Marks(audio, debounceMs: 10.0).Count);
+            Assert.Equal(2, Marks(audio, debounceMs: new CwToneDetectorOptions().KeyDebounceMs).Count);
         }
 
         [Fact]
-        public void On_by_default_at_ten_milliseconds()
+        public void The_default_stays_clear_of_a_dit_at_the_top_of_the_speed_range()
         {
-            Assert.Equal(10.0, new CwToneDetectorOptions().KeyDebounceMs);
-            Assert.Equal(10.0, new CwDecoderOptions().KeyDebounceMs);
+            // 47 wpm is the fastest this decoder claims, where a dit is 25.5 ms.
+            // The default has to stay under that or it merges real elements.
+            var dg = new CwToneDetectorOptions().KeyDebounceMs;
+            Assert.True(dg < 1200.0 / 47.0,
+                $"debounce {dg} ms is not under a 47 wpm dit of {1200.0 / 47.0:F1} ms");
+        }
+
+        [Fact]
+        public void On_by_default_at_eighteen_milliseconds()
+        {
+            Assert.Equal(18.0, new CwToneDetectorOptions().KeyDebounceMs);
+            Assert.Equal(18.0, new CwDecoderOptions().KeyDebounceMs);
         }
     }
 }
