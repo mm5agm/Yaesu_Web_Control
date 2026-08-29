@@ -1,0 +1,260 @@
+name: Unstable develop snapshot
+
+# Snapshot of `develop`, versioned unstable-YYYYMMDD (UTC). Not a supported
+# release. Several pushes on the same UTC day replace that day's prerelease
+# in place. Marked prerelease so GitHub's /releases/latest — and the in-app
+# update banner that reads it — stay on the last full release. GHCR :latest
+# is never moved; the image is tagged unstable-YYYYMMDD and unstable.
+#
+# Builds first, then one job creates the GitHub Release and attaches the
+# Windows installer and macOS DMGs. That avoids an empty prerelease if a
+# build fails. The Docker image is pushed from its own job (it is not a
+# release asset).
+#
+# Creating the prerelease would otherwise re-enter release.yml (on:
+# release). That workflow skips tags that start with unstable- so it does
+# not try to parse this version as SemVer. GITHUB_TOKEN-created releases
+# also do not trigger other workflows; the skip is belt-and-braces.
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: unstable-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prep:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set.outputs.version }}
+      image: ${{ steps.set.outputs.image }}
+    steps:
+      - id: set
+        run: |
+          echo "version=unstable-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    needs: prep
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Stamp unstable version
+        env:
+          VERSION: ${{ needs.prep.outputs.version }}
+        run: |
+          (Get-Content Models/AppVersion.cs -Raw) `
+            -replace 'Current = "[^"]*"', "Current = `"$env:VERSION`"" |
+            Set-Content Models/AppVersion.cs -NoNewline
+        shell: pwsh
+
+      - name: Setup .NET 10
+        run: |
+          $v = dotnet --version 2>$null
+          if ($v -and $v.StartsWith('10.')) {
+            Write-Host ".NET $v already installed — skipping download"
+          } else {
+            Write-Host "Installing .NET 10..."
+            Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile 'dotnet-install.ps1'
+            .\dotnet-install.ps1 -Channel '10.0' -InstallDir "$env:LOCALAPPDATA\Microsoft\dotnet"
+            $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"
+            Write-Host "Installed: $(dotnet --version)"
+          }
+        shell: pwsh
+
+      - name: Install NSIS
+        run: choco install nsis --yes
+        shell: pwsh
+
+      - name: Publish 64-bit self-contained app
+        run: |
+          dotnet publish Yaesu_Web_Control.csproj `
+            --framework net10.0-windows `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output publish
+        shell: pwsh
+
+      - name: Build NSIS installer
+        env:
+          VERSION: ${{ needs.prep.outputs.version }}
+        run: |
+          $makensis = (Get-Command makensis.exe -ErrorAction SilentlyContinue)?.Source
+          if (-not $makensis) { $makensis = "C:\\Program Files (x86)\\NSIS\\makensis.exe" }
+          if (!(Test-Path $makensis)) { Write-Error "makensis.exe not found at $makensis"; exit 1 }
+          Write-Host "Using NSIS at: $makensis"
+          & $makensis "/DVERSION=$env:VERSION" installer.nsi
+          if ($LASTEXITCODE -ne 0) { Write-Error "NSIS failed (exit $LASTEXITCODE)"; exit 1 }
+          $found = Get-ChildItem -Filter "*Setup*.exe" | Select-Object -First 1
+          if (!$found) { Write-Error "No *Setup*.exe found after NSIS ran"; exit 1 }
+          if ($found.Name -ne "Yaesu_Web_Control_Setup.exe") {
+            Rename-Item $found.FullName "Yaesu_Web_Control_Setup.exe"
+          }
+          if (!(Test-Path "Yaesu_Web_Control_Setup.exe")) {
+            Write-Error "Yaesu_Web_Control_Setup.exe not found after build"
+            exit 1
+          }
+          Write-Host "OK: $('{0:N0}' -f (Get-Item Yaesu_Web_Control_Setup.exe).Length) bytes"
+        shell: pwsh
+
+      - name: Upload installer as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          path: Yaesu_Web_Control_Setup.exe
+
+  # One RID per VM — see release.yml build-macos (sequential second-RID hang).
+  build-macos:
+    needs: prep
+    runs-on: macos-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [osx-arm64, osx-x64]
+    env:
+      MSBUILDDISABLENODEREUSE: 1
+      DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Stamp unstable version
+        env:
+          VERSION: ${{ needs.prep.outputs.version }}
+        run: sed -i '' "s/Current = \"[^\"]*\"/Current = \"${VERSION}\"/" Models/AppVersion.cs
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build macOS DMG (${{ matrix.rid }})
+        env:
+          VERSION: ${{ needs.prep.outputs.version }}
+        run: |
+          chmod +x scripts/macos/build-dmg.sh
+          ./scripts/macos/build-dmg.sh "${{ matrix.rid }}"
+          ls -lh publish/dmg/*.dmg
+
+      - name: Upload DMG as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-dmg-${{ matrix.rid }}
+          path: publish/dmg/*.dmg
+
+  build-docker:
+    needs: prep
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      actions: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Stamp unstable version
+        env:
+          VERSION: ${{ needs.prep.outputs.version }}
+        run: sed -i "s/Current = \"[^\"]*\"/Current = \"${VERSION}\"/" Models/AppVersion.cs
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.prep.outputs.image }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ needs.prep.outputs.version }}
+            type=raw,value=unstable
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  publish-release:
+    needs: [prep, build-windows, build-macos, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # Named artifacts only. `download-artifact` with no name/pattern fetches
+      # every artifact on the run, including docker/build-push-action's GHA
+      # cache blob (`*.dockerbuild`). That download failed after 5 retries on
+      # 2026-08-28 even though the installer and both DMGs had already landed.
+      - name: Download Windows installer
+        uses: actions/download-artifact@v7
+        with:
+          name: windows-installer
+          path: dist
+
+      - name: Download macOS DMGs
+        uses: actions/download-artifact@v7
+        with:
+          pattern: macos-dmg-*
+          merge-multiple: true
+          path: dist
+
+      - name: Recreate prerelease ${{ needs.prep.outputs.version }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prep.outputs.version }}
+          IMAGE: ${{ needs.prep.outputs.image }}
+        run: |
+          ls -lh dist
+          gh release delete "$VERSION" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease \
+            --latest=false \
+            --target "$GITHUB_SHA" \
+            --title "Unstable $VERSION" \
+            --notes "$(cat <<EOF
+          Automated snapshot of \`develop\` at \`${GITHUB_SHA}\`.
+
+          This is not a supported release. Installers, DMGs, and the GHCR image
+          are overwritten if \`develop\` moves again on the same UTC day.
+
+          Image: \`${IMAGE}:${VERSION}\` (also tagged \`unstable\`).
+          EOF
+          )" \
+            dist/Yaesu_Web_Control_Setup.exe \
+            dist/*.dmg

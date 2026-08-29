@@ -18,6 +18,13 @@
 
 set -euo pipefail
 
+# Hosted arm64 macOS runners have been seen to leave VBCSCompiler / MSBuild
+# nodes alive after the first RID publish; the second then hangs forever
+# immediately after restore (release.yml 2026-08-13, again 2026-08-28).
+# CI now builds each RID in its own job. These still apply for local `all`.
+export MSBUILDDISABLENODEREUSE=1
+export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
@@ -145,7 +152,8 @@ build_one() {
     -r "$rid" \
     --self-contained true \
     -o "$publish_dir" \
-    /p:UseAppHost=true
+    /p:UseAppHost=true \
+    /p:UseSharedCompilation=false
 
   if [[ ! -x "$publish_dir/$EXEC_NAME" && ! -f "$publish_dir/$EXEC_NAME" ]]; then
     echo "error: apphost missing after publish: $publish_dir/$EXEC_NAME" >&2
@@ -200,6 +208,9 @@ ARG="${1:-$(detect_host_rid)}"
 case "$ARG" in
   all)
     build_one osx-arm64
+    # Drop the compiler/MSBuild servers from the first RID so the second
+    # cannot inherit a wedged VBCSCompiler (the hang CI used to hit).
+    dotnet build-server shutdown >/dev/null 2>&1 || true
     build_one osx-x64
     ;;
   osx-arm64|osx-x64)

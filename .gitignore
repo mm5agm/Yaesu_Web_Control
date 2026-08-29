@@ -199,4 +199,7 @@ data/
 # Bench recordings. The .wav is the evidence for a CW bench run and is worth
 # keeping locally so a decoder change can be re-scored without going back to
 # the air, but it is megabytes of receiver noise and belongs nowhere near git.
+# bench/arrl/ additionally holds ARRL practice files, which are ARRL copyright
+# and must never be committed or redistributed - so this rule is the whole
+# directory, not a *.wav pattern.
 bench/

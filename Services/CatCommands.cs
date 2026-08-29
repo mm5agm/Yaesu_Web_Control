@@ -310,7 +310,9 @@
         // re-query burst after front-panel A/B presses.
         public static readonly string[] SingleReceiverPerVfoQueries =
         {
-            "MD0;",          // mode — per-VFO at CAT level; re-read after VS for safety
+            // Mode is per-VFO at CAT (MD0=A, MD1=B) even on single-receiver.
+            // Both are re-read after VS; the dispatcher routes by P1.
+            "MD0;", "MD1;",
             "RF0;",          // roofing filter
             "GT0;",          // AGC
             "PA0;",          // IPO/AMP

@@ -1,18 +1,15 @@
 namespace Yaesu_Web_Control.Services;
 
-// Capability lookup for per-model behaviour differences. Currently used only
-// for the dual- vs single-receiver UI decision (active-VFO greying-out and
-// PTT placement on single-receiver radios), but the pattern scales: future
-// per-model variations (4 m band availability, max TX power, roofing-filter
-// availability) can hang off this same static class.
+// Capability lookup for per-model behaviour differences. Currently used for
+// the dual- vs single-receiver UI decision (RX/TX selectors, S-meter B,
+// dual-receiver active-band highlight, PTT placement), but the pattern
+// scales: future per-model variations (4 m band availability, max TX power,
+// roofing-filter availability) can hang off this same static class.
 //
 // See docs/decisions/0003-single-vs-dual-receiver-ui.md for the design
 // rationale and Jacek SP3L's #34 report that drove it.
 //
-// Single-receiver is the safe default for unknown models — it applies the
-// active/inactive UI restriction, which over-constrains an unfamiliar radio
-// rather than letting it edit both VFOs' controls simultaneously when
-// possibly only one set actually exists in the hardware.
+// Single-receiver is the safe default for unknown models.
 public static class RadioCapabilities
 {
     // Hardware revision IDs confirmed to reject VT CAT commands despite the
@@ -279,11 +276,30 @@ public static class RadioCapabilities
     /// position and rejects P1=1; on dual-receiver "0" for A, "1" for B.
     /// Shared by CatController (mouse/keyboard input) and IntentDispatcher
     /// (voice input) so the routing rule lives in exactly one place.
+    ///
+    /// Do not use this for MD (operating mode). Mode is per-VFO at CAT
+    /// level on every supported model — see <see cref="ModeP1"/>.
     /// </summary>
     public static string VfoP1(bool isSingleReceiver, string receiver) =>
         isSingleReceiver
             ? "0"
             : (receiver.Equals("B", StringComparison.OrdinalIgnoreCase) ? "1" : "0");
+
+    /// <summary>
+    /// P1 for the MD (operating mode) command. Unlike receive-controls
+    /// (GT, PA, SH, CO, …) whose P1 is 0-Fixed on single-receiver radios,
+    /// MD is documented on the FTdx10 (and the rest of the family) as
+    /// 0 = MAIN / VFO-A, 1 = SUB / VFO-B. VFO A and VFO B are
+    /// frequency-and-mode memory slots even when there is only one
+    /// physical receiver, so the inactive VFO's mode is independently
+    /// addressable — the same way FA/FB address frequency.
+    ///
+    /// Using <see cref="VfoP1"/> here would send MD0 for both panels on
+    /// an FTdx10 and change the active VFO's mode when the operator
+    /// edited the inactive one.
+    /// </summary>
+    public static string ModeP1(string receiver) =>
+        receiver.Equals("B", StringComparison.OrdinalIgnoreCase) ? "1" : "0";
 
     /// <summary>
     /// Returns true if the per-VFO state write should target *B (vs *A) for
@@ -292,6 +308,9 @@ public static class RadioCapabilities
     /// is a hint, not an addressable target -- so this mirrors
     /// <paramref name="activeVfo"/> (0 = A, 1 = B). On dual-receiver radios
     /// the target wins outright.
+    ///
+    /// Do not use this for MD state writes. Mode follows the requested
+    /// VFO, not the active one — see <see cref="ModeP1"/>.
     /// </summary>
     public static bool VfoIsB(bool isSingleReceiver, int activeVfo, string receiver) =>
         isSingleReceiver

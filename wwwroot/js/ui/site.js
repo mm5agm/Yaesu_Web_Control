@@ -754,13 +754,13 @@ window.publishTxState = publishTxState;
 window.applySharedTxState = applySharedTxState;
 document.addEventListener('DOMContentLoaded', () => { getTxSyncChannel(); });
 
-// Apply the .vfo-inactive class to whichever VFO panel is NOT the active
-// (RX) one — but only on single-receiver radios (FTdx10, FT-710, FTDX3000).
-// CSS greys only that panel's .card-body (header stays normal so TX looks
-// enabled). Dual-receiver radios leave both panels active because each
-// VFO is its own physical receiver chain. The data-single-receiver
-// attribute on #vfoRow is rendered server-side from RadioCapabilities.cs.
-// See docs/decisions/0003-single-vs-dual-receiver-ui.md.
+// Dual-receiver (FTdx101): highlight which band is active — the MAIN/SUB
+// band the main tuning knob controls — with .vfo-active, driven by
+// activeVfo (VS: 0 = MAIN/A, 1 = SUB/B). The radio auto-broadcasts VS when
+// you press MAIN⇄SUB-select on the front panel, so this follows live.
+// Single-receiver radios do not grey or lock either panel; both stay fully
+// editable. Clears any leftover .vfo-inactive / .vfo-tx-editable from
+// earlier builds. See docs/decisions/0003-single-vs-dual-receiver-ui.md.
 function applyVfoActiveStyling() {
     const vfoRow = document.getElementById('vfoRow');
     if (!vfoRow) return;
@@ -768,79 +768,22 @@ function applyVfoActiveStyling() {
     const bCol = document.getElementById('vfoBCol');
     if (!aCol || !bCol) return;
 
-    // Spectrum panels live OUTSIDE the VFO columns in their own
-    // #spectrumContainer section — so they need the class applied
-    // separately to be greyed when their corresponding VFO is inactive.
-    // Note these can be absent (only one SDR configured, or none).
-    const aSpec = document.getElementById('spectrumContainerA');
-    const bSpec = document.getElementById('spectrumContainerB');
+    aCol.classList.remove('vfo-inactive', 'vfo-tx-editable');
+    bCol.classList.remove('vfo-inactive', 'vfo-tx-editable');
+    document.getElementById('spectrumContainerA')?.classList.remove('vfo-inactive');
+    document.getElementById('spectrumContainerB')?.classList.remove('vfo-inactive');
 
     const singleReceiver = vfoRow.dataset.singleReceiver === 'true';
-    if (!singleReceiver) {
-        // Dual-receiver (FTdx101): both panels are real receivers, so neither
-        // is greyed. But still show WHICH band is active — the MAIN/SUB band
-        // the main tuning knob controls — with a subtle highlight, driven by
-        // activeVfo (VS: 0 = MAIN/A, 1 = SUB/B). The radio auto-broadcasts VS
-        // when you press MAIN⇄SUB-select on the front panel, so this follows
-        // live. (Restores an indicator dropped in the ADR-0003 rework — Pierre
-        // VK6IS #FTdx101.)
-        aCol.classList.remove('vfo-inactive');
-        bCol.classList.remove('vfo-inactive');
-        aSpec?.classList.remove('vfo-inactive');
-        bSpec?.classList.remove('vfo-inactive');
-        aCol.classList.toggle('vfo-active', activeVfo === 0);
-        bCol.classList.toggle('vfo-active', activeVfo === 1);
+    if (singleReceiver) {
+        // No active-band amber ring on single-receiver — RX/TX selectors
+        // already show which VFO is receiving / transmitting.
+        aCol.classList.remove('vfo-active');
+        bCol.classList.remove('vfo-active');
         return;
     }
 
-    // Single-receiver uses greying (below), not the active highlight — clear
-    // any stale highlight in case the RadioModel was switched mid-session.
-    aCol.classList.remove('vfo-active');
-    bCol.classList.remove('vfo-active');
-
-    // Single-receiver: white = active VFO (the one currently RECEIVING),
-    // grey = the other one. This is true in BOTH normal and split mode:
-    //
-    //   Normal mode (R2): white = active VFO (RX), grey = the other.
-    //                     Pressing A/B on the radio swaps which is RX.
-    //
-    //   Split mode  (R7): white = active VFO (RX), grey = TX VFO.
-    //                     Radio receives on active VFO, transmits on the
-    //                     opposite VFO.
-    //
-    // In both cases, "inactive" (= grey) = whichever VFO is NOT the active
-    // RX one. We previously drove split-mode greying from txVfo (FT
-    // command) because the spec implied FT tracks the TX VFO — but the
-    // FTdx10 doesn't reliably move FT when split engages while VFO-B is
-    // the active VFO (Jacek SP3L 2026-06-21 #34 R7 fail). Using activeVfo
-    // (VS command) for both cases is deterministic and matches what the
-    // radio is actually doing.
-    //
-    // The TX button and SPLIT badge land on the inactive panel in split
-    // mode (R8) because updateTxButton / updateSplitButton derive the TX
-    // position as "opposite of active" on single-receiver radios. The
-    // card header is not greyed, so TX stays full-colour and clickable.
-    //
-    // The spectrum panel is NOT greyed — on single-receiver radios the
-    // single spectrum always shows the live receive signal. The second
-    // spectrum panel is hidden permanently by updateContainerVisibility().
-    const splitOn = splitMode > 0;
-    const inactiveCol = (activeVfo === 0) ? bCol : aCol;
-    const activeCol   = (activeVfo === 0) ? aCol : bCol;
-
-    activeCol.classList.remove('vfo-inactive', 'vfo-tx-editable');
-    inactiveCol.classList.add('vfo-inactive');
-    // R10/R11: in split mode the inactive panel IS the TX VFO — operators
-    // must still be able to set the TX frequency from YWC without
-    // un-splitting. .vfo-tx-editable re-enables the frequency field while
-    // leaving every other card-body control read-only.
-    inactiveCol.classList.toggle('vfo-tx-editable', splitOn);
-
-    // Make sure neither spectrum carries a stale inactive class from a
-    // previous render — in case the user switched RadioModel from
-    // dual-receiver to single-receiver mid-session.
-    aSpec?.classList.remove('vfo-inactive');
-    bSpec?.classList.remove('vfo-inactive');
+    aCol.classList.toggle('vfo-active', activeVfo === 0);
+    bCol.classList.toggle('vfo-active', activeVfo === 1);
 }
 
 // Apply the styling at page-load time too, before any SignalR update has
@@ -986,21 +929,24 @@ function updateSplitButton() {
 }
 
 // Independent RX / TX VFO selectors (single-receiver radios, #78). RX follows
-// activeVfo (VS / FR), TX follows txVfo (FT); split is derived (TX ≠ RX). The
-// selected RX button is filled grey; the selected TX button is red when split
-// is on and filled grey when TX and RX are the same VFO.
+// activeVfo (VS / FR). TX must use effectiveTxVfo() — the same rule as the
+// Index TX button — because on FTdx10 / FT-710 the FT register often stays
+// at 0 when the operating VFO moves (front-panel A/B or RX selector), so
+// raw txVfo would leave TX stuck on A and falsely light split-red.
+// Colours match Yaesu front-panel convention: green = receiving, red = transmitting.
 function updateRxTxSelectors() {
     const rxA = document.getElementById('rxVfoA');
     if (!rxA) return; // group only rendered on single-receiver radios
     const pick = (el, on, onClass) => {
-        el.classList.remove('btn-secondary', 'btn-danger', 'btn-outline-secondary');
+        if (!el) return;
+        el.classList.remove('btn-secondary', 'btn-success', 'btn-danger', 'btn-outline-secondary');
         el.classList.add(on ? onClass : 'btn-outline-secondary');
     };
-    pick(rxA, activeVfo === 0, 'btn-secondary');
-    pick(document.getElementById('rxVfoB'), activeVfo === 1, 'btn-secondary');
-    const split = txVfo !== activeVfo;
-    pick(document.getElementById('txVfoA'), txVfo === 0, split ? 'btn-danger' : 'btn-secondary');
-    pick(document.getElementById('txVfoB'), txVfo === 1, split ? 'btn-danger' : 'btn-secondary');
+    pick(rxA, activeVfo === 0, 'btn-success');
+    pick(document.getElementById('rxVfoB'), activeVfo === 1, 'btn-success');
+    const effTx = effectiveTxVfo();
+    pick(document.getElementById('txVfoA'), effTx === 0, 'btn-danger');
+    pick(document.getElementById('txVfoB'), effTx === 1, 'btn-danger');
 }
 
 async function setRxVfo(vfo) {
@@ -1009,10 +955,12 @@ async function setRxVfo(vfo) {
         if (r.ok) {
             const d = await r.json();
             activeVfo = d.rxVfo;
+            if (typeof d.txVfo === 'number') txVfo = d.txVfo;
             if (typeof d.splitMode === 'number') splitMode = d.splitMode;
             updateRxTxSelectors();
             updateSplitButton();
             applyVfoActiveStyling();
+            updateTxButton();
         }
     } catch {}
 }
@@ -1505,6 +1453,7 @@ connection.on("RadioStateUpdate", function (update) {
         // on (becomes "opposite of activeVfo") but FT often doesn't move on
         // FTdx10 to trigger the TxVfo handler -- so do it here too.
         updateTxButton();
+        updateRxTxSelectors();
         publishTxState();
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('split', update.value);
     }

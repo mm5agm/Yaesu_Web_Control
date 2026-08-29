@@ -66,6 +66,11 @@ jobs:
         run: dotnet test Tests/YaesuWebControl.Tests/YaesuWebControl.Tests.csproj --configuration Release --verbosity normal
 
   build-windows:
+    # Unstable snapshots of develop are published by unstable.yml. Creating
+    # that GitHub Release would otherwise re-enter this workflow (on:
+    # release) and the docker job would try to parse unstable-YYYYMMDD as
+    # SemVer.
+    if: github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-')
     runs-on: windows-latest
     permissions:
       contents: write
@@ -168,27 +173,32 @@ jobs:
   # build-docker cover the same compile, and macOS still runs on dispatch and
   # on release. If a change is macOS-specific, hit "Run workflow" on the branch.
   #
-  # timeout-minutes exists because this job can stall indefinitely. Observed
-  # three times on 2026-08-13: build-dmg.sh runs two sequential publishes, and
-  # the FIRST RID finished in under a minute while the SECOND stopped dead
-  # straight after restore and never recovered — 36, 38 and 54 minutes before
-  # being cancelled, with an orphaned dotnet/VBCSCompiler killed at cleanup.
-  # Not our code: it reproduced on tag v2.4.3-pre6, which has no core/ subtree
-  # in it at all and had built both DMGs in 1m50s three days earlier. Hosted
-  # arm64 macOS runners, nothing in this repo.
+  # One RID per matrix leg (fresh VM). Sequential `build-dmg.sh all` on a
+  # hosted arm64 runner hangs the SECOND publish after restore — VBCSCompiler
+  # wedged, 36/38/54 min on 2026-08-13 and again 2026-08-28 until the job
+  # timeout. Not our code; it reproduced on v2.4.3-pre6 with no core/ at all.
+  # Splitting removes that reuse. timeout-minutes stays so a single-RID hang
+  # still fails loud (~10x a normal ~2 min publish) instead of sitting until
+  # the runner is cancelled.
   #
-  # Why a timeout and not a retry: these jobs are independent — no `needs:` —
-  # so a stalled macOS job does not hold up build-windows or build-docker, and
-  # on a release that is the trap. The tag ships with the Windows installer and
-  # the Docker image while the DMGs never upload, and the release looks
-  # finished. Failing at 20 minutes (~10x the 1m50s normal, so a merely slow
-  # runner won't trip it) makes that visible instead of silent.
+  # Why a timeout and not a retry: these jobs are independent — no `needs:`
+  # from windows/docker — so a stalled macOS job does not hold up those, and
+  # on a release that is the trap. The tag ships with the Windows installer
+  # and the Docker image while the DMGs never upload, and the release looks
+  # finished. Failing at 10 minutes makes that visible instead of silent.
   build-macos:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-'))
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [osx-arm64, osx-x64]
+    env:
+      MSBUILDDISABLENODEREUSE: 1
+      DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: 1
 
     steps:
       - name: Checkout
@@ -199,22 +209,20 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Build macOS DMGs (arm64 + x64)
+      - name: Build macOS DMG (${{ matrix.rid }})
         run: |
           chmod +x scripts/macos/build-dmg.sh
-          ./scripts/macos/build-dmg.sh all
+          ./scripts/macos/build-dmg.sh "${{ matrix.rid }}"
+          ls -lh publish/dmg/*.dmg
 
-      - name: List DMG output
-        run: ls -lh publish/dmg/*.dmg
-
-      - name: Upload DMGs as workflow artifacts
+      - name: Upload DMG as workflow artifact
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
         with:
-          name: Yaesu_Web_Control_macOS_DMGs
+          name: Yaesu_Web_Control_macOS_DMG_${{ matrix.rid }}
           path: publish/dmg/*.dmg
 
-      - name: Upload DMGs to GitHub Release
+      - name: Upload DMG to GitHub Release
         if: github.event_name == 'release' || github.event.inputs.tag != ''
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
@@ -222,7 +230,7 @@ jobs:
           else
             tag="${{ github.event.inputs.tag }}"
           fi
-          echo "Uploading macOS DMGs to release: $tag"
+          echo "Uploading macOS DMG (${{ matrix.rid }}) to release: $tag"
           gh release upload "$tag" publish/dmg/*.dmg --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -230,6 +238,7 @@ jobs:
   # Multi-arch CAT-only Linux image → GHCR (amd64 + arm64).
   # workflow_dispatch with empty tag → build only, no push (smoke test).
   build-docker:
+    if: github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -321,7 +330,7 @@ jobs:
     # job, so the check would go silent in precisely the case it exists for.
     # The event guard stays inside the same expression — a dispatch or a PR has
     # no release to inspect.
-    if: ${{ always() && github.event_name == 'release' }}
+    if: ${{ always() && github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'unstable-') }}
     needs: [build-windows, build-macos, build-docker]
     runs-on: ubuntu-latest
     permissions:
