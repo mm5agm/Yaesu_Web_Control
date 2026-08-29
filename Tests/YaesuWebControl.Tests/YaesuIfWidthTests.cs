@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 using Xunit;
 using Yaesu_Web_Control.Services;
 
-namespace Yaesu_Web_Control.Tests
+namespace YaesuWebControl.Tests
 {
     /// <summary>
     /// The SH code to Hz tables exist twice: in the browser for the Filter
