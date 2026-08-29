@@ -330,7 +330,14 @@ export class DxSpotsPanel {
             if (s.sortBy)  this._sortBy  = s.sortBy;
             if (s.sortDir) this._sortDir = s.sortDir;
             if (s.left || s.top) {
-                this._dialog.style.margin = '0';
+                // A <dialog> shown with show() is position:absolute, so it is placed
+                // against the document and scrolls with it. Every coordinate here is a
+                // viewport one - getBoundingClientRect on the way out, the stored value
+                // on the way back - so pinning it fixed is what makes the two agree.
+                // Left absolute, grabbing the header moved the panel up by exactly the
+                // page's scroll offset, i.e. it jumped to the top of the document.
+                this._dialog.style.position = 'fixed';
+                this._dialog.style.margin   = '0';
                 if (s.left) this._dialog.style.left = s.left;
                 if (s.top)  this._dialog.style.top  = s.top;
             }
@@ -350,9 +357,16 @@ export class DxSpotsPanel {
             const origX = e.clientX, origY = e.clientY;
             const baseL = rect.left,  baseT = rect.top;
 
-            this._dialog.style.margin = '0';
-            this._dialog.style.left   = `${baseL}px`;
-            this._dialog.style.top    = `${baseT}px`;
+            // A <dialog> shown with show() is position:absolute, so it is placed
+            // against the document and scrolls with it. Every coordinate here is a
+            // viewport one - getBoundingClientRect on the way out, the stored value
+            // on the way back - so pinning it fixed is what makes the two agree.
+            // Left absolute, grabbing the header moved the panel up by exactly the
+            // page's scroll offset, i.e. it jumped to the top of the document.
+            this._dialog.style.position = 'fixed';
+            this._dialog.style.margin   = '0';
+            this._dialog.style.left     = `${baseL}px`;
+            this._dialog.style.top      = `${baseT}px`;
 
             const onMove = (ev) => {
                 let l = baseL + (ev.clientX - origX);
