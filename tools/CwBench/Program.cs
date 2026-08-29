@@ -54,6 +54,7 @@ internal static class Program
         var traceFrom = double.MaxValue;
         var traceTo   = double.MinValue;
         var minElement = -1.0;
+        var charGapDits = -1.0;  // --char-gap: character-gap boundary, in dits
         var debounce   = -1.0;
         var resync    = true;
         var warmup     = -1.0;                 // -1 = leave the decoder's own default
@@ -89,6 +90,7 @@ internal static class Program
                 case "--trace":     traceFrom = Arg(args, ++i);
                                     traceTo   = Arg(args, ++i); break;
                 case "--min-element": minElement = Arg(args, ++i); break;
+                case "--char-gap":    charGapDits = Arg(args, ++i); break;
                 case "--debounce":    debounce   = Arg(args, ++i); break;
                 case "--no-resync": resync    = false; break;
                 case "--train-noise": trainNoise = Arg(args, ++i); break;
@@ -203,6 +205,8 @@ internal static class Program
                 EnableResync        = resync,
                 MinElementMs        = minElement >= 0.0
                                     ? minElement : new CwElementDecoderOptions().MinElementMs,
+                CharacterGapDits    = charGapDits > 0.0
+                                    ? charGapDits : new CwElementDecoderOptions().CharacterGapDits,
                 MinTrainNoiseMultiple = trainNoise >= 0.0 ? trainNoise : new CwElementDecoderOptions().MinTrainNoiseMultiple,
             },
         });
