@@ -95,6 +95,22 @@ dotnet test tests/RadioWebControl.Core.Tests/RadioWebControl.Core.Tests.csproj -
 The test project must pass **standalone in this repo**, not only inside an app.
 That is what catches an accidental dependency on a consumer.
 
+**Nothing runs these tests but you.** This repo has no workflows, and neither
+consumer's CI runs them - YWC's release workflow names its own app test
+project and nothing else, IWC's has no test step at all. So a red core test
+reaches nobody unless a human ran the command above. Run it before every
+push.
+
+**Unit tests are not enough for `Services/Cw`.** The decoder's real cover is a
+corpus of off-air recordings that lives in the *app* repos, in a gitignored
+`bench/`, driven by `tools/CwBench` there. It is local-only - it cannot be
+cloned, only recorded - and it is where tone-search and readability changes
+are actually judged, before and after, across the whole corpus rather than on
+one file. Two rules travel with it: read a wav's `.txt` sidecar for the
+arguments and the `VERDICT` before scoring it, and never invent history for a
+sidecar - where a file has no external ground truth, it must say so. The full
+note is in the consuming app's CLAUDE.md.
+
 ## Plans
 
 `docs/design/shared-core-plan.md` is the migration plan and phase table. Keep it

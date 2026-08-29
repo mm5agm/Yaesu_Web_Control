@@ -1,0 +1,41 @@
+# The only thing that runs these tests.
+#
+# Until this file existed, nothing did. This repo had no workflows, Yaesu Web
+# Control's CI names its own app test project and nothing else, and Icom Web
+# Control's had no test step at all - so a red test here reached nobody unless
+# a human happened to run dotnet test locally. That is a poor arrangement for
+# the one repository whose whole job is to be consumed by two others.
+#
+# Runs on ubuntu deliberately. This library must target net10.0 and never
+# net10.0-windows, because YWC's macOS/Linux CAT-only host depends on it. A
+# Windows-only dependency builds perfectly well on a Windows runner and then
+# breaks that host silently. On Linux it cannot: the build fails here first.
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build RadioWebControl.Core.csproj --configuration Release
+
+      - name: Test
+        run: dotnet test tests/RadioWebControl.Core.Tests/RadioWebControl.Core.Tests.csproj --configuration Release --verbosity normal
