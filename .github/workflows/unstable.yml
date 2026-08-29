@@ -233,21 +233,32 @@ jobs:
           merge-multiple: true
           path: dist
 
-      - name: Recreate prerelease ${{ needs.prep.outputs.version }}
+      # Updated in place, never deleted and recreated.
+      #
+      # GitHub notifies watchers every time a release is *published*, and a
+      # delete followed by a create is a fresh publish - so the old step
+      # emailed everyone on every push to develop. Three times on 2026-08-29
+      # alone, two of them within ten minutes. The header comment at the top
+      # of this file has always said a same-day push replaces that day's
+      # prerelease "in place"; now it actually does.
+      #
+      # A reader sees no difference - the assets are still replaced after
+      # every merge. Only the first push of each UTC day notifies.
+      #
+      # The git tag has to be moved by hand, which is presumably why this was
+      # written as delete-and-recreate in the first place. `gh release edit
+      # --target` is honoured only for a release that has not been published
+      # yet, so for a live one the ref itself is what has to move.
+      - name: Publish or update prerelease ${{ needs.prep.outputs.version }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prep.outputs.version }}
           IMAGE: ${{ needs.prep.outputs.image }}
         run: |
+          set -euo pipefail
           ls -lh dist
-          gh release delete "$VERSION" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
-          gh release create "$VERSION" \
-            --repo "$GITHUB_REPOSITORY" \
-            --prerelease \
-            --latest=false \
-            --target "$GITHUB_SHA" \
-            --title "Unstable $VERSION" \
-            --notes "$(cat <<EOF
+
+          notes="$(cat <<EOF
           Automated snapshot of \`develop\` at \`${GITHUB_SHA}\`.
 
           This is not a supported release. Installers, DMGs, and the GHCR image
@@ -255,6 +266,39 @@ jobs:
 
           Image: \`${IMAGE}:${VERSION}\` (also tagged \`unstable\`).
           EOF
-          )" \
-            dist/Yaesu_Web_Control_Setup.exe \
-            dist/*.dmg
+          )"
+
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Prerelease $VERSION exists - updating in place, no notification."
+
+            # Point the existing tag at this commit; force, because moving it
+            # within the same UTC day is the whole design.
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$VERSION" \
+              -f sha="$GITHUB_SHA" -F force=true >/dev/null
+
+            gh release edit "$VERSION" \
+              --repo "$GITHUB_REPOSITORY" \
+              --prerelease \
+              --latest=false \
+              --title "Unstable $VERSION" \
+              --notes "$notes"
+
+            # --clobber replaces same-named assets. Every asset this workflow
+            # produces has a stable name, so nothing stale is left behind.
+            gh release upload "$VERSION" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber \
+              dist/Yaesu_Web_Control_Setup.exe \
+              dist/*.dmg
+          else
+            echo "Prerelease $VERSION is new - creating it. This one notifies."
+            gh release create "$VERSION" \
+              --repo "$GITHUB_REPOSITORY" \
+              --prerelease \
+              --latest=false \
+              --target "$GITHUB_SHA" \
+              --title "Unstable $VERSION" \
+              --notes "$notes" \
+              dist/Yaesu_Web_Control_Setup.exe \
+              dist/*.dmg
+          fi
