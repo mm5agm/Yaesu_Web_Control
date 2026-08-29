@@ -417,6 +417,64 @@ namespace RadioWebControl.Core.Services.Cw
         private const double LatchConfidence = 0.92;
 
         /// <summary>
+        /// How prominent the loudest bin must stand over its search window,
+        /// in dB, for it to be taken as the signal even though its keying
+        /// ratio does not clear AcquireKeyingRatio.
+        ///
+        /// The ratio test assumes the median sits on the noise floor between
+        /// marks. That holds at ordinary duty. It fails on a strong station
+        /// sending near-continuously: at 31 wpm with only word gaps, the
+        /// median rides up onto the marks and the ratio collapses to about
+        /// 2.1 - which is the value an empty band reads. The station then
+        /// scores as noise, the guard does not fire, and the keying-ranked
+        /// search hands the tone to a key-click sideband of that very signal,
+        /// which is narrow and sharply on and off and so ratios 26 to 66.
+        /// bench/follow.wav is that recording: the tail walks 542 Hz -> 817 Hz
+        /// and loses four real CQs to an artefact of the station it was
+        /// already copying.
+        ///
+        /// Level cannot be the discriminator - bench/live-offpitch-1450.wav
+        /// needs a weak keyed bin to beat a loud unkeyed one, which is the
+        /// whole reason the keying rank exists. Prominence can be, because
+        /// the two cases differ in shape and not in level. Measured over the
+        /// frames where the loudest bin ratios under 3.0:
+        ///
+        ///     follow      real station    median 20.8, p90 36.6, max 55.6
+        ///     offpitch    noise           median 12.4, p90 14.2, max 18.1
+        ///     noise       empty band      median  8.1, p90  9.6, max 13.2
+        ///
+        /// 20 dB is above everything either noise file reaches and below the
+        /// real station's median, so the guard fires on about half of the
+        /// station's frames and on none of the noise. Half is enough: it only
+        /// has to stop the tone walking, and TrackGraceSeconds covers the
+        /// rest.
+        ///
+        /// This is measured against the median of the search window, so it
+        /// moves with the window width. The numbers above come from the
+        /// windows those files are scored at - 250 Hz for follow, 900 Hz for
+        /// the other two - and a much narrower window would need them taken
+        /// again.
+        /// </summary>
+        private const double LoudBinProminenceDb = 20.0;
+
+        /// <summary>
+        /// How long the search stays narrow after confidence falls below
+        /// TrackHoldConfidence, in seconds.
+        ///
+        /// Without this, one dip hands a good lock straight back to the
+        /// full-window acquire path: the window jumps from TrackBandHz to the
+        /// whole passband between one frame and the next, and anything in it
+        /// can take the tone. On bench/follow.wav the dip is a single quiet
+        /// patch at 05:25 and the tone never comes back.
+        ///
+        /// Presence still gates it, so a station that actually goes away
+        /// releases the narrow window at once rather than holding it for the
+        /// grace. What this covers is a lock that is still being copied and
+        /// momentarily reads as less certain.
+        /// </summary>
+        private const double TrackGraceSeconds = 5.0;
+
+        /// <summary>
         /// How much wider than the search window the spectrum display reaches,
         /// so a station just outside the range the reader will chase is still
         /// on screen as the explanation for why it is not being read.
@@ -532,6 +590,10 @@ namespace RadioWebControl.Core.Services.Cw
             new double[(FftSize / 2) * AcquireKeyingFrames];
         private int _binHistPos;
         private int _binFrames;
+
+        // Frames of narrow-search grace left after a good lock dipped. See
+        // TrackGraceSeconds.
+        private int _trackGrace;
 
         private long   _sampleIndex8k;
         private double _phasorPhase;
@@ -941,7 +1003,13 @@ namespace RadioWebControl.Core.Services.Cw
             // makes up its mind, so on an empty band it would pin acquisition
             // to the pitch for the first few seconds of every session.
             double binHz    = (double)WorkRate / FftSize;
-            bool   tracking = _present && _confidence >= TrackHoldConfidence;
+            const int TrackGraceFrames = (int)(TrackGraceSeconds * WorkRate / FftHop);
+            if (_present && _confidence >= TrackHoldConfidence) _trackGrace = TrackGraceFrames;
+            else if (_trackGrace > 0)                           _trackGrace--;
+
+            // The grace keeps the window narrow through a dip, but only while
+            // the station is still there - presence is what says it is.
+            bool   tracking = _present && (_confidence >= TrackHoldConfidence || _trackGrace > 0);
             double centre   = tracking ? _toneHz : _opt.PitchHz;
             double halfBand = tracking
                             ? Math.Min(TrackBandHz, _opt.SearchWindowHz)
@@ -1102,6 +1170,25 @@ namespace RadioWebControl.Core.Services.Cw
         /// This is deliberately the same statistic CwBench/Spectrum.cs prints,
         /// so a file that reads as keyed on the bench reads as keyed here.
         /// </summary>
+        /// <summary>
+        /// How far <paramref name="peak"/> stands above the median of the
+        /// bins from lo to hi, in dB. The median rather than the mean because
+        /// the peak itself, and any skirts it has, would drag a mean up and
+        /// flatter a signal that is not really there.
+        /// </summary>
+        private double WindowProminenceDb(int lo, int hi, double peak)
+        {
+            int n = hi - lo + 1;
+            if (n < 3) return 0.0;
+
+            Span<double> v = n <= 512 ? stackalloc double[n] : new double[n];
+            for (int i = 0; i < n; i++) v[i] = _mag[lo + i];
+            v.Sort();
+
+            double median = Math.Max(v[n / 2], 1e-12);
+            return 20.0 * Math.Log10(Math.Max(peak, 1e-12) / median);
+        }
+
         private double KeyingRatio(int bin)
         {
             Span<double> v = stackalloc double[AcquireKeyingFrames];
@@ -1162,7 +1249,12 @@ namespace RadioWebControl.Core.Services.Cw
             // sharply on and off, so a very high ratio - outscores the tone it
             // came from. That cost strong-sig-1, the corpus control, the
             // leading callsign of its first exchange.
-            if (KeyingRatio(loudBin) >= AcquireKeyingRatio)
+            // ...or when it stands far enough clear of the window to be a
+            // station whatever its ratio says. A high-duty sender defeats the
+            // ratio test - see LoudBinProminenceDb - and without this second
+            // limb the search then prefers that station's own click sideband.
+            if (KeyingRatio(loudBin) >= AcquireKeyingRatio
+             || WindowProminenceDb(lo, hi, loudMag) >= LoudBinProminenceDb)
             {
                 mag = loudMag;
                 return loudBin;
