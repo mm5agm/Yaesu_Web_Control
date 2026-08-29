@@ -187,6 +187,55 @@ namespace RadioWebControl.Core.Services.Cw
         public int DitOnlyMinChars { get; set; } = 24;
 
         /// <summary>
+        /// Where the boundary between a gap inside a character and a gap
+        /// between two characters sits, in tracked dits.
+        ///
+        /// Textbook Morse puts the two at one dit and three, so a boundary at
+        /// two is the obvious midpoint, and hardcoded at two is what this was.
+        /// Measured on real audio the two clusters do not land where the
+        /// textbook says. The detector opens a shade late and closes a shade
+        /// early on every mark, and the time it takes off the mark it adds to
+        /// the gap on either side, so the gap distribution is stretched while
+        /// the marks are squeezed. On bench/live-hb9dax-cq.wav, 120 s at
+        /// 13-18 dB with every mark solid, the dah:dit ratio measures 3.44
+        /// rather than 3.00 and the gaps fall out as:
+        ///
+        ///     1.0 dits    93
+        ///     1.5 dits   167     intra-character, peaking at 1.5 not 1.0
+        ///     2.0 dits    21     the old boundary, on a populated bin
+        ///     2.5 dits     2     the valley
+        ///     3.0 dits     9
+        ///     4.0 dits    22     between characters
+        ///
+        /// A boundary at 2.0 dits therefore cuts the shoulder of the
+        /// intra-character cluster rather than the empty ground above it, and
+        /// every gap it clips splits one character into two - a split
+        /// character emits two short symbols in place of one, which looked
+        /// like the source of the stray E, I and T in poor copy.
+        ///
+        /// It is not. Swept over all 99 corpus recordings, scoring correct CQ
+        /// against mangled CQ:
+        ///
+        ///     2.0    12 correct, 0 mangled    baseline
+        ///     2.25   12 correct, 0 mangled    35 files change, no CQ changes
+        ///     2.5    12 correct, 0 mangled    51 files change, no CQ changes
+        ///     2.75    7 correct, 0 mangled    live-ly-oe3wma 6 to 2,
+        ///                                     mkii-dk9py 4 to 2
+        ///
+        /// Moving the boundary into the measured valley buys nothing and
+        /// moving it past the valley costs five CQs. Total characters fall
+        /// from 19725 to 16664 across the sweep, so the splits really are
+        /// being merged; the merging just does not make the copy better. The
+        /// default therefore stays at 2.0 and the histogram argument is
+        /// recorded here as tried and rejected, so it does not get re-derived
+        /// from the same evidence and re-tried.
+        ///
+        /// The knob is kept because it is what made the measurement possible,
+        /// and CwBench exposes it as --char-gap.
+        /// </summary>
+        public double CharacterGapDits { get; set; } = 2.0;
+
+        /// <summary>
         /// How long <see cref="CwElementDecoder.IsLocked"/> keeps believing the
         /// speed estimate after the marks stop looking like Morse.
         ///
@@ -566,7 +615,8 @@ namespace RadioWebControl.Core.Services.Cw
             || peakMag >= _opt.MinTrainNoiseMultiple * noiseLevel;
 
         /// <summary>
-        /// A gap under two dits is inside a character. Past that it separates
+        /// A gap under <see cref="CwElementDecoderOptions.CharacterGapDits"/>
+        /// dits is inside a character. Past that it separates
         /// either two characters or two words, and which one is a question the
         /// element dit cannot answer.
         ///
@@ -605,7 +655,7 @@ namespace RadioWebControl.Core.Services.Cw
         /// </summary>
         private string OnGap(double gapMs)
         {
-            if (gapMs < 2.0 * _ditMs) return string.Empty;
+            if (gapMs < _opt.CharacterGapDits * _ditMs) return string.Empty;
 
             var text = FlushCharacter();
 
