@@ -235,6 +235,13 @@ someone pulls it. Push is not optional once `core/` has changed in a session
   `core/` compiles twice.
 - `core/js/**/*.js` is copied — not linked — into `wwwroot/js/` by a build
   target; edit the `core/` copy, never the generated `wwwroot` one.
+- Moving a JS file *into* `core/js/` can silently delete someone's work. The
+  old `wwwroot/js/...` path becomes a generated, gitignored artefact, so a
+  branch still modifying it merges as **modify/delete** — and resolving that
+  as a delete drops the branch's change with no conflict marker and no build
+  error. Check `gh pr list` for open PRs on the path first and fold them into
+  the `core/` copy. It has happened once already (`audio-playback.js`,
+  PR #112, 2026-08-27). See CLAUDE.md for the full note.
 
 ---
 
