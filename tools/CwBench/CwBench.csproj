@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net10.0, not net10.0-windows: the decoder it drives is in Core, which
+         is deliberately host-agnostic, and this harness should run wherever a
+         recording can be made. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>CwBench</RootNamespace>
+    <AssemblyName>CwBench</AssemblyName>
+    <!-- Bench utility, never shipped. Kept out of the installer by living
+         under tools/, which Yaesu_Web_Control.csproj excludes wholesale. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\RadioWebControl.Core.csproj" />
+  </ItemGroup>
+
+</Project>

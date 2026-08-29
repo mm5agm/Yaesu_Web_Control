@@ -6,7 +6,18 @@ import {
 
 /**
  * Low-latency playback of RX Opus or PCM16 frames.
- * Worklet queue is hard-capped (~30 ms) so bursts cannot accumulate delay.
+ *
+ * The worklet is a jitter buffer. Frames arrive bursty - the server channel is
+ * 48 frames deep and the WebSocket delivers in clumps - so the buffer has to
+ * absorb a burst rather than throw one away. It used to hold 3 frames (30 ms),
+ * which meant any burst of four deleted 10 ms of audio and any momentary
+ * starvation spliced in silence. Both put a phase discontinuity into the
+ * waveform. Speech hides that; a steady CW tone turns it into warble.
+ *
+ * So: hold up to 60 ms, and prime 40 ms before starting, re-priming after a
+ * dry spell so a starved buffer splices once instead of on every render
+ * quantum. Sixty is enough to ride out host load while the main window
+ * navigates, without adding delay the operator can hear.
  */
 export class AudioPlayback {
   constructor() {
@@ -17,8 +28,10 @@ export class AudioPlayback {
     this._decoder = null;
     this._codec = 'pcm16';
     this._muted = false;
-    /** ~60 ms jitter buffer (6 × 10 ms frames) — absorbs host load while navigating. */
+    /** ~60 ms jitter buffer (6 × 10 ms frames) - absorbs host load while navigating. */
     this._maxQueueFrames = 6;
+    /** Frames to accumulate before playback starts, and after a dry spell. */
+    this._prefillFrames = 4;
   }
 
   get muted() { return this._muted; }
@@ -57,6 +70,7 @@ export class AudioPlayback {
     }
 
     const maxFrames = this._maxQueueFrames;
+    const prefillFrames = this._prefillFrames;
     const processorCode = `
       class YwcPlaybackProcessor extends AudioWorkletProcessor {
         constructor() {
@@ -64,6 +78,8 @@ export class AudioPlayback {
           this.queue = [];
           this.offset = 0;
           this.maxFrames = ${maxFrames};
+          this.prefillFrames = ${prefillFrames};
+          this.priming = true;
           this.lastSample = 0;
           this.port.onmessage = (ev) => {
             if (!ev.data || !ev.data.length) return;
@@ -72,20 +88,27 @@ export class AudioPlayback {
               this.queue.shift();
               this.offset = 0;
             }
+            if (this.priming && this.queue.length >= this.prefillFrames) {
+              this.priming = false;
+            }
           };
         }
         process(inputs, outputs) {
           const out = outputs[0][0];
           if (!out) return true;
+          if (this.priming) { out.fill(0); return true; }
           let i = 0;
           while (i < out.length) {
             if (!this.queue.length) {
-              // Soft tail on underrun — hard zeros click when the host hiccups
-              // during main-window navigation (CAT poll / page load contention).
+              // Ran dry. Decay to silence rather than cutting to hard zero -
+              // a step to 0 mid-waveform clicks. Then refill before playing
+              // again, so the gap costs one splice rather than one per render
+              // quantum until frames return.
               for (; i < out.length; i++) {
                 this.lastSample *= 0.85;
                 out[i] = this.lastSample;
               }
+              this.priming = true;
               break;
             }
             const cur = this.queue[0];

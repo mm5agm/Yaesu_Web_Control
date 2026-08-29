@@ -450,6 +450,11 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioSessionManag
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>());
 
+// The CW reader listens to the audio bridge rather than opening the capture
+// device itself, so it must be a singleton alongside it: one decoder, one
+// subscription, one piece of decoded text however many browser tabs are open.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.BridgeCwAudioSource>();
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderService>();
 // Radio Display (USB UVC / HDMI capture → MJPEG) — opt-in; capture opens while viewers connect.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoCaptureService>();

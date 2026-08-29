@@ -9,6 +9,24 @@ two repositories.
 - `calibration/calibration-engine.js` — pure meter-calibration functions, no
   DOM, no side effects. Phase 2's first JS tenant, tested in
   `tests/js/calibration-engine.test.mjs`.
+- `cw/cw-reader-panel.js` — the CW reader panel, which polls an HTTP endpoint
+  and renders what comes back. It knows nothing about how the text was decoded.
+- `cw/cw-phasor.js` and `cw/cw-spectrum.js` — the two tuning aids under the
+  panel's Tune switch: the phasor says whether you are on the tone, the spectrum
+  says where the tone is. Both poll `/api/cw/...` and draw to a canvas.
+- `cw/cw-tokens.js` — colours the decoded copy's QSO-shaped tokens without
+  changing a character of it. Pure functions, tested in
+  `tests/js/cw-tokens.test.mjs`; `docs/design/cw-decoder.md` §7.3 records the
+  measurements behind it, including the suppression version that was rejected.
+- `audio/` — the remote-audio client: `audio-protocol.js` (frame constants and
+  PCM helpers), `audio-capture.js`, `audio-playback.js` and `audio-session.js`.
+  These speak the app's audio WebSocket and nothing else — no CAT, no CI-V, no
+  radio anywhere in them.
+
+  Each app keeps its own `wwwroot/js/audio/remote-audio-ui.js`, which is the
+  UI layer over `createAudioSession` and does touch app-specific markup and
+  settings. Same split as the calibration engine and its tables: the shared
+  half knows the shape, the app half knows the specifics.
 
 The per-radio numbers it works on are **not** here: each app keeps its own
 `wwwroot/js/calibration/calibration-tables.js`, which the engine imports as a

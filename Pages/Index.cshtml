@@ -659,6 +659,10 @@
                                 aria-label="DX spots — list of cluster spots on current band"
                                 title="Open DX spots list — see callsigns spotted on the current band"
                                 onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">DX Spots</button>
+                        <button class="btn btn-sm ms-1 btn-outline-secondary"
+                                aria-label="CW reader - decode received Morse to text"
+                                title="Open the CW reader - decodes the received Morse to text"
+                                onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">CW Read</button>
                         <button id="voiceBtn"
                                 class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="Voice announcements settings"
@@ -2445,6 +2449,97 @@
     </div>
 </dialog>
 
+<!-- CW Reader panel - server-side Morse decode of the receive audio.
+     Non-modal and draggable, like DX Spots: the operator has to be able to
+     work the station while the text is on screen. -->
+<style>
+    #cwReaderDialog .cwr-header { cursor:move; }
+    #cwReaderOut {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 1.05rem;
+        line-height: 1.5;
+        letter-spacing: 0.02em;
+        white-space: pre-wrap;
+        word-break: break-word;
+        min-height: 9rem;
+        max-height: 40vh;
+        overflow-y: auto;
+        background: #111;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 8px 10px;
+        color: #dfe;
+    }
+    /* Tokens that have the shape of QSO traffic. Colour is the only change -
+       nothing is added, removed or reordered - and it means "this looks like
+       something an operator sends", not "this is right". A callsign seen only
+       once is dimmed rather than hidden, because garble finds callsign shape
+       by chance and the first sighting of a real call looks identical. */
+    #cwReaderDialog .cw-tok-proc { color:#8fd0ff; }
+    #cwReaderDialog .cw-tok-rst  { color:#c9a6ff; }
+    #cwReaderDialog .cw-tok-call { color:#ffd24a; font-weight:600; }
+    #cwReaderDialog .cw-tok-call1 { color:#a08a3c; }
+    .cwr-legend { font-size: 0.72rem; color:#89a; }
+    #cwReaderStatus { font-family: ui-monospace, Consolas, monospace; font-size: 0.78rem; color:#9ab; }
+</style>
+<dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:620px; max-width:95vw;" aria-labelledby="cwReaderTitle">
+    <div class="cwr-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="cwReaderTitle">CW Reader</strong>
+        <div class="d-flex align-items-center gap-2">
+            <button id="cwReaderStartBtn" class="btn btn-sm btn-success" type="button">Start</button>
+            <button id="cwReaderClearBtn" class="btn btn-sm btn-outline-secondary" type="button">Clear</button>
+            <div class="form-check form-switch mb-0" style="cursor:default;">
+                <input class="form-check-input" type="checkbox" id="cwReaderAutoScroll" checked>
+                <label class="form-check-label small" for="cwReaderAutoScroll">Follow</label>
+            </div>
+            <div class="form-check form-switch mb-0" style="cursor:default;">
+                <input class="form-check-input" type="checkbox" id="cwPhasorToggle">
+                <label class="form-check-label small" for="cwPhasorToggle"
+                       title="X-Y tuning figure: tune until it stops turning">Tune</label>
+            </div>
+            <button class="btn btn-sm ywc-dialog-close"
+                    onclick="document.getElementById('cwReaderDialog').close()"
+                    aria-label="Close CW reader panel">&#10005;</button>
+        </div>
+    </div>
+    <div class="p-2">
+        <div class="d-flex gap-2 align-items-start">
+            <div class="flex-grow-1" style="min-width:0;">
+                <div id="cwReaderOut" role="log" aria-live="polite" aria-label="Decoded CW text"></div>
+                <div class="cwr-legend mt-1">
+                    Colour marks what <em>looks like</em> QSO traffic, and nothing is hidden or corrected:
+                    <span class="cw-tok-proc">CQ DE 73</span>,
+                    <span class="cw-tok-rst">5NN</span>,
+                    <span class="cw-tok-call">a call heard more than once</span>,
+                    <span class="cw-tok-call1">a call heard once</span>.
+                </div>
+            </div>
+            <div id="cwPhasorBox" style="display:none; flex:0 0 auto; width:200px;">
+                <canvas id="cwSpectrumCanvas" width="200" height="90"
+                        style="width:200px; height:90px; display:block; border:1px solid #444; border-radius:6px;"
+                        aria-label="CW passband spectrum with a marker at the wanted pitch"></canvas>
+                <div id="cwSpectrumInfo" class="mb-1"
+                     style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
+                    Waiting.
+                </div>
+                <canvas id="cwPhasorCanvas" width="200" height="200"
+                        style="width:200px; display:block; border:1px solid #444; border-radius:6px;"
+                        aria-label="CW tuning phasor"></canvas>
+                <div id="cwPhasorInfo" class="mt-1"
+                     style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
+                    Waiting.
+                </div>
+            </div>
+        </div>
+        <div id="cwReaderStatus" class="mt-2 px-1">Stopped.</div>
+        <div class="text-muted small px-1 mt-1">
+            A machine reading Morse out of noise. On a strong clean signal it is close to
+            perfect; on a marginal one it prints plausible-looking rubbish that looks no
+            different. The line above tells you which you are looking at.
+        </div>
+    </div>
+</dialog>
+
 <!-- DX Watch alert toast container — populated by site.js when a watched spot arrives.
      Position is user-draggable; saved in localStorage as dxAlertPos. Defaults to
      bottom-right of the viewport on first run. -->
@@ -2499,6 +2594,7 @@
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -2822,6 +2918,12 @@
             window.dxSpotsPanel = new DxSpotsPanel();
             window.dxSpotsPanel.init();
             window.dxSpotsPanel.setVfoFrequency(@Model.RadioState.FrequencyA);
+
+            // The CW reader is independent of the SDR and of the cluster: it
+            // needs only the audio bridge, which it taps rather than opening a
+            // second stream on the radio's codec.
+            window.cwReaderPanel = new CwReaderPanel();
+            window.cwReaderPanel.init();
 
             spectrumPipeline.onFrequencyA(hz => {
                 spectrumPanelA?.setVfoFrequency(hz);
