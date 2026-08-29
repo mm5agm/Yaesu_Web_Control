@@ -423,6 +423,89 @@ namespace RadioWebControl.Core.Services.Cw
         /// </summary>
         private const double SpectrumMargin = 1.5;
 
+        /// <summary>
+        /// How keyed a bin must look before acquisition prefers it to a louder
+        /// one, as its loud level over its mean level.
+        ///
+        /// The search used to take the loudest bin in the window and nothing
+        /// else. That is right whenever the loudest thing in the passband is
+        /// the thing being sent, and wrong exactly when it is not. Caught live
+        /// on 2026-08-28 with the operator listening to a station he described
+        /// as perfect copy:
+        ///
+        ///     tone  734.6  SNR 15.1  present True   locked True
+        ///     tone  733.6  SNR 15.8  present True   locked True
+        ///     tone  958.7  SNR 12.7  present True   locked False
+        ///     tone  958.7  SNR  7.0  present False  locked False
+        ///     tone 1098.2  SNR 14.8  present False  locked False
+        ///
+        /// His station never stopped sending. Lock dropped for a moment, the
+        /// search re-acquired across a 1500 Hz window, took the loudest bin -
+        /// a different station - and presence collapsed. The app said no
+        /// signal while the operator could hear one perfectly.
+        ///
+        /// bench/live-offpitch-1450.wav is the same fault recorded: loudest bin
+        /// 800 Hz of hiss, only keyed bin 1450 Hz, ninety seconds of nothing.
+        /// Measured on it at this detector's own 128 ms window and 64 ms hop:
+        ///
+        /// Measured over the whole file, at 10 ms frames and at this detector's
+        /// own 128 ms window and 64 ms hop:
+        ///
+        ///     bin       10 ms      128/64 ms
+        ///      700       2.11        2.06
+        ///      800       2.08        2.09
+        ///      900       2.11        2.02
+        ///     1100       2.12        2.07
+        ///     1450       3.38        4.92    <- the station
+        ///
+        /// Separation improves at the detector's own cadence, because a longer
+        /// window integrates a real tone coherently while noise stays Rayleigh.
+        /// The right-hand column is the one this code sees. Note that CwBench
+        /// --spectrum prints the left-hand one, so its verdict on this file -
+        /// "keyed around 1450 Hz, but weakly" - reads more marginal than what
+        /// the detector actually works with.
+        ///
+        /// Narrowband noise is Rayleigh, so its upper tail sits a fixed
+        /// multiple above its own mean however loud the hiss is. That is what
+        /// makes this a shape test rather than a level test, and why a fixed
+        /// threshold is defensible at all - the same reasoning already set out
+        /// at PresentRatio.
+        ///
+        /// 3.0 sits between the two populations with room either side, and is
+        /// the same floor CwBench prints its "nothing is being keyed" verdict
+        /// at, so the bench tool and the decoder agree on what counts as keyed.
+        /// </summary>
+        private const double AcquireKeyingRatio = 3.0;
+
+        /// <summary>
+        /// Frames of history behind the keying ratio. 256 frames at the 64 ms
+        /// hop is about sixteen seconds. That is far longer than it looks like
+        /// it needs to be, and the length is the setting that actually matters
+        /// here - more than the threshold.
+        ///
+        /// The ratio wants a denominator sitting on the noise floor between
+        /// the marks, so the window has to be long enough that the quiet half
+        /// of it is genuinely quiet: several characters is not enough, because
+        /// a dense burst of sending fills a short window with key-down time
+        /// and drags the median up onto a mark. The ratio then collapses on
+        /// the real signal and the search goes hunting when it should have
+        /// stayed put. Tried at three seconds first, and that is exactly what
+        /// happened - strong-sig-1, the corpus control, lost the leading
+        /// callsign of its first exchange. Word gaps have to fit inside the
+        /// window, and at 96 frames and up they do.
+        ///
+        /// Swept over the corpus at 96/160/256 frames against thresholds of
+        /// 3.0/3.5/4.0. 256 and 3.0 came out best on every measure that was
+        /// being watched.
+        ///
+        /// Until this many frames have been seen, acquisition falls back to
+        /// the loudest bin and behaves exactly as it always did, so the cost
+        /// of the long window is only that the rescue is unavailable for the
+        /// first sixteen seconds - never that anything gets worse.
+        /// </summary>
+        private const int AcquireKeyingFrames = 256;
+
+
         private readonly CwToneDetectorOptions _opt;
         private readonly int      _decimation;
         private readonly double[] _fir;
@@ -439,6 +522,16 @@ namespace RadioWebControl.Core.Services.Cw
         private readonly double[] _im     = new double[FftSize];
         private readonly double[] _mag    = new double[FftSize / 2];
         private int _fftFill;
+
+        // Per-bin magnitude history, for ChooseBin. Every bin is recorded every
+        // frame, not just the ones in the current search window: a bin the
+        // window has not reached yet still needs its history ready for the
+        // moment it does, which is exactly when acquisition asks about it.
+        // Laid out bin-major, AcquireKeyingFrames deep, written round-robin.
+        private readonly double[] _binHist =
+            new double[(FftSize / 2) * AcquireKeyingFrames];
+        private int _binHistPos;
+        private int _binFrames;
 
         private long   _sampleIndex8k;
         private double _phasorPhase;
@@ -828,6 +921,11 @@ namespace RadioWebControl.Core.Services.Cw
             for (int i = 0; i < half; i++)
                 _mag[i] = Math.Sqrt(_re[i] * _re[i] + _im[i] * _im[i]);
 
+            for (int i = 0; i < half; i++)
+                _binHist[i * AcquireKeyingFrames + _binHistPos] = _mag[i];
+            _binHistPos = (_binHistPos + 1) % AcquireKeyingFrames;
+            if (_binFrames < AcquireKeyingFrames) _binFrames++;
+
             CaptureSpectrum();
 
             // Acquire across everything the filter passes; track narrowly once
@@ -853,14 +951,9 @@ namespace RadioWebControl.Core.Services.Cw
             int hi = Math.Min(half - 2, (int)Math.Ceiling((centre + halfBand) / binHz));
             if (hi <= lo) { _confidence = 0.0; return; }
 
-            int    peakBin = lo;
-            double peakMag = _mag[lo];
+            int    peakBin = ChooseBin(lo, hi, tracking, out double peakMag);
             double sum     = 0.0;
-            for (int i = lo; i <= hi; i++)
-            {
-                sum += _mag[i];
-                if (_mag[i] > peakMag) { peakMag = _mag[i]; peakBin = i; }
-            }
+            for (int i = lo; i <= hi; i++) sum += _mag[i];
 
             int    n    = hi - lo + 1;
             double rest = n > 1 ? (sum - peakMag) / (n - 1) : sum / n;
@@ -992,6 +1085,112 @@ namespace RadioWebControl.Core.Services.Cw
         /// and flattens itself against its own noise floor; half the bins in a
         /// CW passband are floor even with a signal in it.
         /// </summary>
+        /// <summary>
+        /// How keyed one bin looks: its loud level over its typical level,
+        /// taken as the 95th percentile over the median of the magnitudes
+        /// recorded for it.
+        ///
+        /// Median, not mean, and that distinction is the whole thing. Morse
+        /// spends well under half its time key-down, so the median of a keyed
+        /// bin sits on the noise floor between the marks while the 95th
+        /// percentile sits on a mark, and the ratio opens up. A mean would
+        /// include the key-down time in the denominator and the ratio could
+        /// then never exceed one over the duty cycle - about 2.5 for ordinary
+        /// CW, under the threshold, no matter how strong the signal. Tried it
+        /// that way first; it never fired.
+        ///
+        /// This is deliberately the same statistic CwBench/Spectrum.cs prints,
+        /// so a file that reads as keyed on the bench reads as keyed here.
+        /// </summary>
+        private double KeyingRatio(int bin)
+        {
+            Span<double> v = stackalloc double[AcquireKeyingFrames];
+            _binHist.AsSpan(bin * AcquireKeyingFrames, AcquireKeyingFrames).CopyTo(v);
+            v.Sort();
+
+            double median = v[AcquireKeyingFrames / 2];
+            double loud   = v[(int)(AcquireKeyingFrames * 0.95)];
+            return median > 1e-12 ? loud / median : 0.0;
+        }
+
+        /// <summary>
+        /// Which bin in the search window the tone should be taken from.
+        ///
+        /// While tracking, the loudest bin, as it always was. The tracking
+        /// window is only TrackBandHz wide and the station in it is the one
+        /// already being copied, so level is the right test and there is no
+        /// reason to spend the risk here.
+        ///
+        /// While acquiring, the loudest bin that actually looks keyed - see
+        /// AcquireKeyingRatio for why that is not the same question as the
+        /// loudest bin, and for the recording where the two disagree. Only
+        /// local maxima are considered, so a keyed tone contributes its own
+        /// peak rather than its skirts.
+        ///
+        /// If nothing in the window clears the ratio, or the history has not
+        /// filled yet, this falls back to the plain loudest bin, which is the
+        /// behaviour that existed before it.
+        ///
+        /// On an empty band that fallback is the whole story - no bin clears
+        /// 3.0 against a measured noise ratio of about 2.1 - and the corpus
+        /// bears it out: diag-dead comes out unchanged, and noise, which used
+        /// to invent "F5 EIS CQ TEE E E" out of hiss, now manages only
+        /// "F5 E". Hallucinating a CQ out of noise is the one error that
+        /// makes the reader untrustworthy, so losing it is worth more than
+        /// the character count suggests.
+        /// </summary>
+        private int ChooseBin(int lo, int hi, bool tracking, out double mag)
+        {
+            int    loudBin = lo;
+            double loudMag = _mag[lo];
+            for (int i = lo; i <= hi; i++)
+                if (_mag[i] > loudMag) { loudMag = _mag[i]; loudBin = i; }
+
+            if (tracking || _binFrames < AcquireKeyingFrames)
+            {
+                mag = loudMag;
+                return loudBin;
+            }
+
+            // If the loudest bin is itself keyed, it is the signal, and there is
+            // nothing to reconsider - take it and leave every ordinary file
+            // behaving exactly as it did before this method existed. Only when
+            // the loudest bin looks like hiss is it worth hunting elsewhere.
+            //
+            // This guard is not a nicety. Without it the search ranks a clean
+            // strong signal by keying alone, and a key-click sideband - narrow,
+            // sharply on and off, so a very high ratio - outscores the tone it
+            // came from. That cost strong-sig-1, the corpus control, the
+            // leading callsign of its first exchange.
+            if (KeyingRatio(loudBin) >= AcquireKeyingRatio)
+            {
+                mag = loudMag;
+                return loudBin;
+            }
+
+            // Ranked by keying, not by level. Picking the loudest of the bins
+            // that pass the threshold puts level back in charge among the
+            // candidates, and on a quiet band enough noise bins scrape past
+            // the threshold that the loudest of them wins - the tone then
+            // hops around the window frame by frame instead of settling. Tried
+            // that first; it reached the right region and would not stay there.
+            int    keyedBin   = -1;
+            double keyedRatio = 0.0;
+            for (int i = lo; i <= hi; i++)
+            {
+                if (_mag[i] < _mag[i - 1] || _mag[i] < _mag[i + 1]) continue;
+
+                double r = KeyingRatio(i);
+                if (r < AcquireKeyingRatio) continue;
+                if (r > keyedRatio) { keyedRatio = r; keyedBin = i; }
+            }
+
+            if (keyedBin >= 0) { mag = _mag[keyedBin]; return keyedBin; }
+
+            mag = loudMag;
+            return loudBin;
+        }
+
         private void CaptureSpectrum()
         {
             int n = _specHi - _specLo + 1;
