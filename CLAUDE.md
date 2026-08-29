@@ -24,8 +24,10 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 > - **Not fully covered by tests.** `Tests/YaesuWebControl.Tests` exists and
 >   is real (JPEG SOF parsing, video disconnect/halt and tiled-frame logic,
 >   `RM0` meter parsing, SWR broadcast, per-model max power, mode/VFO
->   routing) but doesn't
->   touch UI, live CAT transport, SDR, or Audio paths. Everything else is
+>   routing, IF filter widths, scope commands) but doesn't
+>   touch UI, live CAT transport, SDR, or Audio paths. **It is the only test
+>   project CI runs, and it is named by path — see "Tests" below before you
+>   add one.** Everything else is
 >   manual verification in the browser at `http://localhost:8080`, against
 >   the radio. When a change is protocol-level (CAT commands, meter scaling,
 >   SDR device I/O), say so and let Colin bench-check it — do not report
@@ -96,6 +98,37 @@ On macOS, set **Serial Port** to a `/dev/cu.*` device. On Linux, use `/dev/ttyUS
 **USB CAT:** install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on Windows, macOS, and Linux, then **reboot the host** before first use (see USER_MANUAL §2.4).
 
 **Docker (linux/amd64 + linux/arm64):** `Dockerfile` + `docker-compose.yml` publish the `net10.0` CAT-only host. Data volume is `XDG_CONFIG_HOME=/data` → `MM5AGM/Yaesu Web Control/`. Entrypoint starts as root, `chown`s `/data` to `app`, then drops privileges (preserving compose `group_add` GIDs). Pass the serial device with `devices:` / `YWC_SERIAL_DEVICE`. For Remote Audio, compose maps `/dev/snd` and `group_add`s host `audio` (`YWC_AUDIO_GID`); the image installs `libasound2t64` + `libportaudio2`. Container runs with auto-shutdown and local browser-open disabled. Install the Silicon Labs driver on the **host** and reboot before mapping the device into the container.
+
+### Tests
+
+```bash
+dotnet test Tests/YaesuWebControl.Tests/YaesuWebControl.Tests.csproj -c Release
+dotnet test core/tests/RadioWebControl.Core.Tests/RadioWebControl.Core.Tests.csproj -c Release
+```
+
+**There is no `.sln`, and CI names one test project by path.**
+`.github/workflows/release.yml` runs
+`Tests/YaesuWebControl.Tests/YaesuWebControl.Tests.csproj` and nothing else.
+There is no solution file to sweep up the rest, so a second test project is
+not "not yet wired in" — it is invisible, permanently and silently. Its tests
+never run, never fail, and never show up as a failing check.
+
+That has already happened here. A `Tests/Yaesu_Web_Control.Tests` existed
+alongside `Tests/YaesuWebControl.Tests` — same directory, names one
+underscore apart — and its 14 IF-width tests had never once run in CI. It was
+deleted and its tests folded into the real project on 2026-08-29.
+
+So: **put new app tests in `Tests/YaesuWebControl.Tests`.** If you genuinely
+need a second project, editing `release.yml` is part of that same change, not
+a follow-up.
+
+**`core/`'s 131 tests run in no CI at all.** `Radio_Web_Control_Core` has no
+workflows, and the line above is the only `dotnet test` in this repo's, so
+nothing automated ever executes them — not here, not in IWC, not in the core
+repo. They are cover only when a human runs them. Run the second command
+above before pushing `core/`, and run it in a standalone clone of the core
+repo too: passing there and not only inside an app is what catches an
+accidental dependency on a consumer.
 
 ### Operational differences (Windows vs macOS/Linux)
 
@@ -267,6 +300,16 @@ inside this repo's `core/`, or IWC's.
 - **`core/js/**/*.js` is copied, not linked**, into `wwwroot/js/` by a build
   target which also writes the `.gitignore` for the copies. Edit the `core/`
   copy; never edit the generated `wwwroot` one.
+- **Moving a JS file *into* `core/js/` can silently delete someone's work.**
+  The moment it moves, the old `wwwroot/js/...` path becomes a generated,
+  gitignored build artefact. Any branch still modifying that path then merges
+  as **modify/delete** — and resolving it as a delete, which is the tempting
+  reading now that the path is generated, drops that branch's change with no
+  conflict marker, no build error, and nothing in the diff to notice. Before
+  moving a file into `core/js/`, run `gh pr list` and check for open PRs
+  touching it; if there are any, fold their changes into the `core/` copy
+  first and say so in the commit. This happened on 2026-08-27 with
+  `audio-playback.js` and PR #112.
 - **Line endings are LF.** Both apps have `* text=auto`, so commits normalise
   to LF on the way in — don't introduce CRLF inside `core/`.
 
@@ -395,6 +438,44 @@ wiring: the audio capture source feeding the engine, the CAT-driven
 pitch/zero-in feedback loop, and the panel host (`core/js/cw/cw-reader-panel.js`
 is shared; the Razor page hosting it is not). In progress on
 `feature/cw-reader` — pull `core/` before extending this.
+
+### CW bench corpus (`bench/`) and `tools/CwBench`
+
+Unit tests cover the decoder's pure logic. Real off-air audio is what catches
+the rest, and it lives in **`bench/`, which is gitignored in its entirety** —
+nothing in it is committed or pushed. It is a local corpus of about 105 wav
+files that has to be recreated by recording, not by cloning.
+
+```powershell
+dotnet build tools/CwBench/CwBench.csproj -c Release
+tools/CwBench/bin/Release/net10.0/CwBench.exe bench/follow.wav --pitch 610 --filter 500 --telemetry 600
+```
+
+`CwBench` runs a wav through `CwDecoderEngine` outside the app and prints the
+decoded text plus tone, confidence and character counts. Any change to
+`core/Services/Cw/` should be scored across the corpus before and after, not
+judged on one file.
+
+**Read a file's sidecar before you score it.** Many wavs have a `.txt` beside
+them recording how they were captured, what is known to be in them, the
+arguments they must be run with, and a `VERDICT` saying what the file is and
+is not evidence for. `bench/follow.txt` and `bench/live-offpitch-1450.txt`
+are the worked examples. Running a file with the wrong `--pitch` / `--filter`
+produces a search window that cannot physically reach the signal, and the
+result looks exactly like a regression. That mistake has been made more than
+once — the sidecar exists to prevent it, so it only works if it is read
+first.
+
+Two hard rules for the corpus:
+
+- **Never invent history for a sidecar.** Record only what was actually
+  measured or logged. Where there is no external ground truth — no
+  independent decoder transcript, no operator copy — the sidecar must say so
+  in those words. Callsigns produced by our own decoder are internal
+  evidence about the tone, never a confirmed identification, and must never
+  be quietly promoted into ground truth later.
+- **ARRL practice files are ARRL copyright.** They stay in `bench/arrl/`,
+  local only. Never commit, publish or redistribute them.
 
 ### Remote Audio (`Services/Audio/`)
 
