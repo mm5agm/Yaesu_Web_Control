@@ -14,8 +14,10 @@ import {
  * starvation spliced in silence. Both put a phase discontinuity into the
  * waveform. Speech hides that; a steady CW tone turns it into warble.
  *
- * So: hold up to 120 ms, and prime 40 ms before starting, re-priming after a
- * dry spell so a starved buffer splices once instead of on every render quantum.
+ * So: hold up to 60 ms, and prime 40 ms before starting, re-priming after a
+ * dry spell so a starved buffer splices once instead of on every render
+ * quantum. Sixty is enough to ride out host load while the main window
+ * navigates, without adding delay the operator can hear.
  */
 export class AudioPlayback {
   constructor() {
@@ -26,8 +28,8 @@ export class AudioPlayback {
     this._decoder = null;
     this._codec = 'pcm16';
     this._muted = false;
-    /** Max queued frames in the worklet (12 × 10 ms = 120 ms). */
-    this._maxQueueFrames = 12;
+    /** ~60 ms jitter buffer (6 × 10 ms frames) - absorbs host load while navigating. */
+    this._maxQueueFrames = 6;
     /** Frames to accumulate before playback starts, and after a dry spell. */
     this._prefillFrames = 4;
   }
