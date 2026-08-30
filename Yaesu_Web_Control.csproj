@@ -286,6 +286,40 @@
     </None>
   </ItemGroup>
 
+  <!--
+    Staging guard. The <None> items above are ordinary evaluation-time items:
+    their Exists() conditions are read before anything is built, and the copy
+    itself is PreserveNewest. That chain does work - a touched file in the
+    worker, or a touched file linked into it from Services/Sdr, both rebuild
+    the worker and restage it (verified 2026-08-30). What it cannot survive is
+    the staged copy being unwritable or the worker output being absent when
+    the items were evaluated, and its failure mode is the dangerous kind: YWC
+    launches a worker that does not contain the change, and nothing in the
+    build output says so. That cost a whole hardware test round chasing an SDR
+    fix that was never in the running code.
+
+    So copy again here, after the worker's ProjectReference has genuinely
+    built, and refuse to finish if there is nothing to copy. The empty-RID
+    case collapses $(RuntimeIdentifier) out of the path, so one target covers
+    both layouts. Cheap, and it turns a silent stale worker into a build
+    error.
+  -->
+  <Target Name="StageSdrWorker" AfterTargets="Build"
+          Condition="'$(TargetFramework)' == 'net10.0-windows' AND ('$(RuntimeIdentifier)' == '' OR $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win')))">
+    <PropertyGroup>
+      <SdrWorkerOutDir>Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\</SdrWorkerOutDir>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.dll')"
+           Text="Yaesu_Sdr_Worker did not produce $(SdrWorkerOutDir)Yaesu_Sdr_Worker.dll. YWC would start and then fail to open any SDR, so this is an error rather than a warning." />
+    <ItemGroup>
+      <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.exe" Condition="Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.exe')" />
+      <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.dll" />
+      <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.deps.json" Condition="Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.deps.json')" />
+      <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.runtimeconfig.json" Condition="Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.runtimeconfig.json')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SdrWorkerStaged)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
   <PropertyGroup>
     <Version>2.4.3</Version>
     <FileVersion>2.4.3.0</FileVersion>
