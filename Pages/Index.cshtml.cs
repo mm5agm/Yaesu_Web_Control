@@ -75,9 +75,9 @@ namespace Yaesu_Web_Control.Pages
         public string CtcssMode { get; set; } = "00";
         public string CtcssTone { get; set; } = "000";
 
-        public double SdrSampleRateHz  { get; set; } = 2_048_000;
-        public double SdrSampleRateHzA { get; set; } = 2_048_000;
-        public double SdrSampleRateHzB { get; set; } = 2_048_000;
+        public double SdrSampleRateHz  { get; set; } = 2_000_000;
+        public double SdrSampleRateHzA { get; set; } = 2_000_000;
+        public double SdrSampleRateHzB { get; set; } = 2_000_000;
 
         // Per-VFO spectrum DSP knobs — initial values for the Low/High/Zoom
         // sliders on each spectrum panel. Persisted server-side; see

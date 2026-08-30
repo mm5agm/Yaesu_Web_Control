@@ -47,6 +47,16 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// </summary>
         public float EmaAlpha { get; set; } = 0.3f;
 
+        // Per-frame weight for the running DC estimate (see ComputeSpectrum).
+        // Frames arrive at sampleRate/fftSize, so at the narrowest span
+        // (62.5 kHz, 1024-point) that is ~61 frames/s and 0.005 gives a time
+        // constant near 3 seconds — a notch roughly 0.3 Hz wide. Wider spans
+        // converge faster, which is harmless: there the residual DC already
+        // sits below the per-bin noise floor.
+        private const float DcAlpha = 0.005f;
+        private double      _dcI, _dcQ;
+        private long        _dcFrames;
+
         /// <summary>
         /// Run the full pipeline on one IQ buffer.
         /// </summary>
@@ -58,13 +68,55 @@ namespace Yaesu_Web_Control.Services.Sdr
             float[] window  = GetHannWindow(fftSize);
             var     complex = new MathNet.Numerics.Complex32[fftSize];
 
+            // 5.2a DC blocker.
+            //
+            // Low-IF tuning moves the tuner's own DC offset out of the
+            // displayed span, which removed the large spike — measured at
+            // 46.9 dB above the noise floor with ifType=0 and gone with
+            // ifType=450. What survives is a small constant offset added
+            // downstream of the API's down-converter: about -93 dBFS, still
+            // ~8 dB above the floor at 61 Hz resolution, and unchanged when the
+            // SDR is retuned 10 kHz — which is what proves it is generated
+            // internally rather than being a carrier at the tuned frequency.
+            //
+            // It is cancelled by subtracting a long-running average of the IQ
+            // stream, NOT each frame's own mean. Subtracting the frame mean
+            // would notch out whatever sits exactly at the tuned frequency —
+            // precisely the signal the user is listening to. A running average
+            // only cancels what stays constant in amplitude and phase over
+            // seconds; a real carrier drifts against the SDR's own LO and
+            // averages to nothing long before it is touched.
+            double sumI = 0, sumQ = 0;
+            for (int i = 0; i < fftSize; i++)
+            {
+                sumI += iqSamples[i * 2];
+                sumQ += iqSamples[i * 2 + 1];
+            }
+            double meanI = sumI / fftSize;
+            double meanQ = sumQ / fftSize;
+
+            // Cumulative mean while the estimate is young, easing into the
+            // fixed-alpha EMA once 1/n drops below it. Seeding from a single
+            // first frame instead was measurably wrong: a start-up frame can be
+            // partial or transient, and subtracting a bad constant ADDS a DC
+            // component — it took the centre bin from 8.3 dB to 15.0 dB above
+            // the floor, worse than doing nothing, for the several seconds the
+            // slow average needed to walk it back.
+            double a = Math.Max(1.0 / (_dcFrames + 1), DcAlpha);
+            _dcFrames++;
+            _dcI += a * (meanI - _dcI);
+            _dcQ += a * (meanQ - _dcQ);
+
+            float dcI = (float)_dcI;
+            float dcQ = (float)_dcQ;
+
             // 5.2 windowing + load IQ into complex buffer.
             for (int i = 0; i < fftSize; i++)
             {
                 float w = window[i];
                 complex[i] = new MathNet.Numerics.Complex32(
-                    iqSamples[i * 2]     * w,
-                    iqSamples[i * 2 + 1] * w);
+                    (iqSamples[i * 2]     - dcI) * w,
+                    (iqSamples[i * 2 + 1] - dcQ) * w);
             }
 
             // 5.1 forward FFT. AsymmetricScaling = we normalise manually below
@@ -122,6 +174,11 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// <summary>Reset EMA history. Call after a settings change (sample rate,
         /// span, antenna) so the smoothing doesn't visibly bleed pre-change levels
         /// into the new spectrum.</summary>
+        /// <summary>The running DC estimate currently being subtracted, so
+        /// SpectrumProbe can measure the stream the display actually sees
+        /// rather than the raw one.</summary>
+        public (float I, float Q) DcEstimate => ((float)_dcI, (float)_dcQ);
+
         public void ResetSmoothing() => _ema = null;
 
         // ── Private helpers ──────────────────────────────────────────────────

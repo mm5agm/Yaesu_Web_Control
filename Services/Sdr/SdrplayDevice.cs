@@ -60,6 +60,8 @@ namespace Yaesu_Web_Control.Services.Sdr
         // gain.LNAstate is unsigned char at gain+4 — Marshal.WriteInt32 writes 4 bytes but
         // the next fields (syncUpdate uchar, 2-byte padding) are all safely zeroed that way.
         private const int    BwTypeOffset        = 0;   // sdrplay_api_Bw_MHzT (int)
+        private const int    IfTypeOffset        = 4;   // sdrplay_api_If_kHzT (int)
+        private const int    LoModeOffset        = 8;   // sdrplay_api_LoModeT (int)
         private const int    GrDbOffset          = 12;  // gain.gRdB     (int) — first field
         private const int    LnaStateOffset      = 16;  // gain.LNAstate (int) — second field
 
@@ -71,6 +73,8 @@ namespace Yaesu_Web_Control.Services.Sdr
         //   ctrlParams.decimation.enable           @ 74
         //   ctrlParams.decimation.decimationFactor @ 75
         //   ctrlParams.decimation.wideBandSignal   @ 76
+        private const int    DcEnableOffset         = 72;
+        private const int    IqEnableOffset         = 73;
         private const int    DecimationEnableOffset = 74;
         private const int    DecimationFactorOffset = 75;
 
@@ -80,6 +84,11 @@ namespace Yaesu_Web_Control.Services.Sdr
         private const int    BW_0_600            = 600;
         private const int    BW_1_536            = 1536;
         private const int    BW_5_000            = 5000;
+
+        // sdrplay_api_If_kHzT enum values (numeric value = IF in kHz).
+        private const int    IF_ZERO             = 0;
+        private const int    IF_0_450            = 450;
+        private const int    IF_2_048            = 2048;
 
         // Key prefix that identifies SDRplay devices across the codebase.
         public const string KeyPrefix = "sdrplay:";
@@ -152,6 +161,13 @@ namespace Yaesu_Web_Control.Services.Sdr
         private IntPtr _deviceStructPtr;  // unmanaged copy of the selected DeviceT
         private IntPtr _devHandle;        // Dev field from DeviceT (HANDLE)
         private IntPtr _callbackFnsPtr;   // unmanaged CallbackFnsT struct
+
+        // Kept from Configure so the applied tuner settings can be read back
+        // after Init. The API hands out pointers to its own live structures,
+        // so if it rejects or rewrites a value, reading these afterwards shows
+        // it — the return code alone does not.
+        private IntPtr _devParamsPtr;
+        private IntPtr _rxChannelAPtr;
         private GCHandle _selfHandle;     // pins 'this' for native callback context
 
         // Delegate fields — kept alive by the instance
@@ -295,6 +311,75 @@ namespace Yaesu_Web_Control.Services.Sdr
             return devices;
         }
 
+        /// <summary>
+        /// A coherent hardware configuration for one requested span.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>HardwareRateHz</c>, <c>BwType</c> and <c>IfType</c> are chosen
+        /// <b>together</b> and must never be picked independently. The API enables
+        /// its low-IF down-conversion only for specific (fsHz, bwType, ifType)
+        /// triples — API spec v3.15 §3.15, "Conditions for LIF down-conversion" —
+        /// and an unmatched triple raises no error. It silently falls back to
+        /// zero-IF, where the tuner's own DC offset lands exactly on the tuned
+        /// frequency and draws a permanent false signal down the centre of the
+        /// spectrum. Colin reported that as a trace that made it impossible to
+        /// tell whether there was really a signal on the frequency he was
+        /// listening to. Bundling the three fields into one value is what stops a
+        /// later edit reintroducing it by changing one of them alone.
+        /// </para>
+        /// <para>
+        /// Every row of <see cref="PlanFor"/> satisfies three constraints:
+        /// it matches a documented LIF triple; its analogue bandwidth is at least
+        /// the achieved span, so the display is not looking through the skirts of
+        /// the IF filter; and the DC offset — which sits <c>IfType</c> kHz from
+        /// centre — falls outside the visible span.
+        /// </para>
+        /// <para>
+        /// Decimation factors are powers of two throughout. The valid range of
+        /// <c>decimationFactor</c> is an undocumented <c>unsigned char</c> — it
+        /// appears in neither the header nor the specification — so this avoids
+        /// discovering the limit by hitting it.
+        /// </para>
+        /// </remarks>
+        private readonly record struct TunePlan(
+            double HardwareRateHz,
+            int    DecimationFactor,
+            int    BwType,
+            int    IfType)
+        {
+            /// <summary>The span actually produced, after decimation.</summary>
+            public double AchievedRateHz => HardwareRateHz / DecimationFactor;
+        }
+
+        /// <summary>
+        /// Maps a requested span onto the hardware settings that deliver it
+        /// without a centre spike. See <see cref="TunePlan"/> for why these
+        /// fields travel together.
+        /// </summary>
+        /// <remarks>
+        /// The 2 MHz / 450 kHz rows run out at a 600 kHz span, because the only
+        /// bandwidths the API will accept alongside a 450 kHz IF at fs = 2 MHz are
+        /// 200, 300 and 600 kHz. Anything wider moves to fs = 8 MHz with a
+        /// 2.048 MHz IF and the 5 MHz filter, which costs four times the USB
+        /// bandwidth — around 32 MB/s per device — and is the reason the span list
+        /// stops at 2 MHz rather than going wider.
+        /// </remarks>
+        private static TunePlan PlanFor(double requestedRateHz) => requestedRateHz switch
+        {
+            //                       fsHz       ÷   bwType     ifType     → span
+            <=    62_500 => new(2_000_000, 32, BW_0_200, IF_0_450), //   62.5 kHz
+            <=   125_000 => new(2_000_000, 16, BW_0_200, IF_0_450), //  125   kHz
+            <=   250_000 => new(2_000_000,  8, BW_0_300, IF_0_450), //  250   kHz
+            <=   500_000 => new(2_000_000,  4, BW_0_600, IF_0_450), //  500   kHz
+            <= 1_000_000 => new(8_000_000,  8, BW_5_000, IF_2_048), //    1   MHz
+
+            _            => new(8_000_000,  4, BW_5_000, IF_2_048), //    2   MHz
+        };
+
+        /// <inheritdoc/>
+        public double ActualSampleRateHz { get; private set; }
+
         /// <inheritdoc/>
         public void Configure(long centreFrequencyHz, double sampleRateHz, int fftSize)
         {
@@ -345,21 +430,35 @@ namespace Yaesu_Web_Control.Services.Sdr
 
             IntPtr devParams  = Marshal.ReadIntPtr(deviceParamsPtr, DevParamsOffset);
             IntPtr rxChannelA = Marshal.ReadIntPtr(deviceParamsPtr, RxChannelAOffset);
+            _devParamsPtr   = devParams;
+            _rxChannelAPtr  = rxChannelA;
 
-            // Sample rate — hardware minimum is 2 MHz; use decimation for narrower spans.
-            const double MinHardwareRateHz = 2_000_000;
-            double hardwareRateHz  = Math.Max(sampleRateHz, MinHardwareRateHz);
-            int    decimationFactor = (sampleRateHz < MinHardwareRateHz)
-                ? (int)Math.Round(MinHardwareRateHz / sampleRateHz)
-                : 1;
+            // Sample rate, decimation, analogue bandwidth and IF mode — one
+            // decision, because the API only enables low-IF down-conversion for
+            // certain combinations of the four. See TunePlan.
+            TunePlan plan = PlanFor(sampleRateHz);
 
-            WriteDouble(devParams, FsHzOffset, hardwareRateHz);
+            // Diagnostic escape hatch: YWC_SDR_FORCE_IF_ZERO=1 runs the
+            // identical plan with the IF forced back to zero. Whether low-IF
+            // down-conversion is really engaging can only be answered by
+            // measuring the same radio on the same band both ways. Measured
+            // 2026-08-30 at the 62.5 kHz span: centre bin +46.9 dB over the
+            // noise floor forced to zero-IF, +8.4 dB with low-IF, +0.7 dB with
+            // low-IF and the DC blocker. One reading alone proves nothing.
+            if (Environment.GetEnvironmentVariable("YWC_SDR_FORCE_IF_ZERO") == "1")
+                plan = plan with { IfType = IF_ZERO };
 
-            if (decimationFactor > 1)
-            {
-                Marshal.WriteByte(rxChannelA, DecimationEnableOffset, 1);
-                Marshal.WriteByte(rxChannelA, DecimationFactorOffset, (byte)decimationFactor);
-            }
+            // The achieved span is rarely the requested one exactly, and the
+            // browser draws its frequency scale from whatever we report. Record
+            // what the hardware will really produce, not what was asked for.
+            ActualSampleRateHz = plan.AchievedRateHz;
+
+            WriteDouble(devParams, FsHzOffset, plan.HardwareRateHz);
+
+            Marshal.WriteByte(rxChannelA, DecimationEnableOffset,
+                              (byte)(plan.DecimationFactor > 1 ? 1 : 0));
+            Marshal.WriteByte(rxChannelA, DecimationFactorOffset,
+                              (byte)plan.DecimationFactor);
 
             // Centre frequency
             WriteDouble(rxChannelA, RfHzOffset, (double)centreFrequencyHz);
@@ -367,12 +466,22 @@ namespace Yaesu_Web_Control.Services.Sdr
             // Analog bandwidth — must be set to match the sample rate.
             // Default after GetDeviceParams is 200 kHz, which rejects almost all of
             // the displayed span and leaves the spectrum showing only noise floor.
-            int bw = sampleRateHz <=   250_000 ? BW_0_200
-                   : sampleRateHz <=   500_000 ? BW_0_300
-                   : sampleRateHz <= 1_200_000 ? BW_0_600
-                   : sampleRateHz <= 2_600_000 ? BW_1_536
-                   :                              BW_5_000;
-            Marshal.WriteInt32(rxChannelA, BwTypeOffset, bw);
+            Marshal.WriteInt32(rxChannelA, BwTypeOffset, plan.BwType);
+
+            // IF mode. Left unwritten this defaults to sdrplay_api_IF_Zero, which
+            // is what put a permanent trace down the centre of the display.
+            Marshal.WriteInt32(rxChannelA, IfTypeOffset, plan.IfType);
+
+            // An unmatched fsHz/bwType/ifType triple is not an error — the API
+            // simply reverts to zero-IF and says nothing, and the only visible
+            // symptom is the centre spike coming back. Log what we asked for so
+            // that failure can be told apart from "low-IF worked and the spike
+            // is coming from somewhere else".
+            Console.Error.WriteLine(
+                $"[SdrplayDevice] tune plan: requested={sampleRateHz:0} Hz  " +
+                $"fsHz={plan.HardwareRateHz:0}  decim={plan.DecimationFactor}  " +
+                $"bwType={plan.BwType}  ifType={plan.IfType}  " +
+                $"achieved={plan.AchievedRateHz:0} Hz  rfHz={centreFrequencyHz}");
 
             // Gain — gRdB 40 (moderate IF gain reduction, safe for strong IF inputs),
             // LNAstate 0 (minimum LNA attenuation = maximum LNA sensitivity).
@@ -408,6 +517,25 @@ namespace Yaesu_Web_Control.Services.Sdr
                 throw new InvalidOperationException(
                     $"sdrplay_api: sdrplay_api_Init returned error code {initErr}" +
                     ReadLastErrorDetail(_deviceStructPtr));
+
+            // Read the tuner settings back out of the API's own structures now
+            // that Init has run. Init returning success does not mean it used
+            // what we asked for: an unmatched fsHz/bwType/ifType triple leaves
+            // the device in zero-IF and reports nothing. If these read back
+            // changed, the API overrode us; if they read back as asked but the
+            // centre spike is still there, the device accepted the settings and
+            // did not act on them.
+            Console.Error.WriteLine(
+                "[SdrplayDevice] after Init: " +
+                $"fsHz={ReadDouble(_devParamsPtr, FsHzOffset):0}  " +
+                $"bwType={Marshal.ReadInt32(_rxChannelAPtr, BwTypeOffset)}  " +
+                $"ifType={Marshal.ReadInt32(_rxChannelAPtr, IfTypeOffset)}  " +
+                $"loMode={Marshal.ReadInt32(_rxChannelAPtr, LoModeOffset)}  " +
+                $"rfHz={ReadDouble(_rxChannelAPtr, RfHzOffset):0}  " +
+                $"decEnable={Marshal.ReadByte(_rxChannelAPtr, DecimationEnableOffset)}  " +
+                $"decFactor={Marshal.ReadByte(_rxChannelAPtr, DecimationFactorOffset)}  " +
+                $"DCenable={Marshal.ReadByte(_rxChannelAPtr, DcEnableOffset)}  " +
+                $"IQenable={Marshal.ReadByte(_rxChannelAPtr, IqEnableOffset)}");
 
             _streaming = true;
         }
@@ -648,6 +776,11 @@ namespace Yaesu_Web_Control.Services.Sdr
         private static void WriteDouble(IntPtr ptr, int offset, double value)
         {
             Marshal.WriteInt64(ptr, offset, BitConverter.DoubleToInt64Bits(value));
+        }
+
+        private static double ReadDouble(IntPtr ptr, int offset)
+        {
+            return BitConverter.Int64BitsToDouble(Marshal.ReadInt64(ptr, offset));
         }
 
         private static void ThrowIfError(int err, string operation)

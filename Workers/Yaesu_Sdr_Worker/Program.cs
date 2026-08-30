@@ -11,7 +11,7 @@
 //       --vfo         A
 //       --port        17001
 //       --if-hz       9000000
-//       --sample-rate 2048000
+//       --sample-rate 2000000
 //       --fft-size    1024
 //
 // Listens on localhost:<port>, accepts one client (YWC main), opens the SDR,
@@ -106,7 +106,7 @@ internal static class Program
             "                 log prefix to disambiguate worker output.\n" +
             "  --port         TCP port to listen on (localhost only).\n" +
             "  --if-hz        Centre/IF frequency in Hz (typically 9000000).\n" +
-            "  --sample-rate  Sample rate in Hz (typically 2048000).\n" +
+            "  --sample-rate  Sample rate in Hz (typically 2000000).\n" +
             "  --fft-size     FFT size — must be a power of two.\n" +
             "\n" +
             "Exit codes:\n" +

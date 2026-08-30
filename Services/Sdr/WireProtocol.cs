@@ -22,7 +22,7 @@
 //   SpectrumFrame (type 0x01)
 //     [8 bytes]   sequence    (uint64) — frame counter, monotonically increasing
 //     [8 bytes]   centreHz    (int64)  — centre frequency in Hz
-//     [8 bytes]   spanHz      (int64)  — full visible span in Hz (= sample rate)
+//     [8 bytes]   spanHz      (int64)  — full visible span in Hz (the achieved IQ rate)
 //     [4 bytes]   binCount    (int32)  — number of float bins that follow
 //     [binCount × 4 bytes]  bins (float32 each, BE) — dBFS values
 //

@@ -162,10 +162,28 @@ namespace Yaesu_Web_Control.Services
         // Rules:
         //   - If legacy SdrSampleRateHz has a value and either A or B is 0,
         //     copy legacy → the missing slot(s). Clear legacy.
-        //   - If A or B is still 0 after that, fall back to the v2.2.x
-        //     default 2_048_000 so a brand-new settings file or one missing
-        //     all three fields still gets sane defaults.
-        private const double DefaultSampleRateHz = 2_048_000;
+        //   - If A or B is still 0 after that, fall back to the current
+        //     default so a brand-new settings file or one missing all three
+        //     fields still gets sane defaults.
+        //   - Map any rate retired by the low-IF change onto its nearest
+        //     survivor (see below).
+        private const double DefaultSampleRateHz = 2_000_000;
+
+        // Spans retired when the spectrum moved to low-IF. Only a handful of
+        // sample rates satisfy the SDRplay API's low-IF conditions, so the
+        // span list shrank to the six rates those conditions allow. A settings
+        // file written before that still names one of the old rates; left
+        // alone it would be rejected by /api/sdr/span and leave the main page
+        // with no span button lit, which reads as a broken UI rather than as
+        // an out-of-date setting.
+        private static readonly Dictionary<double, double> RetiredSampleRates = new()
+        {
+            [1_024_000] = 1_000_000,   // same span, now reached as 8 MHz ÷ 8
+            [2_048_000] = 2_000_000,   // same span, now reached as 8 MHz ÷ 4
+            [2_500_000] = 2_000_000,   // no low-IF combination reaches these,
+            [3_200_000] = 2_000_000,   // so they fall back to the widest span
+        };
+
         private static void MigrateSdrSampleRate(ApplicationSettings s)
         {
             if (s.SdrSampleRateHz > 0)
@@ -176,6 +194,11 @@ namespace Yaesu_Web_Control.Services
             }
             if (s.SdrSampleRateHzA == 0) s.SdrSampleRateHzA = DefaultSampleRateHz;
             if (s.SdrSampleRateHzB == 0) s.SdrSampleRateHzB = DefaultSampleRateHz;
+
+            if (RetiredSampleRates.TryGetValue(s.SdrSampleRateHzA, out double newA))
+                s.SdrSampleRateHzA = newA;
+            if (RetiredSampleRates.TryGetValue(s.SdrSampleRateHzB, out double newB))
+                s.SdrSampleRateHzB = newB;
         }
 
         // Backward-compat for users whose *CommandLine settings were saved before

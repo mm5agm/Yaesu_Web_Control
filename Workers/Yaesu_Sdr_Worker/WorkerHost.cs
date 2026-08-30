@@ -98,6 +98,12 @@ internal sealed class WorkerHost
             float[] iqBuffer = new float[_opts.FftSize * 2];
             ulong sequence = 0;
 
+            // Averages a few seconds of IQ once, then logs the filter shape and
+            // the level of the centre bin — neither of which can be read off
+            // the display, whose bins are clamped and smoothed. See
+            // SpectrumProbe.cs.
+            var probe = new SpectrumProbe(_opts.FftSize);
+
             // FrameIntervalMs is enforced by the SDR's read-availability — we
             // pull as fast as the device emits and let TryReadIqFrameAsync block.
             const int frameTimeoutMs = 200;
@@ -110,6 +116,14 @@ internal sealed class WorkerHost
 
                 float[] bins = _processor.ComputeSpectrum(iqBuffer, _opts.FftSize);
 
+                // After ComputeSpectrum, so the probe subtracts the same DC
+                // estimate the display just used and therefore measures the
+                // corrected stream rather than the raw one.
+                var (dcI, dcQ) = _processor.DcEstimate;
+                if (probe.Add(iqBuffer, dcI, dcQ))
+                    foreach (string line in probe.Format(device.ActualSampleRateHz, _opts.IfFrequencyHz))
+                        Log(line);
+
                 // Round to 1 dp before transmission (same precision as the
                 // current SignalR path, keeps frames small).
                 for (int i = 0; i < bins.Length; i++)
@@ -120,7 +134,7 @@ internal sealed class WorkerHost
                     await writer.WriteSpectrumAsync(
                         ++sequence,
                         _opts.IfFrequencyHz,
-                        (long)_opts.SampleRateHz,
+                        (long)device.ActualSampleRateHz,
                         bins,
                         stoppingToken).ConfigureAwait(false);
                 }
