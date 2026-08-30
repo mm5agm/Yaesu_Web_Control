@@ -137,7 +137,9 @@ second half only.
 
 ### 3a. When the seam question actually arrives — and who has to be in it
 
-Added 2026-08-15, after a no-hardware **stub radio** for YWC was raised.
+Raised 2026-08-15, after a no-hardware **stub radio** for YWC was proposed.
+Answered 2026-08-30 — see "What Fabio said" below, which supersedes the
+plan this section originally carried.
 
 IWC can run its whole UI with no radio attached (`IWC_USE_STUB_RADIO=1` swaps a
 canned `StubRadioController` in behind the seam). That has already paid for
@@ -151,32 +153,49 @@ CAT port to the radio.
 one radio's capabilities and has no second copy to agree with, so it fails §4's
 "only move what already agrees" rule outright. The unit is the seam — and the
 decision point arrives the **moment** stub work starts, because you cannot build
-the stub without building a seam. Building a YWC-local seam first and moving it
-to core afterwards is the expensive order.
+the stub without building a seam.
 
-So when that moment comes, two things are true at once:
+What made that a question rather than a task is that the two seams are not the
+same shape. IWC's is built around a **single-receiver IC-7300**; YWC spans the
+**dual-receiver FTdx101**, the FTdx10 and the FT-710. Deciding which behaviour
+wins is not a copy. And it points in the same direction as the monorepo proposal
+in §5 — smaller, but adjacent to something parked by agreement — so it went to
+Fabio rather than being started unilaterally.
 
-- **The prize is real.** A seam in core would be the first thing in here with
-  serious leverage — core today is `DxSpot.cs`, `AdifParser.cs` and
-  `calibration-engine.js`. It would make UI, voice dispatch and test harness
-  shared surface, and both apps would get a stub nearly free.
-- **The shape is not obvious, and it is not Colin's alone to settle.** IWC's
-  seam is shaped around a **single-receiver IC-7300**; YWC spans the
-  **dual-receiver FTdx101**, the FTdx10 and the FT-710. Making one seam span
-  both is a decision about which behaviour wins, not a copy. And it points in
-  the same direction as the monorepo proposal in §5 — smaller, but adjacent to
-  something parked by agreement — **so it deserves a conversation with Fabio
-  rather than a unilateral start.**
+#### What Fabio said (2026-08-30)
 
-**Therefore: raise the seam's shape with Fabio before building anything against
-it.** If that stalls, a YWC-local seam is still worth having — but go in knowing
-it may have to be redone.
+**Not yet, for anything landing in `core`.** The order is:
 
-*Unrelated to all of the above, and worth trying first: for anything in the
-HTTP/static layer you do not need a fake radio, only a booting app. Starting YWC
-against a non-existent COM port would probably serve its pages showing
-disconnected, which is enough to check response headers and rendered markup.
-That is an untested guess, not a finding.*
+1. a **YWC-local** seam first;
+2. a thin **semantic** API — verbs, not wire traffic;
+3. CAT behind it;
+4. the stub as one implementation of it;
+5. used in YWC until it has paid for itself.
+
+So building locally first is the agreed order. It is not the expensive detour
+this section originally called it, and there is no plan here to promote the
+seam to `core` once the two contracts look alike.
+
+What is open is only the **shape of a later question**. If a radio type is ever
+shared, it is only the verbs both apps already treat as generic — frequency,
+mode, PTT, and whatever else genuinely turns out to be common **once two real
+seams exist to compare**. Brand quirks stay in each app. `core` still does not
+know what a roofing filter or a waterfall is.
+
+That narrow slice is the only candidate worth comparing, judged on evidence from
+two working seams. It is not one seam spanning both radios, and it is not
+something to start now.
+
+*On doing without a stub in the meantime: for anything in the HTTP/static layer
+you do not need a fake radio, only a booting app. Starting YWC against a
+non-existent COM port does serve its pages, showing disconnected — enough to
+check response headers and rendered markup. That was an untested guess when it
+was written here; Fabio has since tested it. But — his point, and the reason it
+belongs in this paragraph rather than replacing the section above — **a missing
+COM port is not a substitute for a stub.** A dead port gives you a disconnected
+app. Anything that needs live frequency, mode or meter behaviour, the Firefox
+meter-needle bug being exactly that, still needs something answering behind the
+seam.*
 
 ## 4. What to do first — and it is not extracting all 36 at once
 
