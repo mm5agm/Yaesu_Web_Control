@@ -135,6 +135,68 @@ add a second radio model without forking again.
 **Do not treat that back-port as a prerequisite for starting.** It gates the
 second half only.
 
+### 3a. When the seam question actually arrives — and who has to be in it
+
+Raised 2026-08-15, after a no-hardware **stub radio** for YWC was proposed.
+Answered 2026-08-30 — see "What Fabio said" below, which supersedes the
+plan this section originally carried.
+
+IWC can run its whole UI with no radio attached (`IWC_USE_STUB_RADIO=1` swaps a
+canned `StubRadioController` in behind the seam). That has already paid for
+itself — the Firefox meter-needle bug was reproduced *and* its fix verified
+entirely under the stub, no radio involved — and its absence in YWC has a cost
+on record: the static-asset caching fix (YWC PR #110) is a pure HTTP-layer
+change that still could not be runtime-verified, because starting YWC opens the
+CAT port to the radio.
+
+**The stub is the wrong unit to argue about.** A canned controller is shaped to
+one radio's capabilities and has no second copy to agree with, so it fails §4's
+"only move what already agrees" rule outright. The unit is the seam — and the
+decision point arrives the **moment** stub work starts, because you cannot build
+the stub without building a seam.
+
+What made that a question rather than a task is that the two seams are not the
+same shape. IWC's is built around a **single-receiver IC-7300**; YWC spans the
+**dual-receiver FTdx101**, the FTdx10 and the FT-710. Deciding which behaviour
+wins is not a copy. And it points in the same direction as the monorepo proposal
+in §5 — smaller, but adjacent to something parked by agreement — so it went to
+Fabio rather than being started unilaterally.
+
+#### What Fabio said (2026-08-30)
+
+**Not yet, for anything landing in `core`.** The order is:
+
+1. a **YWC-local** seam first;
+2. a thin **semantic** API — verbs, not wire traffic;
+3. CAT behind it;
+4. the stub as one implementation of it;
+5. used in YWC until it has paid for itself.
+
+So building locally first is the agreed order. It is not the expensive detour
+this section originally called it, and there is no plan here to promote the
+seam to `core` once the two contracts look alike.
+
+What is open is only the **shape of a later question**. If a radio type is ever
+shared, it is only the verbs both apps already treat as generic — frequency,
+mode, PTT, and whatever else genuinely turns out to be common **once two real
+seams exist to compare**. Brand quirks stay in each app. `core` still does not
+know what a roofing filter or a waterfall is.
+
+That narrow slice is the only candidate worth comparing, judged on evidence from
+two working seams. It is not one seam spanning both radios, and it is not
+something to start now.
+
+*On doing without a stub in the meantime: for anything in the HTTP/static layer
+you do not need a fake radio, only a booting app. Starting YWC against a
+non-existent COM port does serve its pages, showing disconnected — enough to
+check response headers and rendered markup. That was an untested guess when it
+was written here; Fabio has since tested it. But — his point, and the reason it
+belongs in this paragraph rather than replacing the section above — **a missing
+COM port is not a substitute for a stub.** A dead port gives you a disconnected
+app. Anything that needs live frequency, mode or meter behaviour, the Firefox
+meter-needle bug being exactly that, still needs something answering behind the
+seam.*
+
 ## 4. What to do first — and it is not extracting all 36 at once
 
 A big-bang extraction across two live applications with installers going out is
