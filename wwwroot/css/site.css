@@ -1254,7 +1254,63 @@ fieldset.calibration-card {
     display: none !important;
 }
 
-/* Radio Display CAT scope — modeless dialog, same pattern as Mic & Gain. */
+/* Radio Display body: video pane + optional docked scope column. */
+.radio-display-body {
+    position: relative;
+}
+.radio-display-video-pane {
+    position: relative;
+    text-align: center;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.radio-display-body:not(.controls-docked) .radio-display-video-pane {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    width: 100%;
+}
+.card:fullscreen {
+    display: flex;
+    flex-direction: column;
+}
+.card:fullscreen .radio-display-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+}
+.card:fullscreen .radio-display-video-pane {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    width: 100%;
+}
+.card:fullscreen .radio-display-body.controls-docked {
+    flex-direction: row;
+}
+.card:fullscreen #radioDisplayImg {
+    object-position: center center;
+}
+.radio-display-body.controls-docked {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    overflow: hidden;
+    min-height: inherit;
+}
+.radio-display-body.controls-docked .radio-display-video-pane {
+    flex: 1 1 50%;
+    width: 50%;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Radio Display CAT scope — modeless dialog; overlay by default CSS, docked in-column below. */
 #radioDisplayScopeDialog {
     position: fixed;
     top: 120px;
@@ -1272,6 +1328,42 @@ fieldset.calibration-card {
     max-height: 80vh;
     overflow: visible;
 }
+.radio-display-body.controls-docked #radioDisplayScopeDialog {
+    position: static;
+    top: auto;
+    left: auto;
+    transform: none;
+    z-index: auto;
+    flex: 1 1 50%;
+    width: 50%;
+    min-width: 0;
+    min-height: 0;
+    max-width: none;
+    max-height: none;
+    height: auto;
+    align-self: stretch;
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid #444;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.radio-display-body:not(.controls-docked) #radioDisplayScopeDialog:not([open]) {
+    display: none;
+}
+.radio-display-scope-undock-btn,
+.radio-display-scope-dock-btn,
+.radio-display-scope-close-btn {
+    display: none;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog[open] .radio-display-scope-undock-btn {
+    display: inline-block;
+}
+.radio-display-body:not(.controls-docked) #radioDisplayScopeDialog[open] .radio-display-scope-dock-btn,
+.radio-display-body:not(.controls-docked) #radioDisplayScopeDialog[open] .radio-display-scope-close-btn {
+    display: inline-block;
+}
 #radioDisplayScopeDialog .tooltip {
     z-index: 10050;
 }
@@ -1280,12 +1372,24 @@ fieldset.calibration-card {
     user-select: none;
     border-bottom: 1px solid #444;
 }
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-dialog-header {
+    cursor: default;
+    flex-shrink: 0;
+}
 #radioDisplayScopeDialog .radio-display-scope-dialog-header:active {
     cursor: grabbing;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-dialog-header:active {
+    cursor: default;
 }
 #radioDisplayScopeDialog .radio-display-scope-dialog-body {
     overflow-y: auto;
     max-height: calc(80vh - 2.75rem);
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-dialog-body {
+    flex: 1 1 auto;
+    max-height: none;
+    min-height: 0;
 }
 #radioDisplayScopeDialog .text-muted,
 #radioDisplayScopeDialog .form-text,

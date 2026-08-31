@@ -252,7 +252,7 @@ feature.
 | `Controllers/ScopeController.cs` | `GET /api/scope/{main\|sub}`, `POST /api/scope/{band}/{setting}` including `affft` |
 | `Pages/Shared/_RadioScopePartial.cshtml` | standalone card (CAT-without-video); Hold / Marker / Level live here |
 | `Pages/Shared/_RadioScopeButtonsPartial.cshtml` | shared span / display / speed / MULTI / AF-FFT / OSC buttons |
-| `Pages/Shared/_RadioDisplayScopeToolbarPartial.cshtml` | Controls dialog on Index Radio Display and `/RadioDisplay` pop-out |
+| `Pages/Shared/_RadioDisplayScopeToolbarPartial.cshtml` | Controls column / overlay on Index Radio Display and `/RadioDisplay` pop-out |
 | `wwwroot/js/ui/radio-scope.js` | wiring; one instance per root; `applyRemote` includes P2=7 |
 | `scripts/probe/ss-probe.ps1`, `ss-write-probe.ps1` | the read and write probes |
 
@@ -269,17 +269,17 @@ value should look refused rather than accepted.
 first expand.** Six `SS` reads on a port shared with the ~10 Hz meter poll is
 not a cost worth paying for a panel most users will never open. The collapsed
 state persists in `localStorage` as `ywc.radioScopeOpen`. The **Radio Display
-Controls dialog** is lazy the same way: it reads when the operator opens it,
-so the captured picture is not paying CAT cost just to be on screen. When Radio
-Display is enabled, Index hides the standalone card so the same buttons are not
-shown twice.
+scope controls** read lazily when first shown (docked column on load, or when
+the floating panel opens). When Radio Display is enabled, Index hides the
+standalone card so the same buttons are not shown twice.
 
 **It is a partial view, not inline markup.** The standalone card sits above
 YWC's own spectrum panels when video is off; with video on, **Controls** on the
-video bar opens a modeless dialog (same pattern as Mic & Gain). Note the
-conceptual trap: YWC's SDR spectrum display and the radio's internal scope are
-entirely different things, which is why the card header says "the radio's own
-display" out loud.
+video bar docks scope buttons in a right-hand column by default (`ywc.radioDisplayControlsDocked`).
+Hide the column and the same partial becomes a modeless floating dialog (Mic &
+Gain pattern). Note the conceptual trap: YWC's SDR spectrum display and the
+radio's internal scope are entirely different things, which is why the card
+header says "the radio's own display" out loud.
 
 `CatMessageDispatcher` was deliberately **not** touched in the first landing.
 Read-back after write covered the cases the UI actually had, and adding `SS` to

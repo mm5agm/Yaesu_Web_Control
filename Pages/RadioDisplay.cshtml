@@ -57,25 +57,43 @@
             height: auto;
             min-height: 0 !important;
             max-height: none !important;
-            position: relative;
         }
-        #radioDisplayImg { width: 100%; height: 100%; object-fit: contain; background: #000; }
-        .radio-display-placeholder {
-            position: absolute;
-            inset: 0;
+        #radioDisplayContainer .radio-display-body {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        #radioDisplayContainer .radio-display-body.controls-docked {
+            flex-direction: row;
+            height: 100%;
+            min-height: 0;
+        }
+        #radioDisplayContainer .radio-display-video-pane {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 0;
+            position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #9a9a9a;
-            font-size: 0.95rem;
-            text-align: center;
-            padding: 1.25rem;
-            pointer-events: none;
-            user-select: none;
         }
-        .radio-display-placeholder[hidden] {
-            display: none !important;
+        #radioDisplayContainer .radio-display-body.controls-docked .radio-display-video-pane {
+            flex: 1 1 50%;
+            width: 50%;
         }
+        #radioDisplayContainer .radio-display-body.controls-docked #radioDisplayScopeDialog {
+            flex: 1 1 50%;
+            width: 50%;
+            max-height: none;
+            align-self: stretch;
+        }
+        #radioDisplayContainer .card:fullscreen .radio-display-body,
+        #radioDisplayContainer .card:fullscreen .radio-display-video-pane {
+            height: 100%;
+            min-height: 0;
+        }
+        #radioDisplayImg { width: 100%; height: 100%; object-fit: contain; object-position: center center; background: #000; }
         /* Cap intrinsic <select> width so long camera names don't grow the window. */
         #radioDisplayDeviceSelect {
             width: 8rem;
@@ -234,15 +252,17 @@
                     </div>
                 </div>
                 <div class="card-body p-0 bg-black radio-display-body">
-                    <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
-                        <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
+                    <div class="radio-display-video-pane">
+                        <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
+                            <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
+                        </div>
+                        <img id="radioDisplayImg" alt="Radio display" decoding="async" style="display:none;" />
                     </div>
-                    <img id="radioDisplayImg" alt="Radio display" decoding="async" style="display:none;" />
+                    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
                 </div>
             </div>
         </div>
     </div>
-    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     <script type="module">

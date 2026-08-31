@@ -1082,7 +1082,7 @@ All changes are confirmed by reading the radio's state back after each command, 
 | What the controls change | What YWC draws | What the **radio** displays |
 | Extra hardware | SDR required | None |
 
-The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It appears when Radio Display is **off** on radios that support CAT scope control — **FTdx101MP/D** and **FTdx10**. See [§19.4](#194-cat-scope-controls) when Radio Display is on (the same controls live in the **Controls** dialog on the video bar).
+The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It appears when Radio Display is **off** on radios that support CAT scope control — **FTdx101MP/D** and **FTdx10**. See [§19.4](#194-cat-scope-controls) when Radio Display is on (the same controls dock beside the video by default, or float when the column is hidden).
 
 When you expand the card it reads the current settings from the radio, so it opens showing what the radio is actually doing rather than a set of defaults.
 
@@ -3220,13 +3220,15 @@ Capture opens while at least one browser is viewing the stream, and stays open f
 
 ### 19.4 CAT scope controls
 
-The Radio Display picture is a live capture of the radio’s TFT. Clicks on that image never reach the touchscreen (the dongle is one-way). On radios that expose the spectrum scope over CAT (`SS`), a **Controls** button on the video bar (next to FPS / quality) opens a dialog — the same kind of floating panel as **Mic & Gain** — so you can change what the radio draws without covering the picture: Center / Cursor / Fix, 3DSS vs waterfall, Expand (L / N / S), FFT SPAN, FFT SPEED, Level, Peak, Marker, Hold, Color / NB colour (FTdx101 only), and AF-FFT / OSC attenuators and timebase. The pop-out window has the same button.
+The Radio Display picture is a live capture of the radio’s TFT. Clicks on that image never reach the touchscreen (the dongle is one-way). On radios that expose the spectrum scope over CAT (`SS`), a **Controls** button on the video bar (next to FPS / quality) shows scope controls beside the video by default — the stream on the left, buttons on the right — so nothing floats over the picture. Hide the column with **Controls** or **Undock** on the column header; the video recentres. **Controls** only shows or hides the panel — when hidden, click it again to bring controls back in the same layout (docked column or floating panel). **Undock** switches to floating mode; **Dock** on the floating panel pins the column again. **✕** on the floating panel closes it without changing layout mode.
+
+The controls change what the radio draws: Center / Cursor / Fix, 3DSS vs waterfall, Expand (L / N / S), FFT SPAN, FFT SPEED, Level, Peak, Marker, Hold, Color / NB colour (FTdx101 only), and AF-FFT / OSC attenuators and timebase. The pop-out window behaves the same way. Your docked vs floating choice is remembered in the browser.
 
 **FTdx10** and **FTdx101MP/D** show **Controls**. **FTdx101** also has MAIN / SUB (two independent scopes). **FTdx10** is a single receiver, so that row is omitted. **FT-710** stays off until the `SS` writes have been probed on that radio.
 
 **MULTI** (scope + oscilloscope + AF-FFT on the TFT) has no CAT command on any supported radio. The MULTI group in YWC is collapsed by default — expand it for AF-FFT ATT (0 / 10 / 20 dB) and OSC ATT / timebase, which apply once MULTI is already showing on the radio. Press MULTI on the TFT; YWC cannot turn it on.
 
-SPAN, display mode, and SPEED on the front panel live-sync the highlighted buttons while the dialog is open.
+SPAN, display mode, and SPEED on the front panel live-sync the highlighted buttons while the controls are visible (docked column or floating panel).
 
 If Radio Display is **off**, FTdx101 and FTdx10 still have a standalone **Radio Scope** card above the SDR panels with the same CAT controls. Enabling Radio Display hides that card so the buttons are not shown twice; use **Controls** on the video bar instead.
 

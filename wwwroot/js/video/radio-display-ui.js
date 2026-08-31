@@ -10,6 +10,7 @@ const ALLOWED_FPS = [15, 30, 60];
 const ALLOWED_QUALITY = [40, 65, 85];
 const CHANNEL_NAME = 'ywc-radio-display';
 const AUTO_START_KEY = 'ywc.radioDisplayAutoStart';
+const CONTROLS_DOCKED_KEY = 'ywc.radioDisplayControlsDocked';
 
 let panel = null;
 let uiMode = 'index';
@@ -709,20 +710,148 @@ function closeScopeDialog() {
   document.getElementById('radioDisplayScopeDialog')?.close();
 }
 
+function isControlsDocked() {
+  return localStorage.getItem(CONTROLS_DOCKED_KEY) !== '0';
+}
+
+function isScopeControlsVisible() {
+  const dlg = document.getElementById('radioDisplayScopeDialog');
+  const body = getRadioDisplayBody();
+  if (!dlg?.open) return false;
+  if (isControlsDocked()) return !!body?.classList.contains('controls-docked');
+  return true;
+}
+
+function getRadioDisplayBody() {
+  return document.querySelector('.radio-display-body');
+}
+
+function clearScopeDialogOverlayPos(dlg) {
+  if (!dlg) return;
+  dlg.style.left = '';
+  dlg.style.top = '';
+  dlg.style.transform = '';
+  dlg.style.position = '';
+}
+
+function applyScopeOverlayPosition(dlg) {
+  if (!dlg) return;
+  dlg.style.position = 'fixed';
+  try {
+    const saved = JSON.parse(localStorage.getItem('dlgPos_radioDisplayScopeDialog') || 'null');
+    if (saved?.left && saved?.top) {
+      dlg.style.left = saved.left;
+      dlg.style.top = saved.top;
+      dlg.style.transform = 'none';
+      return;
+    }
+  } catch { /* ignore */ }
+  dlg.style.left = '';
+  dlg.style.top = '';
+  dlg.style.transform = '';
+}
+
+function syncScopeControlsBtn(btn, dlg) {
+  if (!btn || !dlg) return;
+  const visible = isScopeControlsVisible();
+  btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+  btn.classList.toggle('active', visible);
+  const tip = btn.closest('.radio-display-tip');
+  if (tip) {
+    const title = visible ? 'Hide scope controls' : 'Show scope controls';
+    tip.setAttribute('data-bs-title', title);
+    tip.setAttribute('aria-label', title);
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+      const inst = bootstrap.Tooltip.getInstance(tip);
+      if (inst) inst.setContent({ '.tooltip-inner': title });
+    }
+  }
+}
+
+function hideScopeControls() {
+  const dlg = document.getElementById('radioDisplayScopeDialog');
+  const body = getRadioDisplayBody();
+  const btn = document.getElementById('radioDisplayScopeBtn');
+  body?.classList.remove('controls-docked');
+  dlg?.close();
+  syncScopeControlsBtn(btn, dlg);
+}
+
+function showScopeControls({ refresh = true } = {}) {
+  const dlg = document.getElementById('radioDisplayScopeDialog');
+  const body = getRadioDisplayBody();
+  const btn = document.getElementById('radioDisplayScopeBtn');
+  if (!dlg) return;
+
+  if (isControlsDocked()) {
+    body?.classList.add('controls-docked');
+    clearScopeDialogOverlayPos(dlg);
+  } else {
+    body?.classList.remove('controls-docked');
+    applyScopeOverlayPosition(dlg);
+  }
+
+  if (!dlg.open) {
+    if (typeof dlg.show === 'function') dlg.show();
+    else dlg.setAttribute('open', '');
+  }
+
+  if (refresh) window.notifyRadioScopeControls?.(c => c.refresh());
+  syncScopeControlsBtn(btn, dlg);
+}
+
+function applyControlsLayout({ refreshIfDocked = false } = {}) {
+  if (isControlsDocked()) showScopeControls({ refresh: refreshIfDocked });
+  else hideScopeControls();
+}
+
+function undockScopeControls() {
+  localStorage.setItem(CONTROLS_DOCKED_KEY, '0');
+  showScopeControls({ refresh: false });
+}
+
+function dockScopeControls() {
+  localStorage.setItem(CONTROLS_DOCKED_KEY, '1');
+  showScopeControls({ refresh: true });
+}
+
 function bindScopeDialog() {
   const dlg = document.getElementById('radioDisplayScopeDialog');
   const btn = document.getElementById('radioDisplayScopeBtn');
+  const closeBtn = document.getElementById('radioDisplayScopeCloseBtn');
+  const dockBtn = document.getElementById('radioDisplayScopeDockBtn');
+  const undockBtn = document.getElementById('radioDisplayScopeUndockBtn');
   if (!dlg || !btn) return;
 
-  const syncExpanded = () => btn.setAttribute('aria-expanded', dlg.open ? 'true' : 'false');
-  btn.addEventListener('click', () => {
-    if (dlg.open) dlg.close();
-    else if (typeof dlg.show === 'function') dlg.show();
-    else dlg.setAttribute('open', '');
-    syncExpanded();
-    if (dlg.open) window.notifyRadioScopeControls?.(c => c.refresh());
+  dlg.addEventListener('close', () => {
+    getRadioDisplayBody()?.classList.remove('controls-docked');
+    syncScopeControlsBtn(btn, dlg);
   });
-  dlg.addEventListener('close', syncExpanded);
+
+  dlg.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    hideScopeControls();
+  });
+
+  closeBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    hideScopeControls();
+  });
+
+  undockBtn?.addEventListener('click', () => {
+    undockScopeControls();
+  });
+
+  dockBtn?.addEventListener('click', () => {
+    dockScopeControls();
+  });
+
+  btn.addEventListener('click', () => {
+    if (isScopeControlsVisible()) hideScopeControls();
+    else showScopeControls();
+  });
+
+  applyControlsLayout({ refreshIfDocked: true });
 
   // Index already makes this dialog draggable with the other popovers.
   // The pop-out page has no such helper, so bind a small drag here.
@@ -736,12 +865,14 @@ function bindDialogDrag(dialog, handle) {
   handle.style.cursor = 'grab';
   handle.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || e.target.closest('button')) return;
+    if (getRadioDisplayBody()?.classList.contains('controls-docked')) return;
     const r = dialog.getBoundingClientRect();
     const startX = e.clientX;
     const startY = e.clientY;
     const origLeft = r.left;
     const origTop = r.top;
     dialog.style.transform = 'none';
+    dialog.style.position = 'fixed';
     const onMove = (ev) => {
       dialog.style.left = `${origLeft + ev.clientX - startX}px`;
       dialog.style.top = `${origTop + ev.clientY - startY}px`;

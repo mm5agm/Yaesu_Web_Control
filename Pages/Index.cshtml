@@ -745,9 +745,9 @@
     </div>
 
     @* Controls for the RADIO's own scope, sent over CAT (SS command). Hidden
-       when Radio Display is on — those controls live in the Controls dialog
-       on the video card, so they are not shown twice. CAT-without-video
-       keeps this standalone card.
+       when Radio Display is on — those controls dock beside the video (or
+       float when the column is hidden). CAT-without-video keeps this
+       standalone card.
 
        See docs/design/scope-control-via-cat.md. *@
     @if (!Model.VideoDisplayEnabled)
@@ -857,13 +857,16 @@
                         </span>
                     </div>
                 </div>
-                <div class="card-body p-0 bg-black radio-display-body" style="text-align:center; overflow:hidden; position:relative; min-height:240px;">
-                    <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
-                        <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
+                <div class="card-body p-0 bg-black radio-display-body" style="overflow:hidden; min-height:240px;">
+                    <div class="radio-display-video-pane">
+                        <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
+                            <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
+                        </div>
+                        <img id="radioDisplayImg" alt="Radio display" decoding="async"
+                             class="radio-display-img"
+                             style="display:none; max-width:100%; width:auto; height:auto; max-height:50vh; object-fit:contain; background:#000; vertical-align:middle;" />
                     </div>
-                    <img id="radioDisplayImg" alt="Radio display" decoding="async"
-                         class="radio-display-img"
-                         style="display:none; max-width:100%; width:auto; height:auto; max-height:50vh; object-fit:contain; background:#000; vertical-align:middle;" />
+                    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
                 </div>
             </div>
         </div>
@@ -2379,11 +2382,6 @@
     </div>
 </dialog>
 
-@if (Model.VideoDisplayEnabled)
-{
-    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
-}
-
 <!-- UTC clock info popover — opened by clicking the top-bar clock.
      Explains the clock source, what depends on it, and how to verify
      the PC's time-sync state. -->
@@ -3867,10 +3865,12 @@
             handle.style.cursor = 'grab';
             handle.addEventListener('mousedown', e => {
                 if (e.button !== 0 || e.target.closest('button')) return;
+                if (dialog.id === 'radioDisplayScopeDialog' && document.querySelector('.radio-display-body')?.classList.contains('controls-docked')) return;
                 const r = dialog.getBoundingClientRect();
                 let startX = e.clientX, startY = e.clientY;
                 let origLeft = r.left, origTop = r.top;
                 dialog.style.transform = 'none';
+                dialog.style.position = 'fixed';
                 function onMove(e) {
                     dialog.style.left = (origLeft + e.clientX - startX) + 'px';
                     dialog.style.top  = (origTop  + e.clientY - startY) + 'px';
@@ -3888,10 +3888,12 @@
             });
             handle.addEventListener('touchstart', e => {
                 if (e.target.closest('button') || e.touches.length !== 1) return;
+                if (dialog.id === 'radioDisplayScopeDialog' && document.querySelector('.radio-display-body')?.classList.contains('controls-docked')) return;
                 const r = dialog.getBoundingClientRect();
                 let startX = e.touches[0].clientX, startY = e.touches[0].clientY;
                 let origLeft = r.left, origTop = r.top;
                 dialog.style.transform = 'none';
+                dialog.style.position = 'fixed';
                 function onMove(e) {
                     dialog.style.left = (origLeft + e.touches[0].clientX - startX) + 'px';
                     dialog.style.top  = (origTop  + e.touches[0].clientY - startY) + 'px';
@@ -3911,12 +3913,14 @@
             const dlg = document.getElementById(id);
             if (!dlg) return;
             makeDraggable(dlg, dlg.querySelector('div'));
+            if (id === 'radioDisplayScopeDialog' && document.querySelector('.radio-display-body')?.classList.contains('controls-docked')) return;
             try {
                 const saved = JSON.parse(localStorage.getItem('dlgPos_' + id) || 'null');
                 if (saved && saved.left && saved.top) {
                     dlg.style.left = saved.left;
                     dlg.style.top  = saved.top;
                     dlg.style.transform = 'none';
+                    dlg.style.position = 'fixed';
                 }
             } catch {}
         });
