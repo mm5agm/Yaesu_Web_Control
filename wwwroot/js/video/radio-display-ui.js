@@ -807,7 +807,7 @@ function applyControlsLayout({ refreshIfDocked = false } = {}) {
 
 function undockScopeControls() {
   localStorage.setItem(CONTROLS_DOCKED_KEY, '0');
-  showScopeControls({ refresh: false });
+  showScopeControls({ refresh: true });
 }
 
 function dockScopeControls() {

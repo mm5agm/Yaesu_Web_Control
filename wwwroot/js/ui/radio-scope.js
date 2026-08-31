@@ -99,6 +99,7 @@ export class RadioScopeControl {
 
         if (this.eager) this.refresh();
         else if (this.toggle && localStorage.getItem('ywc.radioScopeOpen') === '1') this._expand();
+        else if (this.card?.tagName === 'DIALOG' && this.card.open) this.refresh();
     }
 
     // Same Bootstrap tooltip pattern as Mic & Gain on the Remote Audio bar.
