@@ -1082,7 +1082,7 @@ All changes are confirmed by reading the radio's state back after each command, 
 | What the controls change | What YWC draws | What the **radio** displays |
 | Extra hardware | SDR required | None |
 
-The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It only appears on radios where I have verified the CAT commands against the hardware — currently the FTdx101MP and FTdx101D. See "Why only the FTdx101" below.
+The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It appears when Radio Display is **off** on radios that support CAT scope control — **FTdx101MP/D** and **FTdx10**. See [§19.4](#194-cat-scope-controls) when Radio Display is on (the same controls live in the **Controls** dialog on the video bar).
 
 When you expand the card it reads the current settings from the radio, so it opens showing what the radio is actually doing rather than a set of defaults.
 
@@ -1104,7 +1104,7 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 **Marker** — shows or hides the frequency marker.
 
-**Color** — palette **1**–**11** for the waterfall / 3DSS. **NB Col** is a second palette for the narrow filter passband, with Off / On.
+**Color** — palette **1**–**11** for the waterfall / 3DSS. On **FTdx101MP/D** only, **NB Col** is a second palette drawn across the roofing-filter passband (R.FIL), with Off / On.
 
 **Level** — the scope reference level, −30 to +30 dB in 0.5 dB steps.
 
@@ -1120,11 +1120,15 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 **Mono / Multi.** Yaesu exposes no CAT command for it on any supported model, so it stays a front-panel control. This is a limit of the radio, not of YWC. Expand the **MULTI** group in this card for AF-FFT and oscilloscope ATT / timebase once MULTI is already showing on the TFT.
 
-**The FTdx10 and FT-710** have the scope command in their manuals, but I have not been able to verify either against real hardware, so both are switched off rather than shipped on the strength of a document. If you own one and would like to help confirm it, please say so on the [GitHub Issues page](https://github.com/mm5agm/Yaesu_Web_Control/issues) — enabling a model is a one-line change once someone has run it on a real radio.
+**FT-710** has the scope command in its manual, but nobody has run the write probe on real hardware yet, so it stays switched off rather than shipped on the strength of a document. If you own one and would like to help confirm it, please say so on the [GitHub Issues page](https://github.com/mm5agm/Yaesu_Web_Control/issues).
 
-#### Why only the FTdx101
+#### Per-radio differences
 
-Every setting in this card was measured on my own FTdx101MP before it shipped. The radios differ more than their manuals suggest — the FT-710's command list genuinely stops one sub-command short (it has no scope Hold), and it names its scope sizes differently rather than abbreviating the same three. Guessing at those differences would produce controls that silently do nothing, which is worse than not offering them.
+**FTdx101MP/D** — every setting in this card was measured on real hardware before it shipped. Two receivers: **MAIN / SUB** band selector, narrow-band colour (**NB Col**), and **Hold** (freeze the trace).
+
+**FTdx10** — single receiver (no MAIN/SUB row, no **NB Col** — the CAT manual fixes those parameters at zero). **Hold** is shown from the same documented `SS` table as the '101; bench confirmation on the FTdx10 is still pending.
+
+**FT-710** — the command list genuinely stops one sub-command short (no scope **Hold**), and it names scope sizes **Expand / Normal** rather than L / N / S. The card stays hidden until someone has probed writes on that radio.
 
 #### Screen reader use
 
@@ -3216,7 +3220,7 @@ Capture opens while at least one browser is viewing the stream, and stays open f
 
 ### 19.4 CAT scope controls
 
-The Radio Display picture is a live capture of the radio’s TFT. Clicks on that image never reach the touchscreen (the dongle is one-way). On radios that expose the spectrum scope over CAT (`SS`), a **Controls** button on the video bar (next to FPS / quality) opens a dialog — the same kind of floating panel as **Mic & Gain** — so you can change what the radio draws without covering the picture: Center / Cursor / Fix, 3DSS vs waterfall, Expand (L / N / S), FFT SPAN, FFT SPEED, Level, Peak, Marker, Color / NB colour, and AF-FFT / OSC attenuators and timebase. The pop-out window has the same button.
+The Radio Display picture is a live capture of the radio’s TFT. Clicks on that image never reach the touchscreen (the dongle is one-way). On radios that expose the spectrum scope over CAT (`SS`), a **Controls** button on the video bar (next to FPS / quality) opens a dialog — the same kind of floating panel as **Mic & Gain** — so you can change what the radio draws without covering the picture: Center / Cursor / Fix, 3DSS vs waterfall, Expand (L / N / S), FFT SPAN, FFT SPEED, Level, Peak, Marker, Hold, Color / NB colour (FTdx101 only), and AF-FFT / OSC attenuators and timebase. The pop-out window has the same button.
 
 **FTdx10** and **FTdx101MP/D** show **Controls**. **FTdx101** also has MAIN / SUB (two independent scopes). **FTdx10** is a single receiver, so that row is omitted. **FT-710** stays off until the `SS` writes have been probed on that radio.
 
@@ -3224,7 +3228,7 @@ The Radio Display picture is a live capture of the radio’s TFT. Clicks on that
 
 SPAN, display mode, and SPEED on the front panel live-sync the highlighted buttons while the dialog is open.
 
-If Radio Display is **off**, FTdx101 (and FTdx10) still have a standalone **Radio Scope** card above the SDR panels, with the same CAT controls plus Hold. Enabling Radio Display hides that card so the buttons are not shown twice; use **Controls** on the video bar instead.
+If Radio Display is **off**, FTdx101 and FTdx10 still have a standalone **Radio Scope** card above the SDR panels with the same CAT controls. Enabling Radio Display hides that card so the buttons are not shown twice; use **Controls** on the video bar instead.
 
 ### 19.5 Raspberry Pi and Docker
 

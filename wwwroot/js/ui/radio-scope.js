@@ -391,19 +391,23 @@ export class RadioScopeControl {
     }
 
     _sendAfFft(change) {
-        const s = this.state || {};
-        const fftAtt  = change.fftAtt  !== undefined ? change.fftAtt  : (s.fftAtt  ?? '0');
-        const oscAtt  = change.oscAtt  !== undefined ? change.oscAtt  : (s.oscAtt  ?? '0');
-        const oscTime = change.oscTime !== undefined ? change.oscTime : (s.oscTime ?? '0');
-        this._send('affft', `${fftAtt}${oscAtt}${oscTime}`);
+        if (change.fftAtt !== undefined) {
+            this._send('affft', String(change.fftAtt));
+        } else if (change.oscAtt !== undefined) {
+            this._send('affft', `a${change.oscAtt}`);
+        } else if (change.oscTime !== undefined) {
+            this._send('affft', `t${change.oscTime}`);
+        }
     }
 
     _sendColor(change) {
-        const s = this.state || {};
-        const color   = (change.color   !== undefined ? change.color   : (s.color   ?? '0')).toUpperCase();
-        const nbColor = change.nbColor !== undefined ? change.nbColor : (s.nbColor ?? '0');
-        const nbOn    = change.nbOn    !== undefined ? change.nbOn    : (s.nbOn    ?? '0');
-        this._send('color', `${color}${nbColor}${nbOn}`);
+        if (change.color !== undefined) {
+            this._send('color', String(change.color).toUpperCase());
+        } else if (change.nbColor !== undefined) {
+            this._send('color', `n${change.nbColor}`);
+        } else if (change.nbOn !== undefined) {
+            this._send('color', `o${change.nbOn}`);
+        }
     }
 
     // ── transport ────────────────────────────────────────────────────────────

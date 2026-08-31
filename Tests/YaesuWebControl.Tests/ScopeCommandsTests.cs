@@ -51,6 +51,45 @@ public sealed class ScopeCommandsTests
         Assert.Equal('1', on);
     }
 
+    [Theory]
+    [InlineData("4", '4', '0', '0', true, false, false)]
+    [InlineData("A", 'A', '0', '0', true, false, false)]
+    [InlineData("411", '4', '1', '1', true, true, true)]
+    [InlineData("n3", '0', '3', '0', false, true, false)]
+    [InlineData("o1", '0', '0', '1', false, false, true)]
+    public void TryParseColorRequest_AcceptsSingleAxisTags(
+        string value, char color, char nbColor, char nbOn,
+        bool hasColor, bool hasNbColor, bool hasNbOn)
+    {
+        Assert.True(ScopeCommands.TryParseColorRequest(value, out var c, out var nb, out var on,
+            out var hc, out var hnb, out var hon));
+        Assert.Equal(color, c);
+        Assert.Equal(nbColor, nb);
+        Assert.Equal(nbOn, on);
+        Assert.Equal(hasColor, hc);
+        Assert.Equal(hasNbColor, hnb);
+        Assert.Equal(hasNbOn, hon);
+    }
+
+    [Theory]
+    [InlineData("1", '1', '0', '0', true, false, false)]
+    [InlineData("112", '1', '1', '2', true, true, true)]
+    [InlineData("a2", '0', '2', '0', false, true, false)]
+    [InlineData("t5", '0', '0', '5', false, false, true)]
+    public void TryParseAfFftRequest_AcceptsSingleAxisTags(
+        string value, char fft, char osc, char time,
+        bool hasFft, bool hasOsc, bool hasTime)
+    {
+        Assert.True(ScopeCommands.TryParseAfFftRequest(value, out var f, out var o, out var t,
+            out var hf, out var ho, out var ht));
+        Assert.Equal(fft, f);
+        Assert.Equal(osc, o);
+        Assert.Equal(time, t);
+        Assert.Equal(hasFft, hf);
+        Assert.Equal(hasOsc, ho);
+        Assert.Equal(hasTime, ht);
+    }
+
     [Fact]
     public void ParseAfFft_NullOrShortDefaultsToZeros()
     {
@@ -87,5 +126,15 @@ public sealed class ScopeCommandsTests
     public void SupportsScopeNarrowBandColor_IsFtdx101Only(string model, bool expected)
     {
         Assert.Equal(expected, RadioCapabilities.SupportsScopeNarrowBandColor(model));
+    }
+
+    [Theory]
+    [InlineData("FTdx101MP", true)]
+    [InlineData("FTdx101D",  true)]
+    [InlineData("FTdx10",    true)]
+    [InlineData("FT-710",    false)]
+    public void SupportsScopeHold_IncludesFtdx10PendingBench(string model, bool expected)
+    {
+        Assert.Equal(expected, RadioCapabilities.SupportsScopeHold(model));
     }
 }

@@ -171,8 +171,9 @@ public class ScopeController : ControllerBase
             case "color":
                 // Three axes packed into one SS P2=3 field. Writing any one of
                 // them with a single-character Set() would zero the other two.
-                if (!TryColorValue(value, out var color, out var nbColor, out var nbOn, out var colorSupplied))
-                    return BadRequest(new { error = "color must be 1 or 3 characters: colour 0-9/A, NB colour 0-6, NB on 0-1" });
+                if (!ScopeCommands.TryParseColorRequest(value, out var color, out var nbColor, out var nbOn,
+                        out var hasColor, out var hasNbColor, out var hasNbOn))
+                    return BadRequest(new { error = "color must be 1 character (0-9/A), 3 characters, n0-n6 (NB colour), or o0/o1 (NB on)" });
                 if (!await _gate.WaitAsync(2000))
                     return StatusCode(503, new { error = "Radio busy" });
                 try
@@ -180,9 +181,9 @@ public class ScopeController : ControllerBase
                     await EnsureConnectedAsync();
                     var current = await ReadFieldAsync(p1, ScopeCommands.Color);
                     var (curColor, curNb, curOn) = ScopeCommands.ParseColor(current);
-                    if (colorSupplied < 1) color  = curColor;
-                    if (colorSupplied < 2) nbColor = curNb;
-                    if (colorSupplied < 3) nbOn    = curOn;
+                    if (!hasColor)  color   = curColor;
+                    if (!hasNbColor) nbColor = curNb;
+                    if (!hasNbOn)    nbOn    = curOn;
                     frame = ScopeCommands.SetColor(p1, color, nbColor, nbOn);
                     await _catClient.SendCommandAsync(frame, "WebUI", CancellationToken.None);
                     _logger.LogInformation("Scope {Band} color -> {Frame}", band, frame);
@@ -220,8 +221,9 @@ public class ScopeController : ControllerBase
                 // sent, and write the triple back.
                 if (!RadioCapabilities.SupportsScopeAfFft(model))
                     return BadRequest(new { error = $"{model} has no AF-FFT / oscilloscope CAT control" });
-                if (!TryAfFftValue(value, out var fftAtt, out var oscAtt, out var oscTime, out var supplied))
-                    return BadRequest(new { error = "affft must be 1 or 3 digits: FFT ATT 0-2, OSC ATT 0-2, OSC time 0-5" });
+                if (!ScopeCommands.TryParseAfFftRequest(value, out var fftAtt, out var oscAtt, out var oscTime,
+                        out var hasFftAtt, out var hasOscAtt, out var hasOscTime))
+                    return BadRequest(new { error = "affft must be 1 digit (FFT ATT), 3 digits, a0-a2 (OSC ATT), or t0-t5 (OSC time)" });
                 if (!await _gate.WaitAsync(2000))
                     return StatusCode(503, new { error = "Radio busy" });
                 try
@@ -229,9 +231,9 @@ public class ScopeController : ControllerBase
                     await EnsureConnectedAsync();
                     var current = await ReadFieldAsync(p1, ScopeCommands.AfFft);
                     var (curFft, curOsc, curTime) = ScopeCommands.ParseAfFft(current);
-                    if (supplied < 1) fftAtt  = curFft;
-                    if (supplied < 2) oscAtt  = curOsc;
-                    if (supplied < 3) oscTime = curTime;
+                    if (!hasFftAtt)  fftAtt  = curFft;
+                    if (!hasOscAtt)  oscAtt  = curOsc;
+                    if (!hasOscTime) oscTime = curTime;
                     frame = ScopeCommands.SetAfFft(p1, fftAtt, oscAtt, oscTime);
                     await _catClient.SendCommandAsync(frame, "WebUI", CancellationToken.None);
                     _logger.LogInformation("Scope {Band} affft -> {Frame}", band, frame);
@@ -444,54 +446,6 @@ public class ScopeController : ControllerBase
 
     private static bool IsModeChar(char c) =>
         (c >= '0' && c <= '9') || (c is >= 'A' and <= 'B') || (c is >= 'a' and <= 'b');
-
-    /// <summary>
-    /// Accepts a 1-digit FFT ATT or a 3-digit FFT/OSC/time triple. <paramref name="supplied"/>
-    /// is how many digits were present so the caller can fill the rest from a read.
-    /// </summary>
-    private static bool TryAfFftValue(string value, out char fftAtt, out char oscAtt, out char oscTime, out int supplied)
-    {
-        fftAtt = oscAtt = oscTime = '0';
-        supplied = 0;
-        if (value.Length is not (1 or 3)) return false;
-        if (!TryDigit(value[0].ToString(), 0, 2, out fftAtt)) return false;
-        supplied = 1;
-        if (value.Length == 1) return true;
-        if (!TryDigit(value[1].ToString(), 0, 2, out oscAtt)) return false;
-        if (!TryDigit(value[2].ToString(), 0, 5, out oscTime)) return false;
-        supplied = 3;
-        return true;
-    }
-
-    private static bool TryColorDigit(string value, out char digit)
-    {
-        digit = '0';
-        if (value.Length != 1) return false;
-        var c = char.ToUpperInvariant(value[0]);
-        if (c is >= '0' and <= '9' or 'A')
-        {
-            digit = c;
-            return true;
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// Accepts a 1-character colour (0–9/A) or a 3-character colour/NB/on triple.
-    /// </summary>
-    private static bool TryColorValue(string value, out char color, out char nbColor, out char nbOn, out int supplied)
-    {
-        color = nbColor = nbOn = '0';
-        supplied = 0;
-        if (value.Length is not (1 or 3)) return false;
-        if (!TryColorDigit(value[0].ToString(), out color)) return false;
-        supplied = 1;
-        if (value.Length == 1) return true;
-        if (!TryDigit(value[1].ToString(), 0, 6, out nbColor)) return false;
-        if (!TryDigit(value[2].ToString(), 0, 1, out nbOn)) return false;
-        supplied = 3;
-        return true;
-    }
 }
 
 /// <summary>Request body for a scope setting change.</summary>

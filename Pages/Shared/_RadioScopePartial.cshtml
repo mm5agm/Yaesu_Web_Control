@@ -14,7 +14,6 @@
     // See docs/design/scope-control-via-cat.md.
     var radioModel = Model ?? "";
     var hasScope   = Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(radioModel);
-    var hasHold    = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeHold(radioModel);
     var hasSub     = Yaesu_Web_Control.Services.RadioCapabilities.HasPerReceiverScopes(radioModel);
 
     // Start pointed at whichever band the radio is actually operating on, so the
@@ -70,22 +69,6 @@
 
             <partial name="_RadioScopeButtonsPartial" model="@radioModel" />
 
-            @if (hasHold)
-            {
-                <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
-                    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Freeze the radio's scope trace so you can study it. Click Hold again to resume.">Options</span>
-                    <button type="button" class="btn btn-outline-secondary btn-sm scope-toggle-btn"
-                            data-setting="hold" data-a11y-key="radioScope.hold">Hold</button>
-                </div>
-            }
-
-            @if (!hasHold)
-            {
-                <div class="form-text mt-2">
-                    The @radioModel has no scope Hold — its SS command genuinely stops one
-                    sub-command short of the FTdx101 and FTdx10, so there is nothing to send.
-                </div>
-            }
             <div class="form-text mt-1">
                 The radio keeps a separate span for each display mode, so the highlighted span
                 may change when you switch between W/F and 3DSS. That is the radio doing it, not YWC.

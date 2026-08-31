@@ -15,6 +15,7 @@
     var hasAfFft     = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeAfFft(radioModel);
     var hasMulti     = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeMulti(radioModel);
     var hasNbColor   = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeNarrowBandColor(radioModel);
+    var hasHold      = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeHold(radioModel);
     var spans = new (string Value, string Label)[]
     {
         ("0", "1k"), ("1", "2k"), ("2", "5k"), ("3", "10k"), ("4", "20k"),
@@ -122,6 +123,13 @@
     </div>
     <button type="button" class="btn btn-outline-secondary btn-sm scope-toggle-btn"
             data-setting="marker" data-a11y-key="radioScope.marker">Marker</button>
+    @if (hasHold)
+    {
+        <button type="button" class="btn btn-outline-secondary btn-sm scope-toggle-btn"
+                data-setting="hold" data-a11y-key="radioScope.hold"
+                data-bs-toggle="tooltip" data-bs-placement="top"
+                data-bs-title="Freeze the radio's scope trace so you can study it. Click Hold again to resume.">Hold</button>
+    }
 </div>
 
 <div class="radio-scope-row">
@@ -138,12 +146,12 @@
 
 @* Narrow-band colour is an FTdx101-only axis of SS P2=3 -- see
    RadioCapabilities.SupportsScopeNarrowBandColor. On models without it the
-   manual fixes P4/P5 at zero, and _sendColor already falls back to '0'. *@
+   manual fixes P4/P5 at zero; the client sends only the palette axis. *@
 @if (hasNbColor)
 {
     <div class="radio-scope-row">
         <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top"
-              data-bs-title="Narrow-band colour — a second palette drawn only across the IF filter passband, so the slice you are listening to stands out. Off uses the main colour only. 1–7 picks the NB palette when On.">NB Col</span>
+              data-bs-title="Narrow-band colour — a second palette drawn only across the roofing-filter passband (R.FIL), so the slice you are listening to stands out. Off uses the main colour only. 1–7 picks the NB palette when On.">NB Col</span>
         <div class="btn-group btn-group-sm" role="group" aria-label="Narrow-band colour on or off">
             <button type="button" class="btn btn-outline-secondary scope-nbon-btn"
                     data-value="0" data-a11y-key="radioScope.nbColorOff">Off</button>
