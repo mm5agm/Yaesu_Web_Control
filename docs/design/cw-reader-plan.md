@@ -2277,29 +2277,57 @@ see until the operator has zero-beat it (§4.10).
 What is left before Phase 2 is our own work, not more measurement against the
 radio:
 
-- **Acquire wide, then hold the tone (§4.11h). The top item, by some distance.**
-  On `mkii-dk9py.wav` the tracker finds a signal 115 Hz off the operator's pitch
-  - which is the search window doing exactly its job - and then corrupts every
-  `CQ` in the file by re-picking the spectral peak during inter-character gaps.
-  Pinned on the same tone the over reads end to end. The fix is neither
-  tracking nor pinning: keep the filter-derived window for acquisition, then
-  rate-limit the tone estimate to a few Hz per second and require the new peak
-  to be keyed. That also reconciles §4.11f, where tracking beat pinning because
-  the sender drifted. Worth whole words, where the word-gap item is worth spaces.
+- **Acquire wide, then hold the tone (§4.11h). Done - closed by measurement
+  2026-09-01.** The commits are `048a0e8` "hold the tone while nothing is keyed"
+  and `42e775e` "remember where the tone was when the lock drops", which landed
+  after the paragraph below was written and were never scored against it.
+  Re-run on the two files it was raised on:
 
-- **The inter-word gap (§4.11f, §4.11g, §4.11h) - an improvement, but now a
-  worthwhile one.** Fldigi welds words together too (`DE0KDAN`), so this is not
-  a defect against the reference; it is an attempt to beat it. What raised its
-  priority is §4.11h: on `mkii-i1yrl.wav`, the only plain-QSO recording we hold,
-  nearly every error in otherwise correct copy is a missing or spurious word gap
-  (`TKSFORINFOAND`, `QTHNRTIN`, `CQCQCQDE`). Contest traffic hid this behind
-  short tokens and a format the reader already knows. Still behind the tone-hold
-  fix, which costs whole words rather than spaces.
-  Original note: On `bench/strong23.wav` the decoder
-  runs `GI3UBA DE` together as `GI3UBADE` where Fldigi separates the `DE`.
-  Narrowed by the Fldigi reference: the `S M 5 O` split that looked like the
-  other half of the same bug is in the sender's fist, because Fldigi splits it
-  identically. One direction, not two.
+  | file | tracked | pinned |
+  |---|---|---|
+  | `mkii-dk9py.wav` | 230 chars, `Readable 76%` | 233 chars, `Readable 76%` - transcripts differ in two junk runs |
+  | `mkii-i1yrl.wav` | full over copied | `TSEE EEEEI E SE` - pinning at 725 is simply the wrong tone for this file |
+
+  Tracking is now level with pinning where pinning was better and far ahead
+  where it was worse, which is what the item asked for. The original note
+  follows for the record: *"the tracker finds a signal 115 Hz off the
+  operator's pitch and then corrupts every `CQ` in the file by re-picking the
+  spectral peak during inter-character gaps."* That is no longer reproducible -
+  every `CQ CWT DK9PY` in the file now comes out intact.
+
+- **The inter-word gap (§4.11f, §4.11g, §4.11h). Done 2026-09-01 - see
+  `core/docs/design/cw-decoder.md` §5.3.** The fixed 1.8-times-the-character-gap
+  rule was a model of an operator, and `mkii-i1yrl.wav` is an operator it does
+  not fit: measured from the audio, character gaps centre on 4.4 dits and word
+  gaps on 5.8, a ratio of 1.3 rather than 2.33. He had loosened his character
+  gaps and left his word gaps alone, so scaling from the one to the other put
+  the split above two thirds of his word gaps. Replaced with two-means on the
+  log of the recent separator gaps.
+
+  `CwSignalGenerator` could not produce that case - every overload moved the two
+  gaps together - so `GenerateWithFist` sets them independently and
+  `CwRealFistWordGapTests` keys known text with the measured fist. Ground truth,
+  not an eyeball: the ratio rule welds the whole sentence into one word at
+  77.6%, the measured split returns 93.8%.
+
+  **It is not free, and the bill is in §8 of the decoder doc.** Clean, `n12`,
+  `n9`, `n6` and `f20` do not move; `f20n6` gains about 0.4 throughout; the 3 dB
+  column loses at the top of the speed range, 40 WPM by 2.3 points. Three of the
+  four guards tried against that measured completely inert. Taken deliberately:
+  a 20-something WPM QSO with a loose fist is the ordinary case and goes from
+  unreadable to readable, and 40 WPM at 3 dB SNR is not.
+
+- **The opening of a slow transmission. Fixed 2026-09-01.** Not on this list
+  before, because nothing had measured it. `CwDecoderEngine.Gate()` held text
+  until the marks proved readable and ran a five-second stale clock from the
+  first frame - but `Unknown` means both "not enough marks to judge yet", where
+  every transmission starts, and "the marks I am judging have gone stale". At
+  Farnsworth 5 WPM the tenth mark does not arrive until about 8.4 s, so the hold
+  expired before the evidence to keep it existed and the opening was discarded.
+  On air the opening is the callsign. Over the Ninja corpus, clean first entries
+  went from 12 of 29 to 27 of 29 and mean junk words before the first correct
+  copy from 1.34 to 0.03.
+
 - **Why the MkII went quiet on `strong23.wav` (§4.11f).** Open, and the first
   theory is dead: it is not the tuning offset, because the next over was
   further off pitch and decoded fine. Run the auto-tune experiment anyway
@@ -2351,6 +2379,14 @@ radio:
   `0` is wrong the moment a `T` is a `T`, and would silently corrupt callsigns.
   If cut numbers are ever expanded, it belongs in a display layer that can be
   turned off, alongside the raw text, never in `CwElementDecoder`.
+  **Corroborated 2026-09-01** by a second decoder sharing no code with ours - a
+  throwaway quadrature demodulator and Schmitt trigger written to settle this -
+  which reads `ARMIN 2T62` and `BOB 24T6` on the same audio. Two independent
+  decoders agreeing is not external ground truth and the roster check below
+  still stands, but it does rule out the reading being an artefact of our own
+  detector. The same run measured the file's keying directly: dit 29 ms
+  (41.9 WPM), dashes at 86 ms, and **not one key-down run over 200 ms in
+  180 seconds**, so nothing in the recording merges five dashes into one.
 - **Check the CWops roster.** `ARMIN 2062` (DK9PY), `BOB 2406` and `DAN 1854`.
   Offline, no radio needed. It would turn three plausible decodes into three
   confirmed ones, including the `1854`-versus-`1584` argument in §4.11g, which
