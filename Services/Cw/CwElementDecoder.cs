@@ -214,6 +214,45 @@ namespace RadioWebControl.Core.Services.Cw
         public int DitOnlyMinChars { get; set; } = 24;
 
         /// <summary>
+        /// The fewest elements per character a stream can average and still be
+        /// called Morse.
+        ///
+        /// The spread and dit-only tests both ask about marks. This one asks
+        /// about characters, and it catches what neither can: a detector
+        /// chattering on an empty band emits well-separated short and long
+        /// blips - a textbook dit/dah spread - which are then flushed one per
+        /// character. bench/diag-dead.wav is twelve seconds of nothing and
+        /// reads "SETE ET TE E T TE E": every mark cleanly classified, every
+        /// character one element long, and Readable 81% with the speed railed
+        /// at the 60 WPM ceiling and the lock lit. The dit-only test cannot
+        /// see it because E and T alternate, so the characters are not all
+        /// dits.
+        ///
+        /// Real Morse cannot average near one, because the alphabet does not
+        /// allow it. Over the 11,497 characters of the ARRL practice texts the
+        /// sent mean is 2.67 elements per character and only 20.1% of
+        /// characters are a single element - E and T are the two commonest
+        /// letters in English, which is exactly why they are the two shortest.
+        /// Decoded, across seven recordings from 12 to 2,489 characters and
+        /// from 5 to 40 WPM, the mean ran 2.33 to 3.14. The dead band ran 1.15.
+        /// There is no overlap to split, so the floor sits midway.
+        ///
+        /// Like the dit-only ceiling this scores and never edits - the text is
+        /// still printed. What it withholds is the speed and the lock, which
+        /// are the two figures an operator has no way to sanity-check.
+        /// </summary>
+        public double ReadabilityMinElementsPerChar { get; set; } = 1.70;
+
+        /// <summary>
+        /// Characters needed before <see cref="ReadabilityMinElementsPerChar"/>
+        /// is applied. Lower than <see cref="DitOnlyMinChars"/> deliberately:
+        /// the dead-band case produces only about twenty characters in twelve
+        /// seconds, so a window that waits for twenty-four never engages on the
+        /// one recording it exists for.
+        /// </summary>
+        public int MinElementsPerCharMinChars { get; set; } = 10;
+
+        /// <summary>
         /// Where the boundary between a gap inside a character and a gap
         /// between two characters sits, in tracked dits.
         ///
@@ -452,6 +491,7 @@ namespace RadioWebControl.Core.Services.Cw
 
         // Recent decoded characters, true where the symbol held no dah.
         private readonly bool[] _ditOnly;
+        private readonly byte[] _charElements;
         private double _lastDitOnlyAtMs = double.NegativeInfinity;
         private int _ditOnlyCount;
         private int _ditOnlyNext;
@@ -467,6 +507,7 @@ namespace RadioWebControl.Core.Services.Cw
             _markWindow = new double[Math.Max(4, _opt.ReadabilityWindow)];
             _runWindow  = new bool[Math.Max(4, _opt.ReadabilityWindow)];
             _ditOnly    = new bool[Math.Max(4, _opt.DitOnlyWindow)];
+            _charElements = new byte[_ditOnly.Length];
             _ditMs    = 1200.0 / _opt.InitialWpm;
             _dahMs    = _ditMs * 3.0;
             _minDitMs = 1200.0 / _opt.MaxWpm;
@@ -679,8 +720,21 @@ namespace RadioWebControl.Core.Services.Cw
 
             // Refresh the lock here rather than on every 5 ms hop: the answer
             // can only change when a mark arrives, and this sorts the window.
-            if (_marksSeen >= LockMarks && AssessReadability(out _) == CwReadability.Readable)
+            var verdict = AssessReadability(out _);
+            if (_marksSeen >= LockMarks && verdict == CwReadability.Readable)
                 _lastReadableMs = _nowMs;
+
+            // Jumbled cancels the hold outright instead of waiting it out.
+            // The hold is there so a fade does not blink the lock off, and a
+            // fade shows up as Chatter or as marks simply stopping - absence
+            // of evidence, which is what a hold is for. Jumbled is the other
+            // thing: marks are still arriving and they are actively not Morse.
+            // Waiting that out is how bench/diag-dead.wav kept saying locked at
+            // 58.6 wpm for six seconds after the elements test had already
+            // condemned it, on a band with nothing on it. Real recordings spend
+            // 0-3% of their marks Jumbled, so this costs them nothing.
+            if (verdict == CwReadability.Jumbled)
+                _lastReadableMs = double.NegativeInfinity;
 
             return string.Empty;
         }
@@ -911,6 +965,7 @@ namespace RadioWebControl.Core.Services.Cw
             if (decoded is null) { _unknownSymbols++; return string.Empty; }
 
             _ditOnly[_ditOnlyNext]     = sym.IndexOf('-') < 0;
+            _charElements[_ditOnlyNext] = (byte)Math.Min(sym.Length, 255);
             _lastDitOnlyAtMs = _nowMs;
             _ditOnlyNext = (_ditOnlyNext + 1) % _ditOnly.Length;
             if (_ditOnlyCount < _ditOnly.Length) _ditOnlyCount++;
@@ -1080,6 +1135,15 @@ namespace RadioWebControl.Core.Services.Cw
                 int ditOnly = 0;
                 for (int i = 0; i < _ditOnlyCount; i++) if (_ditOnly[i]) ditOnly++;
                 if ((double)ditOnly / _ditOnlyCount > _opt.ReadabilityDitOnlyCeiling)
+                    return CwReadability.Jumbled;
+            }
+
+            if (_ditOnlyCount >= _opt.MinElementsPerCharMinChars
+                && _nowMs - _lastDitOnlyAtMs <= _opt.DitOnlyMaxAgeSeconds * 1000.0)
+            {
+                int elements = 0;
+                for (int i = 0; i < _ditOnlyCount; i++) elements += _charElements[i];
+                if ((double)elements / _ditOnlyCount < _opt.ReadabilityMinElementsPerChar)
                     return CwReadability.Jumbled;
             }
 

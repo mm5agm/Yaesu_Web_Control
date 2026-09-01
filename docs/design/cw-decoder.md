@@ -407,6 +407,51 @@ at 0.60, over a window of the last 48 characters, needing at least 24.
 Measured effect at 40 WPM, 0 dB: output called Readable fell from 64% to 3% and
 Jumbled rose from 0% to 83%, on copy that was 15.6% correct.
 
+### 6.3a Elements per character - and the case the other three all miss
+
+The three tests above all ask about marks. This one asks about characters, and
+it exists because a detector chattering on a dead band passes every one of
+them. Its blips come in two clean lengths, so the spread is textbook; they
+alternate short and long, so the letters are `E` and `T` rather than `E`, `I`
+and `S`, and the dit-only test sees nothing; and each blip is flushed as its
+own character, so nothing is discarded and the dirty-run fraction sees nothing
+either. `bench/diag-dead.wav` is twelve seconds of nothing at 21 MHz and reads:
+
+```
+SETE ET TE E T TE E        Readable 81%   58.6 wpm   locked
+```
+
+Which is the worst thing the panel can show: a confident speed, a lit lock, and
+an empty band.
+
+Morse cannot average near one element per character, because the alphabet does
+not contain enough one-element letters. Over the 11,497 characters of the ARRL
+practice texts the sent mean is **2.67 elements per character**, and only 20.1%
+of characters are a single element - `E` and `T` are the two commonest letters
+in English, which is precisely why they are the two shortest. Decoded, over
+seven recordings from 12 to 2,489 characters and 5 to 40 WPM, the mean ran
+**2.33 to 3.14**. The dead band ran **1.15**.
+
+Sweeping the floor across those same recordings:
+
+| floor | diag-dead | every real recording |
+|---|---|---|
+| off  | Readable 81%, Jumbled 0%  | - |
+| 1.40 | Readable 12%, Jumbled 69% | untouched |
+| 1.70 | Readable 12%, Jumbled 69% | untouched |
+| 2.00 | Readable 12%, Jumbled 69% | untouched |
+| 2.30 | Readable 12%, Jumbled 69% | 5 WPM -1 point, 40 WPM -4 |
+
+Three settings are indistinguishable because the gap between 1.15 and 2.33 has
+nothing in it, so the floor sits at **1.70**, in the middle of it. The window
+is the same 48 characters the dit-only test uses, but it needs only 10 rather
+than 24: the dead band produces about twenty characters in twelve seconds, so a
+test that waits for twenty-four never engages on the one recording it exists
+for.
+
+Every cell of the section 8 table is unchanged to the decimal place, which is
+what "score, never edit" is supposed to mean.
+
 ### 6.4 Holding, not discarding
 
 `CwDecoderEngine.Gate()` holds decoded text in a buffer and releases it only
@@ -482,6 +527,16 @@ in step with the marks it is judging. The `LockHoldMs` grace (5 s) exists
 because readability dips on any deep fade, and a lock that dropped the instant
 it did would flicker the speed off and on across ordinary QSB. What separates a
 fade from a dead band is not the dip but how long it lasts.
+
+**A `Jumbled` verdict cancels the hold outright** rather than waiting it out.
+That grace is for absence of evidence - marks stopping or weakening, which is
+what a fade is - and `Jumbled` is the opposite: marks are still arriving and
+they are actively not Morse. Waiting it out is how `diag-dead.wav` went on
+reporting 58.6 wpm and `locked` for six seconds after 6.3a had already
+condemned it. Measured over five real recordings the change costs exactly
+nothing - `mkii-i1yrl` 150 locked seconds of 239 before and after,
+`mkii-dk9py` 128 of 179, `cq-qso` 64 of 88, ARRL 20 WPM 469 of 471, ARRL
+40 WPM 790 of 791 - because real copy spends 0-3% of its marks Jumbled.
 
 `CwSpeedLockTests` pins both ends: the recorded empty band must not lock, and
 ordinary sending must - a test that only proved the first is satisfied by
