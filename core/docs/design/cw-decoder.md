@@ -265,6 +265,61 @@ gap is a property of one operator's fist, and carrying a Farnsworth beginner's
 stretched gaps into the next station up on frequency puts the word split in the
 wrong place until the percentile migrates.
 
+Splitting words is the other half of the same question, and it was answered by a
+model rather than by measurement until 2026-09-01. The rule was "a word gap is
+1.8 times the measured character gap", which assumes that whatever an operator
+does to their character gaps they do proportionally to their word gaps.
+
+Real fists do not oblige. `bench/mkii-i1yrl.wav` is the only plain-QSO recording
+in the corpus - an ordinary 20 m contact, not contest traffic - and measured
+straight from its audio the character gaps centre on 4.4 dits and the word gaps
+on 5.8. A ratio of 1.3, not 2.33. The operator had loosened his character gaps
+and left his word gaps where they were. Scaling from one to the other put the
+split at 6.7 dits, above two thirds of his word gaps, and the reader printed
+`TKSFORINFOAND`, `QTHNRTIN` and `CQCQCQDE`.
+
+So the two populations are now separated rather than derived from each other:
+two-means on the log of the recent separator gaps, seeded where the ratio rule
+would have put them, and the split taken as the geometric mean of the two
+centres it settles on. Logs because the quantity is a ratio, and because one
+long pause then cannot dominate the arithmetic.
+
+Keyed with that exact fist against known text, the ratio rule returns
+`TKSFORINFOANDURRST599QTHNRTURINNAMELUC` - the whole sentence welded into one
+word, 77.6% - and the measured split returns everything but the first three
+gaps, 93.8%. The three it misses are the ones before the window has twelve gaps
+in it to cluster.
+
+**What it costs.** Measuring instead of assuming is not free, and the ARRL table
+in section 8 shows where the bill lands: the clean, `n12`, `n9`, `n6` and `f20`
+columns do not move at all, the deep-fade `f20n6` column gains about 0.4 points
+throughout, and the 3 dB SNR column loses at the top of the speed range - 30 WPM
+-0.5, 35 WPM -1.2, 40 WPM **-2.3**. In that corner noise breaks a real gap in
+two with a spurious mark, the fragments pile up into a second population that
+clusters beautifully and means nothing, and the split comes down far enough to
+put spaces inside words.
+
+Four guards were tried against that and three of them measured completely inert
+on it - a minimum cluster population, a minimum separation between the centres,
+and a minimum number of gaps before clustering at all all left 40 WPM at 3 dB
+unchanged to the decimal. Only clamping the split hard away from the character
+gap moved it, and it moved it by 0.2 points while undoing the fix. The cost is
+intrinsic to the method at that speed and noise, so it is recorded rather than
+tuned away. The guards were kept anyway: the population guard is worth 13 points
+at 5 WPM and 3 dB on its own, which is where fragmentation hits a Farnsworth
+sender hardest.
+
+The trade is taken deliberately. An operator working a 20-something WPM QSO with
+a loose fist is the ordinary case, and it goes from unreadable to readable; 40
+WPM at 3 dB SNR is not, and it goes from 88.9% to 86.6%.
+
+The clamp is one-directional by construction - the measured split may fall below
+where the ratio rule would have put it but never above - so this change can only
+add word gaps that were being missed and can never remove one that is being
+found today. That asymmetry is the same one the character gap argues for: a
+missed word gap costs one edit per word, a spurious one costs an edit per
+character and reads as gibberish rather than as running text.
+
 ### 5.4 The idle flush
 
 If the key has been up for 1500 ms with a part-built symbol, the character is
@@ -541,16 +596,16 @@ detector had gone in and nobody could cheaply re-measure it.
 
 | WPM | clean | n12   | n9    | n6    | n3    | f20   | f20n12 | f20n6 |
 |-----|-------|-------|-------|-------|-------|-------|--------|-------|
-| 5   | 97.3% | 97.3% | 97.3% | 96.8% | 61.8% | 97.3% | 97.3%  | 85.3% |
-| 10  | 96.5% | 96.5% | 96.5% | 96.5% | 93.7% | 96.5% | 67.8%  | 47.0% |
-| 13  | 98.8% | 98.8% | 98.8% | 98.7% | 97.9% | 98.8% | 60.1%  | 42.6% |
-| 15  | 98.6% | 98.6% | 98.6% | 98.6% | 97.2% | 98.6% | 58.4%  | 39.9% |
-| 18  | 99.8% | 99.8% | 99.8% | 99.8% | 98.6% | 99.8% | 61.7%  | 43.4% |
-| 20  | 99.3% | 99.3% | 99.3% | 99.3% | 99.1% | 99.3% | 62.4%  | 41.3% |
-| 25  | 99.4% | 99.4% | 99.4% | 99.3% | 98.4% | 99.4% | 65.6%  | 43.8% |
-| 30  | 99.5% | 99.5% | 99.5% | 99.5% | 95.7% | 99.5% | 65.2%  | 42.9% |
-| 35  | 99.3% | 99.6% | 99.3% | 99.2% | 92.4% | 99.3% | 62.4%  | 41.8% |
-| 40  | 99.5% | 99.7% | 99.7% | 99.1% | 88.9% | 99.5% | 62.7%  | 38.8% |
+| 5   | 97.3% | 97.3% | 97.3% | 96.8% | 61.6% | 97.3% | 97.3%  | 85.3% |
+| 10  | 96.5% | 96.5% | 96.5% | 96.5% | 93.7% | 96.5% | 67.6%  | 47.2% |
+| 13  | 98.8% | 98.8% | 98.8% | 98.7% | 97.9% | 98.8% | 60.2%  | 42.8% |
+| 15  | 98.6% | 98.6% | 98.6% | 98.6% | 97.2% | 98.6% | 58.2%  | 40.0% |
+| 18  | 99.8% | 99.8% | 99.8% | 99.8% | 98.6% | 99.8% | 61.9%  | 43.8% |
+| 20  | 99.3% | 99.3% | 99.3% | 99.3% | 99.1% | 99.3% | 62.7%  | 41.5% |
+| 25  | 99.4% | 99.4% | 99.4% | 99.3% | 98.4% | 99.4% | 65.7%  | 44.5% |
+| 30  | 99.5% | 99.5% | 99.5% | 99.5% | 95.2% | 99.5% | 65.1%  | 43.2% |
+| 35  | 99.3% | 99.6% | 99.3% | 99.2% | 91.2% | 99.3% | 62.5%  | 42.3% |
+| 40  | 99.5% | 99.7% | 99.7% | 99.0% | 86.6% | 99.5% | 62.8%  | 39.2% |
 
 Two things about this table are easy to misread.
 

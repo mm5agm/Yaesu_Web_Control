@@ -344,6 +344,38 @@ namespace RadioWebControl.Core.Services.Cw
         /// </summary>
         private const double WordGapRatio = 1.8;
 
+        /// <summary>How many separator gaps before <see cref="WordGapMs"/> will
+        /// try to separate two populations out of them. Below this the ratio
+        /// rule is used, because a handful of gaps from the opening of a
+        /// transmission are all character gaps and clustering them splits a
+        /// cluster that has no split in it.</summary>
+        private const int WordGapMinGaps = 12;
+
+        /// <summary>Gaps longer than this many character gaps are clipped to it
+        /// before clustering: past about here a gap is a sender pausing, not a
+        /// word boundary, and it should not get a vote on where the boundary
+        /// is.</summary>
+        private const double WordGapClipDits = 4.0;
+
+        /// <summary>How far apart the two cluster centres have to be before
+        /// they are believed to be two things. Under this, one population.</summary>
+        private const double WordGapMinSeparation = 1.20;
+
+        /// <summary>The lowest the measured split may sit, in character gaps.
+        /// Anything at or below 1.0 splits characters into words.</summary>
+        private const double WordGapFloor = 1.25;
+
+        /// <summary>The share of separators the word cluster must hold before
+        /// it is believed. Plain English text puts about one separator in five
+        /// at a word boundary; well outside that band the two clusters are not
+        /// characters and words.</summary>
+        private const double WordGapMinShare = 0.08;
+        private const double WordGapMaxShare = 0.45;
+
+        /// <summary>Two-means iterations. It converges in three or four on this
+        /// data; the cap is only there so a pathological window cannot spin.</summary>
+        private const int WordGapPasses = 12;
+
         /// <summary>
         /// The de-glitch floor as a fraction of the tracked dit, taking over
         /// from the fixed MinElementMs wherever it is the larger of the two.
@@ -714,7 +746,7 @@ namespace RadioWebControl.Core.Services.Cw
             _gapWindowNext = (_gapWindowNext + 1) % _gapWindow.Length;
             if (_gapWindowCount < _gapWindow.Length) _gapWindowCount++;
 
-            if (gapMs >= WordGapRatio * CharacterGapMs() && !_pendingCharGap)
+            if (gapMs >= WordGapMs() && !_pendingCharGap)
             {
                 text += " ";
                 _pendingCharGap = true;
@@ -763,6 +795,109 @@ namespace RadioWebControl.Core.Services.Cw
             sorted.Sort();
 
             return Math.Max(textbook, sorted[(int)(0.25 * (_gapWindowCount - 1))]);
+        }
+
+        /// <summary>
+        /// Where to split character gaps from word gaps, measured rather than
+        /// assumed.
+        ///
+        /// <see cref="WordGapRatio"/> times the character gap is a model: it
+        /// says that whatever an operator does to their character gaps, they do
+        /// proportionally to their word gaps. Real fists do not oblige.
+        /// Measured on `bench/mkii-i1yrl.wav` on 2026-09-01 - the only plain-QSO
+        /// recording in the corpus - the character gaps centre on 4.4 dits and
+        /// the word gaps on 5.8, a ratio of 1.3. The operator had stretched his
+        /// character gaps and left his word gaps alone. Scaling from the one to
+        /// the other put the split at 6.7 dits, above two thirds of his word
+        /// gaps, and the reader printed TKSFORINFOAND, QTHNRTIN and CQCQCQDE.
+        ///
+        /// So the two populations are separated instead of derived from each
+        /// other: two-means on the log of the recent separator gaps, seeded
+        /// where the ratio rule would have put them, and the split taken as the
+        /// geometric mean of the two centres it settles on. Logs because the
+        /// quantity is a ratio - the distance from 3 dits to 4 is the same kind
+        /// of distance as from 6 to 8 - and because it stops one long pause
+        /// dominating the arithmetic.
+        ///
+        /// Three guards, each of which costs a real measurement to remove:
+        ///
+        /// - Gaps over <see cref="WordGapClipDits"/> character gaps are clipped
+        ///   before clustering. A sender who stops to listen leaves a gap of
+        ///   tens of dits, and one of those drags the upper centre up far
+        ///   enough to swallow every genuine word gap under it.
+        /// - If the two centres end up closer than
+        ///   <see cref="WordGapMinSeparation"/>, there is one population and not
+        ///   two - the sender is running everything together, or has not sent a
+        ///   word gap yet - and the ratio rule is used unchanged. Inventing a
+        ///   split inside a single cluster is how you get a space between every
+        ///   letter.
+        /// - The answer is clamped so it can never sit at or below the measured
+        ///   character gap, and never above where the ratio rule would have put
+        ///   it. The lower bound is what stops a bad cluster splitting every
+        ///   character; the upper bound makes the whole change one-directional,
+        ///   so it can only add word gaps that were being missed and can never
+        ///   remove one that is being found today.
+        ///
+        /// The asymmetry in that last guard is deliberate and is the same one
+        /// <see cref="CharacterGapMs"/> argues for: a missed word gap costs one
+        /// edit per word, a spurious one costs an edit per character.
+        /// </summary>
+        private double WordGapMs()
+        {
+            double charGap = CharacterGapMs();
+            double ratio = WordGapRatio * charGap;
+            if (_gapWindowCount < WordGapMinGaps) return ratio;
+
+            double clip = WordGapClipDits * charGap;
+            Span<double> logs = stackalloc double[_gapWindowCount];
+            for (int i = 0; i < _gapWindowCount; i++)
+                logs[i] = Math.Log(Math.Min(_gapWindow[i], clip));
+
+            double lo = Math.Log(charGap);
+            double hi = Math.Log(ratio);
+
+            for (int pass = 0; pass < WordGapPasses; pass++)
+            {
+                double sumLo = 0.0, sumHi = 0.0;
+                int nLo = 0, nHi = 0;
+                double mid = 0.5 * (lo + hi);
+
+                foreach (double v in logs)
+                {
+                    if (v < mid) { sumLo += v; nLo++; }
+                    else { sumHi += v; nHi++; }
+                }
+
+                // An empty side means the seed was outside the data entirely.
+                // There is nothing to separate, so leave the model alone.
+                if (nLo == 0 || nHi == 0) return ratio;
+
+                double newLo = sumLo / nLo;
+                double newHi = sumHi / nHi;
+                bool settled = Math.Abs(newLo - lo) < 1e-4 && Math.Abs(newHi - hi) < 1e-4;
+                lo = newLo;
+                hi = newHi;
+                if (settled) break;
+            }
+
+            if (hi - lo < Math.Log(WordGapMinSeparation)) return ratio;
+
+            // How much of the window ended up in the upper cluster. English
+            // runs about four and a half characters to a word, so roughly one
+            // separator in five is a word gap; a "word" cluster holding half
+            // the separators is not one. This is what keeps noise out. Under
+            // fading and hiss a real gap gets broken in two by a spurious mark,
+            // and the fragments pile up into a second population that clusters
+            // beautifully and means nothing - measured on the 5 WPM ARRL file
+            // at 3 dB SNR, where believing it cost 13 points.
+            double boundary = 0.5 * (lo + hi);
+            int upper = 0;
+            foreach (double v in logs) if (v >= boundary) upper++;
+            double share = (double)upper / _gapWindowCount;
+            if (share < WordGapMinShare || share > WordGapMaxShare) return ratio;
+
+            double split = Math.Exp(boundary);
+            return Math.Clamp(split, WordGapFloor * charGap, ratio);
         }
 
         private string FlushCharacter()
