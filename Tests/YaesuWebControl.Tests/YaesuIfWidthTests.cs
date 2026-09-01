@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Xunit;
 using Yaesu_Web_Control.Services;
 
@@ -166,5 +166,79 @@ namespace YaesuWebControl.Tests
                 $"Could not find {relative} above {AppContext.BaseDirectory}. This test " +
                 "compares the C# IF width tables against the browser's copy and needs both.");
         }
-    }
+    
+        // ---- CodeForHz: the reverse lookup Reader Mode needs ----------------
+
+        [Theory]
+        [InlineData("FTdx101MP", 250, 5)]    // exactly on a step
+        [InlineData("FTdx101MP", 260, 5)]    // nearer 250 than 300
+        [InlineData("FTdx101MP", 280, 6)]    // nearer 300 than 250
+        [InlineData("FTdx10",    250, 5)]
+        [InlineData("FT-710",    250, 5)]    // the 710 has gaps; 250 is one it has
+        [InlineData("FT-710",    200, 5)]    // 200 is not on the 710 at all: 150 and 250 tie, wider wins
+        [InlineData("FTDX3000",  250, 10)]   // its CW set starts at 500
+        public void The_nearest_available_CW_width_is_chosen(string model, int wantedHz, int expectedCode)
+        {
+            Assert.Equal(expectedCode, YaesuIfWidth.CodeForHz(model, "CW-U", wantedHz));
+        }
+
+        [Fact]
+        public void A_tie_resolves_to_the_wider_filter()
+        {
+            // 175 Hz is exactly between the 101's 150 (code 3) and 200 (code 4).
+            // Wider wins, because a filter narrower than asked for can put the
+            // CW pitch outside the passband and lose a signal the operator can
+            // hear - which is the opposite of what Reader Mode is for.
+            Assert.Equal(4, YaesuIfWidth.CodeForHz("FTdx101MP", "CW-U", 175));
+        }
+
+        [Fact]
+        public void A_width_below_everything_the_radio_has_still_gets_the_narrowest()
+        {
+            // Asking a FTDX3000 for 50 Hz is asking for something it does not
+            // have. Refusing would leave the filter wide open, which helps
+            // nobody; 500 Hz is the best it can do and is still a large
+            // improvement on 2.4 kHz.
+            Assert.Equal(10, YaesuIfWidth.CodeForHz("FTDX3000", "CW-U", 50));
+        }
+
+        [Fact]
+        public void The_answer_is_mode_aware_because_the_codes_are()
+        {
+            // Code 5 is 250 Hz in CW and 1100 Hz in SSB on the 101. A reverse
+            // lookup that ignored the mode would hand Reader Mode a code that
+            // means something else entirely.
+            Assert.Equal(5,  YaesuIfWidth.CodeForHz("FTdx101MP", "CW-U", 250));
+            Assert.Equal(1,  YaesuIfWidth.CodeForHz("FTdx101MP", "USB",  250));
+        }
+
+        [Theory]
+        [InlineData("FT-991A", "CW-U")]   // a model with no table here
+        [InlineData("FTdx101MP", "AM")]   // a mode with no IF width at all
+        [InlineData("FTdx101MP", "FM")]
+        public void No_table_means_no_answer_rather_than_a_guess(string model, string mode)
+        {
+            // Null is the instruction to leave the operator's filter alone. A
+            // guessed SH code would set a bandwidth nobody chose on a rig
+            // nobody here has tested against.
+            Assert.Null(YaesuIfWidth.CodeForHz(model, mode, 250));
+        }
+
+        [Fact]
+        public void Every_code_it_returns_maps_back_to_a_real_width()
+        {
+            // The round trip is the actual contract: whatever CodeForHz picks
+            // has to be a code HzFor recognises, or Reader Mode would send the
+            // radio an SH code the rest of the app cannot interpret.
+            foreach (var model in YaesuIfWidth.KnownModels)
+            {
+                for (int wanted = 50; wanted <= 4000; wanted += 25)
+                {
+                    var code = YaesuIfWidth.CodeForHz(model, "CW-U", wanted);
+                    Assert.NotNull(code);
+                    Assert.NotNull(YaesuIfWidth.HzFor(model, "CW-U", code!.Value));
+                }
+            }
+        }
+}
 }

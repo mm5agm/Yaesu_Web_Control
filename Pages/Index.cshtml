@@ -2494,6 +2494,40 @@
         padding: 0.5rem 0.6rem;
         border-radius: 0.25rem;
     }
+
+    /* QSO log form. The module builds its own DOM; the palette is the host
+       app's business, so the classes are styled here. */
+    .cwq { border-top: 1px solid #444; margin-top: 0.6rem; padding-top: 0.6rem; }
+    .cwq-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+    .cwq-head-btns { display: flex; align-items: center; gap: 0.4rem; }
+    .cwq-grid {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.35rem 0.6rem;
+        align-items: start;
+    }
+    .cwq-label { font-size: 0.85rem; color: #cde; padding-top: 0.3rem; white-space: nowrap; }
+    .cwq-input { background: #111; border-color: #444; color: #dfe; }
+    .cwq-input:focus { background: #111; color: #dfe; border-color: #6aa; box-shadow: none; }
+    .cwq-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
+    /* A chip is a suggestion, so it is drawn as something to consider, not as
+       an answer already given: outlined and quiet until it is chosen. */
+    .cwq-chip {
+        display: inline-flex; align-items: baseline; gap: 0.35rem;
+        background: transparent; color: #ffd24a;
+        border: 1px solid #6a5a20; border-radius: 999px;
+        padding: 0.1rem 0.55rem; font-size: 0.85rem; line-height: 1.4; cursor: pointer;
+    }
+    .cwq-chip:hover { border-color: #ffd24a; }
+    .cwq-chip-on { background: rgba(255, 210, 74, 0.15); border-color: #ffd24a; }
+    .cwq-why { font-size: 0.7rem; color: #9ab; }
+    .cwq-none { font-size: 0.72rem; color: #778; font-style: italic; }
+    .cwq-facts {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.72rem; color: #9ab; margin-top: 0.5rem;
+    }
+    .cwq-status { font-size: 0.85rem; color: #9d9; margin-top: 0.35rem; min-height: 1.2rem; }
+    .cwq-status.cwq-problem { color: #ffd23f; font-weight: 600; }
 </style>
 <dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:620px; max-width:95vw;" aria-labelledby="cwReaderTitle">
     <div class="cwr-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
@@ -2501,6 +2535,10 @@
         <div class="d-flex align-items-center gap-2">
             <button id="cwReaderStartBtn" class="btn btn-sm btn-success" type="button">Start</button>
             <button id="cwReaderClearBtn" class="btn btn-sm btn-outline-secondary" type="button">Clear</button>
+            <button id="cwReaderModeBtn" class="btn btn-sm btn-outline-info" type="button" aria-pressed="false"
+                    title="Set CW mode, a narrow filter and APF for decoding. Your current settings are put back when you stop.">Reader Mode</button>
+            <button id="cwReaderLogBtn" class="btn btn-sm btn-outline-warning" type="button"
+                    title="Log this contact to ywc-log.adi, using what the copy suggests">Log QSO</button>
             <div class="form-check form-switch mb-0" style="cursor:default;">
                 <input class="form-check-input" type="checkbox" id="cwReaderAutoScroll" checked>
                 <label class="form-check-label small" for="cwReaderAutoScroll">Follow</label>
@@ -2550,6 +2588,7 @@
             perfect; on a marginal one it prints plausible-looking rubbish that looks no
             different. The line above tells you which you are looking at.
         </div>
+        <div id="cwQsoForm" class="px-1"></div>
     </div>
 </dialog>
 
@@ -2612,6 +2651,7 @@
         // the panels that offer it so the global is there when they render.
         import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -2941,6 +2981,16 @@
             // second stream on the radio's codec.
             window.cwReaderPanel = new CwReaderPanel();
             window.cwReaderPanel.init();
+
+            // The log form is separate from the reader and starts closed. The
+            // operator opens it when a QSO is worth keeping, and it asks the
+            // server what is in the copy at that moment - so opening it late
+            // in the contact gets the name and QTH that arrived after the
+            // callsign, which opening it early would not.
+            window.cwQsoForm = new CwQsoForm();
+            window.cwQsoForm.init('cwQsoForm');
+            document.getElementById('cwReaderLogBtn')
+                ?.addEventListener('click', () => window.cwQsoForm.toggle());
 
             spectrumPipeline.onFrequencyA(hz => {
                 spectrumPanelA?.setVfoFrequency(hz);

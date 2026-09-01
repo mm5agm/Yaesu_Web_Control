@@ -19,14 +19,17 @@ namespace Yaesu_Web_Control.Controllers
     {
         private readonly CwReaderService _reader;
         private readonly CwQsoLogService _log;
+        private readonly CwReaderModeService _readerMode;
         private readonly ILogger<CwController> _logger;
 
         public CwController(CwReaderService reader,
                             CwQsoLogService log,
+                            CwReaderModeService readerMode,
                             ILogger<CwController> logger)
         {
             _reader = reader;
             _log = log;
+            _readerMode = readerMode;
             _logger = logger;
         }
 
@@ -140,6 +143,45 @@ namespace Yaesu_Web_Control.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
+        /// <summary>
+        /// Sets the radio up for decoding - CW mode, a narrow filter, APF -
+        /// and remembers what to put back.
+        /// </summary>
+        [HttpPost("readermode/on")]
+        public async Task<IActionResult> ReaderModeOn([FromQuery] int? filterHz, CancellationToken ct)
+        {
+            try
+            {
+                return Ok(await _readerMode.EnableAsync(filterHz, ct));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to enter Reader Mode");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>Puts back the mode, filter and APF Reader Mode changed.</summary>
+        [HttpPost("readermode/off")]
+        public async Task<IActionResult> ReaderModeOff(CancellationToken ct)
+        {
+            try
+            {
+                return Ok(await _readerMode.RestoreAsync(ct));
+            }
+            catch (Exception ex)
+            {
+                // Worth saying out loud: a failed restore leaves the operator's
+                // radio narrow with APF on, and the message is how they find
+                // out rather than wondering why the band went quiet.
+                _logger.LogError(ex, "Failed to leave Reader Mode");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("readermode")]
+        public IActionResult ReaderModeStatus() => Ok(_readerMode.Status());
 
         /// <summary>Where the log and this session's transcript are on disk.</summary>
         [HttpGet("files")]

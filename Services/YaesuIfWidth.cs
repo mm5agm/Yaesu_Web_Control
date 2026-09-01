@@ -1,4 +1,4 @@
-namespace Yaesu_Web_Control.Services
+﻿namespace Yaesu_Web_Control.Services
 {
     /// <summary>
     /// SH filter-width code to bandwidth in Hz, per radio and per mode.
@@ -153,5 +153,49 @@ namespace Yaesu_Web_Control.Services
         /// </summary>
         public static int? HzForCode(string? model, string? mode, string? code)
             => int.TryParse(code, out int c) ? HzFor(model, mode, c) : null;
+
+        /// <summary>
+        /// The SH code closest to a wanted bandwidth, for Reader Mode - which
+        /// asks for a narrow filter in Hz and has to turn that into whatever
+        /// this radio actually offers.
+        ///
+        /// The answer is the nearest available width, and on a tie the wider
+        /// one wins. That tie-break is the safe direction: a filter narrower
+        /// than asked for can put the CW pitch outside the passband, and a
+        /// signal the operator can hear disappears the moment they press the
+        /// button meant to improve the copy. A filter slightly wider than
+        /// asked for merely lets a little more noise in.
+        ///
+        /// Nearest, not "narrowest at or below", because the tables are not
+        /// all the same shape. The FTDX3000's CW set starts at 500 Hz, so a
+        /// request for 250 has nothing at or below it and would come back
+        /// null - refusing to narrow a filter it could perfectly well have
+        /// narrowed to 500.
+        ///
+        /// Null still means "do not know": an unknown model, or a mode with no
+        /// IF width at all. Callers must leave the filter alone rather than
+        /// guess a code.
+        /// </summary>
+        public static int? CodeForHz(string? model, string? mode, int wantedHz)
+        {
+            string? group = ModeGroup(mode);
+            if (group is null) return null;
+            if (model is null || !Tables.TryGetValue(model, out var t)) return null;
+
+            var table = group == "cw" ? t.Cw : t.Ssb;
+
+            int? best = null;
+            int bestDistance = int.MaxValue, bestHz = 0;
+            foreach (var kv in table)
+            {
+                int distance = Math.Abs(kv.Value - wantedHz);
+                if (distance > bestDistance) continue;
+                if (distance == bestDistance && kv.Value <= bestHz) continue;
+                best = kv.Key;
+                bestDistance = distance;
+                bestHz = kv.Value;
+            }
+            return best;
+        }
     }
 }

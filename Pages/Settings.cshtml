@@ -2590,6 +2590,48 @@
         </div>
     </details>
 
+    <!-- CW Reader Mode -->
+    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
+        <summary><i class="bi bi-soundwave" aria-hidden="true"></i>&nbsp;CW Reader Mode</summary>
+        <div class="section-body">
+            <p class="text-muted small mb-3">
+                The CW reader decodes far better through a narrow filter than through a wide one
+                full of adjacent signals - more than any change to the decoding itself would give.
+                Reader Mode sets these in one click and puts your previous settings back when you
+                turn it off.
+            </p>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label" for="cwReaderFilterHz">Target filter width</label>
+                    <select id="cwReaderFilterHz" name="Settings.CwReaderFilterHz" class="form-select form-select-sm">
+                        @foreach (var hz in new[] { 50, 100, 150, 200, 250, 300, 400, 500 })
+                        {
+                            <option value="@hz" selected="@(Model.Settings.CwReaderFilterHz == hz)">@hz Hz</option>
+                        }
+                    </select>
+                    <div class="form-text">
+                        Your radio is set to the nearest width it actually has, which is not always
+                        the number above - the FTDX3000's CW filters start at 500 Hz.
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="form-check form-switch mt-4">
+                        <input class="form-check-input" type="checkbox" id="cwReaderUseApf"
+                               name="Settings.CwReaderUseApf" value="true"
+                               @(Model.Settings.CwReaderUseApf ? "checked" : "") />
+                        <input type="hidden" name="Settings.CwReaderUseApf" value="false" />
+                        <label class="form-check-label" for="cwReaderUseApf">Switch APF on as well</label>
+                    </div>
+                    <div class="form-text">
+                        The audio peak filter narrows further still and is the biggest single
+                        improvement available on a weak signal. Turn it off if you are listening as
+                        well as reading and dislike the ringing.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </details>
+
     @{ var isSaveSuccess = !string.IsNullOrEmpty(Model.StatusMessage) && (Model.StatusMessage.Contains("success") || Model.StatusMessage.Contains("✓")); }
 
     @* Placed right next to the Save button rather than at the top of the

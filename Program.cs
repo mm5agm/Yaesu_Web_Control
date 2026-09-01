@@ -456,6 +456,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.BridgeCwAudioSource>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwQsoLogService>();
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderModeService>();
 // Radio Display (USB UVC / HDMI capture → MJPEG) — opt-in; capture opens while viewers connect.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoCaptureService>();

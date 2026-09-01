@@ -288,6 +288,14 @@ namespace Yaesu_Web_Control.Pages
                 if (Settings.CwMessages != null && Settings.CwMessages.Count == 5)
                     current.CwMessages = Settings.CwMessages;
 
+                // Reader Mode. The width is clamped rather than validated away:
+                // a value outside this range would be handed to CodeForHz and
+                // come back as the nearest real filter anyway, so rejecting the
+                // whole save over it would cost the operator their other edits
+                // for nothing.
+                current.CwReaderFilterHz = Math.Clamp(Settings.CwReaderFilterHz, 50, 1000);
+                current.CwReaderUseApf   = Settings.CwReaderUseApf;
+
                 // DX cluster settings — copy through. Normalise callsign to upper case.
                 current.DxClusterEnabled         = Settings.DxClusterEnabled;
                 current.DxClusterHost            = (Settings.DxClusterHost ?? "").Trim();
