@@ -37,6 +37,7 @@ export class CwReaderPanel {
         this._dialog   = null;
         this._out      = null;
         this._status   = null;
+        this._statusSig = null;   // last message shown, so a redraw that says the same thing leaves the DOM alone
         this._startBtn = null;
         this._clearBtn = null;
         this._autoScrl = null;
@@ -212,40 +213,65 @@ export class CwReaderPanel {
         this._renderStatus(snap);
     }
 
+    // A status line that names a missing prerequisite is much more use with a
+    // way to fix it, but the fix is app-specific and this panel is shared.
+    // The host app may publish `window.radioFeatureSetup`; if it has not, or
+    // it does not provide this particular pop-out, the text stands on its own
+    // and nothing here changes.
+    _setStatus(text, setupKind) {
+        if (!this._status) return;
+
+        // Rebuilt on every poll tick, this would replace the button between a
+        // mousedown and its mouseup and the click would never land. Nothing
+        // here changes while the message does not, so leave the node alone.
+        const sig = setupKind + '|' + text;
+        if (this._statusSig === sig) return;
+        this._statusSig = sig;
+
+        this._status.textContent = text;
+
+        const setup = (typeof window !== 'undefined') ? window.radioFeatureSetup : null;
+        if (!setupKind || !setup || typeof setup.open !== 'function') return;
+        if (typeof setup.provides === 'function' && !setup.provides(setupKind)) return;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-primary ms-2';
+        btn.textContent = 'Set it up';
+        btn.addEventListener('click', () => setup.open(setupKind));
+        this._status.appendChild(btn);
+    }
+
     _renderStatus(snap) {
         if (!this._status) return;
 
         if (!snap.running) {
-            this._status.textContent = 'Stopped.';
+            this._setStatus('Stopped.');
             return;
         }
 
-        // The decoder listens to the remote-audio capture rather than opening
-        // a device of its own, so it hears nothing until an audio session is
-        // actually connected. Without saying so the panel looks healthy and
-        // prints nothing, and the operator has no way to tell why.
+        // The decoder opens the radio's capture device itself, for listening
+        // only, so nothing else has to be running first. It used to need a
+        // live remote-audio session, and the advice here used to say so -
+        // that is no longer true and must not come back.
         //
-        // Two different states, and telling them apart matters. Enabling
-        // Remote Audio in Settings only makes the Remote Audio bar appear; it
-        // does not connect anything. Saying 'start remote audio' to an
-        // operator who has already switched it on sends them back to the
-        // setting they have already set, which is exactly what happened the
-        // first time this panel met a radio.
-        if (!snap.audioSessionActive) {
-            this._status.textContent =
-                'Running, but no audio is reaching it. The decoder listens to the '
-                + 'remote audio stream: press the green telephone button on the Remote '
-                + 'Audio bar to connect. (If that bar is not showing, switch Remote '
-                + 'Audio on in Settings first.)';
+        // What it can still hit is a device that is not chosen, or one that
+        // has gone away. The host reports either as a message rather than a
+        // bare failure, so repeat what it said: a healthy-looking panel
+        // printing nothing, with no way to tell why, is what sent the
+        // operator hunting through Settings the first time.
+        if (snap.captureError) {
+            this._setStatus('Running, but the radio audio could not be opened. '
+                + snap.captureError, 'cw-audio');
             return;
         }
 
-        // Session connected but no device open is a genuine fault rather than
-        // something the operator has left undone.
+        // No error and no device is a genuine fault rather than something the
+        // operator has left undone - the capture went away under us.
         if (!snap.audioDevicesOpen) {
-            this._status.textContent =
-                'Remote audio is connected but no capture device opened - check the '
-                + 'audio device selection in Settings.';
+            this._setStatus('Running, but the radio audio device is not open. '
+                + 'Stop and start the reader; if it keeps happening, check the '
+                + 'radio is still connected.', 'cw-audio');
             return;
         }
 
@@ -303,11 +329,11 @@ export class CwReaderPanel {
         if (Number.isFinite(snap.snrDb)) bits.push(`SNR ${snap.snrDb.toFixed(0)} dB`);
         if (snap.droppedFrames)  bits.push(`${snap.droppedFrames} frames dropped`);
 
-        this._status.textContent = bits.join('  |  ');
+        this._setStatus(bits.join('  |  '));
     }
 
     _showError(message) {
-        if (this._status) this._status.textContent = `Error: ${message}`;
+        this._setStatus(`Error: ${message}`);
     }
 
     // ── Settings ────────────────────────────────────────────────────────────
