@@ -43,6 +43,19 @@ namespace Yaesu_Web_Control.Services.Audio
         private readonly object _playbackLock = new();
         private readonly object _graceLock = new();
         private bool _devicesOpen;
+
+        /// <summary>
+        /// True when the open devices are RX-only (see OpenDevicesOnAudioThread).
+        /// A session that needs to transmit must not reuse such an open.
+        /// </summary>
+        private bool _captureOnly;
+
+        /// <summary>
+        /// How many non-session consumers (currently only the CW reader) are
+        /// asking for received audio. While this is above zero the capture
+        /// device stays open with no browser connected.
+        /// </summary>
+        private int _captureHolds;
         private float _rxLevel;
         private float _txLevel;
         private string? _openRxDeviceKey;
@@ -92,6 +105,56 @@ namespace Yaesu_Web_Control.Services.Audio
         public float RxLevel => _rxLevel;
         public float TxLevel => _txLevel;
         public bool DevicesOpen => _devicesOpen;
+
+        /// <summary>True when the open devices are RX-only (no TX endpoint held).</summary>
+        public bool CaptureOnly => _captureOnly;
+
+        /// <summary>
+        /// Ask for received audio without a browser session. The CW decoder needs
+        /// the radio's capture device open; it does not need anything streamed to
+        /// a browser, and requiring an operator to press connect on the Remote
+        /// Audio bar before the reader would work was a prerequisite with no
+        /// technical reason behind it.
+        ///
+        /// Returns null on success, or the same human-readable reason a session
+        /// would have been given. Balance every successful call with
+        /// <see cref="ReleaseCapture"/>.
+        /// </summary>
+        public async Task<string?> AcquireCaptureAsync()
+        {
+            Interlocked.Increment(ref _captureHolds);
+            CancelScheduledDeviceClose();
+
+            // A live session already has them open, duplex, and that serves us
+            // too - RxFrameCaptured fires either way.
+            if (_devicesOpen)
+                return null;
+
+            var settings = await _settings.GetSettingsAsync();
+            var error = OpenDevices(settings, captureOnly: true);
+            if (error != null)
+                Interlocked.Decrement(ref _captureHolds);
+            return error;
+        }
+
+        /// <summary>
+        /// Give up a hold taken by <see cref="AcquireCaptureAsync"/>. The devices
+        /// are not closed immediately: the same grace window a session handoff
+        /// uses applies, so toggling the reader off and on does not churn
+        /// PortAudio streams.
+        /// </summary>
+        public void ReleaseCapture()
+        {
+            if (Interlocked.Decrement(ref _captureHolds) > 0)
+                return;
+
+            // Never let a stray release drive the count negative - a later
+            // acquire would then not open anything.
+            Interlocked.Exchange(ref _captureHolds, 0);
+
+            if (_activeSocket == null && _devicesOpen)
+                ScheduleDeviceClose();
+        }
         public string ActiveCodec => _codecName;
         public float RxGain => _rxGain;
         public float TxGain => _txGain;
@@ -429,9 +492,27 @@ namespace Yaesu_Web_Control.Services.Audio
                 try
                 {
                     await Task.Delay(DeviceCloseGrace, token);
+
+                    // A capture hold (the CW reader) outlives the browser session.
+                    // When the session goes away the devices should not close, but
+                    // nor should they keep holding the radio's TX endpoint that
+                    // only the session needed - so downgrade to RX-only.
+                    bool held = Volatile.Read(ref _captureHolds) > 0;
+                    var settings = held ? await _settings.GetSettingsAsync() : null;
+
                     AudioDeviceEnumerator.Invoke(() =>
                     {
                         if (token.IsCancellationRequested) return;
+                        if (held)
+                        {
+                            if (_captureOnly) return;
+                            _logger.LogInformation(
+                                "Audio device grace ({Seconds}s) elapsed — session gone but capture still held, reopening RX-only",
+                                DeviceCloseGrace.TotalSeconds);
+                            CloseDevicesAndCodecOnAudioThread();
+                            OpenDevicesOnAudioThread(settings!, captureOnly: true);
+                            return;
+                        }
                         _logger.LogInformation(
                             "Audio device grace ({Seconds}s) elapsed — closing PortAudio streams",
                             DeviceCloseGrace.TotalSeconds);
@@ -452,10 +533,20 @@ namespace Yaesu_Web_Control.Services.Audio
             _openTxDeviceKey = null;
         }
 
-        private string? OpenDevices(ApplicationSettings settings) =>
-            AudioDeviceEnumerator.Invoke(() => OpenDevicesOnAudioThread(settings));
+        private string? OpenDevices(ApplicationSettings settings, bool captureOnly = false) =>
+            AudioDeviceEnumerator.Invoke(() => OpenDevicesOnAudioThread(settings, captureOnly));
 
-        private string? OpenDevicesOnAudioThread(ApplicationSettings settings)
+        /// <summary>
+        /// Opens the radio's audio devices. <paramref name="captureOnly"/> opens
+        /// RX alone and leaves the radio's playback endpoint untouched, which is
+        /// what the CW decoder needs: it consumes received audio and never sends
+        /// any. That distinction is not cosmetic. Opening TX would hold the
+        /// radio's USB playback endpoint open for as long as the reader ran, and
+        /// an operator with WSJT-X on the same codec would find it could no
+        /// longer transmit - a fault they would blame on WSJT-X, not on a Morse
+        /// window they left open.
+        /// </summary>
+        private string? OpenDevicesOnAudioThread(ApplicationSettings settings, bool captureOnly = false)
         {
             lock (_deviceLock)
             {
@@ -468,37 +559,41 @@ namespace Yaesu_Web_Control.Services.Audio
                     // into the room (and never reaches the radio USB codec).
                     if (string.IsNullOrWhiteSpace(settings.AudioRadioRxDevice))
                         return "Radio RX (capture) device is not set. Pick the radio USB recording endpoint in Settings → Remote Audio.";
-                    if (string.IsNullOrWhiteSpace(settings.AudioRadioTxDevice))
+                    if (!captureOnly && string.IsNullOrWhiteSpace(settings.AudioRadioTxDevice))
                         return "Radio TX (playback) device is not set. Pick the radio USB Speakers/playback endpoint in Settings → Remote Audio (blank would use PC speakers and cause mic feedback).";
 
                     int rxIndex = AudioDeviceEnumerator.FindDeviceIndex(settings.AudioRadioRxDevice, requireInput: true, requireOutput: false);
-                    int txIndex = AudioDeviceEnumerator.FindDeviceIndex(settings.AudioRadioTxDevice, requireInput: false, requireOutput: true);
+                    int txIndex = captureOnly
+                        ? -1
+                        : AudioDeviceEnumerator.FindDeviceIndex(settings.AudioRadioTxDevice, requireInput: false, requireOutput: true);
 
                     if (rxIndex < 0)
                         return "Radio RX (capture) device not found. Pick it in Settings → Remote Audio.";
-                    if (txIndex < 0)
+                    if (!captureOnly && txIndex < 0)
                         return "Radio TX (playback) device not found. Pick it in Settings → Remote Audio.";
 
                     var rxInfo = PortAudio.GetDeviceInfo(rxIndex);
-                    var txInfo = PortAudio.GetDeviceInfo(txIndex);
+                    var txInfo = captureOnly ? default : PortAudio.GetDeviceInfo(txIndex);
 
                     // WASAPI shared mode usually requires the device mix format
                     // (typically stereo). Opening mono against a 2-ch USB CODEC
                     // fails with InvalidChannelCount — open stereo and mix to mono.
                     int inCh = rxInfo.maxInputChannels >= 2 ? 2 : Math.Max(1, rxInfo.maxInputChannels);
-                    int outCh = txInfo.maxOutputChannels >= 2 ? 2 : Math.Max(1, txInfo.maxOutputChannels);
+                    int outCh = captureOnly ? 0 : (txInfo.maxOutputChannels >= 2 ? 2 : Math.Max(1, txInfo.maxOutputChannels));
 
                     // Same for sample rate: WASAPI rejects a rate that isn't the
                     // shared-mode mix format. Open at each device's default and
                     // resample to/from the 48 kHz bridge.
                     int rxRate = PickDeviceSampleRate(rxInfo.defaultSampleRate);
-                    int txRate = PickDeviceSampleRate(txInfo.defaultSampleRate);
+                    int txRate = captureOnly ? 0 : PickDeviceSampleRate(txInfo.defaultSampleRate);
                     uint rxFrames = DeviceFramesPerBuffer(rxRate);
-                    uint txFrames = DeviceFramesPerBuffer(txRate);
+                    uint txFrames = captureOnly ? 0 : DeviceFramesPerBuffer(txRate);
 
                     const double targetLatency = 0.01;
                     double inLat = Math.Min(rxInfo.defaultLowInputLatency > 0 ? rxInfo.defaultLowInputLatency : targetLatency, 0.02);
-                    double outLat = Math.Min(txInfo.defaultLowOutputLatency > 0 ? txInfo.defaultLowOutputLatency : targetLatency, 0.02);
+                    double outLat = captureOnly
+                        ? targetLatency
+                        : Math.Min(txInfo.defaultLowOutputLatency > 0 ? txInfo.defaultLowOutputLatency : targetLatency, 0.02);
                     inLat = Math.Max(inLat, 0.005);
                     outLat = Math.Max(outLat, 0.005);
 
@@ -610,27 +705,37 @@ namespace Yaesu_Web_Control.Services.Audio
                         callback: captureCb,
                         userData: IntPtr.Zero);
 
-                    _playbackStream = new PortAudioSharp.Stream(
-                        inParams: null,
-                        outParams: outParams,
-                        sampleRate: txRate,
-                        framesPerBuffer: txFrames,
-                        streamFlags: StreamFlags.ClipOff,
-                        callback: playbackCb,
-                        userData: IntPtr.Zero);
+                    _playbackStream = captureOnly
+                        ? null
+                        : new PortAudioSharp.Stream(
+                            inParams: null,
+                            outParams: outParams,
+                            sampleRate: txRate,
+                            framesPerBuffer: txFrames,
+                            streamFlags: StreamFlags.ClipOff,
+                            callback: playbackCb,
+                            userData: IntPtr.Zero);
 
                     // Claim the stream slot before Start so a concurrent Settings
                     // /api/audio/devices call cannot GetDeviceInfo while WASAPI
                     // callbacks are already running.
                     AudioDeviceEnumerator.AddOpenStream();
                     _devicesOpen = true;
+                    _captureOnly  = captureOnly;
                     _captureStream.Start();
-                    _playbackStream.Start();
+                    _playbackStream?.Start();
                     _openRxDeviceKey = settings.AudioRadioRxDevice;
-                    _openTxDeviceKey = settings.AudioRadioTxDevice;
-                    _logger.LogInformation(
-                        "Audio devices open — RX '{Rx}' (#{RxI}, {InCh}ch @{RxRate} Hz), TX '{Tx}' (#{TxI}, {OutCh}ch @{TxRate} Hz), codec={Codec}, bridge={Bridge} Hz, frame={Frame} samples",
-                        rxInfo.name, rxIndex, inCh, rxRate, txInfo.name, txIndex, outCh, txRate, _codecName, AudioConstants.SampleRate, AudioConstants.FrameSamples);
+                    // Null, not the configured name, so CanReuseDevices refuses to
+                    // hand a capture-only open to a session that needs to transmit.
+                    _openTxDeviceKey = captureOnly ? null : settings.AudioRadioTxDevice;
+                    if (captureOnly)
+                        _logger.LogInformation(
+                            "Audio capture open (RX only, no TX endpoint held) — RX '{Rx}' (#{RxI}, {InCh}ch @{RxRate} Hz), bridge={Bridge} Hz, frame={Frame} samples",
+                            rxInfo.name, rxIndex, inCh, rxRate, AudioConstants.SampleRate, AudioConstants.FrameSamples);
+                    else
+                        _logger.LogInformation(
+                            "Audio devices open — RX '{Rx}' (#{RxI}, {InCh}ch @{RxRate} Hz), TX '{Tx}' (#{TxI}, {OutCh}ch @{TxRate} Hz), codec={Codec}, bridge={Bridge} Hz, frame={Frame} samples",
+                            rxInfo.name, rxIndex, inCh, rxRate, txInfo.name, txIndex, outCh, txRate, _codecName, AudioConstants.SampleRate, AudioConstants.FrameSamples);
                     return null;
                 }
                 catch (PortAudioException ex)
@@ -905,6 +1010,7 @@ namespace Yaesu_Web_Control.Services.Audio
                 try { _captureStream?.Stop(); } catch { /* ignore */ }
                 try { _captureStream?.Dispose(); } catch { /* ignore */ }
                 _captureStream = null;
+                _captureOnly = false;
                 try { _playbackStream?.Stop(); } catch { /* ignore */ }
                 try { _playbackStream?.Dispose(); } catch { /* ignore */ }
                 _playbackStream = null;

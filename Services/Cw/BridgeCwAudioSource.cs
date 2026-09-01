@@ -40,6 +40,7 @@ namespace Yaesu_Web_Control.Services.Cw
         private CancellationTokenSource? _cts;
         private Task? _pump;
         private long _dropped;
+        private bool _holdsCapture;
 
         public BridgeCwAudioSource(RadioAudioBridgeService bridge, ILogger<BridgeCwAudioSource> logger)
         {
@@ -62,11 +63,18 @@ namespace Yaesu_Web_Control.Services.Cw
         /// </summary>
         public bool AudioDevicesOpen => _bridge.DevicesOpen;
 
-        public Task StartAsync(CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Last error from asking the bridge to open capture, or null. Surfaced
+        /// so the reader can say "the RX device is not set" rather than sitting
+        /// silently on an audio stream that was never opened.
+        /// </summary>
+        public string? CaptureError { get; private set; }
+
+        public async Task StartAsync(CancellationToken cancellationToken = default)
         {
             lock (_gate)
             {
-                if (IsRunning) return Task.CompletedTask;
+                if (IsRunning) return;
 
                 _queue = Channel.CreateBounded<ReadOnlyMemory<float>>(
                     new BoundedChannelOptions(QueueCapacity)
@@ -84,8 +92,18 @@ namespace Yaesu_Web_Control.Services.Cw
                 IsRunning = true;
             }
 
-            _logger.LogInformation("CW audio source started (devices open: {Open})", _bridge.DevicesOpen);
-            return Task.CompletedTask;
+            // Ask the bridge for received audio directly rather than waiting for
+            // somebody to connect the Remote Audio bar. The decoder only ever
+            // consumes RX, so this opens the capture endpoint alone and leaves
+            // the radio's playback endpoint free for WSJT-X and friends.
+            CaptureError = await _bridge.AcquireCaptureAsync();
+            _holdsCapture = CaptureError == null;
+
+            if (CaptureError != null)
+                _logger.LogWarning("CW audio source started but capture could not open: {Error}", CaptureError);
+            else
+                _logger.LogInformation("CW audio source started (devices open: {Open}, RX-only: {RxOnly})",
+                    _bridge.DevicesOpen, _bridge.CaptureOnly);
         }
 
         public async Task StopAsync(CancellationToken cancellationToken = default)
@@ -107,6 +125,13 @@ namespace Yaesu_Web_Control.Services.Cw
                 _pump = null;
                 _queue = null;
             }
+
+            if (_holdsCapture)
+            {
+                _holdsCapture = false;
+                _bridge.ReleaseCapture();
+            }
+            CaptureError = null;
 
             cts?.Cancel();
 

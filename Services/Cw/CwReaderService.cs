@@ -231,6 +231,7 @@ namespace Yaesu_Web_Control.Services.Cw
                     Running            = IsRunning,
                     AudioSessionActive = _sessions.HasActiveSession,
                     AudioDevicesOpen   = _source.AudioDevicesOpen,
+                    CaptureError       = _source.CaptureError,
                     Text             = text,
                     Cursor           = _totalChars,
                     Truncated        = truncated,
@@ -364,17 +365,23 @@ namespace Yaesu_Web_Control.Services.Cw
         public bool Running { get; init; }
 
         /// <summary>
-        /// False means no browser is holding the remote-audio WebSocket, so
-        /// nothing has asked the bridge to open a device and the decoder is
-        /// being fed silence. This is not the same as the Remote Audio
-        /// *setting*: enabling it in Settings only reveals the Remote Audio
-        /// bar. Something still has to press connect, and until it does this
-        /// stays false. Distinguishing the two is the whole point of
-        /// carrying it - a reader that says "start remote audio" to an
-        /// operator who already has it enabled sends them looking in the
-        /// wrong place.
+        /// True when a browser is holding the remote-audio WebSocket.
+        ///
+        /// This used to be a prerequisite: the decoder heard nothing until
+        /// somebody pressed connect on the Remote Audio bar, and the panel had
+        /// to explain that. It no longer is - the reader asks the bridge for
+        /// capture directly (RX only, so the radio's TX endpoint stays free for
+        /// WSJT-X). Kept because it is still worth showing: it says whether the
+        /// audio the decoder is reading is also being streamed to a browser.
         /// </summary>
         public bool AudioSessionActive { get; init; }
+
+        /// <summary>
+        /// Why capture could not be opened, or null if it opened. Non-null is a
+        /// prerequisite the operator has to fix - almost always that the radio's
+        /// RX device has not been chosen in Settings.
+        /// </summary>
+        public string? CaptureError { get; init; }
 
         /// <summary>
         /// False means the audio bridge has no capture device open, so there

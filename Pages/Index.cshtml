@@ -2594,6 +2594,10 @@
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        // Side-effect import: publishes window.radioFeatureSetup, which the
+        // shared CW panel calls if the host app provides it. Loaded before
+        // the panels that offer it so the global is there when they render.
+        import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";

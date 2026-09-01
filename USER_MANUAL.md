@@ -996,7 +996,7 @@ Click the **DX Spots** button on the toolbar to open a list of DX cluster spots 
 
 **Position and persistence** — drag the title bar to move the panel anywhere on screen. Panel position, size, sort column, sort direction, and the All bands setting are all saved per browser so the panel returns to where you left it next session.
 
-**Empty state** — if you see "No spots on this band", either no spots are in the buffer yet (cluster just connected, give it a few seconds), or the DX cluster feature isn't configured at all (see §6.6).
+**Empty state** — if you see "No spots on this band", either no spots are in the buffer yet (cluster just connected, give it a few seconds), or the DX cluster feature isn't configured at all (see §6.6). In that second case the empty panel also offers a **Set up the DX cluster** button: it opens a small box with the host, port and callsign fields on it, saves them, and connects within about fifteen seconds — so you don't have to leave the Home page and go hunting for §6.6 to get your first spots.
 
 ---
 
@@ -2899,6 +2899,8 @@ This is a primary accessibility feature: a partially-sighted operator can drive 
 5. Confirm the **Windows speech recognition pack for your active language** is installed. Open Windows → Settings → Time &amp; Language → Speech and check the installed-languages list. The active language defaults to English (United Kingdom) — if it isn't listed, install it from there (most UK Windows installs already have it). The **Active language** dropdown in the Voice Control section lets you switch to any other installed language pack (see [§17.7](#177-more-languages)).
 
 **Choosing the microphone and speaker.** The Voice Control section also lets you pick which **microphone** the recogniser listens to and which **speaker** the spoken confirmations play through, each with a **Test** button. Leave them on the Windows defaults to follow your system settings — but if your default output is tied up by another program (WSJT-X, rig audio) you may never hear the confirmations, so it's worth picking your own speakers here. Picking a device in YWC does **not** change your Windows defaults.
+
+Both lists are read once when the Settings page opens, so a microphone or headset plugged in *after* that won't be in them. Each list has a **Refresh** button beside it that re-scans without reloading the page — plug the device in, press Refresh, and it appears.
 
 After restart, you should see a **mic button on the Index page beside each VFO panel** — VFO A's next to VFO A's band/mode controls, and (on dual-receiver radios) VFO B's next to VFO B's. If you don't see them, jump to [§17.4 Troubleshooting](#174-troubleshooting).
 

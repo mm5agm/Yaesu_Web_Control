@@ -297,9 +297,16 @@
             </div>
             <div class="mb-3">
                 <label class="form-label fw-semibold" for="voiceInputDevice">Microphone</label>
-                <select class="form-select w-auto" id="voiceInputDevice">
-                    <option value="">Loading…</option>
-                </select>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <select class="form-select w-auto" id="voiceInputDevice">
+                        <option value="">Loading…</option>
+                    </select>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="voiceInputRefreshBtn"
+                            title="Re-scan for microphones plugged in since this page was opened"
+                            aria-label="Refresh the microphone list">
+                        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>&nbsp;Refresh
+                    </button>
+                </div>
                 <div class="form-text">
                     Which microphone the speech recogniser listens to. Choose the mic you'll speak
                     into — the change takes effect immediately, no restart. Leave on
@@ -317,6 +324,11 @@
                     </select>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="voiceOutputTestBtn">
                         <i class="bi bi-volume-up" aria-hidden="true"></i>&nbsp;Test
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="voiceOutputRefreshBtn"
+                            title="Re-scan for speakers plugged in since this page was opened"
+                            aria-label="Refresh the speaker list">
+                        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>&nbsp;Refresh
                     </button>
                 </div>
                 <div class="form-text">
@@ -641,7 +653,23 @@
                     }
                 });
             })();
+            // Devices plugged in after the page loaded were invisible until a
+            // reload, because these lists were fetched exactly once. The server
+            // enumerates live on every call (WaveInEvent.DeviceCount is
+            // waveInGetNumDevs(), uncached), so re-fetching is all that was ever
+            // needed. Same pattern as the Radio Display device refresh button.
+            function ywcWireDeviceRefresh(btnId, load) {
+                const btn = document.getElementById(btnId);
+                if (!btn) return;
+                btn.addEventListener('click', async function () {
+                    btn.disabled = true;
+                    try { await load(); }
+                    finally { btn.disabled = false; }
+                });
+            }
+
             ywcLoadMicrophones();
+            ywcWireDeviceRefresh('voiceInputRefreshBtn', ywcLoadMicrophones);
 
             // ── Speaker (announcement) picker ──────────────────────────────
             // System.Speech can't target an output device by name, so the chosen
@@ -724,6 +752,7 @@
                 }
             })();
             ywcLoadSpeakers();
+            ywcWireDeviceRefresh('voiceOutputRefreshBtn', ywcLoadSpeakers);
 
             async function ywcOpenGrammarsFolder() {
                 try {
