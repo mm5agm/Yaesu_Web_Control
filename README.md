@@ -193,6 +193,26 @@ This is normal and expected. The first time you see it you'll probably blink; fr
 
 ---
 
+## 📝 CW Reader
+
+The **CW Read** button on the main panel opens a reader that listens to the radio's receive audio and prints the Morse it hears as text. It needs no extra hardware — it decodes the same USB audio the radio already sends the PC — and it never transmits.
+
+I wrote my own decoder rather than reading the radio's. Neither the FTdx101 nor the IC-7300 will hand its decoded characters back over CAT: both expose the decoder's *settings* and neither exposes its *output*, so a passthrough was never available on either brand.
+
+**I want to be honest about what a Morse decoder is.** On a strong, clean, machine-sent signal it is close to perfect. On a marginal one it prints plausible-looking rubbish that looks exactly like good copy, and it has no idea which it is doing — in my own testing it reported full confidence on nearly six hundred characters of complete junk. Every design decision in this feature follows from that:
+
+- **The status line says what it is actually seeing** — signal or no signal, the tone it is tracking against the pitch you are tuned to, the filter width, the search window, the SNR, and how far off pitch the station is. When more than one station is inside the filter, or the tone is breaking up rather than keying, it says so in words and prints nothing rather than guessing.
+- **Nothing is corrected or hidden.** Colour marks what *looks like* QSO traffic — `CQ`, `DE`, `73`, signal reports, and callsigns — laid over exactly what was decoded.
+- **The log form offers, it does not assert.** A field the radio or the clock knows (frequency, band, mode, time) is filled in. A field the *decoder* thinks it knows (callsign, report, name, QTH) starts empty, with suggestions beside it as buttons, each carrying the reason it was suggested — *follows DE*, *sent 3 times*. One click fills the box. That costs one click on a good decode and saves a wrong log entry on a bad one, because a callsign silently pre-filled from junk is worse than an empty box.
+
+**Reader Mode** is one button that sets the radio up the way the decoder wants it — CW mode, a narrow IF filter (250 Hz by default), APF on — and puts your mode, width and APF back exactly as they were when you press Stop. This matters more than it sounds: on my own bench the FTdx101MP's built-in decoder could not read a signal I could copy by ear with the filters wide open, and was still poor at 600 Hz. What a decoder is fed matters more than how it decodes. YWC picks the nearest filter your model actually has, prefers the wider one on a tie so the CW note cannot fall outside the passband, and leaves the filter alone entirely if it has no table for your radio. The saved settings live on the host rather than in the browser tab, so the restore still works after a page reload or from a second browser.
+
+Every session also writes a **timestamped transcript** to `CW Transcripts\` in the app data folder, written as the text arrives rather than held until you close the panel — the thing a transcript most needs to survive is a crash, and a crash happens while something is arriving. A session that decodes nothing leaves no file. Confirmed contacts append to a plain **ADIF** file, which Log4OM and GridTracker both pick up with nothing else to configure.
+
+The decoder itself lives in [Radio_Web_Control_Core](https://github.com/mm5agm/Radio_Web_Control_Core), the shared library behind YWC and Icom Web Control, because a Morse decoder does not know what a radio is.
+
+Full details, including the status-line reference and troubleshooting, are in [USER_MANUAL.md §20 CW Reader](USER_MANUAL.md#20-cw-reader).
+
 ## Project direction
 
 Active development is currently focused on bug fixes and polish for the supported radios, plus rolling out **voice control** as an accessibility feature for partially sighted and blind operators — hands-free band changes, frequency entry, mode switching, and rig status without needing to see the screen.

@@ -412,7 +412,7 @@ Each phase is independently verifiable, and nothing before Phase 4 touches IWC.
 | **2** | **YWC:** capture extraction, `CwReaderService`, SignalR, pop-out page | real CW off the FTdx101MP, on the bench |
 | **3** | **YWC:** Reader Mode, transcript, ADIF QSO save | code complete 2026-09-01, see §4.16. Reader Mode is protocol-level and **unverified** - it needs the bench |
 | **4** | **Core -> IWC:** `git subtree push` from YWC then pull into IWC (§2.1), IWC capture service, reader UI, software ZIN | real CW off the IC-7300 MkII |
-| **5** | `USER_MANUAL.md` section, README notes | — |
+| **5** | `USER_MANUAL.md` section, README notes | written 2026-09-01 - manual §6.10 and §20, README feature section. **No release-notes entry and no version bump** - that waits on Colin's go |
 
 Phase 1 is the one that decides whether this is worth shipping. If the accuracy
 numbers are poor at realistic SNR, that is known before any UI exists.
