@@ -218,17 +218,25 @@ export class CwReaderPanel {
     // The host app may publish `window.radioFeatureSetup`; if it has not, or
     // it does not provide this particular pop-out, the text stands on its own
     // and nothing here changes.
-    _setStatus(text, setupKind) {
+    _setStatus(text, setupKind, level) {
         if (!this._status) return;
 
         // Rebuilt on every poll tick, this would replace the button between a
         // mousedown and its mouseup and the click would never land. Nothing
         // here changes while the message does not, so leave the node alone.
-        const sig = setupKind + '|' + text;
+        const sig = level + '|' + setupKind + '|' + text;
         if (this._statusSig === sig) return;
         this._statusSig = sig;
 
         this._status.textContent = text;
+
+        // Running commentary and 'your radio audio is not working' were being
+        // drawn identically - small, dim and monospaced - and the operator
+        // read straight past the one that mattered. The host app styles
+        // `.cwr-problem`; it is the host's business because only the host
+        // knows its own palette.
+        const problem = level === 'problem';
+        this._status.classList.toggle('cwr-problem', problem);
 
         const setup = (typeof window !== 'undefined') ? window.radioFeatureSetup : null;
         if (!setupKind || !setup || typeof setup.open !== 'function') return;
@@ -236,7 +244,7 @@ export class CwReaderPanel {
 
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'btn btn-sm btn-outline-primary ms-2';
+        btn.className = 'btn btn-sm ms-2 ' + (problem ? 'btn-warning' : 'btn-outline-primary');
         btn.textContent = 'Set it up';
         btn.addEventListener('click', () => setup.open(setupKind));
         this._status.appendChild(btn);
@@ -262,7 +270,7 @@ export class CwReaderPanel {
         // operator hunting through Settings the first time.
         if (snap.captureError) {
             this._setStatus('Running, but the radio audio could not be opened. '
-                + snap.captureError, 'cw-audio');
+                + snap.captureError, 'cw-audio', 'problem');
             return;
         }
 
@@ -271,7 +279,7 @@ export class CwReaderPanel {
         if (!snap.audioDevicesOpen) {
             this._setStatus('Running, but the radio audio device is not open. '
                 + 'Stop and start the reader; if it keeps happening, check the '
-                + 'radio is still connected.', 'cw-audio');
+                + 'radio is still connected.', 'cw-audio', 'problem');
             return;
         }
 
@@ -333,7 +341,7 @@ export class CwReaderPanel {
     }
 
     _showError(message) {
-        this._setStatus(`Error: ${message}`);
+        this._setStatus(`Error: ${message}`, null, 'problem');
     }
 
     // ── Settings ────────────────────────────────────────────────────────────

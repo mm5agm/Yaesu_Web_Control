@@ -2481,6 +2481,19 @@
     #cwReaderDialog .cw-tok-call1 { color:#a08a3c; }
     .cwr-legend { font-size: 0.72rem; color:#89a; }
     #cwReaderStatus { font-family: ui-monospace, Consolas, monospace; font-size: 0.78rem; color:#9ab; }
+    /* A problem the operator has to act on must not be drawn like the running
+       tone/SNR commentary. Same dim monospace at 0.78rem meant 'your radio
+       audio could not be opened' was read straight past. */
+    #cwReaderStatus.cwr-problem {
+        font-family: inherit;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #ffd23f;
+        background: rgba(255, 210, 63, 0.10);
+        border-left: 3px solid #ffd23f;
+        padding: 0.5rem 0.6rem;
+        border-radius: 0.25rem;
+    }
 </style>
 <dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:620px; max-width:95vw;" aria-labelledby="cwReaderTitle">
     <div class="cwr-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
