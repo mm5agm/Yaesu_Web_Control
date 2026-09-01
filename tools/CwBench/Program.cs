@@ -58,6 +58,7 @@ internal static class Program
         var resync    = true;
         var warmup     = -1.0;                 // -1 = leave the decoder's own default
         var trainNoise = -1.0;
+        var minEls     = -1.0;   // 0 = off, so the test can be measured against itself
         var timelineHz = 0.0;
         string? path  = null;
         string? selftest = null;
@@ -92,6 +93,7 @@ internal static class Program
                 case "--debounce":    debounce   = Arg(args, ++i); break;
                 case "--no-resync": resync    = false; break;
                 case "--train-noise": trainNoise = Arg(args, ++i); break;
+                case "--min-elements": minEls    = Arg(args, ++i); break;
                 case "--warmup":    warmup   = Arg(args, ++i); break;
                 case "--raw":       raw       = true;  break;
                 case "--spectrum":  spectrum  = true;  break;
@@ -204,6 +206,7 @@ internal static class Program
                 CharacterGapDits    = charGapDits > 0.0
                                     ? charGapDits : new CwElementDecoderOptions().CharacterGapDits,
                 MinTrainNoiseMultiple = trainNoise >= 0.0 ? trainNoise : new CwElementDecoderOptions().MinTrainNoiseMultiple,
+                ReadabilityMinElementsPerChar = minEls >= 0.0 ? minEls : new CwElementDecoderOptions().ReadabilityMinElementsPerChar,
             },
         });
 
@@ -775,6 +778,8 @@ internal static class Program
                                 against what the presence gate said at the time
               --warmup <s>      detector settling time before anything counts as
                                 keyed; 0 is the pre-fix behaviour
+              --min-elements <x> a stream averaging fewer than x elements per
+                                character is not Morse; 0 turns the test off
               --train-noise <x> a mark must peak at x times the noise floor
                                 before it may train the speed
               --pin-wpm <n>     hold the speed at n wpm so it cannot track at
