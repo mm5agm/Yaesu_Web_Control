@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace RadioWebControl.Core.Services.Cw
 {
@@ -480,6 +480,26 @@ namespace RadioWebControl.Core.Services.Cw
         public CwReadability Readability => AssessReadability(out _);
 
         /// <summary>
+        /// Whether <see cref="Readability"/> is answering the question at all.
+        ///
+        /// <see cref="CwReadability.Unknown"/> covers two states that read the
+        /// same and mean opposite things: "not enough marks have arrived to
+        /// judge yet", which is where every transmission starts, and "the marks
+        /// that were being judged have gone stale", which is silence. The
+        /// window counts rise to capacity and never fall, so the count itself
+        /// separates them.
+        ///
+        /// CwDecoderEngine.Gate needs that separation. It holds text until the
+        /// marks prove readable and discards the hold once it has gone stale,
+        /// and it was measuring stale from the first frame - so on a Farnsworth
+        /// sender the discard fired before the evidence had had time to arrive.
+        /// At 5 WPM the tenth mark lands about 8.4 s in and the hold expired at
+        /// 5 s, which cost "CQ " off the front of the message: the opening,
+        /// which on air is the callsign.
+        /// </summary>
+        public bool HasReadabilityVerdict => _markWindowCount >= _opt.ReadabilityMinMarks;
+
+        /// <summary>
         /// p90/p10 of the recent mark lengths, or 0 before there are enough.
         /// Near 3 on readable Morse, because that is the dah:dit ratio.
         /// </summary>
@@ -543,6 +563,7 @@ namespace RadioWebControl.Core.Services.Cw
             double durationMs = tMs - _edgeTimeMs;
             _edgeTimeMs = tMs;
             _idleFlushed = false;
+            ForgetStaleEvidence();
             bool wasKeyDown = _keyDown;
             _keyDown = sample.KeyDown;
 
@@ -723,11 +744,19 @@ namespace RadioWebControl.Core.Services.Cw
         /// gap costs one edit once per word; a wrongly split one costs an edit
         /// on every character, and reads as gibberish rather than as running
         /// text.
+        ///
+        /// This said "from the very first gap" while the code still waited for
+        /// six, and the six were enough to do the same damage on a smaller
+        /// scale: measured over the Morse Code Ninja corpus on 2026-09-01, the
+        /// first entry of a Farnsworth recording came out "N 7 M O" and the
+        /// second, identical sending came out "N7MO" - the split stopped as
+        /// soon as the window filled. Straight-timed recordings never showed
+        /// it. Now the guard is only the empty window.
         /// </summary>
         private double CharacterGapMs()
         {
             double textbook = 3.0 * _ditMs;
-            if (_gapWindowCount < 6) return textbook;
+            if (_gapWindowCount == 0) return textbook;
 
             Span<double> sorted = stackalloc double[_gapWindowCount];
             for (int i = 0; i < _gapWindowCount; i++) sorted[i] = _gapWindow[i];
@@ -817,6 +846,55 @@ namespace RadioWebControl.Core.Services.Cw
             _lastMarkAtMs = _nowMs;
             _markWindowNext = (_markWindowNext + 1) % _markWindow.Length;
             if (_markWindowCount < _markWindow.Length) _markWindowCount++;
+        }
+
+        /// <summary>
+        /// Empty the evidence windows when a transmission begins after a
+        /// silence long enough that what is in them cannot describe it.
+        ///
+        /// These are rings whose counts rise to capacity and never fall, so
+        /// without this a verdict outlives the marks behind it - and worse, it
+        /// outlives them as a verdict rather than as an absence. The two are
+        /// different to every caller: "these marks are not Morse" is a finding,
+        /// while "no marks yet" is the state every transmission opens in, and
+        /// the second one must not inherit the first one's consequences. With
+        /// the windows left full, a station arriving after a quiet band was
+        /// judged on the previous station's marks and lost its first character
+        /// to the hold being dropped underneath it.
+        ///
+        /// The gap window goes too, and for the same reason with a sharper
+        /// edge: it holds the measured character gap, which is a property of
+        /// one operator's fist. Carrying a Farnsworth beginner's stretched gaps
+        /// into the next station to come up on frequency puts the word split in
+        /// the wrong place for as long as it takes the percentile to migrate.
+        ///
+        /// The horizon is <see cref="CwElementDecoderOptions.ReadabilityMaxAgeSeconds"/>
+        /// - the same silence that already withdraws a Readable verdict, so
+        /// there is one definition of "gone quiet" rather than two.
+        ///
+        /// It fires on the first edge after the silence rather than at the
+        /// moment the silence passes the horizon, and that timing is the whole
+        /// of it. Clearing eagerly answers "no idea" for a band that has just
+        /// been judged and found to be chattering, which is the one verdict an
+        /// operator most needs to keep seeing; clearing on arrival keeps that
+        /// verdict standing until there is something new to replace it.
+        /// </summary>
+        private void ForgetStaleEvidence()
+        {
+            // Quiet means no key-down runs at all, not no usable marks. A
+            // detector chattering across its hysteresis produces runs that are
+            // all discarded as too short, so the accepted-mark clock stops
+            // dead while the band is anything but quiet - and the run window
+            // recording that chatter is the only evidence of it.
+            double lastActivityMs = Math.Max(_lastMarkAtMs, _lastRunAtMs);
+            if (_nowMs - lastActivityMs <= _opt.ReadabilityMaxAgeSeconds * 1000.0) return;
+            if (_markWindowCount == 0 && _runWindowCount == 0
+                && _ditOnlyCount == 0 && _gapWindowCount == 0) return;
+
+            _markWindowCount = _markWindowNext = 0;
+            _runWindowCount  = _runWindowNext  = 0;
+            _ditOnlyCount    = _ditOnlyNext    = 0;
+            _gapWindowCount  = _gapWindowNext  = 0;
         }
 
         /// <summary>Every key-down run, whether or not it survived the de-glitch.</summary>

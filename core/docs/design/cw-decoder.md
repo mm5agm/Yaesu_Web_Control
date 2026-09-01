@@ -252,6 +252,19 @@ turned `CQ CQ DE MM5AGM` into `C Q D E MM5AGM`. Erring towards *not* splitting
 is the cheap direction: a missed word gap costs one edit per word, a wrongly
 split one costs an edit on every character.
 
+That paragraph described the intent, and for six months the code beside it still
+waited for six gaps. Six were enough to do the same damage on a smaller scale:
+over the Morse Code Ninja practice corpus on 2026-09-01, a Farnsworth
+recording's first entry came out `N 7 M O` and its second, identical sending
+came out `N7MO` - the splitting stopped the moment the window filled. Straight
+sending never showed it, which is why the ARRL table above never caught it.
+
+The window is also emptied when a transmission starts after
+`ReadabilityMaxAgeSeconds` of no key-down runs at all. The measured character
+gap is a property of one operator's fist, and carrying a Farnsworth beginner's
+stretched gaps into the next station up on frequency puts the word split in the
+wrong place until the percentile migrates.
+
 ### 5.4 The idle flush
 
 If the key has been up for 1500 ms with a part-built symbol, the character is
@@ -353,6 +366,27 @@ buffer there cost the QSB tests most of their text - 4.2% on a 20 dB fade
 against a 40% floor. Holding costs nothing, because held text that never becomes
 readable is never shown. The buffer is capped at 64 characters and cleared if it
 has been unreadable for `HoldStaleSeconds` (5 s).
+
+**That clock only runs once there is a verdict to be stale.** `Unknown` covers
+two states that read alike and mean opposite things - "not enough marks have
+arrived to judge" and "the marks being judged have gone stale" - and only the
+second is a reason to throw the hold away. The first is where every
+transmission starts. Started at the first frame, the 5 s horizon expired before
+a slow sender could produce its tenth mark: a 5 WPM Farnsworth message reaches
+that mark at about 8.4 s, so `CQ CQ DE MM5AGM MM5AGM K` came back as
+`CQ DE MM5AGM MM5AGM K` - every character correct, the opening gone, which on
+air is the callsign. `CwElementDecoder.HasReadabilityVerdict` separates the two
+by mark count, since the windows fill and never empty on their own.
+
+The other half is that they must empty *sometime*, or a station arriving after a
+quiet band is judged on the last one's marks. They are cleared on the first edge
+after `ReadabilityMaxAgeSeconds` without a key-down run - on the first edge
+rather than when the silence passes the horizon, because clearing eagerly
+answers "no idea" for a band that has just been judged to be chattering, which
+is the one verdict an operator most needs to keep seeing. Note "no key-down run",
+not "no usable mark": a detector chattering across its hysteresis produces runs
+that are all discarded as too short, so the accepted-mark clock stops dead while
+the band is anything but quiet.
 
 `Flush()` releases held text only if the signal was readable. A capture that
 stops while the decoder is still undecided has, by definition, never shown that
@@ -500,18 +534,23 @@ Accuracy is character-level against the published text. Noise columns are SNR in
 dB in the filter bandwidth; `f20` is a 20 dB peak-to-trough fade, applied
 **before** noise - so `f20n6` means peaks at +6 dB and troughs at -14 dB.
 
+Regenerate it with `scripts/cw-arrl-table.ps1`, which is the whole reason the
+script exists: the version of this table published before 2026-09-01 was stale
+by up to 80 points in the hardest cells, because several rounds of work on the
+detector had gone in and nobody could cheaply re-measure it.
+
 | WPM | clean | n12   | n9    | n6    | n3    | f20   | f20n12 | f20n6 |
 |-----|-------|-------|-------|-------|-------|-------|--------|-------|
-| 5   | 97.1% | 96.8% | 96.8% | 78.8% | 0.0%  | 97.1% | 96.4%  | 4.8%  |
-| 10  | 95.9% | 96.3% | 96.3% | 93.0% | 25.0% | 96.3% | 34.1%  | 3.7%  |
-| 13  | 98.9% | 98.9% | 98.9% | 97.2% | 49.9% | 98.9% | 40.5%  | 15.9% |
-| 15  | 98.8% | 98.8% | 98.8% | 97.9% | 54.4% | 98.8% | 35.6%  | 10.1% |
-| 18  | 99.9% | 99.9% | 99.9% | 98.7% | 67.1% | 99.9% | 37.5%  | 12.5% |
-| 20  | 99.4% | 99.4% | 99.4% | 99.1% | 72.5% | 99.4% | 36.2%  | 17.0% |
-| 25  | 99.5% | 99.5% | 99.5% | 99.1% | 77.8% | 99.5% | 44.2%  | 16.8% |
-| 30  | 99.6% | 99.6% | 99.6% | 99.1% | 82.0% | 99.6% | 50.7%  | 21.5% |
-| 35  | 99.3% | 99.6% | 99.3% | 98.5% | 83.4% | 99.3% | 49.3%  | 22.5% |
-| 40  | 99.4% | 99.7% | 99.7% | 99.0% | 85.3% | 99.4% | 51.3%  | 16.9% |
+| 5   | 97.3% | 97.3% | 97.3% | 96.8% | 61.8% | 97.3% | 97.3%  | 85.3% |
+| 10  | 96.5% | 96.5% | 96.5% | 96.5% | 93.7% | 96.5% | 67.8%  | 47.0% |
+| 13  | 98.8% | 98.8% | 98.8% | 98.7% | 97.9% | 98.8% | 60.1%  | 42.6% |
+| 15  | 98.6% | 98.6% | 98.6% | 98.6% | 97.2% | 98.6% | 58.4%  | 39.9% |
+| 18  | 99.8% | 99.8% | 99.8% | 99.8% | 98.6% | 99.8% | 61.7%  | 43.4% |
+| 20  | 99.3% | 99.3% | 99.3% | 99.3% | 99.1% | 99.3% | 62.4%  | 41.3% |
+| 25  | 99.4% | 99.4% | 99.4% | 99.3% | 98.4% | 99.4% | 65.6%  | 43.8% |
+| 30  | 99.5% | 99.5% | 99.5% | 99.5% | 95.7% | 99.5% | 65.2%  | 42.9% |
+| 35  | 99.3% | 99.6% | 99.3% | 99.2% | 92.4% | 99.3% | 62.4%  | 41.8% |
+| 40  | 99.5% | 99.7% | 99.7% | 99.1% | 88.9% | 99.5% | 62.7%  | 38.8% |
 
 Two things about this table are easy to misread.
 
@@ -528,6 +567,56 @@ two dead-band probes and two diagnostic recordings emit **0 characters**. That
 is a hard requirement, not a nice-to-have: every readability improvement above
 was checked against it, because the easy way to raise every number in the table
 is to lower the bar for calling something a signal.
+
+### 8.1 The Morse Code Ninja practice corpus
+
+The ARRL files are ten recordings of one sender reading QST. The Morse Code
+Ninja practice set is about 105 recordings of callsigns, contest exchanges, QSO
+phrases, US states and word drills at 20 WPM and Farnsworth, which is a far
+better spread of the tokens an operator actually copies. It is third-party
+material and lives outside the repository entirely - see
+`D:\cw-keep\CORPUS-NOTES.txt` on Colin's machine for how it was obtained and
+what its two traps are.
+
+Scoring it is not the same job as scoring the ARRL set, because every entry is
+**sent in Morse, spoken aloud, and sent again**. Two consequences:
+
+- The bracketed text in the `.txt` - `K9NR [K 9, N R]`, `GM [Good morning]` - is
+  the spoken gloss and is never keyed. Scoring it as sent text put callsign and
+  abbreviation files at 20-40%, which looks exactly like a real weakness of the
+  decoder on callsigns and is not one.
+- The spoken word is not a condition the decoder meets in service. Files are
+  scored three ways: raw, through a 500 Hz bandpass (what the radio's CW filter
+  does), and with the speech blanked out by a spectral mask. **The mask has to
+  be computed on the raw audio** - computed on the bandpassed copy it keeps
+  everything, because the filter has already made almost all the remaining
+  energy in-band.
+
+Twelve representative files, 150 s from t=0, longest-common-subsequence over
+run-length-collapsed words (which makes the repeat count irrelevant rather than
+something to infer - three attempts to infer it from gap structure all failed,
+because the two sets' gap layouts are inverted):
+
+| | raw | 500 Hz | speech blanked |
+|---|---|---|---|
+| mean of 12 files, 2026-09-01 | 62.9% | 67.5% | **88.0%** |
+
+The bandpass improved nine of the twelve and degraded none, which is the
+measurement that says a CW filter is worth having in front of this.
+
+The corpus also measures something the ARRL table cannot: **how much is lost
+before the reader locks on**. Character accuracy over a five-minute file hides
+three characters at the front; on air those three characters are the callsign.
+Over 29 files, 90 s each:
+
+| | files whose first entry was copied cleanly | mean junk words before it |
+|---|---|---|
+| before 2026-09-01 | 12 of 29 | 1.34 |
+| after | **27 of 29** | **0.03** |
+
+Both remaining failures are harness artefacts, not decoder faults - one is a
+file of single letters, which the "first correctly copied entry" search skips by
+construction.
 
 ---
 

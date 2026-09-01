@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace RadioWebControl.Core.Services.Cw
 {
@@ -361,8 +361,23 @@ namespace RadioWebControl.Core.Services.Cw
                 return released;
             }
 
-            if (double.IsNaN(_badSinceSeconds)) _badSinceSeconds = _nowSeconds;
-            else if (_nowSeconds - _badSinceSeconds > _opt.HoldStaleSeconds) _pending.Clear();
+            // The stale clock only runs once there is a verdict to be stale.
+            // Before the mark window has filled, "not readable" means "no
+            // evidence yet" - which is true of the first seconds of every
+            // transmission - and running the clock there discards the opening
+            // of a slow sender before it has had the chance to prove itself.
+            // Measured 2026-09-01: a 5 WPM Farnsworth message needs 8.4 s to
+            // reach its tenth mark, and a 5 s horizon started at the first
+            // frame always expired first, so "CQ CQ DE MM5AGM" came back as
+            // "CQ DE MM5AGM" - the opening lost, which on air is the callsign.
+            // Silence after a station is the other half of the same test and
+            // still clears the hold: by then the windows have filled, so the
+            // verdict exists and the clock runs.
+            if (_elements.HasReadabilityVerdict)
+            {
+                if (double.IsNaN(_badSinceSeconds)) _badSinceSeconds = _nowSeconds;
+                else if (_nowSeconds - _badSinceSeconds > _opt.HoldStaleSeconds) _pending.Clear();
+            }
 
             _pending.Append(produced);
             if (_pending.Length > PendingCap)
