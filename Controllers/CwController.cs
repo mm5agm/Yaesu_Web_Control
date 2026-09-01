@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Yaesu_Web_Control.Services.Cw;
 
 namespace Yaesu_Web_Control.Controllers
@@ -18,11 +18,15 @@ namespace Yaesu_Web_Control.Controllers
     public class CwController : ControllerBase
     {
         private readonly CwReaderService _reader;
+        private readonly CwQsoLogService _log;
         private readonly ILogger<CwController> _logger;
 
-        public CwController(CwReaderService reader, ILogger<CwController> logger)
+        public CwController(CwReaderService reader,
+                            CwQsoLogService log,
+                            ILogger<CwController> logger)
         {
             _reader = reader;
+            _log = log;
             _logger = logger;
         }
 
@@ -94,5 +98,56 @@ namespace Yaesu_Web_Control.Controllers
         [HttpGet("spectrum")]
         public IActionResult Spectrum()
             => Ok(_reader.Spectrum());
+
+        /// <summary>
+        /// A draft log entry built from the recent copy and the radio's current
+        /// state, for the operator to correct before saving.
+        ///
+        /// Every field comes back as a ranked list with the reason it was
+        /// suggested, not as an answer. The decoder has been measured
+        /// reporting full confidence on junk, so a form silently pre-filled
+        /// from it would be worse than an empty one - the operator would have
+        /// no reason to look at it twice.
+        /// </summary>
+        [HttpGet("qso/suggest")]
+        public async Task<IActionResult> SuggestQso()
+        {
+            try
+            {
+                return Ok(await _log.SuggestAsync());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to build a QSO suggestion");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>Appends a confirmed QSO to the ADIF log.</summary>
+        [HttpPost("qso")]
+        public async Task<IActionResult> SaveQso([FromBody] CwQsoSave qso, CancellationToken ct)
+        {
+            if (qso is null || string.IsNullOrWhiteSpace(qso.Callsign))
+                return BadRequest(new { error = "A QSO needs a callsign." });
+
+            try
+            {
+                return Ok(await _log.SaveAsync(qso, ct));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to log a QSO");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>Where the log and this session's transcript are on disk.</summary>
+        [HttpGet("files")]
+        public IActionResult Files() => Ok(new
+        {
+            log = CwQsoLogService.LogPath,
+            logExists = System.IO.File.Exists(CwQsoLogService.LogPath),
+            transcript = _reader.TranscriptPath,
+        });
     }
 }

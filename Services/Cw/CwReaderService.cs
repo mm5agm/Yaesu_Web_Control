@@ -1,4 +1,5 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
+using System.Globalization;
 using System.Text;
 using RadioWebControl.Core.Services.Cw;
 using Yaesu_Web_Control.Services.Audio;
@@ -50,6 +51,7 @@ namespace Yaesu_Web_Control.Services.Cw
         private readonly StringBuilder _text = new();
 
         private CwDecoderEngine? _engine;
+        private CwTranscriptWriter? _transcript;
         private string _radioModel = "";
         private long _totalChars;
 
@@ -85,6 +87,7 @@ namespace Yaesu_Web_Control.Services.Cw
             lock (_gate)
             {
                 BuildEngine();
+                StartTranscript();
                 _state.PropertyChanged += OnRadioStateChanged;
                 IsRunning = true;
             }
@@ -119,6 +122,9 @@ namespace Yaesu_Web_Control.Services.Cw
 
                 _engine?.Detach();
                 _engine = null;
+
+                _transcript?.Dispose();
+                _transcript = null;
             }
 
             _logger.LogInformation("CW reader stopped");
@@ -247,9 +253,64 @@ namespace Yaesu_Web_Control.Services.Cw
                     ZeroInOffsetHz   = _engine?.ZeroInOffsetHz(IsLowerSideband(_state.ModeA)),
                     Readability      = (_engine?.Readability ?? CwReadability.Unknown).ToString(),
                     DroppedFrames    = _source.DroppedFrames,
+                    TranscriptPath   = _transcript?.Path,
                 };
             }
         }
+
+        // ---- transcript ----------------------------------------------------
+
+        /// <summary>
+        /// Where this session's transcript is being written, or null if nothing
+        /// has been decoded yet - the file is not created until it has content.
+        /// </summary>
+        public string? TranscriptPath
+        {
+            get { lock (_gate) return _transcript?.Path; }
+        }
+
+        /// <summary>Caller holds _gate.</summary>
+        private void StartTranscript()
+        {
+            try
+            {
+                _transcript?.Dispose();
+                _transcript = new CwTranscriptWriter(TranscriptDirectory());
+                _transcript.Note(TranscriptHeader());
+            }
+            catch (Exception ex)
+            {
+                // A transcript that cannot be written is worth a line in the
+                // log and nothing more. The reader's job is to decode; losing
+                // the file must not stop the operator reading the screen.
+                _logger.LogWarning(ex, "CW transcript could not be started");
+                _transcript = null;
+            }
+        }
+
+        /// <summary>Caller holds _gate.</summary>
+        private string TranscriptHeader()
+        {
+            var bits = new List<string>();
+            if (_state.FrequencyA > 0)
+                bits.Add((_state.FrequencyA / 1_000_000.0).ToString("F6", CultureInfo.InvariantCulture) + " MHz");
+            if (!string.IsNullOrWhiteSpace(_state.ModeA)) bits.Add(_state.ModeA!);
+            bits.Add("pitch " + _pitchHz.ToString("F0", CultureInfo.InvariantCulture) + " Hz");
+            bits.Add(_filterWidthHz is int w
+                ? "filter " + w.ToString(CultureInfo.InvariantCulture) + " Hz"
+                : "filter unknown");
+            return string.Join(", ", bits);
+        }
+
+        /// <summary>
+        /// Transcripts live in their own folder under the app data directory
+        /// rather than loose beside radio_state.json. One file per reader
+        /// session accumulates quickly, and mixed in with the operator's
+        /// settings and state files they would bury them.
+        /// </summary>
+        private static string TranscriptDirectory() => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MM5AGM", "Yaesu Web Control", "CW Transcripts");
 
         // ---- engine lifecycle ----------------------------------------------
 
@@ -328,6 +389,13 @@ namespace Yaesu_Web_Control.Services.Cw
                 if (tail.Length > 0) AppendLocked(tail);
 
                 BuildEngine();
+
+                // A new line in the transcript, with its own timestamp, so it
+                // is visible afterwards that the operator moved the pitch or
+                // the filter at that point - which is usually why the copy
+                // either improved or fell apart.
+                _transcript?.Break();
+                _transcript?.Note(TranscriptHeader());
             }
         }
 
@@ -341,6 +409,12 @@ namespace Yaesu_Web_Control.Services.Cw
         {
             _text.Append(text);
             _totalChars += text.Length;
+
+            // The transcript is the copy that survives the operator not
+            // pressing save, so it is written from here rather than from the
+            // UI: everything the reader decodes passes through this line, and
+            // nothing the UI does can cause a character to miss it.
+            _transcript?.Append(text);
 
             if (_text.Length > MaxTextLength)
                 _text.Remove(0, _text.Length - MaxTextLength);
@@ -440,6 +514,13 @@ namespace Yaesu_Web_Control.Services.Cw
         /// </summary>
         public string Readability { get; init; } = "Unknown";
         public long DroppedFrames { get; init; }
+
+        /// <summary>
+        /// The file this session's copy is being written to, or null while
+        /// nothing has been decoded. Shown so the operator knows the copy is
+        /// being kept without having to go looking for it.
+        /// </summary>
+        public string? TranscriptPath { get; init; }
     }
 
     /// <summary>One poll's worth of the tuning figure.</summary>
