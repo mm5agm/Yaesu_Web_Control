@@ -47,7 +47,6 @@ internal static class Program
         var spectrum  = false;
         var wpm       = 0.0;                   // 0 = leave the decoder's own default
         var pinWpm    = false;
-        var speedHold = true;                  // plan 4.11d.1: hold the speed while the gate says quiet
         var timeline  = false;
         var marks     = false;
         var markList  = 0;
@@ -82,7 +81,6 @@ internal static class Program
                 case "--no-track":  track     = false; break;
                 case "--wpm":       wpm       = Arg(args, ++i); break;
                 case "--pin-wpm":   wpm       = Arg(args, ++i); pinWpm = true; break;
-                case "--no-speed-hold": speedHold = false; break;
                 case "--marks":     marks     = true;
                                     if (i + 1 < args.Length && !args[i + 1].StartsWith('-')
                                         && int.TryParse(args[i + 1], out var ml)) { markList = ml; i++; }
@@ -200,8 +198,6 @@ internal static class Program
                 InitialWpm          = wpm > 0 ? wpm : new CwElementDecoderOptions().InitialWpm,
                 MinWpm              = wpm > 0 && pinWpm ? wpm : new CwElementDecoderOptions().MinWpm,
                 MaxWpm              = wpm > 0 && pinWpm ? wpm : new CwElementDecoderOptions().MaxWpm,
-                // --no-speed-hold restores the pre-fix behaviour so the two can
-                // be run back to back over the same recording.
                 EnableResync        = resync,
                 MinElementMs        = minElement >= 0.0
                                     ? minElement : new CwElementDecoderOptions().MinElementMs,
