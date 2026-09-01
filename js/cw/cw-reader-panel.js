@@ -320,7 +320,21 @@ export class CwReaderPanel {
         bits.push(snap.filterWidthHz
             ? `filter ${snap.filterWidthHz} Hz`
             : 'filter unknown');
-        bits.push(`search +/-${Math.round(snap.searchWindowHz)} Hz`);
+        // The window is sized from the filter width, but only over part of
+        // the range: it is half the width clamped to 100..500 Hz. So a 2.4 kHz
+        // SSB filter implies +/-1200 and receives +/-500, and a 100 Hz CW
+        // filter implies +/-50 and receives +/-100. Printing the width and the
+        // window side by side without saying that reads as though the width
+        // set the window, and an operator who widens the filter to help the
+        // reader find a station is then owed an explanation of why nothing
+        // changed. Above the clamp a wider window would only offer more wrong
+        // tones to lock onto - that regime is what multi-signal decode is for.
+        const win  = Math.round(snap.searchWindowHz);
+        const half = snap.filterWidthHz ? snap.filterWidthHz / 2 : null;
+        let note = '';
+        if (half !== null && half > win + 1)      note = ' (clamped)';
+        else if (half !== null && half < win - 1) note = ' (wider than the filter)';
+        bits.push(`search +/-${win} Hz${note}`);
 
         // Speed is left out unless the reader says the estimate is worth
         // reporting. It is the reading that misleads most: with the detector
