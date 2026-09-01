@@ -66,6 +66,28 @@ namespace RadioWebControl.Core.Tests.Cw
         /// word gaps further still - measured 3.68 at 5 WPM, not 2.33 - so this
         /// generator is the easier of the two cases, not the harder one.
         /// </summary>
+        /// <summary>
+        /// Morse with the character gap and the word gap set independently, in
+        /// dits, rather than derived from each other.
+        ///
+        /// Every other overload here assumes the two move together - textbook
+        /// 3 and 7, or Farnsworth stretching both and holding the ratio at
+        /// 2.33. Real fists do not. Measured on `bench/mkii-i1yrl.wav`, an
+        /// ordinary 20 m QSO, the operator's character gaps centre on 4.4 dits
+        /// and his word gaps on 5.8: he had stretched the one and left the
+        /// other alone, so the ratio is 1.3 rather than 2.33. That is the case
+        /// no generated signal in this suite could produce, and it is the case
+        /// the reader was getting wrong.
+        /// </summary>
+        public float[] GenerateWithFist(string text, double wpm,
+                                        double charGapDits, double wordGapDits)
+        {
+            double ditMs = 1200.0 / wpm;
+            var timeline = BuildTimeline(text, ditMs,
+                                         ditMs * charGapDits, ditMs * wordGapDits);
+            return Render(timeline);
+        }
+
         public float[] Generate(string text, double wpm, double characterWpm)
         {
             if (characterWpm < wpm) characterWpm = wpm;
@@ -82,8 +104,11 @@ namespace RadioWebControl.Core.Tests.Cw
                 wordGapMs = 7.0 * totalDelayMs / 19.0;
             }
 
-            var timeline = BuildTimeline(text, ditMs, charGapMs, wordGapMs);
+            return Render(BuildTimeline(text, ditMs, charGapMs, wordGapMs));
+        }
 
+        private float[] Render(List<(double Ms, bool KeyDown)> timeline)
+        {
             int total = 0;
             foreach (var (ms, _) in timeline) total += MsToSamples(ms);
             if (total == 0) return Array.Empty<float>();

@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace RadioWebControl.Core.Services.Cw
 {
@@ -344,6 +344,38 @@ namespace RadioWebControl.Core.Services.Cw
         /// </summary>
         private const double WordGapRatio = 1.8;
 
+        /// <summary>How many separator gaps before <see cref="WordGapMs"/> will
+        /// try to separate two populations out of them. Below this the ratio
+        /// rule is used, because a handful of gaps from the opening of a
+        /// transmission are all character gaps and clustering them splits a
+        /// cluster that has no split in it.</summary>
+        private const int WordGapMinGaps = 12;
+
+        /// <summary>Gaps longer than this many character gaps are clipped to it
+        /// before clustering: past about here a gap is a sender pausing, not a
+        /// word boundary, and it should not get a vote on where the boundary
+        /// is.</summary>
+        private const double WordGapClipDits = 4.0;
+
+        /// <summary>How far apart the two cluster centres have to be before
+        /// they are believed to be two things. Under this, one population.</summary>
+        private const double WordGapMinSeparation = 1.20;
+
+        /// <summary>The lowest the measured split may sit, in character gaps.
+        /// Anything at or below 1.0 splits characters into words.</summary>
+        private const double WordGapFloor = 1.25;
+
+        /// <summary>The share of separators the word cluster must hold before
+        /// it is believed. Plain English text puts about one separator in five
+        /// at a word boundary; well outside that band the two clusters are not
+        /// characters and words.</summary>
+        private const double WordGapMinShare = 0.08;
+        private const double WordGapMaxShare = 0.45;
+
+        /// <summary>Two-means iterations. It converges in three or four on this
+        /// data; the cap is only there so a pathological window cannot spin.</summary>
+        private const int WordGapPasses = 12;
+
         /// <summary>
         /// The de-glitch floor as a fraction of the tracked dit, taking over
         /// from the fixed MinElementMs wherever it is the larger of the two.
@@ -480,6 +512,26 @@ namespace RadioWebControl.Core.Services.Cw
         public CwReadability Readability => AssessReadability(out _);
 
         /// <summary>
+        /// Whether <see cref="Readability"/> is answering the question at all.
+        ///
+        /// <see cref="CwReadability.Unknown"/> covers two states that read the
+        /// same and mean opposite things: "not enough marks have arrived to
+        /// judge yet", which is where every transmission starts, and "the marks
+        /// that were being judged have gone stale", which is silence. The
+        /// window counts rise to capacity and never fall, so the count itself
+        /// separates them.
+        ///
+        /// CwDecoderEngine.Gate needs that separation. It holds text until the
+        /// marks prove readable and discards the hold once it has gone stale,
+        /// and it was measuring stale from the first frame - so on a Farnsworth
+        /// sender the discard fired before the evidence had had time to arrive.
+        /// At 5 WPM the tenth mark lands about 8.4 s in and the hold expired at
+        /// 5 s, which cost "CQ " off the front of the message: the opening,
+        /// which on air is the callsign.
+        /// </summary>
+        public bool HasReadabilityVerdict => _markWindowCount >= _opt.ReadabilityMinMarks;
+
+        /// <summary>
         /// p90/p10 of the recent mark lengths, or 0 before there are enough.
         /// Near 3 on readable Morse, because that is the dah:dit ratio.
         /// </summary>
@@ -543,6 +595,7 @@ namespace RadioWebControl.Core.Services.Cw
             double durationMs = tMs - _edgeTimeMs;
             _edgeTimeMs = tMs;
             _idleFlushed = false;
+            ForgetStaleEvidence();
             bool wasKeyDown = _keyDown;
             _keyDown = sample.KeyDown;
 
@@ -693,7 +746,7 @@ namespace RadioWebControl.Core.Services.Cw
             _gapWindowNext = (_gapWindowNext + 1) % _gapWindow.Length;
             if (_gapWindowCount < _gapWindow.Length) _gapWindowCount++;
 
-            if (gapMs >= WordGapRatio * CharacterGapMs() && !_pendingCharGap)
+            if (gapMs >= WordGapMs() && !_pendingCharGap)
             {
                 text += " ";
                 _pendingCharGap = true;
@@ -723,17 +776,128 @@ namespace RadioWebControl.Core.Services.Cw
         /// gap costs one edit once per word; a wrongly split one costs an edit
         /// on every character, and reads as gibberish rather than as running
         /// text.
+        ///
+        /// This said "from the very first gap" while the code still waited for
+        /// six, and the six were enough to do the same damage on a smaller
+        /// scale: measured over the Morse Code Ninja corpus on 2026-09-01, the
+        /// first entry of a Farnsworth recording came out "N 7 M O" and the
+        /// second, identical sending came out "N7MO" - the split stopped as
+        /// soon as the window filled. Straight-timed recordings never showed
+        /// it. Now the guard is only the empty window.
         /// </summary>
         private double CharacterGapMs()
         {
             double textbook = 3.0 * _ditMs;
-            if (_gapWindowCount < 6) return textbook;
+            if (_gapWindowCount == 0) return textbook;
 
             Span<double> sorted = stackalloc double[_gapWindowCount];
             for (int i = 0; i < _gapWindowCount; i++) sorted[i] = _gapWindow[i];
             sorted.Sort();
 
             return Math.Max(textbook, sorted[(int)(0.25 * (_gapWindowCount - 1))]);
+        }
+
+        /// <summary>
+        /// Where to split character gaps from word gaps, measured rather than
+        /// assumed.
+        ///
+        /// <see cref="WordGapRatio"/> times the character gap is a model: it
+        /// says that whatever an operator does to their character gaps, they do
+        /// proportionally to their word gaps. Real fists do not oblige.
+        /// Measured on `bench/mkii-i1yrl.wav` on 2026-09-01 - the only plain-QSO
+        /// recording in the corpus - the character gaps centre on 4.4 dits and
+        /// the word gaps on 5.8, a ratio of 1.3. The operator had stretched his
+        /// character gaps and left his word gaps alone. Scaling from the one to
+        /// the other put the split at 6.7 dits, above two thirds of his word
+        /// gaps, and the reader printed TKSFORINFOAND, QTHNRTIN and CQCQCQDE.
+        ///
+        /// So the two populations are separated instead of derived from each
+        /// other: two-means on the log of the recent separator gaps, seeded
+        /// where the ratio rule would have put them, and the split taken as the
+        /// geometric mean of the two centres it settles on. Logs because the
+        /// quantity is a ratio - the distance from 3 dits to 4 is the same kind
+        /// of distance as from 6 to 8 - and because it stops one long pause
+        /// dominating the arithmetic.
+        ///
+        /// Three guards, each of which costs a real measurement to remove:
+        ///
+        /// - Gaps over <see cref="WordGapClipDits"/> character gaps are clipped
+        ///   before clustering. A sender who stops to listen leaves a gap of
+        ///   tens of dits, and one of those drags the upper centre up far
+        ///   enough to swallow every genuine word gap under it.
+        /// - If the two centres end up closer than
+        ///   <see cref="WordGapMinSeparation"/>, there is one population and not
+        ///   two - the sender is running everything together, or has not sent a
+        ///   word gap yet - and the ratio rule is used unchanged. Inventing a
+        ///   split inside a single cluster is how you get a space between every
+        ///   letter.
+        /// - The answer is clamped so it can never sit at or below the measured
+        ///   character gap, and never above where the ratio rule would have put
+        ///   it. The lower bound is what stops a bad cluster splitting every
+        ///   character; the upper bound makes the whole change one-directional,
+        ///   so it can only add word gaps that were being missed and can never
+        ///   remove one that is being found today.
+        ///
+        /// The asymmetry in that last guard is deliberate and is the same one
+        /// <see cref="CharacterGapMs"/> argues for: a missed word gap costs one
+        /// edit per word, a spurious one costs an edit per character.
+        /// </summary>
+        private double WordGapMs()
+        {
+            double charGap = CharacterGapMs();
+            double ratio = WordGapRatio * charGap;
+            if (_gapWindowCount < WordGapMinGaps) return ratio;
+
+            double clip = WordGapClipDits * charGap;
+            Span<double> logs = stackalloc double[_gapWindowCount];
+            for (int i = 0; i < _gapWindowCount; i++)
+                logs[i] = Math.Log(Math.Min(_gapWindow[i], clip));
+
+            double lo = Math.Log(charGap);
+            double hi = Math.Log(ratio);
+
+            for (int pass = 0; pass < WordGapPasses; pass++)
+            {
+                double sumLo = 0.0, sumHi = 0.0;
+                int nLo = 0, nHi = 0;
+                double mid = 0.5 * (lo + hi);
+
+                foreach (double v in logs)
+                {
+                    if (v < mid) { sumLo += v; nLo++; }
+                    else { sumHi += v; nHi++; }
+                }
+
+                // An empty side means the seed was outside the data entirely.
+                // There is nothing to separate, so leave the model alone.
+                if (nLo == 0 || nHi == 0) return ratio;
+
+                double newLo = sumLo / nLo;
+                double newHi = sumHi / nHi;
+                bool settled = Math.Abs(newLo - lo) < 1e-4 && Math.Abs(newHi - hi) < 1e-4;
+                lo = newLo;
+                hi = newHi;
+                if (settled) break;
+            }
+
+            if (hi - lo < Math.Log(WordGapMinSeparation)) return ratio;
+
+            // How much of the window ended up in the upper cluster. English
+            // runs about four and a half characters to a word, so roughly one
+            // separator in five is a word gap; a "word" cluster holding half
+            // the separators is not one. This is what keeps noise out. Under
+            // fading and hiss a real gap gets broken in two by a spurious mark,
+            // and the fragments pile up into a second population that clusters
+            // beautifully and means nothing - measured on the 5 WPM ARRL file
+            // at 3 dB SNR, where believing it cost 13 points.
+            double boundary = 0.5 * (lo + hi);
+            int upper = 0;
+            foreach (double v in logs) if (v >= boundary) upper++;
+            double share = (double)upper / _gapWindowCount;
+            if (share < WordGapMinShare || share > WordGapMaxShare) return ratio;
+
+            double split = Math.Exp(boundary);
+            return Math.Clamp(split, WordGapFloor * charGap, ratio);
         }
 
         private string FlushCharacter()
@@ -817,6 +981,55 @@ namespace RadioWebControl.Core.Services.Cw
             _lastMarkAtMs = _nowMs;
             _markWindowNext = (_markWindowNext + 1) % _markWindow.Length;
             if (_markWindowCount < _markWindow.Length) _markWindowCount++;
+        }
+
+        /// <summary>
+        /// Empty the evidence windows when a transmission begins after a
+        /// silence long enough that what is in them cannot describe it.
+        ///
+        /// These are rings whose counts rise to capacity and never fall, so
+        /// without this a verdict outlives the marks behind it - and worse, it
+        /// outlives them as a verdict rather than as an absence. The two are
+        /// different to every caller: "these marks are not Morse" is a finding,
+        /// while "no marks yet" is the state every transmission opens in, and
+        /// the second one must not inherit the first one's consequences. With
+        /// the windows left full, a station arriving after a quiet band was
+        /// judged on the previous station's marks and lost its first character
+        /// to the hold being dropped underneath it.
+        ///
+        /// The gap window goes too, and for the same reason with a sharper
+        /// edge: it holds the measured character gap, which is a property of
+        /// one operator's fist. Carrying a Farnsworth beginner's stretched gaps
+        /// into the next station to come up on frequency puts the word split in
+        /// the wrong place for as long as it takes the percentile to migrate.
+        ///
+        /// The horizon is <see cref="CwElementDecoderOptions.ReadabilityMaxAgeSeconds"/>
+        /// - the same silence that already withdraws a Readable verdict, so
+        /// there is one definition of "gone quiet" rather than two.
+        ///
+        /// It fires on the first edge after the silence rather than at the
+        /// moment the silence passes the horizon, and that timing is the whole
+        /// of it. Clearing eagerly answers "no idea" for a band that has just
+        /// been judged and found to be chattering, which is the one verdict an
+        /// operator most needs to keep seeing; clearing on arrival keeps that
+        /// verdict standing until there is something new to replace it.
+        /// </summary>
+        private void ForgetStaleEvidence()
+        {
+            // Quiet means no key-down runs at all, not no usable marks. A
+            // detector chattering across its hysteresis produces runs that are
+            // all discarded as too short, so the accepted-mark clock stops
+            // dead while the band is anything but quiet - and the run window
+            // recording that chatter is the only evidence of it.
+            double lastActivityMs = Math.Max(_lastMarkAtMs, _lastRunAtMs);
+            if (_nowMs - lastActivityMs <= _opt.ReadabilityMaxAgeSeconds * 1000.0) return;
+            if (_markWindowCount == 0 && _runWindowCount == 0
+                && _ditOnlyCount == 0 && _gapWindowCount == 0) return;
+
+            _markWindowCount = _markWindowNext = 0;
+            _runWindowCount  = _runWindowNext  = 0;
+            _ditOnlyCount    = _ditOnlyNext    = 0;
+            _gapWindowCount  = _gapWindowNext  = 0;
         }
 
         /// <summary>Every key-down run, whether or not it survived the de-glitch.</summary>
