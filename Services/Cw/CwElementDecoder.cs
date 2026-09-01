@@ -71,6 +71,33 @@ namespace RadioWebControl.Core.Services.Cw
         public int ReadabilityMinMarks { get; set; } = 10;
 
         /// <summary>
+        /// How long a mark may still count towards readability, in seconds.
+        ///
+        /// Without this the windows only ever fill: every count rises to the
+        /// ring's capacity and never falls, so one readable burst latches
+        /// Readable for the rest of the session. Measured on air 2026-08-29,
+        /// a station read Readable for minutes after it had stopped sending,
+        /// and CwDecoderEngine.Gate releases held text on exactly that
+        /// verdict - so noise dits reached the screen as copy.
+        ///
+        /// Ten seconds without a single mark is a station that has stopped,
+        /// at any speed. While marks keep arriving the window is judged whole,
+        /// exactly as it was before. Only the Readable verdict is withdrawn -
+        /// see AssessReadability for why Chatter and Jumbled are left to
+        /// stand.
+        /// </summary>
+        public double ReadabilityMaxAgeSeconds { get; set; } = 10.0;
+
+        /// <summary>
+        /// The same idea for the dit-only character window, which needs a
+        /// longer horizon because whole characters arrive far more slowly
+        /// than marks - at 5 wpm a character can take several seconds, and a
+        /// ten-second silence test would retire that guard on a signal still
+        /// being copied.
+        /// </summary>
+        public double DitOnlyMaxAgeSeconds { get; set; } = 30.0;
+
+        /// <summary>
         /// The p90/p10 band of recent mark lengths that can be Morse.
         ///
         /// Morse has two lengths in a 3:1 ratio, so this number sits near 3 on
@@ -380,17 +407,20 @@ namespace RadioWebControl.Core.Services.Cw
         private int  _unknownSymbols;
 
         private readonly double[] _markWindow;
+        private double _lastMarkAtMs = double.NegativeInfinity;
         private int _markWindowCount;
         private int _markWindowNext;
 
         // Parallel to _markWindow but over every key-down run, element or not:
         // true where the run was discarded as too short. See ReadabilityDirtyCeiling.
         private readonly bool[] _runWindow;
+        private double _lastRunAtMs = double.NegativeInfinity;
         private int _runWindowCount;
         private int _runWindowNext;
 
         // Recent decoded characters, true where the symbol held no dah.
         private readonly bool[] _ditOnly;
+        private double _lastDitOnlyAtMs = double.NegativeInfinity;
         private int _ditOnlyCount;
         private int _ditOnlyNext;
 
@@ -716,7 +746,8 @@ namespace RadioWebControl.Core.Services.Cw
             var decoded = MorseTable.Decode(sym);
             if (decoded is null) { _unknownSymbols++; return string.Empty; }
 
-            _ditOnly[_ditOnlyNext] = sym.IndexOf('-') < 0;
+            _ditOnly[_ditOnlyNext]     = sym.IndexOf('-') < 0;
+            _lastDitOnlyAtMs = _nowMs;
             _ditOnlyNext = (_ditOnlyNext + 1) % _ditOnly.Length;
             if (_ditOnlyCount < _ditOnly.Length) _ditOnlyCount++;
 
@@ -783,6 +814,7 @@ namespace RadioWebControl.Core.Services.Cw
         private void RecordForReadability(double markMs)
         {
             _markWindow[_markWindowNext] = markMs;
+            _lastMarkAtMs = _nowMs;
             _markWindowNext = (_markWindowNext + 1) % _markWindow.Length;
             if (_markWindowCount < _markWindow.Length) _markWindowCount++;
         }
@@ -791,6 +823,7 @@ namespace RadioWebControl.Core.Services.Cw
         private void RecordRun(bool tooShort)
         {
             _runWindow[_runWindowNext] = tooShort;
+            _lastRunAtMs = _nowMs;
             _runWindowNext = (_runWindowNext + 1) % _runWindow.Length;
             if (_runWindowCount < _runWindow.Length) _runWindowCount++;
         }
@@ -829,13 +862,35 @@ namespace RadioWebControl.Core.Services.Cw
                     return CwReadability.Jumbled;
             }
 
-            if (_ditOnlyCount >= _opt.DitOnlyMinChars)
+            if (_ditOnlyCount >= _opt.DitOnlyMinChars && _nowMs - _lastDitOnlyAtMs <= _opt.DitOnlyMaxAgeSeconds * 1000.0)
             {
                 int ditOnly = 0;
                 for (int i = 0; i < _ditOnlyCount; i++) if (_ditOnly[i]) ditOnly++;
                 if ((double)ditOnly / _ditOnlyCount > _opt.ReadabilityDitOnlyCeiling)
                     return CwReadability.Jumbled;
             }
+
+            // Only the Readable verdict is withdrawn when the evidence goes
+            // stale, and deliberately only that one.
+            //
+            // These windows are rings whose counts rise to capacity and never
+            // fall, so a verdict outlives the marks behind it. That is harmless
+            // for Chatter and Jumbled - they say "do not trust this", and
+            // saying it a while longer costs nothing. It is not harmless for
+            // Readable: CwDecoderEngine.Gate releases held text on exactly that
+            // verdict, so a latched Readable turns the silence after a station
+            // into copy. Measured on air 2026-08-29 - a station read Readable
+            // for minutes after it stopped sending, and noise dits reached the
+            // panel as text.
+            //
+            // The test is silence - how long since a mark was last recorded -
+            // and not the age of each mark. Per-entry ageing looked equivalent
+            // and was not: it broke Farnsworth, where 5 wpm spreads ten marks
+            // over more than ten seconds on a signal being copied perfectly,
+            // and it answered "no idea" for a blip stream whose marks are all
+            // discarded before they reach this window.
+            if (_nowMs - _lastMarkAtMs > _opt.ReadabilityMaxAgeSeconds * 1000.0)
+                return CwReadability.Unknown;
 
             return CwReadability.Readable;
         }

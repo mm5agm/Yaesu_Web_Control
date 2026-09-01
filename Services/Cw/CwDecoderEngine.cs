@@ -339,10 +339,19 @@ namespace RadioWebControl.Core.Services.Cw
         /// most of their text - 4.2% on a 20 dB fade at 0.25 Hz, against a
         /// 40% floor. Holding costs nothing, because held text that never
         /// becomes readable is never shown.
+        ///
+        /// Readable is necessary but not sufficient: the detector must also
+        /// still be seeing a signal. Both were needed because they fail
+        /// independently - measured on air 2026-08-29, characters kept
+        /// reaching the panel with SignalPresent false, noise dits landing in
+        /// the middle of real copy where an operator who cannot read CW has no
+        /// way to tell them apart. Absence is treated exactly like a bad
+        /// assessment, so it holds rather than discards and a fade deep enough
+        /// to drop presence still gets its text back on the other side.
         /// </summary>
         private string Gate(string produced)
         {
-            if (_elements.Readability == CwReadability.Readable)
+            if (_elements.Readability == CwReadability.Readable && _signalPresent)
             {
                 _badSinceSeconds = double.NaN;
                 if (_pending.Length == 0) return produced;

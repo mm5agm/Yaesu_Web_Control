@@ -475,6 +475,29 @@ namespace RadioWebControl.Core.Services.Cw
         private const double TrackGraceSeconds = 5.0;
 
         /// <summary>
+        /// How long the acquire window stays centred on the last confidently
+        /// tracked tone rather than on the pitch, in seconds.
+        ///
+        /// Acquire is pitch-centred, and its half-width is SearchWindowHz,
+        /// which is derived from the IF width. So narrowing the filter narrows
+        /// the acquire window around the PITCH - and a station that was locked
+        /// off-pitch drops outside it and can never be re-found. That is the
+        /// wrong way round: narrowing after a lock is the correct operating
+        /// move, and it was throwing the lock away.
+        ///
+        /// Measured on air 2026-08-29: a station locked at 823 Hz against a
+        /// 700 Hz pitch was lost the moment the IF went to 300 Hz, which put
+        /// the acquire window at 550-850 Hz, and only re-tuning the VFO by
+        /// 123 Hz brought it back.
+        ///
+        /// Bounded in time because a stale centre must not stop the search
+        /// finding a NEW station on an empty band. Twenty seconds covers
+        /// narrowing the filter and rides a normal over gap; beyond that the
+        /// window goes back to the pitch.
+        /// </summary>
+        private const double ReacquireMemorySeconds = 20.0;
+
+        /// <summary>
         /// How much wider than the search window the spectrum display reaches,
         /// so a station just outside the range the reader will chase is still
         /// on screen as the explanation for why it is not being read.
@@ -594,6 +617,8 @@ namespace RadioWebControl.Core.Services.Cw
         // Frames of narrow-search grace left after a good lock dipped. See
         // TrackGraceSeconds.
         private int _trackGrace;
+        private double _reacquireToneHz = double.NaN;
+        private int    _reacquireGrace;
 
         private long   _sampleIndex8k;
         private double _phasorPhase;
@@ -1004,16 +1029,34 @@ namespace RadioWebControl.Core.Services.Cw
             // to the pitch for the first few seconds of every session.
             double binHz    = (double)WorkRate / FftSize;
             const int TrackGraceFrames = (int)(TrackGraceSeconds * WorkRate / FftHop);
-            if (_present && _confidence >= TrackHoldConfidence) _trackGrace = TrackGraceFrames;
-            else if (_trackGrace > 0)                           _trackGrace--;
+            const int ReacquireFrames  = (int)(ReacquireMemorySeconds * WorkRate / FftHop);
+            if (_present && _confidence >= TrackHoldConfidence)
+            {
+                _trackGrace      = TrackGraceFrames;
+                _reacquireToneHz = _toneHz;
+                _reacquireGrace  = ReacquireFrames;
+            }
+            else
+            {
+                if (_trackGrace     > 0) _trackGrace--;
+                if (_reacquireGrace > 0) _reacquireGrace--;
+            }
 
             // The grace keeps the window narrow through a dip, but only while
             // the station is still there - presence is what says it is.
-            bool   tracking = _present && (_confidence >= TrackHoldConfidence || _trackGrace > 0);
-            double centre   = tracking ? _toneHz : _opt.PitchHz;
-            double halfBand = tracking
-                            ? Math.Min(TrackBandHz, _opt.SearchWindowHz)
-                            : _opt.SearchWindowHz;
+            bool tracking = _present && (_confidence >= TrackHoldConfidence || _trackGrace > 0);
+
+            // Acquire centres on the last tone actually held, not on the pitch,
+            // for as long as ReacquireMemorySeconds. See that constant: without
+            // it, narrowing the IF after a lock moves the window off the very
+            // station the operator just found.
+            bool   remembered = !tracking && _reacquireGrace > 0 && !double.IsNaN(_reacquireToneHz);
+            double centre     = tracking ? _toneHz
+                              : remembered ? _reacquireToneHz
+                              : _opt.PitchHz;
+            double halfBand   = tracking
+                              ? Math.Min(TrackBandHz, _opt.SearchWindowHz)
+                              : _opt.SearchWindowHz;
 
             int lo = Math.Max(1,        (int)Math.Floor((centre - halfBand) / binHz));
             int hi = Math.Min(half - 2, (int)Math.Ceiling((centre + halfBand) / binHz));
