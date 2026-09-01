@@ -410,7 +410,7 @@ Each phase is independently verifiable, and nothing before Phase 4 touches IWC.
 | **0** | branches + this document | done |
 | **1** | **Core:** decoder engine, `CwZeroIn`, Morse table, synthetic-audio test suite. No app wiring at all. | done 2026-08-23 - 69 tests, numbers in §4.1 |
 | **2** | **YWC:** capture extraction, `CwReaderService`, SignalR, pop-out page | real CW off the FTdx101MP, on the bench |
-| **3** | **YWC:** Reader Mode, transcript, ADIF QSO save | as above |
+| **3** | **YWC:** Reader Mode, transcript, ADIF QSO save | code complete 2026-09-01, see §4.16. Reader Mode is protocol-level and **unverified** - it needs the bench |
 | **4** | **Core -> IWC:** `git subtree push` from YWC then pull into IWC (§2.1), IWC capture service, reader UI, software ZIN | real CW off the IC-7300 MkII |
 | **5** | `USER_MANUAL.md` section, README notes | — |
 
@@ -2340,11 +2340,11 @@ radio:
   What remains open is the 3.5-vs-4.0 threshold in §4.11d.2, which needs more
   weak-signal captures, and whether the MkII's own tracker (AUTO 22 wpm, 29 a
   second earlier) is beatable on a signal it fails to print at all.
-  **And one part is not fixed (§4.11h):** the *output* no longer runs away, but
-  the speed estimate still climbs to 46-60 wpm across silent samples and still
-  reports `locked` while doing it. That was harmless on the bench and is not now
-  the panel puts both figures on screen. Hold the last estimate and drop
-  `IsLocked` after a second without signal.
+  **The remaining part is now fixed too, 2026-09-01** - commit `59dcc68`, "an
+  empty band is not a very fast operator". The speed estimate used to climb to
+  46-60 wpm across silent samples and go on reporting `locked` while it did,
+  which was harmless on the bench and stopped being harmless the moment the
+  panel put both figures on screen for an operator to act on.
 - **Surface `WordsPerMinute` in the UI. Done 2026-08-26 - see §4.15.** It is in
   the reader panel's status line with tone, pitch, filter width, search window,
   SNR and lock. Icom show it; it is what let Colin tell a confused decoder from
@@ -2391,7 +2391,10 @@ radio:
   Offline, no radio needed. It would turn three plausible decodes into three
   confirmed ones, including the `1854`-versus-`1584` argument in §4.11g, which
   currently rests on internal evidence alone.
-- **CwBench dies on an unfinalised wav header.** `bench/mkii-14040-qso3.wav` has
+- **CwBench dies on an unfinalised wav header. Fixed 2026-09-01** - see
+  `tools/CwBench/WavReader.cs`, which now treats a zero, `0xFFFFFFFF` or
+  overlong data chunk as "read to end of file" and says which it found. The
+  original note follows. `bench/mkii-14040-qso3.wav` has
   a RIFF size of `0xFFFFFFFF` - ffmpeg was killed before it could rewrite the
   header - and CwBench computes a negative sample count and exits with
   `count ('-1') must be a non-negative value`, which names neither the file nor
@@ -2406,12 +2409,104 @@ radio:
   stops informing the decoder above 1 kHz. The regime above the clamp is what
   §4.13 multi-signal is actually for; until that exists, the clamp should stay
   and the panel should say the window is clamped rather than implying the width
-  set it.
+  set it. **The panel half is done 2026-09-01**: the status line now prints
+  "(clamped)" or "(wider than the filter)" beside the search window, so the
+  figure no longer reads as though the operator's filter chose it. The clamp
+  itself stays, deliberately, until §4.13 exists.
 - **`docs/design/cw-bench-procedure.md`. Written 2026-08-26.** CwBench's usage
   text pointed at it for two sessions before it existed. It carries the three
   lessons that cost the most time: cross-band peek off before recording; sweep
   levels drift about 10 dB over a session, so never compare a level across one;
   and read the poller log, not the screenshot.
+
+### 4.16 Phase 3 built, 2026-09-01
+
+All three pieces exist and the code is committed. **None of it has seen an
+antenna**, and one part of it cannot be called working until it has - see the
+bench check at the end.
+
+**Transcript** - `core/Services/Cw/CwTranscriptWriter`, wired in at
+`CwReaderService.AppendLocked`. It is written from there and not from the UI
+because that one line is where every decoded character passes, and nothing the
+browser does can make a character miss it. Characters are flushed as they
+arrive rather than buffered into lines: a crash happens *while* something is
+coming in, so the buffered line would lose exactly the part worth keeping. CW
+arrives at a handful of characters a second, so the flush costs nothing against
+what it protects. No file is created until something is decoded, so opening the
+reader and closing it again leaves no trace.
+
+**Deviation from §3.6, deliberate.** The plan says the transcript sits
+alongside `radio_state.json`. It goes in a `CW Transcripts` subfolder instead:
+one file per reader session accumulates quickly, and loose in the app data
+folder they would bury the settings and state files they sat among.
+
+**QSO save** - `core/Services/Cw/CwQsoFields` (pure extraction),
+`core/Services/AdifRecordWriter` (ADIF out), `Services/Cw/CwQsoLogService`
+(YWC-local, because it knows the radio state and the app's folders) and
+`core/js/cw/cw-qso-form.js`. The suggest/save split is the point:
+**nothing is ever logged from a suggestion directly.** §4.11h measured the
+decoder reporting confidence 1.00 on 592 characters of junk, so a field
+silently pre-filled from the copy is worse than an empty one - the operator has
+no reason to look twice at a box that already has something in it. So the form
+fills in only what the radio and the clock know, and offers what the decoder
+thinks it knows as chips carrying the evidence that ranked them: "follows DE",
+"sent 3 times".
+
+Two things that only look like details:
+
+- **ADIF length prefixes are octets, not characters.** A wrong length does not
+  merely look untidy - it desynchronises a length-prefixed reader and every
+  later field is read from the wrong offset. `AdifRecordWriter` counts UTF-8
+  bytes. Our own `AdifParser` counts characters, which is a latent bug on the
+  parser's side; the writer follows the specification rather than matching it,
+  because third-party loggers follow the specification too.
+- **Cut-number expansion needs a real digit as a guard.** `T`=0, `N`=9, `A`=1,
+  so expanding any all-cut-letter word turns `ANT` into `190`, `TNT` into `010`
+  and `NNN` into `999` - and ANT is one of the commonest words in a ragchew.
+  Every report an operator actually sends has a figure in it (5NN, 5TT, 4NN),
+  so requiring one digit loses nothing real. This does not contradict the
+  "cut numbers must stay literal" item in §4.12: the decoder still
+  transcribes exactly what was keyed, and the expansion happens only in this
+  suggestion layer, which is exactly the "display layer that can be turned off"
+  that item asks for.
+
+**Reader Mode** - `Services/Cw/CwReaderModeService`, plus
+`YaesuIfWidth.CodeForHz` for the reverse width lookup. CW mode, a narrow filter
+(default 250 Hz, configurable in Settings), APF on, and the operator's previous
+settings put back afterwards.
+
+- **It lives on the server, and that is the design decision.** Three fetch calls
+  from the page would work right up until the operator reloaded the tab, at
+  which point the record of what their filter used to be is gone with it and
+  they are on 250 Hz with APF ringing and nothing to press. Server-side, the
+  restore survives a reload, a second browser, and the voice control.
+- **Mode, then width, then APF.** An SH code means different bandwidths in
+  different modes - code 8 is 1650 Hz in SSB and 400 Hz in CW - so a width sent
+  before the mode sets a width for the mode the radio is about to leave. And a
+  mode change makes the radio restore its own per-mode Contour and APF over
+  anything set first, so APF goes last.
+- **`CodeForHz` picks the nearest width, not the narrowest at or below.** The
+  FTDX3000's CW filters start at 500 Hz, so "narrowest at or below 250" comes
+  back empty and refuses to narrow a filter it could have narrowed to 500. Ties
+  go to the wider filter: one narrower than asked for can put the CW pitch
+  outside the passband and lose a signal the operator can hear, which is the
+  opposite of what the button is for. An unknown model returns null and the
+  filter is left alone - a guessed SH code would set a bandwidth nobody chose
+  on a rig nobody here has tested against.
+
+**Deviation from §3.3, deliberate.** The plan says the restore happens when
+the reader closes. It fires on **Stop** instead, because closing the dialog
+deliberately leaves the decoder running (§3.5), so Stop is when the operator
+has actually finished reading. A filter that silently re-opened to 2.4 kHz
+mid-QSO because they dismissed a panel is the worse surprise of the two.
+
+**What still needs the bench, and must not be reported as working before it:**
+Reader Mode writes `MD`, `SH` and `CO` frames to the radio. A successful build
+and 112 passing app tests say nothing about whether the '101 accepts them, and
+this is a write to the operator's own front panel. Check, on the radio: that
+the filter lands where the button says it did, that APF actually comes on, and
+- the one that matters most - that pressing Stop puts the mode, the width and
+  the APF state back exactly as they were.
 
 ---
 
