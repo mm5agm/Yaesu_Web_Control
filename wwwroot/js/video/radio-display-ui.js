@@ -815,6 +815,25 @@ function dockScopeControls() {
   showScopeControls({ refresh: true });
 }
 
+function hideBootstrapTooltip(el) {
+  if (!el || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+  bootstrap.Tooltip.getInstance(el)?.hide();
+}
+
+function initScopeLayoutTooltips(dlg) {
+  if (!dlg || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+  dlg.querySelectorAll('.radio-display-scope-undock-btn, .radio-display-scope-dock-btn').forEach(el => {
+    bootstrap.Tooltip.getInstance(el)?.dispose();
+    bootstrap.Tooltip.getOrCreateInstance(el, {
+      delay: { show: 200, hide: 50 },
+      trigger: 'hover focus',
+      placement: 'bottom',
+      container: dlg,
+      fallbackPlacements: ['top', 'left', 'right']
+    });
+  });
+}
+
 function bindScopeDialog() {
   const dlg = document.getElementById('radioDisplayScopeDialog');
   const btn = document.getElementById('radioDisplayScopeBtn');
@@ -839,10 +858,12 @@ function bindScopeDialog() {
   });
 
   undockBtn?.addEventListener('click', () => {
+    hideBootstrapTooltip(undockBtn);
     undockScopeControls();
   });
 
   dockBtn?.addEventListener('click', () => {
+    hideBootstrapTooltip(dockBtn);
     dockScopeControls();
   });
 
@@ -851,6 +872,7 @@ function bindScopeDialog() {
     else showScopeControls();
   });
 
+  initScopeLayoutTooltips(dlg);
   applyControlsLayout({ refreshIfDocked: true });
 
   // Index already makes this dialog draggable with the other popovers.
