@@ -411,7 +411,7 @@ Each phase is independently verifiable, and nothing before Phase 4 touches IWC.
 | **1** | **Core:** decoder engine, `CwZeroIn`, Morse table, synthetic-audio test suite. No app wiring at all. | done 2026-08-23 - 69 tests, numbers in §4.1 |
 | **2** | **YWC:** capture extraction, `CwReaderService`, SignalR, pop-out page | real CW off the FTdx101MP, on the bench |
 | **3** | **YWC:** Reader Mode, transcript, ADIF QSO save | code complete 2026-09-01, see §4.16. Reader Mode is protocol-level and **unverified** - it needs the bench |
-| **4** | **Core -> IWC:** `git subtree push` from YWC then pull into IWC (§2.1), IWC capture service, reader UI, software ZIN | real CW off the IC-7300 MkII |
+| **4** | **Core -> IWC:** `git subtree push` from YWC then pull into IWC (§2.1), IWC capture service, reader UI, software ZIN | code complete 2026-09-02, see §4.17. Reader Mode and zero-in are protocol-level and **unverified** - both need the bench |
 | **5** | `USER_MANUAL.md` section, README notes | written 2026-09-01 - manual §6.10 and §20, README feature section. **No release-notes entry and no version bump** - that waits on Colin's go |
 
 Phase 1 is the one that decides whether this is worth shipping. If the accuracy
@@ -2507,6 +2507,113 @@ this is a write to the operator's own front panel. Check, on the radio: that
 the filter lands where the button says it did, that APF actually comes on, and
 - the one that matters most - that pressing Stop puts the mode, the width and
   the APF state back exactly as they were.
+
+---
+
+### 4.17 Phase 4 built, 2026-09-02
+
+IWC has the reader. **None of it has seen an antenna**, and two parts of it
+cannot be called working until they have - see the bench check at the end.
+
+**Core moved first, and nothing had to move with it.** `core/` was already in
+step in both repos, so Phase 4 opened with the subtree push already done. The
+whole of `core/Services/Cw/` and `core/js/cw/` was reused unchanged - engine,
+tone detector, element decoder, zero-in, Morse table, QSO field extraction,
+transcript writer, reader panel, QSO form, spectrum, phasor, tokens. Nothing in
+Core needed a single edit to serve a second radio, which is the result the
+Phase 1 seam was chosen to get.
+
+**Capture** - `Services/Cw/CwAudioDevices` and `Services/Cw/WaveInCwAudioSource`,
+IWC-local. IWC has no audio subsystem at all: no `Services/Audio/`, no Remote
+Audio, nothing to tap. So the reader opens a WinMM recording device directly
+through NAudio, which is already referenced for the voice output, rather than
+adding a second audio stack for one mono input stream.
+
+Three things about that are worth keeping:
+
+- **The device is stored by name, not index.** WinMM renumbers recording
+  devices whenever anything USB is plugged in or removed, so a stored index
+  quietly comes to mean a different device - which is how an operator ends up
+  decoding their webcam microphone and blaming the decoder. A name that no
+  longer matches anything is reported as missing instead.
+- **WinMM truncates names at 31 characters** (`MAXPNAMELEN`). A name typed or
+  pasted from Windows' own sound settings can be longer than anything WinMM
+  will ever report back, so the lookup falls back to comparing the truncated
+  form.
+- **A WinMM buffer is not a multiple of 480 samples.** Without the carry
+  buffer the remainder is dropped from every single buffer - a steady, silent
+  loss that looks exactly like a decoder that cannot copy.
+
+Frames are moved off the capture callback through a bounded channel with
+`DropOldest`, created with the `itemDropped` overload. That callback is the only
+way to know a frame went: `DropOldest` discards silently, so without it the
+reader shows a healthy status while quietly losing audio.
+
+**Reader Mode is six calls, not a table.** This is where IWC's seam pays.
+`IRadioController.SetIfFilterWidthHzAsync(vfo, hz)` takes Hz and snaps
+internally to the radio's own ladder; `RadioStateService.CwPitch` is already Hz.
+So `CwReaderModeService` has no lookup table in it at all - where YWC has a page
+of per-model `SH` codes. **That is the concrete proof that `YaesuIfWidth` could
+never have moved into Core:** the two radios do not merely have different
+numbers, one has numbers and the other has a formula.
+
+Two differences from YWC's implementation, both deliberate:
+
+- **APF asks for MID (2), not NAR (3).** With APF TYPE on SHARP, NAR is about
+  80 Hz wide. At 20 wpm a dit is 60 ms, so the keying sidebands run to roughly
+  +/-17 Hz, and faster sending spreads them further; a filter that narrow starts
+  rounding the very transitions the decoder is timing.
+- **Tie-breaking runs the other way.** YWC breaks an exact width tie *wider*;
+  IWC's `FilterWidthCodec.HzToCode` scans ascending keeping the first match, so
+  it breaks a tie *narrower*. This was found and deliberately left alone: it
+  only bites on a value exactly between two rungs - 275 Hz - and the Icom CW
+  ladder runs in 50 Hz steps to 500 Hz, so every width the Settings page offers
+  is an exact rung. Changing the codec to suit this one caller would move the
+  CI-V API's snapping and the width nudge with it.
+
+**Software zero-in.** `POST /api/cw/zin`. The FTdx101 has a `ZI` command and
+nudges its own VFO; the IC-7300 has no equivalent, so the offset is worked out
+by `CwZeroIn` in Core - shared precisely so both apps agree about the sign - and
+the frequency is set over CI-V. It refuses far more often than it acts, and that
+is the design: a null offset means the tone detector is not confident or the
+correction exceeds the clamp, both of which usually mean it has locked onto the
+wrong signal, and nudging the VFO on a bad measurement moves the station the
+operator was listening to out of the filter. Under 25 Hz it says "already on
+pitch" - that is tracker jitter, the same threshold the reader panel uses before
+it will say anything about being off pitch. The current VFO is read back rather
+than taken from the cache, because the operator may have turned the dial since
+the last poll and adding an offset to a stale reading puts the radio somewhere
+neither of us asked for.
+
+**The Settings device picker is server-rendered, and that is not laziness.** The
+stored device is kept in the list even when it is absent. Populate the dropdown
+from the browser instead and an operator who saves anything on that page while
+the radio is switched off posts an empty value and silently loses their device -
+after which the reader fails with "no CW audio device has been chosen" for a
+reason they never did. `ModelState.Remove("Settings.CwAudioDeviceName")` goes in
+for the same reason it does for the SDR device keys: `<Nullable>enable</Nullable>`
+puts an implicit `[Required]` on a non-nullable string and blocks the whole save
+of an empty value with no visible error.
+
+**No `feature-setup.js` equivalent.** The Core panel skips the
+`window.radioFeatureSetup` hook gracefully when it is absent, and
+`WaveInCwAudioSource`'s error text already names *"Settings, CW Reader"*, so the
+operator is told where to go without a second mechanism to keep in step.
+
+**What still needs the bench, and must not be reported as working before it.**
+Two protocol-level things, on the real MkII:
+
+1. **Reader Mode**, exactly as for YWC: that the filter lands where the button
+   says it did, that APF actually comes on, and - the one that matters most -
+   that pressing Stop puts mode, width and APF back exactly as they were.
+2. **The zero-in sign**, in both CW-U and CW-L. Getting it backwards does not
+   look like a wrong number, it looks like zero-in running away from the signal.
+   The deadband and the clamp mean a wrong sign fails visibly and harmlessly
+   rather than dragging the VFO off, but it still has to be checked in both
+   sidebands - CW-L is the case the `lowerSideband` flag exists for, and the one
+   nobody has exercised.
+
+A build and 202 passing Core tests say nothing about either of them.
 
 ---
 
