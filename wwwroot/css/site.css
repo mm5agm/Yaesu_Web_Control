@@ -1360,8 +1360,10 @@ fieldset.calibration-card {
 .radio-display-body.controls-docked #radioDisplayScopeDialog[open] .radio-display-scope-undock-btn {
     display: inline-block;
 }
-.radio-display-body:not(.controls-docked) #radioDisplayScopeDialog[open] .radio-display-scope-dock-btn,
-.radio-display-body:not(.controls-docked) #radioDisplayScopeDialog[open] .radio-display-scope-close-btn {
+.radio-display-body:not(.controls-docked) #radioDisplayScopeDialog[open] .radio-display-scope-dock-btn {
+    display: inline-block;
+}
+#radioDisplayScopeDialog[open] .radio-display-scope-close-btn {
     display: inline-block;
 }
 #radioDisplayScopeDialog .tooltip {
