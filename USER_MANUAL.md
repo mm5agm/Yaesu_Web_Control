@@ -143,6 +143,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | Voice Control (SAPI mic) | Yes | No | No |
 | Radio Display (USB capture → MJPEG) | Yes | Yes | Yes (map `/dev/video*` in Docker) |
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
+| CW Reader ([§20](#20-cw-reader)) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
 | USB serial driver | **Windows / macOS:** if the radio's COM / `/dev/cu.*` ports are missing or CAT never answers, install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** usually skip — the kernel already includes CP210x support. |
@@ -3283,6 +3284,10 @@ Colour in the decoded text marks what *looks like* QSO traffic — procedural si
 3. Press **Start**.
 
 The reader opens the radio's USB audio codec for listening on its own. You do **not** need a Remote Audio session running first. If the capture device is not chosen or has gone away, the status line says so in words rather than sitting there blank.
+
+**It shares the radio's audio with Remote Audio rather than competing for it.** If you are already listening from another room ([§18](#18-remote-audio)) you can start the reader without stopping anything, and in either order — one capture of the radio feeds both. Starting or stopping either one leaves the other running.
+
+**The reader is not Windows-only.** Unlike the SDR spectrum and Voice Control, it runs on the macOS and Linux hosts and in Docker as well. What it needs is a capture device it can open — on Linux and in Docker that means the sound devices have to be passed through, which is the same requirement Remote Audio has ([§18](#18-remote-audio)).
 
 Set your CW pitch in the CW Keyer panel (§5.12) and tune the station onto it. The reader decodes at the pitch you are using, because that is the tone you have tuned the signal to — hunting for a note you are not listening to is not much use to either of you.
 

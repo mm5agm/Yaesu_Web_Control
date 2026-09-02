@@ -41,6 +41,7 @@ I own and test on the **FTdx101MP**; the other supported models are built from Y
 | SDR spectrum | Yes | No | No |
 | Voice Control (SAPI) | Yes | No | No |
 | Voice announcements (browser TTS) | Yes | Yes | Yes |
+| CW Reader | Yes | Yes | Yes |
 | Serial port | `COM3`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` |
 | USB serial driver | [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on **Windows, macOS, and Linux** — **reboot after install** |
 | User data | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` | Same `~/.config/…` path; Docker uses `./data/ywc` volume |
@@ -195,7 +196,7 @@ This is normal and expected. The first time you see it you'll probably blink; fr
 
 ## 📝 CW Reader
 
-The **CW Read** button on the main panel opens a reader that listens to the radio's receive audio and prints the Morse it hears as text. It needs no extra hardware — it decodes the same USB audio the radio already sends the PC — and it never transmits.
+The **CW Read** button on the main panel opens a reader that listens to the radio's receive audio and prints the Morse it hears as text. It needs no extra hardware — it decodes the same USB audio the radio already sends the PC — and it never transmits. It is one of the few big features that is **not** Windows-only: it works the same on the macOS and Linux hosts, and in Docker.
 
 I wrote my own decoder rather than reading the radio's. Neither the FTdx101 nor the IC-7300 will hand its decoded characters back over CAT: both expose the decoder's *settings* and neither exposes its *output*, so a passthrough was never available on either brand.
 
@@ -207,9 +208,13 @@ I wrote my own decoder rather than reading the radio's. Neither the FTdx101 nor 
 
 **Reader Mode** is one button that sets the radio up the way the decoder wants it — CW mode, a narrow IF filter (250 Hz by default), APF on — and puts your mode, width and APF back exactly as they were when you press Stop. This matters more than it sounds: on my own bench the FTdx101MP's built-in decoder could not read a signal I could copy by ear with the filters wide open, and was still poor at 600 Hz. What a decoder is fed matters more than how it decodes. YWC picks the nearest filter your model actually has, prefers the wider one on a tie so the CW note cannot fall outside the passband, and leaves the filter alone entirely if it has no table for your radio. The saved settings live on the host rather than in the browser tab, so the restore still works after a page reload or from a second browser.
 
+**ZIN** puts the station on your pitch for you. One click sends the Yaesu `ZI` command and the radio nudges its own VFO until the received note sits exactly on your CW pitch, which is where the decoder is listening. It is on the CW Keyer panel and on each VFO header, so you can use it while searching and pouncing without opening anything. If you would rather do it by eye, the reader's **Tune** button shows the passband with a marker at your pitch, and an X-Y figure that stops turning when you are exactly zero-beat.
+
+You do not have to choose between the reader and **Remote Audio** — they share one capture of the radio, so you can listen from another room and read the Morse at the same time. Starting or stopping either leaves the other running.
+
 Every session also writes a **timestamped transcript** to `CW Transcripts\` in the app data folder, written as the text arrives rather than held until you close the panel — the thing a transcript most needs to survive is a crash, and a crash happens while something is arriving. A session that decodes nothing leaves no file. Confirmed contacts append to a plain **ADIF** file, which Log4OM and GridTracker both pick up with nothing else to configure.
 
-The decoder itself lives in [Radio_Web_Control_Core](https://github.com/mm5agm/Radio_Web_Control_Core), the shared library behind YWC and Icom Web Control, because a Morse decoder does not know what a radio is.
+The decoder itself lives in [Radio_Web_Control_Core](https://github.com/mm5agm/Radio_Web_Control_Core), the shared library behind YWC and Icom Web Control, because a Morse decoder does not know what a radio is. That turned out to be the right call: the same reader now runs in Icom Web Control, and **not one line of the decoder had to change** to read Morse off a different brand of radio. The two apps copy identically and differ only in how each rig is asked for a narrow filter.
 
 Full details, including the status-line reference and troubleshooting, are in [USER_MANUAL.md §20 CW Reader](USER_MANUAL.md#20-cw-reader).
 
