@@ -346,6 +346,23 @@ pre, code { tab-size: 4; }
     font-weight: 700;
 }
 
+/* ...but the dark dialogs (background #222) invert that into black on
+   near-black, visible only on hover because Bootstrap's hover fills the
+   button. That is how the CW Reader's Clear button, the VOX toggle's off
+   state and the Voice panel's "Stop talking" all shipped invisible. Same
+   trap the dialog close button hit before it was given .ywc-dialog-close.
+
+   Listed by dialog id because the dark treatment is an inline style with no
+   class to hang this on. If you add another dark dialog containing an
+   outline-secondary button, add it here too - or give the dialogs a shared
+   class and key this off that instead, which would be the better fix. */
+#cwReaderDialog .btn-outline-secondary,
+#voxDialog .btn-outline-secondary,
+#voiceDialog .btn-outline-secondary {
+    color: #adb5bd;          /* 7.3:1 on #222 - passes AA and AAA */
+    border-color: #6c757d;
+}
+
 /* Mode select - sized to fit longest option (D-FM-N), sits below band buttons */
 .vfo-mode-select {
     width: 7rem;
