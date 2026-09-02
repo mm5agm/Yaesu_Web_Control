@@ -9,8 +9,8 @@ an FTdx101MP. Raised by Colin MM5AGM 2026-08-15.
 **Bench evidence:** `SS` read-probe and write-probe run against a real
 FTdx101MP (ID0682) on COM4, 2026-08-15, plus end-to-end testing through the
 app's own endpoints. Live sync from the radio's own front panel confirmed
-end to end 2026-08-16 (§6.1). Results in §2; what the implementation turned
-up in §6.
+end to end 2026-08-16 (§6.1), HOLD measured 2026-09-02 (§6.2). Results in
+§2; what the implementation turned up in §6.
 **Related:** PR #97 (USB video capture of the radio's screen), and the
 overlay idea this note replaces.
 
@@ -305,8 +305,8 @@ does **not** echo changes YWC itself sent — only front-panel ones, which is
 what you want, since a write's own read-back already repaints those.
 
 Live sync is built on this (`CatMessageDispatcher` → `BroadcastTransient` →
-`ScopeSetting` → `radio-scope.js applyRemote`). See §6.1 for what that leaves
-untested.
+`ScopeSetting` → `radio-scope.js applyRemote`). See §6.1 and §6.2 for what
+that leaves untested.
 
 **Span is stored per display mode.** Setting the span to 20 kHz and then
 switching mode appeared at first to "revert" it. It does not: the radio keeps a
@@ -353,10 +353,46 @@ browser followed each one, with no re-read and no collapse-and-expand.
 **What this does and does not cover.** It confirms SPAN, which is the path all
 sub-commands share: dispatcher → `BroadcastTransient` → `ScopeSetting` →
 `applyRemote`. It does **not** separately exercise the two-frames-a-few-ms-apart
-case that a front-panel *mode* change produces, nor HOLD. Those go through the
+case that a front-panel *mode* change produces. Those go through the
 same code with a different `P2`, so they are expected to work — but expected is
 not measured, and the mode pair is the one with an ordering hazard worth
 proving. MARKER and LEVEL still have not been seen announced at all (§6).
+
+### 6.2 HOLD measured, and the blink that is not ours
+
+**Measured 2026-09-02 (Colin MM5AGM, FTdx101MP on COM4)** with temporary
+Information-level logging on the `SS` opcode, run twice — once with the scope
+card collapsed so that every logged frame was necessarily unsolicited, once with
+it expanded.
+
+Five front-panel SPAN presses produced five frames, one each:
+
+```
+14:20:10.642  SS0520000;   14:20:13.512  SS0580000;   14:20:15.732  SS0530000;
+14:20:18.337  SS0550000;   14:20:20.267  SS0510000;
+```
+
+HOLD produced exactly two, thirty-one seconds apart — `SS0810000;` on, then
+`SS0800000;` off — with **nothing at all in between**. The expanded-card run
+agreed: `SS0810000;` at 14:22:24.288, `SS0800000;` at 14:22:58.680, and silence
+across the thirty-four seconds of hold. Every frame arrived at `length=10` with
+the terminator intact; neither drop path was ever taken.
+
+**So an announcement is one-shot per change.** This closes a false trail worth
+recording, because the reasoning that produced it looked sound. The HOLD
+indicator was seen blinking about once a second, and since `radio-scope.js` has
+no timer, no animation and no flash class, and nothing polls `SS`
+(`MeterPollingService` does not touch it and `ScopeController` has no timer),
+it was inferred that the radio must be alternating on/off frames at the sweep
+rate. It is not. The premise was correct and the conclusion still wrong, because
+only the sources that had been looked at were eliminated.
+
+What actually blinks is **the radio's own HOLD indicator on its own screen**,
+which is how the '101 shows the scope is frozen. It reaches the browser through
+Remote Video, which is streaming that screen — so the blink shows on the Radio
+Display page, faithfully, and never touches the CAT path or the scope control
+card at all. Two different subsystems showing the letters HOLD is the whole of
+the confusion; see the three-scope-systems warning in `CLAUDE.md`.
 
 ### Still open
 
