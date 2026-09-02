@@ -23,6 +23,14 @@ export class RadioDisplayPanel {
     this._fitMode = localStorage.getItem('ywc.radioDisplayFit') || 'contain';
     this._onFullscreenChange = () => this._applyFit();
     document.addEventListener('fullscreenchange', this._onFullscreenChange);
+    this._resizeObserver = null;
+    if (this._naturalSize && typeof ResizeObserver !== 'undefined') {
+      const pane = this._body();
+      if (pane) {
+        this._resizeObserver = new ResizeObserver(() => this._applyFit());
+        this._resizeObserver.observe(pane);
+      }
+    }
     this._applyFit();
   }
 
@@ -109,6 +117,7 @@ export class RadioDisplayPanel {
     if (this._status !== 'unconfigured' && this._container) {
       this._container.style.display = '';
     }
+    this.applyFit();
   }
 
   hide() {
@@ -139,10 +148,53 @@ export class RadioDisplayPanel {
     return this._fitMode;
   }
 
+  applyFit() {
+    this._applyFit();
+  }
+
   _body() {
     return this._container?.querySelector('.radio-display-video-pane')
       || this._container?.querySelector('.radio-display-body')
       || this._img?.parentElement;
+  }
+
+  _sourceAspect() {
+    const nw = this._img?.naturalWidth;
+    const nh = this._img?.naturalHeight;
+    if (nw > 0 && nh > 0) return nw / nh;
+    return 4 / 3;
+  }
+
+  /**
+   * Index Fill: size a source-aspect frame inside the pane so object-fit:cover
+   * crops dongle letterboxing, not the TFT, on wide docked cards.
+   * @param {HTMLElement | null | undefined} body
+   */
+  _applyNaturalCover(body) {
+    if (!body || !this._img) return;
+
+    body.style.flex = '';
+    body.style.minHeight = '240px';
+    body.style.height = '';
+
+    const paneRect = body.getBoundingClientRect();
+    const maxH = Math.min(window.innerHeight * 0.5, paneRect.height > 0 ? paneRect.height : window.innerHeight * 0.5);
+    let maxW = paneRect.width > 0 ? paneRect.width : body.clientWidth;
+    if (maxW <= 0) maxW = body.clientWidth || body.offsetWidth;
+    if (maxW <= 0 || maxH <= 0) return;
+
+    const aspect = this._sourceAspect();
+    let frameW = maxW;
+    let frameH = frameW / aspect;
+    if (frameH > maxH) {
+      frameH = maxH;
+      frameW = frameH * aspect;
+    }
+
+    this._img.style.width = `${Math.round(frameW)}px`;
+    this._img.style.maxWidth = '100%';
+    this._img.style.height = `${Math.round(frameH)}px`;
+    this._img.style.maxHeight = '50vh';
   }
 
   _showPlaceholder() {
@@ -212,17 +264,19 @@ export class RadioDisplayPanel {
         this._img.style.maxWidth = '100%';
         this._img.style.height = 'auto';
         this._img.style.maxHeight = inFs ? '100%' : '50vh';
-      } else {
-        // Fill: crop to the available band; center the crop in fullscreen.
+      } else if (inFs) {
+        // Fullscreen Fill unchanged — Colin confirmed this works.
         if (body) {
-          body.style.flex = inFs ? '1 1 auto' : '';
-          body.style.minHeight = inFs ? '0' : '240px';
-          body.style.height = inFs ? '100%' : '40vh';
+          body.style.flex = '1 1 auto';
+          body.style.minHeight = '0';
+          body.style.height = '100%';
         }
         this._img.style.width = '100%';
         this._img.style.maxWidth = '100%';
         this._img.style.height = '100%';
         this._img.style.maxHeight = 'none';
+      } else {
+        this._applyNaturalCover(body);
       }
       return;
     }

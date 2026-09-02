@@ -1,7 +1,7 @@
 /**
  * Radio Display UI wiring: status poll + MJPEG img stream + controls.
  */
-import { RadioDisplayPanel } from './radio-display-panel.js?v=8';
+import { RadioDisplayPanel } from './radio-display-panel.js?v=9';
 
 const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;
@@ -11,6 +11,7 @@ const ALLOWED_QUALITY = [40, 65, 85];
 const CHANNEL_NAME = 'ywc-radio-display';
 const AUTO_START_KEY = 'ywc.radioDisplayAutoStart';
 const CONTROLS_DOCKED_KEY = 'ywc.radioDisplayControlsDocked';
+const CONTROLS_VISIBLE_KEY = 'ywc.radioDisplayControlsVisible';
 
 let panel = null;
 let uiMode = 'index';
@@ -361,6 +362,8 @@ function reattachToIndex() {
 function onReattachFromPopout(stream) {
   if (uiMode !== 'index' || !panel) return;
   panel.show();
+  applyControlsLayout({ refreshIfDocked: true });
+  panel.applyFit();
   if (holdDisconnected) {
     wantStream = false;
     pollStatus();
@@ -714,6 +717,17 @@ function isControlsDocked() {
   return localStorage.getItem(CONTROLS_DOCKED_KEY) !== '0';
 }
 
+function isControlsVisiblePreference() {
+  const stored = localStorage.getItem(CONTROLS_VISIBLE_KEY);
+  if (stored === '0') return false;
+  if (stored === '1') return true;
+  return isControlsDocked();
+}
+
+function setControlsVisiblePreference(visible) {
+  localStorage.setItem(CONTROLS_VISIBLE_KEY, visible ? '1' : '0');
+}
+
 function isScopeControlsVisible() {
   const dlg = document.getElementById('radioDisplayScopeDialog');
   const body = getRadioDisplayBody();
@@ -768,16 +782,18 @@ function syncScopeControlsBtn(btn, dlg) {
   }
 }
 
-function hideScopeControls() {
+function hideScopeControls({ persist = true } = {}) {
   const dlg = document.getElementById('radioDisplayScopeDialog');
   const body = getRadioDisplayBody();
   const btn = document.getElementById('radioDisplayScopeBtn');
   body?.classList.remove('controls-docked');
   dlg?.close();
+  if (persist) setControlsVisiblePreference(false);
   syncScopeControlsBtn(btn, dlg);
+  panel?.applyFit();
 }
 
-function showScopeControls({ refresh = true } = {}) {
+function showScopeControls({ refresh = true, persist = true } = {}) {
   const dlg = document.getElementById('radioDisplayScopeDialog');
   const body = getRadioDisplayBody();
   const btn = document.getElementById('radioDisplayScopeBtn');
@@ -796,13 +812,18 @@ function showScopeControls({ refresh = true } = {}) {
     else dlg.setAttribute('open', '');
   }
 
+  if (persist) setControlsVisiblePreference(true);
   if (refresh) window.notifyRadioScopeControls?.(c => c.refresh());
   syncScopeControlsBtn(btn, dlg);
+  panel?.applyFit();
 }
 
 function applyControlsLayout({ refreshIfDocked = false } = {}) {
-  if (isControlsDocked()) showScopeControls({ refresh: refreshIfDocked });
-  else hideScopeControls();
+  if (isControlsVisiblePreference()) {
+    showScopeControls({ refresh: refreshIfDocked, persist: false });
+  } else {
+    hideScopeControls({ persist: false });
+  }
 }
 
 function undockScopeControls() {
