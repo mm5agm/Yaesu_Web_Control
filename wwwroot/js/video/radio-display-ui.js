@@ -889,14 +889,31 @@ function bindDialogDrag(dialog, handle) {
   });
 }
 
+function syncFitFillToggle(mode) {
+  const contain = document.getElementById('radioDisplayFitContain');
+  const cover = document.getElementById('radioDisplayFitCover');
+  if (!contain || !cover) return;
+  const isCover = mode === 'cover';
+  contain.checked = !isCover;
+  cover.checked = isCover;
+}
+
+function bindFitFillToggle() {
+  const contain = document.getElementById('radioDisplayFitContain');
+  const cover = document.getElementById('radioDisplayFitCover');
+  if (!contain || !cover || !panel) return;
+
+  const onChange = () => {
+    panel.setFitMode(cover.checked ? 'cover' : 'contain');
+  };
+  contain.addEventListener('change', onChange);
+  cover.addEventListener('change', onChange);
+  syncFitFillToggle(panel.getFitMode());
+}
+
 function bindControls() {
   bindScopeDialog();
-
-  document.getElementById('radioDisplayFitBtn')?.addEventListener('click', () => {
-    const mode = panel.toggleFitMode();
-    const btn = document.getElementById('radioDisplayFitBtn');
-    if (btn) btn.textContent = mode === 'contain' ? 'Fit' : 'Fill';
-  });
+  bindFitFillToggle();
 
   document.getElementById('radioDisplayFullscreenBtn')?.addEventListener('click', () => {
     panel.requestFullscreen().catch(() => {});
@@ -963,11 +980,6 @@ function bindControls() {
         requestStart();
       }
     });
-  }
-
-  const fitBtn = document.getElementById('radioDisplayFitBtn');
-  if (fitBtn && panel) {
-    fitBtn.textContent = panel.getFitMode() === 'contain' ? 'Fit' : 'Fill';
   }
 
   syncAutoStartCheckbox();

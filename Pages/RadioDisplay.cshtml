@@ -79,12 +79,14 @@
             justify-content: center;
         }
         #radioDisplayContainer .radio-display-body.controls-docked .radio-display-video-pane {
-            flex: 1 1 50%;
-            width: 50%;
+            flex: 1 1 auto;
+            width: auto;
+            min-width: 0;
         }
         #radioDisplayContainer .radio-display-body.controls-docked #radioDisplayScopeDialog {
-            flex: 1 1 50%;
-            width: 50%;
+            flex: 0 1 auto;
+            width: min(22rem, 42%);
+            max-width: 22rem;
             max-height: none;
             align-self: stretch;
         }
@@ -223,9 +225,16 @@
                     }
                     <div class="radio-display-actions d-flex flex-nowrap align-items-center gap-1">
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                              data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
-                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn"
-                                    aria-label="Toggle fit / fill">Fit</button>
+                              data-bs-title="Fit shows the whole TFT. Fill covers the pane and may crop edges."
+                              aria-label="Video scaling: Fit or Fill">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Video scaling mode">
+                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitContain"
+                                       value="contain" autocomplete="off" checked>
+                                <label class="btn btn-outline-light" for="radioDisplayFitContain">Fit</label>
+                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitCover"
+                                       value="cover" autocomplete="off">
+                                <label class="btn btn-outline-light" for="radioDisplayFitCover">Fill</label>
+                            </div>
                         </span>
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                               data-bs-title="Fullscreen" aria-label="Fullscreen">

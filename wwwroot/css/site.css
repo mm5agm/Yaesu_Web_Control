@@ -1301,8 +1301,8 @@ fieldset.calibration-card {
     min-height: inherit;
 }
 .radio-display-body.controls-docked .radio-display-video-pane {
-    flex: 1 1 50%;
-    width: 50%;
+    flex: 1 1 auto;
+    width: auto;
     min-width: 0;
     min-height: 0;
     display: flex;
@@ -1334,11 +1334,11 @@ fieldset.calibration-card {
     left: auto;
     transform: none;
     z-index: auto;
-    flex: 1 1 50%;
-    width: 50%;
+    flex: 0 1 auto;
+    width: min(22rem, 42%);
+    max-width: 22rem;
     min-width: 0;
     min-height: 0;
-    max-width: none;
     max-height: none;
     height: auto;
     align-self: stretch;

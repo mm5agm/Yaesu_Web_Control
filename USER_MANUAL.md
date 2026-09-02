@@ -1126,7 +1126,7 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 **FTdx101MP/D** — every setting in this card was measured on real hardware before it shipped. Two receivers: **MAIN / SUB** band selector, narrow-band colour (**NB Col**), and **Hold** (freeze the trace).
 
-**FTdx10** — single receiver (no MAIN/SUB row, no **NB Col** — the CAT manual fixes those parameters at zero). **Hold** is shown from the same documented `SS` table as the '101; bench confirmation on the FTdx10 is still pending.
+**FTdx10** — single receiver (no MAIN/SUB row, no **NB Col** — the CAT manual fixes those parameters at zero). **Hold** was confirmed on an FTdx10 — it freezes the TFT over CAT (`SS` P2=8), same as the '101.
 
 **FT-710** — the command list genuinely stops one sub-command short (no scope **Hold**), and it names scope sizes **Expand / Normal** rather than L / N / S. The card stays hidden until someone has probed writes on that radio.
 
@@ -3208,7 +3208,7 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
 4. Frame rate (**15 / 30 / 60 fps**; default **15**) and image quality (**Low / Medium / Max** = 40 / 65 / 85; default **Max**) are chosen on the same card. The FPS list is a **target** — USB bandwidth, JPEG encode, and host CPU can still deliver less. Rates above what the capture device advertises (for example **60** on a 30 fps stick) are hidden. **Max** keeps the capture JPEG (least CPU when the dongle already sends MJPEG). **Low** / **Medium** recompress — smaller stream, more CPU. Prefer **15 fps** on a Raspberry Pi; use Low/Medium there only if the link needs a smaller stream. On Windows/macOS, 15 / 30 / 60 share the same panel-sized pin (see §19.1); the badge should track the dropdown (15 via pacing if the pin floor is 20).
 5. Other controls:
    - **Start / Stop** — attach or release the MJPEG viewer (Stop lets the host drop the dongle after a couple of seconds)
-   - **Fit / Fill** — `object-fit` contain vs cover
+   - **Fit / Fill** — two-button toggle on the video bar: **Fit** (`object-fit: contain`, whole TFT visible) or **Fill** (cover, pane filled and edges may crop).
    - **Fullscreen** — fullscreen the card
    - **Pop out** — opens `/RadioDisplay` in a separate window (closes the Index panel); if you were streaming, the pop-out keeps the stream
    - **Reattach** (pop-out) — returns the stream to the main window and closes the pop-out

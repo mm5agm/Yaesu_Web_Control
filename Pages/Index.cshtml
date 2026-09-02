@@ -831,9 +831,16 @@
                     }
                     <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                              data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
-                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn"
-                                    aria-label="Toggle fit / fill">Fit</button>
+                              data-bs-title="Fit shows the whole TFT. Fill covers the pane and may crop edges."
+                              aria-label="Video scaling: Fit or Fill">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Video scaling mode">
+                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitContain"
+                                       value="contain" autocomplete="off" checked>
+                                <label class="btn btn-outline-light" for="radioDisplayFitContain">Fit</label>
+                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitCover"
+                                       value="cover" autocomplete="off">
+                                <label class="btn btn-outline-light" for="radioDisplayFitCover">Fill</label>
+                            </div>
                         </span>
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                               data-bs-title="Fullscreen" aria-label="Fullscreen">
