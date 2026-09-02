@@ -122,7 +122,7 @@ export class SpectrumPanel {
         this._rangeDb      = this._loadSpectrumRange();
         this._avgBins      = null;   // temporal-EMA history (stage 1); re-seeded on retune
         this._specAvgWeight = SpectrumPanel.DEFAULT_SPEC_AVG;
-        this._specSmoothRadius = SpectrumPanel.DEFAULT_SPEC_SMOOTH;  // spatial half-window (stage 2)
+        this._specSmoothRadius = this._loadSpectrumSmooth();  // spatial half-window (stage 2)
         this._smoothOut    = null;   // reused spatial-smoothing output buffer (stage 2)
         // Last VFO frequency the auto-floor was seeded against, so a large band
         // jump can snap the floor instead of letting the EMA drift across.
@@ -188,12 +188,25 @@ export class SpectrumPanel {
     // cascade to a smooth result. Tune live: window.spectrumPanelA.setSpectrumAveraging(w).
     static DEFAULT_SPEC_AVG = 0.5;
 
-    // Spatial-smoothing half-window, in bins (default radius for YWC's 1024-point
-    // FFT). This is the main knob for flattening the noise floor's bin-to-bin grass
-    // — the SDR floor is far rougher than IWC's radio-smoothed CI-V scope, so it
-    // needs a real spatial pass. Higher = flatter floor but blunter peaks; capped by
-    // MAX_SPEC_SMOOTH. Tune live: window.spectrumPanelA.setSpectrumSmooth(r).
-    static DEFAULT_SPEC_SMOOTH = 6;
+    // Spatial-smoothing half-window, in bins. This flattens the noise floor's
+    // bin-to-bin grass — the SDR floor is far rougher than IWC's radio-smoothed
+    // CI-V scope, so it needs a real spatial pass. Higher = flatter floor but
+    // blunter peaks; capped by MAX_SPEC_SMOOTH, and exposed as the Smooth slider.
+    //
+    // The default was 6 — a 13-bin boxcar. That was chosen to calm the noise and
+    // it does, but it was never checked against a narrow signal. At the usual
+    // 250 kHz span on a 1024-point FFT each bin is 244 Hz, so 13 bins averages
+    // over 3.2 kHz. SSB survives that (2.7 kHz of speech is ~11 bins, about the
+    // kernel width); CW does not. A CW carrier is ONE bin, so averaging it over
+    // 13 costs ~11 dB and the peak vanishes from the trace entirely, while the
+    // waterfall still shows it because it integrates the same signal over time.
+    // Measured on 20m CW, 2026-09-02: signals plainly visible in the waterfall
+    // had no peak at all in the trace until the radius was dropped.
+    //
+    // 2 is a compromise, not a cure: a 5-bin kernel still costs a one-bin
+    // carrier a few dB. Operators working CW should pull Smooth to 0. The
+    // slider exists so that is a choice rather than a console command.
+    static DEFAULT_SPEC_SMOOTH = 2;
     static MAX_SPEC_SMOOTH     = 8;
 
     // A band jump larger than this (Hz) snaps the auto-floor to the new band's
@@ -219,6 +232,22 @@ export class SpectrumPanel {
     _saveSpectrumRange() {
         try {
             localStorage.setItem('ywc.spectrumRange.' + this._vfo, String(Math.round(this._rangeDb)));
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    // Load the persisted spatial-smoothing radius for this VFO. Clamped to the
+    // slider band so a corrupt value can't silently flatten every peak away.
+    _loadSpectrumSmooth() {
+        try {
+            const v = parseInt(localStorage.getItem('ywc.spectrumSmooth.' + this._vfo), 10);
+            if (isFinite(v) && v >= 0 && v <= SpectrumPanel.MAX_SPEC_SMOOTH) return v;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return SpectrumPanel.DEFAULT_SPEC_SMOOTH;
+    }
+
+    _saveSpectrumSmooth() {
+        try {
+            localStorage.setItem('ywc.spectrumSmooth.' + this._vfo, String(this._specSmoothRadius));
         } catch (e) { /* localStorage may be unavailable */ }
     }
 
@@ -417,6 +446,11 @@ export class SpectrumPanel {
         const r = parseInt(radius, 10);
         if (!isFinite(r) || r < 0) return;
         this._specSmoothRadius = Math.min(SpectrumPanel.MAX_SPEC_SMOOTH, r);
+        this._saveSpectrumSmooth();
+        // Repaint from the held bins so the change is visible at once rather
+        // than on the next sweep - matters most when Hold is on, where there
+        // is no next sweep.
+        if (this._lastBins) this._render();
     }
 
     /** Returns the current spatial-smoothing half-window in bins. */

@@ -924,6 +924,9 @@
                         <label class="text-nowrap mb-0 ms-2" title="Waterfall brightness — lifts weak signals up the waterfall colour scale. The spectrum trace auto-ranges, so this brightens the waterfall only, leaving the trace unchanged.">Bright</label>
                         <input type="range" class="form-range spectrum-bright-slider" data-vfo="A" min="0" max="60" step="1" value="0" aria-label="VFO A waterfall brightness" style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-bright-label" data-vfo="A" style="min-width:3.5em; text-align:right;">Off</span>
+                        <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
+                        <input type="range" class="form-range spectrum-smooth-slider" data-vfo="A" min="0" max="8" step="1" value="2" aria-label="VFO A spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-smooth-label" data-vfo="A" style="min-width:3.5em; text-align:right;">2</span>
                     </div>
                     <div class="card-body p-0">
                         <canvas id="spectrumCanvasA" role="img" aria-hidden="true" aria-label="RF spectrum display VFO A" style="display:block; width:100%;"></canvas>
@@ -959,6 +962,9 @@
                         <label class="text-nowrap mb-0 ms-2" title="Waterfall brightness — lifts weak signals up the waterfall colour scale. The spectrum trace auto-ranges, so this brightens the waterfall only, leaving the trace unchanged.">Bright</label>
                         <input type="range" class="form-range spectrum-bright-slider" data-vfo="B" min="0" max="60" step="1" value="0" aria-label="VFO B waterfall brightness" style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-bright-label" data-vfo="B" style="min-width:3.5em; text-align:right;">Off</span>
+                        <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
+                        <input type="range" class="form-range spectrum-smooth-slider" data-vfo="B" min="0" max="8" step="1" value="2" aria-label="VFO B spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-smooth-label" data-vfo="B" style="min-width:3.5em; text-align:right;">2</span>
                     </div>
                     <div class="card-body p-0">
                         <canvas id="spectrumCanvasB" role="img" aria-hidden="true" aria-label="RF spectrum display VFO B" style="display:block; width:100%;"></canvas>
@@ -3140,7 +3146,8 @@
             });
 
             // Spectrum display sliders — Range (vertical scale), Speed (waterfall
-            // scroll rate) and Bright (waterfall colour lift). All three are PURELY
+            // scroll rate), Bright (waterfall colour lift) and Smooth (spatial
+            // averaging across bins). All four are PURELY
             // client-side and persisted per-VFO in localStorage by the panel; none
             // touch the server. The old Low/High pair and the Gain round-trip to the
             // worker are both gone — the trace auto-tracks the noise floor (see
@@ -3216,6 +3223,33 @@
                     const db = parseInt(slider.value, 10);
                     label.textContent = formatBright(db);
                     panel.setWaterfallBrightness(db);
+                });
+            });
+
+            // Spectrum spatial smoothing — purely client-side, persisted per-VFO
+            // by the panel like Range, Speed and Bright. Averages neighbouring FFT
+            // bins to flatten the noise floor. It is a slider rather than a fixed
+            // constant because the right amount depends entirely on what you are
+            // listening to: a CW carrier occupies a single bin, so any smoothing at
+            // all costs it amplitude, while SSB is wide enough not to care. This
+            // was console-only (setSpectrumSmooth) until CW work showed signals
+            // visible in the waterfall with no peak in the trace at all.
+            ['A', 'B'].forEach(vfo => {
+                const slider = document.querySelector(`.spectrum-smooth-slider[data-vfo="${vfo}"]`);
+                const label  = document.querySelector(`.spectrum-smooth-label[data-vfo="${vfo}"]`);
+                const panel  = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+                if (!slider || !label || !panel) return;
+
+                const formatSmooth = (r) => r <= 0 ? 'Off' : String(r);
+
+                const initial = panel.getSpectrumSmooth();
+                slider.value = String(initial);
+                label.textContent = formatSmooth(initial);
+
+                slider.addEventListener('input', () => {
+                    const r = parseInt(slider.value, 10);
+                    label.textContent = formatSmooth(r);
+                    panel.setSpectrumSmooth(r);
                 });
             });
 
