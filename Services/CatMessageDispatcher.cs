@@ -500,6 +500,22 @@
                         // Deliberately not stored: the scope panel holds this
                         // state in the browser and re-reads it on every expand,
                         // and it is the only consumer. See BroadcastTransient.
+                        //
+                        // TEMPORARY INSTRUMENTATION, added 2026-09-02, to be
+                        // removed once both of these are answered:
+                        //   1. Does the FTdx10 announce SS unsolicited at all?
+                        //      Nothing but the '101MP has ever been watched, and
+                        //      PR #120 turns on scope control for the FTdx10 with
+                        //      one-way sync as the reported symptom.
+                        //   2. Why does the '101MP appear to alternate HOLD on and
+                        //      off about once a second while HOLD is engaged? The
+                        //      browser has no timer and nothing polls SS, so it can
+                        //      only be the radio - but that has not been captured.
+                        // Information rather than Debug so a reporter can collect it
+                        // without changing their log level first. Both drop paths are
+                        // logged too: silently discarding an unexpected frame shape is
+                        // exactly what would hide answer 1.
+                        _logger.LogInformation("[SS] raw='{Raw}' length={Length}", message, message.Length);
                         if (message.Length >= 10)
                         {
                             var ss = message.TrimEnd(';');
@@ -512,6 +528,22 @@
                                     field   = ss.Substring(4, 5)
                                 });
                             }
+                            else
+                            {
+                                _logger.LogInformation(
+                                    "[SS] DROPPED: trimmed length {Length} is not 9 - '{Trimmed}'",
+                                    ss.Length, ss);
+                            }
+                        }
+                        else
+                        {
+                            // CatMultiplexerService strips the trailing ';' from
+                            // answers (see docs/design/scope-control-via-cat.md).
+                            // If an announcement ever arrives already stripped it is
+                            // 9 characters, fails the guard above, and vanishes -
+                            // a third candidate for the FTdx10 report.
+                            _logger.LogInformation(
+                                "[SS] DROPPED: shorter than 10 characters - '{Raw}'", message);
                         }
                         break;
                     case "VS":
