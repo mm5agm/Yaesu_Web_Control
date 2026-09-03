@@ -1357,17 +1357,20 @@ fieldset.calibration-card {
     display: none;
 }
 .radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
-    width: 8px;
+    width: 10px;
     z-index: 2;
-    cursor: col-resize;
+    cursor: col-resize !important;
     touch-action: none;
     background: transparent;
 }
+/* Thin separator line (::after) */
 .radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter::after {
     content: "";
     position: absolute;
@@ -1376,16 +1379,49 @@ fieldset.calibration-card {
     bottom: 0;
     width: 1px;
     transform: translateX(-50%);
-    background: #444;
+    background: #555;
+    transition: background 0.15s, width 0.15s;
 }
+/* Grip dots (::before) — three dots centred vertically */
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 4px;
+    height: 20px;
+    background-image: radial-gradient(circle, #666 1.5px, transparent 1.5px);
+    background-size: 4px 7px;
+    background-repeat: repeat-y;
+    border-radius: 2px;
+    transition: background-image 0.15s;
+    pointer-events: none;
+}
+/* Hover / drag: brighten line and dots */
 .radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:hover::after,
-.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus-visible::after,
 .radio-display-body.controls-docked #radioDisplayScopeDialog.scope-resizing .radio-display-scope-splitter::after {
     width: 3px;
     background: #0d6efd;
 }
-.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus-visible {
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:hover::before,
+.radio-display-body.controls-docked #radioDisplayScopeDialog.scope-resizing .radio-display-scope-splitter::before {
+    background-image: radial-gradient(circle, #0d6efd 1.5px, transparent 1.5px);
+}
+/* Keyboard focus — yellow, distinct from hover */
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus {
     outline: none;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus-visible {
+    outline: 2px solid #ffc107;
+    outline-offset: -2px;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus-visible::after {
+    width: 3px;
+    background: #ffc107;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus-visible::before {
+    background-image: radial-gradient(circle, #ffc107 1.5px, transparent 1.5px);
 }
 .radio-display-body.controls-docked #radioDisplayScopeDialog.scope-resizing {
     user-select: none;

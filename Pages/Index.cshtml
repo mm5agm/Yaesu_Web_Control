@@ -3918,7 +3918,7 @@
         ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
-            makeDraggable(dlg, dlg.querySelector('div'));
+            makeDraggable(dlg, dlg.querySelector('div:not(.radio-display-scope-splitter)'));
             if (id === 'radioDisplayScopeDialog' && document.querySelector('.radio-display-body')?.classList.contains('controls-docked')) return;
             try {
                 const saved = JSON.parse(localStorage.getItem('dlgPos_' + id) || 'null');

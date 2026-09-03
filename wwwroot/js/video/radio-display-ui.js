@@ -761,9 +761,10 @@ function getSavedScopeColumnWidthPx() {
     if (raw == null || raw === '') return null;
     const n = parseFloat(raw);
     if (!Number.isFinite(n) || n <= 0) return null;
-    // Pre-33rem default was 22rem and clipped Span. Treat that (or narrower)
-    // as unset so the new default applies without a manual double-click reset.
-    if (n <= remToPx(22) + 1) return null;
+    // Pre-33rem default was exactly 22rem and clipped Span. Only that old
+    // default is treated as unset — values below it are intentional narrow
+    // widths (keyboard/mouse) and must not fall through to the new default.
+    if (Math.abs(n - remToPx(22)) < 2) return null;
     return n;
   } catch {
     return null;
@@ -901,14 +902,19 @@ function bindScopeColumnResize(dlg) {
     const body = getRadioDisplayBody();
     if (!body?.classList.contains('controls-docked')) return;
     const bodyWidth = body.getBoundingClientRect().width;
-    const current = dlg.getBoundingClientRect().width
-      || getSavedScopeColumnWidthPx()
-      || remToPx(SCOPE_WIDTH_DEFAULT_REM);
+    // Prefer live layout / CSS var; never use || (a 0-width rect would
+    // incorrectly fall through to the default and "wrap" past the min).
+    const rectW = dlg.getBoundingClientRect().width;
+    const fromCss = parseFloat(body.style.getPropertyValue('--radio-display-scope-width'));
+    const current = (rectW > 0 ? rectW : null)
+      ?? (Number.isFinite(fromCss) && fromCss > 0 ? fromCss : null)
+      ?? getSavedScopeColumnWidthPx()
+      ?? remToPx(SCOPE_WIDTH_DEFAULT_REM);
     let next = null;
     if (e.key === 'ArrowLeft') next = current + SCOPE_WIDTH_NUDGE_PX;
     else if (e.key === 'ArrowRight') next = current - SCOPE_WIDTH_NUDGE_PX;
-    else if (e.key === 'Home') next = clampScopeColumnWidthPx(0, bodyWidth);
-    else if (e.key === 'End') next = clampScopeColumnWidthPx(bodyWidth, bodyWidth);
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = bodyWidth;
     else return;
     e.preventDefault();
     const clamped = clampScopeColumnWidthPx(next, bodyWidth);
