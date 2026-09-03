@@ -12,6 +12,12 @@ const CHANNEL_NAME = 'ywc-radio-display';
 const AUTO_START_KEY = 'ywc.radioDisplayAutoStart';
 const CONTROLS_DOCKED_KEY = 'ywc.radioDisplayControlsDocked';
 const CONTROLS_VISIBLE_KEY = 'ywc.radioDisplayControlsVisible';
+const CONTROLS_WIDTH_KEY = 'ywc.radioDisplayControlsWidth';
+/** Default docked column width (matches CSS fallback). */
+const SCOPE_WIDTH_DEFAULT_REM = 22;
+const SCOPE_WIDTH_MIN_REM = 16;
+const SCOPE_WIDTH_MAX_REM = 40;
+const SCOPE_WIDTH_NUDGE_PX = 16;
 
 let panel = null;
 let uiMode = 'index';
@@ -38,6 +44,8 @@ let currentCaptureSize = '';
 let deviceSizes = [];
 let controlsBound = false;
 let channel = null;
+/** True while the docked-column splitter is being dragged. */
+let scopeColumnDragging = false;
 
 function getChannel() {
   if (channel) return channel;
@@ -740,6 +748,170 @@ function getRadioDisplayBody() {
   return document.querySelector('.radio-display-body');
 }
 
+function remToPx(rem) {
+  const root = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  return rem * root;
+}
+
+function getSavedScopeColumnWidthPx() {
+  try {
+    const raw = localStorage.getItem(CONTROLS_WIDTH_KEY);
+    if (raw == null || raw === '') return null;
+    const n = parseFloat(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveScopeColumnWidthPx(px) {
+  try {
+    localStorage.setItem(CONTROLS_WIDTH_KEY, String(Math.round(px)));
+  } catch { /* private browsing */ }
+}
+
+function clearSavedScopeColumnWidth() {
+  try {
+    localStorage.removeItem(CONTROLS_WIDTH_KEY);
+  } catch { /* private browsing */ }
+}
+
+/**
+ * Clamp docked column width: min 16rem (or 40% of body on a tiny card),
+ * max min(40rem, 60% of body).
+ */
+function clampScopeColumnWidthPx(px, bodyWidth) {
+  const minRem = remToPx(SCOPE_WIDTH_MIN_REM);
+  const maxRem = remToPx(SCOPE_WIDTH_MAX_REM);
+  const bw = bodyWidth > 0 ? bodyWidth : remToPx(SCOPE_WIDTH_DEFAULT_REM) * 2;
+  const minPx = Math.min(minRem, bw * 0.4);
+  const maxPx = Math.min(maxRem, bw * 0.6);
+  // If the body is so narrow that min > max, favour keeping some video.
+  if (minPx > maxPx) return Math.max(0, maxPx);
+  return Math.max(minPx, Math.min(maxPx, px));
+}
+
+function applyScopeColumnWidth(px) {
+  const body = getRadioDisplayBody();
+  const dlg = document.getElementById('radioDisplayScopeDialog');
+  if (!body || !dlg) return;
+
+  if (!body.classList.contains('controls-docked')) {
+    body.style.removeProperty('--radio-display-scope-width');
+    const splitter = dlg.querySelector('.radio-display-scope-splitter');
+    for (const el of [dlg, splitter]) {
+      if (!el) continue;
+      el.removeAttribute('aria-valuenow');
+      el.removeAttribute('aria-valuemin');
+      el.removeAttribute('aria-valuemax');
+    }
+    return;
+  }
+
+  const bodyWidth = body.getBoundingClientRect().width;
+  // Prefer an explicit drag/keyboard value; otherwise re-apply the persisted
+  // preference (so a narrow first layout pass does not permanently shrink the
+  // column when the body later grows).
+  const desired = (px != null && Number.isFinite(px))
+    ? px
+    : (getSavedScopeColumnWidthPx() ?? remToPx(SCOPE_WIDTH_DEFAULT_REM));
+  const clamped = clampScopeColumnWidthPx(desired, bodyWidth);
+  body.style.setProperty('--radio-display-scope-width', `${Math.round(clamped)}px`);
+
+  const splitter = dlg.querySelector('.radio-display-scope-splitter');
+  const minPx = Math.min(remToPx(SCOPE_WIDTH_MIN_REM), bodyWidth * 0.4);
+  const maxPx = Math.min(remToPx(SCOPE_WIDTH_MAX_REM), bodyWidth * 0.6);
+  const ariaTarget = splitter || dlg;
+  ariaTarget.setAttribute('aria-valuenow', String(Math.round(clamped)));
+  ariaTarget.setAttribute('aria-valuemin', String(Math.round(Math.min(minPx, maxPx))));
+  ariaTarget.setAttribute('aria-valuemax', String(Math.round(Math.max(minPx, maxPx))));
+}
+
+function resetScopeColumnWidth() {
+  clearSavedScopeColumnWidth();
+  applyScopeColumnWidth(remToPx(SCOPE_WIDTH_DEFAULT_REM));
+  panel?.applyFit();
+}
+
+function bindScopeColumnResize(dlg) {
+  const splitter = dlg?.querySelector('.radio-display-scope-splitter');
+  if (!splitter || splitter.dataset.bound === '1') return;
+  splitter.dataset.bound = '1';
+
+  let dragging = false;
+  let pointerId = null;
+
+  const onPointerMove = (e) => {
+    if (!dragging || (pointerId != null && e.pointerId !== pointerId)) return;
+    const body = getRadioDisplayBody();
+    if (!body?.classList.contains('controls-docked')) return;
+    const bodyRect = body.getBoundingClientRect();
+    // Column is on the right: width = body right edge − pointer X.
+    const next = bodyRect.right - e.clientX;
+    applyScopeColumnWidth(next);
+    panel?.applyFit();
+  };
+
+  const endDrag = (e) => {
+    if (!dragging) return;
+    if (pointerId != null && e?.pointerId != null && e.pointerId !== pointerId) return;
+    dragging = false;
+    scopeColumnDragging = false;
+    dlg.classList.remove('scope-resizing');
+    try {
+      if (pointerId != null) splitter.releasePointerCapture(pointerId);
+    } catch { /* ignore */ }
+    pointerId = null;
+    const body = getRadioDisplayBody();
+    if (body?.classList.contains('controls-docked')) {
+      const w = dlg.getBoundingClientRect().width;
+      if (w > 0) saveScopeColumnWidthPx(w);
+    }
+    panel?.applyFit();
+  };
+
+  splitter.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const body = getRadioDisplayBody();
+    if (!body?.classList.contains('controls-docked')) return;
+    dragging = true;
+    scopeColumnDragging = true;
+    pointerId = e.pointerId;
+    dlg.classList.add('scope-resizing');
+    try { splitter.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    e.preventDefault();
+  });
+
+  splitter.addEventListener('pointermove', onPointerMove);
+  splitter.addEventListener('pointerup', endDrag);
+  splitter.addEventListener('pointercancel', endDrag);
+
+  splitter.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    resetScopeColumnWidth();
+  });
+
+  splitter.addEventListener('keydown', (e) => {
+    const body = getRadioDisplayBody();
+    if (!body?.classList.contains('controls-docked')) return;
+    const bodyWidth = body.getBoundingClientRect().width;
+    const current = dlg.getBoundingClientRect().width
+      || getSavedScopeColumnWidthPx()
+      || remToPx(SCOPE_WIDTH_DEFAULT_REM);
+    let next = null;
+    if (e.key === 'ArrowLeft') next = current + SCOPE_WIDTH_NUDGE_PX;
+    else if (e.key === 'ArrowRight') next = current - SCOPE_WIDTH_NUDGE_PX;
+    else if (e.key === 'Home') next = clampScopeColumnWidthPx(0, bodyWidth);
+    else if (e.key === 'End') next = clampScopeColumnWidthPx(bodyWidth, bodyWidth);
+    else return;
+    e.preventDefault();
+    const clamped = clampScopeColumnWidthPx(next, bodyWidth);
+    applyScopeColumnWidth(clamped);
+    saveScopeColumnWidthPx(clamped);
+    panel?.applyFit();
+  });
+}
+
 function clearScopeDialogOverlayPos(dlg) {
   if (!dlg) return;
   dlg.style.left = '';
@@ -788,6 +960,7 @@ function hideScopeControls({ persist = true } = {}) {
   const btn = document.getElementById('radioDisplayScopeBtn');
   body?.classList.remove('controls-docked');
   dlg?.close();
+  applyScopeColumnWidth();
   if (persist) setControlsVisiblePreference(false);
   syncScopeControlsBtn(btn, dlg);
   panel?.applyFit();
@@ -802,9 +975,11 @@ function showScopeControls({ refresh = true, persist = true } = {}) {
   if (isControlsDocked()) {
     body?.classList.add('controls-docked');
     clearScopeDialogOverlayPos(dlg);
+    applyScopeColumnWidth();
   } else {
     body?.classList.remove('controls-docked');
     applyScopeOverlayPosition(dlg);
+    applyScopeColumnWidth();
   }
 
   if (!dlg.open) {
@@ -894,6 +1069,7 @@ function bindScopeDialog() {
   });
 
   initScopeLayoutTooltips(dlg);
+  bindScopeColumnResize(dlg);
   applyControlsLayout({ refreshIfDocked: true });
 
   // Index already makes this dialog draggable with the other popovers.
@@ -901,6 +1077,19 @@ function bindScopeDialog() {
   if (uiMode === 'popout') {
     const handle = dlg.querySelector('.radio-display-scope-dialog-header');
     if (handle) bindDialogDrag(dlg, handle);
+  }
+
+  // Re-clamp if the card / window changes size (Index card, pop-out resize).
+  if (typeof ResizeObserver !== 'undefined') {
+    const body = getRadioDisplayBody();
+    if (body && !body.dataset.scopeWidthRo) {
+      body.dataset.scopeWidthRo = '1';
+      new ResizeObserver(() => {
+        if (body.classList.contains('controls-docked') && !scopeColumnDragging) {
+          applyScopeColumnWidth();
+        }
+      }).observe(body);
+    }
   }
 }
 

@@ -1329,14 +1329,16 @@ fieldset.calibration-card {
     overflow: visible;
 }
 .radio-display-body.controls-docked #radioDisplayScopeDialog {
-    position: static;
+    /* relative so the absolute splitter anchors to this column. */
+    position: relative;
     top: auto;
     left: auto;
     transform: none;
     z-index: auto;
-    flex: 0 1 auto;
-    width: min(22rem, 42%);
-    max-width: 22rem;
+    /* Width is driven by --radio-display-scope-width (set from JS / localStorage). */
+    flex: 0 0 var(--radio-display-scope-width, 22rem);
+    width: var(--radio-display-scope-width, 22rem);
+    max-width: none;
     min-width: 0;
     min-height: 0;
     max-height: none;
@@ -1344,10 +1346,48 @@ fieldset.calibration-card {
     align-self: stretch;
     border-radius: 0;
     border: none;
-    border-left: 1px solid #444;
+    border-left: none;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+/* Drag handle on the left edge of the docked column. Hidden when floating. */
+.radio-display-scope-splitter {
+    display: none;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    z-index: 2;
+    cursor: col-resize;
+    touch-action: none;
+    background: transparent;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    transform: translateX(-50%);
+    background: #444;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:hover::after,
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus-visible::after,
+.radio-display-body.controls-docked #radioDisplayScopeDialog.scope-resizing .radio-display-scope-splitter::after {
+    width: 3px;
+    background: #0d6efd;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus-visible {
+    outline: none;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog.scope-resizing {
+    user-select: none;
 }
 .radio-display-body:not(.controls-docked) #radioDisplayScopeDialog:not([open]) {
     display: none;
