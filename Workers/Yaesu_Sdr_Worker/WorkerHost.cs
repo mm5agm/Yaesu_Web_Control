@@ -13,6 +13,7 @@
 // a non-zero code; YWC's SdrManager (step 2 of the dual-SDR work) supervises
 // and restarts. Keeping the worker dumb keeps the supervisor sensible.
 
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using Yaesu_Web_Control.Services.Sdr;
@@ -108,6 +109,25 @@ internal sealed class WorkerHost
             // pull as fast as the device emits and let TryReadIqFrameAsync block.
             const int frameTimeoutMs = 200;
 
+            // Cap what goes on the wire, not what gets computed.
+            //
+            // Frames are produced at sampleRate/fftSize, so a correctly-reported
+            // 2 MHz span emits 1953 a second. Every one of them was being
+            // broadcast to the browser as a separate SignalR message carrying
+            // 1024 numbers; SdrManager deliberately fire-and-forgets those so the
+            // read loop never blocks, which means nothing upstream was applying
+            // back-pressure and the client simply drowned.
+            //
+            // ComputeSpectrum still runs on every frame. That is the point: its
+            // EMA then averages the whole IQ stream rather than the sparse subset
+            // we happen to send, so throttling here improves the trace instead of
+            // thinning it. The cost is ~20 us of FFT per frame — under 5% of one
+            // core even at the widest span.
+            const int maxSendsPerSecond = 25;
+            long sendIntervalTicks = Stopwatch.Frequency / maxSendsPerSecond;
+            long lastSendTicks = -sendIntervalTicks;
+            var  sendClock = Stopwatch.StartNew();
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 bool got = await device.TryReadIqFrameAsync(iqBuffer, frameTimeoutMs, stoppingToken)
@@ -124,8 +144,13 @@ internal sealed class WorkerHost
                     foreach (string line in probe.Format(device.ActualSampleRateHz, _opts.IfFrequencyHz))
                         Log(line);
 
+                long nowTicks = sendClock.ElapsedTicks;
+                if (nowTicks - lastSendTicks < sendIntervalTicks) continue;
+                lastSendTicks = nowTicks;
+
                 // Round to 1 dp before transmission (same precision as the
-                // current SignalR path, keeps frames small).
+                // current SignalR path, keeps frames small). After the send
+                // gate, so it is not paid for frames that are never sent.
                 for (int i = 0; i < bins.Length; i++)
                     bins[i] = MathF.Round(bins[i], 1);
 

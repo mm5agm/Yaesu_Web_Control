@@ -348,8 +348,26 @@ namespace Yaesu_Web_Control.Services.Sdr
             int    BwType,
             int    IfType)
         {
-            /// <summary>The span actually produced, after decimation.</summary>
-            public double AchievedRateHz => HardwareRateHz / DecimationFactor;
+            /// <summary>
+            /// The API's own low-IF down-conversion decimates by four before
+            /// <c>decimationFactor</c> is applied, so fs = 2 MHz reaches user
+            /// decimation as 500 kHz and fs = 8 MHz as 2 MHz.
+            /// </summary>
+            /// <remarks>
+            /// Omitting this is what made every span four times narrower than it
+            /// claimed. Measured against the radio on 2026-09-03 by stepping VFO A
+            /// a known amount and cross-correlating the whole spectrum before and
+            /// after: a +10 kHz step moved the trace 164 bins at the nominal
+            /// 250 kHz span where 41 was required, and 41 bins at the nominal
+            /// 1 MHz span where 10 was required. Ratio 4.004 on both, and on both
+            /// IF types (450 kHz at fs = 2 MHz, 2.048 MHz at fs = 8 MHz), so the
+            /// factor is a property of LIF mode rather than of any one row.
+            /// </remarks>
+            public const int LifDecimation = 4;
+
+            /// <summary>The span actually produced, after both decimations.</summary>
+            public double AchievedRateHz =>
+                HardwareRateHz / LifDecimation / DecimationFactor;
         }
 
         /// <summary>
@@ -367,14 +385,15 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// </remarks>
         private static TunePlan PlanFor(double requestedRateHz) => requestedRateHz switch
         {
-            //                       fsHz       ÷   bwType     ifType     → span
-            <=    62_500 => new(2_000_000, 32, BW_0_200, IF_0_450), //   62.5 kHz
-            <=   125_000 => new(2_000_000, 16, BW_0_200, IF_0_450), //  125   kHz
-            <=   250_000 => new(2_000_000,  8, BW_0_300, IF_0_450), //  250   kHz
-            <=   500_000 => new(2_000_000,  4, BW_0_600, IF_0_450), //  500   kHz
-            <= 1_000_000 => new(8_000_000,  8, BW_5_000, IF_2_048), //    1   MHz
+            //                      fsHz      ÷   bwType     ifType     → span
+            //                     (÷4 by LIF before this column applies)
+            <=    62_500 => new(2_000_000, 8, BW_0_200, IF_0_450), //   62.5 kHz
+            <=   125_000 => new(2_000_000, 4, BW_0_200, IF_0_450), //  125   kHz
+            <=   250_000 => new(2_000_000, 2, BW_0_300, IF_0_450), //  250   kHz
+            <=   500_000 => new(2_000_000, 1, BW_0_600, IF_0_450), //  500   kHz
+            <= 1_000_000 => new(8_000_000, 2, BW_5_000, IF_2_048), //    1   MHz
 
-            _            => new(8_000_000,  4, BW_5_000, IF_2_048), //    2   MHz
+            _            => new(8_000_000, 1, BW_5_000, IF_2_048), //    2   MHz
         };
 
         /// <inheritdoc/>

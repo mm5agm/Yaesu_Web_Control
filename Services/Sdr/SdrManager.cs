@@ -32,7 +32,10 @@ public sealed class SdrManager : BackgroundService
 
     private const int RetryDelayMs           = 5_000;
     private const int UnconfiguredPollMs     = 10_000;
-    private const int StatusHeartbeatFrames  = 30;     // ~3 s at 10 fps
+    // The worker caps sends at 25/s (see WorkerHost), so this is ~3 s. It used
+    // to read "~3 s at 10 fps", which no frame rate the worker ever produced
+    // actually matched — the rate is set by the IQ rate over the FFT size.
+    private const int StatusHeartbeatFrames  = 75;     // ~3 s at the 25/s send cap
     private const int WorkerConnectTimeoutMs = 10_000;
 
     private CancellationTokenSource _restartCts = new();

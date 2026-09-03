@@ -494,6 +494,25 @@ export class SpectrumPanel {
         // updated so a forced re-render shows the frozen frame.
         if (this._hold) return;
 
+        // The radio's 9 MHz IF tap is spectrally inverted with respect to RF:
+        // bin 0 — the most negative IF frequency — carries the HIGHEST radio
+        // frequency in the span. Flipping the frame here, once, is what lets
+        // every mapping below stay in its natural form. After the flip the
+        // panel's own leftHz + ((i + 0.5) / N) * span expands to exactly the
+        // measured vfo + hzPerBin * (i - (N-1)/2), so the axis, band plan,
+        // DX spots, crosshair and click-to-tune all become correct without
+        // touching any of them.
+        //
+        // Measured on the FTdx101MP on 2026-09-03 by stepping VFO A a known
+        // amount and cross-correlating the whole spectrum before and after: a
+        // +10 kHz step moved the trace +41 bins where correct behaviour needs
+        // -41. Confirmed at 1.13 MHz and again at 14.118 MHz — either side of
+        // the 9 MHz IF — so the sign does not change with the LO injection
+        // side and one flip covers every band. No other Yaesu model has been
+        // measured; if one turns out not to be inverted, this is where the
+        // per-model switch belongs.
+        bins = Array.prototype.slice.call(bins).reverse();
+
         // A span change (span buttons restart the worker at a new sample rate) or
         // a bin-count change means the previous band/scale no longer applies —
         // snap the auto-floor so it seeds fresh instead of drifting across.
