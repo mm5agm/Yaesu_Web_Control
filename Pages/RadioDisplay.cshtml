@@ -18,8 +18,17 @@
         html, body { height: 100%; margin: 0; background: #000; color: #e8e8e8; overflow: hidden; }
         #radioDisplayContainer { height: 100%; margin: 0 !important; max-width: 100%; }
         #radioDisplayContainer > .col-12 { height: 100%; padding: 0; max-width: 100%; }
-        #radioDisplayContainer .card { height: 100%; border-radius: 0; border: none; background: #000; max-width: 100%; }
+        #radioDisplayContainer .card {
+            height: 100%;
+            border-radius: 0;
+            border: none;
+            background: #000;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
         #radioDisplayContainer .card-header {
+            flex: 0 0 auto;
             flex-wrap: nowrap;
             max-width: 100%;
             min-width: 0;
@@ -44,28 +53,47 @@
             font-size: 0.8rem;
         }
         #radioDisplayContainer .card-body {
-            height: calc(100% - 2.5rem);
+            flex: 1 1 auto;
+            height: auto;
             min-height: 0 !important;
             max-height: none !important;
-            position: relative;
         }
-        #radioDisplayImg { width: 100%; height: 100%; object-fit: contain; background: #000; }
-        .radio-display-placeholder {
-            position: absolute;
-            inset: 0;
+        #radioDisplayContainer .radio-display-body {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        #radioDisplayContainer .radio-display-body.controls-docked {
+            flex-direction: row;
+            height: 100%;
+            min-height: 0;
+        }
+        #radioDisplayContainer .radio-display-video-pane {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 0;
+            position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #9a9a9a;
-            font-size: 0.95rem;
-            text-align: center;
-            padding: 1.25rem;
-            pointer-events: none;
-            user-select: none;
         }
-        .radio-display-placeholder[hidden] {
-            display: none !important;
+        #radioDisplayContainer .radio-display-body.controls-docked .radio-display-video-pane {
+            flex: 1 1 auto;
+            width: auto;
+            min-width: 0;
         }
+        #radioDisplayContainer .radio-display-body.controls-docked #radioDisplayScopeDialog {
+            /* Width comes from --radio-display-scope-width in site.css. */
+            max-height: none;
+            align-self: stretch;
+        }
+        #radioDisplayContainer .card:fullscreen .radio-display-body,
+        #radioDisplayContainer .card:fullscreen .radio-display-video-pane {
+            height: 100%;
+            min-height: 0;
+        }
+        #radioDisplayImg { width: 100%; height: 100%; object-fit: contain; object-position: center center; background: #000; }
         /* Cap intrinsic <select> width so long camera names don't grow the window. */
         #radioDisplayDeviceSelect {
             width: 8rem;
@@ -181,11 +209,30 @@
                             Auto
                         </label>
                     </span>
+                    @if (Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(Model.RadioModel))
+                    {
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Change what the radio's own screen is showing (span, 3DSS, speed)"
+                              aria-label="Open radio scope controls">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayScopeBtn"
+                                    aria-haspopup="dialog" aria-expanded="false" aria-controls="radioDisplayScopeDialog"
+                                    aria-label="Open radio scope controls">
+                                <i class="bi bi-sliders" aria-hidden="true"></i>&nbsp;Controls
+                            </button>
+                        </span>
+                    }
                     <div class="radio-display-actions d-flex flex-nowrap align-items-center gap-1">
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                              data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
-                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn"
-                                    aria-label="Toggle fit / fill">Fit</button>
+                              data-bs-title="Fit shows the whole TFT. Fill covers the pane and may crop edges."
+                              aria-label="Video scaling: Fit or Fill">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Video scaling mode">
+                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitContain"
+                                       value="contain" autocomplete="off" checked>
+                                <label class="btn btn-outline-light" for="radioDisplayFitContain">Fit</label>
+                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitCover"
+                                       value="cover" autocomplete="off">
+                                <label class="btn btn-outline-light" for="radioDisplayFitCover">Fill</label>
+                            </div>
                         </span>
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                               data-bs-title="Fullscreen" aria-label="Fullscreen">
@@ -212,18 +259,41 @@
                     </div>
                 </div>
                 <div class="card-body p-0 bg-black radio-display-body">
-                    <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
-                        <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
+                    <div class="radio-display-video-pane">
+                        <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
+                            <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
+                        </div>
+                        <img id="radioDisplayImg" alt="Radio display" decoding="async" style="display:none;" />
                     </div>
-                    <img id="radioDisplayImg" alt="Radio display" decoding="async" style="display:none;" />
+                    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
                 </div>
             </div>
         </div>
     </div>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     <script type="module">
-        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=22";
+        import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RadioScopeControl } from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         initRadioDisplayUi('popout');
+        const dlg = document.getElementById('radioDisplayScopeDialog');
+        window.radioScopeControls = [];
+        if (dlg) {
+            const control = new RadioScopeControl(dlg);
+            window.radioScopeControls.push(control);
+            window.radioScopeControl = control;
+            const conn = new signalR.HubConnectionBuilder()
+                .withUrl('/radioHub')
+                .withAutomaticReconnect()
+                .build();
+            conn.on('RadioStateUpdate', (update) => {
+                if (update.property === 'ScopeSetting')
+                    window.radioScopeControls.forEach(c => c.applyRemote(update.value));
+                if (update.property === 'ActiveVfo')
+                    window.radioScopeControls.forEach(c => c.setActiveBand(update.value));
+            });
+            conn.start().catch(err => console.error('[radio-display-scope]', err));
+        }
     </script>
 </body>
 </html>

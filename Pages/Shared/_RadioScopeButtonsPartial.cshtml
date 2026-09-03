@@ -1,0 +1,226 @@
+@model string
+@{
+    // Shared CAT scope buttons: span, display type/placement/size, speed,
+    // Level, Peak, Marker, Color, MULTI (disabled until a CAT command exists),
+    // AF-FFT ATT, OSC ATT/time.
+    // Included from the standalone Radio Scope card and the Radio Display
+    // Controls dialog. Query by class inside a root element — never by global
+    // id — so the two hosts do not collide if both ever land on one page.
+    //
+    // Tooltips live only on the text labels (the group name), not on each
+    // button — same pattern as hovering "Display" to learn L / N / S.
+    var radioModel   = Model ?? "";
+    var sizeLabels   = Yaesu_Web_Control.Services.RadioCapabilities.ScopeSizeLabels(radioModel);
+    var speedLabels  = Yaesu_Web_Control.Services.RadioCapabilities.ScopeSpeedLabels(radioModel);
+    var hasAfFft     = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeAfFft(radioModel);
+    var hasMulti     = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeMulti(radioModel);
+    var hasNbColor   = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeNarrowBandColor(radioModel);
+    var hasHold      = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeHold(radioModel);
+    var spans = new (string Value, string Label)[]
+    {
+        ("0", "1k"), ("1", "2k"), ("2", "5k"), ("3", "10k"), ("4", "20k"),
+        ("5", "50k"), ("6", "100k"), ("7", "200k"), ("8", "500k"), ("9", "1M")
+    };
+    var fftAtts = new (string Value, string Label)[] { ("0", "0 dB"), ("1", "10 dB"), ("2", "20 dB") };
+    var oscTimes = new (string Value, string Label)[]
+    {
+        ("0", "1 ms"), ("1", "3 ms"), ("2", "10 ms"),
+        ("3", "30 ms"), ("4", "100 ms"), ("5", "300 ms")
+    };
+    var peaks = new (string Value, string Label)[]
+    {
+        ("0", "LV1"), ("1", "LV2"), ("2", "LV3"), ("3", "LV4"), ("4", "LV5")
+    };
+    var colors = new (string Value, string Label)[]
+    {
+        ("0", "1"), ("1", "2"), ("2", "3"), ("3", "4"), ("4", "5"),
+        ("5", "6"), ("6", "7"), ("7", "8"), ("8", "9"), ("9", "10"), ("A", "11")
+    };
+    var nbColors = new (string Value, string Label)[]
+    {
+        ("0", "1"), ("1", "2"), ("2", "3"), ("3", "4"), ("4", "5"), ("5", "6"), ("6", "7")
+    };
+    const string OscTimeTitle =
+        "Oscilloscope timebase — how much time the MULTI oscilloscope traces across the screen. 1 ms is most zoomed-in; 300 ms is the widest window. Only visible after MULTI is pressed on the TFT.";
+    var sizeTip = sizeLabels.Length == 2
+        ? "Expand / Normal set how large the waterfall pane is on the radio's screen (waterfall only; greyed out in 3DSS)."
+        : "L / N / S = Large / Normal / Small — how much of the radio's screen the waterfall uses (waterfall only; greyed out in 3DSS).";
+}
+
+<div class="radio-scope-controls">
+<div class="radio-scope-row">
+    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top"
+          data-bs-title="How much of the band the radio's own scope shows at once (1 kHz to 1 MHz). The radio remembers a separate span for each display mode (W/F vs 3DSS).">Span</span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope span">
+        @foreach (var (value, label) in spans)
+        {
+            <button type="button" class="btn btn-outline-secondary scope-span-btn"
+                    data-value="@value" data-a11y-key="radioScope.span@(label)"
+                    aria-label="Radio scope span @label">@label</button>
+        }
+    </div>
+</div>
+
+<div class="radio-scope-row">
+    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top"
+          data-bs-title="What the radio draws. W/F = waterfall (live spectrum plus scrolling history). 3DSS = three-dimensional spectrum stream. Center keeps the window on your frequency; Cursor moves a marker in a fixed window; Fix pins the window to the band. @sizeTip">Display</span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope display type">
+        <button type="button" class="btn btn-outline-secondary scope-type-btn"
+                data-value="wf" data-a11y-key="radioScope.typeWf">W/F</button>
+        <button type="button" class="btn btn-outline-secondary scope-type-btn"
+                data-value="3dss" data-a11y-key="radioScope.type3dss">3DSS</button>
+    </div>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope placement">
+        <button type="button" class="btn btn-outline-secondary scope-place-btn"
+                data-value="0" data-a11y-key="radioScope.placeCenter">Center</button>
+        <button type="button" class="btn btn-outline-secondary scope-place-btn"
+                data-value="1" data-a11y-key="radioScope.placeCursor">Cursor</button>
+        <button type="button" class="btn btn-outline-secondary scope-place-btn"
+                data-value="2" data-a11y-key="radioScope.placeFix">Fix</button>
+    </div>
+    <div class="scope-size-group btn-group btn-group-sm" role="group" aria-label="Radio scope size">
+        @for (var i = 0; i < sizeLabels.Length; i++)
+        {
+            <button type="button" class="btn btn-outline-secondary scope-size-btn"
+                    data-value="@i" data-a11y-key="radioScope.size@(sizeLabels[i])">@sizeLabels[i]</button>
+        }
+    </div>
+</div>
+
+@if (speedLabels.Length > 0)
+{
+    <div class="radio-scope-row">
+        <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top"
+              data-bs-title="How fast the radio's FFT / waterfall updates. SLOW1 is slowest (weak signals easier to see); FAST3 is fastest (most responsive).">Speed</span>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope FFT speed">
+            @for (var i = 0; i < speedLabels.Length; i++)
+            {
+                <button type="button" class="btn btn-outline-secondary scope-speed-btn"
+                        data-value="@i" data-a11y-key="radioScope.speed@(speedLabels[i])">@speedLabels[i]</button>
+            }
+        </div>
+    </div>
+}
+
+<div class="radio-scope-row">
+    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top"
+          data-bs-title="Reference level of the radio's scope, −30 to +30 dB. Raise it if the trace is too dim; lower it if the display is saturated.">Level</span>
+    <input type="range" class="form-range scope-level-slider"
+           min="-30" max="30" step="0.5" value="0"
+           aria-label="Radio scope reference level in dB">
+    <span class="scope-level-label text-monospace">—</span>
+</div>
+
+<div class="radio-scope-row">
+    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top"
+          data-bs-title="Peak hold — how long strong signals leave a trail. LV1 fades fastest; LV5 holds longest. Marker shows or hides the frequency line at the operating frequency.">Peak</span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope peak hold">
+        @foreach (var (value, label) in peaks)
+        {
+            <button type="button" class="btn btn-outline-secondary scope-peak-btn"
+                    data-value="@value" data-a11y-key="radioScope.peak@(label)">@label</button>
+        }
+    </div>
+    <button type="button" class="btn btn-outline-secondary btn-sm scope-toggle-btn"
+            data-setting="marker" data-a11y-key="radioScope.marker">Marker</button>
+    @if (hasHold)
+    {
+        <button type="button" class="btn btn-outline-secondary btn-sm scope-toggle-btn"
+                data-setting="hold" data-a11y-key="radioScope.hold"
+                data-bs-toggle="tooltip" data-bs-placement="top"
+                data-bs-title="Freeze the radio's scope trace so you can study it. Click Hold again to resume.">Hold</button>
+    }
+</div>
+
+<div class="radio-scope-row">
+    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top"
+          data-bs-title="Waterfall / 3DSS colour palette. The radio names these Color 1–11; they are swatches, not named hues.">Color</span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope colour">
+        @foreach (var (value, label) in colors)
+        {
+            <button type="button" class="btn btn-outline-secondary scope-color-btn"
+                    data-value="@value" data-a11y-key="radioScope.color@(label)">@label</button>
+        }
+    </div>
+</div>
+
+@* Narrow-band colour is an FTdx101-only axis of SS P2=3 -- see
+   RadioCapabilities.SupportsScopeNarrowBandColor. On models without it the
+   manual fixes P4/P5 at zero; the client sends only the palette axis. *@
+@if (hasNbColor)
+{
+    <div class="radio-scope-row">
+        <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top"
+              data-bs-title="Narrow-band colour — a second palette drawn only across the roofing-filter passband (R.FIL), so the slice you are listening to stands out. Off uses the main colour only. 1–7 picks the NB palette when On.">NB Col</span>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Narrow-band colour on or off">
+            <button type="button" class="btn btn-outline-secondary scope-nbon-btn"
+                    data-value="0" data-a11y-key="radioScope.nbColorOff">Off</button>
+            <button type="button" class="btn btn-outline-secondary scope-nbon-btn"
+                    data-value="1" data-a11y-key="radioScope.nbColorOn">On</button>
+        </div>
+        <div class="scope-nbcolor-group btn-group btn-group-sm" role="group" aria-label="Narrow-band scope colour">
+            @foreach (var (value, label) in nbColors)
+            {
+                <button type="button" class="btn btn-outline-secondary scope-nbcolor-btn"
+                        data-value="@value" data-a11y-key="radioScope.nbColor@(label)">@label</button>
+            }
+        </div>
+    </div>
+}
+
+@if (hasAfFft)
+{
+    @* Collapsed by default: AF-FFT / OSC / timebase only apply after MULTI is
+       showing on the TFT, which most operators are not using. Native
+       <details> so the two hosts (card + dialog) need no unique ids. *@
+    <details class="radio-scope-multi">
+        <summary class="radio-scope-multi-toggle"
+                 data-bs-toggle="tooltip" data-bs-placement="top"
+                 data-bs-title="MULTI splits the radio's screen into scope + oscilloscope + AF-FFT. Yaesu has no CAT command for it — press MULTI on the TFT, then expand this group for AF-FFT and OSC.">MULTI</summary>
+        <div class="radio-scope-multi-body">
+            <div class="form-text mb-2">
+                Press MULTI on the radio's TFT — there is no CAT command for it.
+                AF-FFT and OSC apply once that layout is showing.
+            </div>
+            @if (hasMulti)
+            {
+                <div class="radio-scope-row">
+                    <span class="radio-scope-label">MULTI</span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm scope-multi-btn"
+                            data-a11y-key="radioScope.multi">MULTI</button>
+                </div>
+            }
+            <div class="radio-scope-row">
+                <span class="radio-scope-sublabel" data-bs-toggle="tooltip" data-bs-placement="top"
+                      data-bs-title="AF-FFT attenuator (0 / 10 / 20 dB) for the audio-spectrum pane. Only visible after MULTI is pressed on the TFT.">AF-FFT</span>
+                <div class="btn-group btn-group-sm" role="group" aria-label="AF-FFT attenuator">
+                    @foreach (var (value, label) in fftAtts)
+                    {
+                        <button type="button" class="btn btn-outline-secondary scope-fftatt-btn"
+                                data-value="@value" data-a11y-key="radioScope.fftAtt@(value)">@label</button>
+                    }
+                </div>
+                <span class="radio-scope-sublabel" data-bs-toggle="tooltip" data-bs-placement="top"
+                      data-bs-title="Oscilloscope attenuator (0 / 10 / 20 dB) for the MULTI oscilloscope pane. Only visible after MULTI is pressed on the TFT.">OSC</span>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Oscilloscope attenuator">
+                    @foreach (var (value, label) in fftAtts)
+                    {
+                        <button type="button" class="btn btn-outline-secondary scope-oscatt-btn"
+                                data-value="@value" data-a11y-key="radioScope.oscAtt@(value)">@label</button>
+                    }
+                </div>
+            </div>
+            <div class="radio-scope-row">
+                <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="@OscTimeTitle">Time</span>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Oscilloscope timebase">
+                    @foreach (var (value, label) in oscTimes)
+                    {
+                        <button type="button" class="btn btn-outline-secondary scope-osctime-btn"
+                                data-value="@value" data-a11y-key="radioScope.oscTime@(value)">@label</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </details>
+}
+</div>

@@ -744,17 +744,16 @@
         </div>
     </div>
 
-    @* Controls for the RADIO's own scope, sent over CAT (SS command). Renders
-       only on models that have the command; collapsed by default so the page
-       gains one header row, not a wall of controls.
-
-       Placement is not settled. It sits above YWC's own spectrum panels here
-       because both concern "what am I looking at on which band", but it could
-       equally live beside the meters or behind a toolbar button. It is a
-       partial precisely so that argument can be had by moving one line.
+    @* Controls for the RADIO's own scope, sent over CAT (SS command). Hidden
+       when Radio Display is on — those controls dock beside the video (or
+       float when the column is hidden). CAT-without-video keeps this
+       standalone card.
 
        See docs/design/scope-control-via-cat.md. *@
-    <partial name="_RadioScopePartial" model="@Model.RadioModel" />
+    @if (!Model.VideoDisplayEnabled)
+    {
+        <partial name="_RadioScopePartial" model="@Model.RadioModel" />
+    }
 
     <!-- Radio Display — USB UVC / HDMI capture MJPEG; visible when Settings enable it -->
     <div id="radioDisplayContainer" class="row mt-3" style="display:none;">
@@ -818,11 +817,30 @@
                             Auto
                         </label>
                     </span>
+                    @if (Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(Model.RadioModel))
+                    {
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Change what the radio's own screen is showing (span, 3DSS, speed)"
+                              aria-label="Open radio scope controls">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayScopeBtn"
+                                    aria-haspopup="dialog" aria-expanded="false" aria-controls="radioDisplayScopeDialog"
+                                    aria-label="Open radio scope controls">
+                                <i class="bi bi-sliders" aria-hidden="true"></i>&nbsp;Controls
+                            </button>
+                        </span>
+                    }
                     <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                              data-bs-title="Toggle fit / fill" aria-label="Toggle fit / fill">
-                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFitBtn"
-                                    aria-label="Toggle fit / fill">Fit</button>
+                              data-bs-title="Fit shows the whole TFT. Fill covers the pane and may crop edges."
+                              aria-label="Video scaling: Fit or Fill">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Video scaling mode">
+                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitContain"
+                                       value="contain" autocomplete="off" checked>
+                                <label class="btn btn-outline-light" for="radioDisplayFitContain">Fit</label>
+                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitCover"
+                                       value="cover" autocomplete="off">
+                                <label class="btn btn-outline-light" for="radioDisplayFitCover">Fill</label>
+                            </div>
                         </span>
                         <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                               data-bs-title="Fullscreen" aria-label="Fullscreen">
@@ -846,13 +864,15 @@
                         </span>
                     </div>
                 </div>
-                <div class="card-body p-0 bg-black radio-display-body" style="text-align:center; overflow:hidden; position:relative; min-height:240px;">
-                    <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
-                        <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
+                <div class="card-body p-0 bg-black radio-display-body" style="overflow:hidden; min-height:240px;">
+                    <div class="radio-display-video-pane">
+                        <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
+                            <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
+                        </div>
+                        <img id="radioDisplayImg" alt="Radio display" decoding="async"
+                             style="display:none; background:#000;" />
                     </div>
-                    <img id="radioDisplayImg" alt="Radio display" decoding="async"
-                         class="radio-display-img"
-                         style="display:none; max-width:100%; width:auto; height:auto; max-height:50vh; object-fit:contain; background:#000; vertical-align:middle;" />
+                    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
                 </div>
             </div>
         </div>
@@ -2698,10 +2718,15 @@
             initFreqKeyboard();
             initMemoriesPanel();
 
-            // Radio-scope CAT controls. The constructor no-ops when the card is
-            // absent, which is the case on every model without the SS command,
-            // so there is no capability check to keep in sync here.
-            window.radioScopeControl = new RadioScopeControl();
+            // Radio-scope CAT controls. Bind each host (standalone card and/or
+            // Radio Display Controls dialog) so SignalR updates reach every
+            // instance. The constructor no-ops when the root is absent.
+            window.radioScopeControls = [];
+            const scopeCard = document.getElementById('radioScopeCard');
+            if (scopeCard) window.radioScopeControls.push(new RadioScopeControl(scopeCard));
+            const scopeDlg = document.getElementById('radioDisplayScopeDialog');
+            if (scopeDlg) window.radioScopeControls.push(new RadioScopeControl(scopeDlg));
+            window.radioScopeControl = window.radioScopeControls[0] || null;
 
             // ── UTC clock in the top bar ──────────────────────────────────────
             const utcClockEl = document.getElementById('utcClock');
@@ -3880,10 +3905,12 @@
             handle.style.cursor = 'grab';
             handle.addEventListener('mousedown', e => {
                 if (e.button !== 0 || e.target.closest('button')) return;
+                if (dialog.id === 'radioDisplayScopeDialog' && document.querySelector('.radio-display-body')?.classList.contains('controls-docked')) return;
                 const r = dialog.getBoundingClientRect();
                 let startX = e.clientX, startY = e.clientY;
                 let origLeft = r.left, origTop = r.top;
                 dialog.style.transform = 'none';
+                dialog.style.position = 'fixed';
                 function onMove(e) {
                     dialog.style.left = (origLeft + e.clientX - startX) + 'px';
                     dialog.style.top  = (origTop  + e.clientY - startY) + 'px';
@@ -3901,10 +3928,12 @@
             });
             handle.addEventListener('touchstart', e => {
                 if (e.target.closest('button') || e.touches.length !== 1) return;
+                if (dialog.id === 'radioDisplayScopeDialog' && document.querySelector('.radio-display-body')?.classList.contains('controls-docked')) return;
                 const r = dialog.getBoundingClientRect();
                 let startX = e.touches[0].clientX, startY = e.touches[0].clientY;
                 let origLeft = r.left, origTop = r.top;
                 dialog.style.transform = 'none';
+                dialog.style.position = 'fixed';
                 function onMove(e) {
                     dialog.style.left = (origLeft + e.touches[0].clientX - startX) + 'px';
                     dialog.style.top  = (origTop  + e.touches[0].clientY - startY) + 'px';
@@ -3920,16 +3949,18 @@
             }, { passive: true });
         }
 
-        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog'].forEach(id => {
+        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
-            makeDraggable(dlg, dlg.querySelector('div'));
+            makeDraggable(dlg, dlg.querySelector('div:not(.radio-display-scope-splitter)'));
+            if (id === 'radioDisplayScopeDialog' && document.querySelector('.radio-display-body')?.classList.contains('controls-docked')) return;
             try {
                 const saved = JSON.parse(localStorage.getItem('dlgPos_' + id) || 'null');
                 if (saved && saved.left && saved.top) {
                     dlg.style.left = saved.left;
                     dlg.style.top  = saved.top;
                     dlg.style.transform = 'none';
+                    dlg.style.position = 'fixed';
                 }
             } catch {}
         });

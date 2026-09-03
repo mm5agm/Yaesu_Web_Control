@@ -1,0 +1,68 @@
+@model string
+@inject Yaesu_Web_Control.Services.RadioStateService RadioState
+@{
+    // CAT scope controls for Radio Display. Docked by default in a right-hand
+    // column beside the MJPEG stream; hide the column to fall back to the
+    // floating overlay (Mic & Gain pattern). Same SS commands as the standalone
+    // Radio Scope card. See docs/design/scope-control-via-cat.md.
+    var radioModel  = Model ?? "";
+    var hasScope    = Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(radioModel);
+    var hasSub      = Yaesu_Web_Control.Services.RadioCapabilities.HasPerReceiverScopes(radioModel);
+    var initialBand = (hasSub && RadioState.ActiveVfo == 1) ? "sub" : "main";
+}
+
+@if (hasScope)
+{
+    <dialog id="radioDisplayScopeDialog"
+            class="radio-display-scope-dialog"
+            data-initial-band="@initialBand"
+            aria-labelledby="radioDisplayScopeDialogTitle">
+        <div class="radio-display-scope-splitter"
+             role="separator"
+             aria-orientation="vertical"
+             aria-label="Resize scope controls. Arrow keys nudge width, Home and End set limits, double-click restores default."
+             title="Drag to resize. Arrow keys nudge; Home/End set limits; double-click restores default."
+             tabindex="0"></div>
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 radio-display-scope-dialog-header">
+            <div class="d-flex align-items-center gap-2 min-w-0">
+                <strong id="radioDisplayScopeDialogTitle">Radio scope</strong>
+                <span class="scope-status badge bg-secondary small">&mdash;</span>
+            </div>
+            <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                <button type="button" class="btn btn-sm btn-outline-light radio-display-scope-undock-btn"
+                        id="radioDisplayScopeUndockBtn"
+                        data-bs-toggle="tooltip" data-bs-placement="bottom"
+                        data-bs-title="Undock to a floating panel"
+                        aria-label="Undock to a floating panel">
+                    <i class="bi bi-pip" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-light radio-display-scope-dock-btn"
+                        id="radioDisplayScopeDockBtn"
+                        data-bs-toggle="tooltip" data-bs-placement="bottom"
+                        data-bs-title="Dock beside the video"
+                        aria-label="Dock beside the video">
+                    <i class="bi bi-layout-sidebar-inset-reverse" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="btn btn-sm ywc-dialog-close radio-display-scope-close-btn"
+                        id="radioDisplayScopeCloseBtn"
+                        title="Hide scope controls"
+                        aria-label="Hide scope controls">✕</button>
+            </div>
+        </div>
+        <div class="p-3 radio-display-scope-dialog-body radio-scope-controls">
+            @if (hasSub)
+            {
+                <div class="radio-scope-row">
+                    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Which physical receiver's scope the radio is showing. Switching band here is the same as clicking the VFO A or VFO B panel header.">Band</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Which band's scope to show and adjust">
+                        <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "main" ? "active" : "")"
+                                data-band="main" data-a11y-key="radioScope.bandMain">MAIN</button>
+                        <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "sub" ? "active" : "")"
+                                data-band="sub" data-a11y-key="radioScope.bandSub">SUB</button>
+                    </div>
+                </div>
+            }
+            <partial name="_RadioScopeButtonsPartial" model="@radioModel" />
+        </div>
+    </dialog>
+}
