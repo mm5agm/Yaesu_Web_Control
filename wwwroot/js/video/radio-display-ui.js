@@ -1,7 +1,7 @@
 /**
  * Radio Display UI wiring: status poll + MJPEG img stream + controls.
  */
-import { RadioDisplayPanel } from './radio-display-panel.js?v=10';
+import { RadioDisplayPanel } from './radio-display-panel.js?v=11';
 
 const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;

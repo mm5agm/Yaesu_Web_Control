@@ -47,10 +47,6 @@ export class RadioDisplayPanel {
     return this._container?.querySelector('.radio-display-body');
   }
 
-  _isDockedLayout() {
-    return !!this._displayBody()?.classList.contains('controls-docked');
-  }
-
   /** @param {'unconfigured'|'idle'|'connecting'|'streaming'|'disconnected'|'error'} status */
   setStatus(status, detail) {
     this._status = status || 'idle';
@@ -170,39 +166,9 @@ export class RadioDisplayPanel {
   }
 
   /**
-   * Index with scope docked beside the video: fill the flex pane and let
-   * object-fit contain vs cover differ (same model as the pop-out window).
-   * @param {HTMLElement | null | undefined} body
-   * @param {boolean} inFs
-   */
-  _applyPaneFill(body, inFs) {
-    if (!body || !this._img) return;
-
-    body.style.flex = '1 1 auto';
-    body.style.minHeight = inFs ? '0' : '240px';
-    body.style.height = inFs ? '100%' : '';
-    body.style.width = '';
-    body.style.maxWidth = '';
-    body.style.margin = '';
-    body.style.display = 'flex';
-    body.style.alignItems = 'stretch';
-    body.style.justifyContent = 'stretch';
-
-    const r = body.getBoundingClientRect();
-    if (r.width > 0 && r.height > 0) {
-      this._img.style.width = `${Math.round(r.width)}px`;
-      this._img.style.height = `${Math.round(r.height)}px`;
-    } else {
-      this._img.style.width = '100%';
-      this._img.style.height = '100%';
-    }
-    this._img.style.maxWidth = 'none';
-    this._img.style.maxHeight = 'none';
-  }
-
-  /**
-   * Index Fill without a docked column: cap a source-aspect box so a wide card
-   * does not stretch the TFT to a header-only strip.
+   * Index Fill (card, not fullscreen): size a source-aspect frame so a wide or
+   * short-tall pane never cover-crops the TFT down to a header strip. Fit and
+   * Fill may look similar here; that is intentional. Pop-out keeps real cover.
    * @param {HTMLElement | null | undefined} body
    */
   _applyNaturalCover(body) {
@@ -230,36 +196,13 @@ export class RadioDisplayPanel {
       frameW = frameH * aspect;
     }
 
-    body.style.width = `${Math.round(frameW)}px`;
-    body.style.height = `${Math.round(frameH)}px`;
-    body.style.maxWidth = '100%';
-    body.style.margin = '0 auto';
-
-    this._img.style.width = '100%';
-    this._img.style.maxWidth = 'none';
-    this._img.style.height = '100%';
-    this._img.style.maxHeight = 'none';
-  }
-
-  /**
-   * Index Fit without a docked column: natural image size capped to the card.
-   * @param {HTMLElement | null | undefined} body
-   * @param {boolean} inFs
-   */
-  _applyNaturalContain(body, inFs) {
-    if (body) {
-      body.style.flex = inFs ? '1 1 auto' : '';
-      body.style.minHeight = inFs ? '0' : '';
-      body.style.height = inFs ? '100%' : '';
-      body.style.width = '';
-      body.style.maxWidth = '';
-      body.style.margin = '';
-      body.style.display = '';
-    }
-    this._img.style.width = 'auto';
+    // Prefer filling available width when the aspect cap allows it (mild Fit vs
+    // Fill difference without cropping). Centre the frame in a wider pane.
+    this._img.style.width = `${Math.round(frameW)}px`;
     this._img.style.maxWidth = '100%';
-    this._img.style.height = 'auto';
-    this._img.style.maxHeight = inFs ? '100%' : '50vh';
+    this._img.style.height = `${Math.round(frameH)}px`;
+    this._img.style.maxHeight = '50vh';
+    this._img.style.objectFit = 'contain';
   }
 
   _showPlaceholder() {
@@ -318,20 +261,43 @@ export class RadioDisplayPanel {
     }
 
     if (this._naturalSize) {
-      // Index: docked scope column gives the video pane a usable box — same
-      // contain/cover model as the pop-out. Undocked wide cards keep Fit as
-      // natural sizing and Fill as a source-aspect cap (no header strip crop).
-      if (inFs || this._isDockedLayout()) {
-        this._applyPaneFill(body, inFs);
-      } else if (this._fitMode === 'contain') {
-        this._applyNaturalContain(body, inFs);
+      // Index card: never use true cover in the docked/wide pane — that crops
+      // the TFT. Aspect-capped Fill matches 2473101; fullscreen Fill may cover.
+      if (this._fitMode === 'contain') {
+        if (body) {
+          body.style.minHeight = '';
+          body.style.height = '';
+          body.style.flex = inFs ? '1 1 auto' : '';
+          body.style.width = '';
+          body.style.maxWidth = '';
+          body.style.margin = '';
+          body.style.display = '';
+        }
+        this._img.style.width = 'auto';
+        this._img.style.maxWidth = '100%';
+        this._img.style.height = 'auto';
+        this._img.style.maxHeight = inFs ? '100%' : '50vh';
+      } else if (inFs) {
+        if (body) {
+          body.style.flex = '1 1 auto';
+          body.style.minHeight = '0';
+          body.style.height = '100%';
+          body.style.width = '';
+          body.style.maxWidth = '';
+          body.style.margin = '';
+          body.style.display = '';
+        }
+        this._img.style.width = '100%';
+        this._img.style.maxWidth = '100%';
+        this._img.style.height = '100%';
+        this._img.style.maxHeight = 'none';
       } else {
         this._applyNaturalCover(body);
       }
       return;
     }
 
-    // Pop-out / fullscreen-style: fill the available card body.
+    // Pop-out: true contain / cover against the window-sized pane.
     if (body) {
       body.style.flex = '1 1 auto';
       body.style.minHeight = '0';
