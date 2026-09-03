@@ -403,8 +403,9 @@ export class SpectrumPanel {
      * avg += w·(new − avg), so the trace settles toward the running average at a
      * rate set by _specAvgWeight (lower = smoother/slower). Re-seeds (copies the
      * raw sweep) on the first frame, a weight of ≥1 (averaging off), or a bin-count
-     * change; update() also nulls _avgBins on a retune so the average doesn't drag
-     * the old band across. Peaks survive because they recur every frame while noise
+     * change; _avgBins is also nulled by update() on a span change and by
+     * setVfoFrequency() on a frequency change, so the average doesn't drag the
+     * old band across. Peaks survive because they recur every frame while noise
      * averages out — this is the main grass-removal stage.
      * @param {ArrayLike<number>} bins  The raw (worker-EMA'd) sweep.
      * @returns {Float32Array} The temporally-averaged trace.
@@ -496,9 +497,12 @@ export class SpectrumPanel {
         // A span change (span buttons restart the worker at a new sample rate) or
         // a bin-count change means the previous band/scale no longer applies —
         // snap the auto-floor so it seeds fresh instead of drifting across.
-        const retuned = (spanHz !== this._lastSpanHz)
+        // Named for what it actually detects: a frequency change never reaches
+        // here (the worker keeps streaming the same span), and is handled in
+        // setVfoFrequency instead.
+        const scaleChanged = (spanHz !== this._lastSpanHz)
             || (this._lastBins && this._lastBins.length !== bins.length);
-        if (retuned) { this._autoFloorDb = null; this._avgBins = null; }
+        if (scaleChanged) { this._autoFloorDb = null; this._avgBins = null; }
 
         // Two-stage smoothing (ported from IWC). Stage 1 — temporal EMA: averages
         // each bin across frames, removing grass without blunting peaks. Stage 2 —
@@ -616,6 +620,20 @@ export class SpectrumPanel {
             this.snapAutoFloor();
             this._lastFloorVfoHz = hz;
         }
+        // The SDR watches a fixed IF, so changing the VFO slides the whole
+        // spectrum across the bins — bin i no longer holds the frequency it held
+        // on the previous frame. The temporal EMA has to be reseeded or it drags
+        // the old band's trace across the new one for its entire time constant,
+        // which is how a peak can appear to fade out just after it is tuned.
+        // The threshold is half a bin so it scales with span rather than being a
+        // fixed number, and dial movements too small to shift content between
+        // bins keep their smoothing.
+        const binCount = this._lastBins ? this._lastBins.length : 0;
+        if (binCount > 0 && this._lastSpanHz > 0
+            && Math.abs(hz - this._vfoHz) >= this._lastSpanHz / binCount / 2) {
+            this._avgBins = null;
+        }
+
         this._vfoHz = hz;
         if (this._lastBins) this._render();
         // Keep data-reading on the canvas current so the hover live region can announce it.
