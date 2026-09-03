@@ -13,8 +13,10 @@ const AUTO_START_KEY = 'ywc.radioDisplayAutoStart';
 const CONTROLS_DOCKED_KEY = 'ywc.radioDisplayControlsDocked';
 const CONTROLS_VISIBLE_KEY = 'ywc.radioDisplayControlsVisible';
 const CONTROLS_WIDTH_KEY = 'ywc.radioDisplayControlsWidth';
-/** Default docked column width (matches CSS fallback). */
-const SCOPE_WIDTH_DEFAULT_REM = 22;
+/** Default docked column width (matches CSS fallback).
+ *  Wide enough that Span (10×2.65rem) and Color (11×2.15rem) fit on one
+ *  nowrap row with the label + body padding — 22rem clipped the last buttons. */
+const SCOPE_WIDTH_DEFAULT_REM = 33;
 const SCOPE_WIDTH_MIN_REM = 16;
 const SCOPE_WIDTH_MAX_REM = 40;
 const SCOPE_WIDTH_NUDGE_PX = 16;
@@ -758,7 +760,11 @@ function getSavedScopeColumnWidthPx() {
     const raw = localStorage.getItem(CONTROLS_WIDTH_KEY);
     if (raw == null || raw === '') return null;
     const n = parseFloat(raw);
-    return Number.isFinite(n) && n > 0 ? n : null;
+    if (!Number.isFinite(n) || n <= 0) return null;
+    // Pre-33rem default was 22rem and clipped Span. Treat that (or narrower)
+    // as unset so the new default applies without a manual double-click reset.
+    if (n <= remToPx(22) + 1) return null;
+    return n;
   } catch {
     return null;
   }

@@ -1335,9 +1335,10 @@ fieldset.calibration-card {
     left: auto;
     transform: none;
     z-index: auto;
-    /* Width is driven by --radio-display-scope-width (set from JS / localStorage). */
-    flex: 0 0 var(--radio-display-scope-width, 22rem);
-    width: var(--radio-display-scope-width, 22rem);
+    /* Width is driven by --radio-display-scope-width (set from JS / localStorage).
+       Default 33rem fits Span/Color on one row; see SCOPE_WIDTH_DEFAULT_REM. */
+    flex: 0 0 var(--radio-display-scope-width, 33rem);
+    width: var(--radio-display-scope-width, 33rem);
     max-width: none;
     min-width: 0;
     min-height: 0;
