@@ -844,6 +844,10 @@ function bindScopeColumnResize(dlg) {
   const splitter = dlg?.querySelector('.radio-display-scope-splitter');
   if (!splitter || splitter.dataset.bound === '1') return;
   splitter.dataset.bound = '1';
+  // makeDraggable (Index.cshtml) runs before this and sets cursor:grab on the
+  // first div child of every dialog, which is the splitter.  Clear that inline
+  // style so the CSS col-resize rule takes effect.
+  splitter.style.cursor = '';
 
   let dragging = false;
   let pointerId = null;
@@ -1040,6 +1044,26 @@ function initScopeLayoutTooltips(dlg) {
       fallbackPlacements: ['top', 'left', 'right']
     });
   });
+  // Splitter tooltip — Bootstrap must own it so it renders reliably inside
+  // the <dialog> element (native title tooltips are suppressed by many browsers
+  // inside dialogs).  Move the text from title to data-bs-title so Bootstrap
+  // doesn't strip it on dispose, then init with placement 'right'.
+  const splitter = dlg.querySelector('.radio-display-scope-splitter');
+  if (splitter) {
+    bootstrap.Tooltip.getInstance(splitter)?.dispose();
+    const tip = splitter.getAttribute('title') || splitter.getAttribute('data-bs-title') || '';
+    if (tip) {
+      splitter.removeAttribute('title');
+      splitter.setAttribute('data-bs-title', tip);
+    }
+    bootstrap.Tooltip.getOrCreateInstance(splitter, {
+      delay: { show: 600, hide: 100 },
+      trigger: 'hover focus',
+      placement: 'right',
+      container: 'body',
+      fallbackPlacements: ['left', 'bottom', 'top']
+    });
+  }
 }
 
 function bindScopeDialog() {
