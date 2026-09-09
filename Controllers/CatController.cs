@@ -2880,6 +2880,26 @@ namespace Yaesu_Web_Control.Controllers
             return body.Substring(3).TrimEnd(KeyerMemoryTerminator);
         }
 
+        // P1 for KY is NOT the slot number.
+        //
+        // MEASURED on an FTdx101MP, 2026-09-09: KY1;-KY5; do nothing whatever -
+        // the radio accepts them, answers nothing (KY is Set-only) and never
+        // starts a playback. KY6;-KYA; play keyer memories 1-5.
+        //
+        // The proof is slot 3, which was empty at the time: KY8; was the single
+        // value in 6-A that started no playback, and 6789A maps onto 1-5 exactly.
+        // Detected with the radio's own RI4 (PLAY) flag - "RI4;" answers "RI41"
+        // while a playback runs and "RI40" when it ends - which is the same flag
+        // the radio raises when you touch REC/PLAY on its front panel.
+        //
+        // The CAT manual invites the wrong reading: it labels P1 1-5 "Keyer
+        // Memory n Playback" and 6-A "Message Keyer n Playback", so 1-5 looks
+        // like the obvious choice for the M1-M5 memories written by KM. It is
+        // not. Every Yaesu CAT manual checked (FT-991A, FTdx10, FTDX3000,
+        // FT-710, FTX-1, and both '101 revisions) carries the same wording, so
+        // this is likely wrong on all of them.
+        private static char KeyerPlaybackParam(int slot) => "6789A"[slot - 1];
+
         // Read the break-in state: "BI;" -> "BI0" off / "BI1" semi / "BI2" full.
         // Null when the radio did not answer, which is treated as "do not
         // block the send" rather than as off.
@@ -2960,7 +2980,7 @@ namespace Yaesu_Web_Control.Controllers
                         wroteMemory
                     });
 
-                await _catClient.SendCommandAsync($"KY{request.Slot};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync($"KY{KeyerPlaybackParam(request.Slot)};", "WebUI", CancellationToken.None);
                 return Ok(new { sent = clean, slot = request.Slot, wroteMemory, breakIn });
             }
             catch (Exception ex) { _logger.LogError(ex, "Error sending CW message"); return StatusCode(500, new { error = "Failed" }); }
