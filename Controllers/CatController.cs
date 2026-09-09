@@ -2921,7 +2921,8 @@ namespace Yaesu_Web_Control.Controllers
         // matches no documented form on any of the five models, and pressing
         // M1 was bench-confirmed to do nothing at all on the FTdx101MP.
         //
-        // The working pair is KM to load the text and KY to play the slot. The
+        // The working pair is KM to load the text and KY to play the slot - and
+        // KY's parameter is 6-A for slots 1-5, not 1-5; see KeyerPlaybackParam. The
         // slot is read back first and written only when it differs, so an
         // operator whose front-panel memories already say the right thing sees
         // no writes, and YWC never rewrites a memory for a button not pressed.
@@ -2962,26 +2963,39 @@ namespace Yaesu_Web_Control.Controllers
                 if (wroteMemory)
                     await WriteKeyerMemoryAsync(request.Slot, clean);
 
-                // Break-in has to be on for playback to reach the antenna. With
+                // Break-in decides whether a playback reaches the antenna. With
                 // it off the radio plays the memory to the sidetone monitor and
                 // transmits nothing - FTdx101MP/D operating manual p.64, which
                 // makes "Press the [BK-IN] key to enable transmission" step 1 of
-                // On-The-Air CW Message Playback. If the monitor is off too the
-                // operator sees and hears nothing at all, which is exactly how
-                // this was first reported. Say so rather than sending a KY that
-                // cannot do anything; the Break-in control is in this same panel.
+                // On-The-Air CW Message Playback.
+                //
+                // Between 2026-09-09 and the KY fix this refused the send with a
+                // 409. That was the wrong call twice over. The manual's own
+                // "Checking the CW Memory Contents" procedure deliberately uses
+                // break-in OFF plus the monitor to audition a memory without
+                // going on the air, so refusing it removed a feature; and the
+                // silence that prompted the guard was never break-in at all, it
+                // was KY's parameter being wrong.
+                //
+                // So send it either way and say which happened. The caller gets
+                // "transmitted", and the panel's aria-live line reports it - an
+                // operator who cannot see the BK-IN lamp must still be told
+                // whether that message went out or only to the headphones.
                 var breakIn = await ReadBreakInAsync();
-                if (breakIn == "0")
-                    return StatusCode(409, new
-                    {
-                        error = "Break-in is off, so the radio would play this to the monitor without transmitting. Set Break-in to Semi or Full and send again.",
-                        breakIn,
-                        slot = request.Slot,
-                        wroteMemory
-                    });
+                bool transmitted = breakIn != "0";
 
                 await _catClient.SendCommandAsync($"KY{KeyerPlaybackParam(request.Slot)};", "WebUI", CancellationToken.None);
-                return Ok(new { sent = clean, slot = request.Slot, wroteMemory, breakIn });
+                return Ok(new
+                {
+                    sent = clean,
+                    slot = request.Slot,
+                    wroteMemory,
+                    breakIn,
+                    transmitted,
+                    note = transmitted
+                        ? null
+                        : "Break-in is off, so this played to the monitor only and was not transmitted."
+                });
             }
             catch (Exception ex) { _logger.LogError(ex, "Error sending CW message"); return StatusCode(500, new { error = "Failed" }); }
             finally { _requestSemaphore.Release(); }

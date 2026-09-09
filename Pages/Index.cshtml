@@ -4833,15 +4833,18 @@
                     body: JSON.stringify({ message: input.value, slot: index + 1 })
                 });
                 const d = await r.json().catch(() => ({}));
-                if (r.ok) { say(`Sent M${index + 1}: ${d.sent || ''}`); return; }
-                say(d.error || `M${index + 1} was not sent (HTTP ${r.status}).`, true);
-                // Break-in off is the one failure the operator can fix from
-                // this same panel, so point at the control rather than just
-                // naming it.
-                if (d.breakIn === '0') {
-                    const sel = document.getElementById('cwBreakInSelect');
-                    if (sel) { sel.focus(); sel.style.outline = '2px solid #ff6b6b'; setTimeout(() => { sel.style.outline = ''; }, 4000); }
+                if (r.ok) {
+                    // Whether it went on the air is the part that matters, and
+                    // an operator who cannot see the BK-IN lamp has no other way
+                    // to know. Never just say "sent".
+                    if (d.transmitted === false) {
+                        say(`M${index + 1} played to the monitor only, not transmitted - break-in is off. ${d.sent || ''}`);
+                    } else {
+                        say(`Transmitted M${index + 1}: ${d.sent || ''}`);
+                    }
+                    return;
                 }
+                say(d.error || `M${index + 1} was not sent (HTTP ${r.status}).`, true);
             }
             catch (e) { console.error('sendCwMessage error:', e); say(`M${index + 1} failed: ${e.message}`, true); }
         }
