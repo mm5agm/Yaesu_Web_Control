@@ -4829,6 +4829,15 @@
         // will say, RI4 is its PLAY flag, so follow it until it clears.
         // One follower at a time; a new send supersedes the last.
         let cwPlaybackFollow = 0;
+        // A press takes a few hundred ms to serve - the radio is asked whether
+        // anything is playing, then told to start or stop. A second press
+        // inside that window is not a second decision, it is the same press
+        // arriving twice: a rapid double click, a worn mouse switch, a key
+        // repeat. Measured on the bench 2026-09-09, seven presses landed in
+        // 1.4s and alternated start/stop/start/stop, so the message restarted
+        // every time it was stopped and appeared never to stop at all.
+        // Ignore anything that arrives while a press is still being served.
+        let cwSendBusy = false;
         function cwSetMemButton(index, state) {      // 'idle' | 'playing' | 'willstop'
             const b = document.getElementById(`cwMemBtn${index}`);
             if (!b) return;
@@ -4868,9 +4877,15 @@
         }
         async function sendCwMessage(index) {
             const input = document.getElementById(`cwMsg${index}`);
-            if (!input || !input.value.trim()) return;
             const status = document.getElementById('cwKeyerStatus');
             const say = (text, bad) => { if (status) { status.textContent = text; status.style.color = bad ? '#ff6b6b' : '#aaa'; } };
+            // An empty box used to return here silently, so the button looked
+            // dead - no message, no request, nothing in the log to say the
+            // press had even happened. Say so instead.
+            if (!input) { say(`M${index + 1} text box is missing.`, true); return; }
+            if (!input.value.trim()) { say(`M${index + 1} is empty - type a message first.`, true); return; }
+            if (cwSendBusy) return;
+            cwSendBusy = true;
             // index is 0-based; the radio's keyer slots are 1-5.
             try {
                 const r = await fetch('/api/cat/cw/send', {
@@ -4899,6 +4914,7 @@
                 say(d.error || `M${index + 1} was not sent (HTTP ${r.status}).`, true);
             }
             catch (e) { console.error('sendCwMessage error:', e); say(`M${index + 1} failed: ${e.message}`, true); }
+            finally { cwSendBusy = false; }
         }
         async function saveCwMessages() {
             const msgs = [];
