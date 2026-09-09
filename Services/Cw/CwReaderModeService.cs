@@ -321,63 +321,19 @@ namespace Yaesu_Web_Control.Services.Cw
 
         private CwReaderModeStatus Describe(string message, ApplicationSettings? settings = null)
         {
-            int? nowHz = YaesuIfWidth.HzForCode(_state.RadioModel, _state.ModeA, _state.IfWidthA);
-            var (suggest, reason) = settings is null
-                ? (false, "")
-                : Suggestion(settings, nowHz);
-
             return new CwReaderModeStatus
             {
                 On            = _saved is not null,
                 Message       = message,
                 Mode          = _state.ModeA,
                 IfWidthCode   = _state.IfWidthA,
-                IfWidthHz     = nowHz,
+                IfWidthHz     = YaesuIfWidth.HzForCode(_state.RadioModel, _state.ModeA, _state.IfWidthA),
                 ApfOn         = _state.ApfOnA,
                 RestoresMode  = _saved?.Mode,
                 RestoresWidth = _saved?.IfWidthCode,
                 WantedWidthHz = settings?.CwReaderFilterHz,
-                SuggestSetup  = suggest,
-                SuggestReason = reason,
             };
         }
-
-        /// <summary>
-        /// Whether the radio as it stands would make the decode harder than it
-        /// needs to be, and the words to say so in.
-        ///
-        /// Asked when the operator presses Start, so the panel can offer to set
-        /// the radio up rather than either doing it behind their back or
-        /// leaving them to find a second button. It is advice: the operator
-        /// still answers. It never fires while Reader Mode is already on.
-        /// </summary>
-        private (bool Suggest, string Reason) Suggestion(ApplicationSettings settings, int? nowHz)
-        {
-            if (_saved is not null) return (false, "");
-
-            var reasons = new List<string>(3);
-
-            if (!IsCw(_state.ModeA))
-                reasons.Add($"the radio is in {_state.ModeA ?? "another mode"} rather than CW");
-
-            // Twice the wanted width is where adjacent signals start getting
-            // into the decoder. Inside that, narrowing buys little and is not
-            // worth moving a filter the operator may have set deliberately.
-            if (nowHz is { } hz && hz > settings.CwReaderFilterHz * 2)
-                reasons.Add($"the filter is {hz} Hz");
-
-            if (settings.CwReaderUseApf && !_state.ApfOnA)
-                reasons.Add("APF is off");
-
-            return (reasons.Count > 0, JoinReasons(reasons));
-        }
-
-        private static string JoinReasons(List<string> parts) => parts.Count switch
-        {
-            0 => "",
-            1 => parts[0],
-            _ => string.Join(", ", parts.GetRange(0, parts.Count - 1)) + " and " + parts[^1],
-        };
     }
 
     /// <summary>
@@ -398,11 +354,5 @@ namespace Yaesu_Web_Control.Services.Cw
 
         /// <summary>The width Reader Mode would set, from settings.</summary>
         public int? WantedWidthHz { get; init; }
-
-        /// <summary>True when it is worth offering to set the radio up.</summary>
-        public bool SuggestSetup { get; init; }
-
-        /// <summary>Why, in words fit to show the operator.</summary>
-        public string SuggestReason { get; init; } = "";
     }
 }

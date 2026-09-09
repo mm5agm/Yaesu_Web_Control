@@ -77,15 +77,6 @@ export class CwReaderPanel {
             this._refreshReaderMode();
         }
 
-        // The offer to set the radio up on Start. Optional in the same way the
-        // button is: a host page without these elements simply starts.
-        this._setupPrompt = document.getElementById('cwReaderSetupPrompt');
-        this._setupText   = document.getElementById('cwReaderSetupText');
-        this._setupYes    = document.getElementById('cwReaderSetupYes');
-        this._setupNo     = document.getElementById('cwReaderSetupNo');
-        this._setupYes?.addEventListener('click', () => this._answerSetup(true));
-        this._setupNo?.addEventListener('click',  () => this._answerSetup(false));
-
         // The tuning figure. Off by default: it is a thing you reach for while
         // hunting for a signal, not something to leave spinning all session.
         this._phasorBox = document.getElementById('cwPhasorBox');
@@ -98,10 +89,7 @@ export class CwReaderPanel {
         // Stopping the decoder when the dialog closes would throw away the
         // operator's copy mid-QSO if they closed it by accident. The decoder
         // is cheap to leave running, so closing only stops the polling.
-        this._dialog.addEventListener('close', () => {
-            this._stopPolling();
-            if (this._setupPrompt) this._setupPrompt.hidden = true;
-        });
+        this._dialog.addEventListener('close', () => this._stopPolling());
 
         this._initDrag();
     }
@@ -115,9 +103,6 @@ export class CwReaderPanel {
             // work the station, and a modal would lock the operator out of
             // the VFO and the keyer while the text was on screen.
             this._dialog.show();
-            // A new sitting is a new question. Declining the offer holds for
-            // the session the operator declined it in, not for ever.
-            this._setupDeclined = false;
             this._startPolling();
         }
     }
@@ -137,12 +122,6 @@ export class CwReaderPanel {
             return;
         }
 
-        // Starting is where the radio gets asked about. Pressing Start with a
-        // 2.4 kHz filter and no APF used to start a decoder that had almost no
-        // chance, next to a second button nobody had reason to press. Now it
-        // offers - and offering, rather than just doing it, is the point: this
-        // moves the operator's filter, and that is their call to make.
-        if (await this._offerSetup()) return;
         await this._sendRunning('start');
     }
 
@@ -159,45 +138,6 @@ export class CwReaderPanel {
         } catch (e) {
             this._showError(e.message);
         }
-    }
-
-    /// Shows the offer if it is worth showing. Returns true when the prompt is
-    /// up, in which case answering it is what starts the decoder.
-    async _offerSetup() {
-        if (!this._setupPrompt || this._readerMode || this._setupDeclined) return false;
-
-        let status;
-        try {
-            // refresh=true: mode and filter are not on the fast poll, so the
-            // cached width can be a second or two old - and deciding from a
-            // stale one means offering to narrow a filter that is already narrow.
-            const res = await fetch('/api/cw/readermode?refresh=true');
-            if (!res.ok) return false;
-            status = await res.json();
-        } catch {
-            return false;   // the radio not answering is no reason to block Start
-        }
-
-        this._applyReaderMode(status);
-        if (!status.suggestSetup) return false;
-
-        if (this._setupText) {
-            const why = status.suggestReason || 'the radio is not set up for decoding';
-            const to  = status.wantedWidthHz ? `${status.wantedWidthHz} Hz` : 'a narrow filter';
-            this._setupText.textContent =
-                `${why.charAt(0).toUpperCase()}${why.slice(1)}. `
-                + `Set CW, ${to} and APF for decoding? Your settings are put back when you stop.`;
-        }
-        this._setupPrompt.hidden = false;
-        this._setupYes?.focus();
-        return true;
-    }
-
-    async _answerSetup(yes) {
-        if (this._setupPrompt) this._setupPrompt.hidden = true;
-        if (yes) await this._setReaderMode(true);
-        else     this._setupDeclined = true;   // asked once a sitting is enough
-        await this._sendRunning('start');
     }
 
     async _clear() {
