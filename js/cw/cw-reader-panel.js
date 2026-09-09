@@ -45,6 +45,7 @@ export class CwReaderPanel {
         this._cursor   = 0;
         this._running  = false;
         this._text     = '';
+        this._readerMode = false;
     }
 
     // ── Lifecycle ───────────────────────────────────────────────────────────
@@ -66,6 +67,15 @@ export class CwReaderPanel {
 
         this._startBtn?.addEventListener('click', () => this._toggleRunning());
         this._clearBtn?.addEventListener('click', () => this._clear());
+
+        // Reader Mode sets the radio up for decoding and remembers what to put
+        // back. The button is optional: the host page may not offer it, and an
+        // app whose radio cannot be driven this way simply omits it.
+        this._modeBtn = document.getElementById('cwReaderModeBtn');
+        if (this._modeBtn) {
+            this._modeBtn.addEventListener('click', () => this._toggleReaderMode());
+            this._refreshReaderMode();
+        }
 
         // The tuning figure. Off by default: it is a thing you reach for while
         // hunting for a signal, not something to leave spinning all session.
@@ -101,6 +111,14 @@ export class CwReaderPanel {
 
     async _toggleRunning() {
         try {
+            // Stopping the decoder puts the radio back. The plan says the
+            // restore happens when the reader closes, but closing the dialog
+            // deliberately leaves the decoder running - so Stop, not close, is
+            // the moment the operator has actually finished reading. Closing
+            // the panel and finding the filter had silently re-opened to 2.4
+            // kHz mid-QSO would be the worse surprise of the two.
+            if (this._running && this._readerMode) await this._setReaderMode(false);
+
             const res = await fetch(this._running ? '/api/cw/stop' : '/api/cw/start', { method: 'POST' });
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
@@ -129,6 +147,60 @@ export class CwReaderPanel {
         } catch (e) {
             this._showError(e.message);
         }
+    }
+
+    // ── Reader Mode ─────────────────────────────────────────────────────────
+    //
+    // What the operator feeds the decoder matters more than the decoding: a
+    // 2.4 kHz filter full of adjacent signals defeats any decoder there is.
+    // The server holds the previous settings, not this panel, so the restore
+    // survives a page reload - which is the whole reason it is not three fetch
+    // calls from here.
+
+    async _toggleReaderMode() {
+        await this._setReaderMode(!this._readerMode);
+    }
+
+    async _setReaderMode(on) {
+        if (!this._modeBtn) return;
+        this._modeBtn.disabled = true;
+        try {
+            const res = await fetch(`/api/cw/readermode/${on ? 'on' : 'off'}`, { method: 'POST' });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) { this._showError(body.error || `HTTP ${res.status}`); return; }
+            this._applyReaderMode(body);
+        } catch (e) {
+            this._showError(e.message);
+        } finally {
+            this._modeBtn.disabled = false;
+        }
+    }
+
+    async _refreshReaderMode() {
+        try {
+            const res = await fetch('/api/cw/readermode');
+            if (res.ok) this._applyReaderMode(await res.json());
+        } catch { /* the button just stays as it is */ }
+    }
+
+    _applyReaderMode(status) {
+        this._readerMode = !!status.on;
+        if (!this._modeBtn) return;
+
+        this._modeBtn.textContent = this._readerMode ? 'Reader Mode ON' : 'Reader Mode';
+        this._modeBtn.classList.toggle('btn-warning', this._readerMode);
+        this._modeBtn.classList.toggle('btn-outline-info', !this._readerMode);
+        this._modeBtn.setAttribute('aria-pressed', String(this._readerMode));
+
+        // Naming what will be put back is what makes the button safe to press.
+        // An operator who has spent a while getting their filters right will
+        // not hand them to a button that does not say what it is holding.
+        const width = status.ifWidthHz ? `${status.ifWidthHz} Hz` : `code ${status.ifWidthCode ?? '?'}`;
+        this._modeBtn.title = this._readerMode
+            ? `${status.mode ?? 'CW'}, ${width}, APF ${status.apfOn ? 'on' : 'off'}. `
+              + `Press again to restore ${status.restoresMode ?? 'your mode'}`
+              + `${status.restoresWidth ? ` and IF width code ${status.restoresWidth}` : ''}.`
+            : 'Set CW mode, a narrow filter and APF for decoding. Your current settings are put back when you stop.';
     }
 
     // ── Polling ─────────────────────────────────────────────────────────────
