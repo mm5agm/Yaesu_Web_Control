@@ -2867,6 +2867,18 @@ namespace Yaesu_Web_Control.Controllers
             return body.Substring(3).TrimEnd(KeyerMemoryTerminator);
         }
 
+        // Read the break-in state: "BI;" -> "BI0" off / "BI1" semi / "BI2" full.
+        // Null when the radio did not answer, which is treated as "do not
+        // block the send" rather than as off.
+        private async Task<string?> ReadBreakInAsync()
+        {
+            var r = await _catClient.SendCommandAsync("BI;", "WebUI", CancellationToken.None, 400);
+            if (string.IsNullOrWhiteSpace(r)) return null;
+            var body = r.Trim().TrimEnd(';').Trim();
+            if (body.Length < 3 || !body.StartsWith("BI", StringComparison.Ordinal)) return null;
+            return body.Substring(2, 1);
+        }
+
         // M1-M5. There is no CAT command on any supported Yaesu that keys
         // arbitrary text. KY only triggers playback of a memory the radio
         // already holds - "KY P1;" with P1 = 1-5 for a keyer memory and 6-A
@@ -2917,8 +2929,26 @@ namespace Yaesu_Web_Control.Controllers
                 if (wroteMemory)
                     await WriteKeyerMemoryAsync(request.Slot, clean);
 
+                // Break-in has to be on for playback to reach the antenna. With
+                // it off the radio plays the memory to the sidetone monitor and
+                // transmits nothing - FTdx101MP/D operating manual p.64, which
+                // makes "Press the [BK-IN] key to enable transmission" step 1 of
+                // On-The-Air CW Message Playback. If the monitor is off too the
+                // operator sees and hears nothing at all, which is exactly how
+                // this was first reported. Say so rather than sending a KY that
+                // cannot do anything; the Break-in control is in this same panel.
+                var breakIn = await ReadBreakInAsync();
+                if (breakIn == "0")
+                    return StatusCode(409, new
+                    {
+                        error = "Break-in is off, so the radio would play this to the monitor without transmitting. Set Break-in to Semi or Full and send again.",
+                        breakIn,
+                        slot = request.Slot,
+                        wroteMemory
+                    });
+
                 await _catClient.SendCommandAsync($"KY{request.Slot};", "WebUI", CancellationToken.None);
-                return Ok(new { sent = clean, slot = request.Slot, wroteMemory });
+                return Ok(new { sent = clean, slot = request.Slot, wroteMemory, breakIn });
             }
             catch (Exception ex) { _logger.LogError(ex, "Error sending CW message"); return StatusCode(500, new { error = "Failed" }); }
             finally { _requestSemaphore.Release(); }
