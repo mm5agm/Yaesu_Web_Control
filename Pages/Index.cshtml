@@ -2089,7 +2089,7 @@
                     title="Send CW message M@(mi+1)"
                     aria-label="Send CW memory @(mi+1)">M@(mi+1)</button>
             <input type="text" id="cwMsg@(mi)" value="@(Model.CwMessages.Count > mi ? Model.CwMessages[mi] : "")"
-                   class="form-control form-control-sm" maxlength="24"
+                   class="form-control form-control-sm" maxlength="50"
                    placeholder="CW message @(mi+1)"
                    aria-label="CW message @(mi+1)" title="CW memory @(mi+1) text">
         </div>
@@ -4823,7 +4823,8 @@
         async function sendCwMessage(index) {
             const input = document.getElementById(`cwMsg${index}`);
             if (!input || !input.value.trim()) return;
-            try { await fetch('/api/cat/cw/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: input.value }) }); }
+            // index is 0-based; the radio's keyer slots are 1-5.
+            try { await fetch('/api/cat/cw/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: input.value, slot: index + 1 }) }); }
             catch (e) { console.error('sendCwMessage error:', e); }
         }
         async function saveCwMessages() {

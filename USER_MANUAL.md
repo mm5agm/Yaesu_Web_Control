@@ -837,7 +837,7 @@ Click the **CW** button to open the CW Keyer pop-up panel.
 | Pitch | CW sidetone pitch frequency (300–1050 Hz in 10 Hz steps). Also sets the CW receive offset so the radio zero-beats at this tone. Read from the radio on connect. |
 | M1–M5 buttons | Sends the corresponding memory message via the radio's KY CAT command |
 
-**CW memory messages** are configured on the **Settings** page (see Section 6.5). Each message can be up to 24 characters. Use `{CALL}` as a placeholder — it is sent literally (the radio does not expand it; configure your callsign in the message text directly for CW use).
+**CW memory messages** are configured on the **Settings** page (see Section 6.5). Each message can be up to 50 characters, which is the radio’s own keyer-memory limit. Use `{CALL}` as a placeholder for your callsign and it is filled in when the message is sent.
 
 ![CW Keyer panel with Speed, Break-in, Delay, Pitch and M1–M5 memory buttons](pictures/CW-Keyer.png)
 
@@ -1333,7 +1333,7 @@ Select which optional roofing filters are fitted to your radio. The app uses thi
 
 Enter up to five CW message memories. These are available from the CW Keyer panel (see Section 5.12) via the M1–M5 buttons.
 
-- Maximum 24 characters per message
+- Maximum 50 characters per message (the radio’s keyer-memory limit)
 - Messages are saved in application settings and persist between sessions
 - Use the M1–M5 buttons in the CW panel to send a message
 

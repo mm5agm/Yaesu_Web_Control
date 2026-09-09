@@ -2572,7 +2572,7 @@
         <div class="section-body">
                     <p class="text-muted small mb-3">
                         These messages can be sent from the CW panel on the main control page using the M1–M5 buttons.
-                        Use <code>{CALL}</code> as a placeholder for your callsign (set in WSJT-X or similar software).
+                        Use <code>{CALL}</code> as a placeholder for your callsign; it is filled in from the callsign on this page.
                         Maximum 24 characters per message.
                     </p>
                     @for (int i = 0; i < 5; i++)
@@ -2582,7 +2582,7 @@
                             <input type="text"
                                    name="Settings.CwMessages[@i]"
                                    value="@(Model.Settings.CwMessages != null && Model.Settings.CwMessages.Count > i ? Model.Settings.CwMessages[i] : "")"
-                                   maxlength="24"
+                                   maxlength="50"
                                    class="form-control form-control-sm font-monospace"
                                    placeholder="Message @(i+1)" />
                         </div>

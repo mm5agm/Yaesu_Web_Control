@@ -2812,17 +2812,90 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
-        public class CwMessageRequest { public string Message { get; set; } = ""; }
+        public class CwMessageRequest
+        {
+            public string Message { get; set; } = "";
 
+            /// <summary>Radio keyer slot 1-5 this message maps to (M1 = 1).</summary>
+            public int Slot { get; set; } = 1;
+        }
+
+        // The radio's own limit on a keyer memory (KM, "up to 50 characters").
+        // YWC used to cap at 24, which was neither this nor anything else.
+        private const int KeyerMemoryMaxChars = 50;
+
+        // End-of-message marker the radio stores after a keyer memory's text.
+        private const char KeyerMemoryTerminator = '}';
+
+        // Characters the keyer accepts. Anything else is dropped rather than
+        // rejected, so one stray punctuation mark does not fail the whole send.
+        private static string CleanCw(string text, int max) =>
+            new string((text ?? "").ToUpperInvariant().Where(c =>
+                (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                c == ' ' || c == '?' || c == '/' || c == '.' || c == ','
+            ).Take(max).ToArray());
+
+        // Read one of the radio's five keyer memories: "KM P1;" -> "KM P1 <text>;".
+        // Pure read, no transmit, so this is also the safe way to prove the KM
+        // family works on a model nobody has bench-checked yet.
+        // Store text in one of the radio's five keyer memories. The radio's own
+        // '}' terminator is appended here; without it the previous, longer
+        // message is left trailing after the new one.
+        private async Task WriteKeyerMemoryAsync(int slot, string text) =>
+            await _catClient.SendCommandAsync(
+                $"KM{slot}{text}{KeyerMemoryTerminator};", "WebUI", CancellationToken.None);
+
+        private async Task<string?> ReadKeyerMemoryAsync(int slot)
+        {
+            // 400 ms rather than the 150 ms default: this answer carries up to
+            // 50 characters of text, not the usual handful of digits.
+            var response = await _catClient.SendCommandAsync(
+                $"KM{slot};", "WebUI", CancellationToken.None, 400);
+            if (string.IsNullOrEmpty(response)) return null;
+
+            // The multiplexer may or may not leave the terminator on, so accept
+            // both rather than depending on which side trimmed it.
+            var body = response.Trim().TrimEnd(';').Trim();
+            if (body.Length < 3 || !body.StartsWith("KM", StringComparison.Ordinal)) return null;
+            if (body[2] != (char)('0' + slot)) return null;
+
+            // The radio marks the end of the stored message with '}' - measured
+            // on the FTdx101MP 2026-09-09, where empty slots read back as a
+            // bare "}" and used ones as "DE FTDX101 K}". The CAT manual does
+            // not mention it. It is a terminator, not part of the operator's
+            // text, so it never reaches the UI.
+            return body.Substring(3).TrimEnd(KeyerMemoryTerminator);
+        }
+
+        // M1-M5. There is no CAT command on any supported Yaesu that keys
+        // arbitrary text. KY only triggers playback of a memory the radio
+        // already holds - "KY P1;" with P1 = 1-5 for a keyer memory and 6-A
+        // for a message keyer (FT-710 uses "KY P1 P2;", also playback-only).
+        //
+        // This endpoint sent "KY <text>;" from v1.6.0 until 2026-09-09, which
+        // matches no documented form on any of the five models, and pressing
+        // M1 was bench-confirmed to do nothing at all on the FTdx101MP.
+        //
+        // The working pair is KM to load the text and KY to play the slot. The
+        // slot is read back first and written only when it differs, so an
+        // operator whose front-panel memories already say the right thing sees
+        // no writes, and YWC never rewrites a memory for a button not pressed.
         [HttpPost("cw/send")]
         public async Task<IActionResult> SendCwMessage([FromBody] CwMessageRequest request)
         {
             if (string.IsNullOrEmpty(request.Message))
                 return BadRequest(new { error = "Empty message" });
-            var clean = new string(request.Message.ToUpper().Where(c =>
-                (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
-                c == ' ' || c == '?' || c == '/' || c == '.' || c == ','
-            ).Take(24).ToArray());
+            if (request.Slot < 1 || request.Slot > 5)
+                return BadRequest(new { error = "Slot must be 1-5" });
+
+            // {CALL} is documented as a callsign placeholder but nothing ever
+            // expanded it, so the shipped default went out as "CQ CQ DE CALL".
+            // It resolves to the same station call the CW logger already uses.
+            var settings = await _settingsService.GetSettingsAsync();
+            var expanded = request.Message.Replace(
+                "{CALL}", settings.DxClusterLoginCallsign ?? "", StringComparison.OrdinalIgnoreCase);
+
+            var clean = CleanCw(expanded, KeyerMemoryMaxChars);
             if (string.IsNullOrEmpty(clean))
                 return BadRequest(new { error = "No valid CW characters" });
             if (!await _requestSemaphore.WaitAsync(2000))
@@ -2830,10 +2903,74 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                await _catClient.SendCommandAsync($"KY {clean};", "WebUI", CancellationToken.None);
-                return Ok(new { sent = clean });
+
+                var stored = await ReadKeyerMemoryAsync(request.Slot);
+                if (stored is null)
+                {
+                    _logger.LogWarning(
+                        "Keyer memory {Slot} did not read back; writing it rather than refusing to send",
+                        request.Slot);
+                }
+
+                bool wroteMemory = stored is null
+                    || !string.Equals(stored.TrimEnd(), clean, StringComparison.Ordinal);
+                if (wroteMemory)
+                    await WriteKeyerMemoryAsync(request.Slot, clean);
+
+                await _catClient.SendCommandAsync($"KY{request.Slot};", "WebUI", CancellationToken.None);
+                return Ok(new { sent = clean, slot = request.Slot, wroteMemory });
             }
             catch (Exception ex) { _logger.LogError(ex, "Error sending CW message"); return StatusCode(500, new { error = "Failed" }); }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        public class KeyerMemoryRequest { public string Text { get; set; } = ""; }
+
+        // Store a keyer memory WITHOUT sending it. Writing a memory is not a
+        // transmission - only KY keys the radio - so this is safe to call on a
+        // radio you are not licensed, ready or willing to put on the air.
+        [HttpPut("cw/keyer/{slot:int}")]
+        public async Task<IActionResult> SetKeyerMemory(int slot, [FromBody] KeyerMemoryRequest request)
+        {
+            if (slot < 1 || slot > 5)
+                return BadRequest(new { error = "Slot must be 1-5" });
+
+            var settings = await _settingsService.GetSettingsAsync();
+            var expanded = (request?.Text ?? "").Replace(
+                "{CALL}", settings.DxClusterLoginCallsign ?? "", StringComparison.OrdinalIgnoreCase);
+            var clean = CleanCw(expanded, KeyerMemoryMaxChars);
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                await WriteKeyerMemoryAsync(slot, clean);
+                var readBack = await ReadKeyerMemoryAsync(slot);
+                return Ok(new { slot, wrote = clean, readBack, matches = string.Equals(readBack, clean, StringComparison.Ordinal) });
+            }
+            catch (Exception ex) { _logger.LogError(ex, "Error writing keyer memory {Slot}", slot); return StatusCode(500, new { error = "Failed" }); }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        // Read-only view of what the radio actually holds in a keyer slot.
+        // No transmit, so it is safe to call on a model whose KM support has
+        // not been verified - which, at the time of writing, is all of them
+        // except the FTdx101MP.
+        [HttpGet("cw/keyer/{slot:int}")]
+        public async Task<IActionResult> GetKeyerMemory(int slot)
+        {
+            if (slot < 1 || slot > 5)
+                return BadRequest(new { error = "Slot must be 1-5" });
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var text = await ReadKeyerMemoryAsync(slot);
+                return Ok(new { slot, text, read = text is not null });
+            }
+            catch (Exception ex) { _logger.LogError(ex, "Error reading keyer memory {Slot}", slot); return StatusCode(500, new { error = "Failed" }); }
             finally { _requestSemaphore.Release(); }
         }
 
