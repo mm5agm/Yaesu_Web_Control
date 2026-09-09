@@ -2929,10 +2929,18 @@ namespace Yaesu_Web_Control.Controllers
         // RI4 is the radio's own PLAY flag: "RI41" while a keyer playback is
         // running, "RI40" when it is not. RI is read-only and answers with
         // break-in off, so a playback can be watched without any RF at all.
-        private async Task<bool> ReadPlaybackActiveAsync()
+        // null means the read did not come back - under TX-tier meter traffic
+        // a 600ms window can be missed - and that is NOT the same answer as
+        // "nothing is playing". Conflating the two is what made the first cut
+        // of this feature fail on the bench: one missed read and the next
+        // button press sent instead of stopping, which RESTARTS the message.
+        private async Task<bool?> ReadPlaybackActiveAsync()
         {
-            var r = await _catClient!.SendCommandAsync("RI4;", "WebUI", CancellationToken.None, 400);
-            return r != null && r.Contains("RI41");
+            var r = await _catClient!.SendCommandAsync("RI4;", "WebUI", CancellationToken.None, 600);
+            if (r == null) return null;
+            if (r.Contains("RI41")) return true;
+            if (r.Contains("RI40")) return false;
+            return null;
         }
 
         // Which slot we last started. Only ever touched inside the request
@@ -2991,13 +2999,23 @@ namespace Yaesu_Web_Control.Controllers
             {
                 await EnsureConnectedAsync();
 
-                // Pressing the button that is currently playing stops it.
-                // Pressing a different one is left to fall through and start
-                // that message instead, which is what the radio does anyway.
-                if (_playingSlot == request.Slot && await ReadPlaybackActiveAsync())
+                // Any M press while something is playing stops it. The radio
+                // is asked directly and nothing else is consulted - in
+                // particular not which slot we think started it.
+                //
+                // The first cut of this only stopped when the pressed slot
+                // matched _playingSlot, which read nicely and failed on the
+                // bench: that field is cleared by the panel's own RI4 poll,
+                // so one unanswered read turned the next press back into a
+                // send - and a repeat KY restarts the message rather than
+                // stopping it, so the operator presses stop and hears the
+                // message begin again. Keep the decision to one question the
+                // radio itself answers.
+                if (await ReadPlaybackActiveAsync() == true)
                 {
                     await _catClient.SendCommandAsync(CwPlaybackStopCommand, "WebUI", CancellationToken.None);
                     _playingSlot = 0;
+                    _logger.LogInformation("CW playback stopped by M{Slot}", request.Slot);
                     return Ok(new { slot = request.Slot, stopped = true });
                 }
 
@@ -3037,6 +3055,14 @@ namespace Yaesu_Web_Control.Controllers
 
                 await _catClient.SendCommandAsync($"KY{KeyerPlaybackParam(request.Slot)};", "WebUI", CancellationToken.None);
                 _playingSlot = request.Slot;
+                // Logged at Information, with the stop above it: an operator
+                // pressing a button is rare enough to be worth a line, and
+                // between the two of them the log says whether a press reached
+                // the app at all - which is the first thing you want to know
+                // when someone reports that a button did nothing.
+                _logger.LogInformation(
+                    "CW M{Slot} playback started (break-in {BreakIn}, {Where})",
+                    request.Slot, breakIn, transmitted ? "on air" : "monitor only");
                 return Ok(new
                 {
                     stopped = false,
@@ -3068,8 +3094,8 @@ namespace Yaesu_Web_Control.Controllers
                 return Ok(new { playing = (bool?)null, slot = _playingSlot });
             try
             {
-                bool playing = await ReadPlaybackActiveAsync();
-                if (!playing) _playingSlot = 0;
+                bool? playing = await ReadPlaybackActiveAsync();
+                if (playing == false) _playingSlot = 0;
                 return Ok(new { playing, slot = _playingSlot });
             }
             catch (Exception ex)

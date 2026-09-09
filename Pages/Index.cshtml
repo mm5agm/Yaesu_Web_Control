@@ -4821,30 +4821,36 @@
             try { await fetch('/api/cat/cw/breakindelay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delayMs: parseInt(v) }) }); }
             catch (e) { console.error('setCwBreakInDelay error:', e); }
         }
-        // While a memory is playing its own button becomes the stop button, so
-        // the panel has to know when the message ends on its own. The radio
-        // will say - RI4 is its PLAY flag - so follow it until it clears.
+        // While a memory is playing, ANY M press stops it - so every button
+        // has to say so, because the aria-label is what a screen reader reads
+        // and it must describe what the press will actually do. The playing
+        // one is also marked visually, so you can see which is running.
+        // The panel has to know when the message ends on its own: the radio
+        // will say, RI4 is its PLAY flag, so follow it until it clears.
         // One follower at a time; a new send supersedes the last.
         let cwPlaybackFollow = 0;
-        function cwSetMemButton(index, playing) {
+        function cwSetMemButton(index, state) {      // 'idle' | 'playing' | 'willstop'
             const b = document.getElementById(`cwMemBtn${index}`);
             if (!b) return;
             const n = index + 1;
-            b.textContent = playing ? `■ M${n}` : `M${n}`;
-            b.classList.toggle('btn-outline-warning', playing);
-            b.classList.toggle('btn-outline-info', !playing);
-            // The label is the part a screen reader reads, so it has to say
-            // what the press will now do, not what the button is called.
-            b.setAttribute('aria-label', playing ? `Stop CW memory ${n}` : `Send CW memory ${n}`);
-            b.title = playing ? `Stop sending CW message M${n}` : `Send CW message M${n}`;
+            b.textContent = state === 'playing' ? `■ M${n}` : `M${n}`;
+            b.classList.toggle('btn-outline-warning', state === 'playing');
+            b.classList.toggle('btn-outline-info', state !== 'playing');
+            if (state === 'idle') {
+                b.setAttribute('aria-label', `Send CW memory ${n}`);
+                b.title = `Send CW message M${n}`;
+            } else if (state === 'playing') {
+                b.setAttribute('aria-label', `Stop CW memory ${n}`);
+                b.title = `Stop sending CW message M${n}`;
+            } else {
+                b.setAttribute('aria-label', 'Stop the CW message that is sending');
+                b.title = 'Stop the CW message that is sending';
+            }
         }
-        function cwClearMemButtons() { for (let i = 0; i < 5; i++) cwSetMemButton(i, false); }
+        function cwClearMemButtons() { for (let i = 0; i < 5; i++) cwSetMemButton(i, 'idle'); }
         async function cwFollowPlayback(index) {
             const token = ++cwPlaybackFollow;
-            // Superseding an earlier follower leaves its button showing stop,
-            // so clear the lot before claiming this one.
-            cwClearMemButtons();
-            cwSetMemButton(index, true);
+            for (let i = 0; i < 5; i++) cwSetMemButton(i, i === index ? 'playing' : 'willstop');
             // ~90s ceiling: 50 characters at the slowest keyer speed is well
             // inside that, and it stops the poll dead if a read ever wedges.
             for (let i = 0; i < 120 && token === cwPlaybackFollow; i++) {
@@ -4855,10 +4861,10 @@
                     const d = await r.json().catch(() => ({}));
                     // null means the read could not be taken this time round -
                     // the radio is busy, not idle. Keep waiting.
-                    if (d.playing === false || (d.playing === true && d.slot !== index + 1)) break;
+                    if (d.playing === false) break;
                 } catch { break; }
             }
-            if (token === cwPlaybackFollow) cwSetMemButton(index, false);
+            if (token === cwPlaybackFollow) cwClearMemButtons();
         }
         async function sendCwMessage(index) {
             const input = document.getElementById(`cwMsg${index}`);
@@ -4887,9 +4893,6 @@
                     } else {
                         say(`Transmitted M${index + 1}: ${d.sent || ''}`);
                     }
-                    // A different button was pressed mid-message: the radio
-                    // switches to the new message, so the old button must give
-                    // up its stop state - the follower's token bump does that.
                     cwFollowPlayback(index);
                     return;
                 }
