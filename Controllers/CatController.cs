@@ -2900,6 +2900,47 @@ namespace Yaesu_Web_Control.Controllers
         // this is likely wrong on all of them.
         private static char KeyerPlaybackParam(int slot) => "6789A"[slot - 1];
 
+        // Stopping a playback.
+        //
+        // The CAT manual documents no stop at all: KY's P1 runs 1-A and every
+        // one of them is a playback. It turns out the stop is hiding in the
+        // half of that range which does nothing.
+        //
+        // MEASURED on an FTdx101MP, 2026-09-09, break-in off so no RF: with
+        // the radio idle, KY1;-KY5; start no playback whatever (that is the
+        // same measurement that established the 6-A mapping above). With a
+        // playback RUNNING, any of KY1;-KY5; ends it inside 0.33s - against a
+        // 5.8s message that otherwise ran to completion in every control run.
+        // So the "Message Keyer" slots behave like empty messages: asking for
+        // one abandons whatever is playing and then finishes immediately.
+        //
+        // That is what makes it usable as a stop. It needs nothing of the
+        // operator's set up a certain way - unlike KY8, playback of the empty
+        // keyer memory 3, which stopped it just as fast here but only because
+        // slot 3 happened to be empty on this radio.
+        //
+        // Things that do NOT stop it, all measured the same way, all ran the
+        // message to its natural end: KY0;, TX0;, KR0; (keyer off). And a
+        // second KY6; does not stop it either - it RESTARTS the message from
+        // the beginning, which is why pressing a different M button starts
+        // that message rather than needing a stop first.
+        private const string CwPlaybackStopCommand = "KY1;";
+
+        // RI4 is the radio's own PLAY flag: "RI41" while a keyer playback is
+        // running, "RI40" when it is not. RI is read-only and answers with
+        // break-in off, so a playback can be watched without any RF at all.
+        private async Task<bool> ReadPlaybackActiveAsync()
+        {
+            var r = await _catClient!.SendCommandAsync("RI4;", "WebUI", CancellationToken.None, 400);
+            return r != null && r.Contains("RI41");
+        }
+
+        // Which slot we last started. Only ever touched inside the request
+        // semaphore, and only ever trusted when RI4 says something really is
+        // playing - so a message that ended on its own leaves nothing stale
+        // behind, and the next press sends rather than silently stopping.
+        private static int _playingSlot;
+
         // Read the break-in state: "BI;" -> "BI0" off / "BI1" semi / "BI2" full.
         // Null when the radio did not answer, which is treated as "do not
         // block the send" rather than as off.
@@ -2950,6 +2991,16 @@ namespace Yaesu_Web_Control.Controllers
             {
                 await EnsureConnectedAsync();
 
+                // Pressing the button that is currently playing stops it.
+                // Pressing a different one is left to fall through and start
+                // that message instead, which is what the radio does anyway.
+                if (_playingSlot == request.Slot && await ReadPlaybackActiveAsync())
+                {
+                    await _catClient.SendCommandAsync(CwPlaybackStopCommand, "WebUI", CancellationToken.None);
+                    _playingSlot = 0;
+                    return Ok(new { slot = request.Slot, stopped = true });
+                }
+
                 var stored = await ReadKeyerMemoryAsync(request.Slot);
                 if (stored is null)
                 {
@@ -2985,8 +3036,10 @@ namespace Yaesu_Web_Control.Controllers
                 bool transmitted = breakIn != "0";
 
                 await _catClient.SendCommandAsync($"KY{KeyerPlaybackParam(request.Slot)};", "WebUI", CancellationToken.None);
+                _playingSlot = request.Slot;
                 return Ok(new
                 {
+                    stopped = false,
                     sent = clean,
                     slot = request.Slot,
                     wroteMemory,
@@ -2998,6 +3051,32 @@ namespace Yaesu_Web_Control.Controllers
                 });
             }
             catch (Exception ex) { _logger.LogError(ex, "Error sending CW message"); return StatusCode(500, new { error = "Failed" }); }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        // Is a keyer playback running, and which button started it? The panel
+        // polls this while it believes one is playing so the button can offer
+        // "stop" only while there is something to stop, and go back to its
+        // normal label the moment the message ends on its own.
+        [HttpGet("cw/playing")]
+        public async Task<IActionResult> GetCwPlaying()
+        {
+            if (_catClient == null) return StatusCode(503, new { error = "Not connected" });
+            // A short wait, and no error if it times out - this is polled, and
+            // the meter loop has better things to do than queue behind it.
+            if (!await _requestSemaphore.WaitAsync(600))
+                return Ok(new { playing = (bool?)null, slot = _playingSlot });
+            try
+            {
+                bool playing = await ReadPlaybackActiveAsync();
+                if (!playing) _playingSlot = 0;
+                return Ok(new { playing, slot = _playingSlot });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "CW playback poll failed");
+                return Ok(new { playing = (bool?)null, slot = _playingSlot });
+            }
             finally { _requestSemaphore.Release(); }
         }
 
