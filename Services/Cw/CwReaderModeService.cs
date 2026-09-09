@@ -28,6 +28,17 @@ namespace Yaesu_Web_Control.Services.Cw
     public sealed class CwReaderModeService
     {
         private readonly ICatClient _cat;
+
+        // Reads go through the multiplexer directly, not through ICatClient.
+        // Plain SendCommandAsync hands the reply back to the caller and never
+        // dispatches it, so nothing reaches RadioStateService - the same fault
+        // that made RadioInitializationService's read queries silently no-ops
+        // (#35). Reader Mode saves what it reads and puts it back afterwards,
+        // so a read that quietly returns the cached value instead of the
+        // radio's is how an operator gets their filter restored to the wrong
+        // width.
+        private readonly CatMultiplexerService _mux;
+
         private readonly RadioStateService _state;
         private readonly ISettingsService _settings;
         private readonly ILogger<CwReaderModeService> _logger;
@@ -41,11 +52,13 @@ namespace Yaesu_Web_Control.Services.Cw
         private Saved? _saved;
 
         public CwReaderModeService(ICatClient cat,
+                                   CatMultiplexerService mux,
                                    RadioStateService state,
                                    ISettingsService settings,
                                    ILogger<CwReaderModeService> logger)
         {
             _cat      = cat;
+            _mux      = mux;
             _state    = state;
             _settings = settings;
             _logger   = logger;
@@ -247,7 +260,7 @@ namespace Yaesu_Web_Control.Services.Cw
             // its own to give the game away. The dispatcher puts the reply
             // into ApfOnA, so afterwards that field is the radio's answer
             // and not our own.
-            await _cat.SendCommandAsync(
+            await _mux.SendCommandAndDispatchAsync(
                 settings.RadioModel == "FTDX3000" ? "CO00;" : $"CO{p1}2;", "CwReader", ct);
 
             if (_state.ApfOnA != on)
@@ -263,18 +276,18 @@ namespace Yaesu_Web_Control.Services.Cw
         {
             string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
 
-            await _cat.SendCommandAsync($"MD{RadioCapabilities.ModeP1("A")};", "CwReader", ct);
-            await _cat.SendCommandAsync($"SH{p1};", "CwReader", ct);
+            await _mux.SendCommandAndDispatchAsync($"MD{RadioCapabilities.ModeP1("A")};", "CwReader", ct);
+            await _mux.SendCommandAndDispatchAsync($"SH{p1};", "CwReader", ct);
 
             if (settings.RadioModel == "FTDX3000")
             {
-                await _cat.SendCommandAsync("CO00;", "CwReader", ct);
-                await _cat.SendCommandAsync("CO02;", "CwReader", ct);
+                await _mux.SendCommandAndDispatchAsync("CO00;", "CwReader", ct);
+                await _mux.SendCommandAndDispatchAsync("CO02;", "CwReader", ct);
             }
             else
             {
-                await _cat.SendCommandAsync($"CO{p1}2;", "CwReader", ct);
-                await _cat.SendCommandAsync($"CO{p1}3;", "CwReader", ct);
+                await _mux.SendCommandAndDispatchAsync($"CO{p1}2;", "CwReader", ct);
+                await _mux.SendCommandAndDispatchAsync($"CO{p1}3;", "CwReader", ct);
             }
         }
 
