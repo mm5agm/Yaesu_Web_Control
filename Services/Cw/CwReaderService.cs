@@ -45,6 +45,7 @@ namespace Yaesu_Web_Control.Services.Cw
         private readonly AudioSessionManager _sessions;
         private readonly RadioStateService _state;
         private readonly ISettingsService _settings;
+        private readonly IHostEnvironment _host;
         private readonly ILogger<CwReaderService> _logger;
 
         private readonly object _gate = new();
@@ -61,17 +62,24 @@ namespace Yaesu_Web_Control.Services.Cw
         private double _searchWindowHz;
         private int? _filterWidthHz;
 
+        // Bench capture. Null unless the operator asked for one.
+        private CwWavRecorder? _recorder;
+        private DateTime _captureStartedUtc;
+        private long _captureStartChars;
+
         public CwReaderService(
             BridgeCwAudioSource source,
             AudioSessionManager sessions,
             RadioStateService state,
             ISettingsService settings,
+            IHostEnvironment host,
             ILogger<CwReaderService> logger)
         {
             _source = source;
             _sessions = sessions;
             _state = state;
             _settings = settings;
+            _host = host;
             _logger = logger;
         }
 
@@ -110,6 +118,10 @@ namespace Yaesu_Web_Control.Services.Cw
                 _state.PropertyChanged -= OnRadioStateChanged;
                 IsRunning = false;
             }
+
+            // Before the source stops, so the sidecar can still record the
+            // conditions the capture actually ran under.
+            StopCapture();
 
             await _source.StopAsync(ct);
 
@@ -254,6 +266,8 @@ namespace Yaesu_Web_Control.Services.Cw
                     Readability      = (_engine?.Readability ?? CwReadability.Unknown).ToString(),
                     DroppedFrames    = _source.DroppedFrames,
                     TranscriptPath   = _transcript?.Path,
+                    CapturePath      = _recorder?.Path,
+                    CaptureSeconds   = _recorder?.DurationSeconds ?? 0,
                 };
             }
         }
@@ -311,6 +325,202 @@ namespace Yaesu_Web_Control.Services.Cw
         private static string TranscriptDirectory() => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "MM5AGM", "Yaesu Web Control", "CW Transcripts");
+
+        // ---- bench capture -------------------------------------------------
+
+        /// <summary>
+        /// Start recording the audio the decoder is being fed.
+        ///
+        /// The frames come from the same source the engine is attached to, not
+        /// from a second capture of the radio. That is the whole point: a
+        /// separate recorder would have its own device, its own clock and its
+        /// own resampling, so a bench score taken from it could never be
+        /// attributed cleanly to the decoder. Here, what CwBench replays is
+        /// byte-for-byte what the live decoder heard.
+        /// </summary>
+        /// <param name="name">
+        /// Optional base name. Sanitised; a timestamp is used if omitted.
+        /// </param>
+        /// <returns>The file being written.</returns>
+        /// <exception cref="InvalidOperationException">
+        /// The reader is not running, so there are no frames to record.
+        /// </exception>
+        public string StartCapture(string? name = null)
+        {
+            lock (_gate)
+            {
+                if (!IsRunning)
+                    throw new InvalidOperationException(
+                        "The CW reader is not running, so there is no audio to capture.");
+
+                if (_recorder is not null) return _recorder.Path;
+
+                var path = Path.Combine(CaptureDirectory(), SafeName(name) + ".wav");
+                _recorder = new CwWavRecorder(path, _source.SampleRate);
+                _captureStartedUtc = DateTime.UtcNow;
+                _captureStartChars = _totalChars;
+
+                _source.FrameAvailable += OnCaptureFrame;
+
+                _logger.LogInformation("CW bench capture started: {Path}", path);
+                return path;
+            }
+        }
+
+        /// <summary>
+        /// Stop recording and write the sidecar. Returns the summary, or null
+        /// if nothing was recording.
+        /// </summary>
+        public CwCaptureResult? StopCapture()
+        {
+            CwWavRecorder recorder;
+            string decoded;
+            DateTime startedUtc;
+
+            lock (_gate)
+            {
+                if (_recorder is null) return null;
+
+                _source.FrameAvailable -= OnCaptureFrame;
+                recorder = _recorder;
+                _recorder = null;
+                startedUtc = _captureStartedUtc;
+
+                long oldest = _totalChars - _text.Length;
+                long from = Math.Max(_captureStartChars, oldest);
+                decoded = from >= _totalChars
+                    ? ""
+                    : _text.ToString((int)(from - oldest), (int)(_totalChars - from));
+            }
+
+            var seconds = recorder.DurationSeconds;
+            var path = recorder.Path;
+            recorder.Dispose();
+
+            string? sidecar;
+            try
+            {
+                sidecar = Path.ChangeExtension(path, ".txt");
+                File.WriteAllText(sidecar, SidecarText(path, startedUtc, seconds, decoded));
+            }
+            catch (Exception ex)
+            {
+                // The wav is the artefact that matters. A sidecar that could
+                // not be written is worth a log line, not a failed capture.
+                _logger.LogWarning(ex, "CW capture sidecar could not be written");
+                sidecar = null;
+            }
+
+            _logger.LogInformation("CW bench capture stopped: {Path}, {Seconds:F1} s", path, seconds);
+
+            return new CwCaptureResult
+            {
+                Path = path,
+                SidecarPath = sidecar,
+                Seconds = seconds,
+                Characters = decoded.Length,
+                DroppedFrames = _source.DroppedFrames,
+            };
+        }
+
+        private void OnCaptureFrame(ReadOnlyMemory<float> frame)
+        {
+            // Read without the lock: StopCapture unsubscribes before disposing,
+            // but a frame already in flight can still arrive, and CwWavRecorder
+            // ignores writes once it has closed.
+            _recorder?.Write(frame.Span);
+        }
+
+        /// <summary>
+        /// Captures go to the repository's bench/ folder when running from a
+        /// working copy, because that is where CwBench and the rest of the
+        /// corpus live and it is gitignored in its entirety. An installed copy
+        /// has no bench/, so they land beside the transcripts instead.
+        /// </summary>
+        private string CaptureDirectory()
+        {
+            var bench = Path.Combine(_host.ContentRootPath, "bench");
+            if (Directory.Exists(bench)) return bench;
+
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "MM5AGM", "Yaesu Web Control", "CW Captures");
+        }
+
+        private static string SafeName(string? name)
+        {
+            var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(name)) return "cw-" + stamp;
+
+            var cleaned = new string(name.Trim()
+                .Select(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'
+                             ? char.ToLowerInvariant(c) : '-')
+                .ToArray())
+                .Trim('-');
+
+            if (cleaned.Length == 0) return "cw-" + stamp;
+            return cleaned.Length > 60 ? cleaned[..60].Trim('-') : cleaned;
+        }
+
+        /// <summary>
+        /// The sidecar the corpus rules require: what was measured, and an
+        /// explicit statement of what is not known. Nothing here is inferred -
+        /// every value is either read from the radio or counted by the
+        /// recorder, and where there is no ground truth it says so in those
+        /// words rather than leaving a later reader to assume there is some.
+        /// </summary>
+        private string SidecarText(string path, DateTime startedUtc, double seconds, string decoded)
+        {
+            var sb = new StringBuilder();
+            var inv = CultureInfo.InvariantCulture;
+
+            sb.AppendLine(Path.GetFileName(path));
+            sb.AppendLine();
+            sb.AppendLine("Recorded by Yaesu Web Control's CW reader from the frames the decoder");
+            sb.AppendLine("was being fed - the radio's USB CODEC via the Remote Audio bridge. Not a");
+            sb.AppendLine("separate capture: this is byte-for-byte what the live decoder heard.");
+            sb.AppendLine();
+            sb.AppendLine("started   " + startedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", inv)
+                          + " local (" + startedUtc.ToString("yyyy-MM-dd HH:mm:ss", inv) + "Z)");
+            sb.AppendLine("format    " + _source.SampleRate.ToString(inv) + " Hz, 1 ch, 16-bit, "
+                          + seconds.ToString("F1", inv) + " s");
+            if (!string.IsNullOrWhiteSpace(_radioModel))
+                sb.AppendLine("radio     " + _radioModel);
+            if (_state.FrequencyA > 0)
+                sb.AppendLine("frequency " + (_state.FrequencyA / 1_000_000.0).ToString("F6", inv)
+                              + " MHz (VFO A)");
+            if (!string.IsNullOrWhiteSpace(_state.ModeA))
+                sb.AppendLine("mode      " + _state.ModeA);
+            sb.AppendLine("pitch     " + _pitchHz.ToString("F0", inv) + " Hz (read from the radio, KP)");
+            sb.AppendLine(_filterWidthHz is int w
+                ? "filter    " + w.ToString(inv) + " Hz (read from the radio, SH)"
+                : "filter    not known - the decoder used its default search window");
+            sb.AppendLine("search    +/-" + _searchWindowHz.ToString("F0", inv)
+                          + " Hz (derived from the filter)");
+            sb.AppendLine("dropped   " + _source.DroppedFrames.ToString(inv)
+                          + " frames (reader session total, not just this capture)");
+            sb.AppendLine("APF       not recorded. The app's APF state is its own last request,");
+            sb.AppendLine("          not a read-back from the radio, so it is not evidence.");
+            sb.AppendLine();
+            sb.AppendLine("Run it with:");
+            sb.Append("  CwBench.exe bench/").Append(Path.GetFileName(path))
+              .Append(" --pitch ").Append(_pitchHz.ToString("F0", inv));
+            if (_filterWidthHz is int fw) sb.Append(" --filter ").Append(fw.ToString(inv));
+            sb.AppendLine();
+            sb.AppendLine();
+            sb.AppendLine("GROUND TRUTH: none. No independent decoder transcript and no operator");
+            sb.AppendLine("copy was recorded for this capture. The text below is OUR OWN decode at");
+            sb.AppendLine("the time - internal evidence about the tone and nothing more. Any");
+            sb.AppendLine("callsign in it is not a confirmed identification and must never be");
+            sb.AppendLine("promoted into ground truth later.");
+            sb.AppendLine();
+            sb.AppendLine("OUR DECODE AT CAPTURE TIME (" + decoded.Length.ToString(inv) + " chars):");
+            sb.AppendLine(decoded.Length > 0 ? decoded : "(nothing decoded)");
+            sb.AppendLine();
+            sb.AppendLine("VERDICT: <not yet written - say what this file is and is not evidence for>");
+
+            return sb.ToString();
+        }
 
         // ---- engine lifecycle ----------------------------------------------
 
@@ -433,6 +643,16 @@ namespace Yaesu_Web_Control.Services.Cw
         }
     }
 
+    /// <summary>What a finished bench capture produced.</summary>
+    public sealed class CwCaptureResult
+    {
+        public string Path { get; init; } = "";
+        public string? SidecarPath { get; init; }
+        public double Seconds { get; init; }
+        public int Characters { get; init; }
+        public long DroppedFrames { get; init; }
+    }
+
     /// <summary>One read of the reader's state, for the UI.</summary>
     public sealed class CwReaderSnapshot
     {
@@ -521,6 +741,12 @@ namespace Yaesu_Web_Control.Services.Cw
         /// being kept without having to go looking for it.
         /// </summary>
         public string? TranscriptPath { get; init; }
+
+        /// <summary>Where audio is being recorded, or null if it is not.</summary>
+        public string? CapturePath { get; init; }
+
+        /// <summary>Seconds captured so far, 0 when not recording.</summary>
+        public double CaptureSeconds { get; init; }
     }
 
     /// <summary>One poll's worth of the tuning figure.</summary>

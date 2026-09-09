@@ -71,6 +71,51 @@ namespace Yaesu_Web_Control.Controllers
         }
 
         /// <summary>
+        /// Record the audio the decoder is hearing, for the bench corpus.
+        ///
+        /// It taps the frames already flowing to the decoder rather than
+        /// opening a device, so it needs the reader to be running - and it
+        /// captures exactly what the decoder heard, which a separate recorder
+        /// could not.
+        /// </summary>
+        [HttpPost("capture/start")]
+        public IActionResult CaptureStart([FromQuery] string? name)
+        {
+            try
+            {
+                return Ok(new { path = _reader.StartCapture(name) });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to start the CW bench capture");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Stop recording and write the sidecar beside the wav.
+        /// </summary>
+        [HttpPost("capture/stop")]
+        public IActionResult CaptureStop()
+        {
+            try
+            {
+                var result = _reader.StopCapture();
+                if (result is null) return Conflict(new { error = "Nothing was being captured." });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to stop the CW bench capture");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Status plus whatever has been decoded since the caller's cursor.
         /// Pass the Cursor from the previous reply; 0 asks for everything the
         /// reader still holds.
