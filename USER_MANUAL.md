@@ -835,9 +835,21 @@ Click the **CW** button to open the CW Keyer pop-up panel.
 | Break-in | **Off** (keyer only), **Semi** (semi break-in), or **Full** (QSK full break-in) |
 | Delay | Semi break-in delay (0–2500 ms) — only relevant in Semi mode |
 | Pitch | CW sidetone pitch frequency (300–1050 Hz in 10 Hz steps). Also sets the CW receive offset so the radio zero-beats at this tone. Read from the radio on connect. |
-| M1–M5 buttons | Sends the corresponding memory message via the radio's KY CAT command |
+| M1–M5 buttons | Sends the corresponding memory message. See **Sending a memory message** below — there is more to it than it looks. |
 
 **CW memory messages** are configured on the **Settings** page (see Section 6.5). Each message can be up to 50 characters, which is the radio’s own keyer-memory limit. Use `{CALL}` as a placeholder for your callsign and it is filled in when the message is sent.
+
+#### Sending a memory message
+
+Click **M1**–**M5** and that message is sent. Four things about it are worth knowing before you use it on the air.
+
+**Break-in decides whether it goes out.** With Break-in set to **Semi** or **Full**, the message is transmitted. With Break-in **Off**, the radio plays it to the monitor only and no RF leaves the set — which is exactly how Yaesu suggests you check what is in a memory. The status line under the buttons always tells you which of the two happened, in those words, so you are never guessing. If you cannot see the BK-IN indicator on the radio, that line is your confirmation.
+
+**Turn the monitor up if you want to hear it.** Playing to the monitor is silent if the monitor level is down. The radio’s MONI control sets that.
+
+**A message cannot be stopped once it has started.** This is the radio, not the app: the FTdx101 CAT command set has no command that stops a CW message playback, and I measured every candidate on the air before writing this — including the one that looked like it worked and did not. While a message is playing the other M buttons are disabled, and pressing the playing one tells you it has to finish. The practical answer is to keep messages short. A full 50-character message runs about half a minute at 20 wpm, and that is half a minute you cannot take back.
+
+**YWC writes the message into the radio’s own keyer memory.** The five messages live in YWC’s settings on the PC; the radio holds five of its own. When you press M3, YWC reads the radio’s keyer memory 3, and if it does not already match, overwrites it with YWC’s M3 text before playing it. **So if you have programmed the radio’s keyer memories from the front panel, YWC will replace them with its own.** It only ever touches the slot whose button you pressed, and it does not write when the text already agrees — but if your front-panel memories matter to you, set YWC’s five to the same text.
 
 ![CW Keyer panel with Speed, Break-in, Delay, Pitch and M1–M5 memory buttons](pictures/CW-Keyer.png)
 
@@ -1336,6 +1348,9 @@ Enter up to five CW message memories. These are available from the CW Keyer pane
 - Maximum 50 characters per message (the radio’s keyer-memory limit)
 - Messages are saved in application settings and persist between sessions
 - Use the M1–M5 buttons in the CW panel to send a message
+- `{CALL}` is replaced with your callsign — the same one the DX cluster login uses
+- Sending a message **overwrites the matching keyer memory in the radio**, so the radio’s own M1–M5 end up holding whatever you type here (see Section 5.12)
+- Keep them short. A message cannot be stopped once it is sending — the radio has no command for it
 
 **Example messages:**
 
