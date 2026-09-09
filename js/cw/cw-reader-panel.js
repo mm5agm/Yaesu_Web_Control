@@ -110,16 +110,24 @@ export class CwReaderPanel {
     // ── Decoder control ─────────────────────────────────────────────────────
 
     async _toggleRunning() {
-        try {
-            // Stopping the decoder puts the radio back. The plan says the
-            // restore happens when the reader closes, but closing the dialog
-            // deliberately leaves the decoder running - so Stop, not close, is
-            // the moment the operator has actually finished reading. Closing
-            // the panel and finding the filter had silently re-opened to 2.4
-            // kHz mid-QSO would be the worse surprise of the two.
-            if (this._running && this._readerMode) await this._setReaderMode(false);
+        // Stopping the decoder puts the radio back. The plan says the restore
+        // happens when the reader closes, but closing the dialog deliberately
+        // leaves the decoder running - so Stop, not close, is the moment the
+        // operator has actually finished reading. Closing the panel and
+        // finding the filter had silently re-opened to 2.4 kHz mid-QSO would
+        // be the worse surprise of the two.
+        if (this._running) {
+            if (this._readerMode) await this._setReaderMode(false);
+            await this._sendRunning('stop');
+            return;
+        }
 
-            const res = await fetch(this._running ? '/api/cw/stop' : '/api/cw/start', { method: 'POST' });
+        await this._sendRunning('start');
+    }
+
+    async _sendRunning(what) {
+        try {
+            const res = await fetch(`/api/cw/${what}`, { method: 'POST' });
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
                 this._showError(body.error || `HTTP ${res.status}`);
