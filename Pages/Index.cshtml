@@ -4821,55 +4821,41 @@
             try { await fetch('/api/cat/cw/breakindelay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delayMs: parseInt(v) }) }); }
             catch (e) { console.error('setCwBreakInDelay error:', e); }
         }
-        // While a memory is playing, ANY M press stops it - so every button
-        // has to say so, because the aria-label is what a screen reader reads
-        // and it must describe what the press will actually do. The playing
-        // one is also marked visually, so you can see which is running.
-        // The panel has to know when the message ends on its own: the radio
-        // will say, RI4 is its PLAY flag, so follow it until it clears.
-        // One follower at a time; a new send supersedes the last.
+        // While a memory is playing nothing can stop it - the radio has no
+        // CAT command for that, measured 2026-09-09 - so the buttons say so.
+        // The playing one is marked, the rest go disabled until it ends, and
+        // the aria-label follows, because a screen reader reading "Send CW
+        // memory 2" off a button that will refuse is worse than no label.
         let cwPlaybackFollow = 0;
         // A press takes a few hundred ms to serve - the radio is asked whether
-        // anything is playing, then told to start or stop. A second press
+        // anything is playing before it is told what to do. A second press
         // inside that window is not a second decision, it is the same press
         // arriving twice: a rapid double click, a worn mouse switch, a key
         // repeat. Measured on the bench 2026-09-09, seven presses landed in
-        // 1.4s and alternated start/stop/start/stop, so the message restarted
-        // every time it was stopped and appeared never to stop at all.
-        // Ignore anything that arrives while a press is still being served.
+        // 1.4s. Ignore anything that arrives while a press is being served.
         let cwSendBusy = false;
-        function cwSetMemButton(index, state) {      // 'idle' | 'playing' | 'willstop'
+        function cwSetMemButton(index, state) {      // 'idle' | 'playing' | 'busy'
             const b = document.getElementById(`cwMemBtn${index}`);
             if (!b) return;
             const n = index + 1;
-            b.textContent = state === 'playing' ? `■ M${n}` : `M${n}`;
+            b.textContent = state === 'playing' ? `▶ M${n}` : `M${n}`;
             b.classList.toggle('btn-outline-warning', state === 'playing');
             b.classList.toggle('btn-outline-info', state !== 'playing');
-            if (state === 'idle') {
-                b.setAttribute('aria-label', `Send CW memory ${n}`);
-                b.title = `Send CW message M${n}`;
-            } else if (state === 'playing') {
-                b.setAttribute('aria-label', `Stop CW memory ${n}`);
-                b.title = `Stop sending CW message M${n}`;
-            } else {
-                b.setAttribute('aria-label', 'Stop the CW message that is sending');
-                b.title = 'Stop the CW message that is sending';
-            }
+            b.disabled = state === 'busy';
+            if (state === 'idle') { b.setAttribute('aria-label', `Send CW memory ${n}`); b.title = `Send CW message M${n}`; }
+            else if (state === 'playing') { b.setAttribute('aria-label', `CW memory ${n} is sending`); b.title = `M${n} is sending - it cannot be stopped`; }
+            else { b.setAttribute('aria-label', `Send CW memory ${n} - unavailable while a message is sending`); b.title = 'A message is sending'; }
         }
         function cwClearMemButtons() { for (let i = 0; i < 5; i++) cwSetMemButton(i, 'idle'); }
         async function cwFollowPlayback(index) {
             const token = ++cwPlaybackFollow;
-            for (let i = 0; i < 5; i++) cwSetMemButton(i, i === index ? 'playing' : 'willstop');
-            // ~90s ceiling: 50 characters at the slowest keyer speed is well
-            // inside that, and it stops the poll dead if a read ever wedges.
+            for (let i = 0; i < 5; i++) cwSetMemButton(i, i === index ? 'playing' : 'busy');
             for (let i = 0; i < 120 && token === cwPlaybackFollow; i++) {
                 await new Promise(r => setTimeout(r, 750));
                 if (token !== cwPlaybackFollow) return;
                 try {
                     const r = await fetch('/api/cat/cw/playing');
                     const d = await r.json().catch(() => ({}));
-                    // null means the read could not be taken this time round -
-                    // the radio is busy, not idle. Keep waiting.
                     if (d.playing === false) break;
                 } catch { break; }
             }
@@ -4894,12 +4880,6 @@
                 });
                 const d = await r.json().catch(() => ({}));
                 if (r.ok) {
-                    if (d.stopped) {
-                        cwPlaybackFollow++;          // call off the follower
-                        cwClearMemButtons();
-                        say(`M${index + 1} stopped.`);
-                        return;
-                    }
                     // Whether it went on the air is the part that matters, and
                     // an operator who cannot see the BK-IN lamp has no other way
                     // to know. Never just say "sent".

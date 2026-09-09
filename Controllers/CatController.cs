@@ -2900,32 +2900,33 @@ namespace Yaesu_Web_Control.Controllers
         // this is likely wrong on all of them.
         private static char KeyerPlaybackParam(int slot) => "6789A"[slot - 1];
 
-        // Stopping a playback.
+        // Stopping a playback: there is no way to do it. Not "no way found
+        // yet" - the FTdx101 CAT set does not contain one.
         //
-        // The CAT manual documents no stop at all: KY's P1 runs 1-A and every
-        // one of them is a playback. It turns out the stop is hiding in the
-        // half of that range which does nothing.
+        // MEASURED on an FTdx101MP, 2026-09-09, 5W into a dummy load, with
+        // TX polled every ~150ms alongside RI4. A known message ("TEST TEST")
+        // keys from 0.2s to 6.18s and RI4 clears at 6.0s as the keying stops,
+        // so RI4 is honest about when a Message Keyer playback ends and
+        // 6.18s is what "it ran to the end" looks like.
         //
-        // MEASURED on an FTdx101MP, 2026-09-09, break-in off so no RF: with
-        // the radio idle, KY1;-KY5; start no playback whatever (that is the
-        // same measurement that established the 6-A mapping above). With a
-        // playback RUNNING, any of KY1;-KY5; ends it inside 0.33s - against a
-        // 5.8s message that otherwise ran to completion in every control run.
-        // So the "Message Keyer" slots behave like empty messages: asking for
-        // one abandons whatever is playing and then finishes immediately.
+        // Sent 2s into that message, every one of these left the natural end
+        // untouched: KY0;, KY1;, TX0;, KR0; (keyer off), MX0;, BI0; (break-in
+        // off does not even unkey it), and rewriting the playing memory
+        // underneath it with KM. All ended at 6.16-6.43s.
         //
-        // That is what makes it usable as a stop. It needs nothing of the
-        // operator's set up a certain way - unlike KY8, playback of the empty
-        // keyer memory 3, which stopped it just as fast here but only because
-        // slot 3 happened to be empty on this radio.
+        // KY1; deserves its own warning, because it is a trap. It clears RI4
+        // within 30ms while the transmission carries on to the end. It was
+        // shipped here earlier the same day as the stop, on a measurement
+        // made with break-in off and RI4 as the only detector - the flag
+        // going out looked exactly like a stop, and with no RF there was no
+        // second witness. On air it is worse than useless: no stop, AND the
+        // app loses track of the playback. Withdrawn.
         //
-        // Things that do NOT stop it, all measured the same way, all ran the
-        // message to its natural end: KY0;, TX0;, KR0; (keyer off). And a
-        // second KY6; does not stop it either - it RESTARTS the message from
-        // the beginning, which is why pressing a different M button starts
-        // that message rather than needing a stop first.
-        private const string CwPlaybackStopCommand = "KY1;";
-
+        // The manual agrees, for what it is worth. The only Stop parameters
+        // anywhere in the FTdx101 CAT set are DVS recording, DVS playback and
+        // the antenna tuner. KY is ten playbacks - Keyer Memory 1-5 and
+        // Message Keyer 1-5 - and no stop.
+        //
         // RI4 is the radio's own PLAY flag: "RI41" while a keyer playback is
         // running, "RI40" when it is not. RI is read-only and answers with
         // break-in off, so a playback can be watched without any RF at all.
@@ -2999,24 +3000,18 @@ namespace Yaesu_Web_Control.Controllers
             {
                 await EnsureConnectedAsync();
 
-                // Any M press while something is playing stops it. The radio
-                // is asked directly and nothing else is consulted - in
-                // particular not which slot we think started it.
-                //
-                // The first cut of this only stopped when the pressed slot
-                // matched _playingSlot, which read nicely and failed on the
-                // bench: that field is cleared by the panel's own RI4 poll,
-                // so one unanswered read turned the next press back into a
-                // send - and a repeat KY restarts the message rather than
-                // stopping it, so the operator presses stop and hears the
-                // message begin again. Keep the decision to one question the
-                // radio itself answers.
+                // A press while something is playing cannot stop it, so say
+                // so rather than start a second message on top of the first.
+                // Sending KY again does not stop it either - it restarts the
+                // message from the beginning, which is the last thing a hand
+                // reaching for a stop button wants.
                 if (await ReadPlaybackActiveAsync() == true)
                 {
-                    await _catClient.SendCommandAsync(CwPlaybackStopCommand, "WebUI", CancellationToken.None);
-                    _playingSlot = 0;
-                    _logger.LogInformation("CW playback stopped by M{Slot}", request.Slot);
-                    return Ok(new { slot = request.Slot, stopped = true });
+                    _logger.LogInformation("CW M{Slot} pressed while playing - no stop exists", request.Slot);
+                    return StatusCode(409, new
+                    {
+                        error = "A message is already sending. The radio has no CAT command to stop it, so this one has to finish."
+                    });
                 }
 
                 var stored = await ReadKeyerMemoryAsync(request.Slot);
