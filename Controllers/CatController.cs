@@ -2521,10 +2521,23 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                var vfo = receiver.ToUpper() == "A" ? "0" : "1";
-                await _catClient.SendCommandAsync($"ML{vfo}{request.Level:D3};", "WebUI", CancellationToken.None);
-                if (vfo == "0") _radioStateService.MonitorLevelA = request.Level;
-                else            _radioStateService.MonitorLevelB = request.Level;
+
+                // ML's P1 is NOT the receiver - it selects which monitor
+                // property you are addressing: "ML P1 P2P2P2;" with P1=0 for
+                // MONI on/off (P2 = 000 off / 001 on) and P1=1 for MONI level
+                // (P2 = 000-100). Measured on the FTdx101MP 2026-09-09 and
+                // confirmed against the CAT manual's own column positions.
+                //
+                // This sent ML0<level>, i.e. the on/off parameter, so the level
+                // slider has never set the level on any supported radio: every
+                // value except 0 and 1 was rejected outright, and those two
+                // silently switched the monitor off and on instead. There is
+                // one monitor level on the radio, not one per receiver, so the
+                // route's {receiver} has nothing to select - it is kept so
+                // existing callers and the saved UI state still bind.
+                await _catClient.SendCommandAsync($"ML1{request.Level:D3};", "WebUI", CancellationToken.None);
+                _radioStateService.MonitorLevelA = request.Level;
+                _radioStateService.MonitorLevelB = request.Level;
                 return Ok();
             }
             catch (Exception ex)
