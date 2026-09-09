@@ -180,8 +180,26 @@ namespace Yaesu_Web_Control.Controllers
             }
         }
 
+        /// <summary>
+        /// Reader Mode's view of the radio. <c>refresh=true</c> asks the radio
+        /// instead of the cache, which the panel does before deciding whether
+        /// to offer to set things up.
+        /// </summary>
         [HttpGet("readermode")]
-        public IActionResult ReaderModeStatus() => Ok(_readerMode.Status());
+        public async Task<IActionResult> ReaderModeStatus([FromQuery] bool refresh, CancellationToken ct)
+        {
+            try
+            {
+                return Ok(await _readerMode.StatusAsync(refresh, ct));
+            }
+            catch (Exception ex)
+            {
+                // A status read that throws must not stop the operator
+                // starting the decoder, so this is reported and not fatal.
+                _logger.LogWarning(ex, "Could not read Reader Mode status");
+                return Ok(await _readerMode.StatusAsync(false, ct));
+            }
+        }
 
         /// <summary>Where the log and this session's transcript are on disk.</summary>
         [HttpGet("files")]

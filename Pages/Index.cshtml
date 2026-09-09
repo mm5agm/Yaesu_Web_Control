@@ -2535,6 +2535,11 @@
     }
     .cwq-status { font-size: 0.85rem; color: #9d9; margin-top: 0.35rem; min-height: 1.2rem; }
     .cwq-status.cwq-problem { color: #ffd23f; font-weight: 600; }
+
+    .cwr-setup-prompt {
+        background: #2c2a1e; border-bottom: 1px solid #4a452a;
+        color: #ffd23f; font-size: 0.85rem;
+    }
 </style>
 <dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:620px; max-width:95vw;" aria-labelledby="cwReaderTitle">
     <div class="cwr-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
@@ -2559,6 +2564,15 @@
                     onclick="document.getElementById('cwReaderDialog').close()"
                     aria-label="Close CW reader panel">&#10005;</button>
         </div>
+    </div>
+    <!-- Offered on Start when the radio as it stands would make the decode
+         harder than it needs to be. It asks rather than acting, because
+         setting up for decoding moves the operator's filter. -->
+    <div id="cwReaderSetupPrompt" class="cwr-setup-prompt d-flex align-items-center gap-2 px-3 py-2" hidden
+         role="group" aria-labelledby="cwReaderSetupText">
+        <span id="cwReaderSetupText" class="flex-grow-1"></span>
+        <button id="cwReaderSetupYes" class="btn btn-sm btn-warning" type="button">Set the radio up</button>
+        <button id="cwReaderSetupNo" class="btn btn-sm btn-outline-secondary" type="button">Not now</button>
     </div>
     <div class="p-2">
         <div class="d-flex gap-2 align-items-start">
