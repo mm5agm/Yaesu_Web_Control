@@ -2076,7 +2076,7 @@
             <label class="mb-0 text-nowrap" style="min-width:100px;">Pitch: <span id="cwPitchHz">@(300 + Model.CwPitch * 10)</span> Hz</label>
             <input type="range" id="cwPitchSlider" min="0" max="75" step="1" value="@Model.CwPitch"
                    style="flex:1; height:18px;"
-                   oninput="document.getElementById('cwPitchHz').textContent = (300 + parseInt(this.value) * 10) + ' Hz'"
+                   oninput="document.getElementById('cwPitchHz').textContent = 300 + parseInt(this.value) * 10"
                    onchange="setCwPitch(this.value)"
                    aria-label="CW pitch frequency" title="CW sidetone pitch (300–1050 Hz)">
         </div>
@@ -4847,17 +4847,35 @@
             else { b.setAttribute('aria-label', `Send CW memory ${n} - unavailable while a message is sending`); b.title = 'A message is sending'; }
         }
         function cwClearMemButtons() { for (let i = 0; i < 5; i++) cwSetMemButton(i, 'idle'); }
-        async function cwFollowPlayback(index) {
+        // RI4 is the radio's playing flag, and it only ever reports a
+        // playback that is keying the transmitter. With break-in off the
+        // memory plays to the sidetone monitor and RI4 stays 0 throughout -
+        // measured 2026-09-09, sixteen consecutive polls of 0 across a
+        // message the operator could hear. Ending the wait on the first
+        // RI40 therefore cleared the buttons instantly on every monitor-only
+        // send, which is exactly the "I don't see a disabled state" report.
+        //
+        // So RI4 can only END the wait once it has first CONFIRMED a start.
+        // Until it does, the server's estimate of how long the message takes
+        // holds the buttons instead. A flag that never asserts can no longer
+        // be read as "already finished".
+        async function cwFollowPlayback(index, estimatedMs) {
             const token = ++cwPlaybackFollow;
             for (let i = 0; i < 5; i++) cwSetMemButton(i, i === index ? 'playing' : 'busy');
-            for (let i = 0; i < 120 && token === cwPlaybackFollow; i++) {
-                await new Promise(r => setTimeout(r, 750));
+            const endBy = Date.now() + Math.max(1000, estimatedMs || 0);
+            let sawPlaying = false;
+            for (let i = 0; i < 240 && token === cwPlaybackFollow; i++) {
+                await new Promise(r => setTimeout(r, 500));
                 if (token !== cwPlaybackFollow) return;
+                let playing = null;
                 try {
                     const r = await fetch('/api/cat/cw/playing');
                     const d = await r.json().catch(() => ({}));
-                    if (d.playing === false) break;
+                    playing = d.playing;
                 } catch { break; }
+                if (playing === true) { sawPlaying = true; continue; }
+                if (playing === false && sawPlaying) break;   // it started, it has finished
+                if (Date.now() >= endBy) break;               // the estimate has run out
             }
             if (token === cwPlaybackFollow) cwClearMemButtons();
         }
@@ -4883,12 +4901,13 @@
                     // Whether it went on the air is the part that matters, and
                     // an operator who cannot see the BK-IN lamp has no other way
                     // to know. Never just say "sent".
+                    const secs = d.estimatedMs ? ` (about ${Math.round(d.estimatedMs / 1000)} seconds)` : '';
                     if (d.transmitted === false) {
-                        say(`M${index + 1} played to the monitor only, not transmitted - break-in is off. ${d.sent || ''}`);
+                        say(`M${index + 1} played to the monitor only, not transmitted - break-in is off${secs}. ${d.sent || ''}`);
                     } else {
-                        say(`Transmitted M${index + 1}: ${d.sent || ''}`);
+                        say(`Transmitted M${index + 1}${secs}: ${d.sent || ''}`);
                     }
-                    cwFollowPlayback(index);
+                    cwFollowPlayback(index, d.estimatedMs);
                     return;
                 }
                 say(d.error || `M${index + 1} was not sent (HTTP ${r.status}).`, true);

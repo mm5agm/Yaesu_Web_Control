@@ -1796,7 +1796,10 @@ connection.on("RadioStateUpdate", function (update) {
     if (update.property === "CwPitch") {
         const s = document.getElementById('cwPitchSlider'); const l = document.getElementById('cwPitchHz');
         if (s) s.value = update.value;
-        if (l) l.textContent = (300 + parseInt(update.value) * 10) + ' Hz';
+        // The label already supplies the unit, so write the number alone -
+        // appending ' Hz' here rendered as "Pitch: 700 Hz Hz" the moment the
+        // radio's own CwPitch arrived over SignalR.
+        if (l) l.textContent = 300 + parseInt(update.value) * 10;
     }
     if (update.property === "CwSpeed") {
         const s = document.getElementById('cwSpeedSlider'); const l = document.getElementById('cwSpeedValue');

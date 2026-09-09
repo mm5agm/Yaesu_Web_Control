@@ -2935,6 +2935,31 @@ namespace Yaesu_Web_Control.Controllers
         // "nothing is playing". Conflating the two is what made the first cut
         // of this feature fail on the bench: one missed read and the next
         // button press sent instead of stopping, which RESTARTS the message.
+        // Keyer speed, so the panel can say how long a playback will take.
+        // KS is three digits of words per minute (004-060).
+        private async Task<int?> ReadKeyerSpeedAsync()
+        {
+            var r = await _catClient!.SendCommandAsync("KS;", "WebUI", CancellationToken.None, 600);
+            if (string.IsNullOrEmpty(r)) return null;
+            var i = r.IndexOf("KS", StringComparison.Ordinal);
+            if (i < 0 || r.Length < i + 5) return null;
+            return int.TryParse(r.Substring(i + 2, 3), out var wpm) && wpm > 0 ? wpm : null;
+        }
+
+        // How long this message will take to send, in milliseconds.
+        //
+        // PARIS: a "word" is 50 dit units and five characters, so ten units
+        // per character once the inter-character and word gaps are shared out.
+        // A unit is 1200/wpm ms.
+        //
+        // Checked against the on-air yardstick from 2026-09-09: "TEST TEST"
+        // is 9 characters and keyed for 6.0s, which this formula puts at
+        // 18 wpm - the speed the radio was actually set to. It is an
+        // estimate, not a measurement, so it is only ever used as a floor
+        // for the button state, never as the thing that ends a playback.
+        private static int EstimateCwDurationMs(string text, int wpm)
+            => (int)Math.Clamp((long)text.Length * 10L * 1200L / Math.Max(1, wpm), 500L, 120000L);
+
         private async Task<bool?> ReadPlaybackActiveAsync()
         {
             var r = await _catClient!.SendCommandAsync("RI4;", "WebUI", CancellationToken.None, 600);
@@ -3048,6 +3073,10 @@ namespace Yaesu_Web_Control.Controllers
                 var breakIn = await ReadBreakInAsync();
                 bool transmitted = breakIn != "0";
 
+                // Read the speed before starting, not after: once KY is away
+                // the radio is busy keying and a KS read competes with it.
+                var wpm = await ReadKeyerSpeedAsync();
+
                 await _catClient.SendCommandAsync($"KY{KeyerPlaybackParam(request.Slot)};", "WebUI", CancellationToken.None);
                 _playingSlot = request.Slot;
                 // Logged at Information, with the stop above it: an operator
@@ -3066,6 +3095,7 @@ namespace Yaesu_Web_Control.Controllers
                     wroteMemory,
                     breakIn,
                     transmitted,
+                    estimatedMs = EstimateCwDurationMs(clean, wpm ?? 18),
                     note = transmitted
                         ? null
                         : "Break-in is off, so this played to the monitor only and was not transmitted."
@@ -3100,6 +3130,27 @@ namespace Yaesu_Web_Control.Controllers
             }
             finally { _requestSemaphore.Release(); }
         }
+
+        // Read-only dump of everything that decides whether an M button does
+        // anything. Added after a bench session where a press was accepted,
+        // logged, and produced no CW at all - with no way to ask the radio
+        // why without rebuilding the app. Reads only; sends nothing that
+        // changes state and cannot transmit.
+        [HttpGet("cw/state")]
+        public async Task<IActionResult> GetCwState()
+        {
+            if (_catClient == null) return StatusCode(503, new { error = "Not connected" });
+            if (!await _requestSemaphore.WaitAsync(2000)) return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                var r = new Dictionary<string, string?>();
+                foreach (var cmd in new[] { "BI;", "KR;", "RI4;", "ML0;", "ML1;", "KS;", "KM1;", "TX;" })
+                    r[cmd] = await _catClient.SendCommandAsync(cmd, "WebUI", CancellationToken.None, 600);
+                return Ok(r);
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
 
         public class KeyerMemoryRequest { public string Text { get; set; } = ""; }
 
