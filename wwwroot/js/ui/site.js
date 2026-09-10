@@ -1429,7 +1429,9 @@ connection.on("RadioStateUpdate", function (update) {
         // The radio's own scope display follows the operating band, so point
         // the CAT scope controls at the same band. Absent on models without
         // the SS command, and a no-op on single-receiver ones.
-        window.radioScopeControl?.setActiveBand(update.value);
+        window.notifyRadioScopeControls
+            ? window.notifyRadioScopeControls(c => c.setActiveBand(update.value))
+            : window.radioScopeControl?.setActiveBand(update.value);
     }
 
     // --- RADIO SCOPE CHANGED AT THE FRONT PANEL ---
@@ -1438,7 +1440,9 @@ connection.on("RadioStateUpdate", function (update) {
     // already follows its own writes. Transient: nothing is stored server-side
     // (see RadioStateService.BroadcastTransient).
     if (update.property === "ScopeSetting") {
-        window.radioScopeControl?.applyRemote(update.value);
+        window.notifyRadioScopeControls
+            ? window.notifyRadioScopeControls(c => c.applyRemote(update.value))
+            : window.radioScopeControl?.applyRemote(update.value);
     }
 
     // --- SPLIT MODE ---

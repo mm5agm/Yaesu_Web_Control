@@ -98,7 +98,7 @@ public class ScopeController : ControllerBase
     /// <summary>
     /// POST /api/scope/{main|sub}/{setting}   body: { "value": "..." }
     ///
-    /// setting is one of: span, mode, hold, marker, peak, speed, level.
+    /// setting is one of: span, mode, hold, marker, peak, speed, level, affft.
     /// Returns the re-read state, so the caller can see what the radio actually
     /// did rather than what it was asked to do.
     ///
@@ -168,10 +168,40 @@ public class ScopeController : ControllerBase
                 frame = ScopeCommands.Set(p1, ScopeCommands.Peak, peak);
                 break;
 
+            case "color":
+                // Three axes packed into one SS P2=3 field. Writing any one of
+                // them with a single-character Set() would zero the other two.
+                if (!ScopeCommands.TryParseColorRequest(value, out var color, out var nbColor, out var nbOn,
+                        out var hasColor, out var hasNbColor, out var hasNbOn))
+                    return BadRequest(new { error = "color must be 1 character (0-9/A), 3 characters, n0-n6 (NB colour), or o0/o1 (NB on)" });
+                if (!await _gate.WaitAsync(2000))
+                    return StatusCode(503, new { error = "Radio busy" });
+                try
+                {
+                    await EnsureConnectedAsync();
+                    var current = await ReadFieldAsync(p1, ScopeCommands.Color);
+                    var (curColor, curNb, curOn) = ScopeCommands.ParseColor(current);
+                    if (!hasColor)  color   = curColor;
+                    if (!hasNbColor) nbColor = curNb;
+                    if (!hasNbOn)    nbOn    = curOn;
+                    frame = ScopeCommands.SetColor(p1, color, nbColor, nbOn);
+                    await _catClient.SendCommandAsync(frame, "WebUI", CancellationToken.None);
+                    _logger.LogInformation("Scope {Band} color -> {Frame}", band, frame);
+                    await Task.Delay(SettleAfterWriteMs);
+                    return Ok(await ReadStateAsync(p1, model));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error setting scope color on {Band}", band);
+                    return StatusCode(500, new { error = "Failed to set scope color" });
+                }
+                finally { _gate.Release(); }
+
             case "speed":
                 // The FT-710 adds a sixth setting, STOP (5); the others stop at
-                // FAST3 (4).
-                var maxSpeed = model == "FT-710" ? 5 : 4;
+                // FAST3 (4). Labels are the source of truth so a new radio
+                // that documents a different list does not need a second if.
+                var maxSpeed = Math.Max(0, RadioCapabilities.ScopeSpeedLabels(model).Length - 1);
                 if (!TryDigit(value, 0, maxSpeed, out var speed))
                     return BadRequest(new { error = $"speed must be 0-{maxSpeed} for {model}" });
                 frame = ScopeCommands.Set(p1, ScopeCommands.Speed, speed);
@@ -184,10 +214,43 @@ public class ScopeController : ControllerBase
                 frame = ScopeCommands.SetLevel(p1, db);
                 break;
 
+            case "affft":
+                // Three axes packed into one SS P2=7 field. Writing any one of
+                // them with a single-character Set() would zero the other two,
+                // so we read the current field, overlay the digits the caller
+                // sent, and write the triple back.
+                if (!RadioCapabilities.SupportsScopeAfFft(model))
+                    return BadRequest(new { error = $"{model} has no AF-FFT / oscilloscope CAT control" });
+                if (!ScopeCommands.TryParseAfFftRequest(value, out var fftAtt, out var oscAtt, out var oscTime,
+                        out var hasFftAtt, out var hasOscAtt, out var hasOscTime))
+                    return BadRequest(new { error = "affft must be 1 digit (FFT ATT), 3 digits, a0-a2 (OSC ATT), or t0-t5 (OSC time)" });
+                if (!await _gate.WaitAsync(2000))
+                    return StatusCode(503, new { error = "Radio busy" });
+                try
+                {
+                    await EnsureConnectedAsync();
+                    var current = await ReadFieldAsync(p1, ScopeCommands.AfFft);
+                    var (curFft, curOsc, curTime) = ScopeCommands.ParseAfFft(current);
+                    if (!hasFftAtt)  fftAtt  = curFft;
+                    if (!hasOscAtt)  oscAtt  = curOsc;
+                    if (!hasOscTime) oscTime = curTime;
+                    frame = ScopeCommands.SetAfFft(p1, fftAtt, oscAtt, oscTime);
+                    await _catClient.SendCommandAsync(frame, "WebUI", CancellationToken.None);
+                    _logger.LogInformation("Scope {Band} affft -> {Frame}", band, frame);
+                    await Task.Delay(SettleAfterWriteMs);
+                    return Ok(await ReadStateAsync(p1, model));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error setting scope affft on {Band}", band);
+                    return StatusCode(500, new { error = "Failed to set scope affft" });
+                }
+                finally { _gate.Release(); }
+
             default:
                 return BadRequest(new
                 {
-                    error = $"Unknown scope setting '{setting}'. Expected span, mode, hold, marker, peak, speed or level."
+                    error = $"Unknown scope setting '{setting}'. Expected span, mode, hold, marker, peak, color, speed, level or affft."
                 });
         }
 
@@ -234,9 +297,32 @@ public class ScopeController : ControllerBase
         var speed  = await ReadValueAsync(p1, ScopeCommands.Speed);
         var level  = await ReadFieldAsync(p1, ScopeCommands.Level);
 
+        char? color = null, nbColor = null, nbOn = null;
+        var colorField = await ReadFieldAsync(p1, ScopeCommands.Color);
+        if (colorField is not null)
+        {
+            var parsedColor = ScopeCommands.ParseColor(colorField);
+            color   = parsedColor.Color;
+            nbColor = parsedColor.NbColor;
+            nbOn    = parsedColor.NbOn;
+        }
+
         char? hold = null;
         if (RadioCapabilities.SupportsScopeHold(model))
             hold = await ReadValueAsync(p1, ScopeCommands.Hold);
+
+        string? fftAtt = null, oscAtt = null, oscTime = null;
+        if (RadioCapabilities.SupportsScopeAfFft(model))
+        {
+            var affft = await ReadFieldAsync(p1, ScopeCommands.AfFft);
+            var parsed = ScopeCommands.ParseAfFft(affft);
+            if (affft is not null)
+            {
+                fftAtt  = parsed.FftAtt.ToString();
+                oscAtt  = parsed.OscAtt.ToString();
+                oscTime = parsed.OscTime.ToString();
+            }
+        }
 
         var (is3dss, placement, size) = mode is { } m
             ? ScopeCommands.ParseMode(m)
@@ -253,7 +339,13 @@ public class ScopeController : ControllerBase
             hold      = hold?.ToString(),
             marker    = marker?.ToString(),
             peak      = peak?.ToString(),
+            color     = color?.ToString(),
+            nbColor   = nbColor?.ToString(),
+            nbOn      = nbOn?.ToString(),
             speed     = speed?.ToString(),
+            fftAtt,
+            oscAtt,
+            oscTime,
             // Sent as the raw five-character field ("+05.0") — the browser
             // displays it as-is, so there is no float round-trip to disagree
             // about.

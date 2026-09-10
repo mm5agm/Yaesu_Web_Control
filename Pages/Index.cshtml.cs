@@ -98,6 +98,11 @@ namespace Yaesu_Web_Control.Pages
         // Default false; user enables via Settings > Accessibility.
         public bool ShowFrequencyArrowButtons { get; set; } = false;
 
+        /// <summary>True when Settings has Radio Display enabled, so Index can
+        /// hide the standalone Radio Scope card (those controls live on the
+        /// video panel instead) and render the video toolbar.</summary>
+        public bool VideoDisplayEnabled { get; set; } = false;
+
         // Optional browser key that toggles TX. Empty = disabled.
         public string TxToggleKey { get; set; } = string.Empty;
 
@@ -160,6 +165,7 @@ namespace Yaesu_Web_Control.Pages
             BandPlan = settings.BandPlan switch { "UK" => "Region1", "USA" => "Region2", var v => v };
             RadioModel = settings.RadioModel;
             InstalledRoofingFilters = settings.InstalledRoofingFilters;
+            VideoDisplayEnabled = settings.VideoDisplayEnabled;
 
             // Load persisted MIC Gain, PROC, and other TX controls
             MicGain = _radioStateService.MicGain;

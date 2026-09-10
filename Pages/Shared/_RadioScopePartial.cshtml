@@ -14,9 +14,7 @@
     // See docs/design/scope-control-via-cat.md.
     var radioModel = Model ?? "";
     var hasScope   = Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(radioModel);
-    var hasHold    = Yaesu_Web_Control.Services.RadioCapabilities.SupportsScopeHold(radioModel);
     var hasSub     = Yaesu_Web_Control.Services.RadioCapabilities.HasPerReceiverScopes(radioModel);
-    var sizeLabels = Yaesu_Web_Control.Services.RadioCapabilities.ScopeSizeLabels(radioModel);
 
     // Start pointed at whichever band the radio is actually operating on, so the
     // panel opens aimed at the scope on screen. Rendered server-side rather than
@@ -24,42 +22,24 @@
     // and read from before any broadcast arrives, and being aimed at the wrong
     // scope for even one interaction is exactly the confusion this avoids.
     var initialBand = (hasSub && RadioState.ActiveVfo == 1) ? "sub" : "main";
-
-    // SS P2=5 span table — identical across every model that has the command.
-    var spans = new (string Value, string Label)[]
-    {
-        ("0", "1k"), ("1", "2k"), ("2", "5k"), ("3", "10k"), ("4", "20k"),
-        ("5", "50k"), ("6", "100k"), ("7", "200k"), ("8", "500k"), ("9", "1M")
-    };
-
-    // Long-form size names for the tooltips. The FT-710's two-entry vocabulary
-    // is genuinely different, not an abbreviation of the other radios' three.
-    string SizeTitle(string s) => s switch
-    {
-        "L"      => "Large",
-        "N"      => "Normal",
-        "S"      => "Small",
-        _        => s
-    };
 }
 
 @if (hasScope)
 {
     <div id="radioScopeCard" class="card border-dark mt-3" data-initial-band="@initialBand">
-        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1"
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1 scope-toggle"
              role="button" tabindex="0" id="radioScopeToggle"
-             aria-expanded="false" aria-controls="radioScopeBody"
-             title="Change what the radio's own screen is showing. Collapsed by default — these controls drive the radio, not the spectrum panel below.">
+             aria-expanded="false" aria-controls="radioScopeBody">
             <span class="small fw-bold">
                 <i class="bi bi-display me-1" aria-hidden="true"></i>Radio Scope &mdash; the radio's own display
             </span>
             <span class="d-flex align-items-center gap-2">
-                <span id="radioScopeStatus" class="badge bg-secondary small">&mdash;</span>
-                <i id="radioScopeChevron" class="bi bi-chevron-down" aria-hidden="true"></i>
+                <span class="scope-status badge bg-secondary small">&mdash;</span>
+                <i class="scope-chevron bi bi-chevron-down" aria-hidden="true"></i>
             </span>
         </div>
 
-        <div id="radioScopeBody" class="card-body py-2" style="display:none;">
+        <div id="radioScopeBody" class="card-body py-2 scope-body" style="display:none;">
             @if (hasSub)
             {
                 @* These SWITCH THE RADIO's band, via the same VS command and the
@@ -71,14 +51,12 @@
                    of this row so confusing. The controls below then follow the
                    band automatically (see setActiveBand in radio-scope.js). *@
                 <div class="d-flex align-items-center gap-2 mb-1">
-                    <span class="small text-muted" style="min-width:5.5em;">Band</span>
+                    <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Which physical receiver's scope the radio is showing. Switching band here is the same as clicking the VFO A or VFO B panel header.">Band</span>
                     <div class="btn-group btn-group-sm" role="group" aria-label="Which band's scope to show and adjust">
                         <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "main" ? "active" : "")"
-                                data-band="main" data-a11y-key="radioScope.bandMain"
-                                title="Switch the radio to MAIN — the screen shows the MAIN scope and the controls below follow">MAIN</button>
+                                data-band="main" data-a11y-key="radioScope.bandMain">MAIN</button>
                         <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "sub" ? "active" : "")"
-                                data-band="sub" data-a11y-key="radioScope.bandSub"
-                                title="Switch the radio to SUB — the screen shows the SUB scope and the controls below follow">SUB</button>
+                                data-band="sub" data-a11y-key="radioScope.bandSub">SUB</button>
                     </div>
                 </div>
                 <div class="form-text mb-2">
@@ -89,90 +67,11 @@
                 </div>
             }
 
-            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                <span class="small text-muted" style="min-width:5.5em;">Span</span>
-                <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Radio scope span">
-                    @foreach (var (value, label) in spans)
-                    {
-                        <button type="button" class="btn btn-outline-secondary scope-span-btn"
-                                data-value="@value" data-a11y-key="radioScope.span@(label)"
-                                aria-label="Radio scope span @label" title="Radio scope span @label">@label</button>
-                    }
-                </div>
-            </div>
+            <partial name="_RadioScopeButtonsPartial" model="@radioModel" />
 
-            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                <span class="small text-muted" style="min-width:5.5em;">Display</span>
-                <div class="btn-group btn-group-sm" role="group" aria-label="Radio scope display type">
-                    <button type="button" class="btn btn-outline-secondary scope-type-btn"
-                            data-value="wf" data-a11y-key="radioScope.typeWf"
-                            title="Waterfall display">W/F</button>
-                    <button type="button" class="btn btn-outline-secondary scope-type-btn"
-                            data-value="3dss" data-a11y-key="radioScope.type3dss"
-                            title="3DSS — the radio's three-dimensional spectrum stream display">3DSS</button>
-                </div>
-
-                <div class="btn-group btn-group-sm ms-2" role="group" aria-label="Radio scope placement">
-                    <button type="button" class="btn btn-outline-secondary scope-place-btn"
-                            data-value="0" data-a11y-key="radioScope.placeCenter"
-                            title="Centre — the scope stays centred on the operating frequency">Center</button>
-                    <button type="button" class="btn btn-outline-secondary scope-place-btn"
-                            data-value="1" data-a11y-key="radioScope.placeCursor"
-                            title="Cursor — the marker moves within a fixed window">Cursor</button>
-                    <button type="button" class="btn btn-outline-secondary scope-place-btn"
-                            data-value="2" data-a11y-key="radioScope.placeFix"
-                            title="Fix — the window stays put on the band regardless of where you tune">Fix</button>
-                </div>
-
-                @* Size applies to the waterfall modes only — 3DSS has no size
-                   variants at all, so the group is disabled rather than hidden
-                   when 3DSS is selected. Hiding it would reflow the row every
-                   time the operator switched display type. *@
-                <div id="scopeSizeGroup" class="btn-group btn-group-sm ms-2" role="group" aria-label="Radio scope size">
-                    @for (var i = 0; i < sizeLabels.Length; i++)
-                    {
-                        <button type="button" class="btn btn-outline-secondary scope-size-btn"
-                                data-value="@i" data-a11y-key="radioScope.size@(sizeLabels[i])"
-                                title="@SizeTitle(sizeLabels[i]) — waterfall modes only">@sizeLabels[i]</button>
-                    }
-                </div>
-            </div>
-
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="small text-muted" style="min-width:5.5em;">Options</span>
-                @if (hasHold)
-                {
-                    <button type="button" class="btn btn-outline-secondary btn-sm scope-toggle-btn"
-                            data-setting="hold" data-a11y-key="radioScope.hold"
-                            title="Freeze the radio's scope trace so you can study it. Click again to resume.">Hold</button>
-                }
-                <button type="button" class="btn btn-outline-secondary btn-sm scope-toggle-btn"
-                        data-setting="marker" data-a11y-key="radioScope.marker"
-                        title="Show or hide the frequency marker on the radio's scope">Marker</button>
-
-                <span class="small text-muted ms-2">Level</span>
-                <input type="range" class="form-range" id="scopeLevelSlider"
-                       min="-30" max="30" step="0.5" value="0"
-                       aria-label="Radio scope reference level in dB"
-                       title="Reference level of the radio's scope, -30 to +30 dB in 0.5 dB steps"
-                       style="flex:0 1 140px; min-width:90px;">
-                <span id="scopeLevelLabel" class="text-monospace small" style="min-width:4em;">&mdash;</span>
-            </div>
-
-            @if (!hasHold)
-            {
-                <div class="form-text mt-2">
-                    The @radioModel has no scope Hold — its SS command genuinely stops one
-                    sub-command short of the FTdx101 and FTdx10, so there is nothing to send.
-                </div>
-            }
             <div class="form-text mt-1">
                 The radio keeps a separate span for each display mode, so the highlighted span
                 may change when you switch between W/F and 3DSS. That is the radio doing it, not YWC.
-            </div>
-            <div class="form-text mt-1">
-                Mono / Multi cannot be changed from here: Yaesu exposes no CAT command for it
-                on any supported model. It stays a front-panel control.
             </div>
         </div>
     </div>

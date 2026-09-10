@@ -382,6 +382,208 @@
             $"{Opcode}{band}{subCommand}{value}0000;";
 
         /// <summary>
+        /// Set frame for AF-FFT / OSCILLOSCOPE (P2=7). Unlike the other
+        /// single-character sub-commands, P3/P4/P5 are three independent axes
+        /// packed into one field: FFT ATT, OSC ATT, OSC timebase. Writing any
+        /// one of them with Set() would zero the other two, so they must go
+        /// out together. P6-P7 are documented as fixed 0.
+        ///
+        /// P3 0/1/2 = AF-FFT ATT 0/10/20 dB
+        /// P4 0/1/2 = OSC level ATT 0/10/20 dB
+        /// P5 0-5   = OSC time 1/3/10/30/100/300 ms
+        /// </summary>
+        public static string SetAfFft(char band, char fftAtt, char oscAtt, char oscTime)
+        {
+            fftAtt  = ClampDigit(fftAtt,  '2');
+            oscAtt  = ClampDigit(oscAtt,  '2');
+            oscTime = ClampDigit(oscTime, '5');
+            return $"{Opcode}{band}{AfFft}{fftAtt}{oscAtt}{oscTime}00;";
+        }
+
+        /// <summary>
+        /// Unpacks the P2=7 five-character field into the three axes the UI
+        /// exposes. "11200" => FFT ATT 10 dB, OSC ATT 10 dB, OSC 10 ms.
+        /// Missing characters default to '0' rather than throwing — a short
+        /// or null field is treated as unknown-but-harmless, same as Value().
+        /// </summary>
+        public static (char FftAtt, char OscAtt, char OscTime) ParseAfFft(string? field)
+        {
+            var f = (field ?? "00000").PadRight(5, '0');
+            return (f[0], f[1], f[2]);
+        }
+
+        /// <summary>
+        /// Set frame for COLOR (P2=3). P3/P4/P5 are independent axes packed into
+        /// one field: scope colour, narrow-band colour, NB-colour on/off.
+        /// Writing any one of them with Set() would zero the other two.
+        ///
+        /// P3 0–9/A = colour 1–11
+        /// P4 0–6   = narrow-band colour 1–7
+        /// P5 0/1   = narrow-band colour off/on
+        /// </summary>
+        public static string SetColor(char band, char color, char nbColor, char nbOn)
+        {
+            color   = ClampColor(color);
+            nbColor = ClampDigit(nbColor, '6');
+            nbOn    = ClampDigit(nbOn,    '1');
+            return $"{Opcode}{band}{Color}{color}{nbColor}{nbOn}00;";
+        }
+
+        /// <summary>
+        /// Unpacks the P2=3 five-character field. "41100" => colour 5, NB colour 2, NB on.
+        /// </summary>
+        public static (char Color, char NbColor, char NbOn) ParseColor(string? field)
+        {
+            var f = (field ?? "00000").PadRight(5, '0');
+            return (char.ToUpperInvariant(f[0]), f[1], f[2]);
+        }
+
+        /// <summary>
+        /// Parses a scope colour POST body. Accepts a 1-character palette (0–9/A),
+        /// a 3-character triple, or a tagged single axis: <c>n3</c> (NB colour),
+        /// <c>o1</c> (NB on/off). Untagged axes are filled from a radio read by
+        /// the caller.
+        /// </summary>
+        public static bool TryParseColorRequest(
+            string value,
+            out char color,
+            out char nbColor,
+            out char nbOn,
+            out bool hasColor,
+            out bool hasNbColor,
+            out bool hasNbOn)
+        {
+            color = nbColor = nbOn = '0';
+            hasColor = hasNbColor = hasNbOn = false;
+            if (value.Length is 0 or > 3) return false;
+
+            if (value.Length == 3 && value[0] is not ('n' or 'N' or 'o' or 'O' or 'a' or 'A' or 't' or 'T'))
+            {
+                if (!TryColorDigit(value[0].ToString(), out color)) return false;
+                if (!TryScopeDigit(value[1].ToString(), 0, 6, out nbColor)) return false;
+                if (!TryScopeDigit(value[2].ToString(), 0, 1, out nbOn)) return false;
+                hasColor = hasNbColor = hasNbOn = true;
+                return true;
+            }
+
+            if (value.Length == 2)
+            {
+                var tag = char.ToLowerInvariant(value[0]);
+                if (tag == 'n')
+                {
+                    if (!TryScopeDigit(value[1].ToString(), 0, 6, out nbColor)) return false;
+                    hasNbColor = true;
+                    return true;
+                }
+                if (tag == 'o')
+                {
+                    if (!TryScopeDigit(value[1].ToString(), 0, 1, out nbOn)) return false;
+                    hasNbOn = true;
+                    return true;
+                }
+                return false;
+            }
+
+            if (value.Length == 1)
+            {
+                if (!TryColorDigit(value, out color)) return false;
+                hasColor = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Parses an AF-FFT / OSC POST body. Accepts a 1-digit FFT ATT, a 3-digit
+        /// triple, or a tagged single axis: <c>a1</c> (OSC ATT), <c>t2</c> (OSC time).
+        /// </summary>
+        public static bool TryParseAfFftRequest(
+            string value,
+            out char fftAtt,
+            out char oscAtt,
+            out char oscTime,
+            out bool hasFftAtt,
+            out bool hasOscAtt,
+            out bool hasOscTime)
+        {
+            fftAtt = oscAtt = oscTime = '0';
+            hasFftAtt = hasOscAtt = hasOscTime = false;
+            if (value.Length is 0 or > 3) return false;
+
+            if (value.Length == 3 && value[0] is not ('a' or 'A' or 't' or 'T'))
+            {
+                if (!TryScopeDigit(value[0].ToString(), 0, 2, out fftAtt)) return false;
+                if (!TryScopeDigit(value[1].ToString(), 0, 2, out oscAtt)) return false;
+                if (!TryScopeDigit(value[2].ToString(), 0, 5, out oscTime)) return false;
+                hasFftAtt = hasOscAtt = hasOscTime = true;
+                return true;
+            }
+
+            if (value.Length == 2)
+            {
+                var tag = char.ToLowerInvariant(value[0]);
+                if (tag == 'a')
+                {
+                    if (!TryScopeDigit(value[1].ToString(), 0, 2, out oscAtt)) return false;
+                    hasOscAtt = true;
+                    return true;
+                }
+                if (tag == 't')
+                {
+                    if (!TryScopeDigit(value[1].ToString(), 0, 5, out oscTime)) return false;
+                    hasOscTime = true;
+                    return true;
+                }
+                return false;
+            }
+
+            if (value.Length == 1)
+            {
+                if (!TryScopeDigit(value, 0, 2, out fftAtt)) return false;
+                hasFftAtt = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryColorDigit(string value, out char digit)
+        {
+            digit = '0';
+            if (value.Length != 1) return false;
+            var c = char.ToUpperInvariant(value[0]);
+            if (c is >= '0' and <= '9' or 'A')
+            {
+                digit = c;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TryScopeDigit(string value, int min, int max, out char digit)
+        {
+            digit = '0';
+            if (value.Length != 1 || value[0] < '0' || value[0] > '9') return false;
+            var n = value[0] - '0';
+            if (n < min || n > max) return false;
+            digit = value[0];
+            return true;
+        }
+
+        private static char ClampDigit(char value, char max)
+        {
+            if (value < '0') return '0';
+            return value > max ? max : value;
+        }
+
+        private static char ClampColor(char value)
+        {
+            value = char.ToUpperInvariant(value);
+            return value is >= '0' and <= '9' or 'A' ? value : '0';
+        }
+
+        /// <summary>
         /// Set frame for LEVEL, which is the one sub-command that uses the whole
         /// five-character field: -30.0 to +30.0 in 0.5 dB steps, always signed
         /// and always zero-padded to two integer digits ("+05.0", "-30.0").
