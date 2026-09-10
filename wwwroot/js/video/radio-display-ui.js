@@ -869,6 +869,7 @@ function bindScopeColumnResize(dlg) {
     dragging = false;
     scopeColumnDragging = false;
     dlg.classList.remove('scope-resizing');
+    setBootstrapTooltipSuspended(splitter, false);
     try {
       if (pointerId != null) splitter.releasePointerCapture(pointerId);
     } catch { /* ignore */ }
@@ -885,6 +886,10 @@ function bindScopeColumnResize(dlg) {
     if (e.button !== 0) return;
     const body = getRadioDisplayBody();
     if (!body?.classList.contains('controls-docked')) return;
+    // Suspend for the whole drag — hide() alone is not enough: the pointer
+    // stays over the splitter, so Bootstrap's hover trigger re-shows the tip
+    // (and never re-anchors it as the column moves).
+    setBootstrapTooltipSuspended(splitter, true);
     dragging = true;
     scopeColumnDragging = true;
     pointerId = e.pointerId;
@@ -899,7 +904,9 @@ function bindScopeColumnResize(dlg) {
 
   splitter.addEventListener('dblclick', (e) => {
     e.preventDefault();
+    setBootstrapTooltipSuspended(splitter, true);
     resetScopeColumnWidth();
+    setBootstrapTooltipSuspended(splitter, false);
   });
 
   splitter.addEventListener('keydown', (e) => {
@@ -921,10 +928,13 @@ function bindScopeColumnResize(dlg) {
     else if (e.key === 'End') next = bodyWidth;
     else return;
     e.preventDefault();
+    // Focus trigger would re-show after a plain hide(); suspend for the nudge.
+    setBootstrapTooltipSuspended(splitter, true);
     const clamped = clampScopeColumnWidthPx(next, bodyWidth);
     applyScopeColumnWidth(clamped);
     saveScopeColumnWidthPx(clamped);
     panel?.applyFit();
+    setBootstrapTooltipSuspended(splitter, false);
   });
 }
 
@@ -1030,6 +1040,16 @@ function dockScopeControls() {
 function hideBootstrapTooltip(el) {
   if (!el || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
   bootstrap.Tooltip.getInstance(el)?.hide();
+}
+
+/** Hide and suspend a tip for the duration of a drag/resize; restore afterwards. */
+function setBootstrapTooltipSuspended(el, suspended) {
+  if (!el || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+  const tip = bootstrap.Tooltip.getInstance(el);
+  if (!tip) return;
+  tip.hide();
+  if (suspended) tip.disable();
+  else tip.enable();
 }
 
 function initScopeLayoutTooltips(dlg) {
