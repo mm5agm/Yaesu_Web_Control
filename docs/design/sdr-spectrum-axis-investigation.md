@@ -114,6 +114,58 @@ There is already a measured record in `SdrplayDevice.cs` that fits:
 +46.9 -> +8.4 -> +0.7. The DC blocker is measurably taking about 8 dB off the
 centre bin even after LIF has already moved DC away from it.
 
+## How WIDE can the DC blocker's notch be? (derived 2026-09-10, from the code)
+
+This sharpens fault 2 into something predictive, and it turns on the span
+that was being viewed - which I did not record and must ask.
+
+The blocker estimates DC as **each frame's own mean**, then EMAs that across
+frames. A frame mean is a boxcar over all `fftSize` samples, so its response to
+a tone at offset f from centre has its first null at exactly `fs / fftSize` -
+**one bin**. Subtracting a constant from the time series then perturbs only the
+DC component of that frame, which the Hann window spreads over roughly two to
+three bins.
+
+**So the blocker's reach is about 2-3 bins, whatever the span.** In Hz that is
+entirely a function of which span is selected:
+
+| span | Hz/bin (1024) | blocker reach, approx |
+|---|---|---|
+| 62.5 kHz | 61 | 120-180 Hz |
+| 250 kHz | 244 | 490-730 Hz |
+| 500 kHz | 488 | 1.0-1.5 kHz |
+| 2 MHz | 1953 | 3.9-5.9 kHz |
+
+**This cuts both ways, and that is the point.** On a wide span the mechanism
+fits the description very comfortably - at 2 MHz a peak would visibly fade over
+several kHz, and the passband markers are only the 2px sliver at centre, so
+"moving through the passband markers" means moving through the middle few
+pixels. On the 62.5 kHz span it does NOT fit: 120-180 Hz is two or three pixels
+of a 1024-bin display, which nobody would describe as a gradual fade.
+
+**OPEN QUESTION, must be answered before any fix is attempted: which span was
+selected when the gradual dip was seen?** Wide span keeps the DC blocker as the
+prime suspect. Narrow span rules it out and the mechanism is then unknown.
+
+Note the `DcAlpha` comment in `SpectrumProcessor.cs` reasons only about the EMA
+time constant and concludes "a notch roughly 0.3 Hz wide". That is the width of
+the *temporal* filter and it is not the binding constraint - the frame-mean
+boxcar and the window are, and they are three to four orders of magnitude
+wider. Do not take the 0.3 Hz figure as evidence that the notch is invisible.
+
+### The competing hypothesis: the radio's own AGC
+
+A signal that fades as it enters the passband and recovers as it leaves is also
+exactly what AGC looks like, if the 9 MHz IF tap sits after the AGC-controlled
+stage. Against it: the tap is measured to be AHEAD of the roofing filter, which
+is early in the chain, so it may well be ahead of the AGC-controlled amplifier
+too. That is not known either way.
+
+**There is a clean discriminator, and it costs one look at the screen.** AGC
+pulls the WHOLE trace down, not one peak - so if the noise floor sinks along
+with the peak, it is AGC; if only that peak sinks while the floor holds, it is
+not. Failing that, repeat the sweep with AGC off or on fixed manual IF gain.
+
 ## The reconciliation - and a retraction
 
 **I previously reported a frequency OFFSET of roughly +6 to +8 kHz. I am
