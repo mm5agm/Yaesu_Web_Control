@@ -1,48 +1,51 @@
-﻿@page
+@page
 @model Yaesu_Web_Control.Pages.SettingsModel
 
 <style>
-    /* Collapsible Settings sections — native <details>/<summary> for
-       built-in keyboard accessibility (Enter/Space to toggle), built-in
-       screen-reader support (announces "expanded"/"collapsed"), and no
-       JavaScript required. Styled to look like Bootstrap cards. */
-    details.settings-section {
-        border: 1px solid #dee2e6;
-        border-radius: 0.375rem;
-        margin-bottom: 1rem;
-        background: #fff;
-        overflow: hidden;
-    }
-    details.settings-section > summary {
-        padding: 0.75rem 1rem;
-        background: rgba(0,0,0,0.03);
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 1.15rem;
-        list-style: none;
+    /* Settings category layout — left nav on lg+, native <select> below that. */
+    .settings-nav .nav-link {
+        text-align: left;
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        user-select: none;
     }
-    details.settings-section > summary::-webkit-details-marker { display: none; }
-    details.settings-section > summary::before {
-        content: "▸";
-        display: inline-block;
-        transition: transform 0.15s ease;
-        font-size: 0.85em;
-        color: #6c757d;
-        flex-shrink: 0;
+    .settings-nav .nav-link i { flex-shrink: 0; }
+    @@media (min-width: 992px) {
+        .settings-nav {
+            position: sticky;
+            top: 4.25rem;
+        }
     }
-    details.settings-section[open] > summary::before { transform: rotate(90deg); }
-    details.settings-section > summary:hover { background: rgba(0,0,0,0.06); }
-    details.settings-section > summary:focus-visible {
-        outline: 2px solid #0d6efd;
-        outline-offset: -2px;
+    .settings-pane {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem 1.25rem 1.25rem;
+        background: #fff;
+        min-height: 12rem;
     }
-    details.settings-section > .section-body {
-        padding: 1rem;
+    .settings-save-bar {
+        position: sticky;
+        bottom: 0;
+        z-index: 1020;
+        background: #fff;
         border-top: 1px solid #dee2e6;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+        padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom, 0px));
+        margin-top: 1rem;
+    }
+    .settings-save-bar .settings-save-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    .settings-save-bar .settings-status-banner {
+        flex: 1 1 12rem;
+    }
+    @@media (max-width: 991.98px) {
+        .settings-save-bar .settings-save-actions .btn-save-primary {
+            flex: 1 1 100%;
+        }
     }
 </style>
 
@@ -193,1595 +196,90 @@
         </div>
     </div>
 
-    <form method="post" id="settingsForm">
-
-    <!-- Accessibility section -->
-    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
-        <summary><i class="bi bi-universal-access" aria-hidden="true"></i>&nbsp;Accessibility</summary>
-        <div class="section-body">
-            <p class="text-muted small mb-3">
-                Settings to make Yaesu Web Control easier to use for operators with disabilities.
-                The frequency display is fully keyboard-driven: focus it with Tab, then use ↑/↓ to step
-                the selected digit, ←/→ to move the selection, PageUp/PageDown for 10× steps, and
-                Home/End to jump to the most/least significant digit. Got a suggestion?
-                <a href="https://github.com/mm5agm/Yaesu_Web_Control/discussions" target="_blank" rel="noopener">Open a GitHub discussion</a>.
-            </p>
-            <div class="mb-3 form-check form-switch">
-                <input class="form-check-input" type="checkbox" role="switch"
-                       id="showFrequencyArrowButtons" asp-for="Settings.ShowFrequencyArrowButtons" />
-                <label class="form-check-label" for="showFrequencyArrowButtons">
-                    Show frequency up/down arrow buttons
-                </label>
-                <div class="form-text">
-                    Adds ▲ ▼ buttons next to each VFO's frequency display. Each click steps the
-                    currently selected digit by 1 (the same action as the scroll-wheel or the ↑ / ↓
-                    keys). Useful if you cannot use a mouse wheel — e.g. head-tracking input,
-                    on-screen keyboard users, reduced-dexterity operators. Off by default to keep
-                    the main screen uncluttered for users who don't need them.
-                </div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold" for="Settings_TxToggleKey">TX toggle key</label>
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    @* data-val="false": optional blank must never get client-side
-                       required (same silent-block class of bug as #65). Server
-                       already ModelState.Remove's this field. *@
-                    <input asp-for="Settings.TxToggleKey"
-                           class="form-control"
-                           id="Settings_TxToggleKey"
-                           style="max-width: 220px;"
-                           readonly
-                           autocomplete="off"
-                           data-val="false"
-                           aria-describedby="txToggleKeyHelp txToggleKeyDisplay" />
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="txToggleKeySetBtn">
-                        Set key
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="txToggleKeyClearBtn">
-                        Clear
-                    </button>
-                    <span class="badge text-bg-warning" id="txToggleKeyCaptureBadge" style="display:none;">
-                        Press a key now
-                    </span>
-                </div>
-                <div class="form-text" id="txToggleKeyHelp">
-                    Optional browser shortcut for toggling transmit. Disabled when blank. For safety,
-                    YWC ignores this shortcut while you are typing in an input or text box.
-                </div>
-                <div class="form-text text-warning">
-                    Warning: this directly keys the transmitter. Choose a key you will not press by accident.
-                </div>
-                <div class="form-text" id="txToggleKeyDisplay"></div>
-            </div>
-        </div>
-    </details>
-
-    @if (Model.IsWindowsHost)
+    @if (!Model.IsWindowsHost)
     {
-    <!-- Voice Control section -->
-    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
-        <summary><i class="bi bi-mic-fill" aria-hidden="true"></i>&nbsp;Voice Control</summary>
-        <div class="section-body">
-            <p class="text-muted small mb-3">
-                Hands-free control of YWC via a PC microphone. Uses Windows' built-in speech recognition
-                (SAPI 5), so audio never leaves your computer.
-                A small mic button appears in the top navbar when enabled — press and hold it, speak a
-                command, release. The recognised text is interpreted as a CAT action (set frequency,
-                change band, set mode, swap VFO, tune up/down).
-            </p>
-            <div class="mb-3 form-check form-switch">
-                <input class="form-check-input" type="checkbox" role="switch"
-                       id="voiceControlEnabled" asp-for="Settings.VoiceControlEnabled" />
-                <label class="form-check-label" for="voiceControlEnabled">
-                    Enable voice control
-                </label>
-                <div class="form-text">
-                    Off by default. When enabled, YWC loads the Windows speech recogniser at startup
-                    and shows the mic button in the navbar. Disable to hide the button and free the
-                    recogniser. Requires the active language's speech pack (below) to be installed in
-                    Windows (Settings → Time &amp; Language → Speech).
-                </div>
+        <div class="alert alert-secondary mb-3" role="status">
+            <i class="bi bi-mic-mute" aria-hidden="true"></i>
+            Voice Control (Windows SAPI) is not available on this host. CAT control and the web UI work as usual.
+        </div>
+        <div class="alert alert-secondary mb-3" role="status">
+            <i class="bi bi-broadcast-pin" aria-hidden="true"></i>
+            SDR Spectrum Display is not available on this host (CAT-only build).
+        </div>
+    }
+
+    <div class="row settings-layout g-3">
+        <nav class="col-lg-3 d-none d-lg-block" aria-label="Settings categories">
+            <div class="nav flex-column nav-pills settings-nav d-none d-lg-flex" id="settingsTabList" role="tablist" aria-orientation="vertical">
+                <button type="button" class="nav-link active" id="settings-tab-radio" data-bs-toggle="tab" data-bs-target="#settings-pane-radio" data-settings-tab="radio" role="tab" aria-controls="settings-pane-radio" aria-selected="true">
+                    <i class="bi bi-broadcast" aria-hidden="true"></i> Radio &amp; CAT
+                </button>
+                <button type="button" class="nav-link" id="settings-tab-web" data-bs-toggle="tab" data-bs-target="#settings-pane-web" data-settings-tab="web" role="tab" aria-controls="settings-pane-web" aria-selected="false">
+                    <i class="bi bi-globe" aria-hidden="true"></i> Web / HTTP
+                </button>
+                <button type="button" class="nav-link" id="settings-tab-accessibility" data-bs-toggle="tab" data-bs-target="#settings-pane-accessibility" data-settings-tab="accessibility" role="tab" aria-controls="settings-pane-accessibility" aria-selected="false">
+                    <i class="bi bi-universal-access" aria-hidden="true"></i> Accessibility
+                </button>
+                @if (Model.IsWindowsHost)
+                {
+                <button type="button" class="nav-link" id="settings-tab-voice" data-bs-toggle="tab" data-bs-target="#settings-pane-voice" data-settings-tab="voice" role="tab" aria-controls="settings-pane-voice" aria-selected="false">
+                    <i class="bi bi-mic-fill" aria-hidden="true"></i> Voice Control
+                </button>
+                }
+                <button type="button" class="nav-link" id="settings-tab-audio" data-bs-toggle="tab" data-bs-target="#settings-pane-audio" data-settings-tab="audio" role="tab" aria-controls="settings-pane-audio" aria-selected="false">
+                    <i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio
+                </button>
+                <button type="button" class="nav-link" id="settings-tab-display" data-bs-toggle="tab" data-bs-target="#settings-pane-display" data-settings-tab="display" role="tab" aria-controls="settings-pane-display" aria-selected="false">
+                    <i class="bi bi-display" aria-hidden="true"></i> Radio Display
+                </button>
+                @if (Model.IsWindowsHost)
+                {
+                <button type="button" class="nav-link" id="settings-tab-sdr" data-bs-toggle="tab" data-bs-target="#settings-pane-sdr" data-settings-tab="sdr" role="tab" aria-controls="settings-pane-sdr" aria-selected="false">
+                    <i class="bi bi-broadcast-pin" aria-hidden="true"></i> SDR Spectrum
+                </button>
+                }
+                <button type="button" class="nav-link" id="settings-tab-dx-cluster" data-bs-toggle="tab" data-bs-target="#settings-pane-dx-cluster" data-settings-tab="dx-cluster" role="tab" aria-controls="settings-pane-dx-cluster" aria-selected="false">
+                    <i class="bi bi-globe2" aria-hidden="true"></i> DX Cluster
+                </button>
+                <button type="button" class="nav-link" id="settings-tab-cw" data-bs-toggle="tab" data-bs-target="#settings-pane-cw" data-settings-tab="cw" role="tab" aria-controls="settings-pane-cw" aria-selected="false">
+                    <i class="bi bi-keyboard" aria-hidden="true"></i> CW
+                </button>
+                <button type="button" class="nav-link" id="settings-tab-backup" data-bs-toggle="tab" data-bs-target="#settings-pane-backup" data-settings-tab="backup" role="tab" aria-controls="settings-pane-backup" aria-selected="false">
+                    <i class="bi bi-box-arrow-up" aria-hidden="true"></i> Backup &amp; Restore
+                </button>
             </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold" for="voiceActiveLocale">Active language</label>
-                <select class="form-select w-auto" id="voiceActiveLocale">
-                    <option value="">Loading…</option>
+        </nav>
+
+        <div class="col-lg-9">
+            <div class="d-lg-none mb-3">
+                <label for="settingsCategorySelect" class="form-label fw-semibold">Settings category</label>
+                <select id="settingsCategorySelect" class="form-select" aria-label="Settings category">
+                    <option value="radio">Radio &amp; CAT</option>
+                    <option value="web">Web / HTTP</option>
+                    <option value="accessibility">Accessibility</option>
+                    @if (Model.IsWindowsHost)
+                    {
+                    <option value="voice">Voice Control</option>
+                    }
+                    <option value="audio">Remote Audio</option>
+                    <option value="display">Radio Display</option>
+                    @if (Model.IsWindowsHost)
+                    {
+                    <option value="sdr">SDR Spectrum</option>
+                    }
+                    <option value="dx-cluster">DX Cluster</option>
+                    <option value="cw">CW</option>
+                    <option value="backup">Backup &amp; Restore</option>
                 </select>
-                <div class="form-text">
-                    Which installed language pack the speech recogniser listens for. Switching takes
-                    effect immediately — no restart. ✓ means Windows has a matching speech recogniser
-                    installed; ⚠ means the pack is installed here but Windows can't listen in that
-                    language yet.
-                </div>
-                <div id="voiceLocaleMismatchBanner" class="mt-2"></div>
             </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold" for="voiceInputDevice">Microphone</label>
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <select class="form-select w-auto" id="voiceInputDevice">
-                        <option value="">Loading…</option>
-                    </select>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="voiceInputRefreshBtn"
-                            title="Re-scan for microphones plugged in since this page was opened"
-                            aria-label="Refresh the microphone list">
-                        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>&nbsp;Refresh
-                    </button>
+
+            <form method="post" id="settingsForm">
+                <div class="tab-content" id="settingsTabContent">
+        <div class="tab-pane fade show active" id="settings-pane-radio" role="tabpanel" aria-labelledby="settings-tab-radio" tabindex="0" data-settings-tab="radio">
+            <div class="settings-pane">
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <h2 class="h4 mb-0">Radio &amp; CAT</h2>
                 </div>
-                <div class="form-text">
-                    Which microphone the speech recogniser listens to. Choose the mic you'll speak
-                    into — the change takes effect immediately, no restart. Leave on
-                    <em>Windows default recording device</em> to follow your system setting.
-                    Picking one here does <strong>not</strong> change your Windows default, so it
-                    won't disturb other apps (WSJT-X, etc.).
-                </div>
-                <div id="voiceInputDeviceNote" class="mt-2"></div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold" for="voiceOutputDevice">Announcement speaker</label>
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <select class="form-select w-auto" id="voiceOutputDevice">
-                        <option value="">Loading…</option>
-                    </select>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="voiceOutputTestBtn">
-                        <i class="bi bi-volume-up" aria-hidden="true"></i>&nbsp;Test
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="voiceOutputRefreshBtn"
-                            title="Re-scan for speakers plugged in since this page was opened"
-                            aria-label="Refresh the speaker list">
-                        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>&nbsp;Refresh
-                    </button>
-                </div>
-                <div class="form-text">
-                    Which speaker or headset the spoken confirmations play through. Leave on
-                    <em>Windows default playback device</em> to follow your system setting — but if
-                    your default is used by something else (WSJT-X, rig audio) you may never hear
-                    the announcements, so pick your own speakers here. Picking one does
-                    <strong>not</strong> change your Windows default. Press <em>Test</em> to check
-                    you can hear it.
-                </div>
-                <div id="voiceOutputDeviceNote" class="mt-2"></div>
-            </div>
-            <div class="mb-3 form-check form-switch">
-                <input class="form-check-input" type="checkbox" role="switch"
-                       id="voiceSpokenConfirmationEnabled" asp-for="Settings.VoiceSpokenConfirmationEnabled" />
-                <label class="form-check-label" for="voiceSpokenConfirmationEnabled">
-                    Speak confirmation after each voice command
-                </label>
-                <div class="form-text">
-                    When on, YWC speaks a short confirmation through the PC's default audio output after
-                    every recognised voice command — e.g. <em>"Move to fourteen point zero seven four megahertz, successful"</em>.
-                    Key accessibility feature for operators who can't see the screen to verify whether a
-                    command landed. Default on; turn off here if you find it chatty.
-                </div>
-            </div>
-            <div class="mb-3 form-check form-switch">
-                <input class="form-check-input" type="checkbox" role="switch"
-                       id="voiceAdvancedModeEnabled" asp-for="Settings.VoiceAdvancedModeEnabled" />
-                <label class="form-check-label" for="voiceAdvancedModeEnabled">
-                    Advanced mode: allow any CAT command in Custom Commands
-                </label>
-                <div class="form-text">
-                    Off by default. When off, a Custom Command's CAT string must start with a prefix one of
-                    the built-in Core Commands already sends — a Custom Command can only recombine
-                    primitives the app already trusts, not send anything new. Only enable this if you trust
-                    the source of any language pack you import, or you're hand-authoring your own commands.
-                </div>
-            </div>
-            <!-- Inline Save Settings: the Voice Control section is very long, so
-                 this lets the settings above be saved without scrolling all the
-                 way to the button at the bottom of the page. Same submit as the
-                 main button; the Voice Phrases below save separately. -->
-            <div class="mb-3 pt-2 border-top">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
-                </button>
-                <span class="form-text ms-2">
-                    Saves all settings on this page. The Voice Phrases below save
-                    separately with their own <em>Save phrases</em> button.
-                </span>
-            </div>
-            <!-- Voice Phrases editor -->
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Voice Phrases</label>
-                <p class="form-text mt-0 mb-2">
-                    Edit the phrases used to trigger each voice command. Enter one or more phrases
-                    per row, separated by commas. Phrases must be in the language your
-                    <strong>Windows Speech Recognition</strong> is set to.
-                    Changes take effect immediately — no restart needed.
-                </p>
-                <div id="voicePhrasesEditor">
-                    <em class="text-muted small">Loading…</em>
-                </div>
-                <div class="mt-2 d-flex gap-2 flex-wrap">
-                    <button type="button" class="btn btn-sm btn-primary" id="savePhrasesBtn" onclick="ywcSavePhrases()">
-                        <i class="bi bi-floppy" aria-hidden="true"></i>&nbsp;Save phrases
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="validatePhrasesBtn" onclick="ywcValidatePhrases()">
-                        <i class="bi bi-check2-circle" aria-hidden="true"></i>&nbsp;Validate
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="ywcResetPhrases()">
-                        Reset to defaults
-                    </button>
-                </div>
-                <div id="phrasesSaveStatus" class="form-text mt-1" aria-live="polite"></div>
-                <div id="phrasesValidationResults" class="mt-1"></div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Diagnostics</label>
-                <div id="voiceDiagnostics" class="border rounded p-2 small bg-light">
-                    <em class="text-muted">Loading…</em>
-                </div>
-                <div class="form-text">
-                    Shows whether the active language's SAPI engine is available, the installed pack
-                    version, the current state of the recogniser, and the last error (if any).
-                </div>
-            </div>
-            <div class="mb-3">
-                <button type="button" id="openGrammarsFolderBtn" class="btn btn-sm btn-outline-secondary"
-                        onclick="ywcOpenGrammarsFolder()">
-                    <i class="bi bi-folder2-open" aria-hidden="true"></i>&nbsp;Open user grammars folder
-                </button>
-                <button type="button" id="testPackBtn" class="btn btn-sm btn-outline-secondary"
-                        data-bs-toggle="modal" data-bs-target="#voiceTestPackModal">
-                    <i class="bi bi-mic" aria-hidden="true"></i>&nbsp;Test this pack
-                </button>
-                <div class="form-text">
-                    Opens <code>%APPDATA%\MM5AGM\Yaesu Web Control\Grammars\</code> in Explorer.
-                    The <code>Commands.&lt;culture&gt;.json</code> file above is the live, editable
-                    command set; the matching <code>.srgs</code> file is a generated, human-readable
-                    copy for reference and sharing — it is not loaded live by the speech engine.
-                    "Test this pack" lets you speak commands and watch what's recognised without
-                    (by default) sending anything to the radio.
-                </div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Language Pack</label>
-                <div class="row g-2">
-                    <div class="col-sm-4">
-                        <input type="text" class="form-control form-control-sm" id="packAuthor" placeholder="Author">
-                    </div>
-                    <div class="col-sm-8">
-                        <input type="text" class="form-control form-control-sm" id="packDescription" placeholder="Description">
-                    </div>
-                </div>
-                <div class="mt-2 d-flex gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="exportPackBtn" onclick="ywcExportPhrases()">
-                        <i class="bi bi-download" aria-hidden="true"></i>&nbsp;Export language pack
-                    </button>
-                </div>
-                <div class="form-text">
-                    Bundles the current phrases, a freshly generated <code>.srgs</code> reference copy, and
-                    this metadata into a <code>YWC-VoicePack-en-GB-vN.zip</code> you can share or attach to
-                    a GitHub Discussion post. Exporting increments the pack version.
-                </div>
-                <div id="packExportStatus" class="form-text mt-1" aria-live="polite"></div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Version history</label>
-                <div>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="loadHistoryBtn" onclick="ywcLoadHistory()">
-                        <i class="bi bi-clock-history" aria-hidden="true"></i>&nbsp;Show version history
-                    </button>
-                </div>
-                <div class="form-text">
-                    Every save or import keeps the previous version — up to the last 5 — so you can undo
-                    a bad edit or pack install. Restoring re-validates and re-runs the same install
-                    pipeline as importing a pack; the restored version itself is saved to history first.
-                </div>
-                <div id="voiceHistoryResults" class="mt-2"></div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Import language pack</label>
-                <div class="d-flex gap-2 align-items-center flex-wrap">
-                    <input type="file" class="form-control form-control-sm w-auto" id="importPackFile" accept=".zip">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="previewImportBtn" onclick="ywcPreviewImport()">
-                        <i class="bi bi-upload" aria-hidden="true"></i>&nbsp;Preview import
-                    </button>
-                </div>
-                <div class="form-text">
-                    Pick a <code>YWC-VoicePack-&lt;culture&gt;-vN.zip</code> exported from this or another
-                    install. Nothing is written until you review the preview below and click Install.
-                </div>
-                <div id="importPreviewResults" class="mt-2"></div>
-            </div>
-        </div>
-        <script>
-            // Pull /api/voice/status to (re)populate diagnostics -- on Settings
-            // load, and again after a locale switch since the engine state
-            // (and possibly the error message) changes with it.
-            async function ywcRefreshVoiceDiagnostics() {
-                const el = document.getElementById('voiceDiagnostics');
-                if (!el) return;
-                try {
-                    const r = await fetch('/api/voice/diagnostics');
-                    if (!r.ok) { el.innerHTML = '<span class="text-danger">Diagnostics endpoint returned ' + r.status + '</span>'; return; }
-                    const s = await r.json();
-                    const confidenceCell = (s.lastConfidence === null || s.lastConfidence === undefined)
-                        ? '—'
-                        : (s.lastConfidence.toFixed(2) + ' / ' + s.minConfidence.toFixed(2) + ' threshold' +
-                           (s.lastConfidence < s.minConfidence ? ' <span class="text-danger">(below threshold)</span>' : ''));
-                    const rows = [
-                        ['Active language',  escapeHtml(s.activeCulture ?? '—')],
-                        ['Windows recognizer', s.hasWindowsRecognizer
-                            ? '<span class="text-success">✓ installed</span>'
-                            : '<span class="text-danger">✗ not installed</span>'],
-                        ['Pack version',    s.packVersion !== null && s.packVersion !== undefined ? 'v' + escapeHtml(String(s.packVersion)) : '—'],
-                        ['Engine state',    escapeHtml(s.engineState ?? '—')],
-                        ['Last heard',      s.lastHeard  ? '&ldquo;' + escapeHtml(s.lastHeard)  + '&rdquo;' : '—'],
-                        ['Last intent',     escapeHtml(s.lastIntent ?? '—')],
-                        ['Last confidence', confidenceCell],
-                    ];
-                    el.innerHTML = '<table class="table table-sm mb-0">' +
-                        rows.map(([k, v]) => '<tr><th style="width: 30%">' + k + '</th><td>' + v + '</td></tr>').join('') +
-                        '</table>';
-                } catch (e) {
-                    el.innerHTML = '<span class="text-danger">Could not query voice diagnostics: ' + escapeHtml(String(e)) + '</span>';
-                }
-            }
-            ywcRefreshVoiceDiagnostics();
-            function escapeHtml(s) {
-                return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-            }
-
-            // ── Language switcher (§4.2) ───────────────────────────────────
-
-            function renderLocaleMismatchBanner(culture, displayName, hasRecognizer) {
-                const banner = document.getElementById('voiceLocaleMismatchBanner');
-                if (!banner) return;
-                if (hasRecognizer) { banner.innerHTML = ''; return; }
-                banner.innerHTML = '<div class="alert alert-warning py-1 px-2 small mb-0">' +
-                    'Windows has no ' + escapeHtml(displayName) + ' speech recognizer installed. Voice control ' +
-                    "won't work in this language until you install it in " +
-                    '<a href="ms-settings:speech" target="_blank" rel="noopener">Settings → Time &amp; Language → Speech</a>.</div>';
-            }
-
-            async function ywcLoadLocales() {
-                const select = document.getElementById('voiceActiveLocale');
-                if (!select) return;
-                try {
-                    const r = await fetch('/api/voice/locales');
-                    if (!r.ok) { select.innerHTML = '<option value="">Failed to load</option>'; return; }
-                    const data = await r.json();
-                    select.innerHTML = data.locales.map(loc =>
-                        '<option value="' + escapeHtml(loc.culture) + '"' + (loc.isActive ? ' selected' : '') + '>' +
-                        (loc.hasWindowsRecognizer ? '✓ ' : '⚠ ') + escapeHtml(loc.displayName) +
-                        '</option>').join('');
-                    const active = data.locales.find(loc => loc.isActive);
-                    if (active) renderLocaleMismatchBanner(active.culture, active.displayName, active.hasWindowsRecognizer);
-                } catch (e) {
-                    select.innerHTML = '<option value="">Failed to load</option>';
-                }
-            }
-
-            (function () {
-                const select = document.getElementById('voiceActiveLocale');
-                if (!select) return;
-                select.addEventListener('change', async function () {
-                    const culture = select.value;
-                    const displayName = select.options[select.selectedIndex]?.textContent.replace(/^[✓⚠]\s*/, '') || culture;
-                    select.disabled = true;
-                    try {
-                        const r = await fetch('/api/voice/locale', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ culture }),
-                        });
-                        const data = await r.json();
-                        if (!r.ok) {
-                            alert('Could not switch language: ' + (data.error || ('HTTP ' + r.status)));
-                            await ywcLoadLocales();
-                            return;
-                        }
-                        renderLocaleMismatchBanner(culture, displayName, data.hasWindowsRecognizer);
-                        // The Voice Phrases editor below still only edits the
-                        // en-GB pack (per-locale editing is a later phase) --
-                        // only the engine state actually changes here.
-                        ywcRefreshVoiceDiagnostics();
-                    } catch (e) {
-                        alert('Could not switch language: ' + e);
-                    } finally {
-                        select.disabled = false;
-                    }
-                });
-            })();
-            ywcLoadLocales();
-
-            // ── Microphone picker ──────────────────────────────────────────
-            // System.Speech can't target a device by name, so the chosen mic is
-            // captured server-side and fed to SAPI. This just lists devices and
-            // POSTs the pick; VoiceControlService rebinds live (no restart).
-
-            function renderMicNote(msg) {
-                const note = document.getElementById('voiceInputDeviceNote');
-                if (!note) return;
-                note.innerHTML = msg
-                    ? '<div class="alert alert-warning py-1 px-2 small mb-0">' + escapeHtml(msg) + '</div>'
-                    : '';
-            }
-
-            async function ywcLoadMicrophones() {
-                const select = document.getElementById('voiceInputDevice');
-                if (!select) return;
-                try {
-                    const r = await fetch('/api/voice/microphones');
-                    if (!r.ok) { select.innerHTML = '<option value="">Failed to load</option>'; return; }
-                    const data = await r.json();
-                    let html = '<option value=""' + (data.usingDefault ? ' selected' : '') +
-                        '>Windows default recording device</option>';
-                    html += data.devices.map(d =>
-                        '<option value="' + escapeHtml(d.name) + '"' + (d.isSelected ? ' selected' : '') + '>' +
-                        escapeHtml(d.name) + '</option>').join('');
-                    // A saved device that's no longer plugged in: show it so the
-                    // user sees what's selected rather than a silent revert.
-                    if (!data.usingDefault && !data.selectedPresent && data.selected) {
-                        html += '<option value="' + escapeHtml(data.selected) + '" selected>' +
-                            escapeHtml(data.selected) + ' (not connected)</option>';
-                    }
-                    select.innerHTML = html;
-                    renderMicNote((!data.usingDefault && !data.selectedPresent)
-                        ? 'The saved microphone isn’t connected right now. Reconnect it, or pick another.'
-                        : '');
-                } catch (e) {
-                    select.innerHTML = '<option value="">Failed to load</option>';
-                }
-            }
-
-            (function () {
-                const select = document.getElementById('voiceInputDevice');
-                if (!select) return;
-                select.addEventListener('change', async function () {
-                    const name = select.value;
-                    select.disabled = true;
-                    try {
-                        const r = await fetch('/api/voice/microphone', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name }),
-                        });
-                        if (!r.ok) {
-                            const data = await r.json().catch(() => ({}));
-                            alert('Could not switch microphone: ' + (data.error || ('HTTP ' + r.status)));
-                            await ywcLoadMicrophones();
-                            return;
-                        }
-                        renderMicNote('');
-                        ywcRefreshVoiceDiagnostics();
-                    } catch (e) {
-                        alert('Could not switch microphone: ' + e);
-                    } finally {
-                        select.disabled = false;
-                    }
-                });
-            })();
-            // Devices plugged in after the page loaded were invisible until a
-            // reload, because these lists were fetched exactly once. The server
-            // enumerates live on every call (WaveInEvent.DeviceCount is
-            // waveInGetNumDevs(), uncached), so re-fetching is all that was ever
-            // needed. Same pattern as the Radio Display device refresh button.
-            function ywcWireDeviceRefresh(btnId, load) {
-                const btn = document.getElementById(btnId);
-                if (!btn) return;
-                btn.addEventListener('click', async function () {
-                    btn.disabled = true;
-                    try { await load(); }
-                    finally { btn.disabled = false; }
-                });
-            }
-
-            ywcLoadMicrophones();
-            ywcWireDeviceRefresh('voiceInputRefreshBtn', ywcLoadMicrophones);
-
-            // ── Speaker (announcement) picker ──────────────────────────────
-            // System.Speech can't target an output device by name, so the chosen
-            // speaker is rendered-and-played server-side. Lists devices, POSTs the
-            // pick (applied live, no restart), and offers a Test button.
-
-            function renderSpeakerNote(msg) {
-                const note = document.getElementById('voiceOutputDeviceNote');
-                if (!note) return;
-                note.innerHTML = msg
-                    ? '<div class="alert alert-warning py-1 px-2 small mb-0">' + escapeHtml(msg) + '</div>'
-                    : '';
-            }
-
-            async function ywcLoadSpeakers() {
-                const select = document.getElementById('voiceOutputDevice');
-                if (!select) return;
-                try {
-                    const r = await fetch('/api/voice/speakers');
-                    if (!r.ok) { select.innerHTML = '<option value="">Failed to load</option>'; return; }
-                    const data = await r.json();
-                    let html = '<option value=""' + (data.usingDefault ? ' selected' : '') +
-                        '>Windows default playback device</option>';
-                    html += data.devices.map(d =>
-                        '<option value="' + escapeHtml(d.name) + '"' + (d.isSelected ? ' selected' : '') + '>' +
-                        escapeHtml(d.name) + '</option>').join('');
-                    if (!data.usingDefault && !data.selectedPresent && data.selected) {
-                        html += '<option value="' + escapeHtml(data.selected) + '" selected>' +
-                            escapeHtml(data.selected) + ' (not connected)</option>';
-                    }
-                    select.innerHTML = html;
-                    renderSpeakerNote((!data.usingDefault && !data.selectedPresent)
-                        ? 'The saved speaker isn’t connected right now. Reconnect it, or pick another.'
-                        : '');
-                } catch (e) {
-                    select.innerHTML = '<option value="">Failed to load</option>';
-                }
-            }
-
-            (function () {
-                const select = document.getElementById('voiceOutputDevice');
-                if (select) {
-                    select.addEventListener('change', async function () {
-                        const name = select.value;
-                        select.disabled = true;
-                        try {
-                            const r = await fetch('/api/voice/speaker', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ name }),
-                            });
-                            if (!r.ok) {
-                                const data = await r.json().catch(() => ({}));
-                                alert('Could not switch speaker: ' + (data.error || ('HTTP ' + r.status)));
-                                await ywcLoadSpeakers();
-                                return;
-                            }
-                            renderSpeakerNote('');
-                        } catch (e) {
-                            alert('Could not switch speaker: ' + e);
-                        } finally {
-                            select.disabled = false;
-                        }
-                    });
-                }
-                const testBtn = document.getElementById('voiceOutputTestBtn');
-                if (testBtn) {
-                    testBtn.addEventListener('click', async function () {
-                        testBtn.disabled = true;
-                        try {
-                            await fetch('/api/voice/speaker-test', { method: 'POST' });
-                        } catch (e) {
-                            alert('Could not play test announcement: ' + e);
-                        } finally {
-                            // Re-enable after a moment so it can't be spammed while
-                            // the phrase is still playing.
-                            setTimeout(() => { testBtn.disabled = false; }, 1500);
-                        }
-                    });
-                }
-            })();
-            ywcLoadSpeakers();
-            ywcWireDeviceRefresh('voiceOutputRefreshBtn', ywcLoadSpeakers);
-
-            async function ywcOpenGrammarsFolder() {
-                try {
-                    const r = await fetch('/api/voice/open-grammars-folder', { method: 'POST' });
-                    if (!r.ok) alert('Could not open grammars folder (status ' + r.status + ')');
-                } catch (e) {
-                    alert('Could not open grammars folder: ' + e);
-                }
-            }
-
-            // First-time-enable interstitial (§5.5) — the setting itself is
-            // still just a normal asp-for checkbox saved with the rest of
-            // the Settings form; this only warns the user at the moment
-            // they flip it on, and reverts the checkbox if they back out.
-            (function () {
-                const cb = document.getElementById('voiceAdvancedModeEnabled');
-                if (!cb) return;
-                const wasChecked = cb.checked;
-                cb.addEventListener('change', function () {
-                    if (cb.checked && !wasChecked) {
-                        const ok = confirm(
-                            'A malformed or malicious voice pack could send commands that alter your ' +
-                            "radio's configuration. Only enable this if you trust the source of packs " +
-                            "you import, or you're hand-authoring your own.\n\nEnable Advanced Mode?");
-                        if (!ok) cb.checked = false;
-                    }
-                });
-            })();
-
-            // ── Language Pack metadata + export ───────────────────────────
-
-            async function ywcLoadPackMetadata() {
-                try {
-                    const r = await fetch('/api/voice/phrases/metadata');
-                    if (!r.ok) return;
-                    const meta = await r.json();
-                    document.getElementById('packAuthor').value = meta.author || '';
-                    document.getElementById('packDescription').value = meta.description || '';
-                } catch (e) {
-                    // Non-critical — the fields just stay blank.
-                }
-            }
-            ywcLoadPackMetadata();
-
-            async function ywcExportPhrases() {
-                const status = document.getElementById('packExportStatus');
-                const btn = document.getElementById('exportPackBtn');
-                btn.disabled = true;
-                status.textContent = 'Preparing export…';
-                try {
-                    await fetch('/api/voice/phrases/metadata', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            author: document.getElementById('packAuthor').value,
-                            description: document.getElementById('packDescription').value,
-                        }),
-                    });
-                    window.location.href = '/api/voice/phrases/export';
-                    status.textContent = 'Download starting…';
-                    setTimeout(() => { if (status) status.textContent = ''; }, 4000);
-                } catch (e) {
-                    status.innerHTML = '<span class="text-danger">Export failed: ' + escapeHtml(String(e)) + '</span>';
-                } finally {
-                    btn.disabled = false;
-                }
-            }
-
-            // ── Version history (§3.3) ────────────────────────────────────
-            // Restoring re-runs the same validate -> install pipeline as
-            // importing a ZIP (the server treats the archived snapshot as
-            // the source instead of an upload), so failures/warnings render
-            // the same way an import's would.
-
-            async function ywcLoadHistory() {
-                const el = document.getElementById('voiceHistoryResults');
-                el.innerHTML = '<em class="text-muted small">Loading…</em>';
-                try {
-                    const r = await fetch('/api/voice/phrases/history');
-                    if (!r.ok) { el.innerHTML = '<span class="text-danger">Failed to load version history.</span>'; return; }
-                    const snapshots = await r.json();
-                    if (!snapshots.length) {
-                        el.innerHTML = '<span class="text-muted small">No history yet — a snapshot is kept on the next save or import.</span>';
-                        return;
-                    }
-                    let html = '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr>' +
-                        '<th>Saved</th><th>Version</th><th>Author</th><th>Description</th><th></th></tr></thead><tbody>';
-                    for (const s of snapshots) {
-                        html += '<tr>' +
-                            '<td>' + escapeHtml(s.dateModified ? new Date(s.dateModified).toLocaleString() : '—') + '</td>' +
-                            '<td>v' + escapeHtml(String(s.version ?? '?')) + '</td>' +
-                            '<td>' + escapeHtml(s.author || '—') + '</td>' +
-                            '<td>' + escapeHtml(s.description || '—') + '</td>' +
-                            '<td><button type="button" class="btn btn-sm btn-outline-warning" onclick="ywcRestoreHistory(' +
-                                JSON.stringify(s.snapshotId) + ')">Restore</button></td></tr>';
-                    }
-                    html += '</tbody></table></div>';
-                    el.innerHTML = html;
-                } catch (e) {
-                    el.innerHTML = '<span class="text-danger">Failed to load version history: ' + escapeHtml(String(e)) + '</span>';
-                }
-            }
-
-            async function ywcRestoreHistory(snapshotId) {
-                if (!confirm('Restore this version? The current phrases will be saved to history first, so this can be undone.'))
-                    return;
-                try {
-                    const r = await fetch('/api/voice/phrases/history/restore', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ culture: 'en-GB', snapshotId: snapshotId }),
-                    });
-                    const data = await r.json();
-                    if (!r.ok) {
-                        alert('Restore failed: ' + (data.error || ('HTTP ' + r.status)));
-                        return;
-                    }
-                    alert('Restored.' + (data.warnings && data.warnings.length ? ' ' + data.warnings.length + ' warning(s) — check the phrases editor.' : ''));
-                    ywcLoadPhrases();
-                    ywcLoadPackMetadata();
-                    ywcLoadHistory();
-                } catch (e) {
-                    alert('Restore failed: ' + e);
-                }
-            }
-
-            // ── Language Pack import (§3.2) ───────────────────────────────
-            // Two-step, mirroring the server: preview (upload + validate,
-            // nothing written) then install (re-validated server-side,
-            // actually writes the pack). ywcImportPreview holds the parsed
-            // config/meta from the preview step so install can post them
-            // straight back without re-uploading the ZIP.
-
-            let ywcImportPreview = null;
-
-            async function ywcPreviewImport() {
-                const fileInput = document.getElementById('importPackFile');
-                const resultsEl = document.getElementById('importPreviewResults');
-                const btn = document.getElementById('previewImportBtn');
-                if (!fileInput.files.length) {
-                    resultsEl.innerHTML = '<span class="text-danger">Choose a .zip file first.</span>';
-                    return;
-                }
-                ywcImportPreview = null;
-                btn.disabled = true;
-                resultsEl.innerHTML = '<em class="text-muted">Validating…</em>';
-                try {
-                    const fd = new FormData();
-                    fd.append('pack', fileInput.files[0]);
-                    const r = await fetch('/api/voice/phrases/import/preview', { method: 'POST', body: fd });
-                    const data = await r.json();
-                    if (!r.ok) {
-                        resultsEl.innerHTML = '<span class="text-danger">' + escapeHtml(data.error || ('HTTP ' + r.status)) + '</span>';
-                        return;
-                    }
-                    ywcImportPreview = data;
-                    renderImportPreview(data);
-                } catch (e) {
-                    resultsEl.innerHTML = '<span class="text-danger">Preview failed: ' + escapeHtml(String(e)) + '</span>';
-                } finally {
-                    btn.disabled = false;
-                }
-            }
-
-            function renderImportPreview(data) {
-                const resultsEl = document.getElementById('importPreviewResults');
-                let html = '<div class="border rounded p-2">';
-
-                html += '<div class="mb-2"><strong>' + escapeHtml(data.culture) + '</strong> — ';
-                html += data.meta
-                    ? escapeHtml(data.meta.author || 'Unknown author') +
-                      (data.meta.description ? ': ' + escapeHtml(data.meta.description) : '') +
-                      ' (v' + (data.meta.version ?? 1) + ')'
-                    : 'Unknown author / no description';
-                html += '</div>';
-
-                if (!data.hasWindowsRecognizer) {
-                    html += '<div class="alert alert-warning py-1 px-2 small mb-2">Windows has no ' + escapeHtml(data.culture) +
-                        ' speech recognizer installed. This pack can be installed and edited, but voice ' +
-                        'control won\'t work in this language until you install it in ' +
-                        '<a href="ms-settings:speech" target="_blank" rel="noopener">Settings → Time &amp; Language → Speech</a>.</div>';
-                }
-                if (data.alreadyInstalled) {
-                    html += '<div class="alert alert-secondary py-1 px-2 small mb-2">A pack is already installed for ' +
-                        escapeHtml(data.culture) + '. Choose Replace or Merge before installing.</div>';
-                }
-
-                html += renderValidationResults(data.errors || [], data.warnings || []);
-
-                if (data.categories && data.categories.length) {
-                    html += '<table class="table table-sm mt-2 mb-2"><thead><tr><th>Category</th><th>Commands</th><th>Phrases</th><th>Sample</th></tr></thead><tbody>';
-                    for (const c of data.categories) {
-                        html += '<tr><td>' + escapeHtml(c.name) + '</td><td>' + c.commandCount + '</td><td>' + c.phraseCount +
-                            '</td><td class="small text-muted">' + c.samplePhrases.map(escapeHtml).join(', ') + '</td></tr>';
-                    }
-                    html += '</tbody></table>';
-                }
-
-                const collisions = data.collisions || [];
-                const canInstall = !data.errors || data.errors.length === 0;
-                if (canInstall) {
-                    html += '<div class="d-flex gap-2 align-items-center flex-wrap mt-1">';
-                    if (data.alreadyInstalled) {
-                        html += '<select class="form-select form-select-sm w-auto" id="importMergeStrategy" onchange="ywcToggleCollisionsPicker()">' +
-                            '<option value="replace">Replace existing pack</option>' +
-                            '<option value="merge">Merge — keep existing Custom Commands, add new ones</option>' +
-                            '</select>';
-                    }
-                    const warnCount = (data.warnings || []).length;
-                    const label = warnCount ? ('Install with ' + warnCount + ' warning' + (warnCount === 1 ? '' : 's')) : 'Install';
-                    html += '<button type="button" class="btn btn-sm btn-primary" id="installImportBtn" onclick="ywcInstallImport()">' +
-                        escapeHtml(label) + '</button>';
-                    html += '</div>';
-                }
-
-                if (data.alreadyInstalled && collisions.length) {
-                    html += '<div id="importCollisionsPicker" class="mt-2" style="display:none">';
-                    html += '<div class="small text-muted mb-1">' + collisions.length + ' Custom Command name' +
-                        (collisions.length === 1 ? '' : 's') + ' exist' + (collisions.length === 1 ? 's' : '') +
-                        ' in both packs. Choose which version to keep for each:</div>';
-                    html += '<table class="table table-sm mb-2"><thead><tr><th>Name</th><th>Mine (installed)</th><th>Theirs (imported)</th><th>Keep</th></tr></thead><tbody>';
-                    for (const c of collisions) {
-                        const safeName = escapeHtml(c.name);
-                        html += '<tr>' +
-                            '<td>' + safeName + '</td>' +
-                            '<td class="small text-muted">' + (c.mine.phrases || []).map(escapeHtml).join(', ') + '</td>' +
-                            '<td class="small text-muted">' + (c.theirs.phrases || []).map(escapeHtml).join(', ') + '</td>' +
-                            '<td>' +
-                            '<div class="form-check form-check-inline">' +
-                            '<input class="form-check-input importCollisionChoice" type="radio" name="collision_' + safeName + '" data-macro-name="' + safeName + '" value="mine" checked> ' +
-                            '<label class="form-check-label small">Keep mine</label>' +
-                            '</div>' +
-                            '<div class="form-check form-check-inline">' +
-                            '<input class="form-check-input importCollisionChoice" type="radio" name="collision_' + safeName + '" data-macro-name="' + safeName + '" value="theirs"> ' +
-                            '<label class="form-check-label small">Take theirs</label>' +
-                            '</div>' +
-                            '</td>' +
-                            '</tr>';
-                    }
-                    html += '</tbody></table></div>';
-                }
-
-                html += '</div>';
-                resultsEl.innerHTML = html;
-                ywcToggleCollisionsPicker();
-            }
-
-            function ywcToggleCollisionsPicker() {
-                const picker = document.getElementById('importCollisionsPicker');
-                if (!picker) return;
-                const mergeSelect = document.getElementById('importMergeStrategy');
-                picker.style.display = (mergeSelect && mergeSelect.value === 'merge') ? '' : 'none';
-            }
-
-            async function ywcInstallImport() {
-                if (!ywcImportPreview) return;
-                const resultsEl = document.getElementById('importPreviewResults');
-                const btn = document.getElementById('installImportBtn');
-                const mergeSelect = document.getElementById('importMergeStrategy');
-                const mergeStrategy = mergeSelect ? mergeSelect.value : 'replace';
-                let collisionResolutions = null;
-                if (mergeStrategy === 'merge') {
-                    collisionResolutions = {};
-                    document.querySelectorAll('.importCollisionChoice:checked').forEach(function (el) {
-                        collisionResolutions[el.getAttribute('data-macro-name')] = el.value;
-                    });
-                }
-                if (btn) btn.disabled = true;
-                try {
-                    const r = await fetch('/api/voice/phrases/import/install', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            culture: ywcImportPreview.culture,
-                            config: ywcImportPreview.config,
-                            meta: ywcImportPreview.meta,
-                            mergeStrategy: mergeStrategy,
-                            collisionResolutions: collisionResolutions,
-                        }),
-                    });
-                    const data = await r.json();
-                    if (!r.ok) {
-                        resultsEl.innerHTML = '<span class="text-danger">' + escapeHtml(data.error || ('HTTP ' + r.status)) + '</span>' +
-                            renderValidationResults(data.errors || [], []);
-                        return;
-                    }
-                    const culture = ywcImportPreview.culture;
-                    let msg = '<span class="text-success">Installed ' + escapeHtml(culture) + '.</span>';
-                    if (data.collisionsResolved && data.collisionsResolved.length) {
-                        const kept = data.collisionsResolved.filter(c => c.kept === 'mine').map(c => c.name);
-                        const took = data.collisionsResolved.filter(c => c.kept === 'theirs').map(c => c.name);
-                        if (kept.length) msg += ' Kept your existing versions of: ' + kept.map(escapeHtml).join(', ') + '.';
-                        if (took.length) msg += ' Took the imported versions of: ' + took.map(escapeHtml).join(', ') + '.';
-                    }
-                    resultsEl.innerHTML = msg;
-                    ywcImportPreview = null;
-                    document.getElementById('importPackFile').value = '';
-                    // The editor and metadata panel show the active (en-GB)
-                    // pack — refresh them so an en-GB import is visible
-                    // immediately instead of only after a page reload.
-                    if (culture.toLowerCase() === 'en-gb') {
-                        ywcLoadPhrases();
-                        ywcLoadPackMetadata();
-                    }
-                } catch (e) {
-                    resultsEl.innerHTML = '<span class="text-danger">Install failed: ' + escapeHtml(String(e)) + '</span>';
-                } finally {
-                    if (btn) btn.disabled = false;
-                }
-            }
-
-            // ── Voice Phrases editor ──────────────────────────────────────
-            // Core Commands are grouped into four fixed categories; Custom
-            // Commands (macros) are grouped by their own free-text "category"
-            // field, computed at render time. Editing a macro's Category
-            // field does not live-reflow the DOM — the row simply moves to
-            // its new group the next time the editor reloads (after Save).
-            // See docs/VoiceControl/language-pack-manager-design.md §2.
-
-            let _phrasesConfig = null;
-
-            function phrasesToStr(arr) { return (arr || []).join(', '); }
-            function strToPhrases(s) { return s.split(',').map(p => p.trim()).filter(Boolean); }
-
-            const CORE_CATEGORIES = [
-                { key: 'tuning',   label: 'Tuning' },
-                { key: 'radio',    label: 'Radio Controls' },
-                { key: 'transmit', label: 'Transmit' },
-                { key: 'status',   label: 'Status & Help' },
-            ];
-
-            const SIMPLE_LABELS = {
-                SwapVFO:'Swap VFO', NudgeUp:'Step up', NudgeDown:'Step down',
-                BandUp:'Band up', BandDown:'Band down',
-                StatusFrequency:'What frequency?', StatusMode:'What mode?', StatusBand:'What band?',
-                TxOn:'Key transmitter', TxOff:'Stop transmitting',
-                SplitOn:'Split on', SplitOff:'Split off',
-                NudgeIfWidthUp:'Filter wider', NudgeIfWidthDown:'Filter narrower',
-                Help:'Help',
-            };
-
-            const SIMPLE_CATEGORY_OF = {
-                SwapVFO:'tuning', NudgeUp:'tuning', NudgeDown:'tuning', BandUp:'tuning', BandDown:'tuning',
-                NudgeIfWidthUp:'radio', NudgeIfWidthDown:'radio',
-                TxOn:'transmit', TxOff:'transmit', SplitOn:'transmit', SplitOff:'transmit',
-                StatusFrequency:'status', StatusMode:'status', StatusBand:'status', Help:'status',
-            };
-
-            const DECOMPOSED_BLOCKS_OF = {
-                tuning: ['setBand', 'setNudgeStep', 'setFrequency'],
-                radio: ['setMode', 'setAfGain', 'setAttenuator', 'setPreamp', 'setAgc'],
-                transmit: [],
-                status: [],
-            };
-
-            function blockSetMode(cfg, row, thead1, thead2) {
-                let html = `<h6 class="mb-1 text-muted small text-uppercase">Set Mode</h6>`;
-                html += `<p class="text-muted mb-1" style="font-size:0.82em">Say a trigger, then the mode name — e.g. <em>"mode u s b"</em> or <em>"set mode upper sideband"</em>.</p>`;
-                html += `<table class="table table-sm table-bordered mb-2">${thead1}<tbody>`;
-                html += row('Trigger phrases', 'setMode.triggers', phrasesToStr(cfg.setMode?.triggers));
-                html += '</tbody></table>';
-                html += `<table class="table table-sm table-bordered mb-3">${thead2}<tbody>`;
-                const modeLabels = { USB:'USB', LSB:'LSB', 'CW-U':'CW', AM:'AM', FM:'FM', 'DATA-U':'DATA-U', 'DATA-L':'DATA-L', 'RTTY-L':'RTTY' };
-                for (const [key, label] of Object.entries(modeLabels))
-                    html += row(label, `setMode.vocab.${key}`, phrasesToStr(cfg.setMode?.vocabulary?.[key]));
-                html += '</tbody></table>';
-                return html;
-            }
-
-            function blockSetBand(cfg, row, thead1, thead2) {
-                let html = `<h6 class="mb-1 text-muted small text-uppercase">Set Band</h6>`;
-                html += `<p class="text-muted mb-1" style="font-size:0.82em">Say a trigger, then the band — e.g. <em>"go to eighty metres"</em> or <em>"switch to twenty metres"</em>.</p>`;
-                html += `<table class="table table-sm table-bordered mb-2">${thead1}<tbody>`;
-                html += row('Trigger phrases', 'setBand.triggers', phrasesToStr(cfg.setBand?.triggers));
-                html += '</tbody></table>';
-                html += `<table class="table table-sm table-bordered mb-3">${thead2}<tbody>`;
-                const vocab = cfg.setBand?.vocabulary || {};
-                for (const m of Object.keys(vocab).sort((a, b) => parseInt(b) - parseInt(a)))
-                    html += row(`${m}m`, `setBand.vocab.${m}`, phrasesToStr(vocab[m]));
-                html += '</tbody></table>';
-                return html;
-            }
-
-            function blockSetFrequency(cfg, row, thead1, thead2) {
-                let html = `<h6 class="mb-1 text-muted small text-uppercase">Set Frequency</h6>`;
-                html += `<p class="text-muted mb-1" style="font-size:0.82em">Say a trigger followed by a number — e.g. <em>"tune to fourteen megahertz"</em> or <em>"tune to fourteen point zero seven four"</em>.</p>`;
-                html += `<table class="table table-sm table-bordered mb-3">${thead1}<tbody>`;
-                html += row('Trigger phrases', 'setFreq.triggers', phrasesToStr(cfg.setFrequency?.triggers));
-                html += '</tbody></table>';
-                return html;
-            }
-
-            function blockSetNudgeStep(cfg, row, thead1, thead2) {
-                let html = `<h6 class="mb-1 text-muted small text-uppercase">Set Nudge Step</h6>`;
-                html += `<p class="text-muted mb-1" style="font-size:0.82em">Say a trigger, then the step size — e.g. <em>"set step ten kilohertz"</em> or <em>"step size one k"</em>.</p>`;
-                html += `<table class="table table-sm table-bordered mb-2">${thead1}<tbody>`;
-                html += row('Trigger phrases', 'setNudgeStep.triggers', phrasesToStr(cfg.setNudgeStep?.triggers));
-                html += '</tbody></table>';
-                html += `<table class="table table-sm table-bordered mb-3">${thead2}<tbody>`;
-                const stepLabels = { '10':'10 Hz', '100':'100 Hz', '1000':'1 kHz', '10000':'10 kHz', '100000':'100 kHz' };
-                for (const [key, label] of Object.entries(stepLabels))
-                    html += row(label, `setNudgeStep.vocab.${key}`, phrasesToStr(cfg.setNudgeStep?.vocabulary?.[key]));
-                html += '</tbody></table>';
-                return html;
-            }
-
-            function blockSetAfGain(cfg, row, thead1, thead2) {
-                let html = `<h6 class="mb-1 text-muted small text-uppercase">Set AF Gain</h6>`;
-                html += `<p class="text-muted mb-1" style="font-size:0.82em">Say a trigger then a level (0–100) — e.g. <em>"a f gain fifty"</em> or <em>"audio gain thirty"</em>.</p>`;
-                html += `<table class="table table-sm table-bordered mb-2">${thead1}<tbody>`;
-                html += row('Trigger phrases', 'setAfGain.triggers', phrasesToStr(cfg.setAfGain?.triggers));
-                html += '</tbody></table>';
-                html += `<table class="table table-sm table-bordered mb-3">${thead2}<tbody>`;
-                const afGainLabels = { '0':'0 (mute)', '10':'10', '20':'20', '25':'25', '30':'30', '40':'40', '50':'50', '60':'60', '70':'70', '75':'75', '80':'80', '90':'90', '100':'100 (max)' };
-                for (const [key, label] of Object.entries(afGainLabels))
-                    html += row(label, `setAfGain.vocab.${key}`, phrasesToStr(cfg.setAfGain?.vocabulary?.[key]));
-                html += '</tbody></table>';
-                return html;
-            }
-
-            function blockSetAttenuator(cfg, row, thead1, thead2) {
-                let html = `<h6 class="mb-1 text-muted small text-uppercase">Set Attenuator</h6>`;
-                html += `<p class="text-muted mb-1" style="font-size:0.82em">Say a trigger then a level — e.g. <em>"attenuator six d b"</em> or <em>"a t t off"</em>.</p>`;
-                html += `<table class="table table-sm table-bordered mb-2">${thead1}<tbody>`;
-                html += row('Trigger phrases', 'setAttenuator.triggers', phrasesToStr(cfg.setAttenuator?.triggers));
-                html += '</tbody></table>';
-                html += `<table class="table table-sm table-bordered mb-3">${thead2}<tbody>`;
-                for (const [key, label] of Object.entries({ 'off':'Off', '6':'6 dB', '12':'12 dB', '18':'18 dB' }))
-                    html += row(label, `setAttenuator.vocab.${key}`, phrasesToStr(cfg.setAttenuator?.vocabulary?.[key]));
-                html += '</tbody></table>';
-                return html;
-            }
-
-            function blockSetPreamp(cfg, row, thead1, thead2) {
-                let html = `<h6 class="mb-1 text-muted small text-uppercase">Set Preamp</h6>`;
-                html += `<p class="text-muted mb-1" style="font-size:0.82em">Say a trigger then a level — e.g. <em>"preamp one"</em> or <em>"preamplifier off"</em>.</p>`;
-                html += `<table class="table table-sm table-bordered mb-2">${thead1}<tbody>`;
-                html += row('Trigger phrases', 'setPreamp.triggers', phrasesToStr(cfg.setPreamp?.triggers));
-                html += '</tbody></table>';
-                html += `<table class="table table-sm table-bordered mb-3">${thead2}<tbody>`;
-                for (const [key, label] of Object.entries({ 'off':'Off (IPO)', '1':'Amp 1', '2':'Amp 2' }))
-                    html += row(label, `setPreamp.vocab.${key}`, phrasesToStr(cfg.setPreamp?.vocabulary?.[key]));
-                html += '</tbody></table>';
-                return html;
-            }
-
-            function blockSetAgc(cfg, row, thead1, thead2) {
-                let html = `<h6 class="mb-1 text-muted small text-uppercase">Set AGC</h6>`;
-                html += `<p class="text-muted mb-1" style="font-size:0.82em">Say a trigger then a speed — e.g. <em>"a g c slow"</em> or <em>"set a g c off"</em>.</p>`;
-                html += `<table class="table table-sm table-bordered mb-2">${thead1}<tbody>`;
-                html += row('Trigger phrases', 'setAgc.triggers', phrasesToStr(cfg.setAgc?.triggers));
-                html += '</tbody></table>';
-                html += `<table class="table table-sm table-bordered mb-3">${thead2}<tbody>`;
-                for (const [key, label] of Object.entries({ 'off':'Off', 'fast':'Fast', 'mid':'Mid', 'slow':'Slow', 'auto':'Auto' }))
-                    html += row(label, `setAgc.vocab.${key}`, phrasesToStr(cfg.setAgc?.vocabulary?.[key]));
-                html += '</tbody></table>';
-                return html;
-            }
-
-            const DECOMPOSED_BLOCK_BUILDERS = {
-                setMode: blockSetMode, setBand: blockSetBand, setFrequency: blockSetFrequency,
-                setNudgeStep: blockSetNudgeStep, setAfGain: blockSetAfGain,
-                setAttenuator: blockSetAttenuator, setPreamp: blockSetPreamp, setAgc: blockSetAgc,
-            };
-
-            function buildCoreCategory(cat, cfg, row, thead1, thead2) {
-                let html = `<details class="mb-2" open><summary class="fw-semibold">${escapeHtml(cat.label)}</summary><div class="mt-2 ps-2">`;
-                const simpleKeys = Object.keys(SIMPLE_CATEGORY_OF).filter(k => SIMPLE_CATEGORY_OF[k] === cat.key);
-                if (simpleKeys.length) {
-                    html += `<table class="table table-sm table-bordered mb-3">${thead1}<tbody>`;
-                    for (const k of simpleKeys)
-                        html += row(SIMPLE_LABELS[k], `simple.${k}`, phrasesToStr(cfg.simpleCommands?.[k]));
-                    html += '</tbody></table>';
-                }
-                for (const blockKey of (DECOMPOSED_BLOCKS_OF[cat.key] || []))
-                    html += DECOMPOSED_BLOCK_BUILDERS[blockKey](cfg, row, thead1, thead2);
-                html += '</div></details>';
-                return html;
-            }
-
-            function groupMacrosByCategory(macros) {
-                const map = new Map();
-                for (const m of (macros || [])) {
-                    const cat = (m.category && m.category.trim()) || 'Macros';
-                    if (!map.has(cat)) map.set(cat, []);
-                    map.get(cat).push(m);
-                }
-                if (map.size === 0) map.set('Macros', []);
-                return new Map([...map.entries()].sort((a, b) => a[0].localeCompare(b[0])));
-            }
-
-            function macroRow(m) {
-                m = m || {};
-                const name = m.name || '';
-                const phrases = m.phrases || [];
-                const catString = m.cat || '';
-                const category = (m.category && m.category.trim()) || 'Macros';
-                return `<tr class="macro-row">
-                    <td><input type="text" class="form-control form-control-sm macro-name" value="${escapeAttr(name)}" placeholder="e.g. NR on"></td>
-                    <td><input type="text" class="form-control form-control-sm macro-phrases" value="${escapeAttr(phrasesToStr(phrases))}" placeholder="noise reduction on, n r on"></td>
-                    <td><input type="text" class="form-control form-control-sm macro-cat" style="font-family:monospace" value="${escapeAttr(catString)}" placeholder="NR01;"></td>
-                    <td><input type="text" class="form-control form-control-sm macro-category" value="${escapeAttr(category)}" placeholder="Macros"></td>
-                    <td class="text-nowrap">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" data-action="try-it" title="Say one of these phrases into the mic">Try it</button>
-                        <span class="try-it-result small ms-1"></span>
-                    </td>
-                    <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger" data-action="delete-macro" title="Delete command" aria-label="Delete command">✕</button></td>
-                </tr>`;
-            }
-
-            const CUSTOM_COMMANDS_THEAD =
-                '<thead><tr><th style="width:18%">Name</th><th style="width:25%">Phrases (comma-separated)</th>' +
-                '<th style="width:20%">CAT string</th><th style="width:17%">Category</th><th style="width:12%">Test</th><th></th></tr></thead>';
-
-            function buildCustomCommandsSection(cfg) {
-                const groups = groupMacrosByCategory(cfg.macros);
-                let html = `<h6 class="mt-3 mb-1 text-uppercase text-muted small">Custom Commands</h6>`;
-                html += `<p class="text-muted mb-2" style="font-size:0.82em">Custom commands send CAT strings directly. Use <code>;</code> to chain commands, e.g. <code>NR01;NB01;</code>. ` +
-                    `Change a command's Category field to move it to a different group — it moves next time the editor reloads.</p>`;
-                html += `<div id="macroGroups">`;
-                let idx = 0;
-                for (const [category, macros] of groups) {
-                    const groupId = `macroGroup-${idx++}`;
-                    html += `<details class="mb-2" open>
-                        <summary class="fw-semibold">${escapeHtml(category)}</summary>
-                        <div class="mt-2 ps-2">
-                            <table class="table table-sm table-bordered mb-2" id="${groupId}">
-                                ${CUSTOM_COMMANDS_THEAD}
-                                <tbody>${macros.map(m => macroRow(m)).join('')}</tbody>
-                            </table>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" data-action="add-macro" data-group="${groupId}" data-category="${escapeAttr(category)}">
-                                <i class="bi bi-plus" aria-hidden="true"></i> Add command
-                            </button>
-                        </div>
-                    </details>`;
-                }
-                html += `</div>`;
-                html += `<button type="button" class="btn btn-sm btn-outline-secondary mt-1" data-action="add-category">
-                    <i class="bi bi-plus-circle" aria-hidden="true"></i> New category
-                </button>`;
-                return html;
-            }
-
-            function buildPhrasesEditor(cfg) {
-                // Row helper: one labelled text input with a data-path attribute,
-                // plus a §2.5 "Try it" button that tests just this row's phrases.
-                const row = (label, path, val) =>
-                    `<tr><td class="align-middle text-nowrap" style="width:35%">${label}</td>` +
-                    `<td><input type="text" class="form-control form-control-sm" data-path="${path}" value="${escapeAttr(val)}"></td>` +
-                    `<td class="text-nowrap align-middle">` +
-                    `<button type="button" class="btn btn-sm btn-outline-secondary" data-action="try-it" title="Say one of these phrases into the mic">Try it</button>` +
-                    `<span class="try-it-result small ms-1"></span></td></tr>`;
-
-                const thead1 = '<thead><tr><th style="width:35%">Command</th><th>Phrases (comma-separated)</th><th style="width:14%">Test</th></tr></thead>';
-                const thead2 = '<thead><tr><th style="width:35%">Value</th><th>Say (comma-separated)</th><th style="width:14%">Test</th></tr></thead>';
-
-                let html = `<h6 class="mt-1 mb-2 text-uppercase text-muted small">Core Commands</h6>`;
-                for (const cat of CORE_CATEGORIES)
-                    html += buildCoreCategory(cat, cfg, row, thead1, thead2);
-                html += buildCustomCommandsSection(cfg);
-                return html;
-            }
-
-            // Delegated handlers for the dynamically-built Custom Commands
-            // groups (add row / delete row / new category) — attached once,
-            // since buildPhrasesEditor() re-renders #voicePhrasesEditor's
-            // contents wholesale on every load.
-            document.addEventListener('click', function (e) {
-                const editorRoot = document.getElementById('voicePhrasesEditor');
-                if (!editorRoot || !editorRoot.contains(e.target)) return;
-
-                const addBtn = e.target.closest('[data-action="add-macro"]');
-                if (addBtn) {
-                    const tbody = document.querySelector(`#${addBtn.dataset.group} tbody`);
-                    if (tbody) tbody.insertAdjacentHTML('beforeend', macroRow({ category: addBtn.dataset.category }));
-                    return;
-                }
-
-                const tryBtn = e.target.closest('[data-action="try-it"]');
-                if (tryBtn) { ywcTryItPhrase(tryBtn); return; }
-
-                const delBtn = e.target.closest('[data-action="delete-macro"]');
-                if (delBtn) { delBtn.closest('tr').remove(); return; }
-
-                const addCatBtn = e.target.closest('[data-action="add-category"]');
-                if (addCatBtn) {
-                    const name = prompt('New category name:');
-                    if (!name || !name.trim()) return;
-                    const trimmed = name.trim();
-                    const groupsEl = document.getElementById('macroGroups');
-                    const groupId = `macroGroup-new-${Date.now()}`;
-                    const details = document.createElement('details');
-                    details.className = 'mb-2';
-                    details.open = true;
-                    details.innerHTML = `<summary class="fw-semibold">${escapeHtml(trimmed)}</summary>
-                        <div class="mt-2 ps-2">
-                            <table class="table table-sm table-bordered mb-2" id="${groupId}">
-                                ${CUSTOM_COMMANDS_THEAD}
-                                <tbody>${macroRow({ category: trimmed })}</tbody>
-                            </table>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" data-action="add-macro" data-group="${groupId}" data-category="${escapeAttr(trimmed)}">
-                                <i class="bi bi-plus" aria-hidden="true"></i> Add command
-                            </button>
-                        </div>`;
-                    if (groupsEl) groupsEl.appendChild(details);
-                    return;
-                }
-            });
-
-            function readPhrasesFromEditor(cfg) {
-                const out = JSON.parse(JSON.stringify(cfg));
-                document.querySelectorAll('#voicePhrasesEditor input[data-path]').forEach(input => {
-                    // Paths: "simple.SwapVFO" | "setMode.triggers" | "setMode.vocab.USB"
-                    //        "setBand.triggers" | "setBand.vocab.80" | "setFreq.triggers"
-                    const [section, sub, param] = input.dataset.path.split('.');
-                    const phrases = strToPhrases(input.value);
-                    if (section === 'simple') {
-                        out.simpleCommands[sub] = phrases;
-                    } else if (section === 'setMode') {
-                        if (sub === 'triggers')      out.setMode.triggers = phrases;
-                        else if (sub === 'vocab')    out.setMode.vocabulary[param] = phrases;
-                    } else if (section === 'setBand') {
-                        if (sub === 'triggers')      out.setBand.triggers = phrases;
-                        else if (sub === 'vocab')    out.setBand.vocabulary[param] = phrases;
-                    } else if (section === 'setFreq' && sub === 'triggers') {
-                        out.setFrequency.triggers = phrases;
-                    } else if (section === 'setNudgeStep') {
-                        if (sub === 'triggers')   out.setNudgeStep.triggers = phrases;
-                        else if (sub === 'vocab') out.setNudgeStep.vocabulary[param] = phrases;
-                    } else if (section === 'setAfGain') {
-                        if (sub === 'triggers')   out.setAfGain.triggers = phrases;
-                        else if (sub === 'vocab') out.setAfGain.vocabulary[param] = phrases;
-                    } else if (section === 'setAttenuator') {
-                        if (sub === 'triggers')   out.setAttenuator.triggers = phrases;
-                        else if (sub === 'vocab') out.setAttenuator.vocabulary[param] = phrases;
-                    } else if (section === 'setPreamp') {
-                        if (sub === 'triggers')   out.setPreamp.triggers = phrases;
-                        else if (sub === 'vocab') out.setPreamp.vocabulary[param] = phrases;
-                    } else if (section === 'setAgc') {
-                        if (sub === 'triggers')   out.setAgc.triggers = phrases;
-                        else if (sub === 'vocab') out.setAgc.vocabulary[param] = phrases;
-                    }
-                });
-                // Collect custom commands from every group table — a row's
-                // Category input (not which group it's physically in) is the
-                // source of truth for where it ends up after Save.
-                out.macros = [];
-                document.querySelectorAll('#voicePhrasesEditor .macro-row').forEach(tr => {
-                    const name = tr.querySelector('.macro-name')?.value?.trim() ?? '';
-                    const cat  = tr.querySelector('.macro-cat')?.value?.trim() ?? '';
-                    const category = tr.querySelector('.macro-category')?.value?.trim() || 'Macros';
-                    if (!name && !cat) return;
-                    out.macros.push({
-                        name,
-                        phrases: strToPhrases(tr.querySelector('.macro-phrases')?.value ?? ''),
-                        cat,
-                        category,
-                    });
-                });
-                return out;
-            }
-
-            // §2.5 per-row "Try it": tests just the phrases in this row's
-            // input against a scoped 3-second recognition, without saving
-            // anything or touching the live grammar's own state afterwards.
-            async function ywcTryItPhrase(btn) {
-                const tr = btn.closest('tr');
-                const input = tr.querySelector('input[data-path], .macro-phrases');
-                const resultEl = tr.querySelector('.try-it-result');
-                const phrases = strToPhrases(input ? input.value : '');
-                if (!phrases.length) {
-                    if (resultEl) resultEl.innerHTML = '<span class="text-danger">No phrases to test</span>';
-                    return;
-                }
-                // The server has only one recogniser/microphone to test with,
-                // so it serializes overlapping Try It calls -- but a second
-                // click that just silently queues for a few seconds behind
-                // the first is confusing UX. Disable every Try It button on
-                // the page (not just this one) while a test is in flight.
-                const allTryBtns = document.querySelectorAll('#voicePhrasesEditor [data-action="try-it"]');
-                allTryBtns.forEach(b => b.disabled = true);
-                if (resultEl) resultEl.innerHTML = '<span class="text-muted">Listening…</span>';
-                try {
-                    const r = await fetch('/api/voice/try-phrase', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ phrases }),
-                    });
-                    const data = await r.json();
-                    if (!r.ok) {
-                        if (resultEl) resultEl.innerHTML = '<span class="text-danger">' + escapeHtml(data.error || ('HTTP ' + r.status)) + '</span>';
-                        return;
-                    }
-                    if (resultEl) {
-                        const conf = data.confidence !== null && data.confidence !== undefined
-                            ? ' (' + data.confidence.toFixed(2) + ')' : '';
-                        if (data.matched) {
-                            resultEl.innerHTML = '<span class="text-success">✓ heard: "' + escapeHtml(data.heard) + '"' + conf + '</span>';
-                        } else if (data.heard) {
-                            // SAPI returned a result, but below the 0.6 confidence
-                            // threshold the live recogniser requires -- a forced-
-                            // choice grammar this small will fit almost any noise
-                            // to its closest phrase, so a low-confidence "heard"
-                            // isn't a real match.
-                            resultEl.innerHTML = '<span class="text-warning">⚠ too unsure: "' + escapeHtml(data.heard) + '"' + conf + '</span>';
-                        } else {
-                            resultEl.innerHTML = '<span class="text-danger">✗ no match heard</span>';
-                        }
-                    }
-                } catch (e) {
-                    if (resultEl) resultEl.innerHTML = '<span class="text-danger">Failed: ' + escapeHtml(String(e)) + '</span>';
-                } finally {
-                    allTryBtns.forEach(b => b.disabled = false);
-                }
-            }
-
-            // §2.5 inline duplicate-phrase warning: scans every phrase input
-            // in the editor and flags any phrase that appears more than once
-            // (e.g. the same trigger word accidentally added to two
-            // different commands, which SAPI would then match ambiguously).
-            function ywcCheckDuplicatePhrases() {
-                const seen = new Map(); // lowercased phrase -> count
-                document.querySelectorAll('#voicePhrasesEditor input[data-path], #voicePhrasesEditor .macro-phrases').forEach(input => {
-                    input.classList.remove('is-invalid');
-                    for (const p of strToPhrases(input.value)) {
-                        const key = p.toLowerCase();
-                        seen.set(key, (seen.get(key) || 0) + 1);
-                    }
-                });
-                const dupes = [...seen.entries()].filter(([, count]) => count > 1).map(([p]) => p);
-                document.querySelectorAll('#voicePhrasesEditor input[data-path], #voicePhrasesEditor .macro-phrases').forEach(input => {
-                    const phrases = strToPhrases(input.value).map(p => p.toLowerCase());
-                    if (phrases.some(p => dupes.includes(p))) input.classList.add('is-invalid');
-                });
-                const warnEl = document.getElementById('phrasesDuplicateWarning');
-                if (warnEl) {
-                    warnEl.innerHTML = dupes.length
-                        ? '<div class="alert alert-warning py-1 px-2 small mb-2">Duplicate phrase' + (dupes.length === 1 ? '' : 's') +
-                          ' used in more than one command (highlighted below): ' + dupes.map(escapeHtml).join(', ') + '</div>'
-                        : '';
-                }
-            }
-
-            // §2.5 autosave: debounced draft POST on every editor keystroke,
-            // so a browser refresh mid-edit doesn't lose unsaved work.
-            let _draftSaveTimer = null;
-            function ywcScheduleDraftSave() {
-                if (_draftSaveTimer) clearTimeout(_draftSaveTimer);
-                _draftSaveTimer = setTimeout(async () => {
-                    if (!_phrasesConfig) return;
-                    try {
-                        await fetch('/api/voice/phrases/draft', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(readPhrasesFromEditor(_phrasesConfig)),
-                        });
-                    } catch { /* best-effort */ }
-                }, 1500);
-            }
-
-            document.addEventListener('input', function (e) {
-                const editorRoot = document.getElementById('voicePhrasesEditor');
-                if (!editorRoot || !editorRoot.contains(e.target)) return;
-                ywcCheckDuplicatePhrases();
-                ywcScheduleDraftSave();
-            });
-
-            async function ywcLoadPhrases(url) {
-                const el = document.getElementById('voicePhrasesEditor');
-                try {
-                    const r = await fetch(url || '/api/voice/phrases');
-                    if (!r.ok) { el.innerHTML = '<span class="text-danger">Could not load phrases (status ' + r.status + ')</span>'; return; }
-                    _phrasesConfig = await r.json();
-                    el.innerHTML = '<div id="phrasesDuplicateWarning"></div><div id="phrasesDraftBanner"></div>' + buildPhrasesEditor(_phrasesConfig);
-                    const resultsEl = document.getElementById('phrasesValidationResults');
-                    if (resultsEl) resultsEl.innerHTML = '';
-                    ywcCheckDuplicatePhrases();
-                    // §2.5: offer to restore an autosaved draft left over from
-                    // an interrupted edit (browser refresh/crash), but only
-                    // when loading the real installed pack -- not after a
-                    // Reset-to-defaults preview.
-                    if (!url) await ywcCheckForDraft();
-                } catch (e) {
-                    el.innerHTML = '<span class="text-danger">Error loading phrases: ' + escapeHtml(String(e)) + '</span>';
-                }
-            }
-
-            async function ywcCheckForDraft() {
-                const bannerEl = document.getElementById('phrasesDraftBanner');
-                if (!bannerEl) return;
-                try {
-                    const r = await fetch('/api/voice/phrases/draft');
-                    const data = await r.json();
-                    if (!r.ok || !data.hasDraft) return;
-                    bannerEl.innerHTML =
-                        '<div class="alert alert-info py-1 px-2 small mb-2 d-flex justify-content-between align-items-center">' +
-                        '<span>You have unsaved changes from a previous editing session.</span>' +
-                        '<span><button type="button" class="btn btn-sm btn-primary me-1" onclick="ywcRestoreDraft()">Restore</button>' +
-                        '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="ywcDiscardDraft()">Discard</button></span>' +
-                        '</div>';
-                    window._ywcPendingDraft = data.config;
-                } catch { /* best-effort */ }
-            }
-
-            function ywcRestoreDraft() {
-                if (!window._ywcPendingDraft) return;
-                _phrasesConfig = window._ywcPendingDraft;
-                window._ywcPendingDraft = null;
-                const el = document.getElementById('voicePhrasesEditor');
-                el.innerHTML = '<div id="phrasesDuplicateWarning"></div><div id="phrasesDraftBanner"></div>' + buildPhrasesEditor(_phrasesConfig);
-                ywcCheckDuplicatePhrases();
-            }
-
-            async function ywcDiscardDraft() {
-                window._ywcPendingDraft = null;
-                const bannerEl = document.getElementById('phrasesDraftBanner');
-                if (bannerEl) bannerEl.innerHTML = '';
-                try { await fetch('/api/voice/phrases/draft/discard', { method: 'POST' }); } catch { /* best-effort */ }
-            }
-
-            function renderValidationResults(errors, warnings) {
-                if (errors.length === 0 && warnings.length === 0)
-                    return '<span class="text-success small">✓ No issues found.</span>';
-                const item = (i, cls) => `<li class="small"><span class="${cls}">${escapeHtml(i.path)}</span> — ${escapeHtml(i.message)}</li>`;
-                let html = '';
-                if (errors.length)
-                    html += `<div class="text-danger small fw-semibold">Errors (must fix before saving)</div><ul class="mb-2">${errors.map(i => item(i, 'text-danger')).join('')}</ul>`;
-                if (warnings.length)
-                    html += `<div class="text-warning small fw-semibold">Warnings</div><ul class="mb-0">${warnings.map(i => item(i, 'text-warning')).join('')}</ul>`;
-                return html;
-            }
-
-            async function ywcValidatePhrases() {
-                if (!_phrasesConfig) return;
-                const resultsEl = document.getElementById('phrasesValidationResults');
-                const btn = document.getElementById('validatePhrasesBtn');
-                btn.disabled = true;
-                resultsEl.innerHTML = '<em class="text-muted small">Validating…</em>';
-                try {
-                    const updated = readPhrasesFromEditor(_phrasesConfig);
-                    const r = await fetch('/api/voice/phrases/validate', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updated),
-                    });
-                    const result = await r.json().catch(() => ({ errors: [], warnings: [] }));
-                    resultsEl.innerHTML = renderValidationResults(result.errors || [], result.warnings || []);
-                } catch (e) {
-                    resultsEl.innerHTML = '<span class="text-danger">Validation failed: ' + escapeHtml(String(e)) + '</span>';
-                } finally {
-                    btn.disabled = false;
-                }
-            }
-
-            async function ywcSavePhrases() {
-                if (!_phrasesConfig) return;
-                const status = document.getElementById('phrasesSaveStatus');
-                const resultsEl = document.getElementById('phrasesValidationResults');
-                const btn = document.getElementById('savePhrasesBtn');
-                btn.disabled = true;
-                status.textContent = 'Saving…';
-                resultsEl.innerHTML = '';
-                try {
-                    const updated = readPhrasesFromEditor(_phrasesConfig);
-                    const r = await fetch('/api/voice/phrases', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updated),
-                    });
-                    const body = await r.json().catch(() => ({}));
-                    if (r.status === 422) {
-                        status.innerHTML = '<span class="text-danger">' + escapeHtml(body.error || 'Validation failed.') + '</span>';
-                        resultsEl.innerHTML = renderValidationResults(body.errors || [], []);
-                    } else if (!r.ok) {
-                        status.innerHTML = '<span class="text-danger">Save failed: ' + escapeHtml(body.error || r.statusText) + '</span>';
-                    } else {
-                        _phrasesConfig = updated;
-                        const warnings = body.warnings || [];
-                        status.innerHTML = '<span class="text-success">✓ Phrases saved and grammar reloaded.</span>';
-                        resultsEl.innerHTML = warnings.length ? renderValidationResults([], warnings) : '';
-                        setTimeout(() => { if (status) status.textContent = ''; }, 4000);
-                    }
-                } catch (e) {
-                    status.innerHTML = '<span class="text-danger">Save failed: ' + escapeHtml(String(e)) + '</span>';
-                } finally {
-                    btn.disabled = false;
-                }
-            }
-
-            async function ywcResetPhrases() {
-                if (!confirm('Reset all phrases to the built-in English (UK) defaults?')) return;
-                await ywcLoadPhrases('/api/voice/phrases/defaults');
-                document.getElementById('phrasesSaveStatus').innerHTML = '<span class="text-warning">Defaults loaded — click Save phrases to apply.</span>';
-            }
-
-            function escapeAttr(s) {
-                return String(s).replace(/[&"<>]/g, c => ({ '&':'&amp;','"':'&quot;','<':'&lt;','>':'&gt;' }[c]));
-            }
-
-            // Load phrases when the Voice Control section is opened.
-            (function () {
-                const details = document.querySelector('details.settings-section:has(#voicePhrasesEditor)');
-                if (details) {
-                    details.addEventListener('toggle', function onToggle() {
-                        if (details.open && !_phrasesConfig) ywcLoadPhrases();
-                    });
-                    // Also load immediately if the section starts open.
-                    if (details.open) ywcLoadPhrases();
-                }
-            })();
-
-            // ── "Test this pack" modal (§6.5) ──────────────────────────────
-            // Reuses the same live SpeechRecognitionEngine as the navbar mic
-            // button (VoiceControlService.TryPhraseAsync isn't involved here --
-            // this is the normal grammar-driven /api/voice/start /stop path,
-            // just with dryRun=true by default so nothing reaches the radio).
-            (function () {
-                const modalEl   = document.getElementById('voiceTestPackModal');
-                const holdBtn   = document.getElementById('voiceTestHoldBtn');
-                const dryRunCb  = document.getElementById('voiceTestDryRun');
-                const stateBadge = document.getElementById('voiceTestStateBadge');
-                const traceEl   = document.getElementById('voiceTestTrace');
-                if (!modalEl || !holdBtn) return;
-
-                let testActive = false;
-                let pressed = false;
-
-                function traceLine(html) {
-                    const time = new Date().toLocaleTimeString();
-                    const line = document.createElement('div');
-                    line.innerHTML = '<span class="text-muted">' + time + '</span>  ' + html;
-                    if (traceEl.firstElementChild && traceEl.firstElementChild.tagName !== 'DIV') {
-                        traceEl.innerHTML = '';
-                    }
-                    traceEl.appendChild(line);
-                    traceEl.scrollTop = traceEl.scrollHeight;
-                }
-
-                const badgeClass = {
-                    Idle: 'text-bg-secondary', Listening: 'text-bg-danger', Heard: 'text-bg-success',
-                    Executing: 'text-bg-success', Unrecognised: 'text-bg-warning', Error: 'text-bg-danger',
-                };
-
-                function onTestStatusUpdate(status) {
-                    if (!testActive) return;
-                    stateBadge.textContent = status.state || '—';
-                    stateBadge.className = 'badge ' + (badgeClass[status.state] || 'text-bg-secondary');
-                    if (status.state === 'Heard' || status.state === 'Unrecognised' || status.state === 'Error') {
-                        const parts = [];
-                        parts.push('<strong>' + escapeHtml(status.state) + '</strong>');
-                        if (status.lastHeard) parts.push('heard &ldquo;' + escapeHtml(status.lastHeard) + '&rdquo;');
-                        if (status.lastIntent) parts.push('→ ' + escapeHtml(status.lastIntent));
-                        if (status.confidence !== null && status.confidence !== undefined)
-                            parts.push('(confidence ' + status.confidence.toFixed(2) + ')');
-                        if (status.dryRun) parts.push('<span class="text-muted">[dry run]</span>');
-                        if (status.errorMessage) parts.push('<span class="text-danger">' + escapeHtml(status.errorMessage) + '</span>');
-                        traceLine(parts.join(' '));
-                    }
-                }
-
-                function attachSignalR() {
-                    const conn = window.signalRConnection || window.connection;
-                    if (!conn || typeof conn.on !== 'function') { setTimeout(attachSignalR, 250); return; }
-                    conn.on('VoiceStatusUpdate', onTestStatusUpdate);
-                }
-                attachSignalR();
-
-                async function startTest() {
-                    if (pressed) return;
-                    pressed = true;
-                    holdBtn.classList.remove('btn-outline-danger');
-                    holdBtn.classList.add('btn-danger');
-                    try {
-                        const dryRun = dryRunCb.checked;
-                        await fetch('/api/voice/start?dryRun=' + (dryRun ? 'true' : 'false'), { method: 'POST' });
-                        traceLine('Listening…' + (dryRun ? ' <span class="text-muted">[dry run]</span>' : ''));
-                    } catch (e) {
-                        traceLine('<span class="text-danger">Start failed: ' + escapeHtml(String(e)) + '</span>');
-                        pressed = false;
-                        holdBtn.classList.remove('btn-danger');
-                        holdBtn.classList.add('btn-outline-danger');
-                    }
-                }
-
-                async function stopTest() {
-                    if (!pressed) return;
-                    pressed = false;
-                    holdBtn.classList.remove('btn-danger');
-                    holdBtn.classList.add('btn-outline-danger');
-                    try {
-                        await fetch('/api/voice/stop', { method: 'POST' });
-                    } catch (e) {
-                        traceLine('<span class="text-danger">Stop failed: ' + escapeHtml(String(e)) + '</span>');
-                    }
-                }
-
-                holdBtn.addEventListener('mousedown', startTest);
-                holdBtn.addEventListener('touchstart', function (e) { e.preventDefault(); startTest(); });
-                holdBtn.addEventListener('mouseup', stopTest);
-                holdBtn.addEventListener('mouseleave', function () { if (pressed) stopTest(); });
-                holdBtn.addEventListener('touchend', stopTest);
-                holdBtn.addEventListener('touchcancel', stopTest);
-
-                modalEl.addEventListener('shown.bs.modal', function () {
-                    testActive = true;
-                    stateBadge.textContent = 'Idle';
-                    stateBadge.className = 'badge text-bg-secondary';
-                    traceEl.innerHTML = '<span class="text-muted">Hold the button and speak a command…</span>';
-                });
-                modalEl.addEventListener('hidden.bs.modal', function () {
-                    testActive = false;
-                    if (pressed) stopTest();
-                });
-            })();
-        </script>
-    </details>
-    }
-    else
-    {
-    <div class="alert alert-secondary mb-3" role="status">
-        <i class="bi bi-mic-mute" aria-hidden="true"></i>
-        Voice Control (Windows SAPI) is not available on this host. CAT control and the web UI work as usual.
-    </div>
-    }
-
-    <!-- Radio & CAT -->
-    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
-        <summary><i class="bi bi-broadcast" aria-hidden="true"></i>&nbsp;Radio &amp; CAT</summary>
-        <div class="section-body">
                 <h5 class="mb-3">Radio Connection</h5>
                         <div class="mb-3">
                             <label asp-for="Settings.RadioModel" class="form-label">Radio Model</label>
@@ -1945,20 +443,13 @@
                             </div>
                             <span asp-validation-for="Settings.BandPlan" class="text-danger"></span>
                         </div>
-            <!-- Inline Save Settings so this section can be saved in place. -->
-            <div class="mt-2 pt-3 border-top">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
-                </button>
-                <span class="form-text ms-2">Saves everything on this page.</span>
             </div>
         </div>
-    </details>
-
-    <!-- Web / HTTP -->
-    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
-        <summary><i class="bi bi-globe" aria-hidden="true"></i>&nbsp;Web / HTTP</summary>
-        <div class="section-body">
+        <div class="tab-pane fade" id="settings-pane-web" role="tabpanel" aria-labelledby="settings-tab-web" tabindex="0" data-settings-tab="web">
+            <div class="settings-pane">
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <h2 class="h4 mb-0">Web / HTTP</h2>
+                </div>
                 <h5 class="mb-3">Web Server</h5>
                         <div class="mb-3">
                             <label class="form-label">Network Interface</label>
@@ -2076,20 +567,78 @@
                             <strong>External Applications:</strong> Configure WSJT-X, JTAlert, and Log4OM on the
                             <a asp-page="/ApplicationSetup" class="alert-link">Application Setup</a> page.
                         </div>
-            <!-- Inline Save Settings so this section can be saved in place. -->
-            <div class="mt-2 pt-3 border-top">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
-                </button>
-                <span class="form-text ms-2">Saves everything on this page.</span>
             </div>
         </div>
-    </details>
-
-    <!-- Remote Audio (browser ↔ radio USB) -->
-    <details class="settings-section" id="remoteAudioSection" @(ViewContext.ModelState.IsValid ? "" : "open")>
-        <summary><i class="bi bi-soundwave" aria-hidden="true"></i>&nbsp;Remote Audio</summary>
-        <div class="section-body">
+        <div class="tab-pane fade" id="settings-pane-accessibility" role="tabpanel" aria-labelledby="settings-tab-accessibility" tabindex="0" data-settings-tab="accessibility">
+            <div class="settings-pane">
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <h2 class="h4 mb-0">Accessibility</h2>
+                </div>
+            <p class="text-muted small mb-3">
+                Settings to make Yaesu Web Control easier to use for operators with disabilities.
+                The frequency display is fully keyboard-driven: focus it with Tab, then use ↑/↓ to step
+                the selected digit, ←/→ to move the selection, PageUp/PageDown for 10× steps, and
+                Home/End to jump to the most/least significant digit. Got a suggestion?
+                <a href="https://github.com/mm5agm/Yaesu_Web_Control/discussions" target="_blank" rel="noopener">Open a GitHub discussion</a>.
+            </p>
+            <div class="mb-3 form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       id="showFrequencyArrowButtons" asp-for="Settings.ShowFrequencyArrowButtons" />
+                <label class="form-check-label" for="showFrequencyArrowButtons">
+                    Show frequency up/down arrow buttons
+                </label>
+                <div class="form-text">
+                    Adds ▲ ▼ buttons next to each VFO's frequency display. Each click steps the
+                    currently selected digit by 1 (the same action as the scroll-wheel or the ↑ / ↓
+                    keys). Useful if you cannot use a mouse wheel — e.g. head-tracking input,
+                    on-screen keyboard users, reduced-dexterity operators. Off by default to keep
+                    the main screen uncluttered for users who don't need them.
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold" for="Settings_TxToggleKey">TX toggle key</label>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    @* data-val="false": optional blank must never get client-side
+                       required (same silent-block class of bug as #65). Server
+                       already ModelState.Remove's this field. *@
+                    <input asp-for="Settings.TxToggleKey"
+                           class="form-control"
+                           id="Settings_TxToggleKey"
+                           style="max-width: 220px;"
+                           readonly
+                           autocomplete="off"
+                           data-val="false"
+                           aria-describedby="txToggleKeyHelp txToggleKeyDisplay" />
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="txToggleKeySetBtn">
+                        Set key
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="txToggleKeyClearBtn">
+                        Clear
+                    </button>
+                    <span class="badge text-bg-warning" id="txToggleKeyCaptureBadge" style="display:none;">
+                        Press a key now
+                    </span>
+                </div>
+                <div class="form-text" id="txToggleKeyHelp">
+                    Optional browser shortcut for toggling transmit. Disabled when blank. For safety,
+                    YWC ignores this shortcut while you are typing in an input or text box.
+                </div>
+                <div class="form-text text-warning">
+                    Warning: this directly keys the transmitter. Choose a key you will not press by accident.
+                </div>
+                <div class="form-text" id="txToggleKeyDisplay"></div>
+            </div>
+            </div>
+        </div>
+                @if (Model.IsWindowsHost)
+                {
+                    <partial name="_SettingsVoicePane" />
+                }
+        <div class="tab-pane fade" id="settings-pane-audio" role="tabpanel" aria-labelledby="settings-tab-audio" tabindex="0" data-settings-tab="audio">
+            <div class="settings-pane">
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <h2 class="h4 mb-0">Remote Audio</h2>
+                </div>
             <p class="text-muted">
                 Stream radio receive audio to the browser and send the browser microphone into the radio’s USB audio
                 (SCU-LAN10-style remote SSB without Mumble). PTT stays on the existing TX button / shortcut.
@@ -2140,19 +689,13 @@
                     RX / TX software gain is adjusted live via <strong>Mic &amp; Gain</strong> on the Index Remote Audio bar (or inline on the pop-out), not here.
                 </div>
             </div>
-            <div class="mt-2 pt-3 border-top">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
-                </button>
-                <span class="form-text ms-2">Saves everything on this page.</span>
             </div>
         </div>
-    </details>
-
-    <!-- Radio Display (USB UVC / HDMI capture → MJPEG) -->
-    <details class="settings-section" id="radioDisplaySection">
-        <summary><i class="bi bi-display" aria-hidden="true"></i>&nbsp;Radio Display</summary>
-        <div class="section-body">
+        <div class="tab-pane fade" id="settings-pane-display" role="tabpanel" aria-labelledby="settings-tab-display" tabindex="0" data-settings-tab="display">
+            <div class="settings-pane">
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <h2 class="h4 mb-0">Radio Display</h2>
+                </div>
             <p class="text-muted">
                 Show the transceiver’s external video output in the browser via a USB webcam or
                 HDMI/DVI capture dongle. Device, capture size, frame rate, and image quality are chosen on the Index
@@ -2169,28 +712,20 @@
                 <input class="form-check-input" type="checkbox" asp-for="Settings.VideoDisplayEnabled" id="videoDisplayEnabled" />
                 <label class="form-check-label" asp-for="Settings.VideoDisplayEnabled">Enable radio display</label>
             </div>
-            <div class="mt-2 pt-3 border-top">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
-                </button>
-                <span class="form-text ms-2">Saves everything on this page.</span>
             </div>
         </div>
-    </details>
-
-    @if (Model.IsWindowsHost)
-    {
-    <!-- SDR Spectrum Display -->
-    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
-        <summary>
-            <i class="bi bi-broadcast-pin" aria-hidden="true"></i>&nbsp;SDR Spectrum Display
-            <button type="button" class="btn btn-outline-secondary btn-sm ms-auto"
-                    data-bs-toggle="modal" data-bs-target="#sdrHelpModal"
-                    onclick="event.stopPropagation();">
-                <i class="bi bi-question-circle"></i> Help
-            </button>
-        </summary>
-        <div class="section-body">
+                @if (Model.IsWindowsHost)
+                {
+                <text>
+        <div class="tab-pane fade" id="settings-pane-sdr" role="tabpanel" aria-labelledby="settings-tab-sdr" tabindex="0" data-settings-tab="sdr">
+            <div class="settings-pane">
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <h2 class="h4 mb-0">SDR Spectrum Display</h2>
+                    <button type="button" class="btn btn-outline-secondary btn-sm ms-auto"
+                            data-bs-toggle="modal" data-bs-target="#sdrHelpModal">
+                        <i class="bi bi-question-circle"></i> Help
+                    </button>
+                </div>
             <p class="text-muted mb-3">
                 Connect your radio's <strong>IF output (RCA)</strong> to an SDR receiver. The spectrum
                 display shows the band around your current VFO frequency in real time.
@@ -2376,28 +911,15 @@
                     </div>
                 </div>
             </div>
-            <!-- Inline Save Settings so this long section can be saved in place. -->
-            <div class="mt-2 pt-3 border-top">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
-                </button>
-                <span class="form-text ms-2">Saves everything on this page.</span>
             </div>
         </div>
-    </details>
-    }
-    else
-    {
-    <div class="alert alert-secondary mb-3" role="status">
-        <i class="bi bi-broadcast-pin" aria-hidden="true"></i>
-        SDR Spectrum Display is not available on this host (CAT-only build).
-    </div>
-    }
-
-    <!-- DX Cluster -->
-    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
-        <summary><i class="bi bi-globe2" aria-hidden="true"></i>&nbsp;DX Cluster</summary>
-        <div class="section-body">
+                </text>
+                }
+        <div class="tab-pane fade" id="settings-pane-dx-cluster" role="tabpanel" aria-labelledby="settings-tab-dx-cluster" tabindex="0" data-settings-tab="dx-cluster">
+            <div class="settings-pane">
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <h2 class="h4 mb-0">DX Cluster</h2>
+                </div>
                     <p class="text-muted mb-3">
                         Connect to a DX cluster server to overlay DX spots on the SDR spectrum display.
                         Spots show callsigns at their reported frequencies; click a spot to QSY VFO A to it.
@@ -2488,15 +1010,143 @@
                             (without saving) and shows what it returns.
                         </small>
                     </div>
-            <!-- Inline Save Settings so this section can be saved in place. -->
-            <div class="mt-2 pt-3 border-top">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
-                </button>
-                <span class="form-text ms-2">Saves everything on this page.</span>
             </div>
         </div>
-    </details>
+        <div class="tab-pane fade" id="settings-pane-cw" role="tabpanel" aria-labelledby="settings-tab-cw" tabindex="0" data-settings-tab="cw">
+            <div class="settings-pane">
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <h2 class="h4 mb-0">CW</h2>
+                </div>
+                <h5 class="mb-3">CW Memory Messages (M1–M5)</h5>
+                    <p class="text-muted small mb-3">
+                        These messages can be sent from the CW panel on the main control page using the M1–M5 buttons.
+                        Use <code>{CALL}</code> as a placeholder for your callsign; it is filled in from the callsign on this page.
+                        Maximum 50 characters per message.
+                    </p>
+                    @for (int i = 0; i < 5; i++)
+                    {
+                        <div class="mb-2 d-flex align-items-center gap-2">
+                            <span class="badge bg-secondary" style="min-width:2.5rem;">M@(i+1)</span>
+                            <input type="text"
+                                   name="Settings.CwMessages[@i]"
+                                   value="@(Model.Settings.CwMessages != null && Model.Settings.CwMessages.Count > i ? Model.Settings.CwMessages[i] : "")"
+                                   maxlength="50"
+                                   class="form-control form-control-sm font-monospace"
+                                   placeholder="Message @(i+1)" />
+                        </div>
+                    }
+                <h5 class="mt-4 mb-3">CW Reader Mode</h5>
+            <p class="text-muted small mb-3">
+                The CW reader decodes far better through a narrow filter than through a wide one
+                full of adjacent signals - more than any change to the decoding itself would give.
+                Reader Mode sets these in one click and puts your previous settings back when you
+                turn it off.
+            </p>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label" for="cwReaderFilterHz">Target filter width</label>
+                    <select id="cwReaderFilterHz" name="Settings.CwReaderFilterHz" class="form-select form-select-sm">
+                        @foreach (var hz in new[] { 50, 100, 150, 200, 250, 300, 400, 500 })
+                        {
+                            <option value="@hz" selected="@(Model.Settings.CwReaderFilterHz == hz)">@hz Hz</option>
+                        }
+                    </select>
+                    <div class="form-text">
+                        Your radio is set to the nearest width it actually has, which is not always
+                        the number above - the FTDX3000's CW filters start at 500 Hz.
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="form-check form-switch mt-4">
+                        <input class="form-check-input" type="checkbox" id="cwReaderUseApf"
+                               name="Settings.CwReaderUseApf" value="true"
+                               @(Model.Settings.CwReaderUseApf ? "checked" : "") />
+                        <input type="hidden" name="Settings.CwReaderUseApf" value="false" />
+                        <label class="form-check-label" for="cwReaderUseApf">Switch APF on as well</label>
+                    </div>
+                    <div class="form-text">
+                        The audio peak filter narrows further still and is the biggest single
+                        improvement available on a weak signal. Turn it off if you are listening as
+                        well as reading and dislike the ringing.
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
+                </div>
+            </form>
+
+            @* Backup stays outside settingsForm so Import cannot POST with Save.
+               Own tab-content so panes remain .tab-content > .tab-pane for Bootstrap CSS. *@
+            <div class="tab-content">
+        <div class="tab-pane fade" id="settings-pane-backup" role="tabpanel" aria-labelledby="settings-tab-backup" tabindex="0" data-settings-tab="backup">
+            <div class="settings-pane">
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <h2 class="h4 mb-0">Backup &amp; Restore</h2>
+                </div>
+                <p class="text-muted">
+                    Download a single zip file containing everything you've customised in YWC — settings, memories, memory banks, calibration, and accessible-label overrides.
+                    Use it to safeguard your configuration, move to a new PC, or share a setup with another operator.
+                </p>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <a class="btn btn-outline-primary" href="/api/backup/export">
+                        <i class="bi bi-download"></i> Export full backup
+                    </a>
+                    <label class="btn btn-outline-warning mb-0" for="backupImportFile">
+                        <i class="bi bi-upload"></i> Import full backup…
+                    </label>
+                    <input type="file" id="backupImportFile" accept="application/zip,.zip" hidden>
+                    <span id="backupImportStatus" class="ms-2 small"></span>
+                </div>
+                <p class="text-muted small mt-2 mb-0">
+                    Import overwrites the matching files in your user-data folder. Each replaced file is kept as a <code>.bak</code> so you can recover.
+                    After importing, <strong>restart the app</strong> so the radio-connection, DX-cluster, SDR and rigctld services pick up the new values.
+                    Radio state (live frequency, mode etc.) is not included in the backup — it resets to whatever the radio reports on next connect.
+                </p>
+            </div>
+        </div>
+            </div>
+
+            @{ var isSaveSuccess = !string.IsNullOrEmpty(Model.StatusMessage) && (Model.StatusMessage.Contains("success") || Model.StatusMessage.Contains("✓")); }
+
+            @* Sticky bar under every pane. Status sits next to Save — a banner
+               only at the top of this page was easy to miss and looked like the
+               save had silently failed (#65, iu1teu). Auto-dismisses after a few
+               seconds. form="settingsForm" posts the settings form from this bar. *@
+            <div class="settings-save-bar">
+                <div class="settings-save-actions">
+                    <button type="submit" form="settingsForm" id="saveSettingsBtn" class="btn btn-primary btn-lg btn-save-primary" data-save-success="@(isSaveSuccess ? "1" : "0")">
+                        <i class="bi @(isSaveSuccess ? "bi-check-circle-fill" : "bi-save")" id="saveSettingsIcon"></i>
+                        <span id="saveSettingsLabel">@(isSaveSuccess ? "Saved" : "Save Settings")</span>
+                    </button>
+                    @if (!string.IsNullOrEmpty(Model.StatusMessage))
+                    {
+                        <div id="settingsStatusBanner"
+                             class="alert @(isSaveSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show settings-status-banner mb-0"
+                             role="alert">
+                            @Model.StatusMessage
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        <script>
+                            document.getElementById('settingsStatusBanner').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            setTimeout(function () {
+                                var el = document.getElementById('settingsStatusBanner');
+                                if (el && window.bootstrap) {
+                                    bootstrap.Alert.getOrCreateInstance(el).close();
+                                }
+                            }, 6000);
+                        </script>
+                    }
+                    <button type="button" class="btn btn-success btn-lg" onclick="testConnection()">
+                        <i class="bi bi-plug"></i> Test Connection
+                    </button>
+                    <a asp-page="/Index" class="btn btn-secondary btn-lg">
+                        <i class="bi bi-x-circle"></i> Cancel
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- DX Cluster Test result modal -->
     <div class="modal fade" id="dxClusterTestModal" tabindex="-1" aria-labelledby="dxClusterTestModalLabel" aria-hidden="true">
@@ -2566,137 +1216,6 @@
     </div>
     }
 
-    <!-- CW Memory Messages -->
-    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
-        <summary><i class="bi bi-keyboard" aria-hidden="true"></i>&nbsp;CW Memory Messages (M1–M5)</summary>
-        <div class="section-body">
-                    <p class="text-muted small mb-3">
-                        These messages can be sent from the CW panel on the main control page using the M1–M5 buttons.
-                        Use <code>{CALL}</code> as a placeholder for your callsign; it is filled in from the callsign on this page.
-                        Maximum 24 characters per message.
-                    </p>
-                    @for (int i = 0; i < 5; i++)
-                    {
-                        <div class="mb-2 d-flex align-items-center gap-2">
-                            <span class="badge bg-secondary" style="min-width:2.5rem;">M@(i+1)</span>
-                            <input type="text"
-                                   name="Settings.CwMessages[@i]"
-                                   value="@(Model.Settings.CwMessages != null && Model.Settings.CwMessages.Count > i ? Model.Settings.CwMessages[i] : "")"
-                                   maxlength="50"
-                                   class="form-control form-control-sm font-monospace"
-                                   placeholder="Message @(i+1)" />
-                        </div>
-                    }
-        </div>
-    </details>
-
-    <!-- CW Reader Mode -->
-    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
-        <summary><i class="bi bi-soundwave" aria-hidden="true"></i>&nbsp;CW Reader Mode</summary>
-        <div class="section-body">
-            <p class="text-muted small mb-3">
-                The CW reader decodes far better through a narrow filter than through a wide one
-                full of adjacent signals - more than any change to the decoding itself would give.
-                Reader Mode sets these in one click and puts your previous settings back when you
-                turn it off.
-            </p>
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label" for="cwReaderFilterHz">Target filter width</label>
-                    <select id="cwReaderFilterHz" name="Settings.CwReaderFilterHz" class="form-select form-select-sm">
-                        @foreach (var hz in new[] { 50, 100, 150, 200, 250, 300, 400, 500 })
-                        {
-                            <option value="@hz" selected="@(Model.Settings.CwReaderFilterHz == hz)">@hz Hz</option>
-                        }
-                    </select>
-                    <div class="form-text">
-                        Your radio is set to the nearest width it actually has, which is not always
-                        the number above - the FTDX3000's CW filters start at 500 Hz.
-                    </div>
-                </div>
-                <div class="col-md-8">
-                    <div class="form-check form-switch mt-4">
-                        <input class="form-check-input" type="checkbox" id="cwReaderUseApf"
-                               name="Settings.CwReaderUseApf" value="true"
-                               @(Model.Settings.CwReaderUseApf ? "checked" : "") />
-                        <input type="hidden" name="Settings.CwReaderUseApf" value="false" />
-                        <label class="form-check-label" for="cwReaderUseApf">Switch APF on as well</label>
-                    </div>
-                    <div class="form-text">
-                        The audio peak filter narrows further still and is the biggest single
-                        improvement available on a weak signal. Turn it off if you are listening as
-                        well as reading and dislike the ringing.
-                    </div>
-                </div>
-            </div>
-        </div>
-    </details>
-
-    @{ var isSaveSuccess = !string.IsNullOrEmpty(Model.StatusMessage) && (Model.StatusMessage.Contains("success") || Model.StatusMessage.Contains("✓")); }
-
-    @* Placed right next to the Save button rather than at the top of the
-       page — the user just clicked Save from here, so this is exactly where
-       their eyes already are. A banner that only appeared at the very top
-       of this long page was easy to miss and looked like the save had
-       silently failed (#65, iu1teu). Auto-dismisses after a few seconds. *@
-    @if (!string.IsNullOrEmpty(Model.StatusMessage))
-    {
-        <div id="settingsStatusBanner"
-             class="alert @(isSaveSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show"
-             role="alert">
-            @Model.StatusMessage
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        <script>
-            document.getElementById('settingsStatusBanner').scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(function () {
-                var el = document.getElementById('settingsStatusBanner');
-                if (el && window.bootstrap) {
-                    bootstrap.Alert.getOrCreateInstance(el).close();
-                }
-            }, 6000);
-        </script>
-    }
-
-    <div class="mt-4 mb-4">
-        <button type="submit" id="saveSettingsBtn" class="btn btn-primary btn-lg" data-save-success="@(isSaveSuccess ? "1" : "0")">
-            <i class="bi @(isSaveSuccess ? "bi-check-circle-fill" : "bi-save")" id="saveSettingsIcon"></i>
-            <span id="saveSettingsLabel">@(isSaveSuccess ? "Saved" : "Save Settings")</span>
-        </button>
-        <button type="button" class="btn btn-success btn-lg ms-2" onclick="testConnection()">
-            <i class="bi bi-plug"></i> Test Connection
-        </button>
-        <a asp-page="/Index" class="btn btn-secondary btn-lg ms-2">
-            <i class="bi bi-x-circle"></i> Cancel
-        </a>
-    </div>
-    </form>
-
-    <!-- Backup / Restore — outside the main form so the import button doesn't trigger a save -->
-    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
-        <summary><i class="bi bi-box-arrow-up" aria-hidden="true"></i>&nbsp;Backup &amp; Restore</summary>
-        <div class="section-body">
-            <p class="text-muted">
-                Download a single zip file containing everything you've customised in YWC — settings, memories, memory banks, calibration, and accessible-label overrides.
-                Use it to safeguard your configuration, move to a new PC, or share a setup with another operator.
-            </p>
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-                <a class="btn btn-outline-primary" href="/api/backup/export">
-                    <i class="bi bi-download"></i> Export full backup
-                </a>
-                <label class="btn btn-outline-warning mb-0" for="backupImportFile">
-                    <i class="bi bi-upload"></i> Import full backup…
-                </label>
-                <input type="file" id="backupImportFile" accept="application/zip,.zip" hidden>
-                <span id="backupImportStatus" class="ms-2 small"></span>
-            </div>
-            <p class="text-muted small mt-2 mb-0">
-                Import overwrites the matching files in your user-data folder. Each replaced file is kept as a <code>.bak</code> so you can recover.
-                After importing, <strong>restart the app</strong> so the radio-connection, DX-cluster, SDR and rigctld services pick up the new values.
-                Radio state (live frequency, mode etc.) is not included in the backup — it resets to whatever the radio reports on next connect.
-            </p>
-        </div>
-    </details>
 </div>
 
 <script>
@@ -2817,6 +1336,126 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Settings category nav: sidebar pills on lg+, <select> below that.
+        // Remembers the active pane in localStorage and the URL hash so Save's
+        // RedirectToPage() lands back on the same category.
+        (function () {
+            var storageKey = 'ywc.settingsTab';
+            var list = document.getElementById('settingsTabList');
+            var select = document.getElementById('settingsCategorySelect');
+            var aliases = {
+                dx: 'dx-cluster',
+                'remote-audio': 'audio',
+                'radio-display': 'display',
+                http: 'web',
+                cat: 'radio'
+            };
+            var userMovedTab = false;
+
+            function panes() {
+                return document.querySelectorAll('.settings-layout .tab-pane[data-settings-tab]');
+            }
+
+            function availableTabs() {
+                var ids = [];
+                if (!list) return ids;
+                list.querySelectorAll('[data-settings-tab]').forEach(function (el) {
+                    ids.push(el.getAttribute('data-settings-tab'));
+                });
+                return ids;
+            }
+
+            function resolve(id) {
+                if (!id) return null;
+                id = String(id).replace(/^#/, '');
+                if (aliases[id]) id = aliases[id];
+                var avail = availableTabs();
+                if (avail.indexOf(id) >= 0) return id;
+                return avail[0] || 'radio';
+            }
+
+            function paneForInvalid() {
+                var form = document.getElementById('settingsForm');
+                if (!form) return null;
+                var invalid = form.querySelector('.input-validation-error');
+                if (!invalid) return null;
+                var pane = invalid.closest('.tab-pane');
+                return pane && pane.getAttribute('data-settings-tab');
+            }
+
+            function desired() {
+                var invalidTab = paneForInvalid();
+                if (invalidTab) return resolve(invalidTab);
+                var hash = (location.hash || '').replace(/^#/, '');
+                if (hash) return resolve(hash);
+                try {
+                    var stored = localStorage.getItem(storageKey);
+                    if (stored) return resolve(stored);
+                } catch (e) { /* private mode */ }
+                return resolve('radio');
+            }
+
+            function persist(id) {
+                try { localStorage.setItem(storageKey, id); } catch (e) { /* private mode */ }
+                var next = '#' + id;
+                if ((location.hash || '') !== next && history.replaceState) {
+                    history.replaceState(null, '', next);
+                }
+            }
+
+            function showTab(id) {
+                id = resolve(id);
+                var btn = list && list.querySelector('[data-settings-tab="' + id + '"]');
+                if (btn && window.bootstrap && bootstrap.Tab) {
+                    bootstrap.Tab.getOrCreateInstance(btn).show();
+                } else {
+                    panes().forEach(function (p) {
+                        var on = p.getAttribute('data-settings-tab') === id;
+                        p.classList.toggle('active', on);
+                        p.classList.toggle('show', on);
+                    });
+                    if (list) {
+                        list.querySelectorAll('.nav-link').forEach(function (b) {
+                            var on = b.getAttribute('data-settings-tab') === id;
+                            b.classList.toggle('active', on);
+                            b.setAttribute('aria-selected', on ? 'true' : 'false');
+                        });
+                    }
+                    document.dispatchEvent(new CustomEvent('ywc-settings-tab-shown', { detail: id }));
+                }
+                if (select && select.value !== id) select.value = id;
+                persist(id);
+            }
+
+            window.ywcShowSettingsTab = showTab;
+
+            if (list) {
+                list.addEventListener('click', function () { userMovedTab = true; });
+                list.addEventListener('keydown', function () { userMovedTab = true; });
+                list.addEventListener('shown.bs.tab', function (e) {
+                    var id = e.target && e.target.getAttribute('data-settings-tab');
+                    if (!id) return;
+                    if (select) select.value = id;
+                    persist(id);
+                    document.dispatchEvent(new CustomEvent('ywc-settings-tab-shown', { detail: id }));
+                    if (userMovedTab) {
+                        var paneId = e.target.getAttribute('aria-controls');
+                        var pane = paneId && document.getElementById(paneId);
+                        if (pane && typeof pane.focus === 'function') pane.focus({ preventScroll: true });
+                    }
+                });
+            }
+            if (select) {
+                select.addEventListener('change', function () {
+                    userMovedTab = true;
+                    showTab(select.value);
+                });
+            }
+
+            showTab(desired());
+        })();
+    </script>
     <script>
         // Serial port dropdown — same /api/ports source as Diagnostics
         (function () {
@@ -3020,8 +1659,11 @@
             function revealFirstInvalid() {
                 var invalid = form.querySelector('.input-validation-error, :invalid');
                 if (!invalid) return;
-                var section = invalid.closest('details.settings-section');
-                if (section) section.open = true;
+                var pane = invalid.closest('.tab-pane');
+                var tabId = pane && pane.getAttribute('data-settings-tab');
+                if (tabId && typeof window.ywcShowSettingsTab === 'function') {
+                    window.ywcShowSettingsTab(tabId);
+                }
                 invalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 if (typeof invalid.focus === 'function') invalid.focus();
             }

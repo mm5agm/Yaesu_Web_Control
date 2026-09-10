@@ -1154,6 +1154,8 @@ Every button and the level slider carry labels that screen readers announce, and
 
 Access Settings from the navigation bar or by clicking the settings icon. Changes take effect only after clicking **Save Settings**.
 
+Categories sit in a **left sidebar** on a desktop or tablet in landscape. On a phone or small tablet a **Settings category** dropdown at the top of the form picks the same sections. Only one category is on screen at a time; **Save Settings**, **Test Connection**, and **Cancel** stay on a bar at the bottom of the page. After you save, the page comes back to the category you were editing.
+
 At the top of the page, the **Network Access URLs** card lists the addresses you can use to reach YWC from this PC and from other devices on the LAN; the **Current Configuration** card on the right shows a one-line summary of what YWC is using right now (radio model, serial port, baud rate, network interface, web port, SDR device). The web port shown here is whichever port YWC actually managed to bind — usually 8080 but possibly 8081–8089 if 8080 was already in use on your PC.
 
 ![Top of the Settings page — Network Access URLs and Current Configuration cards](pictures/Settings_Network_Config.png)
@@ -1451,7 +1453,7 @@ If the connection drops, the app reconnects automatically after 15 seconds. Disa
 
 ### 6.7 Backup & Restore
 
-At the bottom of the Settings page (below the Save Settings button) are two buttons for exporting and importing your complete YWC user data as a **single zip file**. This rolls up everything you've customised across the app into one file:
+Open **Backup & Restore** from the Settings sidebar (or the **Settings category** dropdown on a small screen). There are two buttons for exporting and importing your complete YWC user data as a **single zip file**. This rolls up everything you've customised across the app into one file:
 
 | File in the zip | What it contains |
 |---|---|
@@ -2947,8 +2949,8 @@ This is a primary accessibility feature: a partially-sighted operator can drive 
 ### 17.2 Enabling voice control
 
 1. Open **Settings** in the YWC top navbar.
-2. Scroll to the **Voice Control** section.
-3. Tick **Enable voice control**, then click **Save Settings**. Every long section on the Settings page now has its own **Save Settings** button, so you can save in place without scrolling to the bottom — the one in the Voice Control section sits just above the Voice Phrases editor.
+2. Choose **Voice Control** in the left sidebar (or the **Settings category** dropdown on a phone).
+3. Tick **Enable voice control**, then click **Save Settings** on the bar at the bottom of the page. Voice Phrases have their own **Save phrases** button and do not use that bar.
 4. **Restart YWC.** The speech engine is loaded once at startup; the toggle takes effect on the next launch.
 5. Confirm the **Windows speech recognition pack for your active language** is installed. Open Windows → Settings → Time &amp; Language → Speech and check the installed-languages list. The active language defaults to English (United Kingdom) — if it isn't listed, install it from there (most UK Windows installs already have it). The **Active language** dropdown in the Voice Control section lets you switch to any other installed language pack (see [§17.7](#177-more-languages)).
 
