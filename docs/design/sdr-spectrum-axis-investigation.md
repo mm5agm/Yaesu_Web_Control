@@ -320,6 +320,70 @@ operating manual and **has never been measured on a signal** - unlike CW-U,
 which was. CW-L and CW-R are likewise unverified on air; they take their sign
 from `CwReaderService.IsLowerSideband`.
 
+## The S-meter reads zero when AGC is OFF (MEASURED 2026-09-10)
+
+This cost most of a session and would cost it again, so it goes in front of
+anyone picking this up.
+
+Colin reported he was sitting on a CW peak at 14.013933 and could hear
+nothing. I went looking with the receiver's own S-meter as the detector and
+concluded the receiver was deaf: **S0 at all 71 stops across 14.000-14.070**,
+S0 on all three antennas, and S0 on BBC Radio 4 longwave at 198 kHz. No
+working receiver reads S0 on a 500 kW carrier, so by then I was diagnosing a
+hardware fault.
+
+It was not a hardware fault. **AGC was OFF.** On this radio the S-meter is
+derived from the AGC detector, so with AGC off the meter is pinned at zero
+whatever is on the antenna.
+
+Measured, same three frequencies, one minute apart:
+
+| frequency | AGC OFF | AGC AUTO |
+|---|---|---|
+| 14.070 MHz | 0 | 5 |
+| 7.210 MHz (41 m broadcast) | 0 | 97 |
+| 0.198 MHz (BBC R4 LW) | 0 | 77 |
+
+`GT0<n>;` sets it: 0 = OFF, 4 = AUTO.
+
+**What found it.** Not CAT. I pulled a frame off the Remote Video MJPEG
+stream and looked at the radio's own screen, which showed `AGC OFF` in red
+and a scope full of healthy signals. That is worth remembering as a
+technique in its own right: when CAT and the SDR disagree about reality,
+the radio's front panel is a third, independent witness, and this app can
+already capture it.
+
+Two consequences for the rest of this document.
+
+**1. Any measurement here that used the S-meter as a detector is void unless
+the AGC state at the time is known.** It was not recorded, and it should have
+been. The receiver-built power-vs-RF profile in Fault 1 read the receiver's
+*audio*, not the S-meter, so it is not void on this account - but its AGC
+state was equally unrecorded, and AGC changes how audio amplitude tracks RF
+(compressed with AGC on, linear with it off). The cross-correlation evidence
+for the mirror does not involve the receiver at all and is untouched.
+
+**2. It bears directly on the notch's competing hypothesis.** The AGC
+alternative for the centre dip only works if AGC is actually running. AGC was
+found OFF on 2026-09-10 and `AgcA`/`AgcB` were both `0` in the persisted
+state, so if it was also off when the gradual dip was observed, **AGC is
+ruled out and the DC blocker stands alone**. Colin can settle this: was AGC
+off at the time? If yes, stop considering AGC.
+
+**Left on AUTO for VFO A.** VFO B was still AGC OFF at the end of the
+session, so VFO B's S-meter still reads zero and will mislead the same way.
+
+### Two smaller things established the same day
+
+- **The 62.5 kHz and 2 MHz panels are two different physical radios.**
+  `SdrDeviceKeyA = sdrplay:hw6-2405242660`, `SdrDeviceKeyB =
+  sdrplay:hw1-0000000001`. So VFO A and VFO B showing different spectra on
+  the *same* frequency is expected - two units, two IF taps, independent gain
+  and independent noise floors. It is not evidence of an axis fault.
+- **The roofing filter is not a suspect.** It was left on code `6`, which is
+  the *widest* setting (12 kHz), so it cannot be attenuating anything. Code
+  map: 6 = 12 kHz, 7 = 3 kHz, 8 = 1.2 kHz, 9 = 600 Hz, A = 300 Hz.
+
 ## Related
 
 - `docs/design/spectrum-dc-spike-plan.md` - the earlier (2026-08-29) analysis
