@@ -3448,5 +3448,93 @@ namespace Yaesu_Web_Control.Controllers
             }
             return false;
         }
+
+        // ── RTTY tone settings ───────────────────────────────────────────────
+        // What audio frequencies the RTTY decoder is listening for. Read from
+        // the radio's own extended menu rather than assumed, for the same
+        // reason the CW click-to-tune offset uses the radio's KP pitch: the
+        // operator may not be running the defaults, and a wrong mark frequency
+        // puts click-to-tune out by up to 850 Hz.
+        //
+        // These are global menu settings, not per-VFO, so there is no vfo
+        // route parameter. The values change about never, so the browser is
+        // expected to read this once when it first needs it and cache.
+
+        public class RttyTonesResponse
+        {
+            public string RadioModel { get; set; } = "";
+            /// <summary>True when the values below came from the radio rather than the defaults.</summary>
+            public bool   FromRadio  { get; set; }
+            /// <summary>Audio frequency of the mark tone, Hz.</summary>
+            public int    MarkHz     { get; set; } = RttyToneMap.DefaultMarkHz;
+            /// <summary>Mark-to-space separation, Hz.</summary>
+            public int    ShiftHz    { get; set; } = RttyToneMap.DefaultShiftHz;
+            /// <summary>True when RX polarity is REV, i.e. mark sits below space in RF.</summary>
+            public bool   PolarityRev { get; set; }
+        }
+
+        [HttpGet("rtty")]
+        public async Task<IActionResult> ReadRttyTones()
+        {
+            var settings   = await _settingsService.GetSettingsAsync();
+            var radioModel = settings.RadioModel ?? "";
+            var resp = new RttyTonesResponse { RadioModel = radioModel };
+
+            var addr = RttyToneMap.For(radioModel);
+            if (addr == null)
+            {
+                // Unknown model — hand back the Yaesu defaults and say so, so
+                // the caller can decide whether to trust them.
+                return Ok(resp);
+            }
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+
+                var mark = await ReadExValueAsync(addr.MarkFreq);
+                var markHz = RttyToneMap.MarkHzFromCode(mark);
+                if (markHz.HasValue) { resp.MarkHz = markHz.Value; resp.FromRadio = true; }
+
+                var shift = await ReadExValueAsync(addr.ShiftFreq);
+                var shiftHz = RttyToneMap.ShiftHzFromCode(shift);
+                if (shiftHz.HasValue) { resp.ShiftHz = shiftHz.Value; resp.FromRadio = true; }
+
+                if (addr.PolarityRx != null)
+                {
+                    var pol = await ReadExValueAsync(addr.PolarityRx);
+                    if (pol != null) resp.PolarityRev = pol.TrimStart('0') == "1";
+                }
+
+                return Ok(resp);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading RTTY tone settings");
+                // Defaults are still useful — a failed menu read shouldn't stop
+                // click-to-tune working for the 99% who run 2125/170.
+                return Ok(resp);
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        // Reads one EX menu item by its raw address (the text after "EX") and
+        // returns the value code, or null if the radio didn't answer in the
+        // expected shape. Shared by the RTTY reads above.
+        private async Task<string?> ReadExValueAsync(string? address)
+        {
+            if (string.IsNullOrEmpty(address)) return null;
+            var response = await _catClient.SendCommandAsync($"EX{address};", "WebUI", CancellationToken.None);
+            if (string.IsNullOrWhiteSpace(response)) return null;
+
+            var body = response.TrimEnd(';');
+            if (!body.StartsWith("EX", StringComparison.OrdinalIgnoreCase)) return null;
+            body = body.Substring(2);
+            if (!body.StartsWith(address, StringComparison.OrdinalIgnoreCase)) return null;
+            var code = body.Substring(address.Length);
+            return code.Length == 0 ? null : code;
+        }
     }
 }

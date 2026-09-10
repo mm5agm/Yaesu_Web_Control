@@ -145,6 +145,37 @@ export class SdrSpectrumPipeline {
     }
 
     /**
+     * Register a handler for the radio's CW sidetone pitch. The value is the
+     * raw KP code (0-75); the handler receives it already converted to Hz,
+     * 300 + code x 10, which is what the Pitch slider on the CW panel shows.
+     * Click-to-tune needs it so that clicking a CW signal lands the operator
+     * at the pitch rather than at zero beat.
+     * @param {function(number)} handler
+     */
+    onCwPitch(handler) {
+        this._pipeline.register('CwPitch', (code) => {
+            const n = Number(code);
+            if (Number.isFinite(n)) handler(300 + Math.max(0, Math.min(75, n)) * 10);
+        });
+    }
+
+    /**
+     * Register a handler for VFO A's mode string, e.g. "CW-U" / "USB".
+     * @param {function(string)} handler
+     */
+    onModeA(handler) {
+        this._pipeline.register('ModeA', (value) => handler(value));
+    }
+
+    /**
+     * Register a handler for VFO B's mode string.
+     * @param {function(string)} handler
+     */
+    onModeB(handler) {
+        this._pipeline.register('ModeB', (value) => handler(value));
+    }
+
+    /**
      * Register a handler for new DX cluster spots.
      * Each spot is the JSON shape from /api/dxcluster/spots.
      * @param {function(object)} handler

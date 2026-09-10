@@ -28,6 +28,32 @@ export class SpectrumPanel {
         this._vfoHz       = initialVfoHz;
         this._status      = 'unconfigured';
 
+        // CW click-to-tune correction. Clicking a CW signal must NOT put the
+        // VFO on the signal's own frequency: in CW that is zero beat, which is
+        // silent at any IF width and also lands the carrier on the display's
+        // centre bin, where the DC blocker cancels it. See _cwTuneOffsetHz.
+        // Both are seeded from the radio via setCwPitchHz()/setMode(); 700 Hz
+        // is only the fallback for the moment before the first CAT update.
+        this._cwPitchHz   = 700;
+        this._modeName    = '';
+
+        // RTTY tone settings, for the same job the pitch does in CW: they say
+        // what audio frequency the operator's decoder is listening for, so
+        // click-to-tune can put the signal there instead of on the dial.
+        // Seeded from the radio's own extended menu via setRttyTones()
+        // (GET /api/cat/rtty); these are Yaesu's defaults until that arrives.
+        this._rttyMarkHz      = 2125;
+        this._rttyShiftHz     = 170;
+        this._rttyPolarityRev = false;
+
+        // Optional () => { lo, hi } supplying the current IF passband edges in
+        // AUDIO Hz — supplied by Index.cshtml from the matching FilterScopePanel,
+        // which already computes them from the SH width code, IF shift, roofing
+        // filter and mode. Reused rather than recomputed so there is one
+        // passband formula in the app, not two that can drift apart.
+        this._passbandProvider = null;
+        this._showPassband     = this._loadShowPassband();
+
         // Waterfall state: ImageData that is scrolled down one row per frame.
         this._waterfallData = null;
         this._waterfallRows = 0;
@@ -264,6 +290,38 @@ export class SpectrumPanel {
             localStorage.setItem('ywc.waterfallSpeed.' + this._vfo, String(this._waterfallSpeed));
         } catch (e) { /* localStorage may be unavailable */ }
     }
+
+    // Passband overlay defaults ON: its whole purpose is to show an operator
+    // where the dial actually is relative to a signal, which is not something
+    // they can be expected to switch on before they know they need it.
+    _loadShowPassband() {
+        try {
+            const v = localStorage.getItem('ywc.spectrumPassband.' + this._vfo);
+            if (v === '0') return false;
+            if (v === '1') return true;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return true;
+    }
+
+    _saveShowPassband() {
+        try {
+            localStorage.setItem('ywc.spectrumPassband.' + this._vfo,
+                                 this._showPassband ? '1' : '0');
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    /**
+     * Show or hide the IF passband overlay.
+     * @param {boolean} on
+     */
+    setShowPassband(on) {
+        this._showPassband = !!on;
+        this._saveShowPassband();
+        if (this._lastBins) this._render();
+    }
+
+    /** Whether the IF passband overlay is currently drawn. */
+    getShowPassband() { return this._showPassband; }
 
     /**
      * Set how many incoming FFT frames the waterfall waits between scrolling
@@ -661,6 +719,156 @@ export class SpectrumPanel {
     }
 
     /**
+     * The radio's CW sidetone pitch in Hz — what the operator is listening
+     * FOR. Sourced from the radio's own KP setting (RadioStateService.CwPitch,
+     * 300 + code x 10), so it follows the Pitch slider on the CW panel rather
+     * than assuming a value.
+     * @param {number} hz
+     */
+    setCwPitchHz(hz) {
+        const v = Number(hz);
+        if (Number.isFinite(v) && v > 0) this._cwPitchHz = v;
+    }
+
+    /**
+     * This VFO's current mode, e.g. "CW-U" / "CW-L" / "USB". Used only to
+     * decide the click-to-tune CW offset and its sign.
+     * @param {string} mode
+     */
+    setMode(mode) {
+        this._modeName = typeof mode === 'string' ? mode : '';
+    }
+
+    /**
+     * The radio's RTTY tone settings, read from its extended menu by
+     * GET /api/cat/rtty. Only the values actually supplied are taken, so a
+     * partial answer leaves the rest at the Yaesu defaults.
+     * @param {{markHz?: number, shiftHz?: number, polarityRev?: boolean}} tones
+     */
+    setRttyTones(tones) {
+        if (!tones) return;
+        const mark  = Number(tones.markHz);
+        const shift = Number(tones.shiftHz);
+        if (Number.isFinite(mark)  && mark  > 0) this._rttyMarkHz  = mark;
+        if (Number.isFinite(shift) && shift > 0) this._rttyShiftHz = shift;
+        if (typeof tones.polarityRev === 'boolean') this._rttyPolarityRev = tones.polarityRev;
+    }
+
+    /**
+     * Supply the current IF passband, in AUDIO Hz, as {lo, hi}. The provider is
+     * called on every repaint so it always reflects the live filter settings.
+     * Pass null to remove it.
+     * @param {(() => ({lo: number, hi: number} | null)) | null} provider
+     */
+    setPassbandProvider(provider) {
+        this._passbandProvider = typeof provider === 'function' ? provider : null;
+    }
+
+    /**
+     * Whether this mode puts audio BELOW the dial frequency in RF terms, i.e.
+     * the audio tone moves opposite to the dial. Same rule and the same mode
+     * names as CwReaderService.IsLowerSideband, extended to the other
+     * lower-sideband modes the radios report.
+     * @param {string} mode
+     */
+    _isLowerSideband(mode) {
+        return mode === 'LSB'    || mode === 'CW-L'  || mode === 'CW-R'
+            || mode === 'DATA-L' || mode === 'RTTY-L'
+            || mode === 'FSK'    || mode === 'PKT-L';
+    }
+
+    /**
+     * Whether this mode is centred on the dial rather than offset to one side
+     * of it — AM and every FM variant, where the carrier sits in the middle of
+     * the passband and clicking straight onto a signal is already correct.
+     * @param {string} mode
+     */
+    _isCarrierCentred(mode) {
+        return mode === 'AM' || mode === 'AM-N' || mode.includes('FM');
+    }
+
+    /**
+     * How far, and which way, the VFO must be moved off a clicked signal for
+     * the operator to actually hear or decode it, in Hz. Zero in the modes
+     * where the dial already sits on the signal.
+     *
+     * The dial is never on the signal in any product-detected mode: the audio
+     * you hear is RF - VFO (upper sideband) or VFO - RF (lower), so a signal
+     * only becomes audible at some offset from the dial. Tuning straight onto
+     * it puts it at 0 Hz audio. CW is the mode where that is fatal rather than
+     * merely wrong, because the passband is a few hundred Hz wide and 0 Hz is
+     * inaudible at any width -- but the same arithmetic governs RTTY, where
+     * the decoder is listening at the mark tone, over 2 kHz from the dial.
+     *
+     * CW. Measured on air 2026-09-10: VFO 14.050768 gave a 687.5 Hz tone from
+     * a signal the axis put at 14.051468 -- 13 Hz agreement. Tuning onto the
+     * signal's own frequency instead gave a ~0 Hz tone, inaudible with the IF
+     * opened right out to 3.0 kHz, and the peak collapsed to -95 dBFS -- which
+     * is not a signal reading but the DC blocker's own residual
+     * (SpectrumProcessor.cs measures it at about -93 dBFS), because zero beat
+     * puts the carrier on the centre bin where that blocker cancels it. One
+     * cause, both symptoms.
+     *
+     * RTTY. The FTdx101 operating manual's RTTY Decode procedure says to
+     * "align the peak of the received signal with the mark frequency and shift
+     * frequency marker of the TFT screen" -- i.e. the radio draws the tone
+     * markers offset from the dial, which is only necessary because the dial
+     * is the suppressed carrier and not the mark tone. So the offset here is
+     * the mark frequency (2125 Hz by default, from the radio's own MARK
+     * FREQUENCY menu), nudged by half the shift so that the MIDPOINT of the
+     * two tones lands on the click -- the midpoint being what the eye picks
+     * out of a two-tone RTTY blob. See _rttyAnchorAudioHz.
+     *
+     * NOTE ON VERIFICATION: CW-U is the half that was measured on air. CW-L
+     * and CW-R take their sign from CwReaderService.IsLowerSideband, and the
+     * RTTY case is derived from the manual, not from a signal. Both are
+     * checkable at a glance now the passband overlay is drawn -- if the offset
+     * is right, the signal lands inside the shaded band.
+     *
+     * @param {string} mode
+     * @returns {number} Hz to add to the clicked frequency.
+     */
+    _tuneOffsetHz(mode) {
+        if (mode === 'CW-U') return -this._cwPitchHz;
+        if (mode === 'CW-L' || mode === 'CW-R') return this._cwPitchHz;
+
+        if (mode === 'RTTY-L' || mode === 'RTTY-U') {
+            const anchor = this._rttyAnchorAudioHz(mode);
+            return this._isLowerSideband(mode) ? anchor : -anchor;
+        }
+
+        // SSB, the DATA modes, AM and FM are left alone deliberately. The dial
+        // is still offset from the signal in the sideband modes, but the
+        // passband is wide enough that the operator compensates by eye -- and
+        // every other panadapter tunes the dial to the clicked frequency, so
+        // silently changing it would break a convention rather than fix a bug.
+        // AM and FM genuinely need no offset: the carrier is centred.
+        return 0;
+    }
+
+    /**
+     * Where in the audio passband the midpoint of the two RTTY tones should
+     * land, in Hz.
+     *
+     * Mark and space sit `shift` apart. Which side of mark the space tone
+     * falls on, in AUDIO, depends on both the sideband and the radio's
+     * POLARITY-RX menu: POLARITY-RX = NOR means space is below mark in RF, and
+     * a lower-sideband mode inverts RF against audio, so under NOR the space
+     * tone is ABOVE mark in audio on RTTY-L and BELOW it on RTTY-U. REV swaps
+     * that. With the defaults (2125 Hz mark, 170 Hz shift, NOR) this gives
+     * 2210 Hz on RTTY-L -- the mode amateurs actually use -- and 2040 Hz on
+     * RTTY-U.
+     *
+     * @param {string} mode
+     * @returns {number} Audio Hz.
+     */
+    _rttyAnchorAudioHz(mode) {
+        const lower = this._isLowerSideband(mode);
+        const spaceAboveMarkInAudio = this._rttyPolarityRev ? !lower : lower;
+        return this._rttyMarkHz + (spaceAboveMarkInAudio ? 1 : -1) * this._rttyShiftHz / 2;
+    }
+
+    /**
      * Respond to SDR lifecycle state changes.
      * @param {string} status  One of: "unconfigured" | "connecting" | "streaming"
      *                                 | "disconnected" | "nodll"
@@ -838,29 +1046,44 @@ export class SpectrumPanel {
             }
         }
 
-        fetch(`/api/cat/frequency/${this._vfoLower}`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ frequencyHz: targetHz }),
-        }).catch(() => { /* ignore network errors */ });
-
+        // The band plan is asked about the SIGNAL's frequency, not the corrected
+        // dial frequency, so the CW offset below can never shift the lookup
+        // across a segment boundary.
+        //
         // Follow the click with a best-guess mode change. Most operators expect
         // jumping from 14.074 (FT8) to 14.284 (SSB) to also flip the radio to
         // USB rather than leave it stuck in DATA-U. window.setMode is defined
         // by site.js and uses the same CAT path the mode buttons use.
         const targetMode = modeForHz(targetHz);
+
+        // In CW and RTTY, tune the tone offset away from the signal instead of
+        // onto it. The mode this click is about to select wins over the mode
+        // the radio is in, so clicking into the CW segment from USB is
+        // corrected on the same click rather than the one after it.
+        const tuneHz = targetHz + this._tuneOffsetHz(targetMode || this._modeName);
+
+        fetch(`/api/cat/frequency/${this._vfoLower}`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ frequencyHz: tuneHz }),
+        }).catch(() => { /* ignore network errors */ });
+
         if (targetMode && window.setMode) {
             try { window.setMode(this._vfo, targetMode); } catch { /* ignore */ }
         }
 
-        // Snap the live crosshair to the canvas centre so it visually
-        // "follows" the clicked frequency once the spectrum recentres on
-        // the new VFO. Without this the user's mouse hasn't moved but the
-        // frequency under it has shifted left/right, so the crosshair label
-        // would briefly show the wrong frequency until the next mousemove.
-        // The next real mousemove resets _crosshairX to wherever the mouse
-        // actually is, so this is a one-shot visual fixup, not persistent.
-        this._crosshairX = Math.floor(W / 2);
+        // Snap the live crosshair to where the clicked signal will sit once the
+        // spectrum recentres on the new VFO. Without this the user's mouse
+        // hasn't moved but the frequency under it has shifted left/right, so
+        // the crosshair label would briefly show the wrong frequency until the
+        // next mousemove. That landing spot is the canvas centre in every mode
+        // EXCEPT CW, where the offset above deliberately leaves the signal
+        // sitting a pitch away from centre — so derive it from the tune rather
+        // than assuming the middle. The next real mousemove resets _crosshairX
+        // to wherever the mouse actually is, so this is a one-shot visual
+        // fixup, not persistent.
+        this._crosshairX = Math.floor(
+            W / 2 + ((targetHz - tuneHz) / this._lastSpanHz) * W);
     }
 
     _onCanvasWheel(e) {
@@ -918,6 +1141,7 @@ export class SpectrumPanel {
         const spanHz      = this._lastSpanHz;
 
         this._drawSpectrum(ctx, bins, W, specH);
+        this._drawPassband(ctx, W, specH);
         this._drawFrequencyAxis(ctx, bins, W, specH, centreHz, spanHz);
         this._drawBandEdges(ctx, W, specH);
         this._drawBandMarkers(ctx, W, specH);
@@ -1029,6 +1253,99 @@ export class SpectrumPanel {
     // line at e.g. 7.300 MHz on 40m might be lenient in a Region 1 country
     // where the band ends at 7.200 — but it's never wrong (no transmission
     // is legal beyond these limits in any region).
+    // ── IF passband overlay ──────────────────────────────────────────────────
+    // Shades the slice of RF the receiver is actually listening to.
+    //
+    // This answers, visually, the question that click-to-tune answers
+    // arithmetically: where is the dial relative to the signal? In every
+    // product-detected mode the dial sits at the edge of the passband rather
+    // than in it, so "tune to the frequency I clicked" and "let me hear what I
+    // clicked" are different requests. With the band drawn, the operator can
+    // see the difference instead of having to know it -- and it makes the
+    // per-mode tuning offsets self-checking: if the offset is right, the
+    // signal ends up inside the shaded band.
+    //
+    // The edges come from the FilterScopePanel for this VFO via
+    // _passbandProvider, so the width tables, IF shift and roofing filter are
+    // all accounted for without a second copy of that logic living here.
+    _drawPassband(ctx, W, specH) {
+        if (!this._showPassband || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+
+        const range = this._passbandRfRange();
+        if (!range) return;
+
+        const leftHz = this._vfoHz - this._lastSpanHz / 2;
+        const xOf    = hz => ((hz - leftHz) / this._lastSpanHz) * W;
+
+        let x0 = xOf(range.loHz);
+        let x1 = xOf(range.hiHz);
+        if (x1 < 0 || x0 > W) return;   // scrolled off the current span
+
+        // A 300 Hz CW filter on a 2 MHz span is a fifth of a pixel wide. Widen
+        // it to a visible sliver rather than letting the overlay quietly draw
+        // nothing at exactly the spans where finding the dial matters most.
+        if (x1 - x0 < 2) {
+            const centre = (x0 + x1) / 2;
+            x0 = centre - 1;
+            x1 = centre + 1;
+        }
+
+        // Clamp AFTER the width check so a partially visible passband still
+        // draws the edge that is on screen.
+        const cx0 = Math.max(0, x0);
+        const cx1 = Math.min(W, x1);
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 255, 140, 0.13)';
+        ctx.fillRect(cx0, 0, cx1 - cx0, specH - 2);
+
+        ctx.strokeStyle = 'rgba(60, 255, 160, 0.9)';
+        ctx.lineWidth   = 1;
+        ctx.beginPath();
+        for (const x of [x0, x1]) {
+            if (x < 0 || x > W) continue;
+            const px = Math.round(x) + 0.5;   // crisp 1px line
+            ctx.moveTo(px, 0);
+            ctx.lineTo(px, specH - 2);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /**
+     * Converts the audio passband from the provider into RF frequencies,
+     * applying this mode's sideband sense.
+     * @returns {{loHz: number, hiHz: number} | null}
+     */
+    _passbandRfRange() {
+        let pb = null;
+        try {
+            pb = this._passbandProvider ? this._passbandProvider() : null;
+        } catch (e) {
+            return null;   // a broken provider must not take the whole panel down
+        }
+        if (!pb || !Number.isFinite(pb.lo) || !Number.isFinite(pb.hi)) return null;
+        if (pb.hi <= pb.lo) return null;
+
+        const mode = (this._modeName || '').toUpperCase();
+
+        // AM and FM are detected around the carrier, so the passband straddles
+        // the dial. The filter scope only ever plots the positive half of that
+        // (audio has no negative frequencies), so mirror it back out here.
+        if (this._isCarrierCentred(mode)) {
+            const half = Math.max(Math.abs(pb.lo), Math.abs(pb.hi));
+            if (half <= 0) return null;
+            return { loHz: this._vfoHz - half, hiHz: this._vfoHz + half };
+        }
+
+        // Lower sideband inverts: the highest audio frequency is the LOWEST RF.
+        if (this._isLowerSideband(mode)) {
+            return { loHz: this._vfoHz - pb.hi, hiHz: this._vfoHz - pb.lo };
+        }
+
+        return { loHz: this._vfoHz + pb.lo, hiHz: this._vfoHz + pb.hi };
+    }
+
     _drawBandEdges(ctx, W, specH) {
         if (this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
         const leftHz  = this._vfoHz - this._lastSpanHz / 2;
@@ -1378,12 +1695,21 @@ export class SpectrumPanel {
         ctx.fillStyle = '#111118';
         ctx.fillRect(0, tickY0, W, axisH);
 
-        // VFO centre marker line (drawn first, behind labels)
-        ctx.strokeStyle = 'rgba(0, 170, 255, 0.4)';
-        ctx.lineWidth   = 1;
+        // VFO dial marker. This is the single most important line on the panel
+        // — it is where the radio actually is — and it used to be drawn in
+        // rgba(0,170,255,0.4), which is the same blue as the trace it sits on
+        // top of at less than half opacity. Amber is unused elsewhere in this
+        // panel, and the dark halo underneath keeps it readable where it
+        // crosses a strong signal instead of vanishing into the peak.
+        const dialX = Math.round(W / 2) + 0.5;   // crisp 1px line
         ctx.beginPath();
-        ctx.moveTo(W / 2, 0);
-        ctx.lineTo(W / 2, tickY0);
+        ctx.moveTo(dialX, 0);
+        ctx.lineTo(dialX, tickY0);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.lineWidth   = 3;
+        ctx.stroke();
+        ctx.strokeStyle = '#ffd24a';
+        ctx.lineWidth   = 1;
         ctx.stroke();
 
         // Only skip labels when FrequencyA has never been set (C# long default = 0).

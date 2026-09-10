@@ -927,6 +927,11 @@
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
                         <input type="range" class="form-range spectrum-smooth-slider" data-vfo="A" min="0" max="8" step="1" value="2" aria-label="VFO A spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="A" style="min-width:3.5em; text-align:right;">2</span>
+                        <div class="form-check form-check-inline mb-0 ms-2 text-nowrap" title="Shades the slice of RF the receiver is actually listening to, from the current IF Width, IF Shift and roofing filter. The dial is at the edge of that band, not in the middle of it, so this shows where a signal has to sit to be heard - and in CW and RTTY, why click-to-tune lands beside the signal rather than on it.">
+                            <input class="form-check-input spectrum-passband-toggle" type="checkbox" data-vfo="A" id="spectrumPassbandToggleA" checked
+                                   aria-label="Show the VFO A receiver passband as a shaded band on the spectrum">
+                            <label class="form-check-label" for="spectrumPassbandToggleA">Passband</label>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <canvas id="spectrumCanvasA" role="img" aria-hidden="true" aria-label="RF spectrum display VFO A" style="display:block; width:100%;"></canvas>
@@ -965,6 +970,11 @@
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
                         <input type="range" class="form-range spectrum-smooth-slider" data-vfo="B" min="0" max="8" step="1" value="2" aria-label="VFO B spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="B" style="min-width:3.5em; text-align:right;">2</span>
+                        <div class="form-check form-check-inline mb-0 ms-2 text-nowrap" title="Shades the slice of RF the receiver is actually listening to, from the current IF Width, IF Shift and roofing filter. The dial is at the edge of that band, not in the middle of it, so this shows where a signal has to sit to be heard - and in CW and RTTY, why click-to-tune lands beside the signal rather than on it.">
+                            <input class="form-check-input spectrum-passband-toggle" type="checkbox" data-vfo="B" id="spectrumPassbandToggleB" checked
+                                   aria-label="Show the VFO B receiver passband as a shaded band on the spectrum">
+                            <label class="form-check-label" for="spectrumPassbandToggleB">Passband</label>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <canvas id="spectrumCanvasB" role="img" aria-hidden="true" aria-label="RF spectrum display VFO B" style="display:block; width:100%;"></canvas>
@@ -3007,6 +3017,69 @@
                 spectrumPanelB?.setVfoFrequency(hz);
             });
 
+            // CW click-to-tune needs the sidetone pitch and the mode, or it
+            // tunes a clicked CW signal to zero beat — silent at any IF width,
+            // and invisible too because zero beat parks the carrier on the
+            // display's centre bin where the DC blocker cancels it. Seeded from
+            // the server-rendered state, then kept current over SignalR.
+            spectrumPanelA?.setCwPitchHz(300 + @Model.CwPitch * 10);
+            spectrumPanelB?.setCwPitchHz(300 + @Model.CwPitch * 10);
+            spectrumPanelA?.setMode('@Model.RadioState.ModeA');
+            spectrumPanelB?.setMode('@Model.RadioState.ModeB');
+            spectrumPipeline.onCwPitch(hz => {
+                spectrumPanelA?.setCwPitchHz(hz);
+                spectrumPanelB?.setCwPitchHz(hz);
+                // The filter scopes centre the CW passband on the pitch too,
+                // so they have to hear about it or their trapezium (and the
+                // passband overlay drawn from it) sits at the wrong place.
+                window.filterScopePanelA?.setState({ cwPitchHz: hz });
+                window.filterScopePanelB?.setState({ cwPitchHz: hz });
+            });
+            spectrumPipeline.onModeA(mode => {
+                spectrumPanelA?.setMode(mode);
+                ensureRttyTones(mode);
+            });
+            spectrumPipeline.onModeB(mode => {
+                spectrumPanelB?.setMode(mode);
+                ensureRttyTones(mode);
+            });
+
+            // RTTY click-to-tune needs the mark and shift frequencies the
+            // decoder is listening for, exactly as CW needs the pitch. They
+            // live in the radio's extended menu rather than in any polled
+            // state, so read them once, the first time a VFO actually lands in
+            // RTTY — they are menu settings that change about never, and there
+            // is no point spending a CAT read on an operator who never leaves
+            // SSB.
+            let rttyTonesRequested = false;
+            function ensureRttyTones(mode) {
+                if (rttyTonesRequested) return;
+                if (typeof mode !== 'string' || !mode.startsWith('RTTY')) return;
+                rttyTonesRequested = true;
+                fetch('/api/cat/rtty')
+                    .then(r => r.ok ? r.json() : null)
+                    .then(t => {
+                        if (!t) return;
+                        spectrumPanelA?.setRttyTones(t);
+                        spectrumPanelB?.setRttyTones(t);
+                    })
+                    .catch(() => {
+                        // Leaving the Yaesu defaults in place is a better
+                        // outcome than disabling the offset, so swallow this.
+                        rttyTonesRequested = false;
+                    });
+            }
+            ensureRttyTones('@Model.RadioState.ModeA');
+            ensureRttyTones('@Model.RadioState.ModeB');
+
+            // Show each spectrum panel the slice of RF its receiver is actually
+            // listening to. The edges are computed by the matching filter scope
+            // panel, which already knows the IF width, shift, roofing filter and
+            // mode — looked up lazily because those panels are constructed
+            // further down this script than this wiring runs.
+            spectrumPanelA?.setPassbandProvider(() => window.filterScopePanelA?.getPassband() ?? null);
+            spectrumPanelB?.setPassbandProvider(() => window.filterScopePanelB?.getPassband() ?? null);
+
             // DX cluster spots — incoming SignalR pushes feed BOTH spectrum
             // overlays (when visible) plus the DX Spots list (always available).
             spectrumPipeline.onDxSpot(spot => {
@@ -3075,7 +3148,8 @@
                 contourFreqHz:      @Model.RadioState.ContourFreqA,
                 apfOn:              @(Model.RadioState.ApfOnA ? "true" : "false"),
                 apfFreqHz:          @Model.RadioState.ApfFreqA,
-                mode:              '@Model.RadioState.ModeA'
+                mode:              '@Model.RadioState.ModeA',
+                cwPitchHz:          @(300 + Model.CwPitch * 10)
             });
             window.filterScopePanelB = new FilterScopePanel('filterScopeCanvasB', '@Model.RadioModel', {
                 ifWidthCode:       '@Model.RadioState.IfWidthB',
@@ -3087,7 +3161,8 @@
                 contourFreqHz:      @Model.RadioState.ContourFreqB,
                 apfOn:              @(Model.RadioState.ApfOnB ? "true" : "false"),
                 apfFreqHz:          @Model.RadioState.ApfFreqB,
-                mode:              '@Model.RadioState.ModeB'
+                mode:              '@Model.RadioState.ModeB',
+                cwPitchHz:          @(300 + Model.CwPitch * 10)
             });
 
             // Tighten the contour sliders' ranges to the current passband
@@ -3252,6 +3327,20 @@
                     label.textContent = formatSmooth(r);
                     panel.setSpectrumSmooth(r);
                 });
+            });
+
+            // Passband overlay toggle. On by default and persisted per VFO by
+            // the panel itself, so the checkbox is initialised FROM the panel
+            // rather than from the markup's `checked` attribute — otherwise a
+            // reload would silently switch it back on for anyone who turned it
+            // off, the same trap the Smooth slider's localStorage value has.
+            ['A', 'B'].forEach(vfo => {
+                const box   = document.querySelector(`.spectrum-passband-toggle[data-vfo="${vfo}"]`);
+                const panel = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+                if (!box || !panel) return;
+
+                box.checked = panel.getShowPassband();
+                box.addEventListener('change', () => panel.setShowPassband(box.checked));
             });
 
             // Span selector — POST new sample rate for this VFO and restart

@@ -53,6 +53,12 @@ export class FilterScopePanel {
             apfOn:            false,
             apfFreqHz:        0,
             mode:             'USB',
+            // CW sidetone pitch, Hz. The CW passband is centred on the pitch,
+            // not on a fixed 700 Hz -- an operator running 600 Hz was being
+            // drawn a trapezium 100 Hz off, and the contour slider bounds and
+            // APF marker derived from it were off by the same amount. Seeded
+            // and kept current from the radio's own KP setting.
+            cwPitchHz:        700,
             ...initialState
         };
 
@@ -170,6 +176,13 @@ export class FilterScopePanel {
         return roofHz !== null ? Math.min(hz, roofHz) : hz;
     }
 
+    // CW sidetone pitch in Hz, guarded so a missing or nonsense value falls
+    // back to the Yaesu default rather than collapsing the passband to zero.
+    _cwPitchHz() {
+        const v = Number(this._state.cwPitchHz);
+        return Number.isFinite(v) && v > 0 ? v : 700;
+    }
+
     _roofingHz() {
         if (this._model === 'FTDX3000') {
             return ROOFING_HZ_3000[String(this._state.roofingCode)] || null;
@@ -185,7 +198,7 @@ export class FilterScopePanel {
         const mode = (this._state.mode || '').toUpperCase();
         const shift = this._state.ifShiftHz || 0;
         if (mode.startsWith('CW')) {
-            const centre = 700 + shift;
+            const centre = this._cwPitchHz() + shift;
             return { lo: centre - ifWidthHz / 2, hi: centre + ifWidthHz / 2 };
         } else if (mode === 'AM' || mode === 'AM-N') {
             return { lo: 0, hi: ifWidthHz / 2 };
@@ -307,7 +320,7 @@ export class FilterScopePanel {
         // --- APF marker ---
         if (this._state.apfOn) {
             const mode    = (this._state.mode || '').toUpperCase();
-            const cwCentre = 700 + (this._state.ifShiftHz || 0);
+            const cwCentre = this._cwPitchHz() + (this._state.ifShiftHz || 0);
             const apfPx   = x(cwCentre + (this._state.apfFreqHz || 0));
             const peakHalf = Math.max(3, Math.round(W * 0.015));
             ctx.fillStyle = 'rgba(0,229,204,0.7)';
