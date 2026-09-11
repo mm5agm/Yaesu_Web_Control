@@ -503,7 +503,7 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 
 **Span buttons** — Click **250k**, **500k**, **1M**, or **2M** to change the visible bandwidth. The display recentres on VFO A.
 
-**Click to tune** — Click anywhere on the spectrum **or the waterfall** to tune VFO A to that frequency. A click on a signal trail in the waterfall QSYs to the frequency of that column, which is the natural way to chase an interesting signal you can see slowly drifting down the screen. **The mode also changes automatically** to match the segment of the band you clicked into — CW below the digital sub-band, DATA-U around the FT8/FT4/RTTY watering holes, USB/LSB in the phone segment, FM at the top of 10m and on 2m/4m. If you click somewhere outside the recognised amateur bands the mode is left as-is.
+**Click to tune** — Click anywhere on the spectrum **or the waterfall** to tune VFO A to that frequency. A click on a signal trail in the waterfall QSYs to the frequency of that column, which is the natural way to chase an interesting signal you can see slowly drifting down the screen. **The mode also changes automatically** to match the segment of the band you clicked into — CW below the digital sub-band, DATA-U around the FT8/FT4/RTTY watering holes, USB/LSB in the phone segment, FM at the top of 10m and on 2m/4m. If you click somewhere outside the recognised amateur bands the mode is left as-is. In CW the click puts the station on your CW pitch, ready for the CW reader (§20) — see the note on where signals are drawn in §6.3.
 
 **Mouse wheel to tune** — Scroll the mouse wheel over the spectrum to tune VFO A up or down in 1 kHz steps.
 
@@ -1229,8 +1229,15 @@ The spectrum display requires an SDR receiver. On the FTdx101MP, FTdx101D, and F
 ![SDR safety warnings on the Settings page when an FTdx10 is selected — the red banner appears only for FTdx10 and FT-710 (no IF tap); the yellow notice appears for all radios reminding the operator that the IF Frequency setting has no effect when connecting to an antenna](pictures/Settings_SDR_Warning.png)
 
 **Spectrum view depends on connection point:**
-- **IF output** (FTdx101 / FTDX3000) — VFO-centred panoramic view of the band you're tuned to, regardless of where on the band you tune. The **SDR centre frequency** settings tell YWC where each SDR is tuned. On the FTdx101 series the two IF OUT sockets are on different frequencies — MAIN is 9.005 MHz, SUB is 8.900 MHz — so the VFO A and VFO B SDRs need different values (see the table below). I measured this on my own FTdx101MP; before this split a single shared setting left the VFO B spectrum showing a slice of band 100 kHz above the SUB dial. On the FTdx101 series the axis is also corrected for the radio's own behaviour: the IF OUT socket is not at the SDR's centre, and the radio slides its IF a little with the filter width, IF shift and CW pitch, so without correction every signal was drawn 5–7 kHz from where it really is. With it, a signal is drawn at its true frequency and clicking on it tunes you straight onto it. One visible consequence: the amber dial marker sits a few kHz left of the canvas centre rather than on it — the centre of the canvas is where the SDR is looking, not where the radio is tuned. Other radio models are drawn dial-at-centre as before, because I have not measured them.
+- **IF output** (FTdx101 / FTDX3000) — VFO-centred panoramic view of the band you're tuned to, regardless of where on the band you tune. The **SDR centre frequency** settings tell YWC where each SDR is tuned. On the FTdx101 series the two IF OUT sockets are on different frequencies — MAIN is 9.005 MHz, SUB is 8.900 MHz — so the VFO A and VFO B SDRs need different values (see the table below). I measured this on my own FTdx101MP; before this split a single shared setting left the VFO B spectrum showing a slice of band 100 kHz above the SUB dial.
 - **Antenna port** (FTdx10 / FT-710) — absolute RF frequencies from the connected antenna. The SDR centre frequency settings have no effect. The Settings page shows a reminder of this when FTdx10 or FT-710 is selected.
+
+**Where signals are drawn (FTdx101 series).** The IF OUT socket is not at the SDR's centre — MAIN is 9.005 MHz against a 9.000 MHz SDR — and the radio also slides its IF a little with the IF width, IF shift and CW pitch. Until September 2026 YWC ignored both, so every signal was drawn 5–7 kHz from where it really was, and clicking on a peak tuned you *near* it rather than *onto* it. The panel now corrects for both, using the filter settings it already knows, so a signal is drawn at its true frequency and a click lands on it. Two things follow from that:
+
+- The **amber dial marker is a few kHz left of the canvas centre**, not on it. The centre of the canvas is where the SDR is looking; the dial is where the radio is tuned. That is correct, not a fault.
+- In **CW**, clicking a peak puts the station on your CW pitch straight away, which is where the CW reader (§20) is listening. I checked this with the decoder rather than by ear: a 40 m signal clicked on the spectrum came out at 738 Hz against a 700 Hz pitch.
+
+I measured all of this on my own FTdx101MP. Other models are drawn dial-at-centre as before, because I have no measurements for them — if you have an FTdx10 or FT-710 with an SDR on the antenna port this does not apply to you at all, and on an FTDX3000 IF tap the offset is unknown.
 
 **Supported hardware:**
 - **SDRplay RSP1 and RSP series** — requires the [SDRplay API v3](https://www.sdrplay.com/downloads/) to be installed separately
@@ -3334,7 +3341,7 @@ The reader opens the radio's USB audio codec for listening on its own. You do **
 
 **The reader is not Windows-only.** Unlike the SDR spectrum and Voice Control, it runs on the macOS and Linux hosts and in Docker as well. What it needs is a capture device it can open — on Linux and in Docker that means the sound devices have to be passed through, which is the same requirement Remote Audio has ([§18](#18-remote-audio)).
 
-Set your CW pitch in the CW Keyer panel (§5.12) and tune the station onto it. The reader decodes at the pitch you are using, because that is the tone you have tuned the signal to — hunting for a note you are not listening to is not much use to either of you.
+Set your CW pitch in the CW Keyer panel (§5.12) and tune the station onto it — on an FTdx101 with an SDR, clicking the station's peak on the spectrum does that in one go. The reader decodes at the pitch you are using, because that is the tone you have tuned the signal to — hunting for a note you are not listening to is not much use to either of you.
 
 | Control | What it does |
 |---|---|
