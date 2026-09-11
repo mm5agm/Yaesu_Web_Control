@@ -1,12 +1,113 @@
 # The SDR spectrum trace does not match what the receiver hears
 
 **STATUS: measured, diagnosed, NOT fixed. 2026-09-10, RX only, against the
-FTdx101MP on 20 m CW.**
+FTdx101MP on 20 m CW. CORRECTED 2026-09-11 - read the next section before
+anything else: Fault 1 (the mirror) is withdrawn, the offset I retracted is
+real, and the SUB receiver's SDR is 100 kHz off.**
 
 This is the write-up of a full session's measurement. Everything below was
 measured on air; where something is inference rather than measurement I say
 so. Nothing here has been fixed, and any fix is device-level, so it must be
 bench-checked against the radio and never signed off on a build.
+
+## Correction, 2026-09-11: the mirror was wrong, the offset was right
+
+I re-measured everything the next day with a better instrument - a single
+strong steady carrier (BBC Radio Scotland, 810 kHz, 100 kW, Colin's
+suggestion) tracked bin-by-bin instead of cross-correlating band noise - and
+most of the 09-10 conclusions below do not survive. I am leaving the original
+text in place, marked, because the reasoning errors are the useful part.
+
+**The sign is correct.** Raw hub frames are pre-flip; `spectrum-panel.js`
+`update()` reverses them once (`bins.reverse()`, added by `55a9b5e`), and I
+had been reading raw frames upstream of that. Raw lag +146 bins, reversed
+-146, at 62.5 kHz. So both of Fault 1's supporting claims were false: there
+IS inversion handling in the codebase, and the sign HAD effectively been
+tested by whoever added the reverse. The "two independent methods" agreed
+because both read the same un-flipped frames.
+
+**The scale is correct.** Stepping the carrier 0-25 kHz in 5 kHz steps at
+9.7 MHz fitted 60.976 Hz/bin against 61.035 nominal (ratio 0.999). The 0.891
+ratio I chased for a while was an artefact of cross-correlating sparse keyed
+CW - the ratio varied 0.867 / 0.891 / false peak / 0.999 with step size,
+which no real scale error does. Never correlate band noise; track one carrier.
+
+**The offset is real, and my retraction of it was wrong.** The argument was
+"the notch sits on the markers, so the offset must be ~0". But the notch is
+at the SDR centre, and the SDR centre is drawn at the dial *by construction* -
+the axis is `dial + (bin - N/2) * hzPerBin`. The notch lands on the markers
+whatever the offset is. That test cannot see an offset, so it cannot retract
+one.
+
+Measured with the receiver as ground truth (CW-U audio tone = RF - dial +
+pitch, so RF = dial + tone - pitch, read from `/api/cw/spectrum`), with the
+SDR at 9.000 MHz:
+
+**MAIN receiver (VFO A SDR, RSPdx):** `true RF = displayed RF + O`
+
+- base **+5060 Hz** at narrow CW widths = the FTdx101's **9.005 MHz first
+  IF** (the operating manual, p.17: "IF OUT (MAIN) ... 9.005 MHz IF signal")
+  plus ~60 Hz.
+- IF SHIFT adds 1:1 (+500 -> 5811, -500 -> 4809).
+- CW-U and CW-L: **`O = 5060 + shift + max(0, (width - pitch) / 2)`**, within
+  2 Hz at every point: widths 100/250/500 -> 5060; 1200 -> 5310; 3000 ->
+  6209; 4000 -> 6710; 1200 @ pitch 500 -> 5409; 1200 @ pitch 900 -> 5210;
+  500 @ pitch 500 -> 5059. The radio keeps the CW filter's lower edge at or
+  above pitch/2 by moving its LO.
+- USB and LSB: a lookup by SH code, not a formula. Codes 3/5/9/11 -> 5059;
+  12 -> 5109; 13 -> 5310; 14 -> 5409; 15 -> 5560; 16 -> 5709; 17 -> 5909;
+  18 -> 6209; 19 -> 6310; 20 -> 6459; 21/22/23 -> 6710 (saturates). Shift
+  still adds 1:1 on top.
+- AM and DATA-U follow the same lookup by whatever SH code the receiver is
+  holding for that mode.
+- Constant to +-1 Hz across a 1 kHz dial sweep in 100 Hz steps - no coarse
+  LO stepping.
+
+**SUB receiver (VFO B SDR, RSP1):** the manual says **"IF OUT (SUB) ... 8.900
+MHz"**, and the single `SdrIfFrequencyHz` setting (9.000 MHz) tunes both
+SDRs. So the SUB panel is looking **100 kHz above the SUB dial**: base
+`O = -99984 Hz`. With the SUB dial at 805 kHz the 810 kHz carrier was not in
+the window at all; I found it with the dial at 905 kHz, 56 dB over the floor,
+fixed to +-1 Hz over a 903-907 kHz sweep. Every width / shift / pitch / SH
+code increment then matched MAIN within 2 Hz (1200 -> +249, 3000 -> +1149,
+4000 -> +1650, shift +-500 -> +499/-499, pitch 500/900 @ 1200 -> +349/+148,
+SSB 12..21 -> +50 +250 +350 +499 +649 +850 +1150 +1249 +1400 +1650). Same
+radio behaviour, different constant. After removing the IF centre the
+residual is +60 Hz on MAIN and +16 Hz on SUB - different per dongle, so that
+part is SDR ppm, not the radio.
+
+**Consequences.**
+
+- Click-to-tune on CW lands 5-6.7 kHz off on MAIN and ~100 kHz off on SUB.
+  The pitch offset in `48e6866` was correct as far as it went but could never
+  have fixed item 2 on its own.
+- The SUB SDR needs its own IF centre (8.900 MHz for the FTdx101). Until it
+  has one, an A/B spectrum comparison is meaningless.
+- Recommended shape of the fix: keep the MAIN SDR at 9.000 MHz (the 5 kHz
+  gap keeps the DC notch away from the dial), give the SUB SDR 8.895 MHz for
+  the same 5 kHz gap, and apply the mode/width/shift/pitch term in the
+  browser from state it already receives (`ModeA/B`, `IfWidthA/B`,
+  `IfShiftA/B`, `CwPitch`). It is a per-radio table, so it stays in this
+  repo, not `core/`.
+- Only the FTdx101MP is measured. The FTdx10's IF OUT may differ; do not
+  assume.
+
+**How I measured it, so it can be repeated.** Two traps cost most of the day:
+
+1. With a strong carrier inside the CW filter passband the audio capture
+   clips to a flat plateau (~+8 dB) and no carrier line is visible in
+   `/api/cw/spectrum`; ATT and RF gain do not help because the AGC holds the
+   level. Fix: open the IF to 3 kHz (SH 18), switch AF LCUT/HCUT off
+   (`POST /api/cat/audiofilter/a/lcutFreq` and `hcutFreq` with
+   `{"code":"00"}`), and park the carrier on the filter skirt at ~2700 Hz.
+2. The AF filter hump (+30 dB at 500-950 Hz whatever the dial) fools a
+   global peak-pick - the same trap as caveat 3 below. Measure prominence
+   against a local +-100 Hz median, never the whole-band median.
+
+Scripts (scratchpad, not committed): `dump.mjs` / `dumpb.mjs` tune a VFO and
+average 60 frames; `fine.py` / `fineb.py` find the strongest bin with
+parabolic interpolation and print `810000 - SDR`; `scan.py` reads the
+receiver-side tone across a dial sweep.
 
 ## The complaint
 
@@ -51,7 +152,11 @@ Hz/bin is right and the trace follows the dial by the right amount.
 So the overlay is right and the trace is wrong. That is the opposite of where
 I started looking.
 
-## Fault 1: the axis sign is inverted (mirrored)
+## Fault 1: the axis sign is inverted (mirrored) - WITHDRAWN 2026-09-11
+
+**Withdrawn.** Both methods below read raw hub frames upstream of the
+`bins.reverse()` in `spectrum-panel.js`. The browser axis is the right way
+round. See the correction section at the top. Original text follows.
 
 Two independent methods say so.
 
@@ -166,7 +271,12 @@ pulls the WHOLE trace down, not one peak - so if the noise floor sinks along
 with the peak, it is AGC; if only that peak sinks while the floor holds, it is
 not. Failing that, repeat the sweep with AGC off or on fixed manual IF gain.
 
-## The reconciliation - and a retraction
+## The reconciliation - and a retraction (the retraction was itself wrong)
+
+**2026-09-11: the offset is real - see the correction at the top. The
+argument below fails because the notch is drawn at the dial by construction,
+so its position on the markers says nothing about the offset.** Original
+text follows.
 
 **I previously reported a frequency OFFSET of roughly +6 to +8 kHz. I am
 retracting that.** The dip Colin describes is centred on the passband markers,
@@ -264,13 +374,17 @@ rebuilding if this is picked up again.
 
 ## Suggested order of work when this is picked up
 
-1. Profile the notch properly, with a tracked known carrier. Confirm or clear
-   the DC blocker as the cause - the cheap test is to disable the EMA
-   subtraction and re-measure the same carrier at the same offsets.
-2. Fix the LIF spectral inversion, then verify by ear: tune a known station
-   and confirm the trace peak sits under the passband markers.
-3. Only then re-examine offset. With the notch gone and the sign right, any
-   residual offset becomes measurable for the first time.
+Rewritten 2026-09-11 in the light of the correction at the top:
+
+1. Give the SUB SDR its own IF centre (8.895 MHz for the FTdx101, keeping the
+   same 5 kHz gap as MAIN). Per-SDR setting, per-radio default.
+2. Apply the measured mode/width/shift/pitch offset table in the browser
+   axis and click-to-tune, for the FTdx101MP, CW only to start. Then verify
+   by ear: click a CW signal and confirm it lands at the pitch and the reader
+   decodes it.
+3. Profile the notch properly, with a tracked known carrier (Fault 2 is
+   still open and untouched by any of this).
+4. Measure the FTdx10 before enabling any of it there.
 
 ## Two smaller overlay defects, unrelated to the above
 
