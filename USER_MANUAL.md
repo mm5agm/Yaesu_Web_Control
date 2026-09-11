@@ -1317,9 +1317,11 @@ To remove the cursor, **Shift-click on or near it** (within ~10 pixels). Each pa
 
 #### Independent span per VFO
 
-Each spectrum panel header has its own **62.5k / 125k / 250k / 500k / 1M / 2M** span buttons. Set VFO A to **2 MHz** for a wide overview of the calling band, and VFO B to **62.5 kHz** zoomed in on the QSO you're working — both at the same time, independently. Each click restarts only that VFO's worker (the other panel keeps its frame frozen for the brief reconnect window — see the bandwidth-change pause note below).
+Each spectrum panel header has its own **15.6k / 31.3k / 62.5k / 125k / 250k / 500k / 1M / 2M** span buttons. Set VFO A to **2 MHz** for a wide overview of the calling band, and VFO B to **62.5 kHz** zoomed in on the QSO you're working — both at the same time, independently. Each click restarts only that VFO's worker (the other panel keeps its frame frozen for the brief reconnect window — see the bandwidth-change pause note below).
 
 The Settings page Sample Rate dropdown still exists but now acts as a "reset both VFOs to this default" control. Use it to set a starting point; use the per-panel buttons to diverge from there.
+
+**The two narrowest spans are for CW.** At 62.5 kHz each FFT bin is 61 Hz and a CW carrier is one bin — a single pixel column, easy to lose in the grass and hard to click on the first try. At **31.25 kHz** (30 Hz bins) the whole of a CW sub-band fits the panel with each station a couple of pixels wide, and at **15.625 kHz** (15 Hz bins) a keyed carrier and its sidebands cover a few pixels, so the peak is plain to see and easy to click. Both keep the same ~10 frames per second as the wider spans. I added them on 2026-09-11 after measuring, on an RSP1, that the SDRplay API accepts the extra decimation and that the spans it delivers are honest — a known VFO step moved the trace the expected number of bins at both. The 15.625 kHz span shows only ±7.8 kHz either side of the dial, so it suits a band you have already tuned to, not band-scanning.
 
 #### Why two SDRs — and why two RSP1Bs rather than one RSPduo
 
@@ -2746,7 +2748,7 @@ To restore all labels to their factory defaults, click **Reset to Defaults** at 
 | VFO Controls | Frequency displays, up/down buttons, mode selector |
 | Radio Controls | AGC, IPO/AMP, ATT, NR, NB, Notch, Roofing filter, AF gain, IF width, IF shift, TX power, Mic gain |
 | Frequency Keyboard | On-screen frequency keyboard — all buttons including digits 0–9 |
-| Spectrum Display | Spectrum canvas and span buttons (250k, 500k, 1M, 2M) |
+| Spectrum Display | Spectrum canvas and the span buttons (15.6k to 2M) for each VFO |
 | Navigation | Application name / home link |
 
 ---

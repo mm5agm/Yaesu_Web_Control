@@ -2357,7 +2357,9 @@
                     <div class="mb-3">
                         <label asp-for="Settings.SdrSampleRateHz" class="form-label fw-bold">Sample Rate (Hz) — both VFOs</label>
                         <select asp-for="Settings.SdrSampleRateHz" class="form-select">
-                            <option value="62500">62,500 — 62.5 kHz span (narrowest, single-QSO zoom)</option>
+                            <option value="15625">15,625 — 15.625 kHz span (narrowest; CW signals a few pixels wide)</option>
+                            <option value="31250">31,250 — 31.25 kHz span (a CW sub-band at CW resolution)</option>
+                            <option value="62500">62,500 — 62.5 kHz span (single-QSO zoom)</option>
                             <option value="125000">125,000 — 125 kHz span (best for 30m / 60m)</option>
                             <option value="250000">250,000 — 250 kHz span</option>
                             <option value="500000">500,000 — 500 kHz span</option>

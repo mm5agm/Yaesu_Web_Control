@@ -338,8 +338,12 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// <para>
         /// Decimation factors are powers of two throughout. The valid range of
         /// <c>decimationFactor</c> is an undocumented <c>unsigned char</c> — it
-        /// appears in neither the header nor the specification — so this avoids
-        /// discovering the limit by hitting it.
+        /// appears in neither the header nor the specification. 16 and 32 were
+        /// measured on an RSP1 on 2026-09-11: the API accepts both, and the
+        /// spans they produce are honest (a known VFO step moved the trace
+        /// 131 of an expected 131.1 bins at 31.25 kHz and 262 of 262.1 at
+        /// 15.625 kHz), with no centre spike (+0.3 dB) and the frame rate
+        /// unchanged at ~10/s. Nothing beyond 32 has been tried.
         /// </para>
         /// </remarks>
         private readonly record struct TunePlan(
@@ -387,6 +391,8 @@ namespace Yaesu_Web_Control.Services.Sdr
         {
             //                      fsHz      ÷   bwType     ifType     → span
             //                     (÷4 by LIF before this column applies)
+            <=    15_625 => new(2_000_000, 32, BW_0_200, IF_0_450), //  15.625 kHz
+            <=    31_250 => new(2_000_000, 16, BW_0_200, IF_0_450), //  31.25  kHz
             <=    62_500 => new(2_000_000, 8, BW_0_200, IF_0_450), //   62.5 kHz
             <=   125_000 => new(2_000_000, 4, BW_0_200, IF_0_450), //  125   kHz
             <=   250_000 => new(2_000_000, 2, BW_0_300, IF_0_450), //  250   kHz

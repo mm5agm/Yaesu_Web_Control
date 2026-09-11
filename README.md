@@ -154,7 +154,7 @@ The application includes a real-time spectrum display and waterfall, intended fo
 - **RTL-SDR, Airspy, and HackRF** — supported via the bundled SoapySDR driver interface. No separate SoapySDR installation is required — the necessary drivers are included in the installer. *These devices have not been tested by me — feedback from users is very welcome.*
 
 **Features:**
-- Variable span: 62.5 kHz, 125 kHz, 250 kHz, 500 kHz, 1 MHz, or 2 MHz
+- Variable span: 15.625 kHz, 31.25 kHz, 62.5 kHz, 125 kHz, 250 kHz, 500 kHz, 1 MHz, or 2 MHz
 - Dual-SDR mode: one SDR per VFO on the FTdx101MP / FTdx101D, with a Mono A / Mono B / Both layout toggle, Stacked / Side-by-side option, and independent span per panel
 - Click anywhere on a spectrum panel to tune the corresponding VFO to that frequency (panel A tunes VFO A, panel B tunes VFO B)
 - Mouse wheel over a spectrum panel tunes that VFO up/down in 1 kHz steps

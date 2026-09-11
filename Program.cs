@@ -748,7 +748,8 @@ try
         Yaesu_Web_Control.Services.ISettingsService settings,
         Yaesu_Web_Control.Services.Sdr.SdrManager sdr) =>
     {
-        double[] valid = [62_500, 125_000, 250_000, 500_000, 1_000_000, 2_000_000];
+        // Must agree with SdrplayDevice.PlanFor and the span buttons in Index.cshtml.
+        double[] valid = [15_625, 31_250, 62_500, 125_000, 250_000, 500_000, 1_000_000, 2_000_000];
         if (Array.IndexOf(valid, hz) < 0) return Results.BadRequest("Invalid span value.");
 
         // sdrId defaults to "A" for backward compatibility with any caller
