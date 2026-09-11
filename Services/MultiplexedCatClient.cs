@@ -46,6 +46,12 @@ namespace Yaesu_Web_Control.Services
             return result ?? string.Empty; // Guarantees non-null return
         }
 
+        public Task SendCommandAndDispatchAsync(string command, string clientId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("[sent+dispatch] {Command}", command.Trim());
+            return _multiplexer.SendCommandAndDispatchAsync(command, clientId, cancellationToken);
+        }
+
         // Overload for legacy code (optional)
         public Task<string> SendCommandAsync(string command, CancellationToken cancellationToken = default)
             => SendCommandAsync(command, DefaultClientId, cancellationToken);

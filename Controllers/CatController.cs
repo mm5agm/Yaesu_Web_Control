@@ -1041,6 +1041,24 @@ namespace Yaesu_Web_Control.Controllers
                     }
                 }
 
+                // Read IF width and IF shift back after the mode change. SH/IS
+                // are not in the poll and the radio does not announce them
+                // unsolicited, so the app's copy is only ever as fresh as the
+                // last time something asked -- and the filter scope draws from
+                // it, and since 2026-09-11 so does the spectrum axis offset, so
+                // a stale width puts the trace a few hundred Hz out. A mode
+                // change is the moment the operator is most likely to have
+                // just been at the front panel, and it is cheap: two reads.
+                //
+                // Measured on the FTdx101MP, both receivers, 2026-09-11: the
+                // radio does NOT keep the SH code per mode. The code set in USB
+                // is the code read back in CW-U and DATA-U (the Hz it means
+                // changes with the mode; the code does not), and IS carries
+                // across the same way. So this is not "the radio restored a
+                // per-mode value"; it is a plain resync.
+                await _catClient.SendCommandAndDispatchAsync($"SH{mdP1};", "User");
+                await _catClient.SendCommandAndDispatchAsync($"IS{mdP1};", "User");
+
                 _logger.LogInformation("Sending CAT command: MD{Vfo}{Mode}; for Receiver {Receiver}", mdP1, request.Mode, recv);
                 return Ok(new { message = $"Mode {displayMode} selected for Receiver {receiver}" });
             }
@@ -1462,10 +1480,13 @@ namespace Yaesu_Web_Control.Controllers
             {
                 await EnsureConnectedAsync();
                 var p1 = VfoP1Outgoing(receiver);
-                var response = await _catClient.SendCommandAsync($"SH{p1};", "WebUI", CancellationToken.None);
-                // The dispatcher will have updated RadioStateService.IfWidthA/B by now.
+                // Dispatch the reply so RadioStateService.IfWidthA/B is updated
+                // before we read it back. Plain SendCommandAsync hands the reply
+                // to the awaiter and to nobody else, so the old "the dispatcher
+                // will have updated it by now" here was never true.
+                await _catClient.SendCommandAndDispatchAsync($"SH{p1};", "WebUI", CancellationToken.None);
                 var current = VfoIsB(receiver) ? _radioStateService.IfWidthB : _radioStateService.IfWidthA;
-                return Ok(new { vfo = receiver.ToUpper(), code = current, rawResponse = response });
+                return Ok(new { vfo = receiver.ToUpper(), code = current });
             }
             catch (Exception ex)
             {
