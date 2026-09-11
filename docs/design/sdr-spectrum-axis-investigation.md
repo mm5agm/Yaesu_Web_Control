@@ -1,6 +1,6 @@
 # The SDR spectrum trace does not match what the receiver hears
 
-**STATUS: measured, diagnosed, NOT fixed. 2026-09-10, RX only, against the
+**STATUS: FIXED in the browser 2026-09-11 and verified on air on both receivers - see "Implemented" below. Originally: measured, diagnosed, NOT fixed. 2026-09-10, RX only, against the
 FTdx101MP on 20 m CW. CORRECTED 2026-09-11 - read the next section before
 anything else: Fault 1 (the mirror) is withdrawn, the offset I retracted is
 real, and the SUB receiver's SDR is 100 kHz off.**
@@ -79,8 +79,8 @@ part is SDR ppm, not the radio.
 **Consequences.**
 
 - Click-to-tune on CW lands 5-6.7 kHz off on MAIN and ~100 kHz off on SUB.
-  The pitch offset in `48e6866` was correct as far as it went but could never
-  have fixed item 2 on its own.
+  The pitch offset in `48e6866` could never have fixed item 2 on its own -
+  and, as it turned out (see "Implemented"), it was wrong in itself.
 - The SUB SDR needs its own IF centre (8.900 MHz for the FTdx101). Until it
   has one, an A/B spectrum comparison is meaningless.
 - Recommended shape of the fix: keep the MAIN SDR at 9.000 MHz (the 5 kHz
@@ -108,6 +108,78 @@ Scripts (scratchpad, not committed): `dump.mjs` / `dumpb.mjs` tune a VFO and
 average 60 frames; `fine.py` / `fineb.py` find the strongest bin with
 parabolic interpolation and print `810000 - SDR`; `scan.py` reads the
 receiver-side tone across a dial sweep.
+
+## Implemented, 2026-09-11 (later the same day), and verified on air
+
+Both halves of the fix are in.
+
+**Per-SDR IF centre** (`c75867a`): `SdrIfFrequencyHz` became
+`SdrIfFrequencyHzA` / `SdrIfFrequencyHzB`, defaulting to 9,000,000 and
+8,895,000 - each 5 kHz below its IF OUT so the SDR's DC notch stays off the
+dial. Old single-value settings migrate into A.
+
+**Browser-side correction** (this commit). `wwwroot/js/sdr/if-out-offset.js`
+holds the per-radio table - IF OUT per VFO, the SSB slide lookup by DSP
+width, and the CW `shift + max(0, (width - pitch) / 2)` formula - and exports
+`axisOffsetHz(model, vfo, sdrCentreHz, filterState)`. It stays in this repo,
+not `core/`, because it is a table of one radio's behaviour. `SpectrumPanel`
+gained `setAxisOffsetProvider()`; every Hz-to-pixel mapping in the panel
+(axis, click, hover, pinned cursor, passband, band edges, band markers, DX
+spots, crosshair) now goes through a single `_axisLeftHz()` so the offset is
+applied exactly once. `Index.cshtml` wires the provider from
+`FilterScopePanel.getFilterState()`, which is live state the browser already
+had. Unknown radio models get `null` and are drawn dial-at-centre as before.
+The SDR centre fed in is `_lastCentreHz` from each frame - what the SDR is
+actually tuned to, not the setting.
+
+**The visible change:** the amber dial marker is no longer at the canvas
+centre. On the FTdx101 it sits ~5 kHz left of centre, because the centre is
+where the SDR is looking and the dial is not. Signals are drawn where they
+are.
+
+**Verified** with the same 810 kHz carrier, but this time reading the panel's
+own mapping from a headless browser (Playwright, `axischeck.mjs` in the
+scratchpad: load the page, sample `_lastBins`, find the strongest bin, ask the
+panel where it drew it). Error = drawn RF - 810,000, dial at 805,000, one bin
+= 61 Hz:
+
+- MAIN, CW-U: width 1200 +11; 3000 -13; 4000 +10; 250 -66; shift +500 -15;
+  shift -500 -69; pitch 500 -24.
+- MAIN, SSB: USB 2300 +7; 3000 -78; 3200/3500/4000 +3/+3/+11; 1800 -65;
+  LSB 2700 -73.
+- SUB (centre 8,895,000), CW-U: 1200 +9; 3000 +6; 3000 @ shift +500 +8;
+  USB 2700 +11.
+
+All within one bin. The residual is the per-dongle ppm (about +60 Hz MAIN,
++16 Hz SUB) that I chose not to model.
+
+**The CW click offset from `48e6866` was wrong, and is removed.** With the
+axis corrected, `_tuneOffsetHz('CW-U'/'CW-L')` is 0: on this radio the dial
+in CW IS the frequency of the signal heard at the pitch (audio = RF - dial +
+pitch on CW-U, measured above), so tuning the dial to the drawn peak is
+exactly right. Proved by decoder rather than by eye: on 40 m, a strong CW
+signal drawn at 7,000,989 was clicked through the real mouse path in the
+headless browser, the dial landed at 7,000,965, and `/api/cw/spectrum`
+reported the tone at **738 Hz, +28 dB, signalPresent, confidence 100** for
+the whole 8 s sample, against a 700 Hz pitch. With the old -pitch it would
+have been at ~1400 Hz. The 09-10 "zero beat" diagnosis was the uncorrected
+axis: the click put the DISPLAYED frequency on the dial, 5-7 kHz off the
+real one, and the peak "vanished" because a dial at the displayed frequency
+puts that peak in the DC notch. It looked like zero beat and never was.
+
+Two things learned on the way that will bite again:
+
+- `POST api/cat/ifwidth/{a|b}` needs `{"code":"18"}` - a **string**. A
+  numeric code is accepted and silently does nothing.
+- A mode change does not re-read `SH`, so after `MD` the browser's width is
+  whatever the previous mode's was until something else reads it. The filter
+  scope has always had this; the axis offset now inherits it (I saw +5650
+  instead of +5250 for one page load after a DATA-U -> CW-U switch). Worth a
+  `SH` read-back in the mode endpoint, not done here.
+
+**Not done:** the FTdx10 and FT-710 are unmeasured and get no correction;
+the per-dongle ppm is not modelled; SSB/DATA click-to-tune is deliberately
+untouched (dial on the clicked frequency, as every other panadapter does).
 
 ## The complaint
 

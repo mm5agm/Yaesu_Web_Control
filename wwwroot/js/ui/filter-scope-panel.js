@@ -158,11 +158,36 @@ export class FilterScopePanel {
         return this._passbandEdges(this._ifWidthHz());
     }
 
+    /**
+     * The filter settings this panel is drawing from, for anyone else who
+     * needs the same numbers — the SDR spectrum panel uses them to work out
+     * how far the radio has slid its LO (see sdr/if-out-offset.js). The width
+     * is the DSP width alone, NOT clamped to the roofing filter: it is the SH
+     * setting that moves the LO, whatever the roofing filter is doing.
+     * @returns {{mode: string, ifWidthCode: number, ifWidthHz: number|null, ifShiftHz: number, cwPitchHz: number}}
+     */
+    getFilterState() {
+        return {
+            mode:        this._state.mode || '',
+            ifWidthCode: parseInt(this._state.ifWidthCode) || 0,
+            ifWidthHz:   this._dspWidthHz(),
+            ifShiftHz:   this._state.ifShiftHz || 0,
+            cwPitchHz:   this._cwPitchHz(),
+        };
+    }
+
     _hzToX(hz, W, loHz, hiHz) {
         return Math.round(((hz - loHz) / (hiHz - loHz)) * W);
     }
 
     _ifWidthHz() {
+        const hz     = this._dspWidthHz();
+        const roofHz = this._roofingHz();
+        return roofHz !== null ? Math.min(hz, roofHz) : hz;
+    }
+
+    // The DSP (IF WIDTH) bandwidth in Hz, before any roofing-filter clamp.
+    _dspWidthHz() {
         // Prefer the mode-aware lookup so the passband matches what the radio
         // is actually doing in the current mode (CW code 8 = 400 Hz, SSB
         // code 8 = 1650 Hz on the FTdx101 etc.). Falls back to the static
@@ -172,8 +197,7 @@ export class FilterScopePanel {
             hz = window.IfWidth.ifWidthHzFor(this._model, this._state.mode, parseInt(this._state.ifWidthCode));
         }
         if (hz == null) hz = this._widthTable[String(this._state.ifWidthCode)] || 3000;
-        const roofHz = this._roofingHz();
-        return roofHz !== null ? Math.min(hz, roofHz) : hz;
+        return hz;
     }
 
     // CW sidetone pitch in Hz, guarded so a missing or nonsense value falls

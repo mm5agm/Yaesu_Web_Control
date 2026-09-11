@@ -2676,6 +2676,7 @@
         import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { axisOffsetHz }         from "/js/sdr/if-out-offset.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import "/js/ui/if-width-tables.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -3104,6 +3105,18 @@
             // further down this script than this wiring runs.
             spectrumPanelA?.setPassbandProvider(() => window.filterScopePanelA?.getPassband() ?? null);
             spectrumPanelB?.setPassbandProvider(() => window.filterScopePanelB?.getPassband() ?? null);
+
+            // Draw each spectrum panel's axis in true RF. The SDR sits on the
+            // radio's IF OUT, which is not at the dial and moves with filter
+            // width, IF shift and CW pitch, so the naive "dial at the centre"
+            // axis is 5-7 kHz out on an FTdx101. if-out-offset.js holds the
+            // measured per-radio table; the filter state it needs comes from
+            // the same filter scope panel as the passband above. Unmeasured
+            // radios get null, which leaves the axis exactly as it was.
+            spectrumPanelA?.setAxisOffsetProvider(centreHz =>
+                axisOffsetHz('@Model.RadioModel', 'A', centreHz, window.filterScopePanelA?.getFilterState()));
+            spectrumPanelB?.setAxisOffsetProvider(centreHz =>
+                axisOffsetHz('@Model.RadioModel', 'B', centreHz, window.filterScopePanelB?.getFilterState()));
 
             // DX cluster spots — incoming SignalR pushes feed BOTH spectrum
             // overlays (when visible) plus the DX Spots list (always available).
