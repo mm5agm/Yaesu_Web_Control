@@ -137,7 +137,20 @@
         // SettingsService.
         public double SdrSampleRateHz { get; set; } = 0;
 
-        public long SdrIfFrequencyHz { get; set; } = 9_000_000;
+        // Per-VFO SDR centre frequency (added 2026-09-11). The FTdx101's two IF OUT
+        // jacks are NOT on the same frequency: MAIN is 9.005 MHz, SUB is
+        // 8.900 MHz (operating manual p.17), so one shared value left the
+        // VFO B SDR looking 100 kHz above the SUB dial. Measured 2026-09-11;
+        // see docs/design/sdr-spectrum-axis-investigation.md. Default 0 is
+        // a "not set" sentinel for the SettingsService migration; after
+        // migration these are always > 0.
+        public long SdrIfFrequencyHzA { get; set; } = 0;
+        public long SdrIfFrequencyHzB { get; set; } = 0;
+
+        // Legacy single IF frequency. KEPT as a hidden migration anchor:
+        // SettingsService reads this and fills A/B from it, then writes 0
+        // on next save. Do not reference outside SettingsService.
+        public long SdrIfFrequencyHz { get; set; } = 0;
         public int SdrFftSize { get; set; } = 1024;
 
         // Per-VFO spectrum DSP knobs (see SpectrumProcessor). Live-controlled

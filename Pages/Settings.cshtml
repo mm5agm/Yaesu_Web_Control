@@ -2257,11 +2257,24 @@
                         <div id="sdrScanNotes" class="mt-2"></div>
                     </div>
                     <div class="mb-3">
-                        <label asp-for="Settings.SdrIfFrequencyHz" class="form-label fw-bold">IF Frequency (Hz)</label>
-                        <input asp-for="Settings.SdrIfFrequencyHz" class="form-control" type="number"
-                               min="1000000" max="100000000" step="1000" />
+                        <label class="form-label fw-bold">SDR centre frequency (Hz)</label>
+                        <div class="row g-2">
+                            <div class="col-sm-6">
+                                <label asp-for="Settings.SdrIfFrequencyHzA" class="form-label small fw-semibold mb-1">VFO A SDR</label>
+                                <input asp-for="Settings.SdrIfFrequencyHzA" class="form-control" type="number"
+                                       min="1000000" max="100000000" step="1000" />
+                            </div>
+                            <div class="col-sm-6">
+                                <label asp-for="Settings.SdrIfFrequencyHzB" class="form-label small fw-semibold mb-1">VFO B SDR</label>
+                                <input asp-for="Settings.SdrIfFrequencyHzB" class="form-control" type="number"
+                                       min="1000000" max="100000000" step="1000" />
+                            </div>
+                        </div>
                         <div class="form-text">
-                            The radio's IF output frequency. <strong>FTdx101 series: 9,000,000 Hz.</strong>
+                            Where each SDR is tuned. The FTdx101's two IF OUT sockets are on different
+                            frequencies — MAIN is 9.005 MHz, SUB is 8.900 MHz — so the two SDRs need
+                            different values. <strong>FTdx101 series: VFO A 9,000,000 Hz, VFO B 8,895,000 Hz</strong>
+                            (5 kHz below each IF, which keeps the SDR's centre notch off the dial).
                             ELAD FDM-DUO via USB: set to match the device's IQ centre frequency.
                         </div>
                     </div>
@@ -2804,7 +2817,7 @@
                 <ul>
                     <li><strong>No devices found after scan</strong> — check the device is plugged in and that Windows Device Manager shows it without a yellow warning icon.</li>
                     <li><strong>SDRplay not detected</strong> — open <em>services.msc</em> and confirm <em>SDRplay API Service</em> is running.</li>
-                    <li><strong>Spectrum looks wrong / distorted</strong> — check your IF frequency setting matches the radio (FTdx101: 9,000,000 Hz).</li>
+                    <li><strong>Spectrum looks wrong / distorted</strong> — check the SDR centre frequencies match the radio (FTdx101: VFO A 9,000,000 Hz, VFO B 8,895,000 Hz).</li>
                 </ul>
 
             </div>

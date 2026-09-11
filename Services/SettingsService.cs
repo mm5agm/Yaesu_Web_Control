@@ -65,6 +65,7 @@ namespace Yaesu_Web_Control.Services
 
                     MigrateSdrDeviceKey(_cachedSettings);
                     MigrateSdrSampleRate(_cachedSettings);
+                    MigrateSdrIfFrequency(_cachedSettings);
                     AutoQuoteCommandLinePaths(_cachedSettings);
                 }
                 else
@@ -72,6 +73,7 @@ namespace Yaesu_Web_Control.Services
                     _cachedSettings = new ApplicationSettings();
                     ApplyContainerDefaults(_cachedSettings);
                     MigrateSdrSampleRate(_cachedSettings);   // fills A/B from defaults when file is brand new
+                    MigrateSdrIfFrequency(_cachedSettings);
                     _logger.LogWarning("Settings file does not exist at {Path}. Using defaults: SerialPort={SerialPort}, WebAddress={WebAddress}, HttpPort={HttpPort}",
                         _settingsFilePath, _cachedSettings.SerialPort, _cachedSettings.WebAddress, _cachedSettings.HttpPort);
                 }
@@ -199,6 +201,34 @@ namespace Yaesu_Web_Control.Services
                 s.SdrSampleRateHzA = newA;
             if (RetiredSampleRates.TryGetValue(s.SdrSampleRateHzB, out double newB))
                 s.SdrSampleRateHzB = newB;
+        }
+
+        // Per-VFO SDR centre frequency. Same sentinel pattern as the
+        // sample rate: 0 means "field not in JSON". Rules:
+        //   - A takes the legacy value if it had one.
+        //   - B takes the legacy value too, UNLESS the legacy value was just
+        //     the radio's stock A default - then B gets the radio's stock B
+        //     default instead. That is the whole point of the split: on an
+        //     FTdx101 the stock 9,000,000 was right for MAIN and 100 kHz
+        //     wrong for SUB, and a user who never touched the field should
+        //     not have to learn that. A user who DID set something else
+        //     (ELAD FDM-DUO, a different IF tap) keeps it on both sides.
+        //   - Anything still 0 falls back to the per-radio default.
+        // Internal, not private, so the test project can drive it.
+        internal static void MigrateSdrIfFrequency(ApplicationSettings s)
+        {
+            var model = s.RadioModel ?? string.Empty;
+            long defA = RadioCapabilities.DefaultSdrCentreHz(model, "A");
+            long defB = RadioCapabilities.DefaultSdrCentreHz(model, "B");
+
+            if (s.SdrIfFrequencyHz > 0)
+            {
+                if (s.SdrIfFrequencyHzA == 0) s.SdrIfFrequencyHzA = s.SdrIfFrequencyHz;
+                if (s.SdrIfFrequencyHzB == 0) s.SdrIfFrequencyHzB = s.SdrIfFrequencyHz == defA ? defB : s.SdrIfFrequencyHz;
+                s.SdrIfFrequencyHz = 0;
+            }
+            if (s.SdrIfFrequencyHzA == 0) s.SdrIfFrequencyHzA = defA;
+            if (s.SdrIfFrequencyHzB == 0) s.SdrIfFrequencyHzB = defB;
         }
 
         // Backward-compat for users whose *CommandLine settings were saved before

@@ -152,12 +152,15 @@ public sealed class SdrManager : BackgroundService
             // Per-VFO sample rate so each panel can run at a different span
             // (e.g. 2 MHz on the calling band, 250 kHz zoomed on the QSO).
             double sampleRateHz = vfo == "B" ? config.SdrSampleRateHzB : config.SdrSampleRateHzA;
+            // Per-VFO centre too: the FTdx101's SUB IF OUT is 100 kHz below
+            // its MAIN one (see RadioCapabilities.DefaultSdrCentreHz).
+            long   ifFrequencyHz = vfo == "B" ? config.SdrIfFrequencyHzB : config.SdrIfFrequencyHzA;
 
             worker = WorkerProcess.Start(
                 _logger,
                 vfo:           vfo,
                 deviceKey:     deviceKey,
-                ifFrequencyHz: config.SdrIfFrequencyHz,
+                ifFrequencyHz: ifFrequencyHz,
                 sampleRateHz:  sampleRateHz,
                 fftSize:       config.SdrFftSize);
 

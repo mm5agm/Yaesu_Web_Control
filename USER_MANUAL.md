@@ -1229,8 +1229,8 @@ The spectrum display requires an SDR receiver. On the FTdx101MP, FTdx101D, and F
 ![SDR safety warnings on the Settings page when an FTdx10 is selected — the red banner appears only for FTdx10 and FT-710 (no IF tap); the yellow notice appears for all radios reminding the operator that the IF Frequency setting has no effect when connecting to an antenna](pictures/Settings_SDR_Warning.png)
 
 **Spectrum view depends on connection point:**
-- **IF output** (FTdx101 / FTDX3000) — VFO-centred panoramic view of the band you're tuned to, regardless of where on the band you tune. The IF Frequency setting tells YWC which IF the radio is using (9 MHz on FTdx101 series).
-- **Antenna port** (FTdx10 / FT-710) — absolute RF frequencies from the connected antenna. The IF Frequency setting has no effect. The Settings page shows a reminder of this when FTdx10 or FT-710 is selected.
+- **IF output** (FTdx101 / FTDX3000) — VFO-centred panoramic view of the band you're tuned to, regardless of where on the band you tune. The **SDR centre frequency** settings tell YWC where each SDR is tuned. On the FTdx101 series the two IF OUT sockets are on different frequencies — MAIN is 9.005 MHz, SUB is 8.900 MHz — so the VFO A and VFO B SDRs need different values (see the table below). I measured this on my own FTdx101MP; before this split a single shared setting left the VFO B spectrum showing a slice of band 100 kHz above the SUB dial.
+- **Antenna port** (FTdx10 / FT-710) — absolute RF frequencies from the connected antenna. The SDR centre frequency settings have no effect. The Settings page shows a reminder of this when FTdx10 or FT-710 is selected.
 
 **Supported hardware:**
 - **SDRplay RSP1 and RSP series** — requires the [SDRplay API v3](https://www.sdrplay.com/downloads/) to be installed separately
@@ -1241,7 +1241,7 @@ The spectrum display requires an SDR receiver. On the FTdx101MP, FTdx101D, and F
 1. Connect the SDR to the 9 MHz IF output using an RCA-to-SMA adapter and a short coax cable.
 2. Go to Settings and click **Scan** in the SDR section.
 3. Detected devices appear in the dropdown. Select your device.
-4. Set **IF Frequency** to `9000000` (9 MHz) for the FTdx101 IF output.
+4. Set the **SDR centre frequency** — `9000000` for the VFO A SDR on IF OUT (MAIN), and `8895000` for a VFO B SDR on IF OUT (SUB). Both sit 5 kHz below the actual IF so the SDR's centre notch stays off the dial.
 5. **Sample Rate**: 2M (2,048,000 Hz) is recommended and gives a 2 MHz span.
 6. **FFT Size**: 1024 is recommended.
 7. Click **Save Settings**.
@@ -1250,7 +1250,8 @@ The spectrum panel appears on the main page when a device is saved. If you want 
 
 | SDR Setting | Recommended Value |
 |-------------|------------------|
-| IF Frequency | 9,000,000 Hz (FTdx101MP, FTdx101D, FTDX3000) — no effect on FTdx10 or FT-710 |
+| SDR centre frequency, VFO A | 9,000,000 Hz (FTdx101MP, FTdx101D, FTDX3000) — no effect on FTdx10 or FT-710 |
+| SDR centre frequency, VFO B | 8,895,000 Hz (FTdx101MP, FTdx101D — IF OUT (SUB) is 8.900 MHz) |
 | Sample Rate | 2,048,000 (2M) |
 | FFT Size | 1024 |
 
@@ -2392,7 +2393,7 @@ Up to and including v2.4.2 — and in the v2.4.3 pre-releases up to pre3 — the
 - For SDRplay devices: confirm the **SDRplay API** is installed and the **SDRplay API Service** is running (check services.msc).
 - For RTL-SDR: check the device is plugged in and not in use by another application (e.g., SDR#).
 - Try clicking **Scan** again in Settings and re-selecting the device.
-- Verify the IF Frequency is set to `9000000`.
+- Verify the SDR centre frequency is `9000000` for VFO A (and `8895000` for a VFO B SDR on an FTdx101).
 
 **Meters appear to show incorrect values**
 

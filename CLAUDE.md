@@ -709,7 +709,7 @@ scanning, port listing), `Memories`, `Calibrations` / `Calibration/MeterCalibrat
   and Remote Video (captures whatever the radio's screen is currently
   showing, including the effect of CAT Scope Control). None of the three
   substitutes for another.
-- **SDR default sample rate:** 2,048,000 Hz (2 MHz span). Spectrum centred on `SdrIfFrequencyHz` (default 9 MHz); axis labels show RF frequencies derived from VFO-A.
+- **SDR default sample rate:** 2,048,000 Hz (2 MHz span). Each SDR is centred on its own `SdrIfFrequencyHzA` / `SdrIfFrequencyHzB` (defaults from `RadioCapabilities.DefaultSdrCentreHz`: 9.000 MHz for A, 8.895 MHz for B on the FTdx101 — its IF OUT (MAIN) is 9.005 MHz and IF OUT (SUB) is 8.900 MHz, measured 2026-09-11). The legacy single `SdrIfFrequencyHz` is a migration anchor only. Axis labels show RF frequencies derived from that panel's VFO.
 - **S-meter raw values:** 0–255 → S0 to S9+60 dB via calibration tables.
 - **Meter polling is tiered**, not a flat rate. `MeterPollingService`;
   `MeterPollIntervalMs` in `ApplicationSettings` is the **minimum cycle

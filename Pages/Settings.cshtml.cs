@@ -218,7 +218,8 @@ namespace Yaesu_Web_Control.Pages
                 // instead of needing a full app restart.
                 var oldSdrA       = current.SdrDeviceKeyA ?? string.Empty;
                 var oldSdrB       = current.SdrDeviceKeyB ?? string.Empty;
-                var oldSdrIfHz    = current.SdrIfFrequencyHz;
+                var oldSdrIfHzA   = current.SdrIfFrequencyHzA;
+                var oldSdrIfHzB   = current.SdrIfFrequencyHzB;
                 var oldSdrSrHzA   = current.SdrSampleRateHzA;
                 var oldSdrSrHzB   = current.SdrSampleRateHzB;
                 var oldSdrFft     = current.SdrFftSize;
@@ -239,7 +240,9 @@ namespace Yaesu_Web_Control.Pages
                 current.SdrDeviceKeyB     = Settings.SdrDeviceKeyB ?? string.Empty;
                 current.SdrDeviceKey      = string.Empty;  // legacy field — kept blank in v2.3.0+ files
                 current.SdrplayInstallPath = Settings.SdrplayInstallPath ?? string.Empty;
-                current.SdrIfFrequencyHz  = Settings.SdrIfFrequencyHz;
+                current.SdrIfFrequencyHzA = Settings.SdrIfFrequencyHzA;
+                current.SdrIfFrequencyHzB = Settings.SdrIfFrequencyHzB;
+                current.SdrIfFrequencyHz  = 0;             // legacy field — kept zero once the per-VFO fields exist
                 // Settings page binds a single Sample Rate dropdown — treat that
                 // as a "reset both VFOs to this rate" control. Per-VFO divergence
                 // happens at runtime via the span buttons on the main page.
@@ -377,7 +380,8 @@ namespace Yaesu_Web_Control.Pages
                 bool sdrChanged =
                        !string.Equals(oldSdrA,  current.SdrDeviceKeyA ?? string.Empty, StringComparison.Ordinal)
                     || !string.Equals(oldSdrB,  current.SdrDeviceKeyB ?? string.Empty, StringComparison.Ordinal)
-                    || oldSdrIfHz   != current.SdrIfFrequencyHz
+                    || oldSdrIfHzA  != current.SdrIfFrequencyHzA
+                    || oldSdrIfHzB  != current.SdrIfFrequencyHzB
                     || oldSdrSrHzA  != current.SdrSampleRateHzA
                     || oldSdrSrHzB  != current.SdrSampleRateHzB
                     || oldSdrFft    != current.SdrFftSize;

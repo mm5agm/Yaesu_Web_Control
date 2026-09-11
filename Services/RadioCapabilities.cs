@@ -365,4 +365,30 @@ public static class RadioCapabilities
         isSingleReceiver
             ? activeVfo == 1
             : receiver.Equals("B", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The frequency the VFO A / VFO B SDR should be tuned to by default,
+    /// i.e. where the radio's IF OUT for that receiver actually sits.
+    ///
+    /// The FTdx101's two IF OUT jacks are on different frequencies. The
+    /// operating manual (p.17) gives MAIN as 9.005 MHz and SUB as 8.900 MHz,
+    /// and I measured both on 2026-09-11 with a 100 kW MW carrier as the
+    /// ruler: with the SDR at 9.000 MHz the MAIN trace reads 5.06 kHz low
+    /// and the SUB trace reads 100 kHz high. A single shared setting had the
+    /// VFO B SDR showing a slice of band 100 kHz above the SUB dial.
+    ///
+    /// The defaults sit 5 kHz BELOW each IF centre, not on it. That is what
+    /// the long-standing 9,000,000 MAIN value always did, and it keeps the
+    /// SDR's DC notch off the dial; the remaining 5 kHz is corrected in the
+    /// browser, not here. Both receivers get the same gap so the two panels
+    /// behave identically. See docs/design/sdr-spectrum-axis-investigation.md.
+    ///
+    /// Only the FTdx101MP has been measured. Every other model falls back to
+    /// 9 MHz for both VFOs, which is what they had before this existed.
+    /// </summary>
+    public static long DefaultSdrCentreHz(string radioModel, string vfo) => (radioModel, vfo.ToUpperInvariant()) switch
+    {
+        ("FTdx101MP" or "FTdx101D", "B") => 8_895_000,   // IF OUT (SUB) 8.900 MHz
+        _                                => 9_000_000,   // IF OUT (MAIN) 9.005 MHz, and the pre-split default
+    };
 }
