@@ -102,18 +102,17 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// </summary>
         /// <param name="spanHz">A member of <see cref="ValidSpans"/>.</param>
         /// <param name="wideFftSize">FFT size for the hardware-rate regime (the SdrFftSize setting).</param>
-        /// <param name="sdrCentreHz">Where the SDR is tuned (SdrIfFrequencyHzA/B).</param>
-        /// <param name="ifOutHz">
-        /// The radio's IF OUT frequency for this receiver, i.e. where the dial
-        /// sits in the SDR's stream, or null when it is not known for the
-        /// model — a crop is then centred on the SDR's own tune frequency.
+        /// <param name="dialHz">
+        /// Where the dial sits in the SDR's stream — the radio's IF OUT for
+        /// this receiver plus its current LO slide (YaesuIfOutOffset), or the
+        /// SDR's own tune frequency for a model whose IF OUT is unmeasured.
+        /// The centre of any crop. SpectrumZoom.Crop slides a window that
+        /// would run off the edge of the stream back inside it, so a centre a
+        /// few kHz off the SDR's tune point needs no clamping here.
         /// </param>
-        public static Plan For(double spanHz, int wideFftSize, long sdrCentreHz, long? ifOutHz)
+        public static Plan For(double spanHz, int wideFftSize, long dialHz)
         {
-            // SpectrumZoom.Crop slides a window that would run off the edge
-            // of the stream back inside it, so a centre a few kHz off the
-            // SDR's tune point needs no clamping here.
-            long centre = ifOutHz ?? sdrCentreHz;
+            long centre = dialHz;
 
             if (IsZoom(spanHz))
                 return new Plan(ZoomRateHz, ZoomFftSize, ZoomHopSize, centre, (long)spanHz);

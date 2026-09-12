@@ -17,6 +17,7 @@
 //   SdrStatus     value = { sdrId: "A"|"B", status: "..." }
 //   SdrError      value = { sdrId: "A"|"B", error:  "..." }
 
+using System.ComponentModel;
 using System.Net.Sockets;
 using Microsoft.AspNetCore.SignalR;
 using Yaesu_Web_Control.Hubs;
@@ -28,6 +29,7 @@ public sealed class SdrManager : BackgroundService
 {
     private readonly ISettingsService             _settings;
     private readonly IHubContext<RadioHub>        _hub;
+    private readonly RadioStateService            _state;
     private readonly ILogger<SdrManager>          _logger;
 
     private const int RetryDelayMs           = 5_000;
@@ -85,11 +87,47 @@ public sealed class SdrManager : BackgroundService
     public SdrManager(
         ISettingsService             settings,
         IHubContext<RadioHub>        hub,
+        RadioStateService            state,
         ILogger<SdrManager>          logger)
     {
         _settings = settings;
         _hub      = hub;
+        _state    = state;
         _logger   = logger;
+
+        // The dial moves through the IF OUT as the operator works the
+        // filter (see YaesuIfOutOffset), so a cropped window has to follow
+        // it. Cheap: a ViewWindow message is a volatile swap in the worker,
+        // and nothing is sent unless the centre actually moved.
+        _state.PropertyChanged += OnRadioStateChanged;
+    }
+
+    private void OnRadioStateChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case "ModeA" or "IfWidthA" or "IfShiftA": _ = RecentreViewAsync("A"); break;
+            case "ModeB" or "IfWidthB" or "IfShiftB": _ = RecentreViewAsync("B"); break;
+            case "CwPitch": _ = RecentreViewAsync("A"); _ = RecentreViewAsync("B"); break;
+        }
+    }
+
+    /// <summary>
+    /// Where the dial sits in this VFO's SDR stream right now: the radio's
+    /// IF OUT for the receiver plus its current LO slide, or the SDR's own
+    /// tune frequency for a model whose IF OUT is unmeasured. This is the
+    /// centre of every software-zoom crop.
+    /// </summary>
+    private long DialCentreHz(string vfo, ApplicationSettings config)
+    {
+        bool b = vfo == "B";
+        long? dial = YaesuIfOutOffset.DialIfHz(
+            config.RadioModel, vfo,
+            mode:        b ? _state.ModeB    : _state.ModeA,
+            ifWidthCode: b ? _state.IfWidthB : _state.IfWidthA,
+            ifShiftHz:   b ? _state.IfShiftB : _state.IfShiftA,
+            cwPitchCode: _state.CwPitch);
+        return dial ?? (b ? config.SdrIfFrequencyHzB : config.SdrIfFrequencyHzA);
     }
 
     /// <summary>
@@ -191,8 +229,7 @@ public sealed class SdrManager : BackgroundService
             var    plan = SpectrumSpanPlan.For(
                 spanHz,
                 wideFftSize: config.SdrFftSize,
-                sdrCentreHz: ifFrequencyHz,
-                ifOutHz:     RadioCapabilities.SdrIfOutHz(config.RadioModel, vfo));
+                dialHz:      DialCentreHz(vfo, config));
 
             worker = WorkerProcess.Start(
                 _logger,
@@ -370,11 +407,42 @@ public sealed class SdrManager : BackgroundService
         lock (_activeLock) _writers.TryGetValue(vfo, out slot);
         if (slot == null) return false;
 
-        // The slot's plan already carries the resolved crop centre, so it is
-        // passed back in as the SDR centre with no IF OUT override.
-        var plan = SpectrumSpanPlan.For(spanHz, slot.WideFftSize, slot.Plan.ViewCentreHz, null);
+        var config = await _settings.GetSettingsAsync().ConfigureAwait(false);
+        var plan   = SpectrumSpanPlan.For(spanHz, slot.WideFftSize, DialCentreHz(vfo, config));
         if (!plan.SameHardwareAs(slot.Plan)) return false;
 
+        return await PushViewAsync(vfo, slot, plan, $"span {spanHz} Hz", ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Move a running worker's crop window to wherever the dial now sits in
+    /// the stream, after a filter change on the radio. A no-op when the
+    /// worker sends the whole stream, when the centre has not moved, or
+    /// when there is no worker.
+    /// </summary>
+    private async Task RecentreViewAsync(string vfo)
+    {
+        try
+        {
+            WriterSlot? slot;
+            lock (_activeLock) _writers.TryGetValue(vfo, out slot);
+            if (slot == null || !slot.Plan.Crops) return;
+
+            var  config = await _settings.GetSettingsAsync().ConfigureAwait(false);
+            long centre = DialCentreHz(vfo, config);
+            if (centre == slot.Plan.ViewCentreHz) return;
+
+            await PushViewAsync(vfo, slot, slot.Plan with { ViewCentreHz = centre }, "dial moved").ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDR {Vfo}: failed to recentre view — {Message}", vfo, ex.Message);
+        }
+    }
+
+    /// <summary>Send one ViewWindow for <paramref name="plan"/> and record it in the slot.</summary>
+    private async Task<bool> PushViewAsync(string vfo, WriterSlot slot, SpectrumSpanPlan.Plan plan, string why, CancellationToken ct = default)
+    {
         var view = new ViewWindowPayload(plan.ViewCentreHz, plan.ViewSpanHz);
 
         try { await slot.Lock.WaitAsync(ct).ConfigureAwait(false); }
@@ -385,7 +453,8 @@ public sealed class SdrManager : BackgroundService
             lock (_activeLock)
                 if (_writers.TryGetValue(vfo, out var current) && ReferenceEquals(current, slot))
                     _writers[vfo] = slot with { Plan = plan };
-            _logger.LogInformation("SDR {Vfo}: span {Span} Hz applied live (view {Centre} Hz)", vfo, spanHz, view.CentreHz);
+            _logger.LogInformation("SDR {Vfo}: {Why} applied live (view {Centre} Hz ±{Half} Hz)",
+                vfo, why, view.CentreHz, view.SpanHz / 2);
             return true;
         }
         catch (Exception ex)
