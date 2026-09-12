@@ -2,9 +2,9 @@
 //
 // Turns the span an operator picked into what the SDR worker is actually
 // asked to do. The span list is the FTdx101's own scope list — 1k, 2k, 5k,
-// 10k, 20k, 50k, 100k, 200k, 500k, 1M — so the panel and the radio's screen
-// offer the same choices. The SDR cannot be run at most of those rates, so
-// each span is served one of two ways:
+// 10k, 20k, 50k, 100k, 200k, 500k, 1M — plus 2M, which the SDR can do and
+// the radio cannot. The SDR cannot be run at most of those rates, so each
+// span is served one of two ways:
 //
 //   * 100 kHz and below: the hardware sits at a fixed 125 kHz and the worker
 //     runs a 16k-point FFT (7.6 Hz per bin), crops the bins under the wanted
@@ -14,9 +14,9 @@
 //     device on the way (see project memory on SDRplayAPIService leaks).
 //
 //   * Above that: the hardware runs at the tightest rate SdrplayDevice.PlanFor
-//     can reach that still covers the span (250 k, 500 k, 1 M), and the
-//     worker crops to the span where the two differ — 200 kHz is a crop of
-//     the 250 kHz stream; 500 kHz and 1 MHz are the stream itself. A change
+//     can reach that still covers the span (250 k, 500 k, 1 M, 2 M), and
+//     the worker crops to the span where the two differ — 200 kHz is a crop
+//     of the 250 kHz stream; 500 kHz and up are the stream itself. A change
 //     of hardware rate is a worker respawn.
 //
 // The dividing line is the RSP1's decimation floor. Below 125 kHz the API
@@ -48,14 +48,14 @@ namespace Yaesu_Web_Control.Services.Sdr
         public const int ZoomHopSize = 4096;
 
         /// <summary>
-        /// Every span the UI offers, in Hz — the FTdx101's own scope spans.
-        /// Must agree with the span buttons in Index.cshtml and the Settings
-        /// page select.
+        /// Every span the UI offers, in Hz — the FTdx101's own scope spans
+        /// and 2 MHz. Must agree with the span buttons in Index.cshtml and
+        /// the Settings page select.
         /// </summary>
         public static readonly double[] ValidSpans =
         [
             1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000,
-            200_000, 500_000, 1_000_000,
+            200_000, 500_000, 1_000_000, 2_000_000,
         ];
 
         /// <summary>
@@ -63,7 +63,7 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// row of SdrplayDevice.PlanFor; a span is served by the first one
         /// that covers it.
         /// </summary>
-        private static readonly double[] WideRatesHz = [250_000, 500_000, 1_000_000];
+        private static readonly double[] WideRatesHz = [250_000, 500_000, 1_000_000, 2_000_000];
 
         public static bool IsValid(double spanHz) => Array.IndexOf(ValidSpans, spanHz) >= 0;
 
