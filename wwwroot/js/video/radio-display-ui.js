@@ -2,6 +2,7 @@
  * Radio Display UI wiring: status poll + MJPEG img stream + controls.
  */
 import { RadioDisplayPanel } from './radio-display-panel.js?v=11';
+import { RadioDisplayHotspots } from './radio-display-hotspots.js?v=1';
 
 const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;
@@ -1295,6 +1296,17 @@ export async function initRadioDisplayUi(mode = 'index') {
   );
   bindChannel();
   bindControls();
+
+  // Prototype: click-to-tune and clickable readouts / soft-buttons drawn over
+  // the captured TFT. Needs the scope control for span and band, so the
+  // pages construct that first. Exposed on window for the debug helpers.
+  window.radioDisplayHotspots = new RadioDisplayHotspots(
+    document.getElementById('radioDisplayImg'),
+    {
+      radioModel: container.dataset.radioModel || '',
+      dualReceiver: container.dataset.dualReceiver === 'true',
+      getScopeControl: () => (window.radioScopeControls || []).find(c => c.state) || window.radioScopeControl || null
+    });
 
   const streamHint = uiMode === 'popout'
     && new URLSearchParams(window.location.search).get('stream') === '1';

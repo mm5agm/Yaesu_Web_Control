@@ -383,6 +383,30 @@ export class RadioScopeControl {
         this._apply(s);
     }
 
+    // ── soft-button equivalents ──────────────────────────────────────────────
+    // What the CURSOR / SPAN / 3DSS / HOLD buttons under the radio's own scope
+    // do, for callers that have a picture of those buttons rather than the
+    // panel above (radio-display-hotspots.js). Each is one SS write; the
+    // read-back repaints as usual.
+
+    cyclePlacement() {
+        const s = this.state || { placement: 0 };
+        this._sendMode({ placement: ((s.placement | 0) + 1) % MODE_PLACEMENTS });
+    }
+
+    cycleSpan() {
+        const cur = parseInt(this.state?.span ?? '0', 10) || 0;
+        this._send('span', String((cur + 1) % 10));
+    }
+
+    toggle3dss() {
+        this._sendMode({ is3dss: !this.state?.is3dss });
+    }
+
+    toggleHold() {
+        this._send('hold', this.state?.hold === '1' ? '0' : '1');
+    }
+
     _sendMode(change) {
         const s = this.state || { is3dss: false, placement: 0, size: 0 };
         const is3dss    = change.is3dss    !== undefined ? change.is3dss    : !!s.is3dss;
