@@ -38,7 +38,11 @@ public sealed class SdrManager : BackgroundService
     private const int StatusHeartbeatFrames  = 75;     // ~3 s at the 25/s send cap
     private const int WorkerConnectTimeoutMs = 10_000;
 
-    private CancellationTokenSource _restartCts = new();
+    // One restart token per VFO, so a span change that needs a new hardware
+    // rate on one SDR respawns that worker alone; the other keeps streaming.
+    // A settings save cycles both.
+    private CancellationTokenSource _restartCtsA = new();
+    private CancellationTokenSource _restartCtsB = new();
 
     // Device keys currently held by spawned workers, keyed by VFO id ("A"/"B").
     // Used by SdrController.GetDevices so the Settings page Scan can include
@@ -89,53 +93,74 @@ public sealed class SdrManager : BackgroundService
     }
 
     /// <summary>
-    /// Cancels the current sessions so they restart with fresh settings.
-    /// Triggered when the user saves SDR-related settings.
+    /// Cancels both sessions so they restart with fresh settings. Triggered
+    /// when the user saves SDR-related settings.
     /// </summary>
     public void RequestRestart()
     {
-        var old = Interlocked.Exchange(ref _restartCts, new CancellationTokenSource());
-        old.Cancel();
-        old.Dispose();
+        RequestRestart("A");
+        RequestRestart("B");
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    /// <summary>
+    /// Cancels one VFO's session so it restarts with fresh settings, leaving
+    /// the other VFO's worker streaming. Used by the span endpoint when the
+    /// new span needs a different hardware rate (see TrySetSpanAsync).
+    /// </summary>
+    public void RequestRestart(string vfo)
+    {
+        if (vfo == "B") Cycle(ref _restartCtsB);
+        else            Cycle(ref _restartCtsA);
+
+        static void Cycle(ref CancellationTokenSource cts)
+        {
+            var old = Interlocked.Exchange(ref cts, new CancellationTokenSource());
+            old.Cancel();
+            old.Dispose();
+        }
+    }
+
+    private CancellationToken RestartTokenFor(string vfo) =>
+        (vfo == "B" ? _restartCtsB : _restartCtsA).Token;
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        // Each VFO is supervised on its own loop so a restart of one never
+        // touches the other. The two share nothing below this point: each
+        // has its own worker process, TCP connection and device.
+        Task.WhenAll(
+            SuperviseAsync("A", stoppingToken),
+            SuperviseAsync("B", stoppingToken));
+
+    private async Task SuperviseAsync(string vfo, CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
             var config       = await _settings.GetSettingsAsync().ConfigureAwait(false);
-            var restartToken = _restartCts.Token;
+            var restartToken = RestartTokenFor(vfo);
             using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, restartToken);
 
-            bool aConfigured = !string.IsNullOrWhiteSpace(config.SdrDeviceKeyA);
-            bool bConfigured = !string.IsNullOrWhiteSpace(config.SdrDeviceKeyB);
-
-            if (!aConfigured && !bConfigured)
+            string? deviceKey = vfo == "B" ? config.SdrDeviceKeyB : config.SdrDeviceKeyA;
+            if (string.IsNullOrWhiteSpace(deviceKey))
             {
-                await BroadcastStatus("A", "unconfigured", stoppingToken).ConfigureAwait(false);
-                await BroadcastStatus("B", "unconfigured", stoppingToken).ConfigureAwait(false);
+                // Tell the frontend explicitly so the panel can clear itself
+                // rather than show a stale state, then wait for a device to
+                // be configured (a settings save cuts the wait short).
+                await BroadcastStatus(vfo, "unconfigured", stoppingToken).ConfigureAwait(false);
                 try { await Task.Delay(UnconfiguredPollMs, sessionCts.Token).ConfigureAwait(false); }
                 catch (OperationCanceledException) { }
                 continue;
             }
 
-            // Tell the frontend explicitly when one side is unconfigured so the
-            // corresponding panel can clear itself rather than show a stale state.
-            if (!aConfigured) await BroadcastStatus("A", "unconfigured", stoppingToken).ConfigureAwait(false);
-            if (!bConfigured) await BroadcastStatus("B", "unconfigured", stoppingToken).ConfigureAwait(false);
+            await RunSessionAsync(vfo, deviceKey, config, sessionCts.Token).ConfigureAwait(false);
 
-            // Run any configured sessions concurrently.
-            var tasks = new List<Task>(2);
-            if (aConfigured)
-                tasks.Add(RunSessionAsync("A", config.SdrDeviceKeyA!, config, sessionCts.Token));
-            if (bConfigured)
-                tasks.Add(RunSessionAsync("B", config.SdrDeviceKeyB!, config, sessionCts.Token));
-
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-
-            // Skip retry delay if a restart was requested (e.g. settings changed).
+            // Retry after a pause unless a restart was requested, in which
+            // case go straight round; a request arriving during the pause
+            // cuts it short too.
             if (!stoppingToken.IsCancellationRequested && !restartToken.IsCancellationRequested)
-                await Task.Delay(RetryDelayMs, stoppingToken).ConfigureAwait(false);
+            {
+                try { await Task.Delay(RetryDelayMs, sessionCts.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) { }
+            }
         }
     }
 

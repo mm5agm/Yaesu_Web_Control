@@ -766,10 +766,10 @@ try
         await settings.SaveSettingsAsync(s);
 
         // Between two software-zoom spans the running worker is retasked
-        // in place; anything else changes the hardware rate and needs the
-        // worker respawned.
+        // in place; anything else changes the hardware rate and needs this
+        // VFO's worker respawned. The other VFO's worker is left alone.
         if (!await sdr.TrySetSpanAsync(target, hz))
-            sdr.RequestRestart();
+            sdr.RequestRestart(target);
         return Results.Ok();
     });
 #endif
