@@ -411,6 +411,19 @@ export class RadioScopeControl {
         this._send('span', String((cur + 1) % 10));
     }
 
+    async cycleSpeed() {
+        if (!await this._ensureState()) return;
+        const n = this.card?.querySelectorAll('.scope-speed-btn').length || 5;
+        const cur = parseInt(this.state.speed ?? '0', 10) || 0;
+        this._send('speed', String((cur + 1) % n));
+    }
+
+    async cycleSize() {
+        if (!await this._ensureState()) return;
+        if (this.state.is3dss) return;
+        this._sendMode({ size: ((this.state.size | 0) + 1) % 3 });
+    }
+
     async toggle3dss() {
         if (!await this._ensureState()) return;
         this._sendMode({ is3dss: !this.state.is3dss });

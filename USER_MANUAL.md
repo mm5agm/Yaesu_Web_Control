@@ -1096,7 +1096,7 @@ All changes are confirmed by reading the radio's state back after each command, 
 | What the controls change | What YWC draws | What the **radio** displays |
 | Extra hardware | SDR required | None |
 
-The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It appears when Radio Display is **off** on radios that support CAT scope control — **FTdx101MP/D** and **FTdx10**. See [§19.4](#194-cat-scope-controls) when Radio Display is on (the same controls dock beside the video by default, or float when the column is hidden).
+The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It appears when Radio Display is **off** on radios that support CAT scope control — **FTdx101MP/D** and **FTdx10**. See [§19.4](#194-cat-scope-controls) when Radio Display is on (the same controls dock beside the video by default, or float when the column is hidden). On the **FTdx101MP/D** and **FTdx10**, the captured Radio Display picture itself is also clickable in MONO W/F (tune and cycle the on-screen readouts / soft-buttons over CAT). **FT-710** does not.
 
 When you expand the card it reads the current settings from the radio, so it opens showing what the radio is actually doing rather than a set of defaults.
 
@@ -1524,7 +1524,7 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 
 On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close. If the dongle is unplugged, the badge stays **Disconnected** until you refresh the device list and click **Start** — YWC does not reopen whatever camera now sits at the old index. **Auto** and reloading the page do not bypass that halt; only **Start** (after refresh) or choosing a different device clears it.
 
-On **FTdx10** and **FTdx101MP/D**, **Controls** on the video bar opens a dialog to drive the radio’s own scope (span, 3DSS, Center/Cursor/Fix, FFT speed, Level, Peak, Marker, Color, AF-FFT/OSC). That is not click-through on the video — HDMI capture is one-way. See [§19.4](#194-cat-scope-controls).
+On **FTdx10** and **FTdx101MP/D**, **Controls** on the video bar opens a dialog to drive the radio’s own scope (span, 3DSS, Center/Cursor/Fix, FFT speed, Level, Peak, Marker, Color, AF-FFT/OSC). HDMI capture is still one-way — clicks never reach the radio’s touchscreen. On the **FTdx101MP/D**, YWC also maps clicks on the captured MONO waterfall picture itself to CAT (tune, cycle ATT/IPO/R.FIL/AGC, and the CURSOR/SPAN/3DSS/HOLD soft-buttons). The **FTdx10** overlay is the same idea: ATT/IPO/R.FIL/AGC, click-to-tune, and CURSOR/3DSS/EXPAND/SPAN/SPEED (no ANT — one jack; no MONO/HOLD/MEM CH on that screen). **FT-710** has neither the overlay nor CAT scope **Controls**. See [§19.4](#194-cat-scope-controls).
 
 ---
 
@@ -3248,6 +3248,10 @@ Capture opens while at least one browser is viewing the stream, and stays open f
 ### 19.4 CAT scope controls
 
 The Radio Display picture is a live capture of the radio’s TFT. Clicks on that image never reach the touchscreen (the dongle is one-way). On radios that expose the spectrum scope over CAT (`SS`), a **Controls** button on the video bar (next to FPS / quality) shows scope controls beside the video by default — the stream on the left, buttons on the right — so nothing floats over the picture. Hide the column with **✕** on the column header (or **Controls** on the video bar); the video recentres. **Controls** only shows or hides the panel — when hidden, click it again to bring controls back in the same layout (docked column or floating panel). The picture-in-picture icon on the column header switches to a floating panel; the sidebar icon on the floating panel pins the column again (hover either icon for its label). **✕** closes the panel without changing layout mode. Drag the column’s left edge to widen or narrow it (Arrow keys nudge when the edge is focused; Home/End jump to the limits; double-click restores the default width); the choice is remembered in the browser. **Reattach** from the pop-out window restores the controls panel in the same docked or floating layout you had before pop-out.
+
+On the **FTdx101MP/D**, with the radio in MONO W/F, YWC also treats the captured picture as a control surface: hover over the spectrum/waterfall for the frequency under the cursor, click to tune that VFO, click the ATT / IPO / R.FIL / AGC readouts to cycle them, and click CURSOR / SPAN / 3DSS / HOLD for the same CAT scope commands as **Controls**. MONO / MULTI / EXPAND / MEM CH have no CAT command — a click flashes that on the label rather than doing nothing silently. The **FTdx10** has the same overlay on its MONO W/F screen: no ANT target, and the soft-button row is CURSOR / 3DSS / MULTI / EXPAND / SPAN / SPEED (EXPAND cycles L/N/S; MULTI has no CAT command). **FT-710** has no click overlay.
+
+This is CAT, not the radio’s touchscreen, and it is not the SDR IF-OUT axis correction in §6.3 — the FTdx10 has no IF tap, and that correction stays on the FTdx101.
 
 The controls change what the radio draws: Center / Cursor / Fix, 3DSS vs waterfall, Expand (L / N / S), FFT SPAN, FFT SPEED, Level, Peak, Marker, Hold, Color / NB colour (FTdx101 only), and AF-FFT / OSC attenuators and timebase. The pop-out window behaves the same way. Your docked vs floating choice is remembered in the browser.
 
