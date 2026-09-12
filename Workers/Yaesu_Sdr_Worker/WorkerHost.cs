@@ -49,7 +49,8 @@ internal sealed class WorkerHost
             _view = new ViewWindow(_opts.ViewCentreHz, _opts.ViewSpanHz);
 
         Log($"starting (deviceKey={_opts.DeviceKey}, vfo={_opts.Vfo}, port={_opts.Port}, " +
-            $"ifHz={_opts.IfFrequencyHz}, sr={_opts.SampleRateHz}, fft={_opts.FftSize}, hop={_opts.HopSize}" +
+            $"ifHz={_opts.IfFrequencyHz}" + (_opts.TrimHz != 0 ? $"{_opts.TrimHz:+#;-#} trim" : "") +
+            $", sr={_opts.SampleRateHz}, fft={_opts.FftSize}, hop={_opts.HopSize}" +
             (_view is { } v0 ? $", view={v0.CentreHz}±{v0.SpanHz / 2}" : "") + ")");
 
         // 1. Open TCP listener on localhost only.
@@ -122,7 +123,10 @@ internal sealed class WorkerHost
             // over a sliding window of FftSize samples that each hop advances.
             // With hop == FftSize this is exactly the old one-FFT-per-frame
             // behaviour.
-            device.Configure(_opts.IfFrequencyHz, _opts.SampleRateHz, _opts.HopSize);
+            // The trim is the one place the hardware and the labels part
+            // company: the dongle is tuned off the nominal IF by its own
+            // crystal error, and every frame is still labelled nominal.
+            device.Configure(_opts.IfFrequencyHz + _opts.TrimHz, _opts.SampleRateHz, _opts.HopSize);
             device.StartStreaming();
 
             await writer.WriteStatusAsync("streaming", stoppingToken).ConfigureAwait(false);
@@ -272,6 +276,7 @@ internal sealed record WorkerOptions(
     string Vfo,            // "A" or "B"
     int    Port,           // localhost TCP port to listen on
     long   IfFrequencyHz,
+    int    TrimHz,         // hardware tune offset from IfFrequencyHz; frames stay labelled IfFrequencyHz
     double SampleRateHz,
     int    FftSize,
     int    HopSize,        // samples read per FFT; == FftSize means no overlap

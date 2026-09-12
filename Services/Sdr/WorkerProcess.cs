@@ -30,6 +30,7 @@ internal sealed class WorkerProcess : IDisposable
         string  vfo,
         string  deviceKey,
         long    ifFrequencyHz,
+        int     trimHz,
         double  sampleRateHz,
         int     fftSize,
         int     hopSize,
@@ -55,6 +56,10 @@ internal sealed class WorkerProcess : IDisposable
         psi.ArgumentList.Add("--vfo");          psi.ArgumentList.Add(vfo);
         psi.ArgumentList.Add("--port");         psi.ArgumentList.Add(port.ToString());
         psi.ArgumentList.Add("--if-hz");        psi.ArgumentList.Add(ifFrequencyHz.ToString());
+        if (trimHz != 0)
+        {
+            psi.ArgumentList.Add("--trim-hz");  psi.ArgumentList.Add(trimHz.ToString());
+        }
         psi.ArgumentList.Add("--sample-rate");  psi.ArgumentList.Add(sampleRateHz.ToString(System.Globalization.CultureInfo.InvariantCulture));
         psi.ArgumentList.Add("--fft-size");     psi.ArgumentList.Add(fftSize.ToString());
         psi.ArgumentList.Add("--hop");          psi.ArgumentList.Add(hopSize.ToString());

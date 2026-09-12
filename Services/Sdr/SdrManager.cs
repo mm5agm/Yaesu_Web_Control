@@ -226,6 +226,7 @@ public sealed class SdrManager : BackgroundService
             // Per-VFO centre too: the FTdx101's SUB IF OUT is 100 kHz below
             // its MAIN one (see RadioCapabilities.DefaultSdrCentreHz).
             long   ifFrequencyHz = vfo == "B" ? config.SdrIfFrequencyHzB : config.SdrIfFrequencyHzA;
+            int    trimHz        = vfo == "B" ? config.SdrFrequencyTrimHzB : config.SdrFrequencyTrimHzA;
             var    plan = SpectrumSpanPlan.For(
                 spanHz,
                 wideFftSize: config.SdrFftSize,
@@ -236,6 +237,7 @@ public sealed class SdrManager : BackgroundService
                 vfo:           vfo,
                 deviceKey:     deviceKey,
                 ifFrequencyHz: ifFrequencyHz,
+                trimHz:        trimHz,
                 sampleRateHz:  plan.HardwareRateHz,
                 fftSize:       plan.FftSize,
                 hopSize:       plan.HopSize,

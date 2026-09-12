@@ -220,6 +220,8 @@ namespace Yaesu_Web_Control.Pages
                 var oldSdrB       = current.SdrDeviceKeyB ?? string.Empty;
                 var oldSdrIfHzA   = current.SdrIfFrequencyHzA;
                 var oldSdrIfHzB   = current.SdrIfFrequencyHzB;
+                var oldSdrTrimA   = current.SdrFrequencyTrimHzA;
+                var oldSdrTrimB   = current.SdrFrequencyTrimHzB;
                 var oldSdrSrHzA   = current.SdrSampleRateHzA;
                 var oldSdrSrHzB   = current.SdrSampleRateHzB;
                 var oldSdrFft     = current.SdrFftSize;
@@ -243,6 +245,8 @@ namespace Yaesu_Web_Control.Pages
                 current.SdrIfFrequencyHzA = Settings.SdrIfFrequencyHzA;
                 current.SdrIfFrequencyHzB = Settings.SdrIfFrequencyHzB;
                 current.SdrIfFrequencyHz  = 0;             // legacy field — kept zero once the per-VFO fields exist
+                current.SdrFrequencyTrimHzA = Math.Clamp(Settings.SdrFrequencyTrimHzA, -10_000, 10_000);
+                current.SdrFrequencyTrimHzB = Math.Clamp(Settings.SdrFrequencyTrimHzB, -10_000, 10_000);
                 // Settings page binds a single Sample Rate dropdown — treat that
                 // as a "reset both VFOs to this rate" control. Per-VFO divergence
                 // happens at runtime via the span buttons on the main page.
@@ -382,6 +386,8 @@ namespace Yaesu_Web_Control.Pages
                     || !string.Equals(oldSdrB,  current.SdrDeviceKeyB ?? string.Empty, StringComparison.Ordinal)
                     || oldSdrIfHzA  != current.SdrIfFrequencyHzA
                     || oldSdrIfHzB  != current.SdrIfFrequencyHzB
+                    || oldSdrTrimA  != current.SdrFrequencyTrimHzA
+                    || oldSdrTrimB  != current.SdrFrequencyTrimHzB
                     || oldSdrSrHzA  != current.SdrSampleRateHzA
                     || oldSdrSrHzB  != current.SdrSampleRateHzB
                     || oldSdrFft    != current.SdrFftSize;

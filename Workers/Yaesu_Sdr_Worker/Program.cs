@@ -11,6 +11,7 @@
 //       --vfo         A
 //       --port        17001
 //       --if-hz       9000000
+//       [--trim-hz     -44]           tune the hardware this far off --if-hz (crystal error)
 //       --sample-rate 2000000
 //       --fft-size    1024
 //       [--hop         4096]          samples between FFTs (default = fft-size, no overlap)
@@ -82,11 +83,13 @@ internal static class Program
         int    fft    = int.Parse(Required("fft-size"));
 
         int  hop        = dict.TryGetValue("hop",         out var h)  ? int.Parse(h)   : fft;
+        int  trimHz     = dict.TryGetValue("trim-hz",     out var t)  ? int.Parse(t)   : 0;
         long viewCentre = dict.TryGetValue("view-centre", out var vc) ? long.Parse(vc) : 0;
         long viewSpan   = dict.TryGetValue("view-span",   out var vs) ? long.Parse(vs) : 0;
 
         if (port <= 0 || port > 65535)  throw new ArgumentException("--port out of range");
         if (ifHz <= 0)                  throw new ArgumentException("--if-hz must be positive");
+        if (Math.Abs(trimHz) > 100_000)  throw new ArgumentException("--trim-hz must be within ±100000");
         if (sr <= 0)                    throw new ArgumentException("--sample-rate must be positive");
         if (fft <= 0 || (fft & (fft - 1)) != 0)
             throw new ArgumentException("--fft-size must be a positive power of two");
@@ -94,7 +97,7 @@ internal static class Program
         if (viewSpan < 0 || viewCentre < 0)
             throw new ArgumentException("--view-span and --view-centre must not be negative");
 
-        return new WorkerOptions(deviceKey, vfo, port, ifHz, sr, fft, hop, viewCentre, viewSpan);
+        return new WorkerOptions(deviceKey, vfo, port, ifHz, trimHz, sr, fft, hop, viewCentre, viewSpan);
     }
 
     private static void PrintUsage(string? error)
@@ -116,6 +119,8 @@ internal static class Program
             "                 log prefix to disambiguate worker output.\n" +
             "  --port         TCP port to listen on (localhost only).\n" +
             "  --if-hz        Centre/IF frequency in Hz (typically 9000000).\n" +
+            "  --trim-hz      Tune the hardware this many Hz off --if-hz to correct\n" +
+            "                 its crystal; every frame is still labelled --if-hz.\n" +
             "  --sample-rate  Sample rate in Hz (typically 2000000).\n" +
             "  --fft-size     FFT size — must be a power of two.\n" +
             "  --hop          Samples between successive FFTs (default: fft-size).\n" +

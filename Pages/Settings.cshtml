@@ -2279,6 +2279,29 @@
                         </div>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label fw-bold">SDR frequency trim (Hz)</label>
+                        <div class="row g-2">
+                            <div class="col-sm-6">
+                                <label asp-for="Settings.SdrFrequencyTrimHzA" class="form-label small fw-semibold mb-1">VFO A SDR</label>
+                                <input asp-for="Settings.SdrFrequencyTrimHzA" class="form-control" type="number"
+                                       min="-10000" max="10000" step="1" />
+                            </div>
+                            <div class="col-sm-6">
+                                <label asp-for="Settings.SdrFrequencyTrimHzB" class="form-label small fw-semibold mb-1">VFO B SDR</label>
+                                <input asp-for="Settings.SdrFrequencyTrimHzB" class="form-control" type="number"
+                                       min="-10000" max="10000" step="1" />
+                            </div>
+                        </div>
+                        <div class="form-text">
+                            Corrects an SDR whose crystal is a little off — a plain RSP1 without a
+                            TCXO can be 50 Hz out at 9 MHz, invisible at 2 MHz span and a fifth of
+                            the screen at 1 kHz. Tune to a steady carrier at a 1 kHz span and nudge
+                            this until the peak sits under the dial line; a peak that shows
+                            <em>above</em> the dial needs a <em>negative</em> trim. Leave at 0 unless
+                            you see the offset.
+                        </div>
+                    </div>
+                    <div class="mb-3">
                         <label asp-for="Settings.SdrplayInstallPath" class="form-label fw-bold">SDRplay install path (advanced)</label>
                         <div class="input-group">
                             <input asp-for="Settings.SdrplayInstallPath" class="form-control" type="text"
