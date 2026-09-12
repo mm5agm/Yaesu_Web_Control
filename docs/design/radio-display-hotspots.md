@@ -1,6 +1,9 @@
 # Radio Display hotspots — click-to-tune and clickable controls on the captured TFT
 
-Status: **prototype**, unverified on hardware. Branch `feature/radio-display-hotspots`.
+Status: **prototype**. Branch `feature/radio-display-hotspots`, PR #138.
+Bench-checked on an FTdx101MP (MONO W/F layout) 2026-09-12: zones align,
+click-to-tune works in CENTER, and every hotspot below does what the table
+says.
 
 ## The idea
 
@@ -75,7 +78,7 @@ own scope is showing the operator exactly where its filter sits.
 | SPAN | next span | `RadioScopeControl.cycleSpan()` |
 | 3DSS | W/F ↔ 3DSS | `RadioScopeControl.toggle3dss()` |
 | HOLD | toggle | `RadioScopeControl.toggleHold()` |
-| MONO / MULTI / EXPAND / MEM CH | nothing — hover text says there is no CAT command | — |
+| MONO / MULTI / EXPAND / MEM CH | nothing — the label flashes red saying there is no CAT command | — |
 
 Cycling needs the current value. The overlay keeps its own small state
 cache, seeded from `/api/cat/status` (which now also returns `att`, `ipo`,
@@ -113,9 +116,11 @@ the bench**. Tools for that:
   threshold needs to follow the `SS` colour setting.
 - **FTdx10 / FT-710 layouts** are unmeasured. The module returns quietly
   when it has no layout for the model.
-- **Roofing-filter ring** includes the optional 1.2 kHz and 300 Hz filters;
-  when one is not fitted the server answers with a warning and the display
-  does not change. Reading the fitted set is a follow-up.
+- **Roofing-filter ring** includes the optional 1.2 kHz and 300 Hz filters.
+  When one is not fitted the server answers `{ warning: true }` and the
+  radio stays put, so the click carries on round the ring until one is
+  accepted (bench, 2026-09-12: 12 kHz -> 3 kHz -> stuck retrying 1.2 kHz
+  before this). Reading the fitted set up front is a follow-up.
 - No touch handling beyond what `click` gives for free.
 
 ## Why this is YWC-only

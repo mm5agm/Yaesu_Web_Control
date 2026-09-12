@@ -389,22 +389,36 @@ export class RadioScopeControl {
     // panel above (radio-display-hotspots.js). Each is one SS write; the
     // read-back repaints as usual.
 
-    cyclePlacement() {
-        const s = this.state || { placement: 0 };
-        this._sendMode({ placement: ((s.placement | 0) + 1) % MODE_PLACEMENTS });
+    //
+    // Each reads the radio first if nothing is loaded yet: "next" only means
+    // something relative to a known current value. Without this the first
+    // click re-sent the placement the radio was already in and it took three
+    // clicks to see a change (measured 2026-09-12).
+
+    async _ensureState() {
+        if (!this.state) await this.refresh();
+        return !!this.state;
     }
 
-    cycleSpan() {
-        const cur = parseInt(this.state?.span ?? '0', 10) || 0;
+    async cyclePlacement() {
+        if (!await this._ensureState()) return;
+        this._sendMode({ placement: ((this.state.placement | 0) + 1) % MODE_PLACEMENTS });
+    }
+
+    async cycleSpan() {
+        if (!await this._ensureState()) return;
+        const cur = parseInt(this.state.span ?? '0', 10) || 0;
         this._send('span', String((cur + 1) % 10));
     }
 
-    toggle3dss() {
-        this._sendMode({ is3dss: !this.state?.is3dss });
+    async toggle3dss() {
+        if (!await this._ensureState()) return;
+        this._sendMode({ is3dss: !this.state.is3dss });
     }
 
-    toggleHold() {
-        this._send('hold', this.state?.hold === '1' ? '0' : '1');
+    async toggleHold() {
+        if (!await this._ensureState()) return;
+        this._send('hold', this.state.hold === '1' ? '0' : '1');
     }
 
     _sendMode(change) {

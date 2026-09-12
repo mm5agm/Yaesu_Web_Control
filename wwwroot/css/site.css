@@ -1348,6 +1348,9 @@ fieldset.calibration-card {
     border-left: 1px dashed rgba(255, 255, 255, 0.7);
     pointer-events: none;
 }
+.radio-display-hotspots .rdh-label.rdh-label-flash {
+    background: #b02a37;
+}
 .radio-display-hotspots .rdh-label {
     position: absolute;
     top: 4px;

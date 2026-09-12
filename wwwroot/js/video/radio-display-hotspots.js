@@ -49,8 +49,8 @@ const SPAN_HZ = [1e3, 2e3, 5e3, 1e4, 2e4, 5e4, 1e5, 2e5, 5e5, 1e6];
 
 // Value rings for the readout boxes. The FTdx101's optional roofing filters
 // (1.2 kHz = 8, 300 Hz = A) are included; the server answers with a warning
-// rather than an error when one is not fitted, and the display simply does
-// not change, which is honest enough for a prototype.
+// rather than an error when one is not fitted, and _cycleRoofing skips on
+// round the ring until the radio accepts one.
 const RINGS = {
     att:  ['00', '06', '12', '18'],
     ipo:  ['0', '1', '2'],
@@ -298,7 +298,16 @@ export class RadioDisplayHotspots {
             return;
         }
         if (hit.kind === 'readout') this._cycleReadout(hit.id);
+        else if (NO_CAT[hit.id]) this._flash(NO_CAT[hit.id]);
         else this._pressButton(hit.id);
+    }
+
+    /** Make the hover label noticeable for a moment after a click. */
+    _flash(text) {
+        this._showCursor(null, text);
+        this.labelEl.classList.add('rdh-label-flash');
+        clearTimeout(this._flashTimer);
+        this._flashTimer = setTimeout(() => this.labelEl.classList.remove('rdh-label-flash'), 1200);
     }
 
     _showCursor(x, text) {
@@ -423,16 +432,19 @@ export class RadioDisplayHotspots {
 
     // ── actions ──────────────────────────────────────────────────────────────
 
+    /** POST and return the parsed JSON reply (null on failure). */
     async _post(url, body) {
         this._busy = true;
         try {
-            await fetch(url, {
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
+            return await res.json().catch(() => null);
         } catch (err) {
             console.error('[radio-display-hotspots]', url, err);
+            return null;
         } finally {
             this._busy = false;
         }
@@ -460,10 +472,24 @@ export class RadioDisplayHotspots {
                 return this._post(`/api/cat/ipo/${v}`, { code: next(RINGS.ipo, s.ipo) });
             case 'agc':
                 return this._post(`/api/cat/agc/${v}`, { code: next(RINGS.agc, s.agc) });
-            case 'rfil': {
-                const ring = RINGS.rfil[this.radioModel] || RINGS.rfil.default;
-                return this._post(`/api/cat/roofingfilter/${v}`, { filter: next(ring, s.rfil) });
-            }
+            case 'rfil':
+                return this._cycleRoofing(v, s);
+        }
+    }
+
+    // The ring lists the optional filters too. When one is not fitted the
+    // server answers { warning: true } and the radio stays where it was, so
+    // a plain "next in ring" would retry the same missing filter on every
+    // click (measured 2026-09-12: stuck at 3 kHz trying 1.2 kHz). Keep going
+    // round the ring until the radio accepts one.
+    async _cycleRoofing(v, s) {
+        const ring = RINGS.rfil[this.radioModel] || RINGS.rfil.default;
+        let cur = s.rfil;
+        for (let i = 0; i < ring.length; i++) {
+            const want = ring[(ring.indexOf(cur) + 1) % ring.length];
+            const reply = await this._post(`/api/cat/roofingfilter/${v}`, { filter: want });
+            if (!reply || !reply.warning) return;
+            cur = want;   // refused; try the one after it
         }
     }
 
