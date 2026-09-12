@@ -2279,6 +2279,29 @@
                         </div>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label fw-bold">SDR frequency trim (Hz)</label>
+                        <div class="row g-2">
+                            <div class="col-sm-6">
+                                <label asp-for="Settings.SdrFrequencyTrimHzA" class="form-label small fw-semibold mb-1">VFO A SDR</label>
+                                <input asp-for="Settings.SdrFrequencyTrimHzA" class="form-control" type="number"
+                                       min="-10000" max="10000" step="1" />
+                            </div>
+                            <div class="col-sm-6">
+                                <label asp-for="Settings.SdrFrequencyTrimHzB" class="form-label small fw-semibold mb-1">VFO B SDR</label>
+                                <input asp-for="Settings.SdrFrequencyTrimHzB" class="form-control" type="number"
+                                       min="-10000" max="10000" step="1" />
+                            </div>
+                        </div>
+                        <div class="form-text">
+                            Corrects an SDR whose crystal is a little off — a plain RSP1 without a
+                            TCXO can be 50 Hz out at 9 MHz, invisible at 2 MHz span and a fifth of
+                            the screen at 1 kHz. Tune to a steady carrier at a 1 kHz span and nudge
+                            this until the peak sits under the dial line; a peak that shows
+                            <em>above</em> the dial needs a <em>negative</em> trim. Leave at 0 unless
+                            you see the offset.
+                        </div>
+                    </div>
+                    <div class="mb-3">
                         <label asp-for="Settings.SdrplayInstallPath" class="form-label fw-bold">SDRplay install path (advanced)</label>
                         <div class="input-group">
                             <input asp-for="Settings.SdrplayInstallPath" class="form-control" type="text"
@@ -2355,21 +2378,27 @@
                 </div>
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label asp-for="Settings.SdrSampleRateHz" class="form-label fw-bold">Sample Rate (Hz) — both VFOs</label>
+                        <label asp-for="Settings.SdrSampleRateHz" class="form-label fw-bold">Span — both VFOs</label>
                         <select asp-for="Settings.SdrSampleRateHz" class="form-select">
-                            <option value="15625">15,625 — 15.625 kHz span (narrowest; CW signals a few pixels wide)</option>
-                            <option value="31250">31,250 — 31.25 kHz span (a CW sub-band at CW resolution)</option>
-                            <option value="62500">62,500 — 62.5 kHz span (single-QSO zoom)</option>
-                            <option value="125000">125,000 — 125 kHz span (best for 30m / 60m)</option>
-                            <option value="250000">250,000 — 250 kHz span</option>
-                            <option value="500000">500,000 — 500 kHz span</option>
-                            <option value="1000000">1,000,000 — 1 MHz span</option>
-                            <option value="2000000">2,000,000 — 2 MHz span (recommended)</option>
+                            <option value="1000">1 kHz — one CW signal (software zoom)</option>
+                            <option value="2000">2 kHz — one CW signal and its close neighbours (software zoom)</option>
+                            <option value="5000">5 kHz — a CW QSO and its neighbours, or one SSB signal (software zoom)</option>
+                            <option value="10000">10 kHz — a few CW signals or a couple of SSB QSOs (software zoom)</option>
+                            <option value="20000">20 kHz — a CW sub-band (software zoom)</option>
+                            <option value="50000">50 kHz — a busy slice of band (software zoom)</option>
+                            <option value="100000">100 kHz — best for 30m / 60m (software zoom)</option>
+                            <option value="200000">200 kHz</option>
+                            <option value="500000">500 kHz</option>
+                            <option value="1000000">1 MHz</option>
+                            <option value="2000000">2 MHz (recommended)</option>
                         </select>
                         <div class="form-text">
-                            Higher rates give a wider visible span but require more CPU.
-                            Not all devices support all rates.
-                            <strong>Saving this resets both VFOs</strong> to the chosen rate;
+                            The same spans as the radio's own scope, plus 2 MHz. Wider spans need
+                            a higher SDR sample rate and more CPU; not all devices
+                            support all rates. Spans of 100 kHz and below all run the
+                            SDR at 125 kHz and zoom in software, so switching between
+                            them is instant.
+                            <strong>Saving this resets both VFOs</strong> to the chosen span;
                             use the span buttons above each spectrum on the main page
                             to set each VFO independently afterwards.
                         </div>

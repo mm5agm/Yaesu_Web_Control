@@ -147,6 +147,17 @@
         public long SdrIfFrequencyHzA { get; set; } = 0;
         public long SdrIfFrequencyHzB { get; set; } = 0;
 
+        // Per-VFO frequency trim (added 2026-09-12). Added to where the SDR
+        // is physically tuned and nowhere else: the frame centre, the zoom
+        // crop and the browser axis all keep using the nominal frequency.
+        // Soaks up a dongle with no TCXO (a plain-crystal RSP1 is ~5 ppm,
+        // 44 Hz at 8.9 MHz — measured on Colin's VFO B) and any error in
+        // the radio's IF OUT constant. Invisible at 2 MHz, a fifth of the
+        // screen at a 1 kHz span. Set by nudging until a carrier sits under
+        // the dial line.
+        public int SdrFrequencyTrimHzA { get; set; } = 0;
+        public int SdrFrequencyTrimHzB { get; set; } = 0;
+
         // Legacy single IF frequency. KEPT as a hidden migration anchor:
         // SettingsService reads this and fills A/B from it, then writes 0
         // on next save. Do not reference outside SettingsService.

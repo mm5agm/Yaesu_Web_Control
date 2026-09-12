@@ -39,9 +39,17 @@
 //     [4 bytes]  dbFloor     (float32, BE) — display clamp lower bound
 //     [4 bytes]  dbCeiling   (float32, BE) — display clamp upper bound
 //
+//   ViewWindow (type 0x05)
+//     [8 bytes]  centreHz    (int64, BE) — middle of the wanted picture
+//     [8 bytes]  spanHz      (int64, BE) — its width
+//     The worker crops its FFT to this window and streams only those bins,
+//     so a span change inside the hardware's fixed rate is a message rather
+//     than a respawn (see SpectrumZoom in core). A window the hardware
+//     cannot cover is slid or clamped, and the frames say what was done.
+//
 //   Sample-rate / FFT-size changes still go via worker respawn; only the
-//   live spectrum-rendering knobs travel through this control channel so
-//   slider drag is smooth.
+//   live spectrum-rendering knobs and the view window travel through this
+//   control channel so slider drag and zoom are smooth.
 
 using System.Buffers.Binary;
 using System.Net.Sockets;
@@ -55,6 +63,7 @@ public enum MessageType : byte
     StatusUpdate  = 0x02,
     ErrorReport   = 0x03,
     DspSettings   = 0x04,
+    ViewWindow    = 0x05,
 }
 
 /// <summary>
@@ -62,6 +71,9 @@ public enum MessageType : byte
 /// FrameWriter on main writes it, ControlReader on the worker reads it.
 /// </summary>
 public readonly record struct DspSettingsPayload(float GainLinear, float DbFloor, float DbCeiling);
+
+/// <summary>Payload of a ViewWindow message: the slice of the stream to send.</summary>
+public readonly record struct ViewWindowPayload(long CentreHz, long SpanHz);
 
 /// <summary>
 /// Frame writer for the worker side. Encapsulates the length-prefix framing
@@ -117,6 +129,18 @@ public sealed class FrameWriter
         await _stream.WriteAsync(buf.AsMemory(), ct).ConfigureAwait(false);
     }
 
+    /// <summary>Main → worker: crop the spectrum to this window. Two int64s, 16-byte payload.</summary>
+    public async Task WriteViewWindowAsync(ViewWindowPayload view, CancellationToken ct)
+    {
+        const int payloadLen = 16;
+        var buf = new byte[5 + payloadLen];
+        BinaryPrimitives.WriteUInt32BigEndian(buf.AsSpan(0, 4), payloadLen);
+        buf[4] = (byte)MessageType.ViewWindow;
+        BinaryPrimitives.WriteInt64BigEndian(buf.AsSpan(5,  8), view.CentreHz);
+        BinaryPrimitives.WriteInt64BigEndian(buf.AsSpan(13, 8), view.SpanHz);
+        await _stream.WriteAsync(buf.AsMemory(), ct).ConfigureAwait(false);
+    }
+
     private async Task WriteStringMessageAsync(MessageType type, string text, CancellationToken ct)
     {
         byte[] payload = Encoding.UTF8.GetBytes(text);
@@ -142,6 +166,7 @@ public sealed class ControlReader
     public ControlReader(NetworkStream stream) => _stream = stream;
 
     public event Action<DspSettingsPayload>? DspSettingsReceived;
+    public event Action<ViewWindowPayload>?  ViewWindowReceived;
 
     public async Task RunAsync(CancellationToken ct)
     {
@@ -161,6 +186,13 @@ public sealed class ControlReader
                     DbFloor:    BinaryPrimitives.ReadSingleBigEndian(payload.AsSpan(4, 4)),
                     DbCeiling:  BinaryPrimitives.ReadSingleBigEndian(payload.AsSpan(8, 4)));
                 DspSettingsReceived?.Invoke(s);
+            }
+            else if (type == MessageType.ViewWindow && payloadLen == 16)
+            {
+                var v = new ViewWindowPayload(
+                    CentreHz: BinaryPrimitives.ReadInt64BigEndian(payload.AsSpan(0, 8)),
+                    SpanHz:   BinaryPrimitives.ReadInt64BigEndian(payload.AsSpan(8, 8)));
+                ViewWindowReceived?.Invoke(v);
             }
             // Unknown types are silently dropped — the length prefix means we
             // already consumed the right number of payload bytes.

@@ -171,19 +171,35 @@ namespace Yaesu_Web_Control.Services
         //     survivor (see below).
         private const double DefaultSampleRateHz = 2_000_000;
 
-        // Spans retired when the spectrum moved to low-IF. Only a handful of
-        // sample rates satisfy the SDRplay API's low-IF conditions, so the
-        // span list shrank to the six rates those conditions allow. A settings
-        // file written before that still names one of the old rates; left
-        // alone it would be rejected by /api/sdr/span and leave the main page
-        // with no span button lit, which reads as a broken UI rather than as
-        // an out-of-date setting.
+        // Spans that have been retired over the releases. The list has
+        // changed twice: once when the spectrum moved to low-IF (only a
+        // handful of sample rates satisfy the SDRplay API's conditions), and
+        // again when it was aligned with the FTdx101's own scope spans (see
+        // SpectrumSpanPlan.ValidSpans). A settings file written before either
+        // change still names an old value; left alone it would be rejected by
+        // /api/sdr/span and leave the main page with no span button lit,
+        // which reads as a broken UI rather than as an out-of-date setting.
+        // Each maps to the nearest surviving span.
         private static readonly Dictionary<double, double> RetiredSampleRates = new()
         {
+            // Pre-low-IF rates.
             [1_024_000] = 1_000_000,   // same span, now reached as 8 MHz ÷ 8
             [2_048_000] = 2_000_000,   // same span, now reached as 8 MHz ÷ 4
             [2_500_000] = 2_000_000,   // no low-IF combination reaches these,
             [3_200_000] = 2_000_000,   // so they fall back to the widest span
+
+            // Low-IF spans that are not on the radio's list.
+            [  250_000] =   200_000,
+            [  125_000] =   100_000,
+
+            // The decimated CW spans of v2.5.0-dev.
+            [   62_500] =    50_000,
+            [   31_250] =    20_000,
+            [   15_625] =    20_000,
+
+            // The first software-zoom set of v2.5.0-dev.
+            [   25_000] =    20_000,
+            [    2_500] =     2_000,
         };
 
         private static void MigrateSdrSampleRate(ApplicationSettings s)

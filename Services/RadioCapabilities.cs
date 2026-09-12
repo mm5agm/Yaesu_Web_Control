@@ -391,4 +391,22 @@ public static class RadioCapabilities
         ("FTdx101MP" or "FTdx101D", "B") => 8_895_000,   // IF OUT (SUB) 8.900 MHz
         _                                => 9_000_000,   // IF OUT (MAIN) 9.005 MHz, and the pre-split default
     };
+
+    /// <summary>
+    /// The frequency in the SDR's stream that corresponds to the dial — the
+    /// radio's IF OUT centre for this receiver — or null where it has not
+    /// been measured. The narrow software-zoom spans crop the SDR's stream
+    /// around this point rather than around the SDR's own tune frequency:
+    /// the two differ by 5 kHz on the FTdx101 (see
+    /// <see cref="DefaultSdrCentreHz"/>), which is twice a 2.5 kHz span, so
+    /// centring the crop on the SDR would put the dial off the picture.
+    /// Null makes the caller fall back to the SDR's tune frequency, which is
+    /// what an unmeasured model always displayed.
+    /// </summary>
+    public static long? SdrIfOutHz(string radioModel, string vfo) => (radioModel, vfo.ToUpperInvariant()) switch
+    {
+        ("FTdx101MP" or "FTdx101D", "B") => 8_900_000,   // IF OUT (SUB), measured 2026-09-11
+        ("FTdx101MP" or "FTdx101D", _)   => 9_005_000,   // IF OUT (MAIN), measured 2026-09-11
+        _                                => null,
+    };
 }

@@ -22,6 +22,12 @@
     <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
   </ItemGroup>
 
+  <!-- Shared, radio-agnostic DSP: SpectrumZoom, the crop and overlap window
+       behind the software-zoom spans. The same subtree the main app uses. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\RadioWebControl.Core.csproj" />
+  </ItemGroup>
+
   <!--
     File-linking from the main project's Services/Sdr/ folder. Single source of
     truth for the SDR device code — both projects compile the same source files.
