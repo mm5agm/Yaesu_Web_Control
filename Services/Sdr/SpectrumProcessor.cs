@@ -57,6 +57,9 @@ namespace Yaesu_Web_Control.Services.Sdr
         private double      _dcI, _dcQ;
         private long        _dcFrames;
 
+        // FFT scratch buffer, sized on first use (see ComputeSpectrum).
+        private MathNet.Numerics.Complex32[]? _complex;
+
         /// <summary>
         /// Run the full pipeline on one IQ buffer.
         /// </summary>
@@ -66,7 +69,13 @@ namespace Yaesu_Web_Control.Services.Sdr
         public float[] ComputeSpectrum(float[] iqSamples, int fftSize)
         {
             float[] window  = GetHannWindow(fftSize);
-            var     complex = new MathNet.Numerics.Complex32[fftSize];
+
+            // Reused across frames: at a 16k-point FFT run 30 times a second
+            // (the software-zoom shape) a fresh buffer per frame is ~4 MB/s
+            // of garbage for nothing. Only the streaming thread calls this.
+            var complex = _complex;
+            if (complex is null || complex.Length != fftSize)
+                _complex = complex = new MathNet.Numerics.Complex32[fftSize];
 
             // 5.2a DC blocker.
             //

@@ -184,6 +184,13 @@ namespace Yaesu_Web_Control.Services
             [2_048_000] = 2_000_000,   // same span, now reached as 8 MHz ÷ 4
             [2_500_000] = 2_000_000,   // no low-IF combination reaches these,
             [3_200_000] = 2_000_000,   // so they fall back to the widest span
+
+            // The three decimated CW spans of v2.5.0-dev, replaced by the
+            // software-zoom set (see SpectrumSpanPlan). Each maps to the
+            // nearest zoom span.
+            [15_625]    = 10_000,
+            [31_250]    = 25_000,
+            [62_500]    = 50_000,
         };
 
         private static void MigrateSdrSampleRate(ApplicationSettings s)

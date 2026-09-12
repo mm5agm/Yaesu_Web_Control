@@ -60,7 +60,11 @@ public sealed class SdrManager : BackgroundService
     // makes the reader block forever waiting for bytes that never come).
     private readonly Dictionary<string, WriterSlot> _writers = new();
 
-    private sealed record WriterSlot(FrameWriter Writer, SemaphoreSlim Lock);
+    // Zoom records whether the session's worker runs the fixed-rate,
+    // cropping regime (see SpectrumSpanPlan); only such a worker can take a
+    // new span as a live ViewWindow message. ViewCentreHz is the dial's
+    // position in that worker's stream, fixed for the session.
+    private sealed record WriterSlot(FrameWriter Writer, SemaphoreSlim Lock, bool Zoom, long ViewCentreHz);
 
     private readonly object _activeLock = new();
 
@@ -149,20 +153,31 @@ public sealed class SdrManager : BackgroundService
         {
             await BroadcastStatus(vfo, "connecting", stoppingToken).ConfigureAwait(false);
 
-            // Per-VFO sample rate so each panel can run at a different span
-            // (e.g. 2 MHz on the calling band, 250 kHz zoomed on the QSO).
-            double sampleRateHz = vfo == "B" ? config.SdrSampleRateHzB : config.SdrSampleRateHzA;
+            // Per-VFO span so each panel can run at a different width
+            // (e.g. 2 MHz on the calling band, 2.5 kHz zoomed on the QSO).
+            // The setting still carries the old name: below 250 kHz it is
+            // no longer the hardware rate but a crop of a fixed 125 kHz
+            // stream — SpectrumSpanPlan decides which.
+            double spanHz = vfo == "B" ? config.SdrSampleRateHzB : config.SdrSampleRateHzA;
             // Per-VFO centre too: the FTdx101's SUB IF OUT is 100 kHz below
             // its MAIN one (see RadioCapabilities.DefaultSdrCentreHz).
             long   ifFrequencyHz = vfo == "B" ? config.SdrIfFrequencyHzB : config.SdrIfFrequencyHzA;
+            var    plan = SpectrumSpanPlan.For(
+                spanHz,
+                wideFftSize: config.SdrFftSize,
+                sdrCentreHz: ifFrequencyHz,
+                ifOutHz:     RadioCapabilities.SdrIfOutHz(config.RadioModel, vfo));
 
             worker = WorkerProcess.Start(
                 _logger,
                 vfo:           vfo,
                 deviceKey:     deviceKey,
                 ifFrequencyHz: ifFrequencyHz,
-                sampleRateHz:  sampleRateHz,
-                fftSize:       config.SdrFftSize);
+                sampleRateHz:  plan.HardwareRateHz,
+                fftSize:       plan.FftSize,
+                hopSize:       plan.HopSize,
+                viewCentreHz:  plan.ViewCentreHz,
+                viewSpanHz:    plan.ViewSpanHz);
 
             lock (_activeLock) _activeDeviceKeys[vfo] = deviceKey;
 
@@ -194,7 +209,7 @@ public sealed class SdrManager : BackgroundService
             // Now safe to expose the writer to the controller. The per-slot
             // semaphore serialises any subsequent slider POSTs.
             var writeLock = new SemaphoreSlim(1, 1);
-            lock (_activeLock) _writers[vfo] = new WriterSlot(writer, writeLock);
+            lock (_activeLock) _writers[vfo] = new WriterSlot(writer, writeLock, plan.IsZoom, plan.ViewCentreHz);
 
             int heartbeatCounter = 0;
 
@@ -307,6 +322,43 @@ public sealed class SdrManager : BackgroundService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "SDR {Vfo}: failed to push DSP settings — {Message}", vfo, ex.Message);
+            return false;
+        }
+        finally
+        {
+            try { slot.Lock.Release(); } catch (ObjectDisposedException) { /* session ended mid-write */ }
+        }
+    }
+
+    /// <summary>
+    /// Change the span of a running worker without restarting it. Only
+    /// possible when the worker is already in the software-zoom regime and
+    /// the new span is too (see SpectrumSpanPlan): the hardware rate is the
+    /// same, so the change is one ViewWindow message. Returns false when a
+    /// restart is needed instead — the caller has already persisted the new
+    /// span, so RequestRestart picks it up.
+    /// </summary>
+    public async Task<bool> TrySetSpanAsync(string vfo, double spanHz, CancellationToken ct = default)
+    {
+        if (!SpectrumSpanPlan.IsZoom(spanHz)) return false;
+
+        WriterSlot? slot;
+        lock (_activeLock) _writers.TryGetValue(vfo, out slot);
+        if (slot == null || !slot.Zoom) return false;
+
+        var view = new ViewWindowPayload(slot.ViewCentreHz, (long)spanHz);
+
+        try { await slot.Lock.WaitAsync(ct).ConfigureAwait(false); }
+        catch (ObjectDisposedException) { return false; }
+        try
+        {
+            await slot.Writer.WriteViewWindowAsync(view, ct).ConfigureAwait(false);
+            _logger.LogInformation("SDR {Vfo}: span {Span} Hz applied live (view {Centre} Hz)", vfo, spanHz, view.CentreHz);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDR {Vfo}: failed to push view window — {Message}", vfo, ex.Message);
             return false;
         }
         finally

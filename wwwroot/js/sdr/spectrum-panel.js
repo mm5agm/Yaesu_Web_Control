@@ -1797,10 +1797,11 @@ export class SpectrumPanel {
         }
 
         // Choose a "nice" tick interval that gives roughly 6–12 ticks across the span.
-        // Candidate steps in Hz: 1k, 2k, 5k, 10k, 20k, 25k, 50k, 100k, 200k, 250k,
-        // 500k, 1M, 2M, 5M, 10M. The list used to start at 50k, which gave the
-        // 62.5 kHz span a single tick and the 15.625 and 31.25 kHz spans none.
-        const steps = [1e3, 2e3, 5e3, 10e3, 20e3, 25e3, 50e3, 100e3, 200e3, 250e3, 500e3, 1e6, 2e6, 5e6, 10e6];
+        // Candidate steps in Hz: 100, 200, 250, 500, 1k, 2k, 5k, 10k, 20k, 25k,
+        // 50k, 100k, 200k, 250k, 500k, 1M, 2M, 5M, 10M. The list used to start at
+        // 50k, which gave a 62.5 kHz span a single tick; the sub-kHz steps are
+        // for the 2.5 and 5 kHz software-zoom spans.
+        const steps = [100, 200, 250, 500, 1e3, 2e3, 5e3, 10e3, 20e3, 25e3, 50e3, 100e3, 200e3, 250e3, 500e3, 1e6, 2e6, 5e6, 10e6];
         const targetTicks = 8;
         const stepHz = steps.find(s => spanHz / s <= targetTicks) ?? steps[steps.length - 1];
 

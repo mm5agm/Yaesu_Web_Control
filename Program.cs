@@ -748,9 +748,10 @@ try
         Yaesu_Web_Control.Services.ISettingsService settings,
         Yaesu_Web_Control.Services.Sdr.SdrManager sdr) =>
     {
-        // Must agree with SdrplayDevice.PlanFor and the span buttons in Index.cshtml.
-        double[] valid = [15_625, 31_250, 62_500, 125_000, 250_000, 500_000, 1_000_000, 2_000_000];
-        if (Array.IndexOf(valid, hz) < 0) return Results.BadRequest("Invalid span value.");
+        // The one list the span buttons, the Settings select and the worker
+        // plan all agree on.
+        if (!Yaesu_Web_Control.Services.Sdr.SpectrumSpanPlan.IsValid(hz))
+            return Results.BadRequest("Invalid span value.");
 
         // sdrId defaults to "A" for backward compatibility with any caller
         // that doesn't supply it. v2.3.0+ frontend always sends an explicit
@@ -763,7 +764,12 @@ try
         if (target == "A") s.SdrSampleRateHzA = hz;
         else               s.SdrSampleRateHzB = hz;
         await settings.SaveSettingsAsync(s);
-        sdr.RequestRestart();
+
+        // Between two software-zoom spans the running worker is retasked
+        // in place; anything else changes the hardware rate and needs the
+        // worker respawned.
+        if (!await sdr.TrySetSpanAsync(target, hz))
+            sdr.RequestRestart();
         return Results.Ok();
     });
 #endif
