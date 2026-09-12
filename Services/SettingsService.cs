@@ -169,7 +169,7 @@ namespace Yaesu_Web_Control.Services
         //     fields still gets sane defaults.
         //   - Map any rate retired by the low-IF change onto its nearest
         //     survivor (see below).
-        private const double DefaultSampleRateHz = 2_000_000;
+        private const double DefaultSampleRateHz = 1_000_000;
 
         // Spans that have been retired over the releases. The list has
         // changed twice: once when the spectrum moved to low-IF (only a
@@ -183,12 +183,13 @@ namespace Yaesu_Web_Control.Services
         private static readonly Dictionary<double, double> RetiredSampleRates = new()
         {
             // Pre-low-IF rates.
-            [1_024_000] = 1_000_000,   // same span, now reached as 8 MHz ÷ 8
-            [2_048_000] = 2_000_000,   // same span, now reached as 8 MHz ÷ 4
-            [2_500_000] = 2_000_000,   // no low-IF combination reaches these,
-            [3_200_000] = 2_000_000,   // so they fall back to the widest span
+            [1_024_000] = 1_000_000,
+            [2_048_000] = 1_000_000,
+            [2_500_000] = 1_000_000,
+            [3_200_000] = 1_000_000,
 
             // Low-IF spans that are not on the radio's list.
+            [2_000_000] = 1_000_000,
             [  250_000] =   200_000,
             [  125_000] =   100_000,
 
