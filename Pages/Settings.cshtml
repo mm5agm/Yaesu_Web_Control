@@ -2357,22 +2357,23 @@
                     <div class="mb-3">
                         <label asp-for="Settings.SdrSampleRateHz" class="form-label fw-bold">Span — both VFOs</label>
                         <select asp-for="Settings.SdrSampleRateHz" class="form-select">
-                            <option value="2500">2.5 kHz — one CW signal at a time (software zoom)</option>
-                            <option value="5000">5 kHz — a CW QSO and its neighbours (software zoom)</option>
-                            <option value="10000">10 kHz — a few CW signals or one SSB QSO (software zoom)</option>
-                            <option value="25000">25 kHz — a CW sub-band (software zoom)</option>
+                            <option value="1000">1 kHz — one CW signal (software zoom)</option>
+                            <option value="2000">2 kHz — one CW signal and its close neighbours (software zoom)</option>
+                            <option value="5000">5 kHz — a CW QSO and its neighbours, or one SSB signal (software zoom)</option>
+                            <option value="10000">10 kHz — a few CW signals or a couple of SSB QSOs (software zoom)</option>
+                            <option value="20000">20 kHz — a CW sub-band (software zoom)</option>
                             <option value="50000">50 kHz — a busy slice of band (software zoom)</option>
-                            <option value="125000">125 kHz — best for 30m / 60m</option>
-                            <option value="250000">250 kHz</option>
+                            <option value="100000">100 kHz — best for 30m / 60m (software zoom)</option>
+                            <option value="200000">200 kHz</option>
                             <option value="500000">500 kHz</option>
-                            <option value="1000000">1 MHz</option>
-                            <option value="2000000">2 MHz (recommended)</option>
+                            <option value="1000000">1 MHz (recommended)</option>
                         </select>
                         <div class="form-text">
-                            Wider spans need a higher SDR sample rate and more CPU;
-                            not all devices support all rates. Spans of 125 kHz and
-                            below all run the SDR at 125 kHz and zoom in software,
-                            so switching between them is instant.
+                            The same spans as the radio's own scope. Wider spans need
+                            a higher SDR sample rate and more CPU; not all devices
+                            support all rates. Spans of 100 kHz and below all run the
+                            SDR at 125 kHz and zoom in software, so switching between
+                            them is instant.
                             <strong>Saving this resets both VFOs</strong> to the chosen span;
                             use the span buttons above each spectrum on the main page
                             to set each VFO independently afterwards.

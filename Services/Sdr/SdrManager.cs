@@ -60,11 +60,12 @@ public sealed class SdrManager : BackgroundService
     // makes the reader block forever waiting for bytes that never come).
     private readonly Dictionary<string, WriterSlot> _writers = new();
 
-    // Zoom records whether the session's worker runs the fixed-rate,
-    // cropping regime (see SpectrumSpanPlan); only such a worker can take a
-    // new span as a live ViewWindow message. ViewCentreHz is the dial's
-    // position in that worker's stream, fixed for the session.
-    private sealed record WriterSlot(FrameWriter Writer, SemaphoreSlim Lock, bool Zoom, long ViewCentreHz);
+    // Plan is what the session's worker was started with (see
+    // SpectrumSpanPlan); a new span whose plan has the same hardware
+    // settings can be applied to the running worker as one ViewWindow
+    // message, anything else is a respawn. WideFftSize is the SdrFftSize
+    // setting the plan was made from, needed to plan the next span.
+    private sealed record WriterSlot(FrameWriter Writer, SemaphoreSlim Lock, SpectrumSpanPlan.Plan Plan, int WideFftSize);
 
     private readonly object _activeLock = new();
 
@@ -209,7 +210,7 @@ public sealed class SdrManager : BackgroundService
             // Now safe to expose the writer to the controller. The per-slot
             // semaphore serialises any subsequent slider POSTs.
             var writeLock = new SemaphoreSlim(1, 1);
-            lock (_activeLock) _writers[vfo] = new WriterSlot(writer, writeLock, plan.IsZoom, plan.ViewCentreHz);
+            lock (_activeLock) _writers[vfo] = new WriterSlot(writer, writeLock, plan, config.SdrFftSize);
 
             int heartbeatCounter = 0;
 
@@ -332,27 +333,33 @@ public sealed class SdrManager : BackgroundService
 
     /// <summary>
     /// Change the span of a running worker without restarting it. Only
-    /// possible when the worker is already in the software-zoom regime and
-    /// the new span is too (see SpectrumSpanPlan): the hardware rate is the
-    /// same, so the change is one ViewWindow message. Returns false when a
-    /// restart is needed instead — the caller has already persisted the new
-    /// span, so RequestRestart picks it up.
+    /// possible when the new span's plan runs the hardware exactly as the
+    /// worker already does (see SpectrumSpanPlan) — in practice, between two
+    /// software-zoom spans — so the change is one ViewWindow message.
+    /// Returns false when a restart is needed instead — the caller has
+    /// already persisted the new span, so RequestRestart picks it up.
     /// </summary>
     public async Task<bool> TrySetSpanAsync(string vfo, double spanHz, CancellationToken ct = default)
     {
-        if (!SpectrumSpanPlan.IsZoom(spanHz)) return false;
-
         WriterSlot? slot;
         lock (_activeLock) _writers.TryGetValue(vfo, out slot);
-        if (slot == null || !slot.Zoom) return false;
+        if (slot == null) return false;
 
-        var view = new ViewWindowPayload(slot.ViewCentreHz, (long)spanHz);
+        // The slot's plan already carries the resolved crop centre, so it is
+        // passed back in as the SDR centre with no IF OUT override.
+        var plan = SpectrumSpanPlan.For(spanHz, slot.WideFftSize, slot.Plan.ViewCentreHz, null);
+        if (!plan.SameHardwareAs(slot.Plan)) return false;
+
+        var view = new ViewWindowPayload(plan.ViewCentreHz, plan.ViewSpanHz);
 
         try { await slot.Lock.WaitAsync(ct).ConfigureAwait(false); }
         catch (ObjectDisposedException) { return false; }
         try
         {
             await slot.Writer.WriteViewWindowAsync(view, ct).ConfigureAwait(false);
+            lock (_activeLock)
+                if (_writers.TryGetValue(vfo, out var current) && ReferenceEquals(current, slot))
+                    _writers[vfo] = slot with { Plan = plan };
             _logger.LogInformation("SDR {Vfo}: span {Span} Hz applied live (view {Centre} Hz)", vfo, spanHz, view.CentreHz);
             return true;
         }

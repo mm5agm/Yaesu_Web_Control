@@ -1,18 +1,23 @@
 // Yaesu Web Control — SpectrumSpanPlan
 //
 // Turns the span an operator picked into what the SDR worker is actually
-// asked to do. Two regimes:
+// asked to do. The span list is the FTdx101's own scope list — 1k, 2k, 5k,
+// 10k, 20k, 50k, 100k, 200k, 500k, 1M — so the panel and the radio's screen
+// offer the same choices. The SDR cannot be run at most of those rates, so
+// each span is served one of two ways:
 //
-//   * 250 kHz and up: span IS the hardware sample rate, as it always was.
-//     SdrplayDevice.PlanFor maps each rate onto a decimation the API's
-//     low-IF rules allow; a change of span is a worker respawn.
-//
-//   * 125 kHz and below: the hardware sits at a fixed 125 kHz and the worker
+//   * 100 kHz and below: the hardware sits at a fixed 125 kHz and the worker
 //     runs a 16k-point FFT (7.6 Hz per bin), crops the bins under the wanted
 //     window and sends only those. The span is then a display property —
-//     switching between 2.5 k and 125 k is one control message to a running
+//     switching between 1 k and 100 k is one control message to a running
 //     worker, with no retune, no blank trace and no chance to leak the
 //     device on the way (see project memory on SDRplayAPIService leaks).
+//
+//   * Above that: the hardware runs at the tightest rate SdrplayDevice.PlanFor
+//     can reach that still covers the span (250 k, 500 k, 1 M), and the
+//     worker crops to the span where the two differ — 200 kHz is a crop of
+//     the 250 kHz stream; 500 kHz and 1 MHz are the stream itself. A change
+//     of hardware rate is a worker respawn.
 //
 // The dividing line is the RSP1's decimation floor. Below 125 kHz the API
 // would have to decimate by 32 to get bins as fine as a CW operator wants,
@@ -20,7 +25,7 @@
 // R/N Hz per bin and R/N frames a second, the same number. Overlapping the
 // FFTs in software (hop < N) breaks that link; decimating harder does not.
 //
-// Radio-specific in one respect only: the crop is centred on the radio's IF
+// Radio-specific in one respect only: a crop is centred on the radio's IF
 // OUT frequency (the dial), not on where the SDR happens to be tuned, which
 // on the FTdx101 is 5 kHz below it. Pure DSP lives in core (SpectrumZoom);
 // this file is the YWC-side policy for driving it.
@@ -43,27 +48,34 @@ namespace Yaesu_Web_Control.Services.Sdr
         public const int ZoomHopSize = 4096;
 
         /// <summary>
-        /// Every span the UI offers, in Hz. Must agree with the span buttons
-        /// in Index.cshtml and the Settings page select. The wide half must
-        /// also agree with SdrplayDevice.PlanFor.
+        /// Every span the UI offers, in Hz — the FTdx101's own scope spans.
+        /// Must agree with the span buttons in Index.cshtml and the Settings
+        /// page select.
         /// </summary>
         public static readonly double[] ValidSpans =
         [
-            2_500, 5_000, 10_000, 25_000, 50_000, 125_000,
-            250_000, 500_000, 1_000_000, 2_000_000,
+            1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000,
+            200_000, 500_000, 1_000_000,
         ];
+
+        /// <summary>
+        /// Hardware rates the wide regime may ask for, ascending. Each is a
+        /// row of SdrplayDevice.PlanFor; a span is served by the first one
+        /// that covers it.
+        /// </summary>
+        private static readonly double[] WideRatesHz = [250_000, 500_000, 1_000_000];
 
         public static bool IsValid(double spanHz) => Array.IndexOf(ValidSpans, spanHz) >= 0;
 
-        /// <summary>True when the span is served by cropping a fixed-rate stream.</summary>
+        /// <summary>True when the span is served by cropping the fixed 125 kHz stream.</summary>
         public static bool IsZoom(double spanHz) => spanHz <= ZoomRateHz;
 
         /// <summary>What to start (or retask) a worker with for one span.</summary>
         /// <param name="HardwareRateHz">Sample rate the SDR is configured for.</param>
         /// <param name="FftSize">FFT length the worker runs.</param>
         /// <param name="HopSize">Samples between FFTs; equals FftSize when not overlapped.</param>
-        /// <param name="ViewCentreHz">Centre of the cropped window, or 0 for "send everything".</param>
-        /// <param name="ViewSpanHz">Width of the cropped window, or 0 for "send everything".</param>
+        /// <param name="ViewCentreHz">Where the dial sits in the stream — the centre of any crop.</param>
+        /// <param name="ViewSpanHz">Width of the cropped window, or 0 for "send the whole stream".</param>
         public readonly record struct Plan(
             double HardwareRateHz,
             int    FftSize,
@@ -71,7 +83,18 @@ namespace Yaesu_Web_Control.Services.Sdr
             long   ViewCentreHz,
             long   ViewSpanHz)
         {
-            public bool IsZoom => ViewSpanHz > 0;
+            /// <summary>True when the worker crops its FFT rather than sending all of it.</summary>
+            public bool Crops => ViewSpanHz > 0;
+
+            /// <summary>
+            /// True when a worker running <paramref name="other"/> can be
+            /// retasked to this plan by a ViewWindow message alone — the
+            /// device and FFT settings are the same, only the crop differs.
+            /// </summary>
+            public bool SameHardwareAs(Plan other) =>
+                HardwareRateHz == other.HardwareRateHz &&
+                FftSize        == other.FftSize        &&
+                HopSize        == other.HopSize;
         }
 
         /// <summary>
@@ -83,19 +106,26 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// <param name="ifOutHz">
         /// The radio's IF OUT frequency for this receiver, i.e. where the dial
         /// sits in the SDR's stream, or null when it is not known for the
-        /// model — the crop is then centred on the SDR's own tune frequency.
+        /// model — a crop is then centred on the SDR's own tune frequency.
         /// </param>
         public static Plan For(double spanHz, int wideFftSize, long sdrCentreHz, long? ifOutHz)
         {
-            if (!IsZoom(spanHz))
-                return new Plan(spanHz, wideFftSize, wideFftSize, 0, 0);
-
             // SpectrumZoom.Crop slides a window that would run off the edge
             // of the stream back inside it, so a centre a few kHz off the
-            // SDR's tune point needs no clamping here; and asking for the
-            // full 125 kHz simply yields the whole stream, thinned.
+            // SDR's tune point needs no clamping here.
             long centre = ifOutHz ?? sdrCentreHz;
-            return new Plan(ZoomRateHz, ZoomFftSize, ZoomHopSize, centre, (long)spanHz);
+
+            if (IsZoom(spanHz))
+                return new Plan(ZoomRateHz, ZoomFftSize, ZoomHopSize, centre, (long)spanHz);
+
+            double rate = WideRatesHz[^1];
+            foreach (double r in WideRatesHz)
+                if (r >= spanHz) { rate = r; break; }
+
+            // A span that is exactly a hardware rate sends the whole stream
+            // (span 0 = no crop); anything narrower is cropped out of the
+            // next rate up.
+            return new Plan(rate, wideFftSize, wideFftSize, centre, rate == spanHz ? 0 : (long)spanHz);
         }
     }
 }
