@@ -5,6 +5,12 @@ Bench-checked on an FTdx101MP (MONO W/F layout) 2026-09-12: zones align,
 click-to-tune works in CENTER, and every hotspot below does what the table
 says.
 
+FTdx10 MONO W/F layout is in `LAYOUTS.FTdx10` from pixel boxes measured
+2026-09-12 on an 800-wide frame (converted as 800×600). No ANT; no MONO /
+HOLD / MEM CH; SPEED is a hotspot. Not yet nudged on a live overlay.
+**FT-710** stays off. IF-OUT axis correction is not part of this overlay
+and is not applicable to the FTdx10 (no IF tap).
+
 ## The idea
 
 Remote Video shows the radio's own screen as an MJPEG stream. CAT Scope
@@ -76,9 +82,11 @@ own scope is showing the operator exactly where its filter sits.
 | AGC | cycle OFF → FAST → MID → SLOW → AUTO | `/api/cat/agc/{a\|b}` |
 | CURSOR | CENTER → CURSOR → FIX | `RadioScopeControl.cyclePlacement()` |
 | SPAN | next span | `RadioScopeControl.cycleSpan()` |
+| SPEED | next FFT speed (FTdx10) | `RadioScopeControl.cycleSpeed()` |
 | 3DSS | W/F ↔ 3DSS | `RadioScopeControl.toggle3dss()` |
-| HOLD | toggle | `RadioScopeControl.toggleHold()` |
-| MONO / MULTI / EXPAND / MEM CH | nothing — the label flashes red saying there is no CAT command | — |
+| EXPAND | L / N / S on FTdx10; no CAT on FTdx101 | `RadioScopeControl.cycleSize()` / flash |
+| HOLD | toggle (FTdx101; not on the FTdx10 TFT row) | `RadioScopeControl.toggleHold()` |
+| MONO / MULTI / MEM CH | nothing — the label flashes red saying there is no CAT command | — |
 
 Cycling needs the current value. The overlay keeps its own small state
 cache, seeded from `/api/cat/status` (which now also returns `att`, `ipo`,
@@ -93,18 +101,22 @@ value cycles to the first entry of the ring rather than doing nothing.
 W/F layout, so every rectangle is ±0.5 % and **expected to need nudging on
 the bench**. Tools for that:
 
-- `localStorage['ywc.radioDisplayHotspots.debug'] = '1'` (or
-  `window.radioDisplayHotspots.debug(true)`) draws every zone and the
-  detected marker over the video.
-- `window.radioDisplayHotspots.snapshot()` opens the current frame at native
-  size in a new tab for measuring.
-- `localStorage['ywc.radioDisplayHotspots.layout']` — a JSON layout in the
-  same shape as `LAYOUTS.FTdx101` overrides the built-in table without a
-  rebuild. Once a layout is right, paste it into the table.
+- `window.radioDisplayHotspots.debug(true)` draws every zone and the
+  detected marker over the video. A white frame around the whole TFT is
+  the overlay's (0,0)–(1,1) space — if the boxes sit in the corner, they
+  were measured from a crop, not that frame.
+- `window.radioDisplayHotspots.measure()` — drag a box on the live picture
+  for each zone in order (ATT → MEM CH). Do not type fractions.
+- `window.radioDisplayHotspots.snapshot()` downloads `radio-display-snapshot.png`
+  (Chrome blanks a `data:` image tab).
+- `localStorage['ywc.radioDisplayHotspots.layout.<RadioModel>']` overrides
+  the built-in table. `dump()` writes the current layout there.
 
 ## Known gaps
 
-- **One layout.** MONO W/F on the FTdx101 only. EXPAND, MULTI, the dual
+- **One layout per measured radio.** MONO W/F on the FTdx101 and FTdx10 is
+  in the table. FTdx10 has no ANT, no MONO/HOLD/MEM CH on that row, and
+  SPEED instead; EXPAND cycles L/N/S. EXPAND/MULTI as *layouts*, the dual
   MAIN/SUB view and 3DSS all move or reshape the scope box, and none of
   those layouts is readable over CAT (`SS` reports W/F vs 3DSS and the
   placement, not MONO/EXPAND/MULTI). Options, in rough order of preference:
@@ -112,15 +124,18 @@ the bench**. Tools for that:
   horizontal run of colour), a layout selector in the toolbar, or a table
   per layout with the operator telling us which one is up.
 - **Marker colour is assumed red.** Verified only for colour scheme 1 in
-  the screenshot. If another scheme draws it differently, the scan
+  the FTdx101 screenshot. If another scheme draws it differently, the scan
   threshold needs to follow the `SS` colour setting.
-- **FTdx10 / FT-710 layouts** are unmeasured. The module returns quietly
-  when it has no layout for the model.
-- **Roofing-filter ring** includes the optional 1.2 kHz and 300 Hz filters.
-  When one is not fitted the server answers `{ warning: true }` and the
-  radio stays put, so the click carries on round the ring until one is
-  accepted (bench, 2026-09-12: 12 kHz -> 3 kHz -> stuck retrying 1.2 kHz
-  before this). Reading the fitted set up front is a follow-up.
+- **FT-710 layout** is unmeasured. The module returns quietly when it has
+  no layout for the model.
+- **IF-OUT / SDR axis** is a different subsystem. It stays FTdx101-only;
+  the FTdx10 has no IF tap, so those numbers must not be copied here.
+- **Roofing-filter ring** includes the optional filters (1.2 kHz / 300 Hz
+  on the 101; optional 300 Hz on the 10). When one is not fitted the
+  server answers `{ warning: true }` and the radio stays put, so the click
+  carries on round the ring until one is accepted (bench, 2026-09-12:
+  12 kHz -> 3 kHz -> stuck retrying 1.2 kHz before this). Reading the
+  fitted set up front is a follow-up.
 - No touch handling beyond what `click` gives for free.
 
 ## Why this is YWC-only

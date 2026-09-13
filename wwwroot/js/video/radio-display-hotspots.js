@@ -30,19 +30,38 @@
 // (see USER_MANUAL on video capture resolution), so fractions survive a change
 // of capture size where pixel offsets would not.
 //
-// Everything here is measured on an FTdx101MP in the MONO W/F layout from a
-// screenshot, and is expected to need nudging on the bench. Set
-// localStorage['ywc.radioDisplayHotspots.debug'] = '1' (or call
-// window.radioDisplayHotspots.debug(true)) to draw every zone and the detected
-// marker over the video, and window.radioDisplayHotspots.snapshot() to open
-// the current frame at native size for measuring. A corrected layout can be
-// dropped into localStorage['ywc.radioDisplayHotspots.layout'] as JSON
-// without a rebuild.
+// FTdx101MP/D MONO W/F is measured. FTdx10 MONO W/F is measured from
+// pixel boxes on an 800×600 frame (2026-09-12): no ANT, no MONO/HOLD/MEM CH,
+// SPEED instead. FT-710 stays off.
+//
+// Bench tools: localStorage['ywc.radioDisplayHotspots.debug'] = '1' (or
+// window.radioDisplayHotspots.debug(true)) draws every zone and the detected
+// marker; snapshot() opens the current frame at native size. A layout override
+// goes in localStorage['ywc.radioDisplayHotspots.layout.<RadioModel>'] as JSON
+// (e.g. ...layout.FTdx10) so a 101 nudge cannot leak onto a 10. reloadLayout()
+// re-reads that key without a rebuild. measure() lets you drag boxes on the
+// live picture instead of typing fractions. The unscoped
+// ywc.radioDisplayHotspots.layout key is still read for FTdx101 only.
 //
 // YWC-local: Remote Video is permanently YWC-only (see CLAUDE.md).
 
 const DEBUG_KEY  = 'ywc.radioDisplayHotspots.debug';
 const LAYOUT_KEY = 'ywc.radioDisplayHotspots.layout';
+
+function layoutStorageKey(radioModel) {
+    const m = String(radioModel || '').trim();
+    return m ? `${LAYOUT_KEY}.${m}` : LAYOUT_KEY;
+}
+
+function isFtdx101(radioModel) {
+    return /^FTdx101/i.test(radioModel || '');
+}
+
+function isFtdx10(radioModel) {
+    // Must not match FTdx101. The 101 test runs first in layoutFor; this is
+    // the exact model string Settings stores for the FTdx10.
+    return /^FTdx10$/i.test(radioModel || '');
+}
 
 // SS span code -> Hz. Mirrors the span table in radio-scope.js.
 const SPAN_HZ = [1e3, 2e3, 5e3, 1e4, 2e4, 5e4, 1e5, 2e5, 5e5, 1e6];
@@ -92,6 +111,32 @@ const LAYOUTS = {
             memch:  [0.854, 0.847, 0.971, 0.902],
         },
     },
+    // FTdx10 MONO W/F. Pixel boxes from Fabio 2026-09-12 on an 800-wide
+    // frame (treated as 800×600, the EXT MONITOR PIXEL we recommend).
+    // No ANT (one jack). No MONO / HOLD / MEM CH on this layout. Button
+    // row is CURSOR, 3DSS, MULTI, EXPAND, SPAN, SPEED.
+    // plot covers spectrum+waterfall; marker is the upper strip only
+    // (their two y-ranges were swapped vs the 101 names).
+    FTdx10: {
+        readouts: {
+            att:  [0.000, 0.283, 0.138, 0.400],
+            ipo:  [0.139, 0.283, 0.275, 0.400],
+            rfil: [0.276, 0.283, 0.413, 0.400],
+            agc:  [0.414, 0.283, 0.550, 0.400],
+        },
+        scope: {
+            plot:   [0.000, 0.433, 1.000, 0.767],
+            marker: [0.000, 0.433, 1.000, 0.533],
+        },
+        buttons: {
+            cursor: [0.000, 0.800, 0.163, 0.900],
+            dss3:   [0.163, 0.800, 0.325, 0.900],
+            multi:  [0.325, 0.800, 0.488, 0.900],
+            expand: [0.488, 0.800, 0.650, 0.900],
+            span:   [0.650, 0.800, 0.813, 0.900],
+            speed:  [0.813, 0.800, 0.975, 0.900],
+        },
+    },
 };
 
 const NO_CAT = {
@@ -101,17 +146,73 @@ const NO_CAT = {
     memch:  'MEM CH has no CAT command',
 };
 
+function emptyLayout() {
+    return { readouts: {}, buttons: {}, scope: {} };
+}
+
 function layoutFor(radioModel) {
     try {
-        const raw = localStorage.getItem(LAYOUT_KEY);
-        if (raw) return JSON.parse(raw);
+        const keyed = localStorage.getItem(layoutStorageKey(radioModel));
+        if (keyed) return JSON.parse(keyed);
+        // Legacy unscoped key: FTdx101 only, so a 101 bench override cannot
+        // leak onto an FTdx10.
+        if (isFtdx101(radioModel)) {
+            const legacy = localStorage.getItem(LAYOUT_KEY);
+            if (legacy) return JSON.parse(legacy);
+        }
     } catch { /* fall through to the built-in table */ }
-    if (/^FTdx101/i.test(radioModel || '')) return LAYOUTS.FTdx101;
+    if (isFtdx101(radioModel)) return LAYOUTS.FTdx101;
+    if (isFtdx10(radioModel)) return LAYOUTS.FTdx10 || null;
     return null;
 }
 
-function inZone(z, fx, fy) {
-    return !!z && fx >= z[0] && fx <= z[2] && fy >= z[1] && fy <= z[3];
+function roundFrac(n) {
+    return Math.round(n * 1000) / 1000;
+}
+
+// Accept [l,t,r,b] fractions, the same in pixels (any value > 1), [x,y,w,h]
+// when right/bottom is a size, a comma string, or {left,top,right,bottom}.
+function normalizeZone(z, nw, nh) {
+    if (!z) return null;
+    let a;
+    if (typeof z === 'string') a = z.trim().split(/[\s,]+/).map(Number);
+    else if (Array.isArray(z)) a = z.map(Number);
+    else if (typeof z === 'object') {
+        if (z.left != null) a = [+z.left, +z.top, +z.right, +z.bottom];
+        else if (z.x != null && (z.w != null || z.width != null))
+            a = [+z.x, +z.y, +z.x + +(z.w ?? z.width), +z.y + +(z.h ?? z.height)];
+        else return null;
+    } else return null;
+    if (!a || a.length < 4 || a.some(n => !Number.isFinite(n))) return null;
+    let [l, t, r, b] = a;
+    if (Math.max(l, t, r, b) > 1 && nw > 0 && nh > 0) {
+        l /= nw; t /= nh; r /= nw; b /= nh;
+    }
+    if (r < l) r = l + r;
+    if (b < t) b = t + b;
+    return [roundFrac(l), roundFrac(t), roundFrac(r), roundFrac(b)];
+}
+
+function inZone(z, fx, fy, nw, nh) {
+    const r = normalizeZone(z, nw, nh);
+    return !!r && fx >= r[0] && fx <= r[2] && fy >= r[1] && fy <= r[3];
+}
+
+const MEASURE_FTDX10 = [
+    'readouts.att', 'readouts.ipo', 'readouts.rfil', 'readouts.agc',
+    'scope.plot', 'scope.marker',
+    'buttons.cursor', 'buttons.dss3', 'buttons.multi', 'buttons.expand',
+    'buttons.span', 'buttons.speed',
+];
+
+function setPath(obj, path, value) {
+    const parts = path.split('.');
+    let o = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+        if (!o[parts[i]] || typeof o[parts[i]] !== 'object') o[parts[i]] = {};
+        o = o[parts[i]];
+    }
+    o[parts[parts.length - 1]] = value;
 }
 
 function formatHz(hz) {
@@ -134,6 +235,10 @@ export class RadioDisplayHotspots {
         this.dualReceiver = !!opts.dualReceiver;
         this.getScopeControl = opts.getScopeControl || (() => null);
         this.layout = layoutFor(this.radioModel);
+        // FTdx10 has no committed fractions yet. Still build the overlay so
+        // snapshot() / debug() / reloadLayout() work on a live capture; an
+        // empty table means clicks hit nothing until a measured layout is loaded.
+        if (!this.layout && isFtdx10(this.radioModel)) this.layout = emptyLayout();
 
         // Radio state the hotspots need. Seeded from /api/cat/status, then kept
         // current by onRadioState() from the page's SignalR handler.
@@ -149,6 +254,8 @@ export class RadioDisplayHotspots {
         this._busy = false;
         this._lastScopeRefresh = 0;
         this._debug = localStorage.getItem(DEBUG_KEY) === '1';
+        this._measureQueue = [];
+        this._measureDrag = null;
 
         if (!this.img || !this.pane || !this.layout) return;
         this._buildOverlay();
@@ -184,12 +291,75 @@ export class RadioDisplayHotspots {
         this._drawDebug();
     }
 
-    /** Open the current frame at native size in a new tab, for measuring. */
+    /**
+     * Open the current frame at native size for measuring.
+     * Chrome blocks top-level data: image URLs (blank white tab), so this
+     * uses a blob URL and also downloads radio-display-snapshot.png.
+     */
     snapshot() {
-        if (!this._grabFrame()) return null;
-        const url = this._canvas.toDataURL('image/png');
-        window.open(url, '_blank');
-        return url;
+        if (!this._grabFrame()) {
+            console.warn('[radio-display-hotspots] snapshot: no frame (is the stream running?)');
+            return null;
+        }
+        this._canvas.toBlob(blob => {
+            if (!blob) {
+                console.warn('[radio-display-hotspots] snapshot: canvas produced no image');
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'radio-display-snapshot.png';
+            a.click();
+            const w = window.open(url, '_blank');
+            if (!w) console.warn('[radio-display-hotspots] snapshot: pop-up blocked; use the downloaded PNG');
+            // Keep the blob alive while the tab loads. Revoking immediately
+            // blanks the tab the same way a blocked data: URL does.
+            setTimeout(() => URL.revokeObjectURL(url), 120000);
+        }, 'image/png');
+        return this._canvas;
+    }
+
+    /**
+     * Re-read the per-model localStorage override (or the built-in table).
+     * After pasting JSON into ywc.radioDisplayHotspots.layout.FTdx10, call
+     * this instead of reloading the page.
+     */
+    reloadLayout() {
+        this.layout = layoutFor(this.radioModel);
+        if (!this.layout && isFtdx10(this.radioModel)) this.layout = emptyLayout();
+        if (!this.overlay && this.img && this.pane && this.layout) {
+            this._buildOverlay();
+            this._seed();
+        }
+        if (this.overlay) this._syncOverlay();
+        else this._drawDebug();
+        return this.layout;
+    }
+
+    /**
+     * Draw zones on the live picture. Drag a box around each control in order
+     * (ATT, IPO, R.FIL, AGC, plot, marker, then the soft-buttons). The label
+     * says which one is next. At the end the JSON is stored and printed.
+     */
+    measure() {
+        this.debug(true);
+        if (!this.layout || !this.layout.readouts) this.layout = emptyLayout();
+        this._measureQueue = MEASURE_FTDX10.slice();
+        this._measureDrag = null;
+        const next = this._measureQueue[0];
+        this._flash(`draw ${next} — drag a box on the picture`);
+        if (this.overlay) this.overlay.style.cursor = 'crosshair';
+        console.info('[radio-display-hotspots] measure:', next);
+        return next;
+    }
+
+    dump() {
+        const json = JSON.stringify(this.layout, null, 2);
+        console.log('[radio-display-hotspots] layout\n' + json);
+        try { localStorage.setItem(layoutStorageKey(this.radioModel), JSON.stringify(this.layout)); }
+        catch { /* private mode */ }
+        return this.layout;
     }
 
     // ── overlay ──────────────────────────────────────────────────────────────
@@ -207,8 +377,12 @@ export class RadioDisplayHotspots {
         this.cursorEl = ov.querySelector('.rdh-cursor');
         this.labelEl = ov.querySelector('.rdh-label');
 
+        ov.addEventListener('pointerdown', e => this._onDown(e));
         ov.addEventListener('pointermove', e => this._onMove(e));
-        ov.addEventListener('pointerleave', () => this._hideCursor());
+        ov.addEventListener('pointerup', e => this._onUp(e));
+        ov.addEventListener('pointerleave', () => {
+            if (!this._measureDrag) this._hideCursor();
+        });
         ov.addEventListener('click', e => this._onClick(e));
         window.addEventListener('resize', () => this._drawDebug());
 
@@ -259,21 +433,52 @@ export class RadioDisplayHotspots {
         return { fx: (e.clientX - r.left) / r.width, fy: (e.clientY - r.top) / r.height, rect: r };
     }
 
+    _nat() {
+        return { nw: this.img?.naturalWidth || 0, nh: this.img?.naturalHeight || 0 };
+    }
+
     _hit(fx, fy) {
         const L = this.layout;
+        const { nw, nh } = this._nat();
         for (const [id, z] of Object.entries(L.readouts || {}))
-            if (inZone(z, fx, fy)) return { kind: 'readout', id };
+            if (inZone(z, fx, fy, nw, nh)) return { kind: 'readout', id };
         for (const [id, z] of Object.entries(L.buttons || {}))
-            if (inZone(z, fx, fy)) return { kind: 'button', id };
-        if (inZone(L.scope?.plot, fx, fy)) return { kind: 'scope' };
+            if (inZone(z, fx, fy, nw, nh)) return { kind: 'button', id };
+        if (inZone(L.scope?.plot, fx, fy, nw, nh)) return { kind: 'scope' };
         return null;
     }
 
     // ── pointer handling ─────────────────────────────────────────────────────
 
+    _onDown(e) {
+        if (!this._measureQueue.length) return;
+        const f = this._frac(e);
+        if (!f) return;
+        e.preventDefault();
+        this.overlay.setPointerCapture?.(e.pointerId);
+        this._measureDrag = { x0: f.fx, y0: f.fy, x1: f.fx, y1: f.fy };
+    }
+
     _onMove(e) {
         const f = this._frac(e);
         if (!f) return;
+
+        if (this._measureDrag) {
+            this._measureDrag.x1 = f.fx;
+            this._measureDrag.y1 = f.fy;
+            const z = this._dragZone();
+            this._showCursor(null, `${this._measureQueue[0]}  [${z.join(', ')}]`);
+            this._drawDebug();
+            this.overlay.style.cursor = 'crosshair';
+            return;
+        }
+
+        if (this._measureQueue.length) {
+            this.overlay.style.cursor = 'crosshair';
+            this._showCursor(null, `draw ${this._measureQueue[0]}`);
+            return;
+        }
+
         const hit = this._hit(f.fx, f.fy);
         this.overlay.style.cursor = hit ? (hit.kind === 'scope' ? 'crosshair' : 'pointer') : 'default';
 
@@ -287,7 +492,29 @@ export class RadioDisplayHotspots {
         this._showCursor(null, this._describe(hit));
     }
 
+    _onUp(e) {
+        if (!this._measureDrag || !this._measureQueue.length) return;
+        const f = this._frac(e);
+        if (f) { this._measureDrag.x1 = f.fx; this._measureDrag.y1 = f.fy; }
+        const z = this._dragZone();
+        const path = this._measureQueue.shift();
+        setPath(this.layout, path, z);
+        this._measureDrag = null;
+        this.dump();
+        if (this._measureQueue.length) this._flash(`draw ${this._measureQueue[0]}`);
+        else this._flash('layout saved — paste the console JSON if it looks right');
+        this._drawDebug();
+    }
+
+    _dragZone() {
+        const d = this._measureDrag;
+        const l = Math.min(d.x0, d.x1), t = Math.min(d.y0, d.y1);
+        const r = Math.max(d.x0, d.x1), b = Math.max(d.y0, d.y1);
+        return [roundFrac(l), roundFrac(t), roundFrac(r), roundFrac(b)];
+    }
+
     _onClick(e) {
+        if (this._measureQueue.length) { e.preventDefault(); e.stopPropagation(); return; }
         const f = this._frac(e);
         if (!f || this._busy) return;
         const hit = this._hit(f.fx, f.fy);
@@ -298,7 +525,7 @@ export class RadioDisplayHotspots {
             return;
         }
         if (hit.kind === 'readout') this._cycleReadout(hit.id);
-        else if (NO_CAT[hit.id]) this._flash(NO_CAT[hit.id]);
+        else if (this._noCat(hit.id)) this._flash(this._noCat(hit.id));
         else this._pressButton(hit.id);
     }
 
@@ -319,6 +546,11 @@ export class RadioDisplayHotspots {
 
     _hideCursor() { this._showCursor(null, ''); }
 
+    _noCat(id) {
+        if (id === 'expand' && isFtdx10(this.radioModel)) return null;
+        return NO_CAT[id] || null;
+    }
+
     _describe(hit) {
         const vfo = this._vfo();
         const s = this.state[vfo];
@@ -330,9 +562,11 @@ export class RadioDisplayHotspots {
             case 'agc':  return `AGC ${s.agc || '?'} — click to cycle`;
             case 'cursor': return 'CENTER / CURSOR / FIX';
             case 'span':   return 'Next span';
+            case 'speed':  return 'Next FFT speed';
             case 'dss3':   return 'W/F ↔ 3DSS';
+            case 'expand': return isFtdx10(this.radioModel) ? 'L / N / S' : (NO_CAT.expand || 'expand');
             case 'hold':   return 'HOLD';
-            default:       return NO_CAT[hit.id] || hit.id;
+            default:       return this._noCat(hit.id) || hit.id;
         }
     }
 
@@ -371,7 +605,9 @@ export class RadioDisplayHotspots {
         const vfoHz = this.state[this._vfo()].hz;
         if (!vfoHz) return { ok: false, why: 'VFO unknown' };
 
-        const plot = this.layout.scope.plot;
+        const { nw, nh } = this._nat();
+        const plot = normalizeZone(this.layout?.scope?.plot, nw, nh);
+        if (!plot) return { ok: false, why: 'no plot layout' };
         const width = plot[2] - plot[0];
         let markerFx = this._findMarker();
         if (markerFx === null) {
@@ -406,7 +642,9 @@ export class RadioDisplayHotspots {
         this._marker.x = null;
 
         if (!this._grabFrame()) return null;
-        const z = this.layout.scope.marker;
+        const { nw, nh } = this._nat();
+        const z = normalizeZone(this.layout?.scope?.marker, nw, nh);
+        if (!z) return null;
         const W = this._canvas.width, H = this._canvas.height;
         const x0 = Math.round(z[0] * W), x1 = Math.round(z[2] * W);
         const y0 = Math.round(z[1] * H), y1 = Math.round(z[3] * H);
@@ -499,7 +737,9 @@ export class RadioDisplayHotspots {
         switch (id) {
             case 'cursor': return sc.cyclePlacement?.();
             case 'span':   return sc.cycleSpan?.();
+            case 'speed':  return sc.cycleSpeed?.();
             case 'dss3':   return sc.toggle3dss?.();
+            case 'expand': return sc.cycleSize?.();
             case 'hold':   return sc.toggleHold?.();
             default:       return;   // no CAT equivalent; the hover text says so
         }
@@ -540,10 +780,16 @@ export class RadioDisplayHotspots {
         const g = c.getContext('2d');
         g.clearRect(0, 0, c.width, c.height);
         g.font = '11px sans-serif';
+        // Frame of the overlay coordinate space — if this is not around the
+        // whole TFT, the overlay is not sitting on the picture.
+        g.strokeStyle = 'rgba(255,255,255,0.55)';
+        g.strokeRect(0.5, 0.5, c.width - 1, c.height - 1);
+        const { nw, nh } = this._nat();
         const box = (z, colour, label) => {
-            if (!z) return;
-            const x = z[0] * c.width, y = z[1] * c.height;
-            const w = (z[2] - z[0]) * c.width, h = (z[3] - z[1]) * c.height;
+            const r = normalizeZone(z, nw, nh);
+            if (!r) return;
+            const x = r[0] * c.width, y = r[1] * c.height;
+            const w = (r[2] - r[0]) * c.width, h = (r[3] - r[1]) * c.height;
             g.strokeStyle = colour; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, w, h);
             g.fillStyle = colour; g.fillText(label, x + 3, y + 12);
         };
@@ -552,6 +798,7 @@ export class RadioDisplayHotspots {
         for (const [id, z] of Object.entries(L.buttons || {})) box(z, '#ff0', id);
         box(L.scope?.plot, '#0ff', 'plot');
         box(L.scope?.marker, '#f0f', 'marker scan');
+        if (this._measureDrag) box(this._dragZone(), '#fff', this._measureQueue[0] || 'drag');
         const mx = this._findMarker();
         if (mx !== null) {
             g.strokeStyle = '#fff'; g.setLineDash([4, 3]);
