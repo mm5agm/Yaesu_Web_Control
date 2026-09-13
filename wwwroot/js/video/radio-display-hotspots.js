@@ -9,9 +9,17 @@
 //     readout of the frequency under the cursor;
 //   * the ANT / ATT / IPO / R.FIL / AGC readouts cycle their setting on click,
 //     over the same /api/cat endpoints the toolbar selects already use;
-//   * the scope soft-buttons (CURSOR, SPAN, 3DSS, HOLD) drive the CAT scope
-//     control; the ones with no CAT equivalent (MONO, MULTI, EXPAND, MEM CH)
-//     say so instead of pretending.
+//   * the scope soft-buttons drive the CAT scope control; the ones with no
+//     CAT equivalent say so instead of pretending.
+//
+// A zone is WHERE something is drawn AND WHAT clicking it should do, because
+// the same soft-key means different things on different radios. EXPAND is the
+// proof: on the FTdx101 it expands the scope vertically and has no CAT
+// command (L/N/S is cycled by touching the waterfall itself); on the FTdx10
+// it cycles L/N/S over CAT; on the FT-710 it toggles EXPAND/NORMAL. So each
+// zone in LAYOUTS carries an `action` from the ACTIONS vocabulary below, and
+// the radio model is looked up exactly once, in builtinFor(). Nothing in the
+// hover/click path asks which radio it is talking to.
 //
 // Frequency under the cursor is worked out from the VFO marker line, not from
 // the left-hand edge of the box. The radio draws the marker at the VFO
@@ -30,9 +38,10 @@
 // (see USER_MANUAL on video capture resolution), so fractions survive a change
 // of capture size where pixel offsets would not.
 //
-// FTdx101MP/D MONO W/F is measured. FTdx10 MONO W/F is measured from
-// pixel boxes on an 800×600 frame (2026-09-12): no ANT, no MONO/HOLD/MEM CH,
-// SPEED instead. FT-710 stays off.
+// FTdx101MP/D MONO W/F is measured (Colin, 2026-09-12). FTdx10 MONO W/F is
+// measured from pixel boxes on an 800×600 frame (Fabio, 2026-09-12): no ANT,
+// no MONO/HOLD/MEM CH, SPEED instead. The FT-710 has an EXT DISPLAY output
+// too but nobody has measured it; the FTDX3000 has no display output at all.
 //
 // Bench tools: localStorage['ywc.radioDisplayHotspots.debug'] = '1' (or
 // window.radioDisplayHotspots.debug(true)) draws every zone and the detected
@@ -40,8 +49,10 @@
 // goes in localStorage['ywc.radioDisplayHotspots.layout.<RadioModel>'] as JSON
 // (e.g. ...layout.FTdx10) so a 101 nudge cannot leak onto a 10. reloadLayout()
 // re-reads that key without a rebuild. measure() lets you drag boxes on the
-// live picture instead of typing fractions. The unscoped
-// ywc.radioDisplayHotspots.layout key is still read for FTdx101 only.
+// live picture instead of typing fractions. An override only needs rects —
+// actions come from the built-in table for the model unless the override
+// names one — and the older { readouts, buttons, scope } shape is still read.
+// The unscoped ywc.radioDisplayHotspots.layout key is still read for FTdx101.
 //
 // YWC-local: Remote Video is permanently YWC-only (see CLAUDE.md).
 
@@ -51,16 +62,6 @@ const LAYOUT_KEY = 'ywc.radioDisplayHotspots.layout';
 function layoutStorageKey(radioModel) {
     const m = String(radioModel || '').trim();
     return m ? `${LAYOUT_KEY}.${m}` : LAYOUT_KEY;
-}
-
-function isFtdx101(radioModel) {
-    return /^FTdx101/i.test(radioModel || '');
-}
-
-function isFtdx10(radioModel) {
-    // Must not match FTdx101. The 101 test runs first in layoutFor; this is
-    // the exact model string Settings stores for the FTdx10.
-    return /^FTdx10$/i.test(radioModel || '');
 }
 
 // SS span code -> Hz. Mirrors the span table in radio-scope.js.
@@ -81,89 +82,149 @@ const RINGS = {
     ant:  ['1', '2', '3'],
 };
 
-// Zones as [left, top, right, bottom] fractions of the frame.
+// What a zone can do. `readout.*` cycles a receiver setting through its ring
+// (label + state key); `scope.*` calls into RadioScopeControl; `none` is a
+// soft-key with no CAT equivalent — the hint says so on hover and click.
+// A zone's own `hint` overrides the default here (EXPAND is 'L / N / S' on
+// the FTdx10 and 'EXPAND / NORMAL' on the FT-710, both `scope.size`).
+const ACTIONS = {
+    'readout.ant':     { label: 'ANT',   key: 'ant' },
+    'readout.att':     { label: 'ATT',   key: 'att' },
+    'readout.ipo':     { label: 'IPO',   key: 'ipo' },
+    'readout.rfil':    { label: 'R.FIL', key: 'rfil' },
+    'readout.agc':     { label: 'AGC',   key: 'agc' },
+    'scope.placement': { hint: 'CENTER / CURSOR / FIX', call: sc => sc.cyclePlacement?.() },
+    'scope.span':      { hint: 'Next span',             call: sc => sc.cycleSpan?.() },
+    'scope.speed':     { hint: 'Next FFT speed',        call: sc => sc.cycleSpeed?.() },
+    'scope.size':      { hint: 'Next scope size',       call: sc => sc.cycleSize?.() },
+    'scope.3dss':      { hint: 'W/F ↔ 3DSS',            call: sc => sc.toggle3dss?.() },
+    'scope.hold':      { hint: 'HOLD',                  call: sc => sc.toggleHold?.() },
+    'none':            { hint: 'No CAT command — press it on the radio' },
+};
+
+// `hideWhen` conditions, evaluated against the scope state. A hidden zone is
+// not hit-tested, so a soft-key row the radio has taken off the screen does
+// not take ghost clicks (Fabio, FTdx10, 2026-09-12: the row disappears in
+// L size and in 3DSS).
+const CONDITIONS = {
+    '3dss':   ss => !!ss.is3dss,
+    'size:0': ss => !ss.is3dss && (ss.size | 0) === 0,
+    'size:1': ss => !ss.is3dss && (ss.size | 0) === 1,
+    'size:2': ss => !ss.is3dss && (ss.size | 0) === 2,
+};
+
+// Per-model zone tables. rect = [left, top, right, bottom] as fractions of
+// the frame (normalizeZone also accepts pixels and x/y/w/h). `scope.plot` is
+// the clickable spectrum + waterfall area, `scope.marker` the rows scanned
+// for the red VFO line (spectrum only — the waterfall can hold red streaks in
+// the hotter colour schemes).
+//
+// Add a radio by adding an entry: the zones it has, what each does, and
+// rects once someone has measured them (a zone with no rect is inert but
+// still listed by measure()).
 const LAYOUTS = {
     // FTdx101MP / FTdx101D, MONO layout, W/F display. Measured from
-    // pictures/Radio_Display_Docked.png; see the header note.
+    // pictures/Radio_Display_Docked.png and bench-confirmed 2026-09-12.
+    // MONO / MULTI / EXPAND / MEM CH have no CAT command on this radio —
+    // EXPAND here is the vertical expand, not L/N/S.
     FTdx101: {
-        readouts: {
-            ant:  [0.003, 0.416, 0.196, 0.476],
-            att:  [0.199, 0.416, 0.392, 0.476],
-            ipo:  [0.395, 0.416, 0.591, 0.476],
-            rfil: [0.594, 0.416, 0.787, 0.476],
-            agc:  [0.790, 0.416, 0.986, 0.476],
-        },
-        // The scope box: `plot` is the clickable spectrum + waterfall area,
-        // `marker` the rows scanned for the red VFO line (spectrum only — the
-        // waterfall can hold red streaks in the hotter colour schemes).
         scope: {
             plot:   [0.003, 0.520, 0.986, 0.812],
             marker: [0.003, 0.540, 0.986, 0.720],
         },
-        buttons: {
-            cursor: [0.003, 0.847, 0.119, 0.902],
-            span:   [0.122, 0.847, 0.242, 0.902],
-            dss3:   [0.245, 0.847, 0.364, 0.902],
-            mono:   [0.367, 0.847, 0.484, 0.902],
-            multi:  [0.487, 0.847, 0.606, 0.902],
-            expand: [0.609, 0.847, 0.729, 0.902],
-            hold:   [0.732, 0.847, 0.851, 0.902],
-            memch:  [0.854, 0.847, 0.971, 0.902],
+        zones: {
+            ant:    { rect: [0.003, 0.416, 0.196, 0.476], action: 'readout.ant' },
+            att:    { rect: [0.199, 0.416, 0.392, 0.476], action: 'readout.att' },
+            ipo:    { rect: [0.395, 0.416, 0.591, 0.476], action: 'readout.ipo' },
+            rfil:   { rect: [0.594, 0.416, 0.787, 0.476], action: 'readout.rfil' },
+            agc:    { rect: [0.790, 0.416, 0.986, 0.476], action: 'readout.agc' },
+            cursor: { rect: [0.003, 0.847, 0.119, 0.902], action: 'scope.placement' },
+            span:   { rect: [0.122, 0.847, 0.242, 0.902], action: 'scope.span' },
+            dss3:   { rect: [0.245, 0.847, 0.364, 0.902], action: 'scope.3dss' },
+            mono:   { rect: [0.367, 0.847, 0.484, 0.902], action: 'none', hint: 'MONO / dual layout has no CAT command' },
+            multi:  { rect: [0.487, 0.847, 0.606, 0.902], action: 'none', hint: 'MULTI has no CAT command — press it on the radio' },
+            expand: { rect: [0.609, 0.847, 0.729, 0.902], action: 'none', hint: 'EXPAND has no CAT command — press it on the radio' },
+            hold:   { rect: [0.732, 0.847, 0.851, 0.902], action: 'scope.hold' },
+            memch:  { rect: [0.854, 0.847, 0.971, 0.902], action: 'none', hint: 'MEM CH has no CAT command' },
         },
     },
     // FTdx10 MONO W/F. Pixel boxes from Fabio 2026-09-12 on an 800-wide
     // frame (treated as 800×600, the EXT MONITOR PIXEL we recommend).
     // No ANT (one jack). No MONO / HOLD / MEM CH on this layout. Button
-    // row is CURSOR, 3DSS, MULTI, EXPAND, SPAN, SPEED.
-    // plot covers spectrum+waterfall; marker is the upper strip only
-    // (their two y-ranges were swapped vs the 101 names).
+    // row is CURSOR, 3DSS, MULTI, EXPAND, SPAN, SPEED, and EXPAND cycles
+    // L/N/S over CAT here. The row leaves the screen in L size and in 3DSS.
+    // plot covers spectrum+waterfall; marker is the upper strip only.
     FTdx10: {
-        readouts: {
-            att:  [0.000, 0.283, 0.138, 0.400],
-            ipo:  [0.139, 0.283, 0.275, 0.400],
-            rfil: [0.276, 0.283, 0.413, 0.400],
-            agc:  [0.414, 0.283, 0.550, 0.400],
-        },
         scope: {
             plot:   [0.000, 0.433, 1.000, 0.767],
             marker: [0.000, 0.433, 1.000, 0.533],
         },
-        buttons: {
-            cursor: [0.000, 0.800, 0.163, 0.900],
-            dss3:   [0.163, 0.800, 0.325, 0.900],
-            multi:  [0.325, 0.800, 0.488, 0.900],
-            expand: [0.488, 0.800, 0.650, 0.900],
-            span:   [0.650, 0.800, 0.813, 0.900],
-            speed:  [0.813, 0.800, 0.975, 0.900],
+        zones: {
+            att:    { rect: [0.000, 0.283, 0.138, 0.400], action: 'readout.att' },
+            ipo:    { rect: [0.139, 0.283, 0.275, 0.400], action: 'readout.ipo' },
+            rfil:   { rect: [0.276, 0.283, 0.413, 0.400], action: 'readout.rfil' },
+            agc:    { rect: [0.414, 0.283, 0.550, 0.400], action: 'readout.agc' },
+            cursor: { rect: [0.000, 0.800, 0.163, 0.900], action: 'scope.placement', hideWhen: ['size:0', '3dss'] },
+            dss3:   { rect: [0.163, 0.800, 0.325, 0.900], action: 'scope.3dss',      hideWhen: ['size:0', '3dss'] },
+            multi:  { rect: [0.325, 0.800, 0.488, 0.900], action: 'none', hint: 'MULTI has no CAT command — press it on the radio', hideWhen: ['size:0', '3dss'] },
+            expand: { rect: [0.488, 0.800, 0.650, 0.900], action: 'scope.size', hint: 'L / N / S', hideWhen: ['size:0', '3dss'] },
+            span:   { rect: [0.650, 0.800, 0.813, 0.900], action: 'scope.span',      hideWhen: ['size:0', '3dss'] },
+            speed:  { rect: [0.813, 0.800, 0.975, 0.900], action: 'scope.speed',     hideWhen: ['size:0', '3dss'] },
         },
     },
 };
 
-const NO_CAT = {
-    mono:   'MONO / dual layout has no CAT command',
-    multi:  'MULTI has no CAT command — press it on the radio',
-    expand: 'EXPAND has no CAT command — press it on the radio',
-    memch:  'MEM CH has no CAT command',
-};
+// Which built-in table a model uses. The ONLY place the model string is
+// consulted for layout; everything after this works from the table.
+function builtinFor(radioModel) {
+    const m = String(radioModel || '').trim();
+    if (/^FTdx101/i.test(m)) return LAYOUTS.FTdx101;
+    if (/^FTdx10$/i.test(m)) return LAYOUTS.FTdx10;
+    return null;
+}
 
 function emptyLayout() {
-    return { readouts: {}, buttons: {}, scope: {} };
+    return { scope: {}, zones: {} };
+}
+
+// Bring any accepted layout shape to { scope, zones: { id: { rect, action,
+// hint, hideWhen } } }. Accepts the current shape, the older
+// { readouts, buttons, scope } shape written by earlier measure() runs, and a
+// zone given as a bare rect. Actions missing from an override are taken from
+// the built-in table for the model, so a rects-only override keeps working.
+function normalizeLayout(raw, builtin) {
+    const out = emptyLayout();
+    if (!raw || typeof raw !== 'object') return out;
+    out.scope = { ...(raw.scope || {}) };
+    const src = {};
+    for (const group of ['readouts', 'buttons'])
+        for (const [id, z] of Object.entries(raw[group] || {})) src[id] = z;
+    for (const [id, z] of Object.entries(raw.zones || {})) src[id] = z;
+    for (const [id, z] of Object.entries(src)) {
+        const zone = (z && typeof z === 'object' && !Array.isArray(z) && 'rect' in z) ? { ...z } : { rect: z };
+        const base = builtin?.zones?.[id];
+        if (!zone.action && base?.action) zone.action = base.action;
+        if (!zone.hint && base?.hint) zone.hint = base.hint;
+        if (!zone.hideWhen && base?.hideWhen) zone.hideWhen = base.hideWhen;
+        if (!zone.action) zone.action = 'none';
+        out.zones[id] = zone;
+    }
+    return out;
 }
 
 function layoutFor(radioModel) {
+    const builtin = builtinFor(radioModel);
     try {
         const keyed = localStorage.getItem(layoutStorageKey(radioModel));
-        if (keyed) return JSON.parse(keyed);
+        if (keyed) return normalizeLayout(JSON.parse(keyed), builtin);
         // Legacy unscoped key: FTdx101 only, so a 101 bench override cannot
         // leak onto an FTdx10.
-        if (isFtdx101(radioModel)) {
+        if (builtin === LAYOUTS.FTdx101) {
             const legacy = localStorage.getItem(LAYOUT_KEY);
-            if (legacy) return JSON.parse(legacy);
+            if (legacy) return normalizeLayout(JSON.parse(legacy), builtin);
         }
     } catch { /* fall through to the built-in table */ }
-    if (isFtdx101(radioModel)) return LAYOUTS.FTdx101;
-    if (isFtdx10(radioModel)) return LAYOUTS.FTdx10 || null;
-    return null;
+    return builtin ? normalizeLayout(builtin, builtin) : null;
 }
 
 function roundFrac(n) {
@@ -198,12 +259,19 @@ function inZone(z, fx, fy, nw, nh) {
     return !!r && fx >= r[0] && fx <= r[2] && fy >= r[1] && fy <= r[3];
 }
 
-const MEASURE_FTDX10 = [
-    'readouts.att', 'readouts.ipo', 'readouts.rfil', 'readouts.agc',
+// Generic measure list for a radio with no built-in table; a model with one
+// measures the zones it declares instead.
+const MEASURE_GENERIC = [
     'scope.plot', 'scope.marker',
-    'buttons.cursor', 'buttons.dss3', 'buttons.multi', 'buttons.expand',
-    'buttons.span', 'buttons.speed',
+    'zones.att', 'zones.ipo', 'zones.rfil', 'zones.agc',
+    'zones.cursor', 'zones.span', 'zones.dss3',
 ];
+
+function measureList(layout) {
+    const ids = Object.keys(layout?.zones || {});
+    if (!ids.length) return MEASURE_GENERIC.slice();
+    return ['scope.plot', 'scope.marker', ...ids.map(id => `zones.${id}`)];
+}
 
 function setPath(obj, path, value) {
     const parts = path.split('.');
@@ -234,11 +302,10 @@ export class RadioDisplayHotspots {
         this.radioModel = opts.radioModel || '';
         this.dualReceiver = !!opts.dualReceiver;
         this.getScopeControl = opts.getScopeControl || (() => null);
-        this.layout = layoutFor(this.radioModel);
-        // FTdx10 has no committed fractions yet. Still build the overlay so
-        // snapshot() / debug() / reloadLayout() work on a live capture; an
-        // empty table means clicks hit nothing until a measured layout is loaded.
-        if (!this.layout && isFtdx10(this.radioModel)) this.layout = emptyLayout();
+        // A model with no built-in table still gets the overlay, so that
+        // snapshot() / debug() / measure() work on a live capture; an empty
+        // table hits nothing until a measured layout is loaded.
+        this.layout = layoutFor(this.radioModel) || emptyLayout();
 
         // Radio state the hotspots need. Seeded from /api/cat/status, then kept
         // current by onRadioState() from the page's SignalR handler.
@@ -326,8 +393,7 @@ export class RadioDisplayHotspots {
      * this instead of reloading the page.
      */
     reloadLayout() {
-        this.layout = layoutFor(this.radioModel);
-        if (!this.layout && isFtdx10(this.radioModel)) this.layout = emptyLayout();
+        this.layout = layoutFor(this.radioModel) || emptyLayout();
         if (!this.overlay && this.img && this.pane && this.layout) {
             this._buildOverlay();
             this._seed();
@@ -338,14 +404,17 @@ export class RadioDisplayHotspots {
     }
 
     /**
-     * Draw zones on the live picture. Drag a box around each control in order
-     * (ATT, IPO, R.FIL, AGC, plot, marker, then the soft-buttons). The label
-     * says which one is next. At the end the JSON is stored and printed.
+     * Draw zones on the live picture. Drag a box around each control in turn
+     * (plot, marker, then every zone the model's table declares — or a
+     * generic list for a radio with no table yet). The label says which one
+     * is next. At the end the JSON is stored and printed. Pass your own list
+     * of 'zones.<id>' / 'scope.<id>' paths to measure a subset, or zones the
+     * table does not know about.
      */
-    measure() {
+    measure(paths) {
         this.debug(true);
-        if (!this.layout || !this.layout.readouts) this.layout = emptyLayout();
-        this._measureQueue = MEASURE_FTDX10.slice();
+        if (!this.layout || !this.layout.zones) this.layout = emptyLayout();
+        this._measureQueue = Array.isArray(paths) && paths.length ? paths.slice() : measureList(this.layout);
         this._measureDrag = null;
         const next = this._measureQueue[0];
         this._flash(`draw ${next} — drag a box on the picture`);
@@ -440,12 +509,21 @@ export class RadioDisplayHotspots {
     _hit(fx, fy) {
         const L = this.layout;
         const { nw, nh } = this._nat();
-        for (const [id, z] of Object.entries(L.readouts || {}))
-            if (inZone(z, fx, fy, nw, nh)) return { kind: 'readout', id };
-        for (const [id, z] of Object.entries(L.buttons || {}))
-            if (inZone(z, fx, fy, nw, nh)) return { kind: 'button', id };
+        for (const [id, zone] of Object.entries(L.zones || {})) {
+            if (this._zoneHidden(zone)) continue;
+            if (inZone(zone.rect, fx, fy, nw, nh)) return { kind: 'zone', id, zone };
+        }
         if (inZone(L.scope?.plot, fx, fy, nw, nh)) return { kind: 'scope' };
         return null;
+    }
+
+    /** True when one of the zone's hideWhen conditions holds for the scope now. */
+    _zoneHidden(zone) {
+        const conds = zone?.hideWhen;
+        if (!conds || !conds.length) return false;
+        const ss = this.getScopeControl()?.state;
+        if (!ss) return false;   // unknown state: leave the zone live
+        return conds.some(c => CONDITIONS[c]?.(ss));
     }
 
     // ── pointer handling ─────────────────────────────────────────────────────
@@ -498,7 +576,12 @@ export class RadioDisplayHotspots {
         if (f) { this._measureDrag.x1 = f.fx; this._measureDrag.y1 = f.fy; }
         const z = this._dragZone();
         const path = this._measureQueue.shift();
-        setPath(this.layout, path, z);
+        // A zone keeps its action/hint; only the rect is being measured.
+        setPath(this.layout, path.startsWith('zones.') ? `${path}.rect` : path, z);
+        if (path.startsWith('zones.')) {
+            const zone = this.layout.zones[path.slice(6)];
+            if (!zone.action) zone.action = 'none';
+        }
         this._measureDrag = null;
         this.dump();
         if (this._measureQueue.length) this._flash(`draw ${this._measureQueue[0]}`);
@@ -524,9 +607,18 @@ export class RadioDisplayHotspots {
             if (r.ok) this._tune(r.hz);
             return;
         }
-        if (hit.kind === 'readout') this._cycleReadout(hit.id);
-        else if (this._noCat(hit.id)) this._flash(this._noCat(hit.id));
-        else this._pressButton(hit.id);
+        this._activate(hit.zone);
+    }
+
+    /** Run a zone's action: cycle a readout, drive the scope, or say why not. */
+    _activate(zone) {
+        const action = ACTIONS[zone.action] || ACTIONS.none;
+        if (action.key) return this._cycleReadout(action.key);
+        if (action.call) {
+            const sc = this.getScopeControl();
+            return sc ? action.call(sc) : undefined;
+        }
+        this._flash(zone.hint || action.hint);
     }
 
     /** Make the hover label noticeable for a moment after a click. */
@@ -546,28 +638,14 @@ export class RadioDisplayHotspots {
 
     _hideCursor() { this._showCursor(null, ''); }
 
-    _noCat(id) {
-        if (id === 'expand' && isFtdx10(this.radioModel)) return null;
-        return NO_CAT[id] || null;
-    }
-
     _describe(hit) {
-        const vfo = this._vfo();
-        const s = this.state[vfo];
-        switch (hit.id) {
-            case 'ant':  return `ANT ${s.ant || '?'} — click to cycle`;
-            case 'att':  return `ATT ${s.att || '?'} — click to cycle`;
-            case 'ipo':  return `IPO ${s.ipo || '?'} — click to cycle`;
-            case 'rfil': return `R.FIL ${s.rfil || '?'} — click to cycle`;
-            case 'agc':  return `AGC ${s.agc || '?'} — click to cycle`;
-            case 'cursor': return 'CENTER / CURSOR / FIX';
-            case 'span':   return 'Next span';
-            case 'speed':  return 'Next FFT speed';
-            case 'dss3':   return 'W/F ↔ 3DSS';
-            case 'expand': return isFtdx10(this.radioModel) ? 'L / N / S' : (NO_CAT.expand || 'expand');
-            case 'hold':   return 'HOLD';
-            default:       return this._noCat(hit.id) || hit.id;
+        const zone = hit.zone;
+        const action = ACTIONS[zone?.action] || ACTIONS.none;
+        if (action.key) {
+            const s = this.state[this._vfo()];
+            return `${action.label} ${s[action.key] || '?'} — click to cycle`;
         }
+        return zone?.hint || action.hint || hit.id;
     }
 
     // ── frequency under the cursor ───────────────────────────────────────────
@@ -693,7 +771,7 @@ export class RadioDisplayHotspots {
         return this._post(`/api/cat/frequency/${vfo}`, { frequencyHz: hz });
     }
 
-    _cycleReadout(id) {
+    _cycleReadout(key) {
         const vfo = this._vfo();
         const s = this.state[vfo];
         const v = vfo.toLowerCase();
@@ -701,7 +779,7 @@ export class RadioDisplayHotspots {
             const i = ring.indexOf(cur);
             return ring[(i + 1) % ring.length];   // unknown current -> first
         };
-        switch (id) {
+        switch (key) {
             case 'ant':
                 return this._post(`/api/cat/antenna/${v}`, { antenna: next(RINGS.ant, s.ant) });
             case 'att':
@@ -728,20 +806,6 @@ export class RadioDisplayHotspots {
             const reply = await this._post(`/api/cat/roofingfilter/${v}`, { filter: want });
             if (!reply || !reply.warning) return;
             cur = want;   // refused; try the one after it
-        }
-    }
-
-    _pressButton(id) {
-        const sc = this.getScopeControl();
-        if (!sc) return;
-        switch (id) {
-            case 'cursor': return sc.cyclePlacement?.();
-            case 'span':   return sc.cycleSpan?.();
-            case 'speed':  return sc.cycleSpeed?.();
-            case 'dss3':   return sc.toggle3dss?.();
-            case 'expand': return sc.cycleSize?.();
-            case 'hold':   return sc.toggleHold?.();
-            default:       return;   // no CAT equivalent; the hover text says so
         }
     }
 
@@ -785,17 +849,25 @@ export class RadioDisplayHotspots {
         g.strokeStyle = 'rgba(255,255,255,0.55)';
         g.strokeRect(0.5, 0.5, c.width - 1, c.height - 1);
         const { nw, nh } = this._nat();
-        const box = (z, colour, label) => {
+        const box = (z, colour, label, hidden) => {
             const r = normalizeZone(z, nw, nh);
             if (!r) return;
             const x = r[0] * c.width, y = r[1] * c.height;
             const w = (r[2] - r[0]) * c.width, h = (r[3] - r[1]) * c.height;
-            g.strokeStyle = colour; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, w, h);
-            g.fillStyle = colour; g.fillText(label, x + 3, y + 12);
+            g.strokeStyle = colour; g.lineWidth = 1;
+            if (hidden) g.setLineDash([2, 4]);
+            g.strokeRect(x + 0.5, y + 0.5, w, h);
+            g.setLineDash([]);
+            g.fillStyle = colour; g.fillText(hidden ? `${label} (hidden)` : label, x + 3, y + 12);
         };
         const L = this.layout;
-        for (const [id, z] of Object.entries(L.readouts || {})) box(z, '#0f0', id);
-        for (const [id, z] of Object.entries(L.buttons || {})) box(z, '#ff0', id);
+        // Green = readout, yellow = scope soft-key, grey = no CAT action;
+        // dashed = hidden by a hideWhen condition right now.
+        for (const [id, zone] of Object.entries(L.zones || {})) {
+            const a = zone.action || 'none';
+            const colour = a.startsWith('readout.') ? '#0f0' : a === 'none' ? '#aaa' : '#ff0';
+            box(zone.rect, colour, id, this._zoneHidden(zone));
+        }
         box(L.scope?.plot, '#0ff', 'plot');
         box(L.scope?.marker, '#f0f', 'marker scan');
         if (this._measureDrag) box(this._dragZone(), '#fff', this._measureQueue[0] || 'drag');
