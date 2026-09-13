@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Hosting;
@@ -137,6 +137,12 @@ namespace Yaesu_Web_Control.Pages
             ModelState.Remove("Settings.AudioRadioRxDevice");
             ModelState.Remove("Settings.AudioRadioTxDevice");
             ModelState.Remove("Settings.HttpsSanHosts");
+            // Theme comes from a <select> that is always populated, so this is
+            // belt and braces rather than a real empty case — but it is the
+            // same implicit-[Required] trap as the fields above, and a theme
+            // that silently blocks every save on this page would be a
+            // spectacularly annoying way to find that out.
+            ModelState.Remove("Settings.Theme");
 
             if (!ModelState.IsValid)
             {

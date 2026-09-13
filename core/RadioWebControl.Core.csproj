@@ -32,6 +32,12 @@
          the publish output by accident. -->
     <None Remove="js\**" />
 
+    <!-- css/ is the same story as js/: browser assets consumed by copying,
+         not by compiling. Each app's CopySharedCoreCss target picks them up.
+         Without this the Web SDK's default globs in a consuming application
+         would also try to treat them as content of this library. -->
+    <None Remove="css\**" />
+
     <!-- tests/ is the shared-core test project (its own .csproj). This library
          globs **/*.cs, so without this the test classes compile into the core
          assembly itself — which has no xUnit reference, so they fail loudly on

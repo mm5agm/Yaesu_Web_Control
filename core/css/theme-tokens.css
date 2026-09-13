@@ -1,0 +1,196 @@
+/* ==========================================================================
+   Theme tokens — shared by Yaesu Web Control and Icom Web Control.
+
+   This file declares every value a theme is allowed to change, and nothing
+   else. It carries no layout, no component rules and no radio: a token is a
+   colour, a length or a font stack, and which radio is on the other end of
+   the serial port cannot affect any of them. That is why it lives in core/.
+
+   THE CONTRACT
+   ------------
+   :root holds the CLASSIC values, and they are the values the two
+   applications already ship. Nothing about the default appearance changes
+   by adding this file — that is the point, and it is the thing to check
+   first if a review suspects otherwise.
+
+   [data-theme="instrument"] overrides them. No other selector in this file
+   sets a token, so a theme can only ever be a different set of numbers
+   here; it can never remove a control, a label or an ARIA attribute,
+   because those live in markup this file cannot reach.
+
+   THE FOUR ACCESSIBILITY TOKENS
+   -----------------------------
+   Semantic accessibility (aria-*, role=, data-a11y-key) is in HTML and is
+   therefore immune to theming — a stylesheet cannot delete an aria-label.
+   PRESENTATIONAL accessibility is made of CSS, and so it is exactly what a
+   restyle breaks, silently. Four values carry it:
+
+       --rwc-focus-ring         visible focus, >= 3:1 against what it sits on
+       --rwc-caption            the smallest text colour, >= 4.5:1
+       --rwc-alarm              the "something is wrong" colour, >= 4.5:1
+       --rwc-target-min         the smallest a hit target may get
+
+   Every ratio quoted below was computed, not judged by eye. Change one of
+   these four and you must recompute; the numbers in the comments are what
+   a later reviewer checks against.
+
+   WCAG references: 1.4.3 (text 4.5:1), 1.4.11 (UI components 3:1),
+   2.4.7 / 2.4.11 (focus visible and not obscured), 2.5.8 (target size).
+   ========================================================================== */
+
+:root {
+    /* ---- surfaces -------------------------------------------------------
+       Classic is Bootstrap's own light ground: the page is white, panels
+       are white, and separation comes from borders rather than from a
+       change of tone. */
+    --rwc-ground: #ffffff;
+    --rwc-panel: #ffffff;
+    --rwc-panel-header: #f8f9fa;
+    --rwc-control: #ffffff;
+    --rwc-border: #dee2e6;
+    --rwc-border-control: #adb5bd;
+
+    /* ---- ink ------------------------------------------------------------ */
+    --rwc-text: #000000;
+    --rwc-muted: #6c757d;
+    --rwc-caption: #6c757d;
+
+    /* ---- accents --------------------------------------------------------
+       main/sub are the two receivers on a dual-receiver radio. On a
+       single-receiver radio only --rwc-accent-main is used, and it is also
+       the general "primary" accent. */
+    --rwc-accent-main: #0d6efd;
+    --rwc-accent-sub: #198754;
+    --rwc-attention: #ffc107;
+    --rwc-alarm: #dc3545;
+
+    /* Text colour to put ON a filled accent. Kept as its own token because
+       the right answer flips between themes — see the instrument block. */
+    --rwc-on-accent: #ffffff;
+
+    /* ---- accessibility contract ----------------------------------------
+       Classic focus ring: #0d6efd on white = 4.50:1. */
+    --rwc-focus-ring: #0d6efd;
+    --rwc-focus-ring-width: 2px;
+    --rwc-focus-ring-offset: 2px;
+
+    /* Classic does not impose a minimum target size: today's layout has
+       buttons smaller than 44px and raising them would change the default
+       appearance, which this change is not allowed to do. The token exists
+       so the instrument theme can set it and so a future layout can read
+       it; it is only consumed by rules scoped to a theme. */
+    --rwc-target-min: 0px;
+
+    /* ---- readouts -------------------------------------------------------
+       The frequency display. These are today's values from site.css. */
+    --rwc-readout-font: 'Consolas', 'Courier New', monospace;
+    --rwc-readout-size: 1.8rem;
+    --rwc-readout-tracking: 0.05em;
+    --rwc-readout-color: inherit;
+
+    /* ---- panel geometry -------------------------------------------------
+       Not colours, but the only two shape values a theme may touch. */
+    --rwc-panel-radius: 0.375rem;
+    --rwc-panel-shadow: none;
+}
+
+/* ==========================================================================
+   Instrument — dark, for a shack at night and for a screen that is one of
+   several on the desk. Contrast ratios are against the surface named.
+   ========================================================================== */
+
+[data-theme="instrument"] {
+    /* ---- surfaces ------------------------------------------------------- */
+    --rwc-ground: #0d1219;
+    --rwc-panel: #151d27;
+    --rwc-panel-header: #1a2430;
+    --rwc-control: #1d2732;
+
+    /* Decorative dividers and panel edges. No contrast requirement — they
+       are not the only way a panel boundary is perceived, because the
+       surfaces either side already differ. */
+    --rwc-border: #2b3847;
+
+    /* The boundary of an interactive control, which IS covered by 1.4.11
+       and does need 3:1:  #5a7390 is 3.47 on panel, 3.09 on control,
+       3.84 on ground. The obvious darker choices all fail — #2b3847 is
+       1.42 on panel — so this deliberately reads lighter than a designer
+       would pick by eye. Do not darken it back. */
+    --rwc-border-control: #5a7390;
+
+    /* ---- ink ------------------------------------------------------------
+       text   #e6edf5 : 15.92 ground / 14.39 panel / 12.82 control — AAA
+       muted  #8ba0b5 :  6.97 /  6.30 /  5.61 — AA at any size */
+    --rwc-text: #e6edf5;
+    --rwc-muted: #8ba0b5;
+
+    /* caption #839ab0 : 6.45 / 5.83 / 5.20 — AA at any size.
+       The mockups used #6d8296 here, which is 4.27 on panel: large-text
+       only, and it was drawn at 10–11px. That is the single clearest
+       example of presentational accessibility failing silently in a
+       restyle, so the token ships at the corrected value. */
+    --rwc-caption: #839ab0;
+
+    /* ---- accents --------------------------------------------------------
+       main  #4fb4e6 : 8.06 / 7.28 / 6.48 — AAA
+       sub   #58cf9a : 9.67 / 8.74 / 7.78 — AAA
+       attn  #f2a33c : 9.02 / 8.15 / 7.26 — AAA */
+    --rwc-accent-main: #4fb4e6;
+    --rwc-accent-sub: #58cf9a;
+    --rwc-attention: #f2a33c;
+
+    /* alarm #ff7a72 : 7.41 / 6.69 / 5.96 — AA at any size.
+       The mockups used #e2453f, which is 4.17 on panel and 3.71 on a
+       control: large-text only, for the colour that says the SWR is bad. */
+    --rwc-alarm: #ff7a72;
+
+    /* Text on a FILLED accent flips to black here. White on #4fb4e6 is
+       2.33:1 and fails outright; black on it is 9.00:1. Every accent in
+       this theme is light enough that this is true of all four. */
+    --rwc-on-accent: #05080c;
+
+    /* ---- accessibility contract ----------------------------------------
+       #4fd6ff : 11.09 ground / 10.02 panel / 8.93 control.
+       Classic's #0d6efd would be 3.77 on panel and 3.36 on a control —
+       still above the 3:1 floor, but only just, and it disappears against
+       the blue accent it sits next to. */
+    --rwc-focus-ring: #4fd6ff;
+    --rwc-focus-ring-width: 3px;
+    --rwc-focus-ring-offset: 2px;
+
+    /* 2.5.8 AA is 24px; 2.5.5 AAA is 44px. This theme is denser than
+       Classic, and density is an accessibility axis in its own right for
+       head-tracker and on-screen-keyboard users, so it takes the AAA
+       figure rather than the minimum. */
+    --rwc-target-min: 44px;
+
+    /* ---- readouts ------------------------------------------------------- */
+    --rwc-readout-color: var(--rwc-accent-main);
+
+    /* ---- panel geometry ------------------------------------------------- */
+    --rwc-panel-radius: 0.5rem;
+    --rwc-panel-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
+                        0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* Honour the operator's own OS setting. Someone who has asked the system
+   for more contrast gets a brighter ring and a brighter caption, without
+   having to find a second control in our Settings page to say so. */
+@media (prefers-contrast: more) {
+    [data-theme="instrument"] {
+        --rwc-text: #ffffff;
+        --rwc-muted: #c4d2e0;
+        --rwc-caption: #c4d2e0;
+        --rwc-border-control: #8ba0b5;
+        --rwc-focus-ring: #ffffff;
+        --rwc-focus-ring-width: 4px;
+    }
+}
+
+/* Someone who has asked the system to stop animating gets no transition
+   when the theme is switched. The switch itself still happens. */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --rwc-theme-transition: none;
+    }
+}

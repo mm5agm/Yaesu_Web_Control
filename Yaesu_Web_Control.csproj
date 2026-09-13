@@ -399,6 +399,35 @@
     </ItemGroup>
   </Target>
 
+  <!-- The stylesheet half of the same arrangement. core/css holds the theme
+       tokens and the Bootstrap layer of the Instrument theme, both of which
+       are radio-agnostic and are therefore shared with Icom Web Control
+       rather than written twice. This target mirrors CopySharedCoreJs above
+       line for line, including the generated .gitignore and the @(Content)
+       top-up, for the same two reasons: nobody should have to hand-maintain
+       an ignore rule for build output, and the default wwwroot/** glob is
+       evaluated BEFORE this runs, so on a clean checkout the files do not
+       exist yet when the glob is computed and the first build would 404
+       them. -->
+  <Target Name="CopySharedCoreCss" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <_SharedCoreCss Include="core\css\**\*.css" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_SharedCoreCss)"
+          DestinationFiles="@(_SharedCoreCss->'wwwroot\css\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <WriteLinesToFile File="wwwroot\css\%(_SharedCoreCss.RecursiveDir).gitignore"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true"
+                      Lines="# Generated at build time from the Radio_Web_Control_Core subtree.;# core/css is the single source of truth - see core/css/README.md.;# Edit these in core/css and push the subtree. Never edit the copy here.;.gitignore;@(_SharedCoreCss-&gt;'%(Filename)%(Extension)')" />
+    <ItemGroup>
+      <Content Include="@(_SharedCoreCss->'wwwroot\css\%(RecursiveDir)%(Filename)%(Extension)')"
+               Exclude="@(Content)">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+
   <!-- ObjC helper for Radio Display FPS. C# objc_msgSend of CMTime aborts
        (NSException) on 59.94 fps HDMI pins; this dylib uses @try and the
        range's own minFrameDuration. -->

@@ -1,4 +1,4 @@
-﻿namespace Yaesu_Web_Control.Models
+namespace Yaesu_Web_Control.Models
 {
     public class ApplicationSettings
     {
@@ -95,6 +95,21 @@
 
         // Band Plan
         public string BandPlan { get; set; } = "Region1";
+
+        // Appearance — the operator's default theme, which follows them to
+        // every browser they open YWC in. "Classic" is the appearance the
+        // application has always had and is the default for existing
+        // installations, because a missing property deserialises to it.
+        //
+        // A given device may disagree: theme-boot.js stores a per-device
+        // override in localStorage under "ywc.theme" and applies it over this.
+        // The shack PC in a dark room and the tablet on the bench want
+        // different answers, and neither should overwrite the other.
+        //
+        // The value is a theme name, matched case-insensitively against the
+        // list in core/js/theme/theme-boot.js. An unrecognised name falls back
+        // to Classic rather than leaving the page with no theme at all.
+        public string Theme { get; set; } = "Classic";
 
         // SDR Spectrum Display — per-VFO device assignment (v2.3.0+).
         //

@@ -1,5 +1,39 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+@{
+    // The theme, read before anything is written, because it has to be an
+    // attribute on <html> itself. Rendering it server-side is what stops the
+    // page painting in Classic and then flipping — the operator who chose the
+    // dark theme would otherwise get a white flash on every single load.
+    //
+    // This is deliberately NOT inside #if WINDOWS: the theme applies to every
+    // host, including the CAT-only Linux/macOS/Docker build. The try/catch is
+    // the same one the voice flag uses further down — if settings are
+    // unavailable for any reason the page must still render, in Classic.
+    var _ywcThemeService = (Yaesu_Web_Control.Services.ISettingsService)Context.RequestServices
+        .GetService(typeof(Yaesu_Web_Control.Services.ISettingsService))!;
+    var _ywcTheme = "Classic";
+    try
+    {
+        var _ywcThemeSettings = await _ywcThemeService.GetSettingsAsync();
+        if (!string.IsNullOrWhiteSpace(_ywcThemeSettings.Theme))
+        {
+            _ywcTheme = _ywcThemeSettings.Theme;
+        }
+    }
+    catch { /* settings unavailable -> Classic, the shipped appearance */ }
+
+    // Lower-cased because it is a CSS attribute selector, which is
+    // case-sensitive: [data-theme="instrument"] does not match "Instrument".
+    // The setting keeps its display casing; only the attribute is folded.
+    var _ywcThemeAttr = _ywcTheme.Trim().ToLowerInvariant();
+
+    // Bootstrap 5.3's own dark mode. Some of what it switches cannot be
+    // reached from a CSS variable — the chevron on a <select> and the tick on
+    // a checkbox are data-URI background images picked by selector — so a dark
+    // theme rides on Bootstrap's dark substrate with our palette over it.
+    var _ywcThemeDark = _ywcThemeAttr == "instrument";
+}
+<!DOCTYPE html>
+<html lang="en" data-theme="@_ywcThemeAttr"@(_ywcThemeDark ? Html.Raw(" data-bs-theme=\"dark\"") : Html.Raw(""))>
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,6 +43,29 @@
     <title>@(ViewData["Title"]?.ToString() == "Yaesu Web Control" ? "Yaesu Web Control" : ViewData["Title"] + " - Yaesu Web Control")</title>
     <script type="importmap">{}</script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    @* Themes. Order matters and is not arbitrary:
+         - theme-tokens.css declares the values a theme may change. Its :root
+           block holds the Classic values, i.e. exactly what the app already
+           looks like, so adding it changes nothing on its own.
+         - theme-instrument.css and theme-instrument-local.css are scoped
+           entirely to [data-theme="instrument"]. With no such attribute on
+           <html>, not one selector in either file matches — Classic is not
+           "believed unchanged", it is unreachable.
+         - Both must load AFTER bootstrap.min.css: the variable block competes
+           with Bootstrap's own [data-bs-theme=dark] at equal specificity,
+           where source order is what decides.
+       The first two are copied out of core/ by CopySharedCoreCss at build
+       time and are shared with Icom Web Control; the -local one is YWC's own.
+       Never edit the copies in wwwroot/css — edit core/css and rebuild. *@
+    <link rel="stylesheet" href="~/css/theme-tokens.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/theme-instrument.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/theme-instrument-local.css" asp-append-version="true" />
+    @* A classic, synchronous, render-blocking script on purpose. A
+       <script type="module"> is deferred by spec and would run after first
+       paint, which is the white flash this whole arrangement exists to avoid.
+       It applies this device's stored override, if there is one, over the
+       server default already rendered on <html> above. *@
+    <script src="~/js/theme/theme-boot.js" data-storage-prefix="ywc" asp-append-version="true"></script>
     <link rel="stylesheet" href="~/Yaesu_Web_Control.styles.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/gauge-debug.css" />
     @* Bootstrap Icons, Canvas Gauges and SignalR (further down) are served from
