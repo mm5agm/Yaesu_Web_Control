@@ -103,4 +103,4 @@ when matching. This is included in the copied files — don't drop it.
 
 After it works, follow YWC's release steps: bump `Models/AppVersion.cs`,
 `installer.nsi`, add release notes + the download badge to `README.md`, update
-`USER_MANUAL.md` (voice section), then the merge/tag/`gh release create` flow.
+`user-manual/voice-control.md`, then the merge/tag/`gh release create` flow.

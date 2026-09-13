@@ -198,7 +198,7 @@ namespace Yaesu_Web_Control.Controllers
         // "path-with-spaces" from "path-no-spaces args-with-spaces", so it
         // creates more confusion than it removes. Users with spaces in their
         // path must quote it themselves — SettingsService migrates legacy
-        // unquoted paths on read, and the USER_MANUAL documents the rule.
+        // unquoted paths on read, and user-manual/external-applications.md documents the rule.
         private static (string exe, string args) ParseCommandLine(string commandLine)
         {
             commandLine = commandLine.Trim();

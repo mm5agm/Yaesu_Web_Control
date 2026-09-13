@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net10.0, not net10.0-windows: the operator book ships with every host
+         (Windows installer, macOS DMG, Linux/Docker) and the generator must
+         run wherever `dotnet build` already does. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>UserManual</RootNamespace>
+    <AssemblyName>UserManual</AssemblyName>
+    <!-- Docs generator, never shipped as its own exe. Kept out of the
+         installer by living under tools/, which Yaesu_Web_Control.csproj
+         excludes wholesale. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NuStreamDocs" Version="1.6.1" />
+    <PackageReference Include="NuStreamDocs.Theme.Material" Version="1.6.1" />
+    <PackageReference Include="NuStreamDocs.Nav" Version="1.6.1" />
+    <PackageReference Include="NuStreamDocs.Toc" Version="1.6.1" />
+    <PackageReference Include="NuStreamDocs.Search.Lunr" Version="1.6.1" />
+    <PackageReference Include="NuStreamDocs.Highlight" Version="1.6.1" />
+    <PackageReference Include="NuStreamDocs.MarkdownExtensions" Version="1.6.1" />
+    <PackageReference Include="NuStreamDocs.Config.MkDocs" Version="1.6.1" />
+  </ItemGroup>
+
+</Project>

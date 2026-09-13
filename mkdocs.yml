@@ -1,0 +1,31 @@
+site_name: Yaesu Web Control
+site_description: Operator manual for Yaesu Web Control
+repo_url: https://github.com/mm5agm/Yaesu_Web_Control
+edit_uri: edit/develop/user-manual/
+docs_dir: user-manual
+# Emitted into wwwroot/manual at compile time; do not commit the output.
+site_dir: wwwroot/manual
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - 1. Introduction: introduction.md
+  - 2. Installation: installation.md
+  - 3. First-Time Setup: first-time-setup.md
+  - 4. Starting the Application: starting.md
+  - 5. Main Control Panel: main-control-panel.md
+  - 6. Settings: settings.md
+  - 7. Application Setup: application-setup.md
+  - 8. Radio Memories: memories.md
+  - 9. External Applications: external-applications.md
+  - 10. Meter Calibration: meter-calibration.md
+  - 11. Diagnostics: diagnostics.md
+  - 12. Tablet or Phone: tablet-and-phone.md
+  - 13. Keyboard Shortcuts: keyboard-shortcuts.md
+  - 14. Troubleshooting: troubleshooting.md
+  - 15. FAQ: faq.md
+  - 16. Accessibility: accessibility.md
+  - 17. Voice Control: voice-control.md
+  - 18. Remote Audio: remote-audio.md
+  - 19. Radio Display: radio-display.md
+  - 20. CW Reader: cw-reader.md

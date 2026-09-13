@@ -196,6 +196,11 @@ data/
 /wwwroot/js/calibration/calibration-engine.js
 /wwwroot/js/cw/cw-reader-panel.js
 
+# Generated at build time from user-manual/ by tools/UserManual (NuStreamDocs).
+/wwwroot/manual/
+# NuStreamDocs may drop a 404 stub into the docs input; it is not a chapter.
+/user-manual/404.md
+
 # Bench recordings. The .wav is the evidence for a CW bench run and is worth
 # keeping locally so a decoder change can be re-scored without going back to
 # the air, but it is megabytes of receiver noise and belongs nowhere near git.

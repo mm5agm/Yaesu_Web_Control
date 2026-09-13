@@ -8,8 +8,8 @@
 
 ## Where to find the current documentation
 
-- **[USER_MANUAL.md §17 Voice Control](USER_MANUAL.md#17-voice-control)** — full description of what voice does, the supported command set, how to enable it, the en-GB Windows speech-pack install step, and troubleshooting.
-- **[USER_MANUAL.md §5.16 Voice Announcements](USER_MANUAL.md#516-voice-announcements)** is the separate feature that makes YWC *speak to you* (band/mode/TX cues). Voice Control (§17) is *you speaking to YWC*. The §17 introduction includes a callout disambiguating the two.
+- **[§17 Voice Control](user-manual/voice-control.md#17-voice-control)** — full description of what voice does, the supported command set, how to enable it, the en-GB Windows speech-pack install step, and troubleshooting.
+- **[§5.16 Voice Announcements](user-manual/main-control-panel.md#516-voice-announcements)** is the separate feature that makes YWC *speak to you* (band/mode/TX cues). Voice Control (§17) is *you speaking to YWC*. The §17 introduction includes a callout disambiguating the two.
 
 ## What happened to the Alexa walkthrough?
 

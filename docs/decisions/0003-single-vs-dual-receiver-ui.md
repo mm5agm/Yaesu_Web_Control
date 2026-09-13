@@ -177,7 +177,7 @@ This pattern (a tiny capability lookup keyed on radio model) sets up nicely for 
 3. Update the home-page JS to send the right CAT P1 parameter per radio class: `0` for the only band on single-receiver, `0`/`1` per active section on dual-receiver.
 4. Move PTT button placement: under shared Receiver panel on single-receiver layouts; per-VFO-section on dual-receiver layouts (unchanged from today).
 5. Add active/standby visual styling — `.vfo-active` / `.vfo-standby` CSS classes wired up via the `FT;` (TX VFO) and any VFO-select state SignalR updates.
-6. Update `USER_MANUAL.md` to describe the two layouts side-by-side with screenshots after implementation.
+6. Update `user-manual/` to describe the two layouts side-by-side with screenshots after implementation.
 
 ## Related decisions and references
 

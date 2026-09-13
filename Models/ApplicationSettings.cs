@@ -56,7 +56,7 @@
         // RULE: paths containing spaces MUST be wrapped in double quotes; any
         // text after the closing quote (or after the first space, for unquoted
         // paths) is passed to the launched process as command-line arguments.
-        // See USER_MANUAL.md "External Applications" for examples.
+        // See user-manual/external-applications.md for examples.
         public string WsjtxCommandLine { get; set; } = @"C:\WSJT\wsjtx\bin\wsjtx.exe --rig-name=WebApp";
         public string JtalertCommandLine { get; set; } = @"C:\HamApps\JTAlert\JTAlert.exe";
         public string Log4omCommandLine { get; set; } = @"""C:\Program Files (x86)\Log4OM 2\Log4OM.exe""";

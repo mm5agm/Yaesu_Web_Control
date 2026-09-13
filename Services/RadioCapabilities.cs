@@ -101,7 +101,7 @@ public static class RadioCapabilities
     /// through to a 200 W slider); and the Power gauge was hard-coded 0-200 for
     /// every model, so a 100 W radio's needle never left the left-hand half of
     /// the dial. The disagreement was live: the FTDX5000 pair is a 200 W radio
-    /// in README.md and USER_MANUAL.md, but CatController's check rejected
+    /// in README.md and user-manual/, but CatController's check rejected
     /// anything above 100 W on it while the slider happily offered 200 W.
     ///
     /// Unlike FrequencyRangeHz above, every supported model is listed here

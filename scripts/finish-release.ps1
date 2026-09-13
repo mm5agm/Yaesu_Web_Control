@@ -7,11 +7,11 @@
 #   Pre-release:        .\scripts\finish-release.ps1 -Version v2.5.0-pre1 -PreRelease
 #
 # Documentation (see the Release Process section of CLAUDE.md):
-#   The script rewrites the version strings in README.md and USER_MANUAL.md to
-#   match the release, and refuses to release at all if README.md has no
-#   release-notes entry for it. It will not write those notes for you -- see
-#   the long comment at the preflight for why. -NoDocUpdate leaves the docs
-#   alone; -SkipVersionCheck skips the lot.
+#   The script rewrites the version strings in README.md and
+#   user-manual/main-control-panel.md to match the release, and refuses to
+#   release at all if README.md has no release-notes entry for it. It will
+#   not write those notes for you -- see the long comment at the preflight
+#   for why. -NoDocUpdate leaves the docs alone; -SkipVersionCheck skips the lot.
 #
 #   scripts\bump-version.ps1 still does the up-front bump of AppVersion.cs,
 #   installer.nsi and the README badge. This script is the safety net that
@@ -57,7 +57,7 @@ param(
     [switch]$SkipVersionCheck,
 
     # By default the script rewrites the version strings in README.md and
-    # USER_MANUAL.md to match the release. Pass this to leave the docs exactly
+    # user-manual/ to match the release. Pass this to leave the docs exactly
     # as they are and be told about mismatches instead.
     [switch]$NoDocUpdate
 )
@@ -239,12 +239,12 @@ Re-run with -SkipVersionCheck to release without them.
         @{ File = 'Yaesu_Web_Control.csproj';   Pattern = '<AssemblyVersion>([^<]+)</AssemblyVersion>'; Fixable = $false },
 
         # Documentation. Auto-fixable, pure version strings.
-        # USER_MANUAL section 5 shows the version in the top bar.
+        # user-manual/main-control-panel.md section 5.1 shows the version in the top bar.
         # Note: keep this file pure ASCII. PowerShell 5.1 reads a BOM-less
         # UTF-8 .ps1 as cp1252, so a literal em dash or smart quote in a
         # pattern here arrives as several characters and the pattern silently
         # stops matching. Use \uXXXX escapes if one is ever needed.
-        @{ File = 'USER_MANUAL.md'; Pattern = 'Yaesu Web Control v([0-9]+\.[0-9]+\.[0-9]+)'; Fixable = $true }
+        @{ File = 'user-manual/main-control-panel.md'; Pattern = 'Yaesu Web Control v([0-9]+\.[0-9]+\.[0-9]+)'; Fixable = $true }
     )
 
     # The README badge tracks FULL releases only -- bumping it during a
@@ -318,10 +318,10 @@ Re-run with -SkipVersionCheck to release without them.
             # item returns a bare string, and under Set-StrictMode asking a
             # string for .Count is a terminating error.
             $userFacing = @($touched | Where-Object { $_ -match '^(Pages/|wwwroot/|Grammars/)' })
-            $manualTouched = @($touched | Where-Object { $_ -eq 'USER_MANUAL.md' })
+            $manualTouched = @($touched | Where-Object { $_ -like 'user-manual/*' })
             if ($userFacing.Count -gt 0 -and $manualTouched.Count -eq 0) {
                 Write-Warn ""
-                Write-Warn "USER_MANUAL.md has not changed since $prevTag, but these user-facing files have:"
+                Write-Warn "user-manual/ has not changed since $prevTag, but these user-facing files have:"
                 $userFacing | Select-Object -First 12 | ForEach-Object { Write-Warn "  $_" }
                 if ($userFacing.Count -gt 12) { Write-Warn "  ... and $($userFacing.Count - 12) more" }
                 Write-Warn "Bring every section the release touches in line, and re-capture any screenshot"
@@ -340,7 +340,7 @@ Re-run with -SkipVersionCheck to release without them.
     # nothing. -SkipVersionCheck bypasses this along with the rest.
     & (Join-Path $PSScriptRoot 'check-manual-links.ps1')
     if ($LASTEXITCODE -ne 0) {
-        throw "USER_MANUAL.md has broken links or sections missing from the contents (listed above). Fix them, or re-run with -SkipVersionCheck."
+        throw "user-manual/ has broken links or chapters missing from mkdocs.yml (listed above). Fix them, or re-run with -SkipVersionCheck."
     }
 }
 

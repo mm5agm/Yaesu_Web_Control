@@ -49,7 +49,7 @@ I own and test on the **FTdx101MP**; the other supported models are built from Y
 
 The macOS DMG is **not notarized** (no Apple Developer Program membership). Gatekeeper will warn on first open — right-click → **Open**, or use **Privacy & Security → Open Anyway**. Same class of warning as the unsigned Windows installer.
 
-Full operational detail: [USER_MANUAL.md §1](USER_MANUAL.md#1-introduction), [§2.2 macOS DMG](USER_MANUAL.md#22-macos-dmg), [§2.4 USB serial driver](USER_MANUAL.md#24-usb-serial-driver-windows--macos--linux), and [§15.10](USER_MANUAL.md#1510-whats-different-on-macos--linux-vs-windows).
+Full operational detail: [§1 Introduction](user-manual/introduction.md#1-introduction), [§2.2 macOS DMG](user-manual/installation.md#22-macos-dmg), [§2.4 USB serial driver](user-manual/installation.md#24-usb-serial-driver-windows--macos--linux), and [§15.10](user-manual/faq.md#1510-whats-different-on-macos--linux-vs-windows).
 
 Before first CAT use on any OS: install the Silicon Labs driver from the link above and reboot the host.
 
@@ -75,7 +75,7 @@ docker compose pull && docker compose up -d
 # Local rebuild: docker compose up -d --build
 ```
 
-On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`. Radio Display (optional USB webcam / HDMI capture → MJPEG) needs `/dev/video*` + the `video` group — see USER_MANUAL §19.
+On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`. Radio Display (optional USB webcam / HDMI capture → MJPEG) needs `/dev/video*` + the `video` group — see [user-manual/radio-display.md §19](user-manual/radio-display.md).
 
 ## Main Page
 ![Yaesu Web Control Main Page](pictures/DevelopScreen.png)
@@ -216,13 +216,13 @@ Every session also writes a **timestamped transcript** to `CW Transcripts\` in t
 
 The decoder itself lives in [Radio_Web_Control_Core](https://github.com/mm5agm/Radio_Web_Control_Core), the shared library behind YWC and Icom Web Control, because a Morse decoder does not know what a radio is. That turned out to be the right call: the same reader now runs in Icom Web Control, and **not one line of the decoder had to change** to read Morse off a different brand of radio. The two apps copy identically and differ only in how each rig is asked for a narrow filter.
 
-Full details, including the status-line reference and troubleshooting, are in [USER_MANUAL.md §20 CW Reader](USER_MANUAL.md#20-cw-reader).
+Full details, including the status-line reference and troubleshooting, are in [user-manual/cw-reader.md §20](user-manual/cw-reader.md#20-cw-reader).
 
 ## Project direction
 
 Active development is currently focused on bug fixes and polish for the supported radios, plus rolling out **voice control** as an accessibility feature for partially sighted and blind operators — hands-free band changes, frequency entry, mode switching, and rig status without needing to see the screen.
 
-**Voice control v1 shipped in v2.4.0-pre1 (2026-06-24)** and has been extended through the v2.4.0 pre-release series, most recently with independent per-VFO control (separate mic buttons for VFO A and VFO B) and a full Voice Language Pack Manager for editing phrases and macros. It uses **Windows' built-in speech recognition (SAPI 5 / `System.Speech`)** running locally on the user's PC, driven by an editable phrase pack tuned to ham-radio vocabulary, with a press-and-hold microphone button beside each VFO panel — the command targets whichever VFO's button you're holding (single-receiver radios show only one button). Recognised audio never leaves the PC; no cloud account, no public endpoint, no DNS or tunnel setup. A microphone connected to the PC is the only hardware requirement. See [USER_MANUAL.md §17 Voice Control](USER_MANUAL.md#17-voice-control) for what voice does, the full command list, and how to enable it. Feedback from real users is what's wanted right now — please try it and report back.
+**Voice control v1 shipped in v2.4.0-pre1 (2026-06-24)** and has been extended through the v2.4.0 pre-release series, most recently with independent per-VFO control (separate mic buttons for VFO A and VFO B) and a full Voice Language Pack Manager for editing phrases and macros. It uses **Windows' built-in speech recognition (SAPI 5 / `System.Speech`)** running locally on the user's PC, driven by an editable phrase pack tuned to ham-radio vocabulary, with a press-and-hold microphone button beside each VFO panel — the command targets whichever VFO's button you're holding (single-receiver radios show only one button). Recognised audio never leaves the PC; no cloud account, no public endpoint, no DNS or tunnel setup. A microphone connected to the PC is the only hardware requirement. See [§17 Voice Control](user-manual/voice-control.md#17-voice-control) for what voice does, the full command list, and how to enable it. Feedback from real users is what's wanted right now — please try it and report back.
 
 **On the abandoned Amazon Alexa route:** an earlier proof of concept routed voice through an Echo device over a Cloudflare tunnel into YWC. It worked end-to-end including signature verification, but setting it up required the user to own a domain, run a Cloudflare account, configure a custom Alexa Skill in the Amazon Developer Console, and install `cloudflared` — well over an hour of fiddly setup for the average ham. The local-SAPI approach above is dramatically simpler (one Windows speech-pack install, one Settings toggle) and runs entirely offline. The Alexa branch is therefore retired; the local mic approach is the supported path going forward.
 
@@ -482,7 +482,7 @@ Reported by wa6auf (FTdx101D) — the app would connect, the SignalR feed would 
 
 ### FTDX3000 frequency display freezes over a VSPE virtual COM port ([#74](https://github.com/mm5agm/Yaesu_Web_Control/issues/74))
 
-Reported by iu1teu, who runs YWC through VSPE (Virtual Serial Ports Emulator) to share one physical COM port with other CAT applications. Meters kept updating live, but the frequency display would freeze — a strong clue, since frequency is the one value YWC only ever learns about via the radio's unsolicited auto-info push, not by polling. Cause: before sending each queued CAT command, YWC discarded any bytes already sitting in the serial receive buffer to clear stale data — but on a slower virtual port, a genuine unsolicited frequency push could land in that buffer in the split second before the next command was sent, and got silently thrown away with it. Real hardware is fast enough that this race rarely loses; a virtual port emulator is not. Fixed: pending bytes are now drained through the normal message pipeline instead of being discarded, so an auto-info push arriving at the wrong moment is processed instead of dropped. See also [§15.6](USER_MANUAL.md#156-can-i-use-vspe-omnirig-com0com-or-a-similar-virtual-com-port-sharer) for background on virtual COM port sharers and YWC.
+Reported by iu1teu, who runs YWC through VSPE (Virtual Serial Ports Emulator) to share one physical COM port with other CAT applications. Meters kept updating live, but the frequency display would freeze — a strong clue, since frequency is the one value YWC only ever learns about via the radio's unsolicited auto-info push, not by polling. Cause: before sending each queued CAT command, YWC discarded any bytes already sitting in the serial receive buffer to clear stale data — but on a slower virtual port, a genuine unsolicited frequency push could land in that buffer in the split second before the next command was sent, and got silently thrown away with it. Real hardware is fast enough that this race rarely loses; a virtual port emulator is not. Fixed: pending bytes are now drained through the normal message pipeline instead of being discarded, so an auto-info push arriving at the wrong moment is processed instead of dropped. See also [§15.6](user-manual/faq.md#156-can-i-use-vspe-omnirig-com0com-or-a-similar-virtual-com-port-sharer) for background on virtual COM port sharers and YWC.
 
 ## 2026-07-11 - v2.4.2-pre1 (pre-release)
 
@@ -500,7 +500,7 @@ For Steve this wasn't just an annoyance — it meant he couldn't change the seri
 
 ### English (US) voice control language pack
 
-Added a US-English variant of the built-in Voice Control phrase pack (same commands, "meters" instead of "metres", the one UK-only trigger phrase dropped) — install it via **Settings → Voice Control → Preview import** using the pack shipped at `/voice-packs/YWC-VoicePack-en-US-v2.zip`. See [USER_MANUAL.md §17.7](USER_MANUAL.md#177-more-languages) for how to author and share further language packs.
+Added a US-English variant of the built-in Voice Control phrase pack (same commands, "meters" instead of "metres", the one UK-only trigger phrase dropped) — install it via **Settings → Voice Control → Preview import** using the pack shipped at `/voice-packs/YWC-VoicePack-en-US-v2.zip`. See [§17.7](user-manual/voice-control.md#177-more-languages) for how to author and share further language packs.
 
 ## 2026-07-10 - v2.4.0
 
@@ -508,7 +508,7 @@ Headline release: **Voice Control v1** — hands-free operation via on-PC speech
 
 ### Headline feature — Voice Control v1
 
-Hands-free voice control of common operating actions, previewed across v2.4.0-pre1 through pre4 and now landing as a full feature. Recognition runs entirely on-PC via Windows' built-in speech engine (SAPI 5) — no audio ever leaves the machine. See [USER_MANUAL.md §17](USER_MANUAL.md#17-voice-control) for the complete reference.
+Hands-free voice control of common operating actions, previewed across v2.4.0-pre1 through pre4 and now landing as a full feature. Recognition runs entirely on-PC via Windows' built-in speech engine (SAPI 5) — no audio ever leaves the machine. See [§17](user-manual/voice-control.md#17-voice-control) for the complete reference.
 
 - **Independent mic button per VFO**, on the Index page next to each VFO's band/mode controls (replacing an earlier single navbar button) — press and hold VFO A's button to control VFO A, VFO B's to control VFO B. Only one VFO listens at a time; single-receiver radios (FTdx10, FT-710, FTDX3000) show just VFO A's button.
 - **Full command set**: set frequency, change band, step up/down with a configurable step size, band up/down, set mode, swap VFOs, set attenuator/preamp/AGC/AF gain, nudge IF filter width, transmit on/off, split on/off, spoken status read-back ("what frequency", "what mode", "what band"), help, and a macro group (noise reduction, noise blanker, copy A↔B, fine step, roofing filter).
@@ -534,7 +534,7 @@ Each SDR spectrum panel has a **draggable splitter between spectrum trace and wa
 
 ### Fullscreen shortcut no longer hijacks browser find (Ctrl+F)
 
-YWC's fullscreen toggle is **F** (bare letter, no modifiers) per [§13 Keyboard Shortcuts](USER_MANUAL.md#13-keyboard-shortcuts). The handler had a missing-modifier-check bug that also fired on **Ctrl+F**, which meant the browser's find-in-page box never appeared on any YWC page — Ctrl+F just put the app fullscreen. Fixed: the handler now only triggers on bare F, so Ctrl+F (Windows/Linux) and ⌘+F (Mac) pass through to the browser as the user expects.
+YWC's fullscreen toggle is **F** (bare letter, no modifiers) per [§13 Keyboard Shortcuts](user-manual/keyboard-shortcuts.md#13-keyboard-shortcuts). The handler had a missing-modifier-check bug that also fired on **Ctrl+F**, which meant the browser's find-in-page box never appeared on any YWC page — Ctrl+F just put the app fullscreen. Fixed: the handler now only triggers on bare F, so Ctrl+F (Windows/Linux) and ⌘+F (Mac) pass through to the browser as the user expects.
 
 ### Fldigi launch button ([#52](https://github.com/mm5agm/Yaesu_Web_Control/issues/52))
 
@@ -642,7 +642,7 @@ Optional on-screen **▲/▼ buttons** sit next to each VFO's frequency display 
 
 The selected digit highlights yellow. Selection persists across the meter polling cycles so you can press ArrowUp ten times in a row and the selection stays put. Click outside the display + ▲/▼ controls to deselect.
 
-USER_MANUAL chapter 13 (Keyboard Shortcuts) has the full reference table; §16.7 covers the accessibility-focused summary.
+[Keyboard shortcuts](user-manual/keyboard-shortcuts.md) has the full reference table; [§16.7](user-manual/accessibility.md#167-frequency-tuning-by-keyboard-or-buttons) covers the accessibility-focused summary.
 
 ### Radio-state init fixes (Jacek SP3L #38–#47)
 
@@ -656,7 +656,7 @@ A cluster of bug reports from Jacek showing YWC starting up displaying stale val
 ### Other improvements
 
 - **Settings page reorganised as collapsible sections.** Each settings category is a native HTML `<details>`/`<summary>` block — built-in keyboard accessibility, screen-reader support, and no JavaScript required. The Accessibility section is the first one, just below the network access URLs.
-- **USER_MANUAL §15.7 — what the TX button does.** Common confusion for new users (raised by Luis LU1CBQ on Groups.io): the TX button sends `TX1;` to the radio to put it in transmit mode without engaging YWC's audio routing, useful for tune-up / external amplifier testing / digital-mode latency checks. The §15.7 FAQ entry explains this.
+- **[§15.7](user-manual/faq.md#157-what-is-the-tx-button-for-when-i-press-it-the-radio-goes-into-tx-mode-but-theres-no-audio-from-my-microphone) — what the TX button does.** Common confusion for new users (raised by Luis LU1CBQ on Groups.io): the TX button sends `TX1;` to the radio to put it in transmit mode without engaging YWC's audio routing, useful for tune-up / external amplifier testing / digital-mode latency checks. The §15.7 FAQ entry explains this.
 
 ---
 

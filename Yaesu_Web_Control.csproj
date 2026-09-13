@@ -70,8 +70,9 @@
     <Content Remove="core\**" />
     <EmbeddedResource Remove="core\**" />
     <None Remove="core\**" />
-    <!-- tools/ holds standalone bench utilities, each its own .csproj (CwBench
-         is a console harness that runs the Core CW decoder over a .wav file).
+    <!-- tools/ holds standalone utilities, each its own .csproj (CwBench
+         is a console harness that runs the Core CW decoder over a .wav file;
+         UserManual generates the operator book into wwwroot/manual).
          Same reason as core/ above: the Web SDK globs **/*.cs, and a second
          Program.cs in this assembly is an error that names neither the file
          nor the cause. -->
@@ -148,7 +149,6 @@
 
   <ItemGroup>
     <PackageReference Include="Concentus" Version="2.2.2" />
-    <PackageReference Include="Markdig" Version="1.2.0" />
     <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
     <!-- Native runtimes: pin to published versions (linux/osx packs skip 4.11). -->
@@ -339,20 +339,7 @@
     </Content>
   </ItemGroup>
 
-  <!-- Copy pictures folder (user manual screenshots served via PhysicalFileProvider) -->
-  <ItemGroup>
-    <Content Include="pictures\**\*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-
-  <!-- Ship USER_MANUAL.md alongside the app so the in-app /UserManual page
-       can render it. Read at request time from IWebHostEnvironment.ContentRootPath. -->
-  <ItemGroup>
-    <Content Include="USER_MANUAL.md">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+  <!-- Operator manual is generated into wwwroot/manual by BuildUserManual. -->
 
   <!-- Explicitly include Razor Pages now that EnableDefaultContentItems is false -->
   <ItemGroup>
@@ -394,6 +381,32 @@
     <ItemGroup>
       <Content Include="@(_SharedCoreJs->'wwwroot\js\%(RecursiveDir)%(Filename)%(Extension)')"
                Exclude="@(Content)">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+
+  <!-- Operator manual: NuStreamDocs generates wwwroot/manual from user-manual/.
+       Same AssignTargetPaths timing as CopySharedCoreJs — EnableDefaultContentItems
+       is false, so the wwwroot glob above would miss a clean-checkout generate
+       unless we add the output as Content this build. -->
+  <ItemGroup>
+    <UserManualSource Include="user-manual\**\*" />
+    <UserManualSource Include="mkdocs.yml" />
+    <UserManualSource Include="tools\UserManual\**\*.cs" />
+    <UserManualSource Include="tools\UserManual\*.csproj" />
+  </ItemGroup>
+  <Target Name="BuildUserManual" BeforeTargets="AssignTargetPaths"
+          Inputs="@(UserManualSource)"
+          Outputs="wwwroot\manual\index.html">
+    <MSBuild Projects="tools\UserManual\UserManual.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)" />
+    <Exec Command="dotnet exec &quot;$(MSBuildProjectDirectory)\tools\UserManual\bin\$(Configuration)\net10.0\UserManual.dll&quot; --input user-manual --output wwwroot/manual"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <ItemGroup>
+      <_UserManualOut Include="wwwroot\manual\**\*" />
+      <Content Include="@(_UserManualOut)" Exclude="@(Content)">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
     </ItemGroup>

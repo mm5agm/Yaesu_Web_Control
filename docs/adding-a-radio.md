@@ -64,7 +64,7 @@ You discover these from the radio's CAT manual (in `docs/manuals/`) plus the tes
 
 ### 6. Documentation
 - README "Supported transceivers" table.
-- `USER_MANUAL.md` — model references (receiver count, meters, bands, per-model notes).
+- `user-manual/` — model references (receiver count, meters, bands, per-model notes).
 
 ### 7. Test against the real radio
 This is the actual verification, and the true gate — see below.

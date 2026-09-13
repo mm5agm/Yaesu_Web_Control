@@ -541,7 +541,7 @@ namespace Yaesu_Web_Control.Services
                 // addresses we were sending were not REAR SELECT — they wrote a value
                 // to some other menu item that happens to exist at 010416 etc.
                 // The radio menu (071 REAR SELECT on FTdx101) must be set to USB
-                // manually. See USER_MANUAL §15 (FAQ) for the user-facing note.
+                // manually. See user-manual/faq.md §15 for the user-facing note.
 
                 logger.LogInformation("[RadioInitializationService] ✓ Radio connected, initialized, and Auto Information streaming enabled");
                 radioStateService.IsConnected = true;

@@ -696,7 +696,7 @@ namespace Yaesu_Web_Control.Services.Sdr
                 // Key format includes hwVer so two devices that happen to share a
                 // serial (notably an RSP1 with the factory-default "0000000001"
                 // placeholder, alongside an RSP1B with a real serial) remain
-                // distinguishable. See USER_MANUAL FAQ "Why does my RSP1 show
+                // distinguishable. See user-manual/faq.md "Why does my RSP1 show
                 // serial 0000000001?" for the background.
                 list.Add(new SdrDeviceInfo(
                     Key:    $"{KeyPrefix}hw{hwVer}-{serial}",

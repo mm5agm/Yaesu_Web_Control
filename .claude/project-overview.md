@@ -251,7 +251,7 @@ someone pulls it. Push is not optional once `core/` has changed in a session
   workers, Voice Control (SAPI). Shipped via NSIS installer.
 - **macOS / Linux (`net10.0`)** — CAT + web UI only. macOS has an Avalonia
   menu-bar tray; Linux is console (or Docker). SDR and Voice Control are
-  compiled/gated out. See `USER_MANUAL.md` §1 / §15.10 and `CLAUDE.md`'s
+  compiled/gated out. See `user-manual/introduction.md` §1 / `user-manual/faq.md` §15.10 and `CLAUDE.md`'s
   operational-differences table.
 
 ---

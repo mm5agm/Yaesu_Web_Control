@@ -174,7 +174,7 @@ dotnet publish -c Release -f net10.0-windows -r win-x64 --self-contained
 
 On macOS, set **Serial Port** to a `/dev/cu.*` device. On Linux, use `/dev/ttyUSB*` or `/dev/ttyACM*`. SDR spectrum and Voice Control are Windows-only and are hidden on the CAT-only host.
 
-**USB CAT:** install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on Windows, macOS, and Linux, then **reboot the host** before first use (see USER_MANUAL §2.4).
+**USB CAT:** install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on Windows, macOS, and Linux, then **reboot the host** before first use (see [user-manual/installation.md §2.4](user-manual/installation.md#24-usb-serial-driver-windows--macos--linux)).
 
 **Docker (linux/amd64 + linux/arm64):** `Dockerfile` + `docker-compose.yml` publish the `net10.0` CAT-only host. Data volume is `XDG_CONFIG_HOME=/data` → `MM5AGM/Yaesu Web Control/`. Entrypoint starts as root, `chown`s `/data` to `app`, then drops privileges (preserving compose `group_add` GIDs). Pass the serial device with `devices:` / `YWC_SERIAL_DEVICE`. For Remote Audio, compose maps `/dev/snd` and `group_add`s host `audio` (`YWC_AUDIO_GID`); the image installs `libasound2t64` + `libportaudio2`. Container runs with auto-shutdown and local browser-open disabled. Install the Silicon Labs driver on the **host** and reboot before mapping the device into the container.
 
@@ -220,7 +220,7 @@ accidental dependency on a consumer.
 | AppData | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `$XDG_CONFIG_HOME` or `~/.config/MM5AGM/Yaesu Web Control/` |
 | `AutoShutdownWhenNoBrowsers` | Default true | Default true; `HostRuntime.IsContainer` forces keep-alive |
 | Browser auto-open | `OpenBrowserOnStartup` (default true) | Same setting; skipped when `HostRuntime.IsContainer` |
-| Operator-facing docs | `USER_MANUAL.md` §§1–4, 6.2–6.3, 15.10, 17 | Same |
+| Operator-facing docs | `user-manual/` §§1–4, 6.2–6.3, 15.10, 17 | Same |
 
 Most verification is manual, via the browser at `http://localhost:8080`. There
 is a small unit-test project covering the parts where a wrong answer is silent
@@ -262,7 +262,7 @@ Then update the documentation:
   `## 2026-08-01 - v2.4.2`), and bump the per-release badge in the shields.io
   URL near the top. Pre-releases get their own heading too, but **not** a badge
   bump — the badge tracks full releases only.
-- `USER_MANUAL.md` — bring every section the release touches in line with what
+- `user-manual/` — bring every chapter the release touches in line with what
   the app now does, and re-capture any screenshot the change makes wrong.
 
 Do not start the git steps until both documents are done. `finish-release.ps1`
@@ -695,7 +695,12 @@ server-rendered initial values), `Settings`, `Diagnostics` (SDR device
 scanning, port listing), `Memories`, `Calibrations` / `Calibration/MeterCalibration`
 / `Calibration/SMeterCalibration`, `Labels` (accessibility label overrides),
 `RemoteAudio`, `RadioDisplay` (Remote Video), `Ports`, `ApplicationSetup`,
-`About`, `UserManual`.
+`About`, `UserManual` (permanent redirect to the generated book at `/manual/`).
+
+The operator manual is authored as a NuStreamDocs book under `user-manual/`,
+with nav in `mkdocs.yml`. `tools/UserManual` generates a static Material site
+into `wwwroot/manual/` at compile time (gitignored). Edit the markdown under
+`user-manual/`; never edit `wwwroot/manual/`.
 
 ---
 

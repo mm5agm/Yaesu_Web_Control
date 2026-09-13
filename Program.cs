@@ -374,8 +374,8 @@ Log.Information("Yaesu Web Control starting (v{Version})", Yaesu_Web_Control.App
 
 // ContentRoot defaults to Directory.GetCurrentDirectory(). That is wrong when
 // macOS launches the .app (cwd is "/" or ~) and can be wrong for a Windows
-// shortcut whose "Start in" folder is missing — wwwroot/pictures/USER_MANUAL.md
-// then resolve nowhere and the UI loads without CSS/JS. Prefer the process cwd
+// shortcut whose "Start in" folder is missing — wwwroot then
+// resolves nowhere and the UI loads without CSS/JS. Prefer the process cwd
 // when it already contains wwwroot (`dotnet run` from the repo, published exe
 // started from its folder); otherwise fall back to the apphost directory.
 var contentRootBaseDir = AppContext.BaseDirectory;
@@ -677,6 +677,8 @@ try
     // revalidates it, so an unchanged file costs one conditional GET answered
     // with a 304 and no body. On a localhost or LAN app that is free, and it is
     // the price of never shipping a fix that fails to arrive.
+    // /manual/ → wwwroot/manual/index.html (the generated operator book).
+    app.UseDefaultFiles();
     app.UseStaticFiles(new StaticFileOptions
     {
         OnPrepareResponse = ctx =>
@@ -684,21 +686,6 @@ try
             ctx.Context.Response.Headers.CacheControl = "no-cache, must-revalidate";
         }
     });
-    var picturesPath = System.IO.Path.Combine(app.Environment.ContentRootPath, "pictures");
-    if (System.IO.Directory.Exists(picturesPath))
-    {
-        app.UseStaticFiles(new StaticFileOptions
-        {
-            FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(picturesPath),
-            RequestPath = "/pictures",
-            // Same reasoning as above. These are user-supplied images, so a
-            // replaced picture must not go on being served from cache either.
-            OnPrepareResponse = ctx =>
-            {
-                ctx.Context.Response.Headers.CacheControl = "no-cache, must-revalidate";
-            }
-        });
-    }
     app.UseWebSockets();
     app.UseRouting();
     app.UseAuthorization();
