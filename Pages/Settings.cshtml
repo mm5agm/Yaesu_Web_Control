@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model Yaesu_Web_Control.Pages.SettingsModel
 
 <style>
@@ -194,6 +194,58 @@
     </div>
 
     <form method="post" id="settingsForm">
+
+    <!-- Appearance section -->
+    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
+        <summary><i class="bi bi-palette" aria-hidden="true"></i>&nbsp;Appearance</summary>
+        <div class="section-body">
+            <p class="text-muted small mb-3">
+                A theme changes how Yaesu Web Control looks — colours, contrast, the focus
+                outline, and how large the smallest buttons are allowed to get. It does not
+                move, add or remove a single control, so everything stays exactly where you
+                already know it is.
+            </p>
+            <div class="mb-3">
+                <label asp-for="Settings.Theme" class="form-label">Theme</label>
+                <select asp-for="Settings.Theme" class="form-select" id="Settings_Theme" style="max-width: 320px;">
+                    <option value="Classic">Classic — the light appearance YWC has always had</option>
+                    <option value="Instrument">Instrument — dark, higher contrast, larger hit targets</option>
+                </select>
+                <div class="form-text">
+                    This is your default, and it follows you to every browser you open YWC in.
+                    <strong>Instrument</strong> is a dark theme built for a dimly lit shack: every
+                    colour in it was checked against the WCAG contrast figures rather than picked
+                    by eye, the focus outline is thicker and brighter so it is obvious which
+                    control the keyboard is on, and no button is smaller than 44&nbsp;pixels.
+                    The meters and the spectrum display are drawn to a canvas by the browser and
+                    are not themed yet — they keep their present colours under both themes.
+                </div>
+                <span asp-validation-for="Settings.Theme" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="themeDeviceOverrideClear">
+                        Use this default on this device too
+                    </button>
+                    <span class="form-text" id="themeDeviceOverrideState" aria-live="polite"></span>
+                </div>
+                <div class="form-text">
+                    Changing the dropdown above previews the theme immediately and remembers it
+                    <em>for this browser</em>, so you can see it before you commit. Pressing
+                    <strong>Save Settings</strong> makes it your default everywhere. If this
+                    machine should simply follow whatever default you save — a shared shack PC,
+                    say — press the button to clear this browser's own answer.
+                </div>
+            </div>
+            <!-- Inline Save Settings so this section can be saved in place. -->
+            <div class="mt-2 pt-3 border-top">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save" aria-hidden="true"></i>&nbsp;Save Settings
+                </button>
+                <span class="form-text ms-2">Saves everything on this page.</span>
+            </div>
+        </div>
+    </details>
 
     <!-- Accessibility section -->
     <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
@@ -2816,6 +2868,59 @@
 </div>
 
 @section Scripts {
+    <script type="module">
+        // Appearance — live theme preview.
+        //
+        // The dropdown is the operator's default, saved to the server with
+        // everything else on this page. This script makes the dropdown apply
+        // the theme to THIS browser the moment it changes, so nobody has to
+        // save a setting to find out what it looks like. That is also what
+        // makes the per-device override reachable at all: it is the only
+        // control in the app that writes localStorage["ywc.theme"].
+        import { setTheme, themeOverride } from '/js/theme/theme.js?v=@Yaesu_Web_Control.AppVersion.Current';
+
+        (function () {
+            const select = document.getElementById('Settings_Theme');
+            const clearBtn = document.getElementById('themeDeviceOverrideClear');
+            const state = document.getElementById('themeDeviceOverrideState');
+            if (!select) { return; }
+
+            // The <select> carries display casing ("Instrument"); the theme
+            // names are lower case, because they end up in a CSS attribute
+            // selector, which is case-sensitive.
+            const toName = v => (v || '').trim().toLowerCase();
+
+            function renderState() {
+                if (!state) { return; }
+                const o = themeOverride();
+                state.textContent = o
+                    ? 'This browser is set to ' + o + ', whatever the saved default is.'
+                    : 'This browser follows the saved default.';
+                if (clearBtn) { clearBtn.disabled = !o; }
+            }
+
+            select.addEventListener('change', () => {
+                setTheme(toName(select.value));
+                renderState();
+            });
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    // null forgets the override and reapplies what the server
+                    // rendered, which is the saved default — not necessarily
+                    // what the dropdown currently shows, so put the dropdown
+                    // back in step with what the operator can now see.
+                    const now = setTheme(null);
+                    for (const opt of select.options) {
+                        if (toName(opt.value) === now) { select.value = opt.value; break; }
+                    }
+                    renderState();
+                });
+            }
+
+            renderState();
+        })();
+    </script>
     <partial name="_ValidationScriptsPartial" />
     <script>
         // Serial port dropdown — same /api/ports source as Diagnostics

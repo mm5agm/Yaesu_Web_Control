@@ -1,0 +1,401 @@
+/* ==========================================================================
+   Instrument theme — the Yaesu Web Control half.
+
+   core/css/theme-instrument.css does the Bootstrap layer, which is shared
+   with Icom Web Control because both applications are Bootstrap 5.3 and
+   build their screens out of the same cards, buttons, forms and dialogs.
+
+   THIS file is the part named after YWC's own markup: the band radiogroup,
+   the VFO control column, the calibration pages, the memory and keypad
+   dialogs, the scope controls. None of it would mean anything in IWC, so
+   none of it goes to core/ — the same split the calibration engine already
+   uses, where core knows the shape and the app knows the specifics.
+
+   Every rule is scoped to [data-theme="instrument"], so with no such
+   attribute on <html> nothing here matches and Classic is untouched.
+
+   Colours come from the tokens in core/css/theme-tokens.css. If a hex
+   value appears below it is because the rule is reproducing an existing
+   YWC decision that is not a theme concern (the yellow selected-digit
+   highlight, say), never because a new colour was invented here.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. The band selector.
+
+   _BandButtonsPartial renders a role="radiogroup" of twelve labels with a
+   roving tabindex, each carrying a data-a11y-key the Labels page can
+   override. All of that is markup and survives the theme untouched; what
+   does not survive is that the label paints itself white with a light grey
+   border, which on a dark ground is a row of twelve white blocks.
+
+   This is also the control an operator uses most, so it is the one where
+   the target-size token earns its keep.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] .band-radio-label {
+    background-color: var(--rwc-control);
+    border-color: var(--rwc-border-control);
+    color: var(--rwc-text);
+    min-height: var(--rwc-target-min);
+}
+
+[data-theme="instrument"] .band-radio-label:hover {
+    background-color: var(--rwc-panel-header);
+    border-color: var(--rwc-accent-main);
+}
+
+[data-theme="instrument"] .band-radio-label span {
+    color: var(--rwc-text);
+}
+
+/* Checked band. Classic marks it with the Bootstrap primary; here it is
+   the receiver's own accent, because both receivers' band rows are on
+   screen at once on a dual-receiver radio and the two must not look alike.
+   The .border-primary / .border-success parents are how Index.cshtml
+   already says which receiver a panel belongs to. */
+[data-theme="instrument"] .border-primary .band-radio-label:has(input:checked) {
+    background-color: var(--rwc-accent-main);
+    border-color: var(--rwc-accent-main);
+}
+
+[data-theme="instrument"] .border-primary .band-radio-label:has(input:checked) span {
+    color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .border-success .band-radio-label:has(input:checked) {
+    background-color: var(--rwc-accent-sub);
+    border-color: var(--rwc-accent-sub);
+}
+
+[data-theme="instrument"] .border-success .band-radio-label:has(input:checked) span {
+    color: var(--rwc-on-accent);
+}
+
+/* The radio circle itself. Classic gives it a dark grey border explicitly
+   "so it is clearly visible on white" — the same reasoning, inverted. */
+[data-theme="instrument"] .band-radio-group input[type="radio"],
+[data-theme="instrument"] .band-radio-grid input[type="radio"] {
+    border-color: var(--rwc-border-control);
+}
+
+/* Out of band. Classic uses #dc3545 with black text; the alarm token is
+   the themed equivalent and is the colour that was raised from 4.17:1 to
+   6.69:1 — this is the rule that made that worth doing, because "you are
+   about to transmit outside the band" is not a message to render in
+   large-text-only contrast. */
+[data-theme="instrument"] .band-radio-label.band-oob,
+[data-theme="instrument"] .band-radio-label.band-oob:hover {
+    background-color: var(--rwc-alarm);
+    border-color: var(--rwc-alarm);
+    color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .band-radio-label.band-oob span {
+    color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .segment-select.segment-oob,
+[data-theme="instrument"] .segment-select.segment-oob:disabled,
+[data-theme="instrument"] .segment-select.segment-oob:hover,
+[data-theme="instrument"] .segment-select.segment-oob:focus {
+    background-color: var(--rwc-alarm);
+    border-color: var(--rwc-alarm);
+    color: var(--rwc-on-accent);
+}
+
+/* --------------------------------------------------------------------------
+   2. The VFO control column and the receiver cards.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] .vfo-control-label {
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .vfo-control-item select,
+[data-theme="instrument"] .vfo-mode-select,
+[data-theme="instrument"] .vfo-ant-select,
+[data-theme="instrument"] .segment-select,
+[data-theme="instrument"] .mem-bank-select {
+    background-color: var(--rwc-control);
+    border-color: var(--rwc-border-control);
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .receiver-card {
+    background-color: var(--rwc-panel);
+}
+
+/* The amber ring Index.cshtml puts on whichever receiver the main tuning
+   knob is driving. Restated with the token so the two ambers cannot drift
+   apart, and brightened a little because it is competing with a dark
+   ground rather than a white one. */
+[data-theme="instrument"] .vfo-active > .card.receiver-card {
+    box-shadow: 0 0 0 2px var(--rwc-attention),
+                0 0 14px rgba(242, 163, 60, 0.45);
+}
+
+/* Index.cshtml forces these to near-black inline, which is right on white
+   and unreadable here. Specificity, not order, is what wins this:
+   [data-theme] + #id beats #id alone, so the !important is matched rather
+   than overridden by accident. */
+[data-theme="instrument"] #saveMemBtnA,
+[data-theme="instrument"] #saveMemBtnB {
+    color: var(--rwc-text) !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. Focus — the rule this whole exercise exists to catch.
+
+   site.css:282 sets `outline: none` on the power slider. On white, with a
+   browser's default focus styling underneath, that was survivable. On a
+   dark ground it is a control a keyboard user cannot see they have
+   reached, and it is the single clearest example of presentational
+   accessibility being deleted by a stylesheet without anything reporting
+   an error.
+
+   It is left alone in Classic — changing today's appearance is out of
+   scope for this change — and put back here, where the theme is new and
+   there is no behaviour to preserve.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] #powerSliderA:focus-visible,
+[data-theme="instrument"] #powerSliderB:focus-visible,
+[data-theme="instrument"] input[type="range"]:focus-visible {
+    outline: var(--rwc-focus-ring-width) solid var(--rwc-focus-ring);
+    outline-offset: var(--rwc-focus-ring-offset);
+}
+
+/* The frequency display's ring needs nothing here: site.css now reads the
+   same three tokens, so it follows the theme on its own. That is the shape
+   to prefer — tokenise the existing rule where it already lives, and only
+   write a scoped override where the existing rule cannot be touched without
+   changing Classic. */
+
+/* .mem-bank-select clears its outline on focus too. */
+[data-theme="instrument"] .mem-bank-select:focus-visible,
+[data-theme="instrument"] .fkb-key:focus-visible,
+[data-theme="instrument"] .mem-tile:focus-visible,
+[data-theme="instrument"] .mem-tool-btn:focus-visible {
+    outline: var(--rwc-focus-ring-width) solid var(--rwc-focus-ring);
+    outline-offset: var(--rwc-focus-ring-offset);
+}
+
+/* --------------------------------------------------------------------------
+   4. The keypad and memory dialogs.
+
+   These are ALREADY dark in Classic — #1e1e2e panels with #e0e0e0 text,
+   written that way long before any theme existed. Nothing here is a
+   readability fix; it is only re-tinting them onto the theme's palette so
+   the application does not show two different darks side by side, and so
+   that a future theme moves them with everything else instead of leaving
+   them behind as the one part that never changes.
+
+   Classic keeps them exactly as they are.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] .fkb-dialog,
+[data-theme="instrument"] .mem-dialog {
+    background: var(--rwc-panel);
+    border-color: var(--rwc-border);
+    color: var(--rwc-text);
+    box-shadow: var(--rwc-panel-shadow);
+}
+
+[data-theme="instrument"] .fkb-header,
+[data-theme="instrument"] .mem-header,
+[data-theme="instrument"] .mem-toolbar {
+    background: var(--rwc-panel-header);
+    border-color: var(--rwc-border);
+}
+
+[data-theme="instrument"] .fkb-title,
+[data-theme="instrument"] .mem-title,
+[data-theme="instrument"] .mem-tile-label {
+    color: var(--rwc-accent-main);
+}
+
+[data-theme="instrument"] .fkb-close,
+[data-theme="instrument"] .mem-close,
+[data-theme="instrument"] .mem-refresh,
+[data-theme="instrument"] .mem-tool-status,
+[data-theme="instrument"] .mem-tile-mode {
+    color: var(--rwc-muted);
+}
+
+[data-theme="instrument"] .fkb-num,
+[data-theme="instrument"] .mem-tool-btn,
+[data-theme="instrument"] .mem-tile {
+    background: var(--rwc-control);
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .mem-tile-freq {
+    color: var(--rwc-accent-sub);
+}
+
+[data-theme="instrument"] .mem-tile-active {
+    background: rgba(88, 207, 154, 0.18) !important;
+    border-color: var(--rwc-accent-sub) !important;
+}
+
+[data-theme="instrument"] .fkb-display {
+    background: var(--rwc-ground);
+    color: var(--rwc-readout-color);
+}
+
+[data-theme="instrument"] .fkb-error {
+    color: var(--rwc-alarm);
+}
+
+[data-theme="instrument"] .mem-edit-link {
+    color: var(--rwc-accent-main);
+}
+
+/* --------------------------------------------------------------------------
+   5. The calibration pages.
+
+   Their own look — pastel gradients, blue/green/orange legends, light grey
+   table cells — predates everything else here. Rather than recolour each
+   gradient, the panels move onto the theme's surfaces and the three
+   per-meter accents become the theme's three accents, which is what those
+   colours were doing all along: telling SWR, Power and ALC apart.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] .calibration-bg {
+    background: var(--rwc-ground);
+}
+
+[data-theme="instrument"] .calibration-container,
+[data-theme="instrument"] .calibration-col {
+    background: var(--rwc-panel);
+}
+
+[data-theme="instrument"] fieldset.calibration-card,
+[data-theme="instrument"] .calibration-card {
+    background: var(--rwc-panel);
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .calibration-card legend {
+    color: var(--rwc-accent-main);
+}
+
+[data-theme="instrument"] .calibration-card.swr { border-color: var(--rwc-accent-main); }
+[data-theme="instrument"] .calibration-card.power { border-color: var(--rwc-accent-sub); }
+[data-theme="instrument"] .calibration-card.alc { border-color: var(--rwc-attention); }
+
+[data-theme="instrument"] .calibration-card.swr legend { color: var(--rwc-accent-main); }
+[data-theme="instrument"] .calibration-card.power legend { color: var(--rwc-accent-sub); }
+[data-theme="instrument"] .calibration-card.alc legend { color: var(--rwc-attention); }
+
+[data-theme="instrument"] .calibration-card .table-sm th {
+    background: var(--rwc-panel-header);
+    color: var(--rwc-muted);
+}
+
+[data-theme="instrument"] .calibration-card .table-sm td {
+    background: transparent;
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .calibration-card .form-control {
+    background: var(--rwc-control);
+    border-color: var(--rwc-border-control);
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .calibration-card .form-control:focus {
+    border-color: var(--rwc-focus-ring);
+}
+
+/* The two gradient buttons. A gradient is not a token, and inventing one
+   for two buttons is not worth it, so they become flat accent fills —
+   which is also the only way the black-on-accent text rule can hold. */
+[data-theme="instrument"] .calibration-card .btn-secondary {
+    background: var(--rwc-accent-main);
+    color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .calibration-card .btn-secondary:hover {
+    background: #6fc4ef;
+    color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .calibration-save-btn {
+    background: var(--rwc-accent-sub);
+    color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .calibration-save-btn:hover {
+    background: #76dbae;
+    color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .calibration-card .btn-link.text-danger,
+[data-theme="instrument"] .calibration-card .btn-link.text-danger:hover {
+    color: var(--rwc-alarm);
+}
+
+[data-theme="instrument"] .calibration-status {
+    background: var(--rwc-panel-header);
+    border-color: var(--rwc-accent-main);
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .raw-meter-label,
+[data-theme="instrument"] #raw-powerout-label {
+    background: var(--rwc-panel-header);
+    color: var(--rwc-text);
+}
+
+/* --------------------------------------------------------------------------
+   6. The voice help popup and the voice PTT button.
+
+   The help popup is already dark (it is drawn over a dark overlay), so it
+   only needs re-tinting. The PTT button matters more than it looks:
+   Index.cshtml documents three deliberately distinguishable states, and
+   the amber hover exists specifically so that "hovering" never looks like
+   "listening" to a partially-sighted operator. Keep all three distinct.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] #voiceHelpBody .vh-intro {
+    color: var(--rwc-muted);
+}
+
+[data-theme="instrument"] #voiceHelpBody .vh-group h6 {
+    color: var(--rwc-accent-main);
+}
+
+[data-theme="instrument"] #voiceHelpBody .vh-ex,
+[data-theme="instrument"] #voiceHelpBody .vh-ex code {
+    color: var(--rwc-attention);
+}
+
+[data-theme="instrument"] #voiceHelpBody .vh-ex code {
+    background: var(--rwc-control);
+}
+
+[data-theme="instrument"] .voice-mic-btn.btn-outline-danger:hover:not(.voice-mic-listening) {
+    background-color: var(--rwc-attention);
+    border-color: var(--rwc-attention);
+    color: var(--rwc-on-accent);
+}
+
+/* --------------------------------------------------------------------------
+   7. Known not covered, on purpose.
+
+   The meters, the SDR spectrum, the waterfall and the filter scope are
+   painted by JavaScript into a <canvas>. CSS cannot reach a single pixel
+   of any of them, so under this theme they keep the colours their drawing
+   code chose: light gauge faces on a dark page.
+
+   That is a real rough edge and it is not a small one — the meters are the
+   middle of the main screen. Carrying the theme into them means the
+   drawing code reading its palette from the tokens, which
+   core/js/theme/theme.js already provides (themeToken / themePalette /
+   onThemeChange) but nothing yet calls. It is deliberately a separate
+   change: it touches the gauge and spectrum pipelines, which are the parts
+   of the frontend with the strictest architecture rules and the least test
+   cover, and it should not ride along inside a stylesheet PR.
+   -------------------------------------------------------------------------- */

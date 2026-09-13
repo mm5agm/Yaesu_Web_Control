@@ -1,0 +1,622 @@
+/* ==========================================================================
+   Instrument theme — the Bootstrap layer. Shared by YWC and IWC.
+
+   Both applications are Bootstrap 5.3.0, both carve their UI out of the
+   same component set, and neither of them has a radio anywhere in this
+   file — so it lives in core/ rather than being written twice.
+
+   HOW THIS IS SCOPED, AND WHY IT MATTERS TO A REVIEWER
+   ----------------------------------------------------
+   Every rule below is prefixed with [data-theme="instrument"]. Without
+   that attribute on <html>, not one selector here matches, so this file
+   cannot change the default appearance of either application. That is the
+   whole safety argument for shipping it: Classic is not "believed
+   unchanged", it is unreachable from here.
+
+   It also raises specificity to (0,2,0) or better, so these rules win over
+   Bootstrap's own (0,1,0) component rules regardless of link order — but
+   the sheet is still linked after bootstrap.min.css, because the variable
+   block below competes with Bootstrap's [data-bs-theme=dark] block at
+   equal specificity, where source order decides.
+
+   WHAT IS DELIBERATELY NOT HERE
+   -----------------------------
+   Anything named after one application's own markup — .fkb-*, .mem-*,
+   .vfo-*, .radio-scope-* in YWC, and IWC's equivalents. Those go in each
+   app's own wwwroot/css/theme-instrument-local.css. The split is the same
+   one calibration already uses: core knows the shape, the app knows the
+   specifics.
+
+   Colours come from theme-tokens.css. Nothing in this file states a hex
+   value for anything a theme is allowed to change; if you find yourself
+   wanting to, add a token instead.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Map the tokens onto Bootstrap's own variables.
+
+   The application also sets data-bs-theme="dark" alongside
+   data-theme="instrument". That is not redundant: Bootstrap's dark block
+   flips things this file cannot reach from a variable — notably the
+   embedded SVG chevrons on .form-select and the .form-check tick, which
+   are data-URI background images chosen by selector, not by token. We take
+   Bootstrap's dark theme as the substrate and then replace its palette
+   with ours.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] {
+    color-scheme: dark;
+
+    --bs-body-bg: var(--rwc-ground);
+    --bs-body-bg-rgb: 13, 18, 25;
+    --bs-body-color: var(--rwc-text);
+    --bs-body-color-rgb: 230, 237, 245;
+
+    --bs-emphasis-color: #ffffff;
+    --bs-heading-color: var(--rwc-text);
+
+    --bs-secondary-color: var(--rwc-muted);
+    --bs-secondary-bg: var(--rwc-control);
+    --bs-tertiary-color: var(--rwc-caption);
+    --bs-tertiary-bg: var(--rwc-panel-header);
+
+    --bs-border-color: var(--rwc-border);
+    --bs-border-color-translucent: rgba(255, 255, 255, 0.12);
+
+    --bs-link-color: var(--rwc-accent-main);
+    --bs-link-hover-color: #7fcdf0;
+    --bs-link-color-rgb: 79, 180, 230;
+
+    --bs-code-color: var(--rwc-accent-sub);
+
+    --bs-primary: var(--rwc-accent-main);
+    --bs-success: var(--rwc-accent-sub);
+    --bs-warning: var(--rwc-attention);
+    --bs-danger: var(--rwc-alarm);
+
+    --bs-primary-rgb: 79, 180, 230;
+    --bs-success-rgb: 88, 207, 154;
+    --bs-warning-rgb: 242, 163, 60;
+    --bs-danger-rgb: 255, 122, 114;
+
+    /* Bootstrap's focus ring, so anything we have not styled by hand still
+       gets the accessible one rather than #0d6efd on near-black. */
+    --bs-focus-ring-color: rgba(79, 214, 255, 0.55);
+    --bs-focus-ring-width: var(--rwc-focus-ring-width);
+}
+
+/* --------------------------------------------------------------------------
+   2. Page ground and surfaces.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] body {
+    background-color: var(--rwc-ground);
+    color: var(--rwc-text);
+}
+
+/* .bg-white is written into the markup of both applications' sticky header.
+   A utility class is normally not something to override, but this one is
+   load-bearing: left alone it paints a white band across the top of a dark
+   page. Scoped to the theme, so Classic keeps its literal white. */
+[data-theme="instrument"] .bg-white {
+    background-color: var(--rwc-panel) !important;
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .bg-light {
+    background-color: var(--rwc-panel-header) !important;
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .text-dark,
+[data-theme="instrument"] .text-black {
+    color: var(--rwc-text) !important;
+}
+
+[data-theme="instrument"] .text-muted {
+    color: var(--rwc-muted) !important;
+}
+
+[data-theme="instrument"] .border,
+[data-theme="instrument"] .border-top,
+[data-theme="instrument"] .border-bottom,
+[data-theme="instrument"] .border-start,
+[data-theme="instrument"] .border-end {
+    border-color: var(--rwc-border) !important;
+}
+
+[data-theme="instrument"] hr {
+    border-color: var(--rwc-border);
+    opacity: 1;
+}
+
+/* --------------------------------------------------------------------------
+   3. Cards — the panel that nearly every screen in both applications is
+   built from.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] .card {
+    background-color: var(--rwc-panel);
+    border-color: var(--rwc-border);
+    border-radius: var(--rwc-panel-radius);
+    box-shadow: var(--rwc-panel-shadow);
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .card-header,
+[data-theme="instrument"] .card-footer {
+    background-color: var(--rwc-panel-header);
+    border-color: var(--rwc-border);
+    color: var(--rwc-text);
+}
+
+/* Both applications colour a VFO/receiver card by border to say which
+   receiver it is. Keep that, in the theme's own two receiver colours, and
+   make the edge thick enough to read at a glance on a dark ground. */
+[data-theme="instrument"] .border-primary {
+    border-color: var(--rwc-accent-main) !important;
+}
+
+[data-theme="instrument"] .border-success {
+    border-color: var(--rwc-accent-sub) !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. Form controls.
+
+   --rwc-border-control rather than --rwc-border: the outline of something
+   you can type in or click is a UI component boundary and owes 3:1
+   (WCAG 1.4.11), which the decorative border deliberately does not meet.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] .form-control,
+[data-theme="instrument"] .form-select,
+[data-theme="instrument"] .input-group-text {
+    background-color: var(--rwc-control);
+    border-color: var(--rwc-border-control);
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .form-control::placeholder {
+    color: var(--rwc-caption);
+    opacity: 1;
+}
+
+[data-theme="instrument"] .form-control:disabled,
+[data-theme="instrument"] .form-select:disabled {
+    background-color: var(--rwc-panel-header);
+    color: var(--rwc-muted);
+}
+
+[data-theme="instrument"] .form-check-input {
+    background-color: var(--rwc-control);
+    border-color: var(--rwc-border-control);
+}
+
+[data-theme="instrument"] .form-check-input:checked {
+    background-color: var(--rwc-accent-main);
+    border-color: var(--rwc-accent-main);
+}
+
+[data-theme="instrument"] .form-label,
+[data-theme="instrument"] .col-form-label,
+[data-theme="instrument"] legend {
+    color: var(--rwc-text);
+}
+
+/* Bootstrap's .form-text is help text at 0.875em — the smallest type on a
+   settings page, and therefore the caption token's job, not muted's. */
+[data-theme="instrument"] .form-text {
+    color: var(--rwc-caption);
+}
+
+/* --------------------------------------------------------------------------
+   5. Buttons.
+
+   Bootstrap 5.3 writes literal hex into each .btn-* variant's own
+   --bs-btn-* variables rather than reading the palette, so overriding
+   --bs-primary above does not reach them. Each variant is restated.
+
+   Note --rwc-on-accent on every FILLED button: in this theme the accents
+   are light, so white-on-accent fails (white on #4fb4e6 is 2.33:1) and the
+   readable answer is near-black at 9:1. Getting this wrong is invisible to
+   the author and unreadable to everyone else.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] .btn-primary {
+    --bs-btn-bg: var(--rwc-accent-main);
+    --bs-btn-border-color: var(--rwc-accent-main);
+    --bs-btn-color: var(--rwc-on-accent);
+    --bs-btn-hover-bg: #6fc4ef;
+    --bs-btn-hover-border-color: #6fc4ef;
+    --bs-btn-hover-color: var(--rwc-on-accent);
+    --bs-btn-active-bg: #3ea3d6;
+    --bs-btn-active-border-color: #3ea3d6;
+    --bs-btn-active-color: var(--rwc-on-accent);
+    --bs-btn-disabled-bg: var(--rwc-control);
+    --bs-btn-disabled-border-color: var(--rwc-border-control);
+    --bs-btn-disabled-color: var(--rwc-muted);
+}
+
+[data-theme="instrument"] .btn-success {
+    --bs-btn-bg: var(--rwc-accent-sub);
+    --bs-btn-border-color: var(--rwc-accent-sub);
+    --bs-btn-color: var(--rwc-on-accent);
+    --bs-btn-hover-bg: #76dbae;
+    --bs-btn-hover-border-color: #76dbae;
+    --bs-btn-hover-color: var(--rwc-on-accent);
+    --bs-btn-active-bg: #46bd89;
+    --bs-btn-active-border-color: #46bd89;
+    --bs-btn-active-color: var(--rwc-on-accent);
+    --bs-btn-disabled-bg: var(--rwc-control);
+    --bs-btn-disabled-border-color: var(--rwc-border-control);
+    --bs-btn-disabled-color: var(--rwc-muted);
+}
+
+[data-theme="instrument"] .btn-warning {
+    --bs-btn-bg: var(--rwc-attention);
+    --bs-btn-border-color: var(--rwc-attention);
+    --bs-btn-color: var(--rwc-on-accent);
+    --bs-btn-hover-bg: #f6b661;
+    --bs-btn-hover-border-color: #f6b661;
+    --bs-btn-hover-color: var(--rwc-on-accent);
+    --bs-btn-active-bg: #dc9130;
+    --bs-btn-active-border-color: #dc9130;
+    --bs-btn-active-color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .btn-danger {
+    --bs-btn-bg: var(--rwc-alarm);
+    --bs-btn-border-color: var(--rwc-alarm);
+    --bs-btn-color: var(--rwc-on-accent);
+    --bs-btn-hover-bg: #ff958e;
+    --bs-btn-hover-border-color: #ff958e;
+    --bs-btn-hover-color: var(--rwc-on-accent);
+    --bs-btn-active-bg: #e66a63;
+    --bs-btn-active-border-color: #e66a63;
+    --bs-btn-active-color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .btn-secondary {
+    --bs-btn-bg: var(--rwc-control);
+    --bs-btn-border-color: var(--rwc-border-control);
+    --bs-btn-color: var(--rwc-text);
+    --bs-btn-hover-bg: #27333f;
+    --bs-btn-hover-border-color: var(--rwc-border-control);
+    --bs-btn-hover-color: var(--rwc-text);
+    --bs-btn-active-bg: #2f3d4b;
+    --bs-btn-active-border-color: var(--rwc-border-control);
+    --bs-btn-active-color: var(--rwc-text);
+    --bs-btn-disabled-bg: var(--rwc-panel-header);
+    --bs-btn-disabled-border-color: var(--rwc-border);
+    --bs-btn-disabled-color: var(--rwc-muted);
+}
+
+[data-theme="instrument"] .btn-light,
+[data-theme="instrument"] .btn-dark {
+    --bs-btn-bg: var(--rwc-control);
+    --bs-btn-border-color: var(--rwc-border-control);
+    --bs-btn-color: var(--rwc-text);
+    --bs-btn-hover-bg: #27333f;
+    --bs-btn-hover-border-color: var(--rwc-border-control);
+    --bs-btn-hover-color: var(--rwc-text);
+}
+
+/* Outline buttons. YWC's markup alone carries 471 of these, and they are
+   how both applications draw band, mode and antenna selectors — so the
+   ACTIVE state below is not cosmetic, it is how an operator sees which
+   band they are on. */
+[data-theme="instrument"] .btn-outline-primary {
+    --bs-btn-color: var(--rwc-accent-main);
+    --bs-btn-border-color: var(--rwc-accent-main);
+    --bs-btn-bg: transparent;
+    --bs-btn-hover-bg: var(--rwc-accent-main);
+    --bs-btn-hover-border-color: var(--rwc-accent-main);
+    --bs-btn-hover-color: var(--rwc-on-accent);
+    --bs-btn-active-bg: var(--rwc-accent-main);
+    --bs-btn-active-border-color: var(--rwc-accent-main);
+    --bs-btn-active-color: var(--rwc-on-accent);
+    --bs-btn-disabled-color: var(--rwc-muted);
+    --bs-btn-disabled-border-color: var(--rwc-border);
+}
+
+[data-theme="instrument"] .btn-outline-success {
+    --bs-btn-color: var(--rwc-accent-sub);
+    --bs-btn-border-color: var(--rwc-accent-sub);
+    --bs-btn-bg: transparent;
+    --bs-btn-hover-bg: var(--rwc-accent-sub);
+    --bs-btn-hover-border-color: var(--rwc-accent-sub);
+    --bs-btn-hover-color: var(--rwc-on-accent);
+    --bs-btn-active-bg: var(--rwc-accent-sub);
+    --bs-btn-active-border-color: var(--rwc-accent-sub);
+    --bs-btn-active-color: var(--rwc-on-accent);
+    --bs-btn-disabled-color: var(--rwc-muted);
+    --bs-btn-disabled-border-color: var(--rwc-border);
+}
+
+[data-theme="instrument"] .btn-outline-secondary {
+    --bs-btn-color: var(--rwc-text);
+    --bs-btn-border-color: var(--rwc-border-control);
+    --bs-btn-bg: transparent;
+    --bs-btn-hover-bg: var(--rwc-control);
+    --bs-btn-hover-border-color: var(--rwc-text);
+    --bs-btn-hover-color: var(--rwc-text);
+    --bs-btn-active-bg: var(--rwc-control);
+    --bs-btn-active-border-color: var(--rwc-text);
+    --bs-btn-active-color: var(--rwc-text);
+    --bs-btn-disabled-color: var(--rwc-muted);
+    --bs-btn-disabled-border-color: var(--rwc-border);
+}
+
+[data-theme="instrument"] .btn-outline-warning {
+    --bs-btn-color: var(--rwc-attention);
+    --bs-btn-border-color: var(--rwc-attention);
+    --bs-btn-bg: transparent;
+    --bs-btn-hover-bg: var(--rwc-attention);
+    --bs-btn-hover-color: var(--rwc-on-accent);
+    --bs-btn-active-bg: var(--rwc-attention);
+    --bs-btn-active-color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .btn-outline-danger {
+    --bs-btn-color: var(--rwc-alarm);
+    --bs-btn-border-color: var(--rwc-alarm);
+    --bs-btn-bg: transparent;
+    --bs-btn-hover-bg: var(--rwc-alarm);
+    --bs-btn-hover-color: var(--rwc-on-accent);
+    --bs-btn-active-bg: var(--rwc-alarm);
+    --bs-btn-active-color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .btn-link {
+    --bs-btn-color: var(--rwc-accent-main);
+    --bs-btn-hover-color: #7fcdf0;
+}
+
+/* --------------------------------------------------------------------------
+   6. Focus.
+
+   This is the one rule in the theme that is not negotiable, and the reason
+   it is written out rather than left to Bootstrap: site.css already
+   carries an `outline: none` on a slider, which is exactly how a focus
+   ring goes missing in a restyle without anyone noticing.
+
+   :focus-visible rather than :focus, so a mouse click on a button does not
+   ring it — but the ring is forced back ON for anything reached by
+   keyboard, and it is drawn outside the element (offset) so it survives a
+   control whose own background is the same colour as the ring.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] :focus-visible {
+    outline: var(--rwc-focus-ring-width) solid var(--rwc-focus-ring);
+    outline-offset: var(--rwc-focus-ring-offset);
+    /* Bootstrap draws focus with box-shadow on several components; clear it
+       so the two do not stack into a fuzzy double ring. */
+    box-shadow: none;
+}
+
+[data-theme="instrument"] .btn:focus-visible,
+[data-theme="instrument"] .form-control:focus-visible,
+[data-theme="instrument"] .form-select:focus-visible,
+[data-theme="instrument"] .form-check-input:focus-visible {
+    outline: var(--rwc-focus-ring-width) solid var(--rwc-focus-ring);
+    outline-offset: var(--rwc-focus-ring-offset);
+    border-color: var(--rwc-focus-ring);
+    box-shadow: none;
+}
+
+/* A focused text field also gets its border brightened, because the ring
+   sits outside the box and the field's own edge is what the cursor is in. */
+[data-theme="instrument"] .form-control:focus,
+[data-theme="instrument"] .form-select:focus {
+    background-color: var(--rwc-control);
+    color: var(--rwc-text);
+    border-color: var(--rwc-focus-ring);
+}
+
+/* --------------------------------------------------------------------------
+   7. Tables, lists, dialogs, everything else the two applications share.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] .table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--rwc-text);
+    --bs-table-border-color: var(--rwc-border);
+    --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
+    --bs-table-striped-color: var(--rwc-text);
+    --bs-table-hover-bg: rgba(79, 180, 230, 0.10);
+    --bs-table-hover-color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .table > thead {
+    color: var(--rwc-muted);
+}
+
+[data-theme="instrument"] .list-group {
+    --bs-list-group-bg: var(--rwc-panel);
+    --bs-list-group-color: var(--rwc-text);
+    --bs-list-group-border-color: var(--rwc-border);
+    --bs-list-group-action-hover-bg: var(--rwc-control);
+    --bs-list-group-action-hover-color: var(--rwc-text);
+    --bs-list-group-active-bg: var(--rwc-accent-main);
+    --bs-list-group-active-border-color: var(--rwc-accent-main);
+    --bs-list-group-active-color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .modal-content,
+[data-theme="instrument"] .dropdown-menu,
+[data-theme="instrument"] .offcanvas {
+    background-color: var(--rwc-panel);
+    border-color: var(--rwc-border);
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .modal-header,
+[data-theme="instrument"] .modal-footer {
+    border-color: var(--rwc-border);
+}
+
+[data-theme="instrument"] .dropdown-menu {
+    --bs-dropdown-link-color: var(--rwc-text);
+    --bs-dropdown-link-hover-bg: var(--rwc-control);
+    --bs-dropdown-link-hover-color: var(--rwc-text);
+    --bs-dropdown-link-active-bg: var(--rwc-accent-main);
+    --bs-dropdown-link-active-color: var(--rwc-on-accent);
+}
+
+[data-theme="instrument"] .nav-tabs {
+    --bs-nav-tabs-border-color: var(--rwc-border);
+    --bs-nav-tabs-link-hover-border-color: var(--rwc-border-control);
+    --bs-nav-tabs-link-active-bg: var(--rwc-panel);
+    --bs-nav-tabs-link-active-color: var(--rwc-text);
+    --bs-nav-tabs-link-active-border-color: var(--rwc-border) var(--rwc-border) var(--rwc-panel);
+    --bs-nav-link-color: var(--rwc-muted);
+    --bs-nav-link-hover-color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .navbar {
+    --bs-navbar-color: var(--rwc-muted);
+    --bs-navbar-hover-color: var(--rwc-text);
+    --bs-navbar-active-color: var(--rwc-accent-main);
+    --bs-navbar-brand-color: var(--rwc-text);
+    --bs-navbar-brand-hover-color: var(--rwc-text);
+    --bs-navbar-toggler-border-color: var(--rwc-border-control);
+}
+
+/* Native <dialog>. Both applications use these directly rather than
+   Bootstrap modals for the memory, keypad and scope panels. */
+[data-theme="instrument"] dialog {
+    background-color: var(--rwc-panel);
+    border: 1px solid var(--rwc-border);
+    border-radius: var(--rwc-panel-radius);
+    box-shadow: var(--rwc-panel-shadow);
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] dialog::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="instrument"] details > summary {
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .badge.text-bg-light,
+[data-theme="instrument"] .badge.text-bg-secondary {
+    background-color: var(--rwc-control) !important;
+    color: var(--rwc-text) !important;
+}
+
+[data-theme="instrument"] .badge.text-bg-primary {
+    background-color: var(--rwc-accent-main) !important;
+    color: var(--rwc-on-accent) !important;
+}
+
+[data-theme="instrument"] .badge.text-bg-success {
+    background-color: var(--rwc-accent-sub) !important;
+    color: var(--rwc-on-accent) !important;
+}
+
+[data-theme="instrument"] .badge.text-bg-warning {
+    background-color: var(--rwc-attention) !important;
+    color: var(--rwc-on-accent) !important;
+}
+
+[data-theme="instrument"] .badge.text-bg-danger {
+    background-color: var(--rwc-alarm) !important;
+    color: var(--rwc-on-accent) !important;
+}
+
+[data-theme="instrument"] .alert {
+    background-color: var(--rwc-panel-header);
+    border-color: var(--rwc-border);
+    color: var(--rwc-text);
+}
+
+[data-theme="instrument"] .alert-warning {
+    border-left: 4px solid var(--rwc-attention);
+}
+
+[data-theme="instrument"] .alert-danger {
+    border-left: 4px solid var(--rwc-alarm);
+}
+
+[data-theme="instrument"] .text-warning {
+    color: var(--rwc-attention) !important;
+}
+
+[data-theme="instrument"] .text-danger {
+    color: var(--rwc-alarm) !important;
+}
+
+[data-theme="instrument"] .text-success {
+    color: var(--rwc-accent-sub) !important;
+}
+
+[data-theme="instrument"] .text-primary {
+    color: var(--rwc-accent-main) !important;
+}
+
+/* --------------------------------------------------------------------------
+   8. Target size.
+
+   2.5.5 AAA is 44px, and --rwc-target-min carries it. Applied to buttons
+   and form controls only — never to a whole page, and never in Classic,
+   where the token is 0 and these rules do not exist at all.
+
+   .btn-sm is deliberately included: in both applications the small buttons
+   ARE the band and mode selectors, which is precisely the control a
+   head-tracker user hits most often.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] .btn,
+[data-theme="instrument"] .form-control,
+[data-theme="instrument"] .form-select {
+    min-height: var(--rwc-target-min);
+}
+
+/* A button whose whole content is an icon is square, so it needs the
+   minimum on both axes or it meets the target size in one dimension only. */
+[data-theme="instrument"] .btn:has(> .bi:only-child) {
+    min-width: var(--rwc-target-min);
+}
+
+/* --------------------------------------------------------------------------
+   9. Readouts.
+
+   The frequency display is the one piece of type in either application
+   that is read at a glance from across the room, so the theme is allowed
+   to restyle it — but only through tokens, so the size and tracking stay
+   in one place and a later large-type mode can raise them.
+   -------------------------------------------------------------------------- */
+
+[data-theme="instrument"] .frequency-display {
+    color: var(--rwc-readout-color);
+    text-shadow: 0 0 18px rgba(79, 180, 230, 0.25);
+}
+
+/* Selected digit: Classic uses a yellow highlight with black text, which
+   still reads correctly here (#ffe066 on black is well past AAA), so the
+   only change is the ring around it. */
+[data-theme="instrument"] .frequency-display .digit.selected {
+    box-shadow: inset 0 0 0 1px var(--rwc-attention);
+}
+
+/* --------------------------------------------------------------------------
+   10. Canvas-drawn content.
+
+   Meters, spectra and waterfalls are painted by JavaScript into a <canvas>
+   and CSS cannot reach a single pixel of them. They are listed here only
+   so the next person does not spend an afternoon looking for the rule:
+   whatever the theme does, a canvas keeps the colours its drawing code
+   chose. Carrying the theme into them means reading these tokens from JS,
+   which is a later change and belongs with the layout work, not here.
+   -------------------------------------------------------------------------- */
+
+/* The label overlay sits ON the canvas, in the DOM, so this one IS
+   reachable — and it must be, because Classic draws it dark-on-white with
+   a white text-shadow, which is invisible against a dark gauge face. */
+[data-theme="instrument"] .gauge-label {
+    color: var(--rwc-text);
+    text-shadow: 0 1px 3px #000, 0 0 3px #000;
+}

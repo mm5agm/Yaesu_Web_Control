@@ -253,11 +253,18 @@ body {
 }
 
 /* Focus ring on the freq display itself -- helps keyboard-only users
-   see that the display is focused (so ArrowUp/Down will step a digit). */
+   see that the display is focused (so ArrowUp/Down will step a digit).
+
+   The three values come from theme tokens whose :root defaults are exactly
+   the literals that used to be here (#0d6efd, 2px, 2px), so this renders
+   identically in Classic. It is written this way so a theme can raise the
+   ring's contrast without having to restate the rule -- see
+   core/css/theme-tokens.css, where the focus ring is one of the four tokens
+   carrying a WCAG requirement. */
 .frequency-display:focus,
 .frequency-display:focus-visible {
-    outline: 2px solid #0d6efd;
-    outline-offset: 2px;
+    outline: var(--rwc-focus-ring-width, 2px) solid var(--rwc-focus-ring, #0d6efd);
+    outline-offset: var(--rwc-focus-ring-offset, 2px);
 }
 
 /* Band/mode/antenna buttons - optimized for 2-line layout with good touch targets */
@@ -277,7 +284,15 @@ body {
 }
 
 
-/* Focus state for accessibility */
+/* NOT a focus state for accessibility, despite what this comment used to
+   say: removing the outline is what makes a control invisible to a keyboard
+   user, not what makes it visible. It is left in place here because changing
+   Classic's appearance is outside a theming change, and the slider does still
+   show the browser's default focus styling underneath on a white page.
+
+   The Instrument theme restores a proper ring (theme-instrument-local.css),
+   where there is no existing appearance to preserve. Worth fixing in Classic
+   too, as its own small change. */
 #powerSliderA:focus {
     outline: none;
     outline-offset: 0;
