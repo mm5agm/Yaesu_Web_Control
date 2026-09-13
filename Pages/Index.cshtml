@@ -2505,6 +2505,14 @@
      putting it back afterwards. Non-modal and draggable like the reader. -->
 <style>
     #cwSendDialog .cws-header { cursor:move; }
+    /* A definite width so lines wrap instead of stretching the panel to
+       the longest one; the corner drags to resize, and a size the operator
+       has set is kept (dlgSize_cwSendDialog) - see makeResizable. */
+    #cwSendDialog { width:560px; min-width:420px; min-height:220px; max-height:95vh; resize:both; overflow:auto; }
+    #cwSendDialog[open] { display:flex; flex-direction:column; }
+    #cwSendDialog .cws-header { flex:0 0 auto; }
+    #cwSendDialog .cws-body { flex:1 1 auto; min-height:0; }
+    #cwSendDialog.user-sized #cwSendLog { max-height:none; flex:1 1 auto; min-height:4rem; }
     #cwSendInput {
         font-family: ui-monospace, Consolas, monospace;
         font-size: 1.05rem;
@@ -2519,6 +2527,7 @@
         min-height: 6rem;
         max-height: 30vh;
         overflow-y: auto;
+        position: relative;   /* offsetTop of a character is then within the log */
         background: #111;
         border: 1px solid #444;
         border-radius: 6px;
@@ -2547,7 +2556,7 @@
         padding: 0.4rem 0.6rem; border-radius: 0.25rem;
     }
 </style>
-<dialog id="cwSendDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:520px; max-width:95vw;" aria-labelledby="cwSendTitle">
+<dialog id="cwSendDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; max-width:95vw;" aria-labelledby="cwSendTitle">
     <div class="cws-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
         <strong id="cwSendTitle">CW Send</strong>
         <div class="d-flex align-items-center gap-2">
@@ -2559,7 +2568,7 @@
                     aria-label="Close CW send panel">&#10005;</button>
         </div>
     </div>
-    <div class="p-2 d-flex flex-column gap-2">
+    <div class="cws-body p-2 d-flex flex-column gap-2">
         <div id="cwSendBanner" role="status" aria-live="polite" hidden></div>
         <div id="cwSendLog" role="log" aria-live="polite" aria-label="CW lines sent"></div>
         <div class="input-group">
@@ -2586,6 +2595,13 @@
      work the station while the text is on screen. -->
 <style>
     #cwReaderDialog .cwr-header { cursor:move; }
+    #cwReaderDialog { width:680px; min-width:480px; min-height:260px; max-height:95vh; resize:both; overflow:auto; }
+    #cwReaderDialog[open] { display:flex; flex-direction:column; }
+    #cwReaderDialog .cwr-header { flex:0 0 auto; }
+    #cwReaderDialog .cwr-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+    #cwReaderDialog.user-sized .cwr-main { flex:1 1 auto; min-height:0; }
+    #cwReaderDialog.user-sized .cwr-textcol { display:flex; flex-direction:column; min-height:0; align-self:stretch; }
+    #cwReaderDialog.user-sized #cwReaderOut { max-height:none; flex:1 1 auto; min-height:4rem; }
     #cwReaderOut {
         font-family: ui-monospace, Consolas, monospace;
         font-size: 1.05rem;
@@ -2661,7 +2677,7 @@
     .cwq-status { font-size: 0.85rem; color: #9d9; margin-top: 0.35rem; min-height: 1.2rem; }
     .cwq-status.cwq-problem { color: #ffd23f; font-weight: 600; }
 </style>
-<dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:620px; max-width:95vw;" aria-labelledby="cwReaderTitle">
+<dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; max-width:95vw;" aria-labelledby="cwReaderTitle">
     <div class="cwr-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
         <strong id="cwReaderTitle">CW Reader</strong>
         <div class="d-flex align-items-center gap-2">
@@ -2685,9 +2701,9 @@
                     aria-label="Close CW reader panel">&#10005;</button>
         </div>
     </div>
-    <div class="p-2">
-        <div class="d-flex gap-2 align-items-start">
-            <div class="flex-grow-1" style="min-width:0;">
+    <div class="cwr-body p-2">
+        <div class="cwr-main d-flex gap-2 align-items-start">
+            <div class="cwr-textcol flex-grow-1" style="min-width:0;">
                 <div id="cwReaderOut" role="log" aria-live="polite" aria-label="Decoded CW text"></div>
                 <div class="cwr-legend mt-1">
                     Colour marks what <em>looks like</em> QSO traffic, and nothing is hidden or corrected:
@@ -4152,6 +4168,34 @@
                 document.addEventListener('touchend', onEnd);
             }, { passive: true });
         }
+
+        // Dialogs whose CSS says resize:both. The browser writes the dragged
+        // size as inline width/height; that is what is saved and put back,
+        // and its presence flips the dialog into user-sized layout, where
+        // the text area fills the height instead of capping at its own max.
+        function makeResizable(dialog) {
+            const key = 'dlgSize_' + dialog.id;
+            const apply = () => dialog.classList.toggle('user-sized', !!(dialog.style.width || dialog.style.height));
+            try {
+                const saved = JSON.parse(localStorage.getItem(key) || 'null');
+                if (saved && saved.width) { dialog.style.width = saved.width; dialog.style.height = saved.height || ''; }
+            } catch { /* ignore */ }
+            apply();
+            let timer = null;
+            new ResizeObserver(() => {
+                if (!dialog.open) return;
+                apply();
+                if (!dialog.style.width && !dialog.style.height) return;
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    try { localStorage.setItem(key, JSON.stringify({ width: dialog.style.width, height: dialog.style.height })); } catch { /* ignore */ }
+                }, 250);
+            }).observe(dialog);
+        }
+        ['cwSendDialog', 'cwReaderDialog'].forEach(id => {
+            const dlg = document.getElementById(id);
+            if (dlg) makeResizable(dlg);
+        });
 
         ['voxDialog', 'cwDialog', 'cwSendDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog'].forEach(id => {
             const dlg = document.getElementById(id);

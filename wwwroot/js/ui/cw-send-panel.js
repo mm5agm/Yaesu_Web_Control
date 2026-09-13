@@ -338,17 +338,37 @@ export class CwSendPanel {
         const spans = el.querySelectorAll('.cws-ch');
         const timeline = charTimeline(chunk, this._wpmOf(d));
         const t0 = Date.now();
+        let shown = null;   // the span last scrolled into view
         const tick = () => {
             const t = Date.now() - t0;
+            let cur = null;
             for (const e of timeline) {
                 const sp = spans[from + e.index];
                 if (!sp) continue;
+                const isCur = e.start <= t && t < e.end;
                 sp.classList.toggle('cws-done', e.end <= t && e.end > e.start);
-                sp.classList.toggle('cws-cur', e.start <= t && t < e.end);
+                sp.classList.toggle('cws-cur', isCur);
+                if (isCur && !cur) cur = sp;
             }
+            if (cur && cur !== shown) { shown = cur; this._keepVisible(cur); }
         };
+        // The log was scrolled to its bottom when the line was added, which
+        // for a long wrapped line is its tail: start by showing its head, so
+        // the highlight is on screen from the first character.
+        this._keepVisible(spans[from]);
         tick();
         this._cursor = { id: setInterval(tick, CURSOR_MS), spans, from, len: chunk.length };
+    }
+
+    // Scroll the log, and only the log, so the character is in view: above
+    // the box it comes to the top, below it to the bottom.
+    _keepVisible(sp) {
+        const log = this._log;
+        if (!sp || !log) return;
+        const top = sp.offsetTop;   // the log is position:relative, so this is within it
+        const bottom = top + sp.offsetHeight;
+        if (top < log.scrollTop) log.scrollTop = top;
+        else if (bottom > log.scrollTop + log.clientHeight) log.scrollTop = bottom - log.clientHeight;
     }
 
     // The piece has ended (RI4 cleared, or the computed time ran out):
