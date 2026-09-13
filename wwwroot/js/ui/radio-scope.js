@@ -6,8 +6,8 @@
 // showing on its front-panel screen.
 //
 // See docs/design/scope-control-via-cat.md. Frame format is hardware-confirmed
-// on an FTdx101MP. FTdx10 is enabled from the same SS table; FT-710 stays
-// gated until a write probe.
+// on an FTdx101MP. FTdx10 is enabled from the same SS table (CAT AI column is
+// O, same live-sync path as the 101); FT-710 stays gated until a write probe.
 //
 // Design notes worth keeping:
 //
@@ -345,7 +345,13 @@ export class RadioScopeControl {
     // { band: "main"|"sub", setting: "0".."8", field: 5 chars }
     applyRemote(msg) {
         if (!this.card || !msg) return;
-        if (msg.band !== this.band) return;   // the band we are not showing
+        // Dual-receiver radios have independent MAIN/SUB scopes; ignore the
+        // band we are not showing. Single-receiver models (FTdx10) have one
+        // scope and no band buttons — P1 is documented as fixed at 0, but if
+        // a frame arrives tagged otherwise we still apply it rather than
+        // dropping the only update the operator can see.
+        const hasBandButtons = !!this.card.querySelector('.scope-band-btn');
+        if (hasBandButtons && msg.band !== this.band) return;
         if (!this.state) return;              // nothing loaded yet; expand reads it
 
         const v = String(msg.field ?? '');
