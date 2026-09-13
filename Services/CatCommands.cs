@@ -600,6 +600,35 @@
         }
 
         /// <summary>
+        /// Unsolicited SS announcement (front-panel change) → band digit, P2
+        /// sub-command, and the five-character value field.
+        ///
+        /// Accepts the 10-character on-wire form (`SS0510000;`), the 9-character
+        /// body after the multiplexer strips the terminator, and a shorter
+        /// value field padded on the right with zeros. The previous dispatcher
+        /// insisted on length 10 including `;`, so a stripped 9-character frame
+        /// vanished — which would look exactly like "the radio never announces".
+        /// </summary>
+        public static bool TryParseAnnouncement(string? message, out char band, out char setting, out string field)
+        {
+            band = '0';
+            setting = '0';
+            field = "00000";
+            if (string.IsNullOrEmpty(message)) return false;
+
+            var ss = message.Trim();
+            if (ss.EndsWith(';')) ss = ss[..^1];
+            if (ss.Length < 5) return false;
+            if (ss[0] != 'S' || ss[1] != 'S') return false;
+
+            band = ss[2];
+            setting = ss[3];
+            var raw = ss[4..];
+            field = raw.Length >= 5 ? raw[..5] : raw.PadRight(5, '0');
+            return true;
+        }
+
+        /// <summary>
         /// Extracts the five-character value field from an SS answer, or null if
         /// the answer is not the expected shape. "SS0540000;" => "40000".
         ///

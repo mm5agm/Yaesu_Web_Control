@@ -497,53 +497,28 @@
                         // routing on P2 instead of listing sub-commands means it
                         // costs nothing to be wrong about that.
                         //
+                        // FTdx10 CAT manual (ENG 2308-F) marks SS AI as O — the
+                        // same live-sync path as the 101. P1 is "0: Fixed" on
+                        // that radio, so a frame is always MAIN even if P1 is
+                        // not the digit 0 (otherwise applyRemote would drop it
+                        // as "the other band").
+                        //
                         // Deliberately not stored: the scope panel holds this
                         // state in the browser and re-reads it on every expand,
                         // and it is the only consumer. See BroadcastTransient.
-                        //
-                        // TEMPORARY INSTRUMENTATION, added 2026-09-02, to be
-                        // removed once both of these are answered:
-                        //   1. Does the FTdx10 announce SS unsolicited at all?
-                        //      Nothing but the '101MP has ever been watched, and
-                        //      PR #120 turns on scope control for the FTdx10 with
-                        //      one-way sync as the reported symptom.
-                        //   2. Why does the '101MP appear to alternate HOLD on and
-                        //      off about once a second while HOLD is engaged? The
-                        //      browser has no timer and nothing polls SS, so it can
-                        //      only be the radio - but that has not been captured.
-                        // Information rather than Debug so a reporter can collect it
-                        // without changing their log level first. Both drop paths are
-                        // logged too: silently discarding an unexpected frame shape is
-                        // exactly what would hide answer 1.
-                        _logger.LogInformation("[SS] raw='{Raw}' length={Length}", message, message.Length);
-                        if (message.Length >= 10)
+                        if (ScopeCommands.TryParseAnnouncement(message, out var ssBand, out var ssSetting, out var ssField))
                         {
-                            var ss = message.TrimEnd(';');
-                            if (ss.Length == 9)
+                            var dual = RadioCapabilities.HasPerReceiverScopes(_stateService.RadioModel ?? "");
+                            _stateService.BroadcastTransient("ScopeSetting", new
                             {
-                                _stateService.BroadcastTransient("ScopeSetting", new
-                                {
-                                    band    = ss[2] == '1' ? "sub" : "main",
-                                    setting = ss[3].ToString(),
-                                    field   = ss.Substring(4, 5)
-                                });
-                            }
-                            else
-                            {
-                                _logger.LogInformation(
-                                    "[SS] DROPPED: trimmed length {Length} is not 9 - '{Trimmed}'",
-                                    ss.Length, ss);
-                            }
+                                band    = (dual && ssBand == '1') ? "sub" : "main",
+                                setting = ssSetting.ToString(),
+                                field   = ssField
+                            });
                         }
                         else
                         {
-                            // CatMultiplexerService strips the trailing ';' from
-                            // answers (see docs/design/scope-control-via-cat.md).
-                            // If an announcement ever arrives already stripped it is
-                            // 9 characters, fails the guard above, and vanishes -
-                            // a third candidate for the FTdx10 report.
-                            _logger.LogInformation(
-                                "[SS] DROPPED: shorter than 10 characters - '{Raw}'", message);
+                            _logger.LogDebug("[SS] DROPPED: unparseable frame '{Raw}'", message);
                         }
                         break;
                     case "VS":

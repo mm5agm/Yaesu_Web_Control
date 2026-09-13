@@ -115,6 +115,31 @@ public sealed class ScopeCommandsTests
         Assert.False(RadioCapabilities.SupportsScopeMulti("FTdx10"));
     }
 
+    [Theory]
+    [InlineData("SS0510000;", '0', '5', "10000")]
+    [InlineData("SS0510000",  '0', '5', "10000")]  // terminator already stripped
+    [InlineData("SS1590000;", '1', '5', "90000")]
+    [InlineData("SS059;",     '0', '5', "90000")]  // short field, pad right
+    public void TryParseAnnouncement_AcceptsOnWireAndStrippedFrames(
+        string raw, char band, char setting, string field)
+    {
+        Assert.True(ScopeCommands.TryParseAnnouncement(raw, out var b, out var s, out var f));
+        Assert.Equal(band, b);
+        Assert.Equal(setting, s);
+        Assert.Equal(field, f);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("SS")]
+    [InlineData("SS05")]
+    [InlineData("FA014200000;")]
+    public void TryParseAnnouncement_RejectsShortOrWrongOpcode(string? raw)
+    {
+        Assert.False(ScopeCommands.TryParseAnnouncement(raw, out _, out _, out _));
+    }
+
     // The FTDX10 CAT manual fixes SS P2=3 P4/P5 at zero, so the NB Col row must
     // not render there. Gated in _RadioScopeButtonsPartial on this method.
     [Theory]
