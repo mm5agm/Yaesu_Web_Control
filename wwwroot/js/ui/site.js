@@ -1445,6 +1445,10 @@ connection.on("RadioStateUpdate", function (update) {
             : window.radioScopeControl?.applyRemote(update.value);
     }
 
+    // The Radio Display hotspot overlay keeps its own small copy of the VFO
+    // and front-end state so it can label and cycle what the TFT is showing.
+    window.radioDisplayHotspots?.onRadioState(update);
+
     // --- SPLIT MODE ---
     if (update.property === "SplitMode") {
         splitMode = update.value;

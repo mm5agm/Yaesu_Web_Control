@@ -146,7 +146,8 @@
     </style>
 </head>
 <body>
-    <div id="radioDisplayContainer" class="row">
+    <div id="radioDisplayContainer" class="row"
+         data-radio-model="@Model.RadioModel" data-dual-receiver="@(Yaesu_Web_Control.Services.RadioCapabilities.IsDualReceiver(Model.RadioModel) ? "true" : "false")">
         <div class="col-12">
             <div class="card border-dark">
                 <div class="card-header bg-dark text-white d-flex align-items-center py-2">
@@ -275,25 +276,31 @@
     <script type="module">
         import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl } from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        initRadioDisplayUi('popout');
         const dlg = document.getElementById('radioDisplayScopeDialog');
         window.radioScopeControls = [];
         if (dlg) {
             const control = new RadioScopeControl(dlg);
             window.radioScopeControls.push(control);
             window.radioScopeControl = control;
-            const conn = new signalR.HubConnectionBuilder()
-                .withUrl('/radioHub')
-                .withAutomaticReconnect()
-                .build();
-            conn.on('RadioStateUpdate', (update) => {
-                if (update.property === 'ScopeSetting')
-                    window.radioScopeControls.forEach(c => c.applyRemote(update.value));
-                if (update.property === 'ActiveVfo')
-                    window.radioScopeControls.forEach(c => c.setActiveBand(update.value));
-            });
-            conn.start().catch(err => console.error('[radio-display-scope]', err));
         }
+        // After the scope control exists: the hotspot overlay looks it up for
+        // the span and the band the radio is showing.
+        initRadioDisplayUi('popout');
+        // One hub connection for the pop-out: scope settings changed at the
+        // rig, the active band, and the VFO / front-end state the hotspot
+        // overlay needs to label and cycle what is on the TFT.
+        const conn = new signalR.HubConnectionBuilder()
+            .withUrl('/radioHub')
+            .withAutomaticReconnect()
+            .build();
+        conn.on('RadioStateUpdate', (update) => {
+            if (update.property === 'ScopeSetting')
+                window.radioScopeControls.forEach(c => c.applyRemote(update.value));
+            if (update.property === 'ActiveVfo')
+                window.radioScopeControls.forEach(c => c.setActiveBand(update.value));
+            window.radioDisplayHotspots?.onRadioState(update);
+        });
+        conn.start().catch(err => console.error('[radio-display-scope]', err));
     </script>
 </body>
 </html>
