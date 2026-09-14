@@ -104,7 +104,6 @@
   <ItemGroup>
     <Compile Remove="Models\RigState.cs" />
     <Compile Remove="Pages\Ports..cshtml.cs" />
-    <Compile Remove="Pages\Shared\_BandButtonsPartial.cshtml.cs" />
     <Compile Remove="Services\CatPollingService.cs" />
     <Compile Remove="Services\IRigStateService.cs" />
     <Compile Remove="Services\RigStateService.cs" />
