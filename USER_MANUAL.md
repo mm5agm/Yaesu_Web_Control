@@ -1146,7 +1146,7 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 **The span button can change on its own when you switch display mode.** The radio stores a *separate span for each display mode*. I confirmed this over ten consecutive mode changes: W/F held 20 kHz and 3DSS held 1 MHz, each returning reliably. So the highlight moving is the radio reporting its own setting, and YWC deliberately does not "correct" it — re-sending the old span would overwrite a choice you made.
 
-**Changes you make at the radio appear in the browser.** Turn the SPAN knob on the front panel and the highlighted button follows within a moment, with no need to collapse and reopen the card. The radio announces front-panel scope changes over CAT and YWC listens for them. It does not announce changes YWC itself made, which is correct — those are already repainted from the command's own read-back.
+**Changes you make at the radio appear in the browser.** Turn the SPAN knob on the front panel and the highlighted button follows within a moment, with no need to collapse and reopen the card. The radio announces front-panel scope changes over CAT (`SS` is in the auto-information list on both FTdx101 and FTdx10) and YWC listens for them. It does not announce changes YWC itself made, which is correct — those are already repainted from the command's own read-back.
 
 #### What cannot be controlled from here
 
@@ -1158,7 +1158,7 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 **FTdx101MP/D** — every setting in this card was measured on real hardware before it shipped. Two receivers: **MAIN / SUB** band selector, narrow-band colour (**NB Col**), and **Hold** (freeze the trace).
 
-**FTdx10** — single receiver (no MAIN/SUB row, no **NB Col** — the CAT manual fixes those parameters at zero). **Hold** was confirmed on an FTdx10 — it freezes the TFT over CAT (`SS` P2=8), same as the '101.
+**FTdx10** — single receiver (no MAIN/SUB row, no **NB Col** — the CAT manual fixes those parameters at zero). **Hold** was confirmed on an FTdx10 — it freezes the TFT over CAT (`SS` P2=8), same as the '101. Front-panel scope changes follow the same CAT auto-information path as the 101.
 
 **FT-710** — the command list genuinely stops one sub-command short (no scope **Hold**), and it names scope sizes **Expand / Normal** rather than L / N / S. The card stays hidden until someone has probed writes on that radio.
 

@@ -322,6 +322,14 @@ Live sync is built on this (`CatMessageDispatcher` → `BroadcastTransient` →
 `ScopeSetting` → `radio-scope.js applyRemote`). See §6.1 and §6.2 for what
 that leaves untested.
 
+**FTdx10 uses the same path.** Its CAT manual (ENG 2308-F) marks `SS` AI as
+O, same as the 101. Two software holes were dropping those frames before the
+UI saw them: the dispatcher required a 10-character frame including `;` (a
+stripped 9-character body vanished), and `applyRemote` ignored any band that
+was not the one currently shown — on a radio whose P1 is "0: Fixed" that
+meant a non-`0` P1 never updated the buttons. Parser and band mapping now
+match the 101's live-sync, with P1 forced to MAIN on single-receiver models.
+
 **Span is stored per display mode.** Setting the span to 20 kHz and then
 switching mode appeared at first to "revert" it. It does not: the radio keeps a
 separate span for each mode. Over ten consecutive mode changes, W/F CURSOR (L)
