@@ -302,7 +302,7 @@ Because the picture is one-way, clicking on it does nothing. Instead a **Control
 - **Cable:** a DVI-D to HDMI cable — this is [the one I bought](https://www.amazon.co.uk/dp/B0002GRUIC?th=1).
 - **Capture:** an HDMI-to-USB capture card — [this one](https://www.amazon.co.uk/dp/B0C4STMPS2?th=1). It appears to the PC as a webcam, which is exactly what YWC wants.
 
-**Two videos.** I made these while testing Fabio's work:
+**Two videos**, made by other radio amateurs, that explain the problem with the Yaesu DVI-D to monitor connection and how to get round it:
 
 - [**Yaesu DVI-D to HDMI — investigation**](https://www.youtube.com/watch?v=dtlziYEsXxE) — what the radio's video output actually is, and the problems you can run into connecting it to HDMI equipment. Please watch this one before you plug anything in.
 - [**Capturing the Yaesu video**](https://www.youtube.com/watch?v=1EY7m5e91TI) — the feature in action: the radio's screen in the browser, and the scope controls driving it.
