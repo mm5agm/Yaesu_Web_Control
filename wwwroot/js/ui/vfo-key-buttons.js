@@ -8,6 +8,7 @@ import {
     ToggleButton,
     CycleContextButton,
 } from "/js/ui/toggle-dropdown-button.js";
+import { rebuildIfWidthSelect, ifWidthOptionsFor } from "/js/ui/if-width-tables.js";
 
 function debounce(fn, ms) {
     let timer = null;
@@ -159,6 +160,11 @@ function initMenuOnlyButton(root, cfg) {
     const originalSetState = widget.setState.bind(widget);
     widget.setState = (partial = {}, opts = {}) => {
         originalSetState(partial, opts);
+        lastId = widget.getState().selectedId;
+    };
+    const originalSetOptions = widget.setOptions.bind(widget);
+    widget.setOptions = (options, opts = {}) => {
+        originalSetOptions(options, opts);
         lastId = widget.getState().selectedId;
     };
 
@@ -362,15 +368,28 @@ function initRoofingButton(vfo) {
     });
 }
 
+function resolveRadioModel() {
+    return (
+        window._radioModel ||
+        window.getConfiguredRadioModel?.() ||
+        document.getElementById("vfoRow")?.dataset?.radioModel ||
+        null
+    );
+}
+
 function initIfWidthButton(vfo) {
     const root = document.getElementById(`ifWidthButton${vfo}`);
     if (!root) return null;
+    const model = resolveRadioModel();
+    const table = ifWidthOptionsFor(model, root.dataset.mode);
     const selectedId = root.dataset.selected || "0";
+    const options = table?.map((o) => ({ id: o.code, label: o.label }))
+        ?? [{ id: selectedId, label: "…" }];
     let lastId = selectedId;
 
     const widget = new CycleContextButton(root, {
         label: "IF Width",
-        options: [{ id: selectedId, label: "…" }],
+        options,
         selectedId,
         linkSliderToOptions: true,
         context: { type: "slider" },
@@ -391,11 +410,12 @@ function initIfWidthButton(vfo) {
         lastId = widget.getState().selectedId;
     };
     const originalSetOptions = widget.setOptions.bind(widget);
-    widget.setOptions = (options, opts = {}) => {
-        originalSetOptions(options, opts);
+    widget.setOptions = (next, opts = {}) => {
+        originalSetOptions(next, opts);
         lastId = widget.getState().selectedId;
     };
 
+    rebuildIfWidthSelect(widget, model, root.dataset.mode);
     return widget;
 }
 
