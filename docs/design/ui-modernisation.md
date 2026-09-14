@@ -95,13 +95,25 @@ page 2: *hidden from view* is not the same as *absent from the DOM*.
 
 ## Where the layout choice lives
 
+**Decided 2026-09-14.** Every GUI is *in addition to* the current one,
+never a replacement for it. The current GUI is called **Classic** and
+stays; each other GUI gets its own name (Workspace is the first). As
+soon as an app has more than one, the choice between them is made **on
+the main page** — a View selector present in every view — and that
+choice is **remembered** by the browser. Settings only supplies the
+default for a browser that has never chosen. IWC PR #37 does this
+(`f905ced`: `uiViewSelect`, localStorage `iwc.view`, a head script that
+applies the remembered view before first paint).
+
 - `ApplicationSettings`: `LayoutMode` = Classic | Workspace, `Theme` =
   Classic | Instrument. These are the **defaults**.
   Mind the `ModelState.Remove` trap for string settings on the Settings
   page (`<Nullable>enable</Nullable>` adds implicit `[Required]`).
-- **Per-device override in localStorage** (`ywc.layout`, `ywc.theme`) —
+- **Per-device override in localStorage** (`ywc.view`, `ywc.theme`) —
   the shack PC and a tablet want different answers, and there are
-  already 10 `ywc.*` view prefs following this pattern.
+  already 10 `ywc.*` view prefs following this pattern. (`.view`, not
+  `.layout`: the layout store already owns `<prefix>.layout.<name>` for
+  the saved arrangements.)
 - **Named presets go server-side** through `SettingsService`, so they
   survive a browser cache clear and follow the operator between machines.
 
@@ -252,8 +264,10 @@ mid-QSO because a window got dragged narrower.
 ## Open — not decided
 
 - Whether to do any of this at all, and whether phase 2 alone suffices.
-- Whether Classic is frozen, and if so how the accessibility trap above
-  is avoided.
+- ~~Whether Classic is frozen~~ — decided 2026-09-14: Classic is not
+  frozen and not replaced; it is one named GUI among several and keeps
+  getting its fixes. The accessibility trap is avoided because the other
+  GUIs re-place Classic's own elements rather than copying them.
 - Whether the layout editor is mouse-first.
 - Whether the layout engine actually goes to `core/` on first cut or
   after it settles (CLAUDE.md says the former — build it in `core/` from
