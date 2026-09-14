@@ -1,13 +1,65 @@
 
 # Yaesu Web Control
 
-![Latest release](https://img.shields.io/badge/Latest%20release-v2.4.2-blue?style=flat-square)
+![Latest release](https://img.shields.io/badge/Latest%20release-v2.5.0-blue?style=flat-square)
 ![Downloads](https://img.shields.io/github/downloads/mm5agm/Yaesu_Web_Control/latest/Yaesu_Web_Control_Setup.exe?label=Downloads&style=flat-square)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue?style=flat-square)
 
 > **Feedback wanted — especially if your setup isn't mine.** I operate FT8 on an FTdx101MP with an SDRplay RSP1B/RSP1 for the spectrum display, so that's the combination that actually gets tested. YWC now does everything I personally need, which means I've run out of my own ideas for what to add next — new features from here on depend on what other operators ask for. If you use another mode (SSB, CW, RTTY, other digital modes), another supported radio (FTdx101D, FTdx10, FT-710, FTDX3000), or a different SDR, even a one-line "works fine" or "this is annoying because…" on the [Discussions tab](https://github.com/mm5agm/Yaesu_Web_Control/discussions) tells me something I can't find out on my own. Bug reports, layout issues, and feature requests are all equally welcome.
 
 Yaesu Web Control (**YWC**) is a continuation of my FTdx101_WebApp with more Yaesu transceivers added and more controls.
+
+## ✨ Added since the last release
+
+**v2.5.0 is the biggest release since the SDR spectrum display arrived.** Five things are in it that were not in v2.4.2 at all: the radio's own screen in the browser — and you can click it — a Morse reader, a Morse sender, remote audio both ways, and YWC running on macOS, Linux and a Raspberry Pi. Two of those are Fabio Valente's (CR7CDC) work, and this release is as much his as mine.
+
+### The radio's own screen in the browser — and you can click it
+
+![The radio's TFT captured over HDMI, with the Radio scope controls docked beside it](pictures/Radio_Display_Docked.png)
+
+The FTdx101, FTdx10 and FT-710 repeat their front-panel TFT on a rear DVI-D socket. Plug that into a cheap HDMI-to-USB capture stick and YWC shows the radio's screen — scope, 3DSS, meters, menus, all of it — in the browser, popped out into its own window, or on a tablet in another room. That part is Fabio's, start to finish.
+
+**It is not a static picture of the radio.** HDMI capture is one-way, so a click can never reach the touchscreen — instead YWC works out what is under the mouse and sends the CAT command for it. On the FTdx101MP/D and the FTdx10 in MONO W/F:
+
+- **Hover over the scope or the waterfall** to read the frequency under the cursor, and **click to tune there**. The frequency is measured from the radio's own VFO marker line, so it is right whatever the span is set to.
+- **Click the ANT / ATT / IPO / R.FIL / AGC readouts** to cycle them, exactly as you would on the radio itself.
+- **Click the CURSOR / SPAN / 3DSS / HOLD soft-buttons** along the bottom of the screen.
+- Where a soft-button has no CAT command behind it (MONO, MULTI, EXPAND, MEM CH) the label says so rather than doing nothing silently. The overlay assumes EXPAND is off: with it on the scope grows up over the readout row, and the radio does not report that over CAT.
+
+Docked to the right of the picture is a **Controls** column that drives the radio's own scope over CAT — centre/cursor/fix, 3DSS or waterfall, span, speed, level, peak, marker, hold, colour, and the AF-FFT and oscilloscope settings. Turn a knob on the front panel and the button in the browser follows. On the FTdx101 both the MAIN and SUB scopes are driven, and with no capture stick at all the same controls are still there as a **Radio Scope** card.
+
+Two videos: [what the radio's DVI-D output actually is, and what can go wrong connecting it to HDMI](https://www.youtube.com/watch?v=dtlziYEsXxE) — worth watching before you plug anything in — and [the feature in action](https://www.youtube.com/watch?v=1EY7m5e91TI). **Set the radio's EXT MONITOR PIXEL menu to 800×600 first**, or the capture stick silently stretches the picture. The FT-710 has no clickable overlay yet. Full detail: [§19](USER_MANUAL.md#19-radio-display) and [§19.4](USER_MANUAL.md#194-cat-scope-controls).
+
+### CW Reader — the Morse on the air, as text
+
+![CW Reader panel decoding an off-air signal, with the status line, the tuning aids and the QSO log form](pictures/CW-Reader.png)
+
+A **CW Read** button on the main page opens a reader that decodes the Morse in the radio's receive audio and prints it as text. No extra hardware, nothing transmitted. Neither Yaesu nor Icom hand their own decoder's output over CAT, so I wrote a decoder; it lives in the shared [Radio_Web_Control_Core](https://github.com/mm5agm/Radio_Web_Control_Core) and the identical code reads Morse in Icom Web Control.
+
+The status line says what it is actually hearing — signal or not, the tone against your pitch, the filter width, the SNR, how far off pitch the station is — and when two stations are inside the filter, or the tone is breaking up, it says so and prints nothing rather than guessing. **Reader Mode** sets the radio up for copy (CW, a narrow filter, APF on) and puts your own settings back when you stop; **ZIN** drops the station onto your pitch; **Tune** shows the passband with a pitch marker and a zero-beat figure. Every session writes a timestamped transcript, and the log form *offers* the callsign and report the reader thinks it saw as one-click suggestions rather than filling them in — a callsign quietly filled in from junk is worse than an empty box. Confirmed contacts append to a plain ADIF file. Windows, macOS, Linux and Docker. Full detail: [§20](USER_MANUAL.md#20-cw-reader).
+
+### CW Send — type a line, press Enter, the radio keys it
+
+![CW Send panel part way through a long line, the character being keyed highlighted and the tag showing part 2 of 3](pictures/CW-Send.png)
+
+The reader's other half. A **CW Send** button opens a box: type a line, press **Enter**, and the radio keys it. Nothing goes out until Enter, so you can type ahead or paste, and the character being keyed is highlighted as it goes out. Only the CAT cable is needed, so it runs everywhere the reader does.
+
+It is built on the radio's own keyer memories: the line is cut into pieces of up to 50 characters at word boundaries, each written to keyer memory 5 and played, and your own M5 is put back at the end. With break-in **Off** the line goes to the monitor with a banner and nothing is transmitted, which is how I test it. **Stop** — or **Escape** — drops everything not yet started; the piece already on the air finishes, because the radio cannot be told to abandon a playback, which is the reason it is sent in pieces at all. Lines typed while one is sending are queued. Full detail: [§21](USER_MANUAL.md#21-cw-send).
+
+### And the rest of v2.5.0
+
+- **Remote Audio** (Fabio) — the radio's receive audio in the browser's speakers and the browser's microphone into the radio's USB audio for transmit, with a pop-out player and device pickers that find the radio's USB CODEC for you. For your own LAN or a VPN: YWC has no login, so don't port-forward it.
+- **macOS, Linux and Docker** (Fabio) — an unsigned macOS app for Apple Silicon and Intel, and a multi-architecture Docker image that runs on a Raspberry Pi 3B.
+- **Signals are drawn where they really are on the FTdx101 spectrum.** The IF OUT sockets are not at the SDR's centre and the radio slides its IF with the filter settings; YWC ignored both, so everything was drawn 5–7 kHz out. Measured and corrected on both receivers.
+- **The span buttons are now the radio's own list** — 1k to 1M, plus 2M. Everything from 100 kHz down is a software zoom of a fixed stream, so stepping between 1k and 100k is instant: no retune, no blank trace.
+- **The receiver's passband is shaded on the trace**, moving with IF width, shift and CW pitch, so you can see which of the signals on screen you are actually hearing.
+- **Smooth is a slider now, and the default no longer buries CW** — the old fixed average took about 11 dB off a one-bin CW carrier.
+- **The keyer's M1–M5 buttons finally send.** They had done nothing since v1.6.0: they used the command that *plays* a memory to try to *load* one. **Monitor level** had never worked either. Both fixed.
+- **Meters** — the SWR needle no longer freezes or dips ([#124](https://github.com/mm5agm/Yaesu_Web_Control/issues/124)), the FTdx101's front-panel meter pair is yours again outside transmit, and RF power is scaled to each radio's own rating instead of the FTdx101MP's 200 W.
+- **A keyboard-reachable ATU Tune button** and tuner voice commands, **CTCSS that works** (six separate faults), and **one screen-reader announcement per action** instead of an unpredictable number.
+- **The log is a tenth of the size**, with **Start fresh test log** / **Download test log** on the Diagnostics page, so a bug report can carry just the part that matters.
+
+Every one of these is written up in full in the [release notes](#2026-09-14---v250) at the foot of this page.
 
 **Supported transceivers:**
 
@@ -42,6 +94,9 @@ I own and test on the **FTdx101MP**; the other supported models are built from Y
 | Voice Control (SAPI) | Yes | No | No |
 | Voice announcements (browser TTS) | Yes | Yes | Yes |
 | CW Reader | Yes | Yes | Yes |
+| CW Send (keyboard keying via the radio's keyer) | Yes | Yes | Yes |
+| Remote Audio (RX to browser, mic to radio) | Yes | Yes | Yes (native host; not Docker) |
+| Radio Display (HDMI capture of the radio's screen) | Yes | Yes | Yes (map `/dev/video*` in Docker) |
 | Serial port | `COM3`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` |
 | USB serial driver | [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on **Windows, macOS, and Linux** — **reboot after install** |
 | User data | `%APPDATA%\MM5AGM\Yaesu Web Control\` | `~/.config/MM5AGM/Yaesu Web Control/` | Same `~/.config/…` path; Docker uses `./data/ywc` volume |
@@ -78,13 +133,17 @@ docker compose pull && docker compose up -d
 On macOS/Linux set **Serial Port** in Settings to the matching `/dev/…` path. SDR and Voice Control UI are hidden on the CAT-only host. Install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot before connecting the radio. In Docker, Remote Audio needs the host ALSA devices (`/dev/snd` + `audio` group); pick the radio USB codec in Settings after `compose up`. Radio Display (optional USB webcam / HDMI capture → MJPEG) needs `/dev/video*` + the `video` group — see USER_MANUAL §19.
 
 ## Main Page
-![Yaesu Web Control Main Page](pictures/DevelopScreen.png)
+Everything on one page: the meters across the top, the radio's own screen captured over HDMI with the CAT scope controls docked to its right, both SDR spectrum panels underneath, and a VFO card for each receiver:
+
+![The main page — meter row, the radio's TFT over HDMI with the scope controls beside it, the two SDR spectrum panels, and a VFO card per receiver](pictures/DevelopScreen.png)
+
+## Spectrum Display
+One SDR panel at the 20 kHz span: the shaded band is the receiver's IF passband, the amber line is the dial, and a click on a CW signal lands on it:
+
+![Spectrum panel at a narrow span showing the IF passband overlay and the dial marker](pictures/Spectrum_Passband.png)
 
 ## VOX, CW and FM Repeater Panels
 ![VOX, CW Keyer and FM Repeater panels open simultaneously](pictures/Screen%20popups.png)
-
-## Calibration Page
-![Calibration Page](pictures/Calibration.png)
 
 ## ⚠️ Warning
 
@@ -154,7 +213,9 @@ The application includes a real-time spectrum display and waterfall, intended fo
 - **RTL-SDR, Airspy, and HackRF** — supported via the bundled SoapySDR driver interface. No separate SoapySDR installation is required — the necessary drivers are included in the installer. *These devices have not been tested by me — feedback from users is very welcome.*
 
 **Features:**
-- Variable span: 15.625 kHz, 31.25 kHz, 62.5 kHz, 125 kHz, 250 kHz, 500 kHz, 1 MHz, or 2 MHz
+- Variable span: 15.625 kHz, 31.25 kHz, 62.5 kHz, 125 kHz, 250 kHz, 500 kHz, 1 MHz, or 2 MHz — the two narrowest are for CW, where one station is a single carrier
+- The receiver's **IF passband** drawn as a shaded band on the trace, moving with the IF width, IF shift and CW pitch, so you can see which of the signals on screen you are actually hearing; a **Passband** tick box on each panel turns it off
+- Signals drawn at their **true RF frequency** on the FTdx101, and a click on a CW signal tunes straight onto it (the IF OUT socket is not at the SDR's centre, and the radio slides its IF with the filter settings — YWC now corrects for both)
 - Dual-SDR mode: one SDR per VFO on the FTdx101MP / FTdx101D, with a Mono A / Mono B / Both layout toggle, Stacked / Side-by-side option, and independent span per panel
 - Click anywhere on a spectrum panel to tune the corresponding VFO to that frequency (panel A tunes VFO A, panel B tunes VFO B)
 - Mouse wheel over a spectrum panel tunes that VFO up/down in 1 kHz steps
@@ -218,9 +279,43 @@ The decoder itself lives in [Radio_Web_Control_Core](https://github.com/mm5agm/R
 
 Full details, including the status-line reference and troubleshooting, are in [USER_MANUAL.md §20 CW Reader](USER_MANUAL.md#20-cw-reader).
 
+## ⌨️ CW Send
+
+The reader's other half. **CW Send** opens a box you type into; press **Enter** and the radio keys the line. Nothing goes out until you press Enter, so you can type ahead, correct yourself, or paste. Read in one panel, answer in the other, with no key, keyer interface or extra audio — only the CAT cable, so it works on Windows, macOS, Linux and Docker alike.
+
+No Yaesu has a "send this text" command. What the radio has is five 50-character keyer memories and a command that plays one whole, so CW Send cuts the line into pieces of up to 50 characters at word boundaries, writes each into **keyer memory 5**, plays it, waits for it to end, and writes the next — then puts your own M5 text back. The wait is the textbook Morse timing worked out from the text and the keyer speed, because I measured the radio's "playback finished" flag through a whole message on the air and it never once asserted. The seam between pieces is a fraction of a second; a highlight walks along the text as it is keyed, driven by the same clock, and on my FTdx101MP it stays with the sidetone across a full line.
+
+Break-in decides whether it transmits, as it does for the M buttons: **Off** plays to the monitor with a banner saying so and nothing on the air — a free practice mode. **Stop** or **Escape** drops everything not yet started; the piece already playing has to finish, because the radio has no command to stop a memory playback — which is exactly why the line goes out in pieces rather than as one long memory: the most you can be committed to is 50 characters.
+
+Full details in [USER_MANUAL.md §21 CW Send](USER_MANUAL.md#21-cw-send).
+
+## 📺 Radio Display — the radio's own screen in the browser
+
+**This feature is Fabio Valente's (CR7CDC) work, not mine.** He designed it, wrote it, and carried it through three pull requests ([#97](https://github.com/mm5agm/Yaesu_Web_Control/pull/97), [#117](https://github.com/mm5agm/Yaesu_Web_Control/pull/117), [#120](https://github.com/mm5agm/Yaesu_Web_Control/pull/120)); all I did was test it on my FTdx101MP and make a couple of suggestions. It is the reason this release is a major one.
+
+The FTdx101, FTdx10 and FT-710 all have a DVI-D video output on the back that repeats the front-panel TFT — the scope, the 3DSS waterfall, the meters, every menu. Radio Display captures that output with an ordinary HDMI-to-USB capture stick and shows it in the browser next to everything else, so whatever the radio is drawing on its own screen is visible wherever the browser is: the other side of the shack, another room, or over a VPN. Nothing is transmitted and nothing on the radio is changed by the capture — it is a one-way picture.
+
+Because the picture is one-way, clicking on it does nothing. Instead a **Controls** column docks beside the video with the radio's own scope controls, sent over CAT: centre / cursor / fix, 3DSS or waterfall, span, speed, level, peak, marker, hold, colour, and the AF-FFT and oscilloscope attenuators. Change the span on the radio's front panel and the highlighted button in the browser follows. On the FTdx101 both MAIN and SUB scopes are driven independently. The column can be undocked into a floating panel or hidden altogether; the video can be popped out into its own window.
+
+**What I use.** Two things, both cheap:
+
+- **Cable:** a DVI-D to HDMI cable — this is [the one I bought](https://www.amazon.co.uk/dp/B0002GRUIC?th=1).
+- **Capture:** an HDMI-to-USB capture card — [this one](https://www.amazon.co.uk/dp/B0C4STMPS2?th=1). It appears to the PC as a webcam, which is exactly what YWC wants.
+
+**Two videos.** I made these while testing Fabio's work:
+
+- [**Yaesu DVI-D to HDMI — investigation**](https://www.youtube.com/watch?v=dtlziYEsXxE) — what the radio's video output actually is, and the problems you can run into connecting it to HDMI equipment. Please watch this one before you plug anything in.
+- [**Capturing the Yaesu video**](https://www.youtube.com/watch?v=1EY7m5e91TI) — the feature in action: the radio's screen in the browser, and the scope controls driving it.
+
+> **Electrical safety.** The DVI-D socket on these radios is not a standard-conforming HDMI source, and not every passive DVI-D-to-HDMI adapter is safe on every Yaesu — there are community investigations of damaged radios. YWC does not supply, protect or vouch for any cable or capture device; the chain from the radio's socket to the PC is your responsibility. The investigation video above is my own look at the question; the cable and card above are what I run on my own FTdx101MP and are not a guarantee for yours.
+
+**Set the radio's output to 800×600 first.** All three radios default to 800×480, and almost no capture stick offers a 480-line mode, so the stick stretches the picture to fill 600 lines and nothing tells you it has. The menu is DISPLAY SETTING → EXT MONITOR → PIXEL (FTdx101, FTdx10) or menu 04-02 (FT-710). And leave YWC's capture size on **Auto**: the radio only ever sends 800 pixels across, so a bigger capture mode is the stick's own scaler inventing pixels — softer *and* more expensive, which I measured rather than assumed.
+
+Radio Display works on Windows, macOS and Linux, including Docker on a Raspberry Pi with `/dev/video*` mapped in. It needs no OBS, no streaming software and no extra ports. Full setup, the Docker mapping and troubleshooting are in [USER_MANUAL.md §19 Radio Display](USER_MANUAL.md#19-radio-display).
+
 ## Project direction
 
-Active development is currently focused on bug fixes and polish for the supported radios, plus rolling out **voice control** as an accessibility feature for partially sighted and blind operators — hands-free band changes, frequency entry, mode switching, and rig status without needing to see the screen.
+The summer of 2026 went into three big pieces: the **CW Reader**, and two that are Fabio Valente's (CR7CDC) work — **Radio Display** and **Remote Audio**, and the whole of running YWC **outside Windows** (macOS, Linux, Docker on a Raspberry Pi); my part in those was testing on my FTdx101MP and a Raspberry Pi 3B. Together they mean the radio can now be operated, heard and *seen* from a browser anywhere on the network. What comes next depends on what people ask for — see the note at the top of this page. **Voice control** remains a first-class accessibility feature for partially sighted and blind operators — hands-free band changes, frequency entry, mode switching, and rig status without needing to see the screen.
 
 **Voice control v1 shipped in v2.4.0-pre1 (2026-06-24)** and has been extended through the v2.4.0 pre-release series, most recently with independent per-VFO control (separate mic buttons for VFO A and VFO B) and a full Voice Language Pack Manager for editing phrases and macros. It uses **Windows' built-in speech recognition (SAPI 5 / `System.Speech`)** running locally on the user's PC, driven by an editable phrase pack tuned to ham-radio vocabulary, with a press-and-hold microphone button beside each VFO panel — the command targets whichever VFO's button you're holding (single-receiver radios show only one button). Recognised audio never leaves the PC; no cloud account, no public endpoint, no DNS or tunnel setup. A microphone connected to the PC is the only hardware requirement. See [USER_MANUAL.md §17 Voice Control](USER_MANUAL.md#17-voice-control) for what voice does, the full command list, and how to enable it. Feedback from real users is what's wanted right now — please try it and report back.
 
@@ -249,11 +344,81 @@ If you're talking to another Yaesu operator running an older YWC, **a heads-up t
 
 YWC is mostly my own work, but I'm grateful for the community contributions that have improved it:
 
-- **Fabio Valente (CR7CDC)** — an optional keyboard transmit shortcut plus split-mode UI fixes ([#79](https://github.com/mm5agm/Yaesu_Web_Control/pull/79)); FTdx10 roofing-filter CAT support and an FTDX3000 roofing read-code fix ([#80](https://github.com/mm5agm/Yaesu_Web_Control/pull/80)); and a set of single-receiver VFO routing fixes, including correct state on late-joining browser tabs and devices ([#81](https://github.com/mm5agm/Yaesu_Web_Control/pull/81)).
+- **Fabio Valente (CR7CDC)** — by now a good deal more than a contributor. The whole of **Radio Display** — HDMI capture of the radio's screen, the docked CAT scope controls, the Linux and Docker capture path — is his ([#97](https://github.com/mm5agm/Yaesu_Web_Control/pull/97), [#117](https://github.com/mm5agm/Yaesu_Web_Control/pull/117), [#120](https://github.com/mm5agm/Yaesu_Web_Control/pull/120)). So is **Remote Audio** ([#92](https://github.com/mm5agm/Yaesu_Web_Control/pull/92), [#112](https://github.com/mm5agm/Yaesu_Web_Control/pull/112)), and so is the entire **macOS / Linux / Docker** side — the CAT-only host, the macOS app and menu-bar item, the Dockerfile and multi-architecture image, and the release pipeline that builds them all. I did none of that; I tested it on a Raspberry Pi 3B ([#90](https://github.com/mm5agm/Yaesu_Web_Control/pull/90), [#133](https://github.com/mm5agm/Yaesu_Web_Control/pull/133), [#134](https://github.com/mm5agm/Yaesu_Web_Control/pull/134)). He also cut the CAT polling and persistence overhead and scaled the power meter to each radio's own rating ([#122](https://github.com/mm5agm/Yaesu_Web_Control/pull/122)), kept both VFO panels live on single-receiver radios ([#119](https://github.com/mm5agm/Yaesu_Web_Control/pull/119)), set up the daily `unstable` snapshot builds ([#115](https://github.com/mm5agm/Yaesu_Web_Control/pull/115)), and earlier contributed the keyboard transmit shortcut and split-mode fixes ([#79](https://github.com/mm5agm/Yaesu_Web_Control/pull/79)), FTdx10 roofing-filter support ([#80](https://github.com/mm5agm/Yaesu_Web_Control/pull/80)) and the single-receiver VFO routing fixes ([#81](https://github.com/mm5agm/Yaesu_Web_Control/pull/81)).
 
 ---
 
 ## Release Notes
+
+## 2026-09-14 - v2.5.0
+
+*The biggest release since the SDR spectrum. Five things that were not there in v2.4.2: the radio's own screen in the browser — and now clickable — a Morse reader and a Morse sender to go with it, the radio's audio in the browser and your microphone back to it, and YWC running outside Windows. Two of the five are Fabio Valente's (CR7CDC) work, and the release is as much his as mine.*
+
+### Radio Display — the radio's screen in the browser ([#97](https://github.com/mm5agm/Yaesu_Web_Control/pull/97), [#117](https://github.com/mm5agm/Yaesu_Web_Control/pull/117), [#120](https://github.com/mm5agm/Yaesu_Web_Control/pull/120) — Fabio Valente, CR7CDC)
+
+**This is Fabio's feature from start to finish; I tested it and made a couple of suggestions.** The FTdx101, FTdx10 and FT-710 repeat their front-panel TFT on a rear DVI-D socket. Plug that into a cheap HDMI-to-USB capture stick and YWC shows the radio's screen — scope, 3DSS, meters, menus, all of it — in the browser beside the SDR panels, popped out into its own window, or on a tablet in another room. The picture is one-way, so beside it sits a docked **Controls** column that drives the radio's own scope over CAT: centre / cursor / fix, 3DSS or waterfall, span, speed, level, peak, marker, hold, colour, and the AF-FFT and oscilloscope settings; change something on the front panel and the button in the browser follows. On the FTdx101 both MAIN and SUB scopes are driven. Works on Windows, macOS and Linux, including Docker on a Raspberry Pi.
+
+Two videos: [what the radio's DVI-D output actually is, and what can go wrong connecting it to HDMI](https://www.youtube.com/watch?v=dtlziYEsXxE) — watch this before plugging anything in — and [the feature in action](https://www.youtube.com/watch?v=1EY7m5e91TI). The [cable](https://www.amazon.co.uk/dp/B0002GRUIC?th=1) and [capture card](https://www.amazon.co.uk/dp/B0C4STMPS2?th=1) I use are linked in the Radio Display section above and in the manual. **Set the radio's EXT MONITOR PIXEL menu to 800×600 first** — at the 800×480 default the capture stick silently stretches the picture. Manual [§19](USER_MANUAL.md#19-radio-display).
+
+**The picture is now clickable** ([#138](https://github.com/mm5agm/Yaesu_Web_Control/pull/138)) — this part was my idea, built on Fabio's Radio Display and his CAT scope controls, and I wanted it so the radio's own screen could stand in for an SDR panadapter. HDMI capture is one-way, so a click can never reach the touchscreen — instead YWC works out what is under the mouse and sends the CAT for it. On the FTdx101MP/D and FTdx10 in MONO W/F: hover over the scope or waterfall for the frequency under the cursor and click to tune there (the frequency is measured from the radio's own VFO marker line, so it is right whatever the span); click the ANT / ATT / IPO / R.FIL / AGC readouts to cycle them; click the CURSOR / SPAN / 3DSS / HOLD soft-buttons for the same commands as **Controls**. Where a soft-button has no CAT command (MONO, MULTI, EXPAND, MEM CH) a click says so on the label rather than doing nothing silently. EXPAND is the one limitation: it grows the scope up over the readout row on both radios, the radio does not report it over CAT, so the overlay assumes it is off. The FTdx10 table (no ANT on a one-jack radio; SPEED in place of HOLD), the six screenshots that settled what EXPAND and L/N/S actually do on that radio, and the drag-to-measure tool for mapping a new screen are Fabio's contribution to it. The FT-710 has no overlay yet. Manual [§19.4](USER_MANUAL.md#194-cat-scope-controls).
+
+### CW Reader ([§20](USER_MANUAL.md#20-cw-reader))
+
+A **CW Read** button on the main panel opens a reader that decodes the Morse in the radio's receive audio and prints it as text, with no extra hardware and nothing transmitted. Neither Yaesu nor Icom hand their decoder's output over CAT, so I wrote one; it lives in the shared [Radio_Web_Control_Core](https://github.com/mm5agm/Radio_Web_Control_Core) and the identical code reads Morse in Icom Web Control. Its status line says what it is actually hearing — signal or not, the tone against your pitch, the filter width, SNR, how far off pitch the station is — and when two stations are in the filter or the tone is breaking up it says so and prints nothing rather than guessing. **Reader Mode** sets the radio up (CW, a narrow filter, APF on) and restores your settings on Stop; **ZIN** puts the station on your pitch; **Tune** shows the passband with a pitch marker and a zero-beat figure. Every session writes a timestamped transcript, and a log form offers the callsign and report the reader *thinks* it saw as one-click suggestions rather than pre-filling them — a callsign silently filled in from junk is worse than an empty box. Confirmed contacts append to a plain ADIF file. Runs on Windows, macOS, Linux and Docker.
+
+### CW Send ([§21](USER_MANUAL.md#21-cw-send))
+
+The reader's other half: a **CW Send** button opens a box, you type a line, press **Enter**, and the radio keys it — nothing goes out until Enter, so you can type ahead or paste. Only the CAT cable is needed, so it runs everywhere the reader does. Built on the same keyer memories as M1–M5: the line is cut into pieces of up to 50 characters at word boundaries, each written to keyer memory 5 and played, your own M5 put back at the end. The wait between pieces is standard Morse timing from the text and the keyer speed, because the radio's own "playback finished" flag turned out never to assert through a whole message on the air; the gap between pieces is a fraction of a second. The character being keyed is highlighted as it goes — the same clock, and it stays with the sidetone across a full line on my '101MP. Break-in **Off** plays to the monitor with a banner and nothing transmitted; **Stop** / **Escape** drops everything not yet started, the piece on the air finishing because the radio cannot stop a playback — which is the reason it is sent in pieces at all. Lines typed while one is sending are queued; the sent-lines log wraps and the panel (and the CW Reader's) can now be resized by its corner instead of stretching across the screen to fit a long line.
+
+### Remote Audio ([#92](https://github.com/mm5agm/Yaesu_Web_Control/pull/92), [#112](https://github.com/mm5agm/Yaesu_Web_Control/pull/112) — Fabio Valente, CR7CDC; [§18](USER_MANUAL.md#18-remote-audio))
+
+The radio's receive audio in the browser's speakers, and the browser's microphone into the radio's USB audio for transmit, over a WebSocket on the YWC host — Opus or PCM16, with an optional local HTTPS certificate because browsers will only open a microphone on a secure page. PTT is still the normal TX button. A pop-out player, per-direction gain, and device pickers that find the radio's USB CODEC for you. Intended for the LAN or a VPN (YWC has no login — do not port-forward it). The CW Reader and Remote Audio share one capture of the radio, so you can listen and read at the same time. Native hosts only; not in Docker.
+
+### macOS, Linux and Docker ([#90](https://github.com/mm5agm/Yaesu_Web_Control/pull/90), [#133](https://github.com/mm5agm/Yaesu_Web_Control/pull/133), [#134](https://github.com/mm5agm/Yaesu_Web_Control/pull/134) — Fabio Valente, CR7CDC)
+
+**All of this is Fabio's work — the port, the macOS app, the Docker image and the build pipeline. My only contribution was testing it on a Raspberry Pi 3B.** First seen in pre6 and now in a full release: an unsigned macOS app (Apple Silicon and Intel) and a multi-architecture Docker image that runs on a Raspberry Pi 3B. CAT, the web panel, Radio Display, Remote Audio (native hosts) and the CW Reader all work there; the SDR spectrum and SAPI voice control stay Windows-only. Manual [§2.2](USER_MANUAL.md#22-macos-dmg), [§2.3](USER_MANUAL.md#23-linux-docker-including-raspberry-pi) and [§15.10](USER_MANUAL.md#1510-whats-different-on-macos--linux-vs-windows).
+
+### SDR spectrum display
+
+- **Signals are now drawn where they really are on the FTdx101.** The IF OUT sockets are at 9.005 MHz (MAIN) and 8.900 MHz (SUB), not at the SDR's centre, and the radio slides its IF with the IF width, IF shift and CW pitch. YWC ignored both, so everything was drawn 5–7 kHz from its true frequency and a click on a peak tuned *near* it. Each SDR is now tuned to its own centre (9.000 / 8.895 MHz) and the panel corrects the axis from the filter settings it already knows, so a signal sits at its true frequency, the amber dial marker is drawn where the dial really is (a few kHz left of centre — that is correct), and a click on a CW signal lands on it, on your pitch, ready for the reader. Measured on both receivers against a broadcast carrier and by stepping the dial a known amount. The FTdx10 and FT-710 are unmeasured and keep the old dial-at-centre drawing.
+- **The span buttons are now the radio's own list — 1k, 2k, 5k, 10k, 20k, 50k, 100k, 200k, 500k, 1M — plus 2M.** Everything from 100 kHz down is a software zoom: the SDR stays at a fixed 125 kHz, the worker runs a 16k-point FFT (7.6 Hz per bin) and sends only the slice under the window, so stepping between 1k and 100k is instant — no retune, no blank trace. The window is cut around where the dial really is (the IF OUT plus the radio's own LO slide) and follows a filter, shift or pitch change live. Above 100 kHz a span change still restarts the SDR, and now only the one you changed. The 15.6k / 31.3k / 62.5k / 125k buttons of the pre-releases are gone. Manual [§5.4](USER_MANUAL.md#54-spectrum-display) and [§6.3](USER_MANUAL.md#63-sdr-spectrum-display).
+- **Per-SDR frequency trim.** At a 1 kHz span an SDR whose crystal is 5 ppm out draws a carrier 44 Hz — a fifth of the screen — beside the dial line. My original RSP1 on VFO B did exactly that; the RSP1B on VFO A, which has a TCXO, did not. **SDR frequency trim** in Settings corrects it per SDR (mine is −44 Hz), and the manual says how to set it.
+- **The default sample rate is 2,000,000 Hz** (was 2,048,000); a saved 2,048,000 is migrated. Two SDRs at 1 MHz or 2 MHz plus the radio's USB audio all on one USB hub starve the audio — measured, and cured by plugging them into separate PC ports; see the manual.
+- **Every span was a quarter of its label, and the IF was inverted.** SDRplay's low-IF mode decimates by four before the decimation YWC asks for, so a "250k" panel was 62.5 kHz wide; and the radio's IF tap is spectrally inverted, so bin 0 was the highest frequency. Both measured and fixed; this is why click-to-tune used to land in odd places.
+- **The permanent spike at the centre is gone.** The RSP's DC offset drew a +47 dB "signal" exactly on the tuned frequency. Low-IF plus a long-running IQ average puts it below the noise floor at every span.
+- **IF passband overlay.** The receiver's passband is shaded on the trace, moving with IF width, shift and CW pitch, so you can see which of the signals on screen you are hearing. A **Passband** tick box per panel turns it off.
+- **Smooth control, and the default no longer buries CW.** The old fixed 13-bin average took ~11 dB off a one-bin CW carrier — a station plainly visible in the waterfall had no peak in the trace. Smooth is now a slider (Off to 8, default 2); set it to Off for CW.
+- **Mode changes re-read the IF width and shift from the radio**, so a filter changed at the front panel or by another CAT program is picked up. (Measured while doing it: the FTdx101 does not keep a separate width code per mode — a code set in USB is what CW-U reads back.)
+
+### Radio Scope card — driving the radio's own display over CAT ([#109](https://github.com/mm5agm/Yaesu_Web_Control/pull/109))
+
+Even without a capture stick, the FTdx101 and FTdx10 now have a **Radio Scope** card that sets the radio's own scope — span, centre/cursor/fix, waterfall or 3DSS, level, speed, hold, marker, colour — with every write followed by a read-back so the radio stays the source of truth, and the buttons following the front panel when you turn the knobs there. Enabling Radio Display folds these same controls into the video panel. Bench-verified on the FTdx101 only; the FTdx10 and FT-710 tables exist but stay off until someone probes them on a real radio.
+
+### CW keyer — M1 to M5 finally send
+
+Pressing an M button had done nothing since v1.6.0: it sent `KY <text>;`, and `KY` plays a memory the radio already holds — the text-carrying command is `KM`, which was never used. The buttons now load the slot (only if it differs from what the radio has) and play it. Measured on the FTdx101MP along the way: with break-in off the message plays to the sidetone monitor rather than being refused; the buttons stay held for the message's duration (PARIS timing against the keyer speed) and the panel says how long it will take; a press while one is playing is ignored. There is no stop — `KY1;` clears the radio's playback flag and transmits on regardless, so the "stop" I briefly shipped in a pre-release has been withdrawn. **Monitor level** had also never worked: `ML`'s first parameter selects on/off versus level, not the receiver, so the slider toggled the monitor at the bottom of its travel and did nothing elsewhere. Fixed.
+
+### Meters
+
+- **SWR meter freezing and dipping** ([#124](https://github.com/mm5agm/Yaesu_Web_Control/issues/124)) — four stacked faults, the worst being that a fabricated zero was indistinguishable from a real reading. The needle also now says when it has run off the end of the scale.
+- **The FTdx101's front-panel meters are yours again outside transmit** ([#107](https://github.com/mm5agm/Yaesu_Web_Control/pull/107)). YWC sent `MS13` twice a second to harvest Comp and SWR, so the meter pair you chose on the touchscreen was stomped continuously. It now borrows the pair when TX starts and hands your choice back ten seconds after TX ends.
+- **Meter updates pushed over SignalR with less CAT and disk overhead, and RF power scaled to each radio's own rating** ([#122](https://github.com/mm5agm/Yaesu_Web_Control/pull/122), Fabio) — a 100 W radio's gauge no longer tops out at the FTdx101MP's 200 W.
+- Frozen S-meter readings are no longer drawn during transmit (the FTdx101 stops updating `SM` while keyed).
+
+### Other fixes and additions
+
+- **ATU Tune button and voice commands** ([#105](https://github.com/mm5agm/Yaesu_Web_Control/pull/105)) — the auto-tune was only reachable by a long press, which a screen reader cannot announce and voice cannot perform. A keyboard-reachable **Tune** button that becomes **Stop** while a cycle runs, plus tuner voice intents. Existing phrase packs keep your edits.
+- **CTCSS never worked** — six separate faults in the write, the tone table, the parser and the init read; and the Clarifier read never reached the app. All fixed while removing a dead block of start-up code.
+- **One screen-reader announcement per action** ([#123](https://github.com/mm5agm/Yaesu_Web_Control/issues/123), Thomas OZ1JTE) — a band change or QMB recall used to be read an unpredictable number of times.
+- **Both VFO panels stay live on single-receiver radios**, and an inactive-VFO mode change no longer rewrites the active VFO ([#119](https://github.com/mm5agm/Yaesu_Web_Control/pull/119), Fabio).
+- **Frequency requests the radio refuses as out of range are now reported** instead of silently ignored.
+- **Upgrading no longer leaves the old JavaScript behind** ([#110](https://github.com/mm5agm/Yaesu_Web_Control/pull/110)) — the browser was keeping cached modules across installs, so fixes living in JavaScript never arrived for some users.
+- **Draggable dialogs no longer jump to the top of a scrolled page.**
+- **The log is a tenth of the size** — 94,000 lines a day of routine polling moved to Debug — with an opt-in **Detailed logging (for bug reports)** checkbox in Settings that takes effect at once, no restart. Diagnostics has **Start fresh test log / Download test log** for sending me just the bit that matters.
+- **QMB Store / Recall / V-M buttons** (pre5; confirmed on Thomas OZ1JTE's FTdx10) and **no internet connection needed** (pre4) — carried forward from the pre-release series.
+- Unit tests now run in CI; a release build fails if an asset is missing; the Apps & features entry no longer repeats the version; daily `unstable` snapshot builds from `develop` for anyone who wants to try a fix before it is released ([#115](https://github.com/mm5agm/Yaesu_Web_Control/pull/115), Fabio).
+
+*Not in this release: the FTdx10 and FT-710 spectrum axis are unmeasured (dial-at-centre as before); FT-710 CAT scope control stays off until probed; RSPduo dual-tuner mode is still not driven.*
 
 ## 2026-08-10 - v2.4.3-pre6 (pre-release)
 

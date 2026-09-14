@@ -663,6 +663,10 @@
                                 aria-label="CW reader - decode received Morse to text"
                                 title="Open the CW reader - decodes the received Morse to text"
                                 onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">CW Read</button>
+                        <button class="btn btn-sm ms-1 btn-outline-secondary"
+                                aria-label="CW send - type text and send it as Morse"
+                                title="Open CW send - type a line, press Enter, the radio keys it"
+                                onclick="window.cwSendPanel && window.cwSendPanel.toggle()">CW Send</button>
                         <button id="voiceBtn"
                                 class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="Voice announcements settings"
@@ -2496,11 +2500,108 @@
     </div>
 </dialog>
 
+<!-- CW SEND - type a line, Enter keys it. Built on the same KM/KY keyer
+     memories as the M1-M5 buttons, borrowing M5 as the scratch slot and
+     putting it back afterwards. Non-modal and draggable like the reader. -->
+<style>
+    #cwSendDialog .cws-header { cursor:move; }
+    /* A definite width so lines wrap instead of stretching the panel to
+       the longest one; the corner drags to resize, and a size the operator
+       has set is kept (dlgSize_cwSendDialog) - see makeResizable. */
+    #cwSendDialog { width:560px; min-width:420px; min-height:220px; max-height:95vh; resize:both; overflow:auto; }
+    #cwSendDialog[open] { display:flex; flex-direction:column; }
+    #cwSendDialog .cws-header { flex:0 0 auto; }
+    #cwSendDialog .cws-body { flex:1 1 auto; min-height:0; }
+    #cwSendDialog.user-sized #cwSendLog { max-height:none; flex:1 1 auto; min-height:4rem; }
+    #cwSendInput {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 1.05rem;
+        text-transform: uppercase;
+        background: #111; border-color: #444; color: #dfe;
+    }
+    #cwSendInput:focus { background: #111; color: #dfe; border-color: #6aa; box-shadow: none; }
+    #cwSendLog {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        min-height: 6rem;
+        max-height: 30vh;
+        overflow-y: auto;
+        position: relative;   /* offsetTop of a character is then within the log */
+        background: #111;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 6px 10px;
+        color: #dfe;
+    }
+    #cwSendLog .cws-line { display:flex; gap:0.6rem; align-items:baseline; }
+    #cwSendLog .cws-time { color:#778; font-size:0.75rem; flex:0 0 auto; }
+    #cwSendLog .cws-text { flex:1 1 auto; white-space:pre-wrap; word-break:break-word; }
+    #cwSendLog .cws-tag  { color:#9ab; font-size:0.75rem; flex:0 0 auto; }
+    #cwSendLog .cws-line[data-state="queued"]  .cws-text { color:#9ab; }
+    #cwSendLog .cws-line[data-state="sending"] .cws-text { color:#ffd24a; }
+    #cwSendLog .cws-line[data-state="sending"] .cws-tag  { color:#ffd24a; }
+    #cwSendLog .cws-line[data-state="sent"]    .cws-tag  { color:#9d9; }
+    #cwSendLog .cws-line[data-state="monitor"] .cws-tag  { color:#8fd0ff; }
+    #cwSendLog .cws-line[data-state="dropped"] .cws-text { color:#778; text-decoration:line-through; }
+    #cwSendLog .cws-line[data-state="error"]   .cws-tag  { color:#ff6b6b; }
+    #cwSendLog .cws-ch.cws-done { color:#eee; }
+    #cwSendLog .cws-ch.cws-cur  { background:#ffd24a; color:#111; border-radius:2px; }
+    #cwSendStatus { font-size: 0.8rem; color:#9ab; min-height:1.2em; }
+    #cwSendStatus.cws-problem { color:#ffd23f; font-weight:600; }
+    #cwSendBanner {
+        font-size: 0.9rem; font-weight: 600; color: #ffd23f;
+        background: rgba(255, 210, 63, 0.10);
+        border-left: 3px solid #ffd23f;
+        padding: 0.4rem 0.6rem; border-radius: 0.25rem;
+    }
+</style>
+<dialog id="cwSendDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; max-width:95vw;" aria-labelledby="cwSendTitle">
+    <div class="cws-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="cwSendTitle">CW Send</strong>
+        <div class="d-flex align-items-center gap-2">
+            <button id="cwSendStopBtn" class="btn btn-sm btn-outline-warning" type="button"
+                    title="Send nothing further. The piece already playing cannot be stopped - the radio has no CAT command for that.">Stop</button>
+            <button id="cwSendClearBtn" class="btn btn-sm btn-outline-light" type="button" title="Clear the sent-lines log">Clear log</button>
+            <button class="btn btn-sm ywc-dialog-close"
+                    onclick="document.getElementById('cwSendDialog').close()"
+                    aria-label="Close CW send panel">&#10005;</button>
+        </div>
+    </div>
+    <div class="cws-body p-2 d-flex flex-column gap-2">
+        <div id="cwSendBanner" role="status" aria-live="polite" hidden></div>
+        <div id="cwSendLog" role="log" aria-live="polite" aria-label="CW lines sent"></div>
+        <div class="input-group">
+            <input type="text" id="cwSendInput" class="form-control"
+                   autocomplete="off" spellcheck="false" autocapitalize="characters"
+                   placeholder="Type here and press Enter to send"
+                   aria-label="CW text to send - Enter sends, Escape stops"
+                   title="A-Z 0-9 space ? / . , - Enter sends the line, Escape drops anything not yet started (or clears the box when nothing is sending)">
+            <button id="cwSendClearInputBtn" class="btn btn-outline-light" type="button"
+                    title="Empty the text box without sending it" aria-label="Clear the text box">Clear</button>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" for="cwSendSpeedSlider">Speed WPM: <span id="cwSendSpeedValue">@Model.CwSpeed</span></label>
+            <input type="range" id="cwSendSpeedSlider" min="4" max="60" step="1" value="@Model.CwSpeed"
+                   style="flex:1; height:18px;"
+                   aria-label="CW keyer speed" title="CW keyer speed in WPM - the same control as in the CW keyer panel">
+        </div>
+        <div id="cwSendStatus" role="status" aria-live="polite"></div>
+    </div>
+</dialog>
+
 <!-- CW Reader panel - server-side Morse decode of the receive audio.
      Non-modal and draggable, like DX Spots: the operator has to be able to
      work the station while the text is on screen. -->
 <style>
     #cwReaderDialog .cwr-header { cursor:move; }
+    #cwReaderDialog { width:680px; min-width:480px; min-height:260px; max-height:95vh; resize:both; overflow:auto; }
+    #cwReaderDialog[open] { display:flex; flex-direction:column; }
+    #cwReaderDialog .cwr-header { flex:0 0 auto; }
+    #cwReaderDialog .cwr-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+    #cwReaderDialog.user-sized .cwr-main { flex:1 1 auto; min-height:0; }
+    #cwReaderDialog.user-sized .cwr-textcol { display:flex; flex-direction:column; min-height:0; align-self:stretch; }
+    #cwReaderDialog.user-sized #cwReaderOut { max-height:none; flex:1 1 auto; min-height:4rem; }
     #cwReaderOut {
         font-family: ui-monospace, Consolas, monospace;
         font-size: 1.05rem;
@@ -2576,7 +2677,7 @@
     .cwq-status { font-size: 0.85rem; color: #9d9; margin-top: 0.35rem; min-height: 1.2rem; }
     .cwq-status.cwq-problem { color: #ffd23f; font-weight: 600; }
 </style>
-<dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:620px; max-width:95vw;" aria-labelledby="cwReaderTitle">
+<dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; max-width:95vw;" aria-labelledby="cwReaderTitle">
     <div class="cwr-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
         <strong id="cwReaderTitle">CW Reader</strong>
         <div class="d-flex align-items-center gap-2">
@@ -2600,9 +2701,9 @@
                     aria-label="Close CW reader panel">&#10005;</button>
         </div>
     </div>
-    <div class="p-2">
-        <div class="d-flex gap-2 align-items-start">
-            <div class="flex-grow-1" style="min-width:0;">
+    <div class="cwr-body p-2">
+        <div class="cwr-main d-flex gap-2 align-items-start">
+            <div class="cwr-textcol flex-grow-1" style="min-width:0;">
                 <div id="cwReaderOut" role="log" aria-live="polite" aria-label="Decoded CW text"></div>
                 <div class="cwr-legend mt-1">
                     Colour marks what <em>looks like</em> QSO traffic, and nothing is hidden or corrected:
@@ -2699,6 +2800,7 @@
         // the panels that offer it so the global is there when they render.
         import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -3034,6 +3136,11 @@
             // second stream on the radio's codec.
             window.cwReaderPanel = new CwReaderPanel();
             window.cwReaderPanel.init();
+
+            // Typed CW goes out through the keyer memories the M1-M5 buttons
+            // use; the panel only sequences the writes and plays.
+            window.cwSendPanel = new CwSendPanel();
+            window.cwSendPanel.init();
 
             // The log form is separate from the reader and starts closed. The
             // operator opens it when a QSO is worth keeping, and it asks the
@@ -4062,7 +4169,35 @@
             }, { passive: true });
         }
 
-        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog'].forEach(id => {
+        // Dialogs whose CSS says resize:both. The browser writes the dragged
+        // size as inline width/height; that is what is saved and put back,
+        // and its presence flips the dialog into user-sized layout, where
+        // the text area fills the height instead of capping at its own max.
+        function makeResizable(dialog) {
+            const key = 'dlgSize_' + dialog.id;
+            const apply = () => dialog.classList.toggle('user-sized', !!(dialog.style.width || dialog.style.height));
+            try {
+                const saved = JSON.parse(localStorage.getItem(key) || 'null');
+                if (saved && saved.width) { dialog.style.width = saved.width; dialog.style.height = saved.height || ''; }
+            } catch { /* ignore */ }
+            apply();
+            let timer = null;
+            new ResizeObserver(() => {
+                if (!dialog.open) return;
+                apply();
+                if (!dialog.style.width && !dialog.style.height) return;
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    try { localStorage.setItem(key, JSON.stringify({ width: dialog.style.width, height: dialog.style.height })); } catch { /* ignore */ }
+                }, 250);
+            }).observe(dialog);
+        }
+        ['cwSendDialog', 'cwReaderDialog'].forEach(id => {
+            const dlg = document.getElementById(id);
+            if (dlg) makeResizable(dlg);
+        });
+
+        ['voxDialog', 'cwDialog', 'cwSendDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
             makeDraggable(dlg, dlg.querySelector('div:not(.radio-display-scope-splitter)'));
@@ -4990,6 +5125,12 @@
             else { b.setAttribute('aria-label', `Send CW memory ${n} - unavailable while a message is sending`); b.title = 'A message is sending'; }
         }
         function cwClearMemButtons() { for (let i = 0; i < 5; i++) cwSetMemButton(i, 'idle'); }
+        // The CW Send panel borrows M5 while a typed line goes out; the
+        // buttons go busy so a press here does not land on top of it.
+        function cwMemButtonsBusy(busy) {
+            cwPlaybackFollow++;                       // abandon any follow in progress
+            for (let i = 0; i < 5; i++) cwSetMemButton(i, busy ? 'busy' : 'idle');
+        }
         // RI4 is the radio's playing flag, and it only ever reports a
         // playback that is keying the transmitter. With break-in off the
         // memory plays to the sidetone monitor and RI4 stays 0 throughout -
@@ -5296,6 +5437,7 @@
         window.setCwBreakIn    = setCwBreakIn;
         window.setCwBreakInDelay = setCwBreakInDelay;
         window.sendCwMessage   = sendCwMessage;
+        window.cwMemButtonsBusy = cwMemButtonsBusy;
         window.saveCwMessages  = saveCwMessages;
     </script>
     <script>

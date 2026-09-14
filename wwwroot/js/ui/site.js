@@ -1808,9 +1808,12 @@ connection.on("RadioStateUpdate", function (update) {
     if (update.property === "CwSpeed") {
         const s = document.getElementById('cwSpeedSlider'); const l = document.getElementById('cwSpeedValue');
         if (s) s.value = update.value; if (l) l.textContent = update.value;
+        // The CW Send panel carries the same speed control; keep it honest.
+        window.cwSendPanel?.setSpeed?.(update.value);
     }
     if (update.property === "CwBreakIn") {
         const el = document.getElementById('cwBreakInSelect'); if (el) el.value = update.value;
+        window.cwSendPanel?.setBreakIn?.(update.value);
     }
     if (update.property === "CwBreakInDelay") {
         const s = document.getElementById('cwDelaySlider'); const l = document.getElementById('cwDelayValue');

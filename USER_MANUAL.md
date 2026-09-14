@@ -32,7 +32,7 @@
    - 5.17 [DX Spots List](#517-dx-spots-list)
    - 5.18 [Audio Filter popout](#518-audio-filter-popout)
    - 5.19 [VC Tune Preselector (FTdx101MP)](#519-vc-tune-preselector-ftdx101mp)
-   - 5.20 [Radio Scope — the radio's own display (FTdx101MP and FTdx101D)](#520-radio-scope--the-radios-own-display-ftdx101mp-and-ftdx101d)
+   - 5.20 [Radio Scope — the radio's own display (FTdx101MP/D and FTdx10)](#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
 6. [Settings Page](#6-settings-page)
    - 6.1 [Radio Connection](#61-radio-connection)
    - 6.2 [Web Server Settings](#62-web-server-settings)
@@ -120,10 +120,16 @@
     - 20.4 [Transcripts](#204-transcripts)
     - 20.5 [Logging a QSO](#205-logging-a-qso)
     - 20.6 [Troubleshooting](#206-troubleshooting)
+21. [CW Send](#21-cw-send)
+    - 21.1 [Sending a line](#211-sending-a-line)
+    - 21.2 [What the radio is actually doing](#212-what-the-radio-is-actually-doing)
+    - 21.3 [Stopping](#213-stopping)
+    - 21.4 [The panel](#214-the-panel)
+    - 21.5 [Troubleshooting](#215-troubleshooting)
 
 ---
 
-![Yaesu Web Control main screen](pictures/DevelopScreen.png)
+![Yaesu Web Control main screen — the radio's own screen (Radio Display) beside the two SDR spectrum panels](pictures/DevelopScreen.png)
 
 ---
 
@@ -145,6 +151,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | Radio Display (USB capture → MJPEG) | Yes | Yes | Yes (map `/dev/video*` in Docker) |
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | CW Reader ([§20](#20-cw-reader)) | Yes | Yes | Yes |
+| CW Send ([§21](#21-cw-send)) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
 | USB serial driver | **Windows / macOS:** if the radio's COM / `/dev/cu.*` ports are missing or CAT never answers, install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** usually skip — the kernel already includes CP210x support. |
@@ -182,7 +189,10 @@ The application was written for operators who want a large, clean, touchscreen-f
 - CW keyer with speed, break-in, delay, **sidetone pitch**, and five programmable memory messages
 - TX monitor on/off toggle and level control
 - Radio memory channels — recall saved frequencies and modes at a click; save and load named memory banks for different operating scenarios (e.g. Daily, Contest)
-- Optional real-time spectrum display and waterfall (**Windows host only** — requires an SDR connected to the 9 MHz IF output)
+- Optional real-time spectrum display and waterfall (**Windows host only** — requires an SDR connected to the 9 MHz IF output), with the radio's own span list from 2 MHz down to 1 kHz and the receiver's IF passband drawn over the trace
+- **CW Reader** — decodes the Morse the radio is receiving into text, with a one-click Reader Mode, transcripts and ADIF logging (see §20)
+- **Radio Display** — the radio's own screen, captured from its DVI-D output and shown in the browser (Fabio Valente's work — see §19)
+- **Remote Audio** — receive audio to the browser and your microphone back to the radio over the network (Fabio Valente's work — see §18)
 - **DX cluster spots** overlaid on the spectrum when SDR is available; the DX Spots list works without an SDR
 - **DX watch list** — get a popup alert and a beep when watched callsigns or prefixes appear in the cluster feed (e.g. `P29*` for a DXpedition); persisted across app restarts
 - **TX timeout warning** — visible red banner + audible tone if TX has been on too long (configurable threshold), as a safety net against open mics, stuck PTTs and VOX false-triggers
@@ -214,6 +224,8 @@ If Device Manager never shows the radio's COM ports, or **Test Connection** fail
 This is the supported product build: tray icon, SDR spectrum, and Voice Control.
 
 ### 2.2 macOS (DMG)
+
+The macOS and Linux/Docker builds, and the release pipeline that produces them, are all Fabio Valente's (CR7CDC) work — I only tested the Docker image on a Raspberry Pi 3B.
 
 macOS ships as an **unsigned CAT-only** app (menu-bar status item; no SDR spectrum or Windows Voice Control). There is no Apple Developer ID / notarization — this is an open-source project and that licence costs money every year. Gatekeeper will warn the first time you open a download from the internet, the same way Windows warns about the unsigned installer.
 
@@ -247,6 +259,8 @@ Then open `http://localhost:8080` (or the port shown in the console / menu-bar t
 - Set **Serial Port** to a USB-serial device path (see §3). SDR and Voice Control sections are hidden on this host.
 
 ### 2.3 Linux Docker (including Raspberry Pi)
+
+Like the macOS build, the Dockerfile, the multi-arch image and its build pipeline are Fabio Valente's (CR7CDC) work. The Raspberry Pi 3B is what I tested it on.
 
 For an always-on CAT controller on an x64 PC or arm64 Pi, use the published multi-arch image (`linux/amd64` and `linux/arm64`) from the GitHub Container Registry, or build locally from the repo `Dockerfile` / `docker-compose.yml`.
 
@@ -387,7 +401,7 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 ### 5.1 Top Bar
 
-The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.4.3**) are shown in the top-left corner.
+The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.0**) are shown in the top-left corner.
 
 **Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the latest version or if the internet is not available.
 
@@ -501,7 +515,11 @@ The spectrum display is only visible if an SDR device has been configured in Set
 
 This panel is drawn by YWC from your SDR. It is not the radio's own scope, and nothing here changes what the radio is displaying. To drive the radio's screen instead — its span, waterfall or 3DSS, reference level — see §5.20, which needs no SDR at all.
 
-**Span buttons** — Click **250k**, **500k**, **1M**, or **2M** to change the visible bandwidth. The display recentres on VFO A.
+**Span buttons** — Click **1k**, **2k**, **5k**, **10k**, **20k**, **50k**, **100k**, **200k**, **500k**, **1M** or **2M** to change the visible bandwidth. These are the FTdx101's own scope spans plus 2 MHz, so the browser and the front panel speak the same language. The display recentres on the VFO. From **100k** down the change is instant — the SDR keeps running and only the slice it sends changes (see §6.3 for how); from **200k** up the SDR is retuned, which pauses that panel for a few seconds. For CW, **20k** shows a whole sub-band with each station a few pixels wide and easy to click; **1k** and **2k** show one station as a broad hump, which is what the radio's own scope shows at those spans too — a keyed carrier is not a needle at 7.6 Hz per bin.
+
+**Passband** — tick the **Passband** box (beside the span buttons) to draw the receiver's IF passband as a shaded band on the trace, with the amber dial marker inside it. Its width and position follow the radio's IF Width and IF Shift, so it shows exactly which slice of the band you are listening to, and it moves as you change either control. On the FTdx101 the marker sits at the station's true frequency — see the note on where signals are drawn in §6.3. The setting is remembered per VFO across browser reloads.
+
+![Spectrum panel at a narrow span on the CW end of 20 m — the receiver's passband is shaded around the amber dial marker, and each CW station is a separate line](pictures/Spectrum_Passband.png)
 
 **Click to tune** — Click anywhere on the spectrum **or the waterfall** to tune VFO A to that frequency. A click on a signal trail in the waterfall QSYs to the frequency of that column, which is the natural way to chase an interesting signal you can see slowly drifting down the screen. **The mode also changes automatically** to match the segment of the band you clicked into — CW below the digital sub-band, DATA-U around the FT8/FT4/RTTY watering holes, USB/LSB in the phone segment, FM at the top of 10m and on 2m/4m. If you click somewhere outside the recognised amateur bands the mode is left as-is. In CW the click puts the station on your CW pitch, ready for the CW reader (§20) — see the note on where signals are drawn in §6.3.
 
@@ -856,7 +874,7 @@ Click **M1**–**M5** and that message is sent. Four things about it are worth k
 
 Close the panel by clicking the **×** button in its title bar. Drag the title bar to reposition the panel anywhere on screen. Its position is remembered between sessions.
 
-To read incoming Morse rather than send it, use the **CW Read** button on the main toolbar — see [§20 CW Reader](#20-cw-reader).
+To read incoming Morse rather than send it, use the **CW Read** button on the main toolbar — see [§20 CW Reader](#20-cw-reader). To send from the keyboard rather than from five fixed memories, use **CW Send** — see [§21 CW Send](#21-cw-send). Be aware that CW Send borrows **M5** as its scratch memory while a line goes out and puts your text back afterwards.
 
 ---
 
@@ -1085,7 +1103,7 @@ All changes are confirmed by reading the radio's state back after each command, 
 
 ---
 
-### 5.20 Radio Scope — the radio's own display (FTdx101MP and FTdx101D)
+### 5.20 Radio Scope — the radio's own display (FTdx101MP/D and FTdx10)
 
 **This is not the spectrum panel in §5.4.** The two are easy to confuse, so it is worth being clear about which is which:
 
@@ -1096,7 +1114,7 @@ All changes are confirmed by reading the radio's state back after each command, 
 | What the controls change | What YWC draws | What the **radio** displays |
 | Extra hardware | SDR required | None |
 
-The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It appears when Radio Display is **off** on radios that support CAT scope control — **FTdx101MP/D** and **FTdx10**. See [§19.4](#194-cat-scope-controls) when Radio Display is on (the same controls dock beside the video by default, or float when the column is hidden).
+The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It appears when Radio Display is **off** on radios that support CAT scope control — **FTdx101MP/D** and **FTdx10**. See [§19.4](#194-cat-scope-controls) when Radio Display is on (the same controls dock beside the video by default, or float when the column is hidden). On the **FTdx101MP/D** and **FTdx10**, the captured Radio Display picture itself is also clickable in MONO W/F (tune, and cycle the on-screen readouts and soft-buttons over CAT). The **FT-710** is not.
 
 When you expand the card it reads the current settings from the radio, so it opens showing what the radio is actually doing rather than a set of defaults.
 
@@ -1110,7 +1128,7 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 **Placement** — **Center** keeps the scope centred on your operating frequency; **Cursor** moves the marker within a fixed window; **Fix** pins the window to the band regardless of where you tune.
 
-**Size** — **L** / **N** / **S**. Waterfall modes only; 3DSS has no size variants, so the buttons grey out when you select it rather than disappearing and reflowing the row.
+**Size** — **L** / **N** / **S**. The size of the spectrum pane: **L** is the biggest spectrum and the smallest waterfall, **S** the other way about, and the marker strip stays inside the spectrum in all three (measured on the FTdx101MP and the FTdx10). Waterfall modes only; 3DSS has no size variants, so the buttons grey out when you select it rather than disappearing and reflowing the row. The FT-710 has **Expand** / **Normal** instead.
 
 **Hold** — freezes the trace so you can study it. Click again to resume.
 
@@ -1249,7 +1267,7 @@ I measured all of this on my own FTdx101MP. Other models are drawn dial-at-centr
 2. Go to Settings and click **Scan** in the SDR section.
 3. Detected devices appear in the dropdown. Select your device.
 4. Set the **SDR centre frequency** — `9000000` for the VFO A SDR on IF OUT (MAIN), and `8895000` for a VFO B SDR on IF OUT (SUB). Both sit 5 kHz below the actual IF so the SDR's centre notch stays off the dial.
-5. **Sample Rate**: 2M (2,048,000 Hz) is recommended and gives a 2 MHz span.
+5. **Sample Rate**: 2M (2,000,000 Hz) is recommended and gives a 2 MHz span. This is only the starting span — the buttons on each panel change it.
 6. **FFT Size**: 1024 is recommended.
 7. Click **Save Settings**.
 
@@ -1259,8 +1277,9 @@ The spectrum panel appears on the main page when a device is saved. If you want 
 |-------------|------------------|
 | SDR centre frequency, VFO A | 9,000,000 Hz (FTdx101MP, FTdx101D, FTDX3000) — no effect on FTdx10 or FT-710 |
 | SDR centre frequency, VFO B | 8,895,000 Hz (FTdx101MP, FTdx101D — IF OUT (SUB) is 8.900 MHz) |
-| Sample Rate | 2,048,000 (2M) |
+| Sample Rate | 2,000,000 (2M) |
 | FFT Size | 1024 |
+| SDR frequency trim, VFO A / VFO B | 0 — unless a steady carrier sits beside the dial line at a 1 kHz span; see *SDR frequency trim* below |
 
 #### Dual SDR — one per VFO *(v2.3.0 and later)*
 
@@ -1317,11 +1336,25 @@ To remove the cursor, **Shift-click on or near it** (within ~10 pixels). Each pa
 
 #### Independent span per VFO
 
-Each spectrum panel header has its own **15.6k / 31.3k / 62.5k / 125k / 250k / 500k / 1M / 2M** span buttons. Set VFO A to **2 MHz** for a wide overview of the calling band, and VFO B to **62.5 kHz** zoomed in on the QSO you're working — both at the same time, independently. Each click restarts only that VFO's worker (the other panel keeps its frame frozen for the brief reconnect window — see the bandwidth-change pause note below).
+Each spectrum panel header has its own **1k / 2k / 5k / 10k / 20k / 50k / 100k / 200k / 500k / 1M / 2M** span buttons — the FTdx101's own scope list plus 2 MHz. Set VFO A to **2M** for a wide overview of the calling band and VFO B to **20k** zoomed in on the QSO you're working — both at the same time, independently. A change on one panel never touches the other.
 
 The Settings page Sample Rate dropdown still exists but now acts as a "reset both VFOs to this default" control. Use it to set a starting point; use the per-panel buttons to diverge from there.
 
-**The two narrowest spans are for CW.** At 62.5 kHz each FFT bin is 61 Hz and a CW carrier is one bin — a single pixel column, easy to lose in the grass and hard to click on the first try. At **31.25 kHz** (30 Hz bins) the whole of a CW sub-band fits the panel with each station a couple of pixels wide, and at **15.625 kHz** (15 Hz bins) a keyed carrier and its sidebands cover a few pixels, so the peak is plain to see and easy to click. Both keep the same ~10 frames per second as the wider spans. I added them on 2026-09-11 after measuring, on an RSP1, that the SDRplay API accepts the extra decimation and that the spans it delivers are honest — a known VFO step moved the trace the expected number of bins at both. The 15.625 kHz span shows only ±7.8 kHz either side of the dial, so it suits a band you have already tuned to, not band-scanning.
+**How the narrow spans work.** An RSP cannot be run at 1 kHz, and it should not be: the narrower the hardware rate, the slower the display. So from **100k** down the SDR stays at a fixed 125 kHz and the worker runs a 16,384-point FFT — 7.6 Hz per bin — over it, then sends the browser only the bins under the span you asked for. Stepping between 1k and 100k is therefore instant: nothing is retuned, the trace never blanks, and the frame rate stays the same at every span. Above 100k the SDR is retuned to the tightest rate that covers the span (250 kHz for 200k; 500k, 1M and 2M are the stream itself) and that VFO's panel pauses for a few seconds — see below.
+
+**The window is cut around the dial, not around the SDR's centre.** On the FTdx101 the dial sits at the IF OUT frequency plus a slide the radio applies for the current mode, IF width, IF shift and CW pitch — 1.4 kHz for CW with a 3.5 kHz filter and a 700 Hz pitch. At a 1 kHz span, ignoring that would leave the dial off the screen entirely, so the worker centres its window on the slid frequency and moves it the moment you change the filter, shift or pitch. The FTdx10 and FT-710 have no measured slide and are cut around the IF OUT itself.
+
+**At 1k and 2k a CW station is a hump, not a needle.** A keyed carrier has keying sidebands, and at 7.6 Hz per bin they spread across tens of pixels. The radio's own scope at its 1k span shows exactly the same shape. If you want to see individual stations as clickable lines, **20k** is the span for that.
+
+#### SDR frequency trim
+
+At the wide spans an SDR whose crystal is a few ppm out draws every signal a pixel or so from where it belongs and you will never notice. At **1k** the same error is a fifth of the screen. My original RSP1 (VFO B) is 5 ppm out — a steady carrier sat 44 Hz above the dial line while the same carrier on the RSP1B (VFO A, which has a TCXO) sat on it.
+
+To check yours: tune to a steady carrier — a broadcast station or a beacon — so it is on the dial and you hear it zero-beat, select **1k**, and see whether the peak sits under the amber line. If it does not, go to **Settings → SDR frequency trim (Hz)** and enter a value for that SDR: **a peak above the dial needs a negative trim, a peak below it a positive one**, roughly as many hertz as the peak is from the line. Save, let the SDR restart, and look again. Mine is −44 for VFO B and 0 for VFO A. The trim moves only where the SDR is tuned; nothing else in the display changes, so a trim that is wrong just moves the peak the other way and you correct it. Leave it at 0 unless you see the offset.
+
+#### Two SDRs at 1 MHz and above: use separate USB ports
+
+At 1M and 2M the RSP1 runs its converter at 8 MHz and moves about 24 MB/s over USB; at 500k and below it is about 6 MB/s. Two RSPs at 1 MHz or above, plus the radio's own USB (CAT and the USB AUDIO CODEC that Remote Audio and the CW Reader listen to), all on **one** USB hub is more than a USB 2.0 link carries, and the first thing to suffer is the audio — it stutters. I measured this on 2026-09-12: two RSPs at 1M on a shared hub stuttered the radio's audio at 8–12 % CPU; the same two at 1M on separate ports on the PC were clean. If the audio breaks up when you pick a wide span, that is the cause. Put each SDR on its own PC port, or at least keep the radio's USB cable off the hub the SDRs share.
 
 #### Why two SDRs — and why two RSP1Bs rather than one RSPduo
 
@@ -1342,15 +1375,15 @@ RTL-SDR dongles are supported via the SoapySDR driver path and will function —
 - **Bit depth.** RTL-SDR is 8-bit; RSPplay RSPs are 14-bit. That's about 36 dB more dynamic range — weak signals next to a strong neighbour are far easier to see.
 - **HF coverage.** Most RTL-SDR dongles need a separate upconverter to receive HF. RSPs cover 1 kHz to 2 GHz natively.
 - **Front-end filtering.** RSPs have selectable bandpass filters; dongles have essentially none. With a kilowatt-class transmitter on the next band, a dongle overloads long before an RSP does.
-- **Clock stability.** RSPs use a TCXO; cheap dongles drift visibly during warm-up — the spectrum centred on a 9 MHz IF will appear to slide sideways for the first ten minutes after power-on.
+- **Clock stability.** The RSP1A, RSP1B and later use a TCXO; cheap dongles drift visibly during warm-up — the spectrum centred on a 9 MHz IF will appear to slide sideways for the first ten minutes after power-on. (The original RSP1 has a plain crystal — mine is 5 ppm out, which the *SDR frequency trim* setting above corrects.)
 
 My full bench testing has been against the SDRplay path. RTL-SDR users are welcome to experiment and report back.
 
 #### Why is there a brief pause when I change the span?
 
-When you click a different span button (e.g. 250k → 2M) the spectrum visibly freezes for about **three seconds** before resuming at the new bandwidth. The header badge says "Connecting…" during that window.
+Only spans of **200k and above** change the SDR's sample rate; from 100k down the SDR keeps running and the change is instant. When a span change does cross a rate (e.g. 100k → 200k, or 500k → 2M) that panel visibly freezes for about **three seconds** before resuming at the new bandwidth. The header badge says "Connecting…" during that window.
 
-The delay is **hardware**, not software. Changing the sample rate means YWC asks the SDR worker process to close the device, reopen it at the new rate, and restart streaming. The SDRplay API takes roughly a second to release a device cleanly and another second or so to reinitialise it. With two SDRs running, both restart at once.
+The delay is **hardware**, not software. Changing the sample rate means YWC asks the SDR worker process to close the device, reopen it at the new rate, and restart streaming. The SDRplay API takes roughly a second to release a device cleanly and another second or so to reinitialise it. Only the SDR whose span you changed restarts; the other panel carries on.
 
 YWC keeps the previous spectrum frame visible during the pause rather than blanking out the canvas — the brief frozen image is intentional, not a glitch. It returns to live data as soon as the new sample rate is running.
 
@@ -1372,6 +1405,7 @@ Enter up to five CW message memories. These are available from the CW Keyer pane
 - `{CALL}` is replaced with your callsign — the same one the DX cluster login uses
 - Sending a message **overwrites the matching keyer memory in the radio**, so the radio’s own M1–M5 end up holding whatever you type here (see Section 5.12)
 - Keep them short. A message cannot be stopped once it is sending — the radio has no command for it
+- **CW Send** ([§21](#21-cw-send)) uses slot 5 as its scratch memory: while a typed line is going out the radio’s M5 holds a piece of that line, and your M5 text is written back when it finishes
 
 **Example messages:**
 
@@ -1524,7 +1558,7 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 
 On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close. If the dongle is unplugged, the badge stays **Disconnected** until you refresh the device list and click **Start** — YWC does not reopen whatever camera now sits at the old index. **Auto** and reloading the page do not bypass that halt; only **Start** (after refresh) or choosing a different device clears it.
 
-On **FTdx10** and **FTdx101MP/D**, **Controls** on the video bar opens a dialog to drive the radio’s own scope (span, 3DSS, Center/Cursor/Fix, FFT speed, Level, Peak, Marker, Color, AF-FFT/OSC). That is not click-through on the video — HDMI capture is one-way. See [§19.4](#194-cat-scope-controls).
+On **FTdx10** and **FTdx101MP/D**, **Controls** on the video bar opens a dialog to drive the radio’s own scope (span, 3DSS, Center/Cursor/Fix, FFT speed, Level, Peak, Marker, Color, AF-FFT/OSC). HDMI capture is still one-way — clicks never reach the radio’s touchscreen. On the **FTdx101MP/D**, YWC also maps clicks on the captured MONO W/F picture itself to CAT (tune, cycle ANT/ATT/IPO/R.FIL/AGC, and the CURSOR/SPAN/3DSS/HOLD soft-buttons). The **FTdx10** overlay is the same idea: ATT/IPO/R.FIL/AGC, click-to-tune, and CURSOR/3DSS/SPAN/SPEED (no ANT — one jack; MULTI and EXPAND have no CAT command on either radio). **FT-710** has neither the overlay nor CAT scope **Controls**. See [§19.4](#194-cat-scope-controls).
 
 ---
 
@@ -2091,7 +2125,9 @@ GridTracker is a separate desktop app that draws a live world map of WSJT-X grid
 
 The calibration page lets you adjust the scale of each meter gauge to match your radio's actual output. This is useful if the meter readings seem inaccurate.
 
-Access calibration from **Calibrate Meters** in the navigation bar.
+Access calibration from **Meter Calibration** in the navigation bar.
+
+![The Meter Calibration page — one panel per meter, each with its table of raw-to-display calibration points](pictures/Calibration.png)
 
 **How calibration works:**
 
@@ -2495,7 +2531,7 @@ For casual VHF/UHF listening an RTL-SDR is fine. For a permanent HF-band-monitor
 
 ### 15.5 Why is there a 3-second delay when I change the spectrum bandwidth?
 
-When you click a different span button (e.g. 250k → 2M) the spectrum visibly freezes for about **three seconds** before resuming at the new bandwidth. YWC keeps the previous frame visible during the pause rather than blanking out — the frozen image is intentional, not a glitch.
+Only a span of **200k or wider** changes the SDR's sample rate — from 100k down the SDR keeps running and the span changes instantly (see §6.3). When a change does cross a rate (e.g. 500k → 2M) the spectrum visibly freezes for about **three seconds** before resuming at the new bandwidth. YWC keeps the previous frame visible during the pause rather than blanking out — the frozen image is intentional, not a glitch.
 
 The delay is **hardware**, not software:
 
@@ -2504,7 +2540,7 @@ The delay is **hardware**, not software:
 3. The worker then calls **sdrplay_api_Init** with the new sample rate — another ~500 ms to 1 s while the SDRplay API service reconfigures the hardware.
 4. Streaming resumes; the frontend's next frame replaces the frozen one.
 
-With two SDRs running in dual-SDR mode, both go through the cycle simultaneously when you change the shared sample rate. Per-VFO bandwidth changes only restart the one worker that changed.
+With two SDRs running, only the one whose span you changed goes through the cycle; the other panel carries on. Changing the Sample Rate on the Settings page resets both, so both restart.
 
 This is normal SDRplay API behaviour, not specific to YWC. The first time you see it you'll blink; from the second time on it's just how RSPs reconfigure.
 
@@ -2748,7 +2784,7 @@ To restore all labels to their factory defaults, click **Reset to Defaults** at 
 | VFO Controls | Frequency displays, up/down buttons, mode selector |
 | Radio Controls | AGC, IPO/AMP, ATT, NR, NB, Notch, Roofing filter, AF gain, IF width, IF shift, TX power, Mic gain |
 | Frequency Keyboard | On-screen frequency keyboard — all buttons including digits 0–9 |
-| Spectrum Display | Spectrum canvas and the span buttons (15.6k to 2M) for each VFO |
+| Spectrum Display | Spectrum canvas and the span buttons (1k to 2M) for each VFO |
 | Navigation | Application name / home link |
 
 ---
@@ -3045,6 +3081,8 @@ The **Voice Phrases editor** itself currently only edits the **en-GB** pack in p
 
 ## 18. Remote Audio
 
+Remote Audio is Fabio Valente's (CR7CDC) work (#92, #112); I tested it on my FTdx101MP and on a Raspberry Pi 3B.
+
 Remote Audio streams **radio RX → browser speakers** and **browser microphone → radio TX** over a dedicated WebSocket on the YWC host. PTT remains the normal Index **TX** button (or optional TX toggle key). It is intended for **LAN or VPN** use (for example WireGuard) as a simpler alternative to running Mumble or SonoBus alongside YWC.
 
 > **Not supported in Docker for v1.** USB audio device access from containers is host-specific and unreliable; run the native host on Windows, macOS, or Linux instead.
@@ -3133,7 +3171,21 @@ Both directions use the same codec for a session. Stop remote audio and connect 
 
 ## 19. Radio Display
 
-Radio Display captures the radio’s **external video output** (or any USB UVC webcam) on the YWC host and streams it to the browser as **MJPEG**. It complements CAT control when you need to see menus, meters, or status that are not exposed over CAT. No OBS or separate streaming app is required.
+Radio Display captures the radio's **external video output** (or any USB UVC webcam) on the YWC host and streams it to the browser as **MJPEG**. It complements CAT control when you need to see menus, meters, or status that are not exposed over CAT. No OBS or separate streaming app is required.
+
+**This feature is Fabio Valente's (CR7CDC) work, not mine.** He designed it, wrote it and carried it through three pull requests (#97, #117 and #120). All I did was test it on my FTdx101MP and make a couple of suggestions along the way. If it is useful to you, he is the one to thank.
+
+**Two videos** made by other radio amateurs that explain the problem with the Yaesu DVI to monitor connection and how to overcome it:
+
+- **Yaesu DVI-D to HDMI — investigation:** <https://www.youtube.com/watch?v=dtlziYEsXxE> — the possible problems with taking video off the radio's DVI-D socket. Watch this one *before* you plug anything in.
+- **Capturing Yaesu video:** <https://www.youtube.com/watch?v=1EY7m5e91TI> — the feature in action: the radio's screen in the browser, with the CAT scope controls driving it.
+
+**What I use.** These are the two parts on my bench, and the ones the videos were made with. Other cables and capture sticks may well work, but these are the ones I can vouch for:
+
+- **DVI-D to HDMI cable:** <https://www.amazon.co.uk/dp/B0002GRUIC?th=1>
+- **HDMI to USB capture card:** <https://www.amazon.co.uk/dp/B0C4STMPS2?th=1>
+
+![The Radio Display card on the main page with the radio's screen showing, and the scope Controls column docked beside it](pictures/Radio_Display_Docked.png)
 
 ### 19.1 Hardware chain
 
@@ -3212,7 +3264,7 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
 
 - Verify that any **DVI-D→HDMI** cable or adapter is electrically suitable for **your** radio model before connecting.
 - Do **not** assume every passive DVI-D→HDMI adapter is safe on every Yaesu transceiver.
-- Follow the radio manufacturer’s guidance and published investigations of Yaesu video-output interfaces (for example community DVI-D→HDMI risk discussions on YouTube / forums).
+- Follow the radio manufacturer's guidance and published investigations of Yaesu video-output interfaces. My own investigation video (<https://www.youtube.com/watch?v=dtlziYEsXxE>) goes through what I found on the FTdx101MP's DVI-D socket — watch it before connecting anything.
 - Treat the capture chain as an external accessory under your responsibility.
 
 ### 19.3 Settings and Index panel
@@ -3249,7 +3301,11 @@ Capture opens while at least one browser is viewing the stream, and stays open f
 
 The Radio Display picture is a live capture of the radio’s TFT. Clicks on that image never reach the touchscreen (the dongle is one-way). On radios that expose the spectrum scope over CAT (`SS`), a **Controls** button on the video bar (next to FPS / quality) shows scope controls beside the video by default — the stream on the left, buttons on the right — so nothing floats over the picture. Hide the column with **✕** on the column header (or **Controls** on the video bar); the video recentres. **Controls** only shows or hides the panel — when hidden, click it again to bring controls back in the same layout (docked column or floating panel). The picture-in-picture icon on the column header switches to a floating panel; the sidebar icon on the floating panel pins the column again (hover either icon for its label). **✕** closes the panel without changing layout mode. Drag the column’s left edge to widen or narrow it (Arrow keys nudge when the edge is focused; Home/End jump to the limits; double-click restores the default width); the choice is remembered in the browser. **Reattach** from the pop-out window restores the controls panel in the same docked or floating layout you had before pop-out.
 
-The controls change what the radio draws: Center / Cursor / Fix, 3DSS vs waterfall, Expand (L / N / S), FFT SPAN, FFT SPEED, Level, Peak, Marker, Hold, Color / NB colour (FTdx101 only), and AF-FFT / OSC attenuators and timebase. The pop-out window behaves the same way. Your docked vs floating choice is remembered in the browser.
+On the **FTdx101MP/D**, with the radio in MONO W/F, YWC also treats the captured picture as a control surface: hover over the spectrum or waterfall for the frequency under the cursor, click to tune that VFO, click the ANT / ATT / IPO / R.FIL / AGC readouts to cycle them, and click CURSOR / SPAN / 3DSS / HOLD for the same CAT scope commands as **Controls**. The frequency is measured from the radio’s own VFO marker line, so it is right whatever the span. MONO / MULTI / EXPAND / MEM CH have no CAT command — a click flashes that on the label rather than doing nothing silently. The **FTdx10** has the same overlay on its MONO W/F screen: no ANT target (one jack), and the soft-button row is CURSOR / 3DSS / MULTI / EXPAND / SPAN / SPEED, of which MULTI and EXPAND have no CAT command. **FT-710** has no click overlay.
+
+One limitation, the same on both radios: **EXPAND** grows the scope up over the readout row, and the radio does not report it over CAT (`SS` reports W/F vs 3DSS, placement and size, never EXPAND), so the overlay assumes EXPAND is off. With it on, the readout clicks land on scope and the top of the plot is wrong — press EXPAND on the radio to put it back. This is CAT, not the radio’s touchscreen, and it is not the SDR IF-OUT axis correction in §6.3 — the FTdx10 has no IF tap, and that correction stays on the FTdx101.
+
+The controls change what the radio draws: Center / Cursor / Fix, 3DSS vs waterfall, Size (L / N / S — the size of the spectrum pane, see [§5.20](#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)), FFT SPAN, FFT SPEED, Level, Peak, Marker, Hold, Color / NB colour (FTdx101 only), and AF-FFT / OSC attenuators and timebase. The pop-out window behaves the same way. Your docked vs floating choice is remembered in the browser.
 
 **FTdx10** and **FTdx101MP/D** show **Controls**. **FTdx101** also has MAIN / SUB (two independent scopes). **FTdx10** is a single receiver, so that row is omitted. **FT-710** stays off until the `SS` writes have been probed on that radio.
 
@@ -3299,7 +3355,7 @@ See comments in `docker-compose.yml`. Install the Silicon Labs (or other) serial
 | Stream stays black / FPS stays 0 after allowing Camera | Quit YWC fully and relaunch via `scripts/macos/run-dev.sh` (or the DMG). The first permission grant must complete before OpenCV can deliver frames; also confirm the HDMI cable is live into the USB capture dongle. |
 | Host app exits when stopping / popping out the stream | USB HDMI dongles crash if the capture graph is closed and immediately reopened. Use a current build — pop-out hands off the live device; Close waits ~2 s before release. |
 
-OCR, click-through of the captured UI, capture-device audio, and WebRTC are **not** in this version. Drive the radio’s scope from **Controls** on the video bar (§19.4), not by clicking the image.
+OCR, capture-device audio, and WebRTC are **not** in this version. Clicks on the picture never reach the radio’s touchscreen; what a click does is send CAT for the spot you clicked (§19.4), and only on the FTdx101MP/D and FTdx10 in MONO W/F — everywhere else, drive the radio’s scope from **Controls** on the video bar.
 
 ---
 
@@ -3308,6 +3364,8 @@ OCR, click-through of the captured UI, capture-device audio, and WebRTC are **no
 The **CW Read** button on the main control panel opens a reader that listens to the radio's receive audio and prints the Morse it hears as text. It also offers a **Reader Mode** button that sets the radio up for decoding and puts your settings back afterwards, keeps a transcript of everything it decoded, and can turn a contact into a line in an ADIF log.
 
 Nothing here transmits. The reader only listens.
+
+![The CW Reader panel — decoded text at the top, the status line beneath it, and the Reader Mode, transcript and log controls](pictures/CW-Reader.png)
 
 ### 20.1 What to expect from a machine reading Morse
 
@@ -3433,6 +3491,57 @@ If a suggestion box says *nothing in the copy*, that is a result rather than a f
 | The log file is not where I expected | The exact path is shown in the form's status line after a save. |
 
 The reader decodes from the receive audio, so anything you can hear is something it can be given — but equally, if you cannot hear it, neither can it.
+
+---
+
+## 21. CW Send
+
+The **CW Send** button on the main control panel opens the other half of the CW Reader: a box you type into, and the radio keys what you typed. Read in one panel, answer in the other. It needs nothing beyond the CAT cable — no key, no keyer interface, no extra audio — and it works on every host YWC runs on.
+
+![The CW Send panel part way through a long line — the character being keyed is highlighted, the tag on the right says which piece of the line is going out, and the speed slider and status line sit beneath the box](pictures/CW-Send.png)
+
+### 21.1 Sending a line
+
+Type into the box and press **Enter**. Nothing leaves the radio until you press Enter, so you can type ahead, correct yourself, and paste. Each line you send appears in the log above the box with the time, and a tag on the right that follows it through: **queued**, **sending part 2 of 3**, then **sent** — or **monitor only** if break-in was off (see below).
+
+You can press Enter again while a line is still going out; the next line is queued and starts as soon as the first finishes, and the status line says how many are waiting.
+
+The keyer takes **A–Z, 0–9, space, and `? / . ,`**. Anything else is dropped before sending, and lower case is sent as upper. A line with nothing sendable in it is refused with a message rather than silently keying nothing. The **Speed** slider sets the radio’s keyer speed (4–60 wpm) and is the same setting as the one on the CW Keyer panel.
+
+**Break-in decides whether it goes out**, exactly as it does for M1–M5 ([§5.12](#512-cw-keyer-panel)). With Break-in **Semi** or **Full** the line is transmitted. With Break-in **Off** the radio plays it to the sidetone monitor and no RF leaves the set — a yellow banner across the top of the panel says so while that is the case, and each line is tagged **monitor only** rather than **sent**. That is the practice mode: turn the monitor up, and hear your own sending without transmitting a thing.
+
+### 21.2 What the radio is actually doing
+
+There is no “send this text” command on any Yaesu. What the radio has is five keyer memories of up to 50 characters each, and a command that plays one of them whole. So CW Send cuts your line into pieces of up to 50 characters at word boundaries, writes each piece into **keyer memory 5**, plays it, waits for it to finish, and writes the next. When the last piece has gone, your own **M5** text is written back.
+
+Three things follow from that, and all are worth knowing:
+
+**There is a short gap between pieces.** Each piece is a separate memory write and playback, and the radio cannot be told to start the next one early. The pause is a fraction of a second — I have measured it on the air and it is small enough not to trouble the other station, but a very long line is not quite one continuous transmission. Keep lines to a sentence or two and you will never notice.
+
+**Your M5 is borrowed.** While a line is going out, the radio’s keyer memory 5 holds a piece of it, not your message. It is read before the first piece and put back after the last, and the panel tells you if the write-back failed — check M5 in the CW Keyer panel if it ever does. The M1–M5 buttons are disabled while CW Send is busy, for the same reason a second message cannot be started on top of a first.
+
+**The highlight follows the keying.** As a piece plays, the character being sent is lit in the log and the ones already gone turn white. The radio does not report where it is in the text, so the highlight is the standard Morse timing — a dot is one unit, a dash three, three between letters, seven between words, and a unit is 1200 ÷ wpm milliseconds — run from the moment playback started. On my FTdx101MP it keeps pace with the sidetone across a full line, which is also how I know the radio’s own keyer runs to that timing. The log scrolls itself so the character under the key stays in view.
+
+### 21.3 Stopping
+
+**Stop** (or **Escape** with the cursor in the box) drops everything that has not started: queued lines are tagged **not sent**, and a line part way through is tagged **stopped after part 2 of 3**. The piece already playing has to finish — the radio has no command to stop a memory playback, and I measured every candidate on the air before writing that ([§5.12](#512-cw-keyer-panel)). This is precisely why the line is sent in pieces rather than as one long memory: the most you can ever be committed to is one piece, and a piece is at most 50 characters.
+
+**Escape** with nothing sending simply empties the box (as does the **Clear** button beside it) — handy after a paste that was never meant for the keyer. **Clear log** empties the sent-lines log.
+
+### 21.4 The panel
+
+The panel is non-modal: it can stay open while you work the rest of the page, and the CW Reader can be open beside it. Drag the title bar to move it; drag the bottom-right corner to resize it, and the log grows to fill whatever height you give it. Both are remembered between sessions. Close it with **×**; a line already going out finishes on its own.
+
+### 21.5 Troubleshooting
+
+| Symptom | What to try |
+|---|---|
+| Lines are tagged **monitor only** and nothing is transmitted | Break-in is **Off**. Set it to **Semi** or **Full** on the CW Keyer panel ([§5.12](#512-cw-keyer-panel)). The yellow banner on the panel says the same. |
+| I can’t hear the sending | With break-in off the radio plays to the monitor, so turn the radio’s **MONI** level up. |
+| “Radio is still sending – waiting for it to finish” | Something else is playing — an M button, or a piece from the previous line. It resumes on its own. |
+| The gap between pieces is long | The wait between pieces is worked out from the keyer speed, so a slider that disagrees with the radio makes it wait too long. Nudge the **Speed** slider and it is written to the radio. |
+| M5 has the wrong text after sending | The write-back failed, and the status line will have said so. The next line you send from CW Send puts M5 back again; or press **M5** on the CW Keyer panel, which rewrites the slot from YWC’s own text before playing it. |
+| Characters missing from what was sent | Only A–Z, 0–9, space and `? / . ,` are keyed. The rest are dropped before the line is stored. |
 
 ---
 
