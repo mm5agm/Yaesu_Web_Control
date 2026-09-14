@@ -184,12 +184,13 @@
 }
 
 .toggle-dd__slider-end {
-    min-width: 1.1rem;
+    min-width: 3.4rem;
     color: #9a9a9a;
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-align: center;
+    white-space: nowrap;
 }
 
 .toggle-dd__slider {

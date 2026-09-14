@@ -1345,7 +1345,8 @@
                     <!-- IF Width and IF Shift -->
                     <div class="d-flex align-items-center gap-2 mb-0" style="flex-wrap: wrap;">
                         <div id="ifWidthButtonA"
-                             data-selected="@(string.IsNullOrEmpty(Model.RadioState.IfWidthA) ? ifWidthDefaultA : Model.RadioState.IfWidthA)"></div>
+                             data-selected="@(string.IsNullOrEmpty(Model.RadioState.IfWidthA) ? ifWidthDefaultA : Model.RadioState.IfWidthA)"
+                             data-mode="@Model.RadioState.ModeA"></div>
                         <button type="button" class="btn btn-secondary btn-sm fw-bold flex-shrink-0 ms-2"
                                 id="audioFilterBtnA"
                                 aria-label="VFO A Audio Filter"
@@ -1613,7 +1614,8 @@
                     <!-- IF Width and IF Shift -->
                     <div class="d-flex align-items-center gap-2 mb-0" style="flex-wrap: wrap;">
                         <div id="ifWidthButtonB"
-                             data-selected="@(string.IsNullOrEmpty(Model.RadioState.IfWidthB) ? ifWidthDefaultB : Model.RadioState.IfWidthB)"></div>
+                             data-selected="@(string.IsNullOrEmpty(Model.RadioState.IfWidthB) ? ifWidthDefaultB : Model.RadioState.IfWidthB)"
+                             data-mode="@Model.RadioState.ModeB"></div>
                         <button type="button" class="btn btn-secondary btn-sm fw-bold flex-shrink-0 ms-2"
                                 id="audioFilterBtnB"
                                 aria-label="VFO B Audio Filter"
@@ -2525,7 +2527,14 @@
 
 @section Scripts {
     <!-- Cache-busted JS reference, placed BEFORE your inline script if you use window.radioControl, etc. -->
-    <script>window.bandPlan = '@Model.BandPlan';</script>
+    <script>
+        window.bandPlan = '@Model.BandPlan';
+        // Classic script so this is set before the deferred module runs
+        // initVfoKeyButtons / rebuildIfWidthSelect. Assigning it only inside
+        // the module's DOMContentLoaded left IF Width stuck on a placeholder
+        // ("…") with no Hz values.
+        window._radioModel = '@Model.RadioModel';
+    </script>
     <script>
         window.ywcTxToggleKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.TxToggleKey));
         window.ywcVoiceNudgeStepHzA = @Model.VoiceNudgeStepHzA;
@@ -3102,8 +3111,8 @@
                 window.updateContourSliderBounds('B');
             }
 
-            // Radio model for mode-aware IF Width labels (menus populated after
-            // initVfoKeyButtons creates the Yaesu keys).
+            // Repeat of the classic-script assignment above; kept so anything
+            // in this DOMContentLoaded block can rely on it locally.
             window._radioModel = '@Model.RadioModel';
             // IF Shift is greyed out in AM / FM, where the radio ignores it.
             if (window.updateIfShiftForMode) {
