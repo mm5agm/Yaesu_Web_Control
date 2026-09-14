@@ -321,9 +321,9 @@
   </Target>
 
   <PropertyGroup>
-    <Version>2.4.3</Version>
-    <FileVersion>2.4.3.0</FileVersion>
-    <AssemblyVersion>2.4.3.0</AssemblyVersion>
+    <Version>2.5.0</Version>
+    <FileVersion>2.5.0.0</FileVersion>
+    <AssemblyVersion>2.5.0.0</AssemblyVersion>
     <AssemblyTitle>Yaesu Web Control</AssemblyTitle>
     <Product>Yaesu Web Control</Product>
     <Description>Browser-based CAT controller for Yaesu HF transceivers</Description>
