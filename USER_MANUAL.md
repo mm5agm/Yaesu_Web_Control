@@ -718,7 +718,7 @@ Your antenna choice is **remembered per band per VFO**. Set Ant 1 on 20 m and An
 
 Existing installs auto-populate empty slots on the next startup with whatever the radio currently has, so you don't need to manually click through every band to seed it.
 
-**Roofing Filter** — Select the roofing filter bandwidth: 12 kHz, 3 kHz, 1.2 kHz, 600 Hz, 300 Hz
+**Roofing Filter** — Yaesu-style key under Band / Mode. Click to open a single-column list of fitted roofing widths (e.g. 12 kHz, 3 kHz, 1.2 kHz, 600 Hz, 300 Hz on FTdx101MP/D). Not shown on FT-710 (no CAT roofing control).
 
 Selecting a narrower roofing filter can change the IF Width as well. If IF Width is at 4.0 kHz and you drop the roofing filter from 12 kHz to 3 kHz, the radio itself pulls IF Width down to 3.0 kHz at that moment, and the IF Width dropdown and the Filter Function Display follow — the radio's own screen shows the same change. That is the radio's doing, not the app's: the app only sends the roofing filter command and reads the result back. It is a one-off adjustment, not a limit: you can widen IF Width again afterwards (3.5 kHz behind a 3 kHz roofing filter is allowed, and the roofing filter then does the real narrowing — see the Filter Function Display below), and going back to 12 kHz does not restore the width the narrower filter took away.
 
@@ -727,12 +727,14 @@ Selecting a narrower roofing filter can change the IF Width as well. If IF Width
 | Control | Options |
 |---------|---------|
 | AGC | Yaesu-style key. Left-click toggles OFF ↔ last speed. Right-click opens OFF / FAST / MID / SLOW / AUTO. |
-| IPO/AMP | Yaesu-style key. Left-click toggles IPO ↔ last AMP. Right-click opens IPO / AMP1 / AMP2. |
+| IPO/AMP | Yaesu-style key. Left-click cycles IPO → AMP1 → AMP2 → IPO. Right-click opens IPO / AMP1 / AMP2. |
 | ATT | Yaesu-style key. Left-click toggles OFF ↔ last attenuation. Right-click opens OFF / 6 dB / 12 dB / 18 dB. |
 | NR / DNR | Yaesu-style key. Left-click cycles OFF → NR1 → NR2 → OFF (FTdx101MP/D, FTDX3000, FTDX5000) or OFF → DNR → OFF (FTdx10 / FT-710). Right-click opens a 1–15 slider for NR depth / DNR algorithm. |
 | NB | Yaesu-style key. Left-click toggles ON/OFF. Right-click opens a 1–20 slider for noise blanker depth. |
 | Auto Notch | Yaesu-style key. Left-click toggles ON/OFF. |
 | Notch | Yaesu-style key. Left-click toggles manual notch ON/OFF. Right-click opens a 10–3200 Hz frequency slider. |
+| Contour | Yaesu-style key. Left-click toggles Contour ON/OFF. Right-click opens a frequency slider (passband-bounded; radio hard limit 100–3200 Hz, or 100–4000 Hz on FTDX3000). |
+| APF | Yaesu-style key. Left-click toggles APF ON/OFF. Right-click opens a −250…+250 Hz offset slider (CW audio peak filter). |
 | RF Gain | Slider 0–255. Controls the RF preamplifier gain. At 255 (maximum) sensitivity is highest; reducing RF Gain is useful when a strong nearby signal is causing overload that AGC and IPO cannot handle. |
 | Squelch | Slider 0–255. Only shown when the VFO is in FM or FM-N mode. 0 = squelch fully open (hear everything); higher values cut off weaker signals. |
 
@@ -751,7 +753,7 @@ The trapezium is the DSP filter — the IF Width setting — and it grows and sh
 - A **"Roof Nk" label** in the top-right corner shows the currently selected roofing filter (e.g. "Roof 3k", "Roof 12k", "Roof 600"). The trapezium does not change with it, so the label is how you see which roofing filter is in circuit — and, when it is narrower than the IF Width, the bars show its effect as described above.
 - **Passband width** reflects the current IF Width setting.
 - **Passband position** shifts left or right as the IF Shift slider is adjusted — the display updates live while dragging the slider. Where the passband sits in SSB was measured on my FTdx101MP with the audio feed above, one width at a time: widths of 850 Hz and below are centred on 1500 Hz, the IF centre (300 Hz is roughly 1350–1650 Hz), and the wider settings narrow in from the 3 kHz default with about a third taken off the low side and two-thirds off the high (2.4 kHz is roughly 300–2700 Hz). Earlier versions drew every SSB width starting at 300 Hz and growing upward, which put the trapezium in the wrong place at everything but 3 kHz — and, once the bars were real, put the signal outside it. In CW the passband is centred on your CW pitch for the narrow widths, measured the same way; once a width is too wide to sit centred on the pitch (from about 800 Hz with a 700 Hz pitch) its low edge stops at about 250 Hz and it grows upward from there, so a 3.5 kHz CW filter fills the display much as the radio's own draws it. Earlier versions centred every CW width on the pitch, which sent the wide ones off the left of the display.
-- A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as the contour frequency slider is adjusted.
+- A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as you adjust Contour frequency (right-click the Contour key).
 - A **dark vertical bar** marks the Manual Notch frequency while Man Notch is on, and a **cyan wedge** marks the APF peak while APF is on (CW). Both sit at the frequency the radio is set to, so they move with the IF Shift slider along with the rest of the passband.
 - The display updates automatically whenever any filter parameter changes, whether adjusted from the browser or from the radio's front panel.
 
@@ -1455,7 +1457,7 @@ YWC keeps the previous spectrum frame visible during the pause rather than blank
 
 ### 6.4 Roofing Filters
 
-Select which optional roofing filters are fitted to your radio. The app uses this list to show only the installed filters in the Roofing Filter dropdown on the main page. FTdx101MP comes fully loaded; FTdx101D, FTdx10, and FTDX3000 allow optional filter selection.
+Select which optional roofing filters are fitted to your radio. The app uses this list to show only the installed filters in the Roofing Yaesu-style key on the main page. FTdx101MP comes fully loaded; FTdx101D, FTdx10, and FTDX3000 allow optional filter selection.
 
 Only the boxes for the radio model chosen above are live — the other models' boxes are greyed out and ignored when you save. Before v2.5.2-pre4 a box belonging to a hidden model could still be submitted, which is why unticking 300 Hz on an FTdx101D did not stick ([#156](https://github.com/mm5agm/Yaesu_Web_Control/issues/156)), and an FTdx10's 300 Hz tick was never saved at all.
 
