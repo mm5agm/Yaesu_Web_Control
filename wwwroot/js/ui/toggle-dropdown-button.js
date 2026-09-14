@@ -313,15 +313,25 @@ export class ToggleSliderButton {
     }
 
     /**
-     * @param {{ enabled?: boolean, value?: number }} partial
+     * @param {{ enabled?: boolean, value?: number, min?: number, max?: number }} partial
      * @param {{ silent?: boolean }} [opts]
      */
     setState(partial = {}, opts = {}) {
+        if (partial.min !== undefined) {
+            const n = Number(partial.min);
+            if (!Number.isNaN(n)) this.min = n;
+        }
+        if (partial.max !== undefined) {
+            const n = Number(partial.max);
+            if (!Number.isNaN(n)) this.max = n;
+        }
         if (partial.enabled !== undefined) this.enabled = Boolean(partial.enabled);
         if (partial.value !== undefined) {
             const n = Number(partial.value);
-            if (!Number.isNaN(n)) this.value = Math.min(this.max, Math.max(this.min, n));
+            if (!Number.isNaN(n)) this.value = n;
         }
+        // Always clamp to the current range (bounds may have narrowed).
+        this.value = Math.min(this.max, Math.max(this.min, this.value));
         this._sync();
         if (!opts.silent) this.onChange(this.getState());
     }
@@ -333,8 +343,6 @@ export class ToggleSliderButton {
     _render() {
         this.root.classList.add("toggle-dd", "dropdown");
         const a11yAttr = this.a11yKey ? ` data-a11y-key="${this.a11yKey}"` : "";
-        const endMin = this._formatValue(this.min);
-        const endMax = this._formatValue(this.max);
         this.root.innerHTML = `
             <button type="button"
                     class="btn toggle-dd__btn toggle-dd__btn--menu"
@@ -349,14 +357,14 @@ export class ToggleSliderButton {
             <div class="dropdown-menu toggle-dd__menu toggle-dd__menu--slider">
                 <div class="toggle-dd__slider-value" aria-live="polite"></div>
                 <div class="toggle-dd__slider-row">
-                    <span class="toggle-dd__slider-end">${endMin}</span>
+                    <span class="toggle-dd__slider-end"></span>
                     <input type="range"
                            class="toggle-dd__slider"
                            min="${this.min}"
                            max="${this.max}"
                            step="${this.step}"
                            value="${this.value}">
-                    <span class="toggle-dd__slider-end">${endMax}</span>
+                    <span class="toggle-dd__slider-end"></span>
                 </div>
             </div>
         `;
@@ -367,6 +375,9 @@ export class ToggleSliderButton {
         this.menu = this.root.querySelector(".toggle-dd__menu");
         this.slider = this.root.querySelector(".toggle-dd__slider");
         this.valueEl = this.root.querySelector(".toggle-dd__slider-value");
+        const ends = this.root.querySelectorAll(".toggle-dd__slider-end");
+        this.endMinEl = ends[0];
+        this.endMaxEl = ends[1];
     }
 
     _bind() {
@@ -434,12 +445,17 @@ export class ToggleSliderButton {
         const formatted = this._formatValue(this.value);
         this.labelEl.textContent = `${this.label} · ${formatted}`;
         this.valueEl.textContent = formatted;
+        this.slider.min = String(this.min);
+        this.slider.max = String(this.max);
+        this.slider.step = String(this.step);
         this.slider.value = String(this.value);
         this.slider.setAttribute("aria-valuenow", String(this.value));
         this.slider.setAttribute(
             "aria-label",
             `${this.label} ${this._formatValue(this.min)} to ${this._formatValue(this.max)}`
         );
+        if (this.endMinEl) this.endMinEl.textContent = this._formatValue(this.min);
+        if (this.endMaxEl) this.endMaxEl.textContent = this._formatValue(this.max);
         this.button.setAttribute("aria-pressed", this.enabled ? "true" : "false");
         this.button.setAttribute("aria-label", `${this.label}: ${this.enabled ? "on" : "off"}, ${formatted}`);
         this.led.classList.toggle("is-on", this.enabled);
@@ -753,11 +769,16 @@ export class CycleContextButton {
     _sync() {
         const optionLabel = this._optionLabel();
         const contextLabel = this._contextLabel();
-        this.labelEl.textContent = `${optionLabel} · ${contextLabel}`;
-        this.button.setAttribute("aria-label", `${this.label}: ${optionLabel}, level ${contextLabel}`);
+        const isOn = this.selectedId !== this.offId;
+        // Off faceplate keeps the key name (DNR/NR), like NB — not the option "OFF".
+        const faceLabel = isOn ? optionLabel : this.label;
+        this.labelEl.textContent = `${faceLabel} · ${contextLabel}`;
+        this.button.setAttribute(
+            "aria-label",
+            `${this.label}: ${isOn ? optionLabel : "off"}, level ${contextLabel}`
+        );
         this.button.title = `${this.label}: left-click to cycle, right-click for level`;
 
-        const isOn = this.selectedId !== this.offId;
         this.button.setAttribute("aria-pressed", isOn ? "true" : "false");
         this.led.classList.toggle("is-on", isOn);
 
