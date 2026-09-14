@@ -213,7 +213,7 @@ The application includes a real-time spectrum display and waterfall, intended fo
 - **RTL-SDR, Airspy, and HackRF** — supported via the bundled SoapySDR driver interface. No separate SoapySDR installation is required — the necessary drivers are included in the installer. *These devices have not been tested by me — feedback from users is very welcome.*
 
 **Features:**
-- Variable span: 15.625 kHz, 31.25 kHz, 62.5 kHz, 125 kHz, 250 kHz, 500 kHz, 1 MHz, or 2 MHz — the two narrowest are for CW, where one station is a single carrier
+- Variable span: 1k, 2k, 5k, 10k, 20k, 50k, 100k, 200k, 500k, 1M or 2M — the radio's own scope spans plus 2 MHz. From 100k down the change is instant (a software zoom of a fixed 125 kHz stream, 7.6 Hz per bin); 20k is the CW sweet spot, a whole sub-band with each station a few pixels wide
 - The receiver's **IF passband** drawn as a shaded band on the trace, moving with the IF width, IF shift and CW pitch, so you can see which of the signals on screen you are actually hearing; a **Passband** tick box on each panel turns it off
 - Signals drawn at their **true RF frequency** on the FTdx101, and a click on a CW signal tunes straight onto it (the IF OUT socket is not at the SDR's centre, and the radio slides its IF with the filter settings — YWC now corrects for both)
 - Dual-SDR mode: one SDR per VFO on the FTdx101MP / FTdx101D, with a Mono A / Mono B / Both layout toggle, Stacked / Side-by-side option, and independent span per panel
