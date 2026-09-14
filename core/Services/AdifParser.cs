@@ -1,10 +1,10 @@
 using System.Globalization;
 
-namespace Yaesu_Web_Control.Services
+namespace RadioWebControl.Core.Services
 {
     /// <summary>
     /// Minimal ADIF (Amateur Data Interchange Format) parser. Reads only the
-    /// fields YWC's memory-import feature cares about — FREQ, MODE, BAND,
+    /// fields the memory-import feature cares about — FREQ, MODE, BAND,
     /// CALL — and ignores everything else. Tolerates header (skipped via
     /// &lt;EOH&gt;), arbitrary whitespace, mixed-case field names, and DOS
     /// or Unix line endings.
@@ -98,12 +98,12 @@ namespace Yaesu_Web_Control.Services
         }
 
         /// <summary>
-        /// Map an ADIF MODE string to one of YWC's mode names. ADIF uses a
-        /// flat list of modes; YWC's "modes" include the upper/lower
+        /// Map an ADIF MODE string to one of the app's radio mode names. ADIF
+        /// uses a flat list of modes; the app's "modes" include the upper/lower
         /// distinction for CW, RTTY and DATA which ADIF doesn't carry. We
         /// pick a sensible default for ambiguous cases.
         /// </summary>
-        public static string AdifModeToYwc(string? mode)
+        public static string AdifModeToRadioMode(string? mode)
         {
             if (string.IsNullOrWhiteSpace(mode)) return "USB";
             switch (mode.Trim().ToUpperInvariant())

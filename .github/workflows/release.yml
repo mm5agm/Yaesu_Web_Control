@@ -1,8 +1,34 @@
-name: Build and Release Installer
+# Named "Build" rather than "Build and Release Installer" because it runs on
+# every PR into develop as a build-only smoke test, and the old name made a
+# routine PR check look like it was about to publish a release. Nothing is
+# released except on the `release` event -- see the guards on each upload step.
+name: Build
+
+# Retitles the run itself, so the Actions list says what a given run was for.
+run-name: >-
+  ${{ github.event_name == 'pull_request' && format('Smoke build - PR #{0} (nothing published)', github.event.number)
+   || github.event_name == 'release' && format('Release {0} - building and publishing installers', github.event.release.tag_name)
+   || 'Manual build' }}
 
 on:
   release:
     types: [created]
+
+  # Build every pull request into develop, so a PR arrives with a real signal
+  # instead of "no checks". Added after shared-core phase 1 (#99) merged clean
+  # and broke build-docker: nothing had run, because until now the only ways in
+  # were a release and a manual dispatch, and the manual one happened after the
+  # merge. build-docker is exactly the job that would have caught it.
+  #
+  # Nothing is published on this path. Every upload step is guarded by event
+  # name, and the docker job's push flag falls into its `else` branch on any
+  # event that is neither a release nor a dispatch carrying a tag — so a PR run
+  # gets version=smoke, push=false, the GHCR login skips and the image is built
+  # and discarded.
+  #
+  # build-macos is deliberately excluded (see its `if:`).
+  pull_request:
+    branches: [develop]
 
   workflow_dispatch:
     inputs:
@@ -12,14 +38,46 @@ on:
         type: string
 
 jobs:
-  build:
+  # Runs on every trigger, including pull requests. Until this existed the
+  # workflow only ran `dotnet publish`, so a green tick meant "it compiles and
+  # packages" and said nothing about the tests -- a PR could break every test in
+  # the suite and still show all checks passed.
+  #
+  # The test project targets net10.0 only, so ubuntu is the cheapest host for it.
+  # It is a standalone job rather than a gate on the build jobs: a failure should
+  # be loud on the PR without adding its runtime to the front of every release
+  # build. To make it actually block a merge, add "Build / test" to the required
+  # status checks on develop -- none are configured at present.
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run unit tests
+        run: dotnet test Tests/YaesuWebControl.Tests/YaesuWebControl.Tests.csproj --configuration Release --verbosity normal
+
+  build-windows:
+    # Unstable snapshots of develop are published by unstable.yml. Creating
+    # that GitHub Release would otherwise re-enter this workflow (on:
+    # release) and the docker job would try to parse unstable-YYYYMMDD as
+    # SemVer.
+    if: github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-')
     runs-on: windows-latest
     permissions:
       contents: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup .NET 10
         run: |
@@ -42,6 +100,7 @@ jobs:
       - name: Publish 64-bit self-contained app
         run: |
           dotnet publish Yaesu_Web_Control.csproj `
+            --framework net10.0-windows `
             --configuration Release `
             --runtime win-x64 `
             --self-contained true `
@@ -84,7 +143,7 @@ jobs:
 
       - name: Upload installer as workflow artifact
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Yaesu_Web_Control_Setup
           path: Yaesu_Web_Control_Setup.exe
@@ -105,3 +164,220 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
+
+  # Unsigned CAT-only .app DMGs (arm64 + x64). No Apple Developer ID / notarization.
+  # workflow_dispatch with empty tag → artifacts only (safe branch smoke test).
+  #
+  # Skipped on pull requests, on wall-clock grounds rather than cost — both
+  # repos are public, so Actions minutes are free. build-windows and
+  # build-docker cover the same compile, and macOS still runs on dispatch and
+  # on release. If a change is macOS-specific, hit "Run workflow" on the branch.
+  #
+  # One RID per matrix leg (fresh VM). Sequential `build-dmg.sh all` on a
+  # hosted arm64 runner hangs the SECOND publish after restore — VBCSCompiler
+  # wedged, 36/38/54 min on 2026-08-13 and again 2026-08-28 until the job
+  # timeout. Not our code; it reproduced on v2.4.3-pre6 with no core/ at all.
+  # Splitting removes that reuse. timeout-minutes stays so a single-RID hang
+  # still fails loud (~10x a normal ~2 min publish) instead of sitting until
+  # the runner is cancelled.
+  #
+  # Why a timeout and not a retry: these jobs are independent — no `needs:`
+  # from windows/docker — so a stalled macOS job does not hold up those, and
+  # on a release that is the trap. The tag ships with the Windows installer
+  # and the Docker image while the DMGs never upload, and the release looks
+  # finished. Failing at 10 minutes makes that visible instead of silent.
+  build-macos:
+    if: github.event_name != 'pull_request' && (github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-'))
+    runs-on: macos-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [osx-arm64, osx-x64]
+    env:
+      MSBUILDDISABLENODEREUSE: 1
+      DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build macOS DMG (${{ matrix.rid }})
+        run: |
+          chmod +x scripts/macos/build-dmg.sh
+          ./scripts/macos/build-dmg.sh "${{ matrix.rid }}"
+          ls -lh publish/dmg/*.dmg
+
+      - name: Upload DMG as workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Yaesu_Web_Control_macOS_DMG_${{ matrix.rid }}
+          path: publish/dmg/*.dmg
+
+      - name: Upload DMG to GitHub Release
+        if: github.event_name == 'release' || github.event.inputs.tag != ''
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="${{ github.event.inputs.tag }}"
+          fi
+          echo "Uploading macOS DMG (${{ matrix.rid }}) to release: $tag"
+          gh release upload "$tag" publish/dmg/*.dmg --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Multi-arch CAT-only Linux image → GHCR (amd64 + arm64).
+  # workflow_dispatch with empty tag → build only, no push (smoke test).
+  build-docker:
+    if: github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'unstable-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      actions: write  # docker buildx GHA cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve version and push flag
+        id: prep
+        run: |
+          image="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          # :latest only moves on full releases — never on pre-releases or smoke builds.
+          latest=false
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "push=true" >> "$GITHUB_OUTPUT"
+            if [ "${{ github.event.release.prerelease }}" != "true" ]; then
+              latest=true
+            fi
+          elif [ -n "${{ github.event.inputs.tag }}" ]; then
+            version="${{ github.event.inputs.tag }}"
+            echo "version=${version}" >> "$GITHUB_OUTPUT"
+            echo "push=true" >> "$GITHUB_OUTPUT"
+            # SemVer pre-release (e.g. v2.4.3-pre6) has a hyphen after the numeric version.
+            ver="${version#v}"
+            if [[ "$ver" != *-* ]]; then
+              latest=true
+            fi
+          else
+            echo "version=smoke" >> "$GITHUB_OUTPUT"
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "latest=${latest}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        if: steps.prep.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.prep.outputs.image }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.prep.outputs.version }},enable=${{ steps.prep.outputs.push }}
+            type=semver,pattern={{raw}},value=${{ steps.prep.outputs.version }},enable=${{ steps.prep.outputs.push }}
+            type=raw,value=latest,enable=${{ steps.prep.outputs.latest }}
+            type=raw,value=smoke,enable=${{ steps.prep.outputs.push != 'true' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ steps.prep.outputs.push == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: ${{ steps.prep.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # The three build jobs above are independent on purpose — no `needs:` between
+  # them, so they run in parallel and a release is not held up by the slowest.
+  # The cost of that is nobody notices when one of them does not finish: the
+  # release event fires when the tag is created, each job uploads its own assets
+  # to a release that already exists, and if one never gets there the tag simply
+  # ends up short an asset. The release page looks finished. That is exactly what
+  # a stalled build-macos produced on 2026-08-13 — installer and image present,
+  # both DMGs missing, nothing red for six hours.
+  #
+  # This job is the only thing that actually checks. It runs last and in parallel
+  # with nothing, so it costs the release no wall-clock time.
+  verify-release-assets:
+    # always() matters: without it a failed or cancelled `needs` would SKIP this
+    # job, so the check would go silent in precisely the case it exists for.
+    # The event guard stays inside the same expression — a dispatch or a PR has
+    # no release to inspect.
+    if: ${{ always() && github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'unstable-') }}
+    needs: [build-windows, build-macos, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check every build job succeeded
+        run: |
+          fail=0
+          for pair in "build-windows:${{ needs.build-windows.result }}" \
+                      "build-macos:${{ needs.build-macos.result }}" \
+                      "build-docker:${{ needs.build-docker.result }}"; do
+            name="${pair%%:*}"; result="${pair##*:}"
+            if [ "$result" = "success" ]; then
+              echo "OK       $name"
+            else
+              echo "::error::$name did not succeed (result: $result)"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Check the release carries every expected asset
+        # always() again, so a failed job above does not hide which assets are
+        # actually missing — both answers are more useful than either alone.
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          names="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          echo "Assets on $tag:"
+          echo "$names" | sed 's/^/  /'
+          echo
+          fail=0
+          # Matched on a suffix rather than a full filename: the DMGs carry
+          # AppVersion.Current (2.4.3), which is deliberately NOT the tag on a
+          # pre-release (v2.4.3-pre6), so building the name from the tag would
+          # fail every pre-release for the wrong reason.
+          for want in 'Yaesu_Web_Control_Setup.exe' 'macos-arm64.dmg' 'macos-x64.dmg'; do
+            if printf '%s\n' "$names" | grep -q -- "$want"; then
+              echo "OK       $want"
+            else
+              echo "::error::missing from release $tag: $want"
+              fail=1
+            fi
+          done
+          # The Docker image is not a release asset — it goes to GHCR — so it is
+          # covered by build-docker's job result in the step above, not here.
+          exit $fail

@@ -5,6 +5,11 @@
         // Connection Settings
         public string SerialPort { get; set; } = "COM3";
         public int BaudRate { get; set; } = 38400;
+
+        // Delay between meter-poll cycles in milliseconds. Lower gives a faster
+        // S-meter but increases CAT traffic on a bus shared with rigctld/WSJT-X.
+        // Valid range: 50–1000. Default 200.
+        public int MeterPollIntervalMs { get; set; } = 200;
         public string WebAddress { get; set; } = "0.0.0.0"; // Bind to all interfaces
 
         // HTTP port the web server listens on. Default 8080. If that port is
@@ -13,7 +18,38 @@
         // know 8080 always clashes on their machine (e.g. Plex, Jenkins).
         public int HttpPort { get; set; } = 8080;
 
+        /// <summary>
+        /// When true (default), the host exits ~30s after the last heartbeating
+        /// browser tab disconnects. Set false to keep the process running with
+        /// no browser connected (useful on macOS console hosts and headless shacks).
+        /// </summary>
+        public bool AutoShutdownWhenNoBrowsers { get; set; } = true;
+
+        /// <summary>
+        /// When true (default), the host opens the default browser to the control
+        /// panel URL once after Kestrel starts. Set false to start quietly —
+        /// open the UI from the system tray / menu bar, or browse to the URL
+        /// yourself. Docker / containers always skip auto-open regardless.
+        /// </summary>
+        public bool OpenBrowserOnStartup { get; set; } = true;
+
         public string RadioModel { get; set; } = "FTdx101MP"; // MP = dual receiver, D = single receiver
+
+        /// <summary>
+        /// When true, the log file records Debug as well as Information — every
+        /// CAT command sent, every reply received, every state save and every
+        /// browser status poll. Default OFF: on a live radio that is ~85,000
+        /// extra lines and ~12 MB a day, almost none of which anyone ever reads.
+        ///
+        /// The normal log is NOT switched off by this, only trimmed. An
+        /// opt-in-only log is never present for the first occurrence of an
+        /// intermittent fault, which is the occurrence that gets reported.
+        ///
+        /// Applied live via <see cref="Services.LogLevelController"/> — no
+        /// restart, because restarting to enable logging can destroy the state
+        /// that caused the bug.
+        /// </summary>
+        public bool DetailedLogging { get; set; } = false;
 
 
         // External Applications - Command Lines.
@@ -101,7 +137,31 @@
         // SettingsService.
         public double SdrSampleRateHz { get; set; } = 0;
 
-        public long SdrIfFrequencyHz { get; set; } = 9_000_000;
+        // Per-VFO SDR centre frequency (added 2026-09-11). The FTdx101's two IF OUT
+        // jacks are NOT on the same frequency: MAIN is 9.005 MHz, SUB is
+        // 8.900 MHz (operating manual p.17), so one shared value left the
+        // VFO B SDR looking 100 kHz above the SUB dial. Measured 2026-09-11;
+        // see docs/design/sdr-spectrum-axis-investigation.md. Default 0 is
+        // a "not set" sentinel for the SettingsService migration; after
+        // migration these are always > 0.
+        public long SdrIfFrequencyHzA { get; set; } = 0;
+        public long SdrIfFrequencyHzB { get; set; } = 0;
+
+        // Per-VFO frequency trim (added 2026-09-12). Added to where the SDR
+        // is physically tuned and nowhere else: the frame centre, the zoom
+        // crop and the browser axis all keep using the nominal frequency.
+        // Soaks up a dongle with no TCXO (a plain-crystal RSP1 is ~5 ppm,
+        // 44 Hz at 8.9 MHz — measured on Colin's VFO B) and any error in
+        // the radio's IF OUT constant. Invisible at 2 MHz, a fifth of the
+        // screen at a 1 kHz span. Set by nudging until a carrier sits under
+        // the dial line.
+        public int SdrFrequencyTrimHzA { get; set; } = 0;
+        public int SdrFrequencyTrimHzB { get; set; } = 0;
+
+        // Legacy single IF frequency. KEPT as a hidden migration anchor:
+        // SettingsService reads this and fills A/B from it, then writes 0
+        // on next save. Do not reference outside SettingsService.
+        public long SdrIfFrequencyHz { get; set; } = 0;
         public int SdrFftSize { get; set; } = 1024;
 
         // Per-VFO spectrum DSP knobs (see SpectrumProcessor). Live-controlled
@@ -130,6 +190,23 @@
 
         // CW keyer message memories M1-M5 (sent via KY command)
         public List<string> CwMessages { get; set; } = new() { "CQ CQ DE {CALL}", "TU 73", "QRZ?", "UR 5NN", "DE {CALL}" };
+
+        // Reader Mode's target IF width, in Hz. The reader decodes far better
+        // through a narrow filter than through a wide one full of adjacent
+        // signals, and 250 Hz is narrow enough to help without being so narrow
+        // that a slightly mistuned signal falls outside it. Configurable
+        // because the right answer depends on the operator's ear as much as on
+        // the radio: someone who tunes precisely may prefer 100, and someone
+        // working a crowded band by ear may want 400. The radio is asked for
+        // the nearest width it actually has - see YaesuIfWidth.CodeForHz.
+        public int CwReaderFilterHz { get; set; } = 250;
+
+        // Whether Reader Mode also switches the audio peak filter on. APF
+        // narrows further still, in the audio domain, and it is the single
+        // biggest improvement available to a decoder on a weak signal. Left
+        // switchable because APF rings, and an operator listening as well as
+        // reading may not want it.
+        public bool CwReaderUseApf { get; set; } = true;
 
         // Per-band IF Width/Shift/Mode memory — keyed by band name (e.g. "20m")
         public Dictionary<string, BandProfile> BandProfilesA { get; set; } = new();
@@ -247,6 +324,82 @@
         // by name, so the chosen-device path renders the phrase to a WAV and
         // plays it via NAudio (see Services/Voice/AudioOutput.cs, VoiceTtsService).
         public string VoiceOutputDeviceName { get; set; } = "";
+
+        // ── Remote Audio (browser ↔ radio USB) ─────────────────────────────
+        // Opt-in Opus/PCM bridge so a remote browser can hear radio RX and send
+        // mic audio into radio TX over the existing LAN/VPN path. Off by default.
+        public bool AudioStreamingEnabled { get; set; } = false;
+
+        /// <summary>
+        /// PortAudio capture device for radio RX (USB recording). Required when
+        /// <see cref="AudioStreamingEnabled"/> — no OS-default fallback (wrong mic).
+        /// Stored as <c>{name} [{hostApi}]</c> (e.g. <c>Microphone (USB Audio CODEC) [Windows WASAPI]</c>)
+        /// so Windows duplicates across MME/WASAPI/DirectSound/WDM-KS stay distinct.
+        /// Legacy bare names still resolve.
+        /// </summary>
+        public string? AudioRadioRxDevice { get; set; } = "";
+
+        /// <summary>
+        /// PortAudio playback device for radio TX (USB playback). Required when
+        /// <see cref="AudioStreamingEnabled"/> — blank must not fall back to PC
+        /// speakers (browser mic feedback). Same <c>{name} [{hostApi}]</c> key
+        /// format as <see cref="AudioRadioRxDevice"/>.
+        /// </summary>
+        public string? AudioRadioTxDevice { get; set; } = "";
+
+        public float AudioRxGain { get; set; } = 1.0f;
+        public float AudioTxGain { get; set; } = 1.0f;
+
+        // ── Radio Display (USB UVC / HDMI capture → MJPEG) ────────────────
+        // Opt-in panel that grabs frames from a USB webcam or HDMI capture
+        // dongle and serves them as MJPEG. Off by default. Tuned for Pi-class
+        // hosts and ~800×480/600 radio panels (see VideoMaxWidth / FPS / quality).
+        public bool VideoDisplayEnabled { get; set; } = false;
+
+        /// <summary>
+        /// Capture device key from <c>/api/video/devices</c>
+        /// (<c>index:N</c>, or macOS <c>uid:…</c>). Empty = no device selected.
+        /// </summary>
+        public string? VideoCaptureDeviceKey { get; set; } = "";
+
+        /// <summary>
+        /// Downscale frames wider than this before JPEG encode. 0 = no downscale.
+        /// Default 800 matches FTDX-10-class panels and avoids 1080p encode cost on a Pi.
+        /// </summary>
+        public int VideoMaxWidth { get; set; } = 800;
+
+        /// <summary>
+        /// Capture size for the Radio Display, as <c>"WxH"</c>. Empty (the
+        /// default) means automatic — the ranked pin pick, which is right for
+        /// almost everyone. An explicit value pins the capture to that MJPEG
+        /// mode and becomes the encode width, overriding
+        /// <see cref="VideoMaxWidth"/>. A value the current device does not
+        /// offer falls back to automatic rather than failing to open.
+        /// </summary>
+        public string? VideoCaptureSize { get; set; } = "";
+
+        /// <summary>
+        /// Target encode rate. Allowed: 15, 30, 60 (Radio Display panel).
+        /// Rates above the capture device's advertised maximum are hidden.
+        /// </summary>
+        public int VideoTargetFps { get; set; } = 15;
+
+        /// <summary>
+        /// JPEG quality. Allowed: 40, 65, 85 (Low / Medium / Max on the Radio Display panel).
+        /// Default 85 (Max): keep the capture JPEG. Low/Medium recompress.
+        /// </summary>
+        public int VideoJpegQuality { get; set; } = 85;
+
+        // ── Optional HTTPS (self-signed; restart to apply) ────────────────
+        // Required for getUserMedia from a remote browser (secure context).
+        public bool HttpsEnabled { get; set; } = false;
+        public int HttpsPort { get; set; } = 8443;
+
+        /// <summary>
+        /// Extra SAN hostnames/IPs (newline or comma separated) baked into the
+        /// self-signed cert — e.g. WireGuard IP or LAN hostname.
+        /// </summary>
+        public string? HttpsSanHosts { get; set; } = "";
     }
 
     public class RadioState

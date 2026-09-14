@@ -287,6 +287,8 @@ namespace Yaesu_Web_Control.Services.Sdr
                     ? "Modules found: (none — copy SoapySDRPlay3.dll into one of the search paths above)"
                     : $"Modules found: {string.Join(", ", modules.Select(System.IO.Path.GetFileName))}");
 
+                sb.AppendLine(DescribeLoadedNativeModules());
+
                 return sb.ToString().Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd();
             }
             catch (Exception ex)
@@ -296,6 +298,48 @@ namespace Yaesu_Web_Control.Services.Sdr
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────────
+
+        // Reports the on-disk path each SDR-related native DLL was actually
+        // loaded from. This is the decisive check for "the dongle works in other
+        // SDR apps but this one finds nothing": SoapySDRDevice_enumerate probes
+        // every backend, so by the time this runs the rtlsdr module has already
+        // pulled in librtlsdr.dll + libusb-1.0.dll — if either resolves to a copy
+        // OUTSIDE the application folder, another SDR install on the PATH has
+        // shadowed the ones we ship, and an incompatible build silently
+        // enumerates zero devices. Equally telling is librtlsdr.dll *not*
+        // appearing at all after an enumerate — that means the rtlsdr backend
+        // failed to load its dependency.
+        private static string DescribeLoadedNativeModules()
+        {
+            try
+            {
+                // File names (without extension) of the SoapySDR core, the
+                // per-radio backend modules, and the libraries they depend on.
+                string[] wanted =
+                {
+                    "soapysdr", "rtlsdrsupport", "librtlsdr", "libusb-1.0",
+                    "airspysupport", "airspy", "hackrfsupport", "hackrf",
+                };
+
+                using var me = System.Diagnostics.Process.GetCurrentProcess();
+                var loaded = me.Modules
+                    .Cast<System.Diagnostics.ProcessModule>()
+                    .Where(m => wanted.Contains(
+                        System.IO.Path.GetFileNameWithoutExtension(m.ModuleName),
+                        StringComparer.OrdinalIgnoreCase))
+                    .Select(m => $"{m.ModuleName} <- {m.FileName}")
+                    .Distinct()
+                    .ToArray();
+
+                return loaded.Length == 0
+                    ? "Loaded native SDR DLLs: (none — no backend module has been loaded)"
+                    : "Loaded native SDR DLLs: " + string.Join(" | ", loaded);
+            }
+            catch (Exception ex)
+            {
+                return $"Loaded native SDR DLLs: (could not enumerate — {ex.Message})";
+            }
+        }
 
         // Reads a native char** array into a managed string[].
         private static string[] ReadStringArray(IntPtr ptr, nuint count)

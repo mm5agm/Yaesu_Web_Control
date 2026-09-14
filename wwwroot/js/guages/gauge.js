@@ -204,17 +204,25 @@ class SMeterGauge extends Gauge {
 class PowerGauge extends Gauge {
     constructor(canvasId, options = {}) {
         console.log('[PowerGauge] constructor called for', canvasId);
+        // Scale the dial to the radio's own maximum. The face was fixed at
+        // 0-200 W (the FTdx101MP's rating) for every model, so on a 100 W radio
+        // full output only reached the middle of the arc. Nine ticks either way,
+        // so 200 W still reads 0/25/.../200 exactly as before and 100 W reads
+        // 0/13/.../100. Caller passes maxValue; see RadioCapabilities.MaxPowerWatts.
+        const maxValue = options.maxValue ?? 200;
+        const ticks = Array.from({ length: 9 }, (_, i) => String(Math.round((maxValue * i) / 8)));
         const config = Object.assign({
             renderTo: canvasId,
             minValue: 0,
-            maxValue: 200,
-            majorTicks: ["0", "25", "50", "75", "100", "125", "150", "175", "200"],
+            maxValue,
+            majorTicks: ticks,
+            // Green to 75 % of rated output, amber to 87.5 %, red above.
             highlights: [
-                { from: 0, to: 150, color: "rgba(0,255,0,.25)" },
-                { from: 150, to: 175, color: "rgba(255,255,0,.25)" },
-                { from: 175, to: 200, color: "rgba(255,0,0,.25)" }
+                { from: 0, to: maxValue * 0.75, color: "rgba(0,255,0,.25)" },
+                { from: maxValue * 0.75, to: maxValue * 0.875, color: "rgba(255,255,0,.25)" },
+                { from: maxValue * 0.875, to: maxValue, color: "rgba(255,0,0,.25)" }
             ],
-            labels: ["5", "25", "50", "75", "100", "125", "150", "175", "200"],
+            labels: ticks,
             startAngle: 90,
             ticksAngle: 180,
             valueBox: false,

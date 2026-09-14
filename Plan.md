@@ -139,20 +139,38 @@ MR/MW (full channel read/write) are deferred — they may already be in the memo
 
 ---
 
-## Phase 7 — SP3L Alternative GUI Layout *(Jacek SP3L — issue [#48](https://github.com/mm5agm/Yaesu_Web_Control/issues/48), PARKED)*
+## Phase 7 — Skins: switchable layouts from one set of markup *(issue [#48](https://github.com/mm5agm/Yaesu_Web_Control/issues/48), UNPARKED 2026-08-06)*
 
-**Status: blocked — waiting for Jacek to answer the spectrum placement question.**
+**Status: unblocked, not yet started. Sequenced after the IWC build — see "Sequencing" below.**
 
-Colin asked in the issue thread: *"Where would the SDR spectrum displays go?"* Jacek has not yet replied. Do not start implementation until that question has an answer, because the answer changes the layout fundamentally (spectrum below VFOs = tall scroll on 1080p; spectrum hidden behind toggle = layout only serves SDR-less users; spectrum replaces meter strip when enabled = different again).
+**Read [ADR 0004](docs/decisions/0004-skins-not-per-layout-pages.md) before touching this phase.** The mechanism agreed with Jacek — a second Razor page per layout — was **superseded on 2026-08-06**. Three layouts (Classic, SP3L, Fabio's) would have meant adding every control three times, fixing every bug three times, and writing every `data-a11y-key` three times. Alternative layouts are now **skins**.
 
-**What is agreed:**
+**The blocker is gone.** This phase was parked waiting for Jacek to answer *"where would the SDR spectrum displays go?"*, which he never did. Fabio Valente's prototype in [PR #93](https://github.com/mm5agm/Yaesu_Web_Control/pull/93) answers it with working desktop, tablet and mobile layouts.
 
-- A second Razor page (e.g. `IndexSp3l.cshtml`) plus a companion CSS file. All existing JS and C# control logic reused as-is — no new backend work.
-- User picks the layout in **Settings** via a new "GUI Layout" dropdown. Options: *Classic* (current) / *SP3L*.
-- The Settings dropdown label for Jacek's layout: **SP3L**.
-- A `feature/jacek-gui` branch already exists and has the Settings dropdown skeleton in place.
+**What a skin is (the mechanism — ADR 0004 has the full reasoning):**
 
-**What is agreed on the layout itself:**
+- **One set of markup, shared by every skin.** Every control declared exactly once. No per-skin HTML.
+- **A skin is a stylesheet.** Each control group is a named CSS grid area declared once in the shared markup; a skin supplies its own `grid-template-areas` plus colour/typography tokens.
+- **Hiding a control group is CSS**, not conditional Razor rendering.
+- **No per-skin Razor partial. This is absolute** — it is the loophole that reintroduces the duplication the decision exists to prevent.
+- **The current `Index.cshtml` arrangement becomes the default skin.** Skin zero, not privileged.
+- **Known limit, accepted:** CSS can move a control anywhere on the page but not into a different parent. Skins constrain layout freedom; that is the price of the maintenance property.
+
+**What is unchanged from what Jacek was promised** — the user-facing surface is identical, only the mechanism behind it differs:
+
+- User picks the layout in **Settings** via a "GUI Layout" dropdown. Options: *Classic* (current) / *SP3L* / others as they arrive.
+- The Settings dropdown label for Jacek's layout stays **SP3L**.
+- The `feature/jacek-gui` branch's Settings-dropdown skeleton is still useful; the rest of that branch's premise (a second Razor page) is not.
+
+**Sequencing — IWC first.** Build the skin mechanism in IWC (`docs/design/iwc-clone-split-plan.md` Phase 7, where the design already lives), then port to YWC. IWC has no contributors working in it, so the ~4,500-line `Index.cshtml` refactor cannot collide; YWC has two open draft PRs (#90, #92) touching `Index.cshtml`, `Settings.cshtml` and `site.js`. (#93 was a third until its author closed it on 2026-08-06 — it was a concept spike, never a merge request.) Layout-independent work — notably **keyboard shortcuts**, which are also a screen-reader path — can proceed in YWC meanwhile.
+
+**Open question:** is responsive (desktop/tablet/mobile) behaviour a property of each skin, carried by media queries inside every skin stylesheet, or a separate axis? Put to Fabio in the PR #93 thread; unanswered there, and #93 is now closed — he said he would follow up by email, so **the answer will not appear in this repo unless it is copied back in.**
+
+**Accessibility is a condition, not a preference.** A skin offered in the Settings dropdown or made default must carry its `data-a11y-key` attributes — voice control and screen-reader labelling exist for partially-sighted operators and regressions are release blockers. An experimental skin behind a flag and unlisted in Settings may ship without them if labelled as such.
+
+**The first two skins** are Jacek's layout (SP3L) and Fabio's. A high-contrast large-print skin for partially-sighted operators is wanted early, and under this mechanism is a stylesheet rather than a project.
+
+**What is agreed on Jacek's layout itself:**
 
 - Two panels per radio: **VFO-A** and **VFO-B** (not MAIN/SUB/VFO-A/VFO-B — MAIN≡VFO-A and SUB≡VFO-B on the FTdx101 family; on single-receiver radios one panel goes grey as per R1–R12).
 - A **global strip** at the bottom: Frequency Lock, RF Gain, AF Gain, BK-IN. On the FTdx101 family RF/AF Gain are per-panel (inside each VFO panel), not in the global strip.
@@ -161,17 +179,20 @@ Colin asked in the issue thread: *"Where would the SDR spectrum displays go?"* J
 
 **What still needs deciding before code starts:**
 
-1. **Spectrum placement** — Jacek's answer needed (see above).
-2. **"Button OFF" semantics** — does pressing a control button to OFF mean "send the radio's default value" (active write) or "this YWC panel stops tracking / go configure from front panel" (read-only handoff)? Needs resolution for IF Width and similar always-on controls.
-3. **Low Cut / Audio Filter** — in the current layout these are per-mode parameters accessed via the Audio Filter popout (EX commands). Jacek's mockup removed Low Cut. Needs a placement decision for the SP3L layout.
+1. ~~**Spectrum placement**~~ — **resolved.** Fabio's PR #93 screenshots answer it. Confirm the final choice against his layout rather than re-opening the question with Jacek.
+2. **"Button OFF" semantics** — does pressing a control button to OFF mean "send the radio's default value" (active write) or "this YWC panel stops tracking / go configure from front panel" (read-only handoff)? Needs resolution for IF Width and similar always-on controls. Skin-independent — it is a behaviour question, not a layout one.
+3. **Low Cut / Audio Filter** — in the current layout these are per-mode parameters accessed via the Audio Filter popout (EX commands). Jacek's mockup removed Low Cut. Under skins this becomes a control-manifest question: which skins show the group, which collapse it.
+4. **Responsive axis** — skin-carried media queries, or a separate axis? Put to Fabio, unanswered; now moved to email with the closure of #93, so it needs chasing rather than waiting for.
 
-**When unblocked, implementation order:**
+**Implementation order (revised for skins — supersedes the second-page order):**
 
-1. Finalise layout spec with Jacek (close open questions above).
-2. Create `Pages/IndexSp3l.cshtml` + `wwwroot/css/sp3l.css` — static HTML structure only, no JS yet.
-3. Wire Settings dropdown to switch the active layout (store choice in `appsettings.user.json`; serve `IndexSp3l` from `/` when SP3L is selected).
-4. Port all existing JS initialisation and SignalR handlers to work against the SP3L DOM.
-5. Test on FTdx101MP and FTdx10 (single-receiver grey-panel behaviour must match R1–R12 spec).
+1. **Build the mechanism in IWC first** and prove it there. Do not start in YWC while #90 and #92 are open against `Index.cshtml`.
+2. Port to YWC: refactor `Pages/Index.cshtml` so every control group is a named CSS grid area, declared once. This is the bulk of the work (~4,500 lines). No behaviour change — the default skin must look identical to today when finished.
+3. Extract the current look into `wwwroot/css/skins/classic.css` as skin zero.
+4. Wire the Settings "GUI Layout" dropdown to the active skin (store choice in `appsettings.user.json`, apply via a class or attribute on the page root — **not** by serving a different Razor page). The `feature/jacek-gui` skeleton covers most of this.
+5. Add `sp3l.css` and Fabio's skin as stylesheets. No new Razor, no new JS init, no per-skin SignalR wiring — the DOM is the same DOM.
+6. Verify `data-a11y-key` coverage once, in the shared markup, and confirm voice control and screen-reader labels work in every listed skin.
+7. Test on FTdx101MP and FTdx10 (single-receiver grey-panel behaviour must match R1–R12 spec).
 
 ---
 
@@ -217,5 +238,5 @@ Colin asked in the issue thread: *"Where would the SDR spectrum displays go?"* J
 | 4 | SC | 2 | Scan button + mode popout | ~1 day |
 | 5 | MC, MA, MB, CH | 4 | CH step buttons, →VFO buttons | ~half day |
 | 6 | BY, PB, KM, KC, AB/BA, PS | 8 | Minor per-feature additions | ~pick & mix |
-| 7 | *(no CAT commands)* | 0 new | SP3L alternative GUI layout | ~1 week — **PARKED** pending Jacek's spectrum answer |
+| 7 | *(no CAT commands)* | 0 new | Skins — switchable layouts from one markup (see [ADR 0004](docs/decisions/0004-skins-not-per-layout-pages.md)) | Mechanism first in IWC, then port. `Index.cshtml` refactor is the bulk — **not** ~1 week |
 | 8 | *(no CAT commands)* | 0 new | Voice control v2 improvements | **WAITING** — v1 shipped in pre-release, no tester feedback yet |

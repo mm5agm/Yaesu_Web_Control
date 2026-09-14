@@ -1,4 +1,13 @@
 # create-release.ps1
+#
+# PREFER scripts\finish-release.ps1. This script has NOT had the exit-code
+# hardening that one got: none of its git calls check $LASTEXITCODE, so a
+# develop -> main merge that conflicts is not noticed and the tag and GitHub
+# release are created from an unmerged main anyway. That is not theoretical --
+# it shipped the wrong code in the sibling repo (Icom Web Control) on
+# 2026-08-05. It also generates release notes from git log, which produces
+# developer prose under a heading users actually read.
+#
 # Full automated release from develop branch.
 # Run with no arguments: .\scripts\create-release.ps1
 # Run with explicit version: .\scripts\create-release.ps1 -Version v0.9.0-rc1

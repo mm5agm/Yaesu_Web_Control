@@ -13,6 +13,7 @@ namespace Yaesu_Web_Control.Services
         private readonly CatMultiplexerService _multiplexer;
         private readonly RadioStateService _radioStateService;
         private readonly ILogger<RigctldServer> _logger;
+        private readonly FrequencyRejectionNotifier _rejectionNotifier;
         private TcpListener? _listener;
         private readonly List<TcpClient> _clients = new();
         private readonly object _clientsLock = new();
@@ -58,8 +59,12 @@ namespace Yaesu_Web_Control.Services
             { "RTTY-R", "RTTY-U"   },
         };
 
-        private const long MinFrequency = 30000;
-        private const long MaxFrequency = 75000000;
+        // The tunable range is per model — see RadioCapabilities.FrequencyRangeHz.
+        // It used to be a pair of constants here, duplicating the same two
+        // literals in CatController, while the WSJT-X UDP path had no bound at
+        // all. IsTunableFrequency is now the single source for all of them.
+        private bool IsTunable(long hz) =>
+            RadioCapabilities.IsTunableFrequency(_radioStateService.RadioModel, hz);
 
         // Band mapping for set_band support (using BSxx; command codes)
         private static readonly Dictionary<string, string> BandCodes = new()
@@ -78,11 +83,16 @@ namespace Yaesu_Web_Control.Services
             { "4m",   "11" } // Added 4m band
         };
 
-        public RigctldServer(CatMultiplexerService multiplexer, RadioStateService radioStateService, ILogger<RigctldServer> logger)
+        public RigctldServer(
+            CatMultiplexerService multiplexer,
+            RadioStateService radioStateService,
+            ILogger<RigctldServer> logger,
+            FrequencyRejectionNotifier rejectionNotifier)
         {
             _multiplexer = multiplexer;
             _radioStateService = radioStateService;
             _logger = logger;
+            _rejectionNotifier = rejectionNotifier;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -316,8 +326,20 @@ namespace Yaesu_Web_Control.Services
                 return "RPRT -1";
 
             var freq = (long)Math.Round(freqDouble);
-            if (freq < MinFrequency || freq > MaxFrequency)
+            if (!IsTunable(freq))
+            {
+                // RPRT -1 is the honest answer and is deliberately kept: the
+                // radio genuinely cannot tune this. The notifier only explains
+                // the refusal to the operator — it does not suppress the
+                // client-side error, and cannot (see FrequencyRejectionNotifier).
+                // "rigctld", not clientId: clientId is an endpoint like
+                // rigctld-127.0.0.1:54321, and rigctld cannot know which
+                // program is on the other end. Naming a specific one would be
+                // a guess shown to the operator as fact.
+                _logger.LogDebug("[{ClientId}] Refused out-of-range set_freq {Freq}", clientId, freq);
+                await _rejectionNotifier.NotifyAsync(freq, "rigctld");
                 return "RPRT -1";
+            }
 
             var command = CatCommands.FormatFrequencyA(freq);
             await _multiplexer.SendCommandAsync(command, clientId);
@@ -503,7 +525,7 @@ namespace Yaesu_Web_Control.Services
         private string GetSplitFrequency() => _splitFrequency.ToString();
         private string SetSplitFrequency(string freqStr)
         {
-            if (long.TryParse(freqStr, out var freq) && freq >= MinFrequency && freq <= MaxFrequency)
+            if (long.TryParse(freqStr, out var freq) && IsTunable(freq))
             {
                 _splitFrequency = freq;
                 return "RPRT 0";
@@ -643,7 +665,7 @@ namespace Yaesu_Web_Control.Services
                 return "RPRT 0";
             }
             // Try parsing as frequency in Hz
-            if (long.TryParse(band, out var freqHz) && freqHz >= MinFrequency && freqHz <= MaxFrequency)
+            if (long.TryParse(band, out var freqHz) && IsTunable(freqHz))
             {
                 var command = CatCommands.FormatFrequencyA(freqHz);
                 await _multiplexer.SendCommandAsync(command, clientId);

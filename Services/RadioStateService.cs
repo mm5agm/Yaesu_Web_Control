@@ -39,11 +39,19 @@ namespace Yaesu_Web_Control.Services
 
         private RadioState _initialState;
 
+        // Resolves frequencies to band names in the operator's own IARU region.
+        // Assigned FIRST in the constructor: the FrequencyA/FrequencyB
+        // initialisers below call UpdateBandFromFrequency() -> GetBandFromFrequency
+        // -> _bandPlan.BandForFrequency, so a null field here NREs at startup.
+        private readonly IBandPlanService _bandPlan;
+
         public RadioStateService(
             ILogger<RadioStateService> logger,
             RadioStatePersistenceService statePersistence,
-            IHubContext<RadioHub> hubContext)
+            IHubContext<RadioHub> hubContext,
+            IBandPlanService bandPlan)
         {
+            _bandPlan = bandPlan;
             _logger = logger;
             _statePersistence = statePersistence;
             _hubContext = hubContext;
@@ -80,6 +88,9 @@ namespace Yaesu_Web_Control.Services
 
         public RadioState InitialState => _initialState;
 
+        private static readonly HashSet<string> _persistedPropertyNames =
+            typeof(RadioState).GetProperties().Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+
         private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {
             if (!EqualityComparer<T>.Default.Equals(field, value))
@@ -98,7 +109,8 @@ namespace Yaesu_Web_Control.Services
                 if (IsInitialized)
                 {
                     _logger.LogDebug("[SetField] Persisting state (IsInitialized=true, {Property}={Value})", propertyName, value);
-                    _statePersistence.Save(this.ToRadioState());
+                    if (_persistedPropertyNames.Contains(propertyName!))
+                        _statePersistence.MarkDirty(this.ToRadioState());
                 }
                 else
                 {
@@ -147,7 +159,7 @@ namespace Yaesu_Web_Control.Services
             _logger.LogDebug("[BroadcastUpdate] Broadcasting {Property} = {Value}", property, value);
             if (property == "PowerMeter")
             {
-                _logger.LogWarning("[DEBUG][PowerMeter] Broadcasting PowerMeter value: {@Value}", value);
+                _logger.LogDebug("[PowerMeter] Broadcasting PowerMeter value: {@Value}", value);
             }
             // Special case: PowerMeter should include isTransmitting for frontend sync
             if (property == "PowerMeter")
@@ -160,7 +172,27 @@ namespace Yaesu_Web_Control.Services
             }
         }
 
-        // --- Properties for all CAT commands in GetInitialValues() ---
+        /// <summary>
+        /// Pushes a one-off update down the normal RadioStateUpdate envelope for
+        /// something that has no stored property here.
+        ///
+        /// Used by the scope panel, whose eleven SS sub-commands are read on
+        /// demand and held in the browser. Mirroring them as fields on this
+        /// service would mean eleven more properties, eleven more snapshot
+        /// entries and a persistence round-trip, all so that one collapsible
+        /// panel could learn something it re-reads whenever it opens anyway.
+        ///
+        /// Not a general escape hatch: anything the rest of the UI depends on,
+        /// or that a late-joining client needs replayed, belongs in a property
+        /// and in GetClientStateSnapshot instead.
+        /// </summary>
+        public void BroadcastTransient(string property, object value) =>
+            BroadcastUpdate(property, value);
+
+        // --- Properties for the CAT commands read at connect ---
+        // (the read list lives in RadioInitializationService.readQueries; this
+        // header used to name CatMultiplexerService.GetInitialValues(), which
+        // was dead code from 2026-02-22 and was deleted 2026-08-17)
 
         private string _id = "";
         public string Id { get => _id; set => SetField(ref _id, value); }
@@ -415,6 +447,43 @@ namespace Yaesu_Web_Control.Services
         private int? _powerMeter;
         public int? PowerMeter { get => _powerMeter; set => SetField(ref _powerMeter, value); }
 
+        // --- Front-panel meter selection (MS) ---------------------------------
+        //
+        // The operator's own front-panel meter choice, stored as the RAW parameter
+        // digits from the radio's own MS answer — never interpreted. That matters,
+        // because MS's parameter encoding is model-specific:
+        //
+        //   FTdx101MP/D  MSP1P2;  P1 MAIN 0=POW 1=COMP 2=TEMP
+        //                         P2 SUB  0=ALC 1=VDD  2=ID   3=SWR
+        //   FTdx10/710   MSP1P2;  P1 0=PO 1=COMP 2=ALC 3=VDD 4=ID 5=SWR, P2 fixed 0
+        //   FTDX5000     MSP1;    0=COMP 1=ALC 2=PO 3=SWR 4=ID 5=VDD
+        //   FT-991A      MSP1;    0=COMP 1=ALC 2=PO 3=SWR 4=ID 5=VDD
+        //   FTDX3000     MSP1;    0=COMP 1=ALC 3=SWR 4=ID 5=VDD  (no PO)
+        //
+        // Keeping the digits opaque means capture-and-restore works on every model
+        // without a per-model table: we replay exactly what the radio told us it
+        // had. Only the *borrow* value (MS13 on the FTdx101) is model-specific, and
+        // that stays confined to the FTdx101 branch in MeterPollingService.
+        //
+        // Populated from the MS; read issued during init and from the unsolicited
+        // MS auto-info the radio pushes when the operator changes meters on the
+        // front panel (MS has AI in every supported model's CAT manual).
+        public string? RadioMeterSelection { get; private set; }
+
+        // True while MeterPollingService has commandeered the meter pair for the
+        // FTdx101 comp+SWR read. MS traffic seen during a borrow is our own write
+        // echoing back, so ReportMeterSelection drops it rather than recording
+        // MS13 as the operator's preference and "restoring" to it forever.
+        public bool MetersBorrowed { get; set; }
+
+        public void ReportMeterSelection(string digits)
+        {
+            if (MetersBorrowed || string.IsNullOrEmpty(digits)) return;
+            if (RadioMeterSelection == digits) return;
+            RadioMeterSelection = digits;
+            _logger.LogInformation("[Meters] Operator front-panel meter selection is MS{Digits}", digits);
+        }
+
         private int? _compressionMeter;
         public int? CompressionMeter
         {
@@ -440,6 +509,14 @@ namespace Yaesu_Web_Control.Services
         }
 
         private int? _swrMeter;
+        // No spike filter here -- see issue #124. A "reject anything more than 30
+        // from the last value" test made the first reading of an over the anchor
+        // and then rejected every correction to it, so a genuine 255 latched for
+        // the rest of the over. Worse, a rejected write is not a write, so
+        // SetField never fired and the client stopped receiving SWRMeter updates
+        // altogether -- the gauge froze rather than reading high. Smoothing is
+        // the client's job: FTdx101Meters._processSWR averages the last 3
+        // readings and will not draw until it has 2 of them.
         public int? SWRMeter
         {
             get => _swrMeter;
@@ -447,11 +524,6 @@ namespace Yaesu_Web_Control.Services
             {
                 if (value == null) return;
                 int clamped = Math.Clamp(value.Value, 0, 255);
-                if (_swrMeter.HasValue && _swrMeter.Value != 0 && clamped != 0 && Math.Abs(clamped - _swrMeter.Value) > 30)
-                {
-                    _logger.LogWarning("[SWRMeter] Ignored spike: {Old} -> {New}", _swrMeter, clamped);
-                    return;
-                }
                 SetField(ref _swrMeter, clamped);
             }
         }
@@ -560,7 +632,7 @@ namespace Yaesu_Web_Control.Services
         public int FmOffsetHz { get => _fmOffsetHz; set => SetField(ref _fmOffsetHz, value); }
         private string _ctcssMode = "00";
         public string CtcssMode { get => _ctcssMode; set => SetField(ref _ctcssMode, value); }
-        private string _ctcssTone = "01";
+        private string _ctcssTone = "000";   // CN P3 — Table 1 index, 000 = 67.0 Hz
         public string CtcssTone { get => _ctcssTone; set => SetField(ref _ctcssTone, value); }
 
         // CW Keyer
@@ -599,7 +671,10 @@ namespace Yaesu_Web_Control.Services
         // property not server-rendered in Index.cshtml — most visibly
         // ActiveVfo/TxVfo/SplitMode, which made VFO A always look active on
         // late-joining clients. Property names must match the handlers in
-        // wwwroot/js/ui/site.js. Meters are excluded (they stream at ~10 Hz).
+        // wwwroot/js/ui/site.js. Meters are included so a late-joining client
+        // receives the last-known values immediately rather than waiting for the
+        // next ~10 Hz poll cycle. Temperature is intentionally excluded (see
+        // the matching comment in site.js).
         public IReadOnlyList<KeyValuePair<string, object>> GetClientStateSnapshot()
         {
             return new List<KeyValuePair<string, object>>
@@ -681,6 +756,14 @@ namespace Yaesu_Web_Control.Services
                 new("FmOffsetHz", FmOffsetHz),
                 new("CtcssMode", CtcssMode),
                 new("CtcssTone", CtcssTone),
+                new("SMeterA", SMeterA ?? 0),
+                new("SMeterB", SMeterB ?? 0),
+                new("PowerMeter", new { value = PowerMeter ?? 0, isTransmitting = IsTransmitting }),
+                new("SWRMeter", SWRMeter ?? 0),
+                new("CompressionMeter", CompressionMeter ?? 0),
+                new("ALCMeter", ALCMeter ?? 0),
+                new("IDDMeter", IDDMeter ?? 0),
+                new("VDDMeter", VDDMeter ?? 0),
             };
         }
 
@@ -715,22 +798,17 @@ namespace Yaesu_Web_Control.Services
             BandA = newBandA;
             BandB = newBandB;
         }
-        public string GetBandFromFrequency(long freq)
-        {
-            if (freq >= 1800000 && freq < 2000000) return "160m";
-            if (freq >= 3500000 && freq < 4000000) return "80m";
-            if (freq >= 5258000 && freq <= 5408000) return "60m";
-            if (freq >= 7000000 && freq < 7300000) return "40m";
-            if (freq >= 10100000 && freq < 10150000) return "30m";
-            if (freq >= 14000000 && freq < 14350000) return "20m";
-            if (freq >= 18068000 && freq < 18168000) return "17m";
-            if (freq >= 21000000 && freq < 21450000) return "15m";
-            if (freq >= 24890000 && freq < 24990000) return "12m";
-            if (freq >= 28000000 && freq < 29700000) return "10m";
-            if (freq >= 50000000 && freq < 54000000) return "6m";
-            if (freq >= 70000000 && freq < 70500000) return "4m";
-            return "Unknown";
-        }
+        /// <summary>
+        /// Band name for a frequency, in the operator's own IARU region.
+        ///
+        /// This used to be a hardcoded ladder here, region-blind and generous
+        /// with the edges — it disagreed with the browser's region-aware
+        /// BAND_EDGES (R1 80m: 3.800 there, 4.000 here). BandPlanService now
+        /// answers from wwwroot/bandplan.default.json, the same table the
+        /// browser uses. Off-band still returns "Unknown", so every existing
+        /// consumer behaves as before.
+        /// </summary>
+        public string GetBandFromFrequency(long freq) => _bandPlan.BandForFrequency(freq);
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)

@@ -1,18 +1,15 @@
 namespace Yaesu_Web_Control.Services;
 
-// Capability lookup for per-model behaviour differences. Currently used only
-// for the dual- vs single-receiver UI decision (active-VFO greying-out and
-// PTT placement on single-receiver radios), but the pattern scales: future
-// per-model variations (4 m band availability, max TX power, roofing-filter
-// availability) can hang off this same static class.
+// Capability lookup for per-model behaviour differences. Currently used for
+// the dual- vs single-receiver UI decision (RX/TX selectors, S-meter B,
+// dual-receiver active-band highlight, PTT placement), but the pattern
+// scales: future per-model variations (4 m band availability, max TX power,
+// roofing-filter availability) can hang off this same static class.
 //
 // See docs/decisions/0003-single-vs-dual-receiver-ui.md for the design
 // rationale and Jacek SP3L's #34 report that drove it.
 //
-// Single-receiver is the safe default for unknown models — it applies the
-// active/inactive UI restriction, which over-constrains an unfamiliar radio
-// rather than letting it edit both VFOs' controls simultaneously when
-// possibly only one set actually exists in the hardware.
+// Single-receiver is the safe default for unknown models.
 public static class RadioCapabilities
 {
     // Hardware revision IDs confirmed to reject VT CAT commands despite the
@@ -24,6 +21,51 @@ public static class RadioCapabilities
     //   FA; → correct frequency  (serial link otherwise functional)
     //   Firmware: MAIN V01-28 / DISPLAY V01-51 / DSP V01-20 (current / up to date)
     private static readonly HashSet<string> _vcTuneCatBlockedIds = ["0682"];
+    /// <summary>
+    /// The frequency range the radio can tune, in Hz, as (MinHz, MaxHz).
+    /// Used to reject frequencies the radio cannot reach before they are
+    /// written to it or shown in the UI.
+    ///
+    /// This exists because 30 kHz - 75 MHz was hard-coded in three separate
+    /// places (CatController's set-frequency endpoints and RigctldServer's
+    /// Min/MaxFrequency constants) while a fourth path — the WSJT-X UDP
+    /// listener — had no bound at all. That gap is how an out-of-band WSJT-X
+    /// on 2 m put 144.174 MHz into VFO A, displayed with band "Unknown", and
+    /// sent FA144174000; to a radio that cannot tune it.
+    ///
+    /// The default is deliberately the previous hard-coded range, so every
+    /// model behaves exactly as before unless it is listed here. Only the
+    /// FT-991A deviates, because it genuinely reaches VHF/UHF and would be
+    /// wrongly rejected by the HF default the moment it is added to the
+    /// Settings dropdown.
+    ///
+    /// Tighten per model only against a manual, and note the trade-off first:
+    /// a bound that is too generous merely lets an impossible frequency
+    /// through to a radio that will ignore it, but one that is too tight
+    /// silently rejects legitimate tuning. Several models are narrower than
+    /// the default in reality (the FTDX3000 and FTDX5000 both stop well short
+    /// of 75 MHz) — they are left at the default rather than guessed at.
+    /// Note also that this is a range, not a coverage map: the FT-991A's
+    /// gap between 56 MHz and 108 MHz is not expressed here.
+    /// </summary>
+    public static (long MinHz, long MaxHz) FrequencyRangeHz(string radioModel) => radioModel switch
+    {
+        // RX 30 kHz - 56 MHz, 118 - 164 MHz and 420 - 470 MHz.
+        "FT-991A" => (30_000, 470_000_000),
+        _ => (30_000, 75_000_000)
+    };
+
+    /// <summary>
+    /// True when <paramref name="hz"/> is within the model's tunable range.
+    /// An unknown or not-yet-initialised model falls back to the default
+    /// range, which is the behaviour that was in place before this existed.
+    /// </summary>
+    public static bool IsTunableFrequency(string radioModel, long hz)
+    {
+        var (minHz, maxHz) = FrequencyRangeHz(radioModel);
+        return hz >= minHz && hz <= maxHz;
+    }
+
     /// <summary>
     /// True when the radio has two independent physical receiver chains
     /// (MAIN + SUB), each with its own set of RX controls addressable
@@ -49,6 +91,36 @@ public static class RadioCapabilities
     public static bool IsSingleReceiver(string radioModel) => !IsDualReceiver(radioModel);
 
     /// <summary>
+    /// The radio's maximum TX power in watts. Drives the RF Power slider's
+    /// range, the Power meter's dial scale, and the server-side range check in
+    /// CatController.SetPower.
+    ///
+    /// This exists because the same fact was written down in three places that
+    /// disagreed. CatController read "FTdx101MP ? 200 : 100"; site.js carried
+    /// its own model table (added for #37, when every 100 W radio was falling
+    /// through to a 200 W slider); and the Power gauge was hard-coded 0-200 for
+    /// every model, so a 100 W radio's needle never left the left-hand half of
+    /// the dial. The disagreement was live: the FTDX5000 pair is a 200 W radio
+    /// in README.md and USER_MANUAL.md, but CatController's check rejected
+    /// anything above 100 W on it while the slider happily offered 200 W.
+    ///
+    /// Unlike FrequencyRangeHz above, every supported model is listed here
+    /// rather than left to a default, because the two plausible defaults are
+    /// both wrong for half the range: 200 W re-creates #37 on an unlisted 100 W
+    /// radio, and 100 W silently caps an unlisted 200 W one. The default is the
+    /// generous 200 W for the same reason given there — a cap that is too high
+    /// lets a command through to a radio that will clamp it itself, while one
+    /// that is too low blocks legitimate output with no way for the operator to
+    /// override it. Add new models to the list rather than relying on it.
+    /// </summary>
+    public static int MaxPowerWatts(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTDX5000MP" or "FTDX5000D" => 200,
+        "FTdx101D" or "FTdx10" or "FT-710" or "FTDX3000" or "FT-991A" => 100,
+        _ => 200
+    };
+
+    /// <summary>
     /// True when the radio has more than one antenna jack and YWC should
     /// expose a per-VFO antenna selector. Single-antenna radios get the
     /// selector hidden (Jacek SP3L #34, FTdx10 has one ANT jack — showing
@@ -58,6 +130,28 @@ public static class RadioCapabilities
     {
         "FTdx10" or "FT-991A" => false,
         _                     => true
+    };
+
+    /// <summary>
+    /// True when the radio has a Quick Memory Bank reachable over CAT via the
+    /// QI (store) / QR (recall) opcode pair, so YWC can expose Store/Recall
+    /// buttons next to the band selector. Every Yaesu model YWC supports has a
+    /// QMB, and QI/QR are common across the modern Yaesu CAT reference (both are
+    /// documented in the CAT manuals and are in scripts/probe's command sweep).
+    ///
+    /// NOTE (bench-gate): the exact store/recall behaviour — stack depth and
+    /// whether QR cycles through the slots — differs across the line, so QI/QR
+    /// should be confirmed against real hardware per model before we rely on it.
+    /// Confirmed on: FTdx101MP (Colin MM5AGM, 2026-08-07 — QI/QR reach the rig
+    /// and the display shows "QMB", with VM; returning to VFO). The rest remain
+    /// enabled on the strength of the shared Yaesu CAT set but are not yet
+    /// hardware-verified; narrow this list if any model rejects QI/QR.
+    /// </summary>
+    public static bool SupportsQmb(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" or "FT-710"
+            or "FTDX3000" or "FTDX5000MP" or "FTDX5000D" or "FT-991A" => true,
+        _ => false
     };
 
     /// <summary>
@@ -90,17 +184,171 @@ public static class RadioCapabilities
         !string.IsNullOrEmpty(hardwareId) && !_vcTuneCatBlockedIds.Contains(hardwareId);
 
     /// <summary>
+    /// True when the radio's own spectrum scope can be driven over CAT with the
+    /// SS command, so YWC can change what the radio's front-panel display shows
+    /// (span, 3DSS vs waterfall, fix/centre/cursor, hold, marker).
+    ///
+    /// This is deliberately not the same question as "does YWC show a spectrum
+    /// for this radio" — that is YWC's own SDR panel, which is unrelated
+    /// hardware. See docs/design/scope-control-via-cat.md.
+    ///
+    /// Confirmed on FTdx101MP (Colin MM5AGM, 2026-08-15): all nine SS
+    /// sub-commands answered a Read, and Set frames for SPAN, HOLD and MARKER
+    /// were written and read back on both MAIN and SUB
+    /// (scripts/probe/ss-probe.ps1 and ss-write-probe.ps1).
+    ///
+    /// FTdx10 is enabled on the strength of the same documented SS table as the
+    /// 101 (P1 fixed at 0; HOLD present; L/N/S sizes) so Radio Display can drive
+    /// the captured TFT. FT-710 stays gated: its size labels and SPEED STOP are
+    /// different, and nobody has run ss-write-probe.ps1 on one yet. Enabling a
+    /// model here is a one-line change once that probe has been reported.
+    ///
+    /// Excluded, and not by oversight: the FTDX3000 has no SS command at all —
+    /// its scope lives in EX menu items 124-148, which is writing configuration
+    /// rather than operating a control — and the FTDX5000 has only a DP
+    /// display-page selector.
+    /// </summary>
+    public static bool SupportsSpectrumScopeCat(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" => true,
+        _ => false
+    };
+
+    /// <summary>
+    /// True when the scope supports HOLD (freeze the trace) via SS P2=8.
+    /// The FT-710's SS sub-command list genuinely stops at 7 — it has fewer
+    /// functions, not a gap in its manual — so the Hold button is hidden there
+    /// rather than sent and silently ignored.
+    ///
+    /// The FT-710 row stays listed here even though SupportsSpectrumScopeCat
+    /// gates it off today. That is not an inconsistency to tidy up: this table
+    /// is manual-derived knowledge worth keeping, and it is never consulted
+    /// unless the gate above lets the model through.
+    /// </summary>
+    public static bool SupportsScopeHold(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" => true,
+        _ => false
+    };
+
+    /// <summary>
+    /// True when the radio has two independently-configurable scopes addressed
+    /// by SS P1 (0 = MAIN, 1 = SUB), so the UI needs a MAIN/SUB selector.
+    /// Proven on the FTdx101MP by reading both at once: MAIN answered span=1 MHz
+    /// mode=W/F CURSOR (L) while SUB answered span=500 kHz mode=3DSS FIX.
+    /// On every other model SS P1 is documented as "0: (Fixed)".
+    /// </summary>
+    public static bool HasPerReceiverScopes(string radioModel) =>
+        radioModel is "FTdx101MP" or "FTdx101D";
+
+    /// <summary>
+    /// True when the scope has a second colour palette drawn across the IF
+    /// filter passband, set by SS P2=3 P4 (palette 1-7) and P5 (on/off).
+    ///
+    /// Only the FTdx101 has it. The FTDX10 CAT manual documents SS P2=3 as
+    /// P3 = "0: COLOR-1 - A: COLOR-11 (DIRECT SAMPLING)" with "P4 - P7: 0:
+    /// Fixed", and its operating manual describes COLOR as choosing from 11
+    /// types for the direct sampling trace only. Fabio Valente confirmed on
+    /// his own FtdX10 that the radio shows no narrow-band region at all
+    /// (#120). So on an FtdX10 the NB Col row would be writing non-zero into
+    /// two parameters the manual fixes at zero -- which is why this is gated
+    /// rather than sent and left to be ignored.
+    ///
+    /// _sendColor falls back to '0' for both axes when the row is hidden, so
+    /// the plain Color buttons still emit exactly what the manual specifies.
+    /// </summary>
+    public static bool SupportsScopeNarrowBandColor(string radioModel) =>
+        radioModel is "FTdx101MP" or "FTdx101D";
+
+    /// <summary>
+    /// The size variants of the waterfall scope modes, in SS P2=6 value order.
+    ///
+    /// The FTdx101 and FTdx10 offer three (Large / Normal / Small); the FT-710
+    /// offers two, and calls them something else entirely (Expand / Normal).
+    /// Same command, same value positions, different vocabulary and different
+    /// length — so this must stay a per-model list. Do not be tempted to
+    /// collapse it into one shared enum: on the FT-710 the third slot of each
+    /// group (values 5, 8 and the one after B) is documented as "-", i.e. it
+    /// does not exist, and sending it would be a guess.
+    ///
+    /// Returns an empty array for models with no CAT scope control.
+    /// The FT-710 row is retained while SupportsSpectrumScopeCat gates that
+    /// model off — see the note there before deleting it.
+    /// </summary>
+    public static string[] ScopeSizeLabels(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" => ["L", "N", "S"],
+        "FT-710"                              => ["Expand", "Normal"],
+        _                                     => []
+    };
+
+    /// <summary>
+    /// FFT SPEED labels for SS P2=0, in value order. The FT-710 adds STOP (5);
+    /// FTdx101 and FTdx10 stop at FAST3 (4). Empty when the model has no CAT
+    /// scope control.
+    /// </summary>
+    public static string[] ScopeSpeedLabels(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" => ["SLOW1", "SLOW2", "FAST1", "FAST2", "FAST3"],
+        "FT-710"                              => ["SLOW1", "SLOW2", "FAST1", "FAST2", "FAST3", "STOP"],
+        _                                     => []
+    };
+
+    /// <summary>
+    /// True when SS P2=7 (AF-FFT ATT, OSC ATT, OSC timebase) is documented.
+    /// This does not toggle MULTI — it only sets the attenuators/timebase that
+    /// apply while MULTI is already showing on the TFT.
+    /// </summary>
+    public static bool SupportsScopeAfFft(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" or "FTdx101D" or "FTdx10" or "FT-710" => true,
+        _ => false
+    };
+
+    /// <summary>
+    /// True when CAT can toggle the radio's MULTI layout (scope + oscilloscope
+    /// + AF-FFT). No supported model exposes this: searched CAT manuals, EX
+    /// DISPLAY/SCOPE menus, Hamlib, and this repo's mnemonic sweep. Kept as a
+    /// flag so a later probe that finds a real frame can enable the button
+    /// without a UI rewrite.
+    /// </summary>
+    public static bool SupportsScopeMulti(string radioModel)
+    {
+        _ = radioModel;
+        return false;
+    }
+
+    /// <summary>
     /// Returns the P1 character for a per-VFO CAT command, given the
     /// user's (or voice command's) targeted receiver ("A" or "B"). On
     /// single-receiver radios always "0" -- the firmware hard-codes that
     /// position and rejects P1=1; on dual-receiver "0" for A, "1" for B.
     /// Shared by CatController (mouse/keyboard input) and IntentDispatcher
     /// (voice input) so the routing rule lives in exactly one place.
+    ///
+    /// Do not use this for MD (operating mode). Mode is per-VFO at CAT
+    /// level on every supported model — see <see cref="ModeP1"/>.
     /// </summary>
     public static string VfoP1(bool isSingleReceiver, string receiver) =>
         isSingleReceiver
             ? "0"
             : (receiver.Equals("B", StringComparison.OrdinalIgnoreCase) ? "1" : "0");
+
+    /// <summary>
+    /// P1 for the MD (operating mode) command. Unlike receive-controls
+    /// (GT, PA, SH, CO, …) whose P1 is 0-Fixed on single-receiver radios,
+    /// MD is documented on the FTdx10 (and the rest of the family) as
+    /// 0 = MAIN / VFO-A, 1 = SUB / VFO-B. VFO A and VFO B are
+    /// frequency-and-mode memory slots even when there is only one
+    /// physical receiver, so the inactive VFO's mode is independently
+    /// addressable — the same way FA/FB address frequency.
+    ///
+    /// Using <see cref="VfoP1"/> here would send MD0 for both panels on
+    /// an FTdx10 and change the active VFO's mode when the operator
+    /// edited the inactive one.
+    /// </summary>
+    public static string ModeP1(string receiver) =>
+        receiver.Equals("B", StringComparison.OrdinalIgnoreCase) ? "1" : "0";
 
     /// <summary>
     /// Returns true if the per-VFO state write should target *B (vs *A) for
@@ -109,9 +357,56 @@ public static class RadioCapabilities
     /// is a hint, not an addressable target -- so this mirrors
     /// <paramref name="activeVfo"/> (0 = A, 1 = B). On dual-receiver radios
     /// the target wins outright.
+    ///
+    /// Do not use this for MD state writes. Mode follows the requested
+    /// VFO, not the active one — see <see cref="ModeP1"/>.
     /// </summary>
     public static bool VfoIsB(bool isSingleReceiver, int activeVfo, string receiver) =>
         isSingleReceiver
             ? activeVfo == 1
             : receiver.Equals("B", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The frequency the VFO A / VFO B SDR should be tuned to by default,
+    /// i.e. where the radio's IF OUT for that receiver actually sits.
+    ///
+    /// The FTdx101's two IF OUT jacks are on different frequencies. The
+    /// operating manual (p.17) gives MAIN as 9.005 MHz and SUB as 8.900 MHz,
+    /// and I measured both on 2026-09-11 with a 100 kW MW carrier as the
+    /// ruler: with the SDR at 9.000 MHz the MAIN trace reads 5.06 kHz low
+    /// and the SUB trace reads 100 kHz high. A single shared setting had the
+    /// VFO B SDR showing a slice of band 100 kHz above the SUB dial.
+    ///
+    /// The defaults sit 5 kHz BELOW each IF centre, not on it. That is what
+    /// the long-standing 9,000,000 MAIN value always did, and it keeps the
+    /// SDR's DC notch off the dial; the remaining 5 kHz is corrected in the
+    /// browser, not here. Both receivers get the same gap so the two panels
+    /// behave identically. See docs/design/sdr-spectrum-axis-investigation.md.
+    ///
+    /// Only the FTdx101MP has been measured. Every other model falls back to
+    /// 9 MHz for both VFOs, which is what they had before this existed.
+    /// </summary>
+    public static long DefaultSdrCentreHz(string radioModel, string vfo) => (radioModel, vfo.ToUpperInvariant()) switch
+    {
+        ("FTdx101MP" or "FTdx101D", "B") => 8_895_000,   // IF OUT (SUB) 8.900 MHz
+        _                                => 9_000_000,   // IF OUT (MAIN) 9.005 MHz, and the pre-split default
+    };
+
+    /// <summary>
+    /// The frequency in the SDR's stream that corresponds to the dial — the
+    /// radio's IF OUT centre for this receiver — or null where it has not
+    /// been measured. The narrow software-zoom spans crop the SDR's stream
+    /// around this point rather than around the SDR's own tune frequency:
+    /// the two differ by 5 kHz on the FTdx101 (see
+    /// <see cref="DefaultSdrCentreHz"/>), which is twice a 2.5 kHz span, so
+    /// centring the crop on the SDR would put the dial off the picture.
+    /// Null makes the caller fall back to the SDR's tune frequency, which is
+    /// what an unmeasured model always displayed.
+    /// </summary>
+    public static long? SdrIfOutHz(string radioModel, string vfo) => (radioModel, vfo.ToUpperInvariant()) switch
+    {
+        ("FTdx101MP" or "FTdx101D", "B") => 8_900_000,   // IF OUT (SUB), measured 2026-09-11
+        ("FTdx101MP" or "FTdx101D", _)   => 9_005_000,   // IF OUT (MAIN), measured 2026-09-11
+        _                                => null,
+    };
 }

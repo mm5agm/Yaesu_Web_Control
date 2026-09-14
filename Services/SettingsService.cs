@@ -3,12 +3,13 @@ using Yaesu_Web_Control.Models;
 
 namespace Yaesu_Web_Control.Services
 {
-    public class SettingsService : ISettingsService
+    public class SettingsService : ISettingsService, IDisposable
     {
         private readonly string _settingsFilePath;
         private readonly ILogger<SettingsService> _logger;
         private readonly SemaphoreSlim _semaphore = new(1, 1);
-        private ApplicationSettings? _cachedSettings;
+        private volatile ApplicationSettings? _cachedSettings;
+        private readonly FileSystemWatcher _watcher;
 
         public SettingsService(IWebHostEnvironment environment, ILogger<SettingsService> logger)
         {
@@ -20,13 +21,30 @@ namespace Yaesu_Web_Control.Services
             _settingsFilePath = Path.Combine(appData, "appsettings.user.json");
             _logger = logger;
             _logger.LogInformation("SettingsService initialized. File path: {Path}", _settingsFilePath);
+
+            var watcher = new FileSystemWatcher(Path.GetDirectoryName(_settingsFilePath)!, Path.GetFileName(_settingsFilePath))
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
+                EnableRaisingEvents = true
+            };
+            watcher.Changed += (_, _) => InvalidateCache();
+            watcher.Created += (_, _) => InvalidateCache();
+            watcher.Renamed += (_, _) => InvalidateCache();
+            _watcher = watcher;
         }
+
+        public void Dispose() => _watcher.Dispose();
+
+        public ApplicationSettings GetCachedSettings() =>
+            _cachedSettings ?? new ApplicationSettings();
 
         public async Task<ApplicationSettings> GetSettingsAsync()
         {
             await _semaphore.WaitAsync();
             try
             {
+                if (_cachedSettings != null) return _cachedSettings;
+
                 // These fire on every meter-poll cycle (GetSettingsAsync is
                 // called ~2 Hz). At Information level — and especially dumping
                 // the entire settings JSON — they were a major contributor to
@@ -47,12 +65,15 @@ namespace Yaesu_Web_Control.Services
 
                     MigrateSdrDeviceKey(_cachedSettings);
                     MigrateSdrSampleRate(_cachedSettings);
+                    MigrateSdrIfFrequency(_cachedSettings);
                     AutoQuoteCommandLinePaths(_cachedSettings);
                 }
                 else
                 {
                     _cachedSettings = new ApplicationSettings();
+                    ApplyContainerDefaults(_cachedSettings);
                     MigrateSdrSampleRate(_cachedSettings);   // fills A/B from defaults when file is brand new
+                    MigrateSdrIfFrequency(_cachedSettings);
                     _logger.LogWarning("Settings file does not exist at {Path}. Using defaults: SerialPort={SerialPort}, WebAddress={WebAddress}, HttpPort={HttpPort}",
                         _settingsFilePath, _cachedSettings.SerialPort, _cachedSettings.WebAddress, _cachedSettings.HttpPort);
                 }
@@ -84,7 +105,10 @@ namespace Yaesu_Web_Control.Services
                 };
 
                 var json = JsonSerializer.Serialize(settings, options);
-                _logger.LogInformation("Serialized to JSON: {Json}", json);
+                // Debug: this is the entire settings file, including the user's
+                // callsign and local paths. It belongs in a log the user opted
+                // into for a bug report, not in every log by default.
+                _logger.LogDebug("Serialized to JSON: {Json}", json);
 
                 await File.WriteAllTextAsync(_settingsFilePath, json);
                 _cachedSettings = settings;
@@ -95,7 +119,7 @@ namespace Yaesu_Web_Control.Services
                 if (File.Exists(_settingsFilePath))
                 {
                     var verify = await File.ReadAllTextAsync(_settingsFilePath);
-                    _logger.LogInformation("Verification: File content after save: {Content}", verify);
+                    _logger.LogDebug("Verification: File content after save: {Content}", verify);
                 }
             }
             catch (Exception ex)
@@ -140,10 +164,44 @@ namespace Yaesu_Web_Control.Services
         // Rules:
         //   - If legacy SdrSampleRateHz has a value and either A or B is 0,
         //     copy legacy → the missing slot(s). Clear legacy.
-        //   - If A or B is still 0 after that, fall back to the v2.2.x
-        //     default 2_048_000 so a brand-new settings file or one missing
-        //     all three fields still gets sane defaults.
-        private const double DefaultSampleRateHz = 2_048_000;
+        //   - If A or B is still 0 after that, fall back to the current
+        //     default so a brand-new settings file or one missing all three
+        //     fields still gets sane defaults.
+        //   - Map any rate retired by the low-IF change onto its nearest
+        //     survivor (see below).
+        private const double DefaultSampleRateHz = 2_000_000;
+
+        // Spans that have been retired over the releases. The list has
+        // changed twice: once when the spectrum moved to low-IF (only a
+        // handful of sample rates satisfy the SDRplay API's conditions), and
+        // again when it was aligned with the FTdx101's own scope spans (see
+        // SpectrumSpanPlan.ValidSpans). A settings file written before either
+        // change still names an old value; left alone it would be rejected by
+        // /api/sdr/span and leave the main page with no span button lit,
+        // which reads as a broken UI rather than as an out-of-date setting.
+        // Each maps to the nearest surviving span.
+        private static readonly Dictionary<double, double> RetiredSampleRates = new()
+        {
+            // Pre-low-IF rates.
+            [1_024_000] = 1_000_000,   // same span, now reached as 8 MHz ÷ 8
+            [2_048_000] = 2_000_000,   // same span, now reached as 8 MHz ÷ 4
+            [2_500_000] = 2_000_000,   // no low-IF combination reaches these,
+            [3_200_000] = 2_000_000,   // so they fall back to the widest span
+
+            // Low-IF spans that are not on the radio's list.
+            [  250_000] =   200_000,
+            [  125_000] =   100_000,
+
+            // The decimated CW spans of v2.5.0-dev.
+            [   62_500] =    50_000,
+            [   31_250] =    20_000,
+            [   15_625] =    20_000,
+
+            // The first software-zoom set of v2.5.0-dev.
+            [   25_000] =    20_000,
+            [    2_500] =     2_000,
+        };
+
         private static void MigrateSdrSampleRate(ApplicationSettings s)
         {
             if (s.SdrSampleRateHz > 0)
@@ -154,6 +212,39 @@ namespace Yaesu_Web_Control.Services
             }
             if (s.SdrSampleRateHzA == 0) s.SdrSampleRateHzA = DefaultSampleRateHz;
             if (s.SdrSampleRateHzB == 0) s.SdrSampleRateHzB = DefaultSampleRateHz;
+
+            if (RetiredSampleRates.TryGetValue(s.SdrSampleRateHzA, out double newA))
+                s.SdrSampleRateHzA = newA;
+            if (RetiredSampleRates.TryGetValue(s.SdrSampleRateHzB, out double newB))
+                s.SdrSampleRateHzB = newB;
+        }
+
+        // Per-VFO SDR centre frequency. Same sentinel pattern as the
+        // sample rate: 0 means "field not in JSON". Rules:
+        //   - A takes the legacy value if it had one.
+        //   - B takes the legacy value too, UNLESS the legacy value was just
+        //     the radio's stock A default - then B gets the radio's stock B
+        //     default instead. That is the whole point of the split: on an
+        //     FTdx101 the stock 9,000,000 was right for MAIN and 100 kHz
+        //     wrong for SUB, and a user who never touched the field should
+        //     not have to learn that. A user who DID set something else
+        //     (ELAD FDM-DUO, a different IF tap) keeps it on both sides.
+        //   - Anything still 0 falls back to the per-radio default.
+        // Internal, not private, so the test project can drive it.
+        internal static void MigrateSdrIfFrequency(ApplicationSettings s)
+        {
+            var model = s.RadioModel ?? string.Empty;
+            long defA = RadioCapabilities.DefaultSdrCentreHz(model, "A");
+            long defB = RadioCapabilities.DefaultSdrCentreHz(model, "B");
+
+            if (s.SdrIfFrequencyHz > 0)
+            {
+                if (s.SdrIfFrequencyHzA == 0) s.SdrIfFrequencyHzA = s.SdrIfFrequencyHz;
+                if (s.SdrIfFrequencyHzB == 0) s.SdrIfFrequencyHzB = s.SdrIfFrequencyHz == defA ? defB : s.SdrIfFrequencyHz;
+                s.SdrIfFrequencyHz = 0;
+            }
+            if (s.SdrIfFrequencyHzA == 0) s.SdrIfFrequencyHzA = defA;
+            if (s.SdrIfFrequencyHzB == 0) s.SdrIfFrequencyHzB = defB;
         }
 
         // Backward-compat for users whose *CommandLine settings were saved before
@@ -190,6 +281,19 @@ namespace Yaesu_Web_Control.Services
             Directory.CreateDirectory(newFolder);
             foreach (var file in Directory.GetFiles(oldFolder))
                 File.Copy(file, Path.Combine(newFolder, Path.GetFileName(file)), overwrite: false);
+        }
+
+        /// <summary>
+        /// First-run defaults when hosted in Docker / a container: keep the
+        /// process alive with no browser tabs, and prefer a common USB-serial
+        /// path (override in Settings once the real device is known).
+        /// </summary>
+        private static void ApplyContainerDefaults(ApplicationSettings s)
+        {
+            if (!HostRuntime.IsContainer) return;
+            s.AutoShutdownWhenNoBrowsers = false;
+            if (string.Equals(s.SerialPort, "COM3", StringComparison.OrdinalIgnoreCase))
+                s.SerialPort = "/dev/ttyUSB0";
         }
     }
 }

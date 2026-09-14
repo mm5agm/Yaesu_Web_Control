@@ -99,8 +99,15 @@ function initPhysicalKeyboard() {
     document.addEventListener('keydown', e => {
         if (!_dialog.open) return;
 
+        // Someone typing into a text box (the CW Send line, a DX watch
+        // callsign, a keyer memory) is not entering a frequency, however
+        // many digits they type. Leave those keystrokes alone.
+        const t = e.target;
+        if (t && (t.tagName === 'TEXTAREA' || t.isContentEditable ||
+                 (t.tagName === 'INPUT' && !/^(button|checkbox|radio|range|submit|reset)$/i.test(t.type || 'text'))))
+            return;
+
         // Digit keys: always route to the keyboard while it is open.
-        // There are no text inputs on the main page, so capturing digits is safe.
         if (e.key >= '0' && e.key <= '9') {
             e.preventDefault();
             e.stopPropagation();

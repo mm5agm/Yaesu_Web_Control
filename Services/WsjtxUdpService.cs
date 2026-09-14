@@ -23,6 +23,7 @@ namespace Yaesu_Web_Control.Services
         private readonly RadioStateService _radioStateService;
         private readonly ILogger<WsjtxUdpService> _logger;
         private readonly ISettingsService _settingsService;
+        private readonly FrequencyRejectionNotifier _rejectionNotifier;
 
         private readonly object _lock = new();
         private DateTime _lastSeen = DateTime.MinValue;
@@ -39,38 +40,42 @@ namespace Yaesu_Web_Control.Services
             ICatClient catClient,
             RadioStateService radioStateService,
             ILogger<WsjtxUdpService> logger,
-            ISettingsService settingsService)
+            ISettingsService settingsService,
+            FrequencyRejectionNotifier rejectionNotifier)
         {
             _catClient = catClient;
             _radioStateService = radioStateService;
             _logger = logger;
             _settingsService = settingsService;
+            _rejectionNotifier = rejectionNotifier;
             _logger.LogInformation("WsjtxUdpService constructor called. Service is being constructed.");
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogWarning("WsjtxUdpService ExecuteAsync started - listening for WSJT-X UDP packets");
+            _logger.LogInformation("WsjtxUdpService ExecuteAsync started - listening for WSJT-X UDP packets");
             UdpClient? udpClient = null;
             try
             {
-                _logger.LogWarning("Loading WSJT-X UDP settings...");
+                _logger.LogDebug("Loading WSJT-X UDP settings...");
                 var settings = await _settingsService.GetSettingsAsync();
                 if (!settings.WsjtxIntegrationEnabled)
                 {
-                    _logger.LogWarning("WSJT-X integration is disabled in settings — not binding the UDP port, so it stays free for other WSJT-X tools.");
+                    _logger.LogInformation("WSJT-X integration is disabled in settings — not binding the UDP port, so it stays free for other WSJT-X tools.");
                     return;
                 }
-                _logger.LogWarning("WSJT-X UDP Settings: Address={Address}, Port={Port}", settings.WsjtxUdpAddress, settings.WsjtxUdpPort);
+                _logger.LogInformation("WSJT-X UDP Settings: Address={Address}, Port={Port}", settings.WsjtxUdpAddress, settings.WsjtxUdpPort);
                 udpClient = CreateUdpListener(settings.WsjtxUdpAddress, settings.WsjtxUdpPort);
-                _logger.LogWarning("WSJT-X UDP listener ACTIVE on port {Port} (address filter: {Address})", settings.WsjtxUdpPort, settings.WsjtxUdpAddress);
+                _logger.LogInformation("WSJT-X UDP listener ACTIVE on port {Port} (address filter: {Address})", settings.WsjtxUdpPort, settings.WsjtxUdpAddress);
 
                 while (!stoppingToken.IsCancellationRequested)
                 {
                     try
                     {
                         var result = await udpClient.ReceiveAsync(stoppingToken);
-                        _logger.LogWarning("[WSJT-X UDP] Packet received: {Length} bytes from {RemoteEndPoint}", result.Buffer.Length, result.RemoteEndPoint);
+                        // Debug: WSJT-X sends a status packet roughly once a second
+                        // while it is running, so this is a steady stream, not an event.
+                        _logger.LogDebug("[WSJT-X UDP] Packet received: {Length} bytes from {RemoteEndPoint}", result.Buffer.Length, result.RemoteEndPoint);
                         await ProcessMessageAsync(result.Buffer, stoppingToken);
                     }
                     catch (OperationCanceledException) { break; }
@@ -88,7 +93,7 @@ namespace Yaesu_Web_Control.Services
             {
                 udpClient?.Close();
                 _logger.LogInformation("WSJT-X UDP listener stopped");
-                _logger.LogWarning("WsjtxUdpService ExecuteAsync has exited. Service should be stopped.");
+                _logger.LogInformation("WsjtxUdpService ExecuteAsync has exited. Service should be stopped.");
             }
 
         }
@@ -102,7 +107,7 @@ namespace Yaesu_Web_Control.Services
             udp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             udp.Client.Bind(new IPEndPoint(IPAddress.Any, udpPort));
 
-            _logger.LogWarning("UDP socket bound to port {Port} on all interfaces", udpPort);
+            _logger.LogInformation("UDP socket bound to port {Port} on all interfaces", udpPort);
 
             // If multicast address, join group on default interface and also on loopback.
             // WSJT-X may be configured with "Outgoing Interfaces: loopback_0", in which case
@@ -115,7 +120,7 @@ namespace Yaesu_Web_Control.Services
                 try
                 {
                     udp.JoinMulticastGroup(ip);
-                    _logger.LogWarning("✓ Joined WSJT-X multicast group {Address}:{Port} on default interface", udpAddress, udpPort);
+                    _logger.LogInformation("✓ Joined WSJT-X multicast group {Address}:{Port} on default interface", udpAddress, udpPort);
                 }
                 catch (Exception ex)
                 {
@@ -125,7 +130,7 @@ namespace Yaesu_Web_Control.Services
                 try
                 {
                     udp.JoinMulticastGroup(ip, IPAddress.Loopback);
-                    _logger.LogWarning("✓ Joined WSJT-X multicast group {Address}:{Port} on loopback interface", udpAddress, udpPort);
+                    _logger.LogInformation("✓ Joined WSJT-X multicast group {Address}:{Port} on loopback interface", udpAddress, udpPort);
                 }
                 catch (Exception ex)
                 {
@@ -134,7 +139,7 @@ namespace Yaesu_Web_Control.Services
             }
             else
             {
-                _logger.LogWarning("Listening for unicast UDP on port {Port} (address {Address} is not multicast)", udpPort, udpAddress);
+                _logger.LogInformation("Listening for unicast UDP on port {Port} (address {Address} is not multicast)", udpPort, udpAddress);
             }
             return udp;
         }
@@ -180,7 +185,30 @@ namespace Yaesu_Web_Control.Services
                     // - Band is changed
                     // - User clicks outside current passband on wide graph
                     // - Split mode frequency changes
-                    if (msg.DialFrequency > 0)
+                    // Ignore a dial frequency the radio cannot tune. WSJT-X
+                    // broadcasts whatever band it is sitting on, which need not
+                    // be one this radio has: seen on 2026-08-14 with WSJT-X on
+                    // 2 m, where 144.174 MHz was both written into VFO A
+                    // (displayed with band "Unknown" until WSJT-X moved back to
+                    // 20 m) and sent to the radio as FA144174000;. The rigctld
+                    // path has always bounded this; this one never did, which is
+                    // why the rigctld guard did not catch it.
+                    if (msg.DialFrequency > 0
+                        && !RadioCapabilities.IsTunableFrequency(
+                               _radioStateService.RadioModel, msg.DialFrequency))
+                    {
+                        _logger.LogDebug(
+                            "[WSJT-X UDP] Ignoring out-of-range dial frequency {Freq} Hz for {Model}",
+                            msg.DialFrequency, _radioStateService.RadioModel);
+
+                        // This path is otherwise completely silent to the
+                        // operator — unlike rigctld, a UDP broadcast has no
+                        // reply, so WSJT-X is never told and shows nothing.
+                        // The notifier throttles: WSJT-X rebroadcasts this
+                        // status about once a second while it sits on the band.
+                        await _rejectionNotifier.NotifyAsync(msg.DialFrequency, "WSJT-X");
+                    }
+                    else if (msg.DialFrequency > 0)
                     {
                         var currentFreq = _radioStateService.FrequencyA;
                         var diff = Math.Abs(msg.DialFrequency - currentFreq);

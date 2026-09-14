@@ -1,6 +1,7 @@
 // filter-scope-panel.js — Filter Function Display canvas renderer
 // Shows DSP filter passband shape, roofing filter outline, notch, contour, and APF markers.
-// Pure computation from CAT state — no actual signal content.
+// Passband geometry is computed from CAT state. Green bars inside the passband are
+// decorative (random) unless a live RX spectrum provider is attached (remote audio).
 
 // IF Width code → Hz per radio model (mirrors ifWidthOptions in Index.cshtml)
 const IF_WIDTH_TABLES = {
@@ -52,8 +53,17 @@ export class FilterScopePanel {
             apfOn:            false,
             apfFreqHz:        0,
             mode:             'USB',
+            // CW sidetone pitch, Hz. The CW passband is centred on the pitch,
+            // not on a fixed 700 Hz -- an operator running 600 Hz was being
+            // drawn a trapezium 100 Hz off, and the contour slider bounds and
+            // APF marker derived from it were off by the same amount. Seeded
+            // and kept current from the radio's own KP setting.
+            cwPitchHz:        700,
             ...initialState
         };
+
+        /** Optional () => { data, sampleRate, fftSize } | null from remote audio RX. */
+        this._spectrumProvider = null;
 
         this._init();
     }
@@ -61,6 +71,15 @@ export class FilterScopePanel {
     setState(updates) {
         Object.assign(this._state, updates);
         this._render();
+    }
+
+    /**
+     * Attach or clear a live RX spectrum source. When the provider returns null
+     * (no session / muted), bars fall back to the decorative random animation.
+     * @param {(() => ({ data: Uint8Array, sampleRate: number, fftSize: number } | null)) | null} provider
+     */
+    setSpectrumProvider(provider) {
+        this._spectrumProvider = typeof provider === 'function' ? provider : null;
     }
 
     _init() {
@@ -139,11 +158,36 @@ export class FilterScopePanel {
         return this._passbandEdges(this._ifWidthHz());
     }
 
+    /**
+     * The filter settings this panel is drawing from, for anyone else who
+     * needs the same numbers — the SDR spectrum panel uses them to work out
+     * how far the radio has slid its LO (see sdr/if-out-offset.js). The width
+     * is the DSP width alone, NOT clamped to the roofing filter: it is the SH
+     * setting that moves the LO, whatever the roofing filter is doing.
+     * @returns {{mode: string, ifWidthCode: number, ifWidthHz: number|null, ifShiftHz: number, cwPitchHz: number}}
+     */
+    getFilterState() {
+        return {
+            mode:        this._state.mode || '',
+            ifWidthCode: parseInt(this._state.ifWidthCode) || 0,
+            ifWidthHz:   this._dspWidthHz(),
+            ifShiftHz:   this._state.ifShiftHz || 0,
+            cwPitchHz:   this._cwPitchHz(),
+        };
+    }
+
     _hzToX(hz, W, loHz, hiHz) {
         return Math.round(((hz - loHz) / (hiHz - loHz)) * W);
     }
 
     _ifWidthHz() {
+        const hz     = this._dspWidthHz();
+        const roofHz = this._roofingHz();
+        return roofHz !== null ? Math.min(hz, roofHz) : hz;
+    }
+
+    // The DSP (IF WIDTH) bandwidth in Hz, before any roofing-filter clamp.
+    _dspWidthHz() {
         // Prefer the mode-aware lookup so the passband matches what the radio
         // is actually doing in the current mode (CW code 8 = 400 Hz, SSB
         // code 8 = 1650 Hz on the FTdx101 etc.). Falls back to the static
@@ -153,8 +197,14 @@ export class FilterScopePanel {
             hz = window.IfWidth.ifWidthHzFor(this._model, this._state.mode, parseInt(this._state.ifWidthCode));
         }
         if (hz == null) hz = this._widthTable[String(this._state.ifWidthCode)] || 3000;
-        const roofHz = this._roofingHz();
-        return roofHz !== null ? Math.min(hz, roofHz) : hz;
+        return hz;
+    }
+
+    // CW sidetone pitch in Hz, guarded so a missing or nonsense value falls
+    // back to the Yaesu default rather than collapsing the passband to zero.
+    _cwPitchHz() {
+        const v = Number(this._state.cwPitchHz);
+        return Number.isFinite(v) && v > 0 ? v : 700;
     }
 
     _roofingHz() {
@@ -172,7 +222,7 @@ export class FilterScopePanel {
         const mode = (this._state.mode || '').toUpperCase();
         const shift = this._state.ifShiftHz || 0;
         if (mode.startsWith('CW')) {
-            const centre = 700 + shift;
+            const centre = this._cwPitchHz() + shift;
             return { lo: centre - ifWidthHz / 2, hi: centre + ifWidthHz / 2 };
         } else if (mode === 'AM' || mode === 'AM-N') {
             return { lo: 0, hi: ifWidthHz / 2 };
@@ -223,7 +273,7 @@ export class FilterScopePanel {
         ctx.fillStyle = 'rgba(74,138,191,0.10)';
         ctx.fill();
 
-        // Clip to trapezoid, then draw animated signal bars inside it
+        // Clip to trapezoid, then draw signal bars inside it (live FFT or random)
         ctx.save();
         trapPath();
         ctx.clip();
@@ -231,8 +281,21 @@ export class FilterScopePanel {
         const barW    = 2;
         const maxBarH = Math.floor((pbBot - pbTop) * 0.85);
         const barBase = pbBot - 1;
+        const spectrum = this._spectrumProvider ? this._spectrumProvider() : null;
+        const hzPerBin = spectrum
+            ? spectrum.sampleRate / spectrum.fftSize
+            : 0;
+        const binCount = spectrum ? spectrum.data.length : 0;
+
         for (let bx = pxLo; bx <= pxHi; bx += barW) {
-            const nh = Math.random();
+            let nh;
+            if (spectrum && binCount > 0) {
+                const hz = rangeLo + ((bx + barW * 0.5) / W) * rangeHz;
+                const bin = Math.max(0, Math.min(binCount - 1, Math.round(hz / hzPerBin)));
+                nh = spectrum.data[bin] / 255;
+            } else {
+                nh = Math.random();
+            }
             const bh = Math.max(2, Math.round(nh * maxBarH));
             ctx.fillStyle = `rgba(80,210,80,${(0.4 + nh * 0.5).toFixed(2)})`;
             ctx.fillRect(bx, barBase - bh, barW - 1, bh);
@@ -281,7 +344,7 @@ export class FilterScopePanel {
         // --- APF marker ---
         if (this._state.apfOn) {
             const mode    = (this._state.mode || '').toUpperCase();
-            const cwCentre = 700 + (this._state.ifShiftHz || 0);
+            const cwCentre = this._cwPitchHz() + (this._state.ifShiftHz || 0);
             const apfPx   = x(cwCentre + (this._state.apfFreqHz || 0));
             const peakHalf = Math.max(3, Math.round(W * 0.015));
             ctx.fillStyle = 'rgba(0,229,204,0.7)';

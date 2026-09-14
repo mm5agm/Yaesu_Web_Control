@@ -11,6 +11,14 @@ namespace Yaesu_Web_Control.Services
         bool IsConnected { get; }
         Task<string> SendCommandAsync(string command, string clientId, CancellationToken cancellationToken = default, int timeoutMs = 150);
 
+        /// <summary>
+        /// Send a read query and forward its reply through the message
+        /// dispatcher so RadioStateService (and the browser) learn the answer.
+        /// Plain SendCommandAsync hands the reply to the awaiter and to nobody
+        /// else -- use this for "read this property into app state".
+        /// </summary>
+        Task SendCommandAndDispatchAsync(string command, string clientId, CancellationToken cancellationToken = default);
+
         // VFO-A (Main) Methods
         Task<long> ReadFrequencyAsync();
         Task<long> ReadFrequencyAAsync();

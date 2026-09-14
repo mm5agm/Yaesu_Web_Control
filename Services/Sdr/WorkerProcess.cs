@@ -30,8 +30,12 @@ internal sealed class WorkerProcess : IDisposable
         string  vfo,
         string  deviceKey,
         long    ifFrequencyHz,
+        int     trimHz,
         double  sampleRateHz,
-        int     fftSize)
+        int     fftSize,
+        int     hopSize,
+        long    viewCentreHz,
+        long    viewSpanHz)
     {
         string exePath = LocateWorkerExe()
             ?? throw new FileNotFoundException(
@@ -52,8 +56,21 @@ internal sealed class WorkerProcess : IDisposable
         psi.ArgumentList.Add("--vfo");          psi.ArgumentList.Add(vfo);
         psi.ArgumentList.Add("--port");         psi.ArgumentList.Add(port.ToString());
         psi.ArgumentList.Add("--if-hz");        psi.ArgumentList.Add(ifFrequencyHz.ToString());
+        if (trimHz != 0)
+        {
+            psi.ArgumentList.Add("--trim-hz");  psi.ArgumentList.Add(trimHz.ToString());
+        }
         psi.ArgumentList.Add("--sample-rate");  psi.ArgumentList.Add(sampleRateHz.ToString(System.Globalization.CultureInfo.InvariantCulture));
         psi.ArgumentList.Add("--fft-size");     psi.ArgumentList.Add(fftSize.ToString());
+        psi.ArgumentList.Add("--hop");          psi.ArgumentList.Add(hopSize.ToString());
+        if (viewSpanHz > 0)
+        {
+            // Software-zoom span: the worker crops each FFT to this window
+            // (see SpectrumSpanPlan). Omitted for hardware-rate spans, where
+            // the worker sends the whole stream.
+            psi.ArgumentList.Add("--view-centre"); psi.ArgumentList.Add(viewCentreHz.ToString());
+            psi.ArgumentList.Add("--view-span");   psi.ArgumentList.Add(viewSpanHz.ToString());
+        }
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         var wp = new WorkerProcess(logger, vfo, process, port);

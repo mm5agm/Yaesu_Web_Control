@@ -11,8 +11,12 @@
 //       --vfo         A
 //       --port        17001
 //       --if-hz       9000000
-//       --sample-rate 2048000
+//       [--trim-hz     -44]           tune the hardware this far off --if-hz (crystal error)
+//       --sample-rate 2000000
 //       --fft-size    1024
+//       [--hop         4096]          samples between FFTs (default = fft-size, no overlap)
+//       [--view-centre 9005000]       crop the spectrum to this window before sending
+//       [--view-span   2500]          (default: send the whole span)
 //
 // Listens on localhost:<port>, accepts one client (YWC main), opens the SDR,
 // and streams FFT frames per the wire protocol in WireProtocol.cs.
@@ -78,13 +82,22 @@ internal static class Program
         double sr     = double.Parse(Required("sample-rate"), System.Globalization.CultureInfo.InvariantCulture);
         int    fft    = int.Parse(Required("fft-size"));
 
+        int  hop        = dict.TryGetValue("hop",         out var h)  ? int.Parse(h)   : fft;
+        int  trimHz     = dict.TryGetValue("trim-hz",     out var t)  ? int.Parse(t)   : 0;
+        long viewCentre = dict.TryGetValue("view-centre", out var vc) ? long.Parse(vc) : 0;
+        long viewSpan   = dict.TryGetValue("view-span",   out var vs) ? long.Parse(vs) : 0;
+
         if (port <= 0 || port > 65535)  throw new ArgumentException("--port out of range");
         if (ifHz <= 0)                  throw new ArgumentException("--if-hz must be positive");
+        if (Math.Abs(trimHz) > 100_000)  throw new ArgumentException("--trim-hz must be within ±100000");
         if (sr <= 0)                    throw new ArgumentException("--sample-rate must be positive");
         if (fft <= 0 || (fft & (fft - 1)) != 0)
             throw new ArgumentException("--fft-size must be a positive power of two");
+        if (hop <= 0 || hop > fft)      throw new ArgumentException("--hop must be between 1 and --fft-size");
+        if (viewSpan < 0 || viewCentre < 0)
+            throw new ArgumentException("--view-span and --view-centre must not be negative");
 
-        return new WorkerOptions(deviceKey, vfo, port, ifHz, sr, fft);
+        return new WorkerOptions(deviceKey, vfo, port, ifHz, trimHz, sr, fft, hop, viewCentre, viewSpan);
     }
 
     private static void PrintUsage(string? error)
@@ -106,8 +119,14 @@ internal static class Program
             "                 log prefix to disambiguate worker output.\n" +
             "  --port         TCP port to listen on (localhost only).\n" +
             "  --if-hz        Centre/IF frequency in Hz (typically 9000000).\n" +
-            "  --sample-rate  Sample rate in Hz (typically 2048000).\n" +
+            "  --trim-hz      Tune the hardware this many Hz off --if-hz to correct\n" +
+            "                 its crystal; every frame is still labelled --if-hz.\n" +
+            "  --sample-rate  Sample rate in Hz (typically 2000000).\n" +
             "  --fft-size     FFT size — must be a power of two.\n" +
+            "  --hop          Samples between successive FFTs (default: fft-size).\n" +
+            "                 Smaller than fft-size overlaps FFTs for a faster display.\n" +
+            "  --view-centre  With --view-span: crop each FFT to this window before\n" +
+            "  --view-span    sending, so a narrow span costs no hardware retune.\n" +
             "\n" +
             "Exit codes:\n" +
             "  0  clean shutdown (cancelled or client disconnected)\n" +

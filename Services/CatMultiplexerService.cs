@@ -37,19 +37,15 @@ namespace Yaesu_Web_Control.Services
 
         public bool IsConnected => _serialPort?.IsOpen ?? false;
 
-        private readonly ISettingsService _settingsService;
-
         public CatMultiplexerService(
             ILogger<CatMultiplexerService> logger,
             CatMessageBuffer messageBuffer,
             CatMessageDispatcher messageDispatcher,
-            ISettingsService settingsService,
             RadioStateService radioStateService)
         {
             _logger = logger;
             _messageBuffer = messageBuffer;
             _messageDispatcher = messageDispatcher;
-            _settingsService = settingsService;
             _radioStateService = radioStateService;
 
             _messageBuffer.MessageReceived += OnMessageReceived;
@@ -96,7 +92,9 @@ namespace Yaesu_Web_Control.Services
             // Suppress high-frequency RM meter poll responses from logs
             if (!message.StartsWith("RM"))
             {
-                _logger.LogInformation("[CatMultiplexerService] OnMessageReceived: {Message}", message);
+                // Debug: the S-meter alone lands here ~10 times a second. This was
+                // the single largest contributor to a 12 MB/day log file.
+                _logger.LogDebug("[CatMultiplexerService] OnMessageReceived: {Message}", message);
             }
 
             if (message.Length < 2) return;
@@ -107,7 +105,7 @@ namespace Yaesu_Web_Control.Services
             // This is the only path that triggers SignalInitializationComplete.
             if (prefix == "DT")
             {
-                _logger.LogWarning("[CatMultiplexerService] >>> Dispatching DT message: {Message}", message);
+                _logger.LogDebug("[CatMultiplexerService] >>> Dispatching DT message: {Message}", message);
                 _messageDispatcher.DispatchMessage(message);
                 return; // Do not fall through to _pendingResponses
             }
@@ -483,138 +481,6 @@ namespace Yaesu_Web_Control.Services
             public DateTime Timestamp { get; set; }
         }
 
-        public async Task SendCommand(string command, bool processResult = false, int delay = 0)
-        {
-            var response = await SendCommandAsync(command, "InitialValues");
-            _logger.LogDebug("Command {Command} got response: {Response}", command, response);
-            if (processResult && !string.IsNullOrEmpty(response))
-            {
-                _messageDispatcher.DispatchMessage(response + ";");
-            }
-            if (delay > 0)
-                await Task.Delay(Math.Min(delay, 20));
-        }
-
-        public async Task SendCommandPause(string command, bool processResult = false)
-        {
-            await SendCommand(command, processResult, delay: 20);
-        }
-
-        public async Task GetInitialValues()
-        {
-            await SendCommand("AI1;", true);
-            await SendCommand("ID;", true);
-            await SendCommand("AG0;", true);
-            await SendCommand("AG1;", true);
-            await SendCommand("RG0;", true);
-            await SendCommand("RG1;", true);
-            await SendCommand("FA;", true);
-            await SendCommand("FB;", true);
-            await SendCommand("FR;", true);
-            await SendCommand("FT;", true);
-            await SendCommand("SS04;", true);
-            await SendCommand("SS14;", true);
-            await SendCommand("AO;", true);
-            await SendCommand("MG;", true);
-            await SendCommand("PL;", true);
-            await SendCommand("PR0;", true);
-            await SendCommand("PR1;", true);
-            await SendCommand("MD0;", true);
-            await SendCommand("MD1;", true);
-            await SendCommand("VS;", true);
-            await SendCommand("KP;", true);
-            await SendCommand("PC;", true);
-            await SendCommand("RL0;", true);
-            await SendCommand("RL1;", true);
-            await SendCommand("NR0;", true);
-            await SendCommand("NR1;", true);
-            await SendCommand("NB0;", true);
-            await SendCommand("NB1;", true);
-            await SendCommand("NL0;", true);
-            await SendCommand("CO00;", true);
-            await SendCommand("CO10;", true);
-            await SendCommand("CO01;", true);
-            await SendCommand("CO11;", true);
-            await SendCommand("CO02;", true);
-            await SendCommand("CO12;", true);
-            await SendCommand("CO03;", true);
-            await SendCommand("CO13;", true);
-            await SendCommand("CN00;", true);
-            await SendCommand("CN10;", true);
-            await SendCommand("CT0;", true);
-            await SendCommand("CT1;", true);
-            await SendCommandPause("EX030203;", true);
-            await SendCommandPause("EX030202;", true);
-            await SendCommandPause("EX030102;", true);
-            await SendCommandPause("EX030103;", true);
-            await SendCommandPause("EX040105;", true);
-            await SendCommandPause("EX030201;", true);
-            await SendCommandPause("EX010111;", true);
-            await SendCommandPause("EX010112;", true);
-            await SendCommandPause("EX030405;", true);
-            await SendCommandPause("EX010111;", true);
-            await SendCommandPause("EX010211;", true);
-            await SendCommandPause("EX010310;", true);
-            await SendCommandPause("EX010413;", true);
-            await SendCommandPause("EX010112;", true);
-            await SendCommandPause("EX010213;", true);
-            await SendCommandPause("EX010312;", true);
-            await SendCommandPause("EX010414;", true);
-            await SendCommandPause("EX0403021;", false);
-            await SendCommand("SH0;", true);
-            await SendCommand("SH1;", true);
-            await SendCommand("IS0;", true);
-            await SendCommand("SS06;", true);
-            await SendCommand("IS1;", true);
-            await SendCommand("AC;", true);
-            await SendCommand("KP;", true);
-            await SendCommand("FT;", true);
-            await SendCommand("IF;", true);
-            await SendCommand("BP00;", true);
-            await SendCommand("BP01;", true);
-            await SendCommand("BP10;", true);
-            await SendCommand("BP11;", true);
-            await SendCommand("GT0;", true);
-            await SendCommand("GT1;", true);
-            await SendCommand("AN0;", true);
-            await SendCommand("AN1;", true);
-            await SendCommand("PA0;", true);
-            await SendCommand("PA1;", true);
-            await SendCommand("RF0;", true);
-            var initSettings = await _settingsService.GetSettingsAsync();
-            if (RadioCapabilities.IsDualReceiver(initSettings.RadioModel))
-                await SendCommand("RF1;", true);
-            await SendCommand("ID;", true);
-            await SendCommand("CS;", true);
-            await SendCommand("ML0;", true);
-            await SendCommand("ML1;", true);
-            await SendCommand("BI;", true);
-            await SendCommand("MS;", true);
-            await SendCommand("KS;", true);
-            await SendCommand("SS05;", true);
-            await SendCommand("SS15;", true);
-            await SendCommand("SS06;", true);
-            await SendCommand("SS16;", true);
-            // VT0; removed: VC Tune status is probed by VCTuneModule.InitializeAsync
-            // after init completes. Hardware revisions that reject VT CAT frames
-            // (e.g. ID0682) would return "?;?;" here, polluting the message buffer.
-            await SendCommand("VX;", true);
-            await SendCommand("VG;", true);
-            await SendCommand("AV;", true);
-            await SendCommand("CF000;", true);
-            await SendCommand("CF100;", true);
-            await SendCommand("CF001;", true);
-            await SendCommand("CF101;", true);
-            await SendCommand("BC0;", true);
-            await SendCommand("BC1;", true);
-            await SendCommand("KR;", true);
-            await SendCommand("RA0;", true);
-            await SendCommand("RA1;", true);
-            await SendCommand("SY;", true);
-            await SendCommandPause("VD;", true);
-            await SendCommandPause("DT0;", true);
-        }
-
         /// <summary>
         /// Send initialization commands quickly without waiting for individual responses.
         /// Responses are handled asynchronously via Auto Information mode.
@@ -666,15 +532,19 @@ namespace Yaesu_Web_Control.Services
 
         public async Task InitializeRadioAsync()
         {
-            _logger.LogWarning("[CatMultiplexerService] InitializeRadioAsync starting...");
+            // Information, not Warning: this whole sequence is the normal connect
+            // path, and it runs once per connect. It stays in the default log
+            // because it is the trace that made #73's startup hang diagnosable —
+            // but a successful connect is not a warning.
+            _logger.LogInformation("[CatMultiplexerService] InitializeRadioAsync starting...");
             LogThreadPoolState("init-start");
             _initializationCompletionSource = new TaskCompletionSource<bool>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
-            _logger.LogWarning("[CatMultiplexerService] Sending AI1 command...");
+            _logger.LogInformation("[CatMultiplexerService] Sending AI1 command...");
             await SendCommandAsync("AI1;", "Initialization", CancellationToken.None);
 
-            _logger.LogWarning("[CatMultiplexerService] Sending {Count} initialization commands (fast mode)...",
+            _logger.LogInformation("[CatMultiplexerService] Sending {Count} initialization commands (fast mode)...",
                 CatCommands.InitializationCommands.Length);
             await SendInitializationCommandsFastAsync(CatCommands.InitializationCommands);
 
@@ -682,7 +552,7 @@ namespace Yaesu_Web_Control.Services
             await Task.Delay(100);
 
             LogThreadPoolState("init-burst-complete, before DT0");
-            _logger.LogWarning("[CatMultiplexerService] Sending DT0 command (raw)...");
+            _logger.LogInformation("[CatMultiplexerService] Sending DT0 command (raw)...");
 
             // Send DT0 raw — do NOT use SendCommandAsync here.
             // SendCommandAsync would register "DT" in _pendingResponses, which competes
@@ -692,7 +562,7 @@ namespace Yaesu_Web_Control.Services
             var dt0Bytes = Encoding.ASCII.GetBytes("DT0;");
             _serialPort!.Write(dt0Bytes, 0, dt0Bytes.Length);
 
-            _logger.LogWarning("[CatMultiplexerService] Waiting for DT0 response...");
+            _logger.LogInformation("[CatMultiplexerService] Waiting for DT0 response...");
 
             var completionTask = _initializationCompletionSource.Task;
             var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
@@ -704,7 +574,7 @@ namespace Yaesu_Web_Control.Services
                 throw new TimeoutException("Timeout waiting for DT0 response from radio");
             }
 
-            _logger.LogWarning("[CatMultiplexerService] ✓ DT0 response received, initialization complete");
+            _logger.LogInformation("[CatMultiplexerService] ✓ DT0 response received, initialization complete");
         }
 
         public async Task ShutdownRadioAsync()
@@ -714,10 +584,14 @@ namespace Yaesu_Web_Control.Services
 
         public void SignalInitializationComplete()
         {
-            _logger.LogWarning("[CatMultiplexerService] >>> SignalInitializationComplete called");
+            // Debug: these two only trace the mechanism. The outcome is already in
+            // the default log either way — "DT0 response received" on success, or
+            // the TIMEOUT error above. The null branch below stays at Warning
+            // because that one really is a fault.
+            _logger.LogDebug("[CatMultiplexerService] >>> SignalInitializationComplete called");
             if (_initializationCompletionSource != null)
             {
-                _logger.LogWarning("[CatMultiplexerService] >>> Setting _initializationCompletionSource result to true");
+                _logger.LogDebug("[CatMultiplexerService] >>> Setting _initializationCompletionSource result to true");
                 _initializationCompletionSource.TrySetResult(true);
             }
             else

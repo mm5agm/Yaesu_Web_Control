@@ -55,11 +55,17 @@ function showServerStoppedOverlay() {
 
 function isTypingIntoEditable() {
     const active = document.activeElement;
-    if (active && (
-        active.tagName === 'INPUT' ||
-        active.tagName === 'TEXTAREA' ||
-        active.isContentEditable
-    )) return true;
+    if (active) {
+        if (active.isContentEditable) return true;
+        if (active.tagName === 'TEXTAREA' || active.tagName === 'SELECT') return true;
+        if (active.tagName === 'INPUT') {
+            const type = (active.getAttribute('type') || 'text').toLowerCase();
+            // Range/checkbox/etc. are not text entry — allow TX shortcut.
+            if (['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'color', 'hidden'].includes(type))
+                return false;
+            return true;
+        }
+    }
     // The on-screen frequency keypad is a text-entry surface even though focus
     // sits on its buttons (a <dialog>, not an <input>). Treat it as "typing" so
     // global shortcuts (TX toggle, fullscreen) don't fire while a frequency is
@@ -103,15 +109,18 @@ document.addEventListener('keydown', function (e) {
     // Accept both the token and a legacy lone-space value.
     const isSpaceShortcut = configuredKey === 'Space' || configuredKey === ' ';
     const keyMatches = isSpaceShortcut
-        ? (e.key === ' ')
+        ? (e.key === ' ' || e.code === 'Space')
         : (configuredKey.length === 1 && e.key.length === 1
             ? e.key.toLowerCase() === configuredKey.toLowerCase()
-            : e.key === configuredKey);
+            : e.key === configuredKey || e.code === configuredKey);
     if (!keyMatches) return;
 
     e.preventDefault();
+    const active = document.activeElement;
+    if (active && typeof active.blur === 'function' && active.tagName === 'BUTTON')
+        active.blur();
     toggleTx();
-});
+}, true);
 
 // Add/remove fullscreen-mode class on body when entering/exiting fullscreen
 document.addEventListener('fullscreenchange', function () {
@@ -173,7 +182,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- SignalR connection setup and disconnect on page unload ---
     if (window.signalRConnection === undefined) {
         window.signalRConnection = new signalR.HubConnectionBuilder().withUrl("/radioHub").withAutomaticReconnect().build();
-        window.signalRConnection.start().catch(function (err) { });
+        window.signalRConnection.start().then(function () {
+            window.signalRConnection.invoke("Heartbeat").catch(function () { });
+        }).catch(function (err) { });
         // Heartbeat: send every 5 seconds
         window.signalRHeartbeatInterval = setInterval(function () {
             if (window.signalRConnection && window.signalRConnection.invoke) {
@@ -247,30 +258,6 @@ document.addEventListener('DOMContentLoaded', function () {
 // only from aria-valuenow, which this debounce gates.
 const _ariaDebounceTimers = {};
 
-// Frequency display renderer (outer version, used by outer updateFrequencyDisplay)
-function updateFrequencyDisplay(receiver, freqHz) {
-    const display = document.getElementById('freq' + receiver);
-    if (!display) {
-        return;
-    }
-    let selIdx = window.radioControl && window.radioControl._state ? window.radioControl._state.selectedIdx[receiver] : null;
-    let editing = window.radioControl && window.radioControl._state ? window.radioControl._state.editing[receiver] : false;
-    let localFreq = window.radioControl && window.radioControl._state ? window.radioControl._state.localFreq[receiver] : null;
-    let lastBackendFreq = window.radioControl && window.radioControl._state ? window.radioControl._state.lastBackendFreq[receiver] : null;
-    let freqToShow = (!editing || localFreq === null)
-        ? lastBackendFreq
-        : localFreq;
-    display.innerHTML = renderFrequencyDigits(freqToShow, selIdx);
-    if (freqToShow && freqToShow > 0) {
-        const mhz = String(parseFloat((freqToShow / 1e6).toFixed(6)));
-        clearTimeout(_ariaDebounceTimers[receiver]);
-        _ariaDebounceTimers[receiver] = setTimeout(() => {
-            display.setAttribute('aria-valuenow', mhz);
-            display.setAttribute('aria-label', `VFO ${receiver}: ${mhz} MHz`);
-            display.setAttribute('title', `VFO ${receiver}: ${mhz} MHz`);
-        }, 500);
-    }
-}
 
 function renderFrequencyDigits(freq, selIdx) {
     // Show dashes if no valid frequency yet
@@ -308,6 +295,36 @@ window.setBand = async function (receiver, band) {
     }
 };
 
+// Quick Memory Bank Store / Recall (Thomas OZ1JTE request). Global radio
+// function — the backend sends QI; (store) or QR; (recall). A recall changes
+// the radio's frequency/mode, which flows back to the UI via auto-info or the
+// FA/FB poll, so there's nothing to update here beyond an accessible status
+// announcement (Thomas is a screen-reader user).
+// Announce into the aria-live status span. Clearing first, then setting on the
+// next frame, forces a screen reader to re-read even when the message is
+// identical to last time — Recall sends the same text on every press as the user
+// steps through QMB slots, and without this they'd hear nothing after the first.
+function qmbAnnounce(status, message) {
+    if (!status) return;
+    status.textContent = '';
+    requestAnimationFrame(() => { status.textContent = message; });
+}
+async function qmbSend(action, announce) {
+    const status = document.getElementById('qmbStatus');
+    try {
+        const response = await fetch(`/api/cat/qmb/${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        qmbAnnounce(status, response.ok ? announce : 'QMB command failed');
+    } catch (error) {
+        qmbAnnounce(status, 'QMB command failed');
+    }
+}
+window.qmbStore  = function () { return qmbSend('store',  'Stored to Quick Memory Bank'); };
+window.qmbRecall = function () { return qmbSend('recall', 'Recalled from Quick Memory Bank'); };
+window.qmbVfo    = function () { return qmbSend('vfo',    'Returned to VFO mode'); };
+
 // Outer mode setter - called from Razor inline onchange on mode select
 window.setMode = async function (receiver, mode) {
     const modeToCatCode = {
@@ -327,7 +344,6 @@ window.setMode = async function (receiver, mode) {
 
 // Outer antenna setter - called from Razor inline onchange on antenna buttons
 window.setAntenna = async function (receiver, antenna) {
-    if (window.pausePolling) pausePolling();
     try {
         if (window.highlightButtons) highlightButtons(receiver, state.lastBand ? state.lastBand[receiver] : undefined, state.lastMode ? state.lastMode[receiver] : undefined, antenna);
         if (state.lastAntenna) state.lastAntenna[receiver] = antenna;
@@ -361,14 +377,45 @@ function modelMaxPower(model) {
 }
 window.modelMaxPower = modelMaxPower;
 
+// Server-rendered radio model. window._radioModel is assigned later inside
+// Index.cshtml's module block, so DOMContentLoaded in this file runs first
+// and must not rely on it alone (be48971 regression — FTdx10 slider stuck at 200 W).
+function getConfiguredRadioModel() {
+    return window._radioModel
+        || (window.state && window.state.radioModel)
+        || document.getElementById('vfoRow')?.dataset?.radioModel
+        || null;
+}
+window.getConfiguredRadioModel = getConfiguredRadioModel;
+
+// Rated TX output for the configured radio. Prefer the figure the server
+// rendered into #vfoRow: it comes from RadioCapabilities.MaxPowerWatts, which
+// is the same value CatController.SetPower validates against, so the slider
+// cannot offer a wattage the API will reject. modelMaxPower is the fallback for
+// pages that don't render the VFO row.
+function configuredMaxPower(fallback) {
+    const rendered = Number(document.getElementById('vfoRow')?.dataset?.maxPower);
+    if (Number.isFinite(rendered) && rendered > 0) return rendered;
+    const model = getConfiguredRadioModel();
+    if (model) return modelMaxPower(model);
+    return typeof fallback === "number" ? fallback : 200;
+}
+window.configuredMaxPower = configuredMaxPower;
+
+function syncRadioModel(model) {
+    if (!model) return;
+    window.state = window.state || {};
+    window.state.radioModel = model;
+    if (window.radioControl && window.radioControl._state) {
+        window.radioControl._state.radioModel = model;
+    }
+}
+
 // Outer power slider max updater
 function updatePowerSliderMax(maxPower) {
     const slider = document.getElementById('powerSlider');
     const labelMax = document.getElementById('powerMaxLabel');
-    const model = (window.state && window.state.radioModel) || null;
-    const actualMax = model
-        ? modelMaxPower(model)
-        : (typeof maxPower === "number" ? maxPower : 200);
+    const actualMax = configuredMaxPower(maxPower);
 
     if (slider) {
         slider.max = actualMax;
@@ -384,22 +431,39 @@ function updatePowerSliderMax(maxPower) {
     if (labelMax) labelMax.textContent = window.MeterFormatters.powerLabel(actualMax);
 }
 
+// True while the radio is transmitting and therefore no longer measuring
+// received signal. Read by updateSMeter() — see the comment there.
+let sMetersFrozenByTx = false;
+
 // TX state updater - updates TX button and meters
 function updateTxIndicators(isTransmitting) {
     if (window.radioControl && window.radioControl._state) {
         window.radioControl._state.isTransmitting = isTransmitting;
     }
+    // Grey the S-meters for the duration of the over. The radio latches SM0
+    // and SM1 at key-down and holds them until release (measured — see the
+    // .meters-tx-dim comment in Index.cshtml), so they are not readings.
+    sMetersFrozenByTx = !!isTransmitting;
+    document.getElementById('meterGaugesRow')
+        ?.classList.toggle('meters-tx-dim', sMetersFrozenByTx);
     if (window.ftdx101Meters) {
         window.ftdx101Meters.setTransmitting(isTransmitting);
     }
     if (!isTransmitting) {
-        // Force gauges to zero immediately when TX stops
+        // Force gauges to zero immediately when TX stops, without waiting for
+        // the next backend broadcast (~200 ms away at the default poll interval).
         if (window.meterPanel) {
             window.meterPanel.update('power', 0);
             window.meterPanel.update('swr', 0);
+            window.meterPanel.update('compression', 0);
+            window.meterPanel.update('alc', 0);
+            window.meterPanel.update('idd', 0);
         }
-        updateMeterDomLabel('PowerMeter', { skip: false, displayValue: { watts: 0, rawAvg: 0 } });
-        updateMeterDomLabel('SWRMeter',   { skip: false, displayValue: { swr: 1.0 } });
+        updateMeterDomLabel('PowerMeter',       { skip: false, displayValue: { watts: 0, rawAvg: 0 } });
+        updateMeterDomLabel('SWRMeter',         { skip: false, displayValue: { swr: 1.0 } });
+        updateMeterDomLabel('CompressionMeter', { skip: false, displayValue: { db: 0 } });
+        updateMeterDomLabel('ALCMeter',         { skip: false, displayValue: { percent: 0, alcVolts: 0, rawValue: 0 } });
+        updateMeterDomLabel('IDDMeter',         { skip: false, displayValue: { amps: 0 } });
     }
 }
 
@@ -420,11 +484,26 @@ function updateMeterDomLabel(property, result) {
             break;
         }
         case 'SWRMeter': {
+            const offScale = window.MeterFormatters.swrIsOffScale(dv.swr);
             const formatted = window.MeterFormatters.swr(dv.swr);
             const el = document.getElementById('swrMeterValue');
-            if (el) el.textContent = formatted;
+            if (el) {
+                el.textContent = formatted;
+                // The badge is the <div> the gauge builds around this span
+                // (gauge.js, gaugeTitle block). Its background is set inline
+                // there, so it has to be overridden inline here — a CSS class
+                // would lose to the inline style.
+                const badge = el.parentElement;
+                if (badge) {
+                    badge.style.background = offScale ? '#ffc107' : '#dc3545';
+                    badge.style.color      = offScale ? '#000000' : '#ffffff';
+                }
+            }
             const canvas = document.getElementById('swrMeterCanvas');
-            if (canvas) canvas.dataset.reading = formatted;
+            if (canvas) {
+                canvas.dataset.reading = window.MeterFormatters.swrAnnouncement(dv.swr);
+                canvas.dataset.offScale = offScale ? 'true' : 'false';
+            }
             break;
         }
         case 'CompressionMeter': {
@@ -583,15 +662,9 @@ async function checkRadioPowerStatus() {
 document.addEventListener('DOMContentLoaded', function() {
     checkRadioPowerStatus();
     checkTxStatus();
-    // Fetch radio status and update slider max / model-dependent UI
-    fetch('/api/cat/status')
-        .then(response => response.json())
-        .then(data => {
-            if (data && data.radioModel && window.state) {
-                window.state.radioModel = data.radioModel;
-                updatePowerSliderMax();
-            }
-        });
+    // Seed the power slider max from the server-rendered radio model.
+    syncRadioModel(getConfiguredRadioModel());
+    updatePowerSliderMax();
 
     // Update powerValue label live as slider moves (outer/global version).
     // NOTE: deliberately no longer initialises the label from slider.value
@@ -626,13 +699,68 @@ let txVfo = 0; // 0 = VFO A, 1 = VFO B (the TX VFO — only flips with split)
 // instead of activeVfo.
 let activeVfo = 0;
 
-// Apply the .vfo-inactive class to whichever VFO panel is NOT the active
-// (RX) one — but only on single-receiver radios (FTdx10, FT-710, FTDX3000).
-// CSS greys only that panel's .card-body (header stays normal so TX looks
-// enabled). Dual-receiver radios leave both panels active because each
-// VFO is its own physical receiver chain. The data-single-receiver
-// attribute on #vfoRow is rendered server-side from RadioCapabilities.cs.
-// See docs/decisions/0003-single-vs-dual-receiver-ui.md.
+// Sync TX PTT with the Remote Audio pop-out (same BroadcastChannel).
+const TX_SYNC_CHANNEL = 'ywc-remote-audio';
+let _txSyncChannel = null;
+function getTxSyncChannel() {
+    if (_txSyncChannel) return _txSyncChannel;
+    try {
+        if (typeof BroadcastChannel === 'undefined') return null;
+        _txSyncChannel = new BroadcastChannel(TX_SYNC_CHANNEL);
+        _txSyncChannel.onmessage = (ev) => {
+            const msg = ev.data;
+            if (!msg || typeof msg !== 'object') return;
+            if (msg.type === 'txState' && typeof msg.transmitting === 'boolean') {
+                if (!!msg.transmitting === isTransmitting) return;
+                applySharedTxState(msg.transmitting);
+                return;
+            }
+            if (msg.type === 'requestTxState')
+                publishTxState();
+        };
+    } catch {
+        _txSyncChannel = null;
+    }
+    return _txSyncChannel;
+}
+function effectiveTxVfo() {
+    const vfoRow = document.getElementById('vfoRow');
+    const isSingleReceiver = vfoRow?.dataset.singleReceiver === 'true';
+    if (isSingleReceiver) {
+        return (splitMode > 0)
+            ? (activeVfo === 0 ? 1 : 0)
+            : activeVfo;
+    }
+    return txVfo;
+}
+function publishTxState() {
+    try {
+        getTxSyncChannel()?.postMessage({
+            type: 'txState',
+            transmitting: isTransmitting,
+            txVfo: effectiveTxVfo()
+        });
+    } catch { /* ignore */ }
+}
+function applySharedTxState(transmitting, _sharedTxVfo) {
+    // Index owns VFO selection via SignalR; only PTT on/off syncs from pop-out.
+    isTransmitting = !!transmitting;
+    updateTxButton();
+    updateTxIndicators(isTransmitting);
+    if (typeof window.handleTxStateForTimeout === 'function')
+        window.handleTxStateForTimeout(isTransmitting);
+}
+window.publishTxState = publishTxState;
+window.applySharedTxState = applySharedTxState;
+document.addEventListener('DOMContentLoaded', () => { getTxSyncChannel(); });
+
+// Dual-receiver (FTdx101): highlight which band is active — the MAIN/SUB
+// band the main tuning knob controls — with .vfo-active, driven by
+// activeVfo (VS: 0 = MAIN/A, 1 = SUB/B). The radio auto-broadcasts VS when
+// you press MAIN⇄SUB-select on the front panel, so this follows live.
+// Single-receiver radios do not grey or lock either panel; both stay fully
+// editable. Clears any leftover .vfo-inactive / .vfo-tx-editable from
+// earlier builds. See docs/decisions/0003-single-vs-dual-receiver-ui.md.
 function applyVfoActiveStyling() {
     const vfoRow = document.getElementById('vfoRow');
     if (!vfoRow) return;
@@ -640,79 +768,22 @@ function applyVfoActiveStyling() {
     const bCol = document.getElementById('vfoBCol');
     if (!aCol || !bCol) return;
 
-    // Spectrum panels live OUTSIDE the VFO columns in their own
-    // #spectrumContainer section — so they need the class applied
-    // separately to be greyed when their corresponding VFO is inactive.
-    // Note these can be absent (only one SDR configured, or none).
-    const aSpec = document.getElementById('spectrumContainerA');
-    const bSpec = document.getElementById('spectrumContainerB');
+    aCol.classList.remove('vfo-inactive', 'vfo-tx-editable');
+    bCol.classList.remove('vfo-inactive', 'vfo-tx-editable');
+    document.getElementById('spectrumContainerA')?.classList.remove('vfo-inactive');
+    document.getElementById('spectrumContainerB')?.classList.remove('vfo-inactive');
 
     const singleReceiver = vfoRow.dataset.singleReceiver === 'true';
-    if (!singleReceiver) {
-        // Dual-receiver (FTdx101): both panels are real receivers, so neither
-        // is greyed. But still show WHICH band is active — the MAIN/SUB band
-        // the main tuning knob controls — with a subtle highlight, driven by
-        // activeVfo (VS: 0 = MAIN/A, 1 = SUB/B). The radio auto-broadcasts VS
-        // when you press MAIN⇄SUB-select on the front panel, so this follows
-        // live. (Restores an indicator dropped in the ADR-0003 rework — Pierre
-        // VK6IS #FTdx101.)
-        aCol.classList.remove('vfo-inactive');
-        bCol.classList.remove('vfo-inactive');
-        aSpec?.classList.remove('vfo-inactive');
-        bSpec?.classList.remove('vfo-inactive');
-        aCol.classList.toggle('vfo-active', activeVfo === 0);
-        bCol.classList.toggle('vfo-active', activeVfo === 1);
+    if (singleReceiver) {
+        // No active-band amber ring on single-receiver — RX/TX selectors
+        // already show which VFO is receiving / transmitting.
+        aCol.classList.remove('vfo-active');
+        bCol.classList.remove('vfo-active');
         return;
     }
 
-    // Single-receiver uses greying (below), not the active highlight — clear
-    // any stale highlight in case the RadioModel was switched mid-session.
-    aCol.classList.remove('vfo-active');
-    bCol.classList.remove('vfo-active');
-
-    // Single-receiver: white = active VFO (the one currently RECEIVING),
-    // grey = the other one. This is true in BOTH normal and split mode:
-    //
-    //   Normal mode (R2): white = active VFO (RX), grey = the other.
-    //                     Pressing A/B on the radio swaps which is RX.
-    //
-    //   Split mode  (R7): white = active VFO (RX), grey = TX VFO.
-    //                     Radio receives on active VFO, transmits on the
-    //                     opposite VFO.
-    //
-    // In both cases, "inactive" (= grey) = whichever VFO is NOT the active
-    // RX one. We previously drove split-mode greying from txVfo (FT
-    // command) because the spec implied FT tracks the TX VFO — but the
-    // FTdx10 doesn't reliably move FT when split engages while VFO-B is
-    // the active VFO (Jacek SP3L 2026-06-21 #34 R7 fail). Using activeVfo
-    // (VS command) for both cases is deterministic and matches what the
-    // radio is actually doing.
-    //
-    // The TX button and SPLIT badge land on the inactive panel in split
-    // mode (R8) because updateTxButton / updateSplitButton derive the TX
-    // position as "opposite of active" on single-receiver radios. The
-    // card header is not greyed, so TX stays full-colour and clickable.
-    //
-    // The spectrum panel is NOT greyed — on single-receiver radios the
-    // single spectrum always shows the live receive signal. The second
-    // spectrum panel is hidden permanently by updateContainerVisibility().
-    const splitOn = splitMode > 0;
-    const inactiveCol = (activeVfo === 0) ? bCol : aCol;
-    const activeCol   = (activeVfo === 0) ? aCol : bCol;
-
-    activeCol.classList.remove('vfo-inactive', 'vfo-tx-editable');
-    inactiveCol.classList.add('vfo-inactive');
-    // R10/R11: in split mode the inactive panel IS the TX VFO — operators
-    // must still be able to set the TX frequency from YWC without
-    // un-splitting. .vfo-tx-editable re-enables the frequency field while
-    // leaving every other card-body control read-only.
-    inactiveCol.classList.toggle('vfo-tx-editable', splitOn);
-
-    // Make sure neither spectrum carries a stale inactive class from a
-    // previous render — in case the user switched RadioModel from
-    // dual-receiver to single-receiver mid-session.
-    aSpec?.classList.remove('vfo-inactive');
-    bSpec?.classList.remove('vfo-inactive');
+    aCol.classList.toggle('vfo-active', activeVfo === 0);
+    bCol.classList.toggle('vfo-active', activeVfo === 1);
 }
 
 // Apply the styling at page-load time too, before any SignalR update has
@@ -752,6 +823,7 @@ async function toggleTx() {
             isTransmitting = data.transmitting;
             updateTxButton();
             updateTxIndicators(isTransmitting);
+            publishTxState();
         } else {
 
         }
@@ -857,21 +929,24 @@ function updateSplitButton() {
 }
 
 // Independent RX / TX VFO selectors (single-receiver radios, #78). RX follows
-// activeVfo (VS / FR), TX follows txVfo (FT); split is derived (TX ≠ RX). The
-// selected RX button is filled grey; the selected TX button is red when split
-// is on and filled grey when TX and RX are the same VFO.
+// activeVfo (VS / FR). TX must use effectiveTxVfo() — the same rule as the
+// Index TX button — because on FTdx10 / FT-710 the FT register often stays
+// at 0 when the operating VFO moves (front-panel A/B or RX selector), so
+// raw txVfo would leave TX stuck on A and falsely light split-red.
+// Colours match Yaesu front-panel convention: green = receiving, red = transmitting.
 function updateRxTxSelectors() {
     const rxA = document.getElementById('rxVfoA');
     if (!rxA) return; // group only rendered on single-receiver radios
     const pick = (el, on, onClass) => {
-        el.classList.remove('btn-secondary', 'btn-danger', 'btn-outline-secondary');
+        if (!el) return;
+        el.classList.remove('btn-secondary', 'btn-success', 'btn-danger', 'btn-outline-secondary');
         el.classList.add(on ? onClass : 'btn-outline-secondary');
     };
-    pick(rxA, activeVfo === 0, 'btn-secondary');
-    pick(document.getElementById('rxVfoB'), activeVfo === 1, 'btn-secondary');
-    const split = txVfo !== activeVfo;
-    pick(document.getElementById('txVfoA'), txVfo === 0, split ? 'btn-danger' : 'btn-secondary');
-    pick(document.getElementById('txVfoB'), txVfo === 1, split ? 'btn-danger' : 'btn-secondary');
+    pick(rxA, activeVfo === 0, 'btn-success');
+    pick(document.getElementById('rxVfoB'), activeVfo === 1, 'btn-success');
+    const effTx = effectiveTxVfo();
+    pick(document.getElementById('txVfoA'), effTx === 0, 'btn-danger');
+    pick(document.getElementById('txVfoB'), effTx === 1, 'btn-danger');
 }
 
 async function setRxVfo(vfo) {
@@ -880,10 +955,12 @@ async function setRxVfo(vfo) {
         if (r.ok) {
             const d = await r.json();
             activeVfo = d.rxVfo;
+            if (typeof d.txVfo === 'number') txVfo = d.txVfo;
             if (typeof d.splitMode === 'number') splitMode = d.splitMode;
             updateRxTxSelectors();
             updateSplitButton();
             applyVfoActiveStyling();
+            updateTxButton();
         }
     } catch {}
 }
@@ -1005,6 +1082,60 @@ connection.on("RadioInfoStatus", function (message) {
 });
 
 
+// An external program (WSJT-X, a logger, anything on rigctld) asked for a
+// frequency this radio cannot tune, so the request was refused and the radio
+// stayed where it was.
+//
+// This explains the refusal; it does not prevent the other program from
+// complaining. WSJT-X in particular decides it failed from the rigctld reply
+// and never sees this page, so its own "Rig control error" still appears —
+// the whole point of this banner is that the operator now knows why.
+//
+// Deliberately a banner, not a modal: WSJT-X re-sends while it sits on the
+// offending band, and a dialog needing dismissal each time would be worse than
+// silence — especially with a screen reader. role="alert" (not "status" like
+// the overlay above) because this reports a request that did not happen.
+connection.on("FrequencyRejected", function (info) {
+    if (!info) return;
+    const mhz = typeof info.frequencyMhz === 'number'
+        ? info.frequencyMhz.toFixed(3)
+        : String(info.frequencyHz || '');
+    const who = info.source ? ` (requested by ${info.source})` : '';
+
+    let el = document.getElementById('frequencyRejectedBanner');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'frequencyRejectedBanner';
+        el.setAttribute('role', 'alert');
+        el.style.cssText = [
+            'position: fixed',
+            'top: 1rem',
+            'left: 50%',
+            'transform: translateX(-50%)',
+            'z-index: 9999',
+            'background: rgba(120, 78, 8, 0.96)',
+            'color: #fff',
+            'padding: 0.75rem 1.25rem',
+            'border-radius: 0.5rem',
+            'border: 1px solid #ffc107',
+            'font-size: 0.95rem',
+            'max-width: 90vw',
+            'text-align: center',
+            'box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35)',
+            'pointer-events: none'
+        ].join(';');
+        document.body.appendChild(el);
+    }
+    el.textContent =
+        `Requested frequency not available: ${mhz} MHz is outside this radio's range${who}. ` +
+        `The radio has stayed on its current frequency.`;
+    el.style.display = '';
+
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, 8000);
+});
+
+
 
 
 function sMeterLabel(val) {
@@ -1103,6 +1234,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeA', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('A', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('A', update.value);
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastMode.A = update.value;
     }
     if (update.property === "ModeB") {
         updateModeSelect('B', update.value);
@@ -1116,6 +1248,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeB', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('B', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('B', update.value);
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastMode.B = update.value;
     }
 
     // --- ANTENNA CHANGE ---
@@ -1127,10 +1260,12 @@ connection.on("RadioStateUpdate", function (update) {
     if (update.property === "AntennaA") {
         const sel = document.getElementById('antennaSelectA');
         if (sel) sel.value = update.value;
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastAntenna.A = update.value;
     }
     if (update.property === "AntennaB") {
         const sel = document.getElementById('antennaSelectB');
         if (sel) sel.value = update.value;
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastAntenna.B = update.value;
     }
 
     // --- PROC ---
@@ -1155,8 +1290,23 @@ connection.on("RadioStateUpdate", function (update) {
     // frequency display fresh independently, so losing this write isn't fatal.
     if (update.property === "FrequencyA") {
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('freqHzA', update.value);
-        try { state.lastBackendFreq.A = update.value; } catch (_) { /* state lives in IIFE scope only */ }
-        try { updateFrequencyDisplay('A', update.value); } catch (e) { console.error('updateFrequencyDisplay A error:', e); }
+        if (window.radioControl && window.radioControl._state) {
+            window.radioControl._state.lastBackendFreq.A = update.value;
+        }
+        // BandA only broadcasts when the band *changes*, so an operator who is
+        // already out of band at page load would never get the red marker from
+        // updateBandButton alone. Re-apply it whenever the frequency moves.
+        lastVfoHz.A = update.value;
+        try { applyBandOutOfBand('A'); } catch (e) { console.error('applyBandOutOfBand A error:', e); }
+        try { window.updateFrequencyDisplay('A', update.value); } catch (e) { console.error('updateFrequencyDisplay A error:', e); }
+        // Clear editing mode once the radio echoes back our sent frequency.
+        if (window.radioControl && window.radioControl._state) {
+            const s = window.radioControl._state;
+            if (s.editing.A && s.lastSentFreq.A !== null && s.localFreq.A === null
+                && update.value === s.lastSentFreq.A) {
+                s.editing.A = false;
+            }
+        }
         try { window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'A', hz: update.value } })); }
         catch (e) { console.error('radioFrequencyUpdate dispatch error:', e); }
         try { if (window.syncSegmentSelectToFrequency) window.syncSegmentSelectToFrequency('A', update.value); }
@@ -1164,8 +1314,20 @@ connection.on("RadioStateUpdate", function (update) {
     }
     if (update.property === "FrequencyB") {
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('freqHzB', update.value);
-        try { state.lastBackendFreq.B = update.value; } catch (_) { /* state lives in IIFE scope only */ }
-        try { updateFrequencyDisplay('B', update.value); } catch (e) { console.error('updateFrequencyDisplay B error:', e); }
+        if (window.radioControl && window.radioControl._state) {
+            window.radioControl._state.lastBackendFreq.B = update.value;
+        }
+        lastVfoHz.B = update.value;
+        try { applyBandOutOfBand('B'); } catch (e) { console.error('applyBandOutOfBand B error:', e); }
+        try { window.updateFrequencyDisplay('B', update.value); } catch (e) { console.error('updateFrequencyDisplay B error:', e); }
+        // Clear editing mode once the radio echoes back our sent frequency.
+        if (window.radioControl && window.radioControl._state) {
+            const s = window.radioControl._state;
+            if (s.editing.B && s.lastSentFreq.B !== null && s.localFreq.B === null
+                && update.value === s.lastSentFreq.B) {
+                s.editing.B = false;
+            }
+        }
         try { window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'B', hz: update.value } })); }
         catch (e) { console.error('radioFrequencyUpdate dispatch error:', e); }
         try { if (window.syncSegmentSelectToFrequency) window.syncSegmentSelectToFrequency('B', update.value); }
@@ -1178,12 +1340,14 @@ connection.on("RadioStateUpdate", function (update) {
         updateBandButton('A', update.value);
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('bandA', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayBand('A', update.value);
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastBand.A = update.value;
     }
     if (update.property === "BandB") {
         // ...removed debug logging...
         updateBandButton('B', update.value);
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('bandB', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayBand('B', update.value);
+        if (window.radioControl && window.radioControl._state) window.radioControl._state.lastBand.B = update.value;
     }
 
     // --- POWER CHANGE ---
@@ -1236,6 +1400,7 @@ connection.on("RadioStateUpdate", function (update) {
         }
         updateTxButton();
         updateTxIndicators(update.value);
+        publishTxState();
         if (typeof window.handleTxStateForTimeout === 'function') {
             window.handleTxStateForTimeout(!!update.value);
         }
@@ -1246,6 +1411,7 @@ connection.on("RadioStateUpdate", function (update) {
         updateTxButton();
         applyVfoActiveStyling();
         updateRxTxSelectors();
+        publishTxState();
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('txVfo', update.value);
     }
     if (update.property === "ActiveVfo") {
@@ -1255,11 +1421,33 @@ connection.on("RadioStateUpdate", function (update) {
         // In normal mode on a single-receiver radio, the TX button position
         // follows activeVfo (the TX VFO IS the active VFO; FT doesn't move).
         updateTxButton();
+        publishTxState();
         // R8 (Jacek SP3L #34, 2026-06-21): in split mode the TX VFO is the
         // opposite of active, so the SPLIT TX badge and the red border have
         // to switch panels whenever the active VFO changes.
         updateSplitButton();
+        // The radio's own scope display follows the operating band, so point
+        // the CAT scope controls at the same band. Absent on models without
+        // the SS command, and a no-op on single-receiver ones.
+        window.notifyRadioScopeControls
+            ? window.notifyRadioScopeControls(c => c.setActiveBand(update.value))
+            : window.radioScopeControl?.setActiveBand(update.value);
     }
+
+    // --- RADIO SCOPE CHANGED AT THE FRONT PANEL ---
+    // The radio announces SS changes the operator makes on the rig itself, so
+    // the scope panel can follow a hand on the front panel the same way it
+    // already follows its own writes. Transient: nothing is stored server-side
+    // (see RadioStateService.BroadcastTransient).
+    if (update.property === "ScopeSetting") {
+        window.notifyRadioScopeControls
+            ? window.notifyRadioScopeControls(c => c.applyRemote(update.value))
+            : window.radioScopeControl?.applyRemote(update.value);
+    }
+
+    // The Radio Display hotspot overlay keeps its own small copy of the VFO
+    // and front-end state so it can label and cycle what the TFT is showing.
+    window.radioDisplayHotspots?.onRadioState(update);
 
     // --- SPLIT MODE ---
     if (update.property === "SplitMode") {
@@ -1273,10 +1461,20 @@ connection.on("RadioStateUpdate", function (update) {
         // on (becomes "opposite of activeVfo") but FT often doesn't move on
         // FTdx10 to trigger the TxVfo handler -- so do it here too.
         updateTxButton();
+        updateRxTxSelectors();
+        publishTxState();
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('split', update.value);
     }
 
     // --- METER UPDATES ---
+    if (update.property === "SMeterA") {
+        try { window.updateSMeter?.('A', update.value); }
+        catch (e) { console.error('updateSMeter A error:', e); }
+    }
+    if (update.property === "SMeterB") {
+        try { window.updateSMeter?.('B', update.value); }
+        catch (e) { console.error('updateSMeter B error:', e); }
+    }
     if (window.ftdx101Meters) {
         // PowerMeter is sent as { value, isTransmitting } — unpack it and sync TX state.
         let meterValue = update.value;
@@ -1606,14 +1804,20 @@ connection.on("RadioStateUpdate", function (update) {
     if (update.property === "CwPitch") {
         const s = document.getElementById('cwPitchSlider'); const l = document.getElementById('cwPitchHz');
         if (s) s.value = update.value;
-        if (l) l.textContent = (300 + parseInt(update.value) * 10) + ' Hz';
+        // The label already supplies the unit, so write the number alone -
+        // appending ' Hz' here rendered as "Pitch: 700 Hz Hz" the moment the
+        // radio's own CwPitch arrived over SignalR.
+        if (l) l.textContent = 300 + parseInt(update.value) * 10;
     }
     if (update.property === "CwSpeed") {
         const s = document.getElementById('cwSpeedSlider'); const l = document.getElementById('cwSpeedValue');
         if (s) s.value = update.value; if (l) l.textContent = update.value;
+        // The CW Send panel carries the same speed control; keep it honest.
+        window.cwSendPanel?.setSpeed?.(update.value);
     }
     if (update.property === "CwBreakIn") {
         const el = document.getElementById('cwBreakInSelect'); if (el) el.value = update.value;
+        window.cwSendPanel?.setBreakIn?.(update.value);
     }
     if (update.property === "CwBreakInDelay") {
         const s = document.getElementById('cwDelaySlider'); const l = document.getElementById('cwDelayValue');
@@ -1765,35 +1969,69 @@ window.radioControl = {
     }
 };
 
-// Fetch and apply band button state from the backend on page load
-async function updateBandButtonsFromBackend() {
-    try {
-        const response = await fetch('/api/cat/status');
-        if (!response.ok) return;
-        const data = await response.json();
-        // Update global radioModel if present
-        if (data.radioModel) {
-            state.radioModel = data.radioModel;
-            // Always call updatePowerSliderMax to use latest radioModel
-            updatePowerSliderMax();
+
+
+// Out-of-band marker state.
+//
+// The `state` object further down the file is trapped inside an IIFE and is
+// not visible here — see the note above the FrequencyA handler. The band
+// buttons need both values together: the band name says *whether* we are out
+// of band, and the frequency says *which* band button to mark.
+const lastVfoHz   = { A: 0, B: 0 };
+const lastVfoBand = { A: null, B: null };
+
+// Paint the out-of-band marker on the band grid.
+//
+// The server reports "Unknown" for a frequency outside every allocation in the
+// operator's own IARU region, so no band button is selected. On its own that
+// just looks like nothing is happening. Here we mark the nearest band in the
+// operator's region instead: a UK operator on 3.9 MHz gets a red 80m button,
+// which says "you are at 80m, but not where you are allowed to be" — and so
+// does one on 3.4 MHz, having drifted off the bottom.
+function applyBandOutOfBand(receiver) {
+    const inputs = document.querySelectorAll(`input[name="band-${receiver}"]`);
+
+    // A checked button means we are in band, whatever lastVfoBand still says.
+    // Clicking a band button checks it immediately and tunes; the frequency
+    // update then lands before the BandA broadcast that clears lastVfoBand, so
+    // without this the button flashes red on the way in.
+    const anyChecked = Array.from(inputs).some(radio => radio.checked);
+
+    const band = lastVfoBand[receiver];
+    const isOutOfBand = !anyChecked && !!band && band.toLowerCase() === 'unknown';
+    const oobBand = (isOutOfBand && typeof window.nearestBandForHz === 'function')
+        ? window.nearestBandForHz(lastVfoHz[receiver])
+        : null;
+
+    inputs.forEach(radio => {
+        const label = radio.closest('.band-radio-label');
+        if (!label) return;
+
+        const marked = !!oobBand && radio.value.toLowerCase() === oobBand.toLowerCase();
+        label.classList.toggle('band-oob', marked);
+
+        // Red is no use to an operator using a screen reader, so say it in the
+        // tooltip too. Stash the original on the way in and release it on the
+        // way out, rather than caching it forever — a11y-labels.js rewrites
+        // these titles from labels.json whenever the window regains focus.
+        if (marked) {
+            if (!('titleOriginal' in label.dataset)) {
+                label.dataset.titleOriginal = label.getAttribute('title') || '';
+            }
+            label.setAttribute('title', `${label.dataset.titleOriginal} — out of band for your region`);
+        } else if ('titleOriginal' in label.dataset) {
+            label.setAttribute('title', label.dataset.titleOriginal);
+            delete label.dataset.titleOriginal;
         }
-        if (data.vfoA && data.vfoA.band) {
-            document.querySelectorAll('input[name="band-A"]').forEach(radio => {
-                radio.checked = (radio.value.toLowerCase() === data.vfoA.band.toLowerCase());
-            });
-            syncBandAriaChecked('A');
-        }
-        if (data.vfoB && data.vfoB.band) {
-            document.querySelectorAll('input[name="band-B"]').forEach(radio => {
-                radio.checked = (radio.value.toLowerCase() === data.vfoB.band.toLowerCase());
-            });
-            syncBandAriaChecked('B');
-        }
-    } catch (error) {
-        // ...removed debug logging...
-    }
+    });
 }
 
+// a11y-labels.js reapplies titles from labels.json on every window focus,
+// wiping the "out of band" suffix. Index.cshtml calls this once that has run.
+window.refreshBandOutOfBand = function () {
+    applyBandOutOfBand('A');
+    applyBandOutOfBand('B');
+};
 
 // Update band button selection for a specific receiver (called via SignalR)
 function updateBandButton(receiver, band) {
@@ -1802,6 +2040,7 @@ function updateBandButton(receiver, band) {
         // ...removed debug logging...
         return;
     }
+    lastVfoBand[receiver] = band;
     const bandLower = band.toLowerCase();
     const inputs = document.querySelectorAll(`input[name="band-${receiver}"]`);
     // ...removed debug logging...
@@ -1817,6 +2056,7 @@ function updateBandButton(receiver, band) {
     });
 
     if (typeof syncBandAriaChecked === 'function') syncBandAriaChecked(receiver);
+    applyBandOutOfBand(receiver);
 
     if (!foundMatch) {
         // ...removed debug logging...
@@ -1838,7 +2078,6 @@ function syncBandAriaChecked(receiver) {
 // Outer DOMContentLoaded - initial UI wiring
 window.addEventListener('DOMContentLoaded', () => {
     pollInitStatus();
-        updateBandButtonsFromBackend();
 
     // VFO-B show/hide toggle — click handler is in Index.cshtml (applyVisibility).
     // Only set the aria-label here; do not add a second click listener.
@@ -2299,8 +2538,6 @@ document.addEventListener('DOMContentLoaded', function() {
         lastPower: { A: 100, B: 100 },
         maxPower: 200,
         radioModel: 'FTdx101MP',
-        pollingInterval: null,
-        operationInProgress: false,
         isTransmitting: false  // Track TX state for meter display
     };
 
@@ -2343,6 +2580,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 300);
         }
     }
+    window.updateFrequencyDisplay = updateFrequencyDisplay;
 
     // Update band, mode, and antenna radio/toggle buttons to reflect current state.
     // NOTE: The Razor page renders mode buttons as <input type="radio" name="modeA" value="USB">
@@ -2364,24 +2602,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll(`input[name="antenna${receiver}"]`).forEach(btn => {
             btn.checked = (btn.value === antenna);
         });
-    }
-
-    // Update ONLY mode and antenna selectors (not bands) - used by polling to avoid overwriting user's band selection
-    function updateModeAndAntennaButtons(receiver, mode, antenna) {
-        // Mode dropdown
-        const modeSelect = document.getElementById(`modeSelect${receiver}`);
-        if (modeSelect && mode) {
-            modeSelect.value = mode;
-        }
-
-        // Antenna is a <select> (#antennaSelectA / #antennaSelectB), not a
-        // radio-button group — earlier code queried input[name="antennaA"]
-        // which never matched anything, so polling-based antenna updates
-        // were silently broken.
-        const antennaSelect = document.getElementById(`antennaSelect${receiver}`);
-        if (antennaSelect && antenna) {
-            antennaSelect.value = antenna;
-        }
     }
 
     // Update roofing filter dropdown
@@ -2682,7 +2902,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function setBand(receiver, band) {
-        const didPause = pausePolling();
         try {
             highlightButtons(receiver, band, state.lastMode[receiver], state.lastAntenna[receiver]);
             state.lastBand[receiver] = band;
@@ -2692,10 +2911,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({ band })
             });
         } catch (error) {
-        } finally {
-            if (didPause) {
-                resumePolling();
-            }
         }
     }
 
@@ -2712,7 +2927,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function setAntenna(receiver, antenna) {
-        const didPause = pausePolling();
         try {
             highlightButtons(receiver, state.lastBand[receiver], state.lastMode[receiver], antenna);
             state.lastAntenna[receiver] = antenna;
@@ -2722,10 +2936,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({ antenna })
             });
         } catch (error) {
-        } finally {
-            if (didPause) {
-                resumePolling();
-            }
         }
     }
 
@@ -2854,8 +3064,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function setRoofingFilter(receiver, filter) {
-        const didPause = pausePolling();
-
         try {
             const response = await fetch(`/api/cat/roofingfilter/${receiver.toLowerCase()}`, {
                 method: 'POST',
@@ -2881,157 +3089,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             showMessageBox('Error setting roofing filter. Check console for details.', 'Error');
-        } finally {
-            if (didPause) {
-                resumePolling();
-            }
-        }
-    }
-
-    function pausePolling() {
-        if (state.pollingInterval && !state.operationInProgress) {
-            state.operationInProgress = true;
-            return true;
-        }
-        return false;
-    }
-
-    function resumePolling() {
-        if (state.operationInProgress) {
-            state.operationInProgress = false;
-            setTimeout(fetchRadioStatus, 500);
-        }
-    }
-
-    // Full status poll - updates frequencies, S-meter, band/mode/antenna buttons, and power
-    async function fetchRadioStatus() {
-        if (state.operationInProgress) {
-            return;
-        }
-        try {
-            const response = await fetch('/api/cat/status');
-            if (!response.ok) {
-                return;
-            }
-            const data = await response.json();
-
-            if (data.radioModel !== undefined) {
-                state.radioModel = data.radioModel;
-            }
-            // Always call updatePowerSliderMax to use latest radioModel
-            if (state.radioModel) {
-                const model = state.radioModel.toLowerCase();
-                if (model === "ftdx101d") {
-                    state.maxPower = 100;
-                } else if (model === "ftdx101mp") {
-                    state.maxPower = 200;
-                } else {
-                    const maxPower = (data.maxPower !== undefined) ? data.maxPower : 200;
-                    state.maxPower = maxPower;
-                }
-            } else {
-                const maxPower = (data.maxPower !== undefined) ? data.maxPower : 200;
-                state.maxPower = maxPower;
-            }
-            updatePowerSliderMax();
-
-            state.lastMode.A = data.vfoA.mode;
-            state.lastMode.B = data.vfoB.mode;
-            state.lastAntenna.A = data.vfoA.antenna;
-            state.lastAntenna.B = data.vfoB.antenna;
-
-            // Show set power value (not meter reading) when not transmitting
-            let powerValue = 100;
-            if (data.vfoA && data.vfoA.power !== undefined) {
-                powerValue = data.vfoA.power;
-                state.lastPower.A = data.vfoA.power;
-            } else if (state.lastPower && typeof state.lastPower === 'object' && state.lastPower.A !== undefined) {
-                powerValue = state.lastPower.A;
-            }
-            updatePowerSlider(null, powerValue);
-            // TX meter (updatePowerMeter) will use RM5 during transmit only
-
-            // Stop showing local frequency once backend confirms our sent value.
-            // IMPORTANT: do NOT clear state.selectedIdx here. The user's
-            // digit selection should survive a successful step so the next
-            // ArrowUp / ▲ press acts on the same digit -- accessibility
-            // users press these in rapid sequence and re-selecting every
-            // time would be unusable. Selection is cleared explicitly when
-            // the user clicks outside the display (see the document.click
-            // handler inside initializeDigitInteraction).
-            if (state.editing.A && state.lastSentFreq.A !== null && state.localFreq.A === null && data.vfoA.frequency === state.lastSentFreq.A) {
-                state.editing.A = false;
-            }
-            if (state.editing.B && state.lastSentFreq.B !== null && state.localFreq.B === null && data.vfoB.frequency === state.lastSentFreq.B) {
-                state.editing.B = false;
-            }
-
-            if (!state.editing.A) {
-                updateFrequencyDisplay('A', data.vfoA.frequency);
-                if (data.vfoA.frequency !== state.lastBackendFreq.A) {
-                    state.lastBackendFreq.A = data.vfoA.frequency;
-                    window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'A', hz: data.vfoA.frequency } }));
-                }
-            } else updateFrequencyDisplay('A', state.localFreq.A);
-
-            if (!state.editing.B) {
-                updateFrequencyDisplay('B', data.vfoB.frequency);
-                if (data.vfoB.frequency !== state.lastBackendFreq.B) {
-                    state.lastBackendFreq.B = data.vfoB.frequency;
-                    window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'B', hz: data.vfoB.frequency } }));
-                }
-            } else updateFrequencyDisplay('B', state.localFreq.B);
-
-            updateSMeter('A', data.vfoA.sMeter);
-            updateSMeter('B', data.vfoB.sMeter);
-
-            if (window.ftdx101Meters) {
-                const metersFromState = {
-                    PowerMeter:       data.powerMeter,
-                    SWRMeter:         data.swrMeter,
-                    CompressionMeter: data.compressionMeter,
-                    ALCMeter:         data.alcMeter,
-                    IDDMeter:         data.iddMeter,
-                    VDDMeter:         data.vddMeter,
-                    // Temperature intentionally omitted — the persisted value in radio_state.json
-                    // can be stale (e.g. from a hot previous session). Live SignalR updates from
-                    // MeterPollingService arrive within ~100ms and provide the first real reading.
-                };
-                for (const [prop, value] of Object.entries(metersFromState)) {
-                    if (value !== undefined) {
-                        const result = window.ftdx101Meters.handleMeterUpdate(prop, value);
-                        updateMeterDomLabel(prop, result);
-                    }
-                }
-            }
-
-            // Update band buttons from polling (fixes WSJT-X and radio band changes)
-            if (data.vfoA.band) {
-                updateBandButton('A', data.vfoA.band);
-                state.lastBand.A = data.vfoA.band;
-            }
-            if (data.vfoB.band) {
-                updateBandButton('B', data.vfoB.band);
-                state.lastBand.B = data.vfoB.band;
-            }
-
-            // Update mode and antenna buttons from polling
-            updateModeAndAntennaButtons('A', data.vfoA.mode, data.vfoA.antenna);
-            updateModeAndAntennaButtons('B', data.vfoB.mode, data.vfoB.antenna);
-
-            // Update roofing filter dropdowns
-            if (data.vfoA.roofingFilter) {
-                updateRoofingFilterSelect('A', data.vfoA.roofingFilter);
-            }
-            if (data.vfoB.roofingFilter) {
-                updateRoofingFilterSelect('B', data.vfoB.roofingFilter);
-            }
-
-            // Update MIC Gain / Data Out Gain label based on current mode (VFO A is main)
-            updateMicGainLabel(data.vfoA.mode);
-
-
-        } catch (error) {
         }
     }
 
@@ -3078,8 +3135,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function updatePowerSliderMax(maxPower) {
         const slider = document.getElementById('powerSlider');
         const labelMax = document.getElementById('powerMaxLabel');
-        const actualMax = state.radioModel
-            ? window.modelMaxPower(state.radioModel)
+        const actualMax = window.configuredMaxPower
+            ? window.configuredMaxPower(maxPower)
             : (typeof maxPower === "number" ? maxPower : 200);
 
         if (slider) {
@@ -3102,6 +3159,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // window.meterPanel has no 'smeterB' gauge (canvas doesn't exist —
         // MeterPanel._createGauges skipped it) and sMeterHistoryB.push() is
         // a no-op (canvas doesn't exist).
+        // The radio stops measuring received signal at key-down: it latches
+        // SM0/SM1 and holds them for the whole over, then resumes within
+        // ~200 ms of release (measured — see the .meters-tx-dim comment in
+        // Index.cshtml). So the value arriving here during transmit is a
+        // snapshot of the instant you keyed, not a reading, and until now it
+        // was drawn as though it were live.
+        //
+        // Show zero instead. Safe only because updateTxIndicators() greys the
+        // gauges at the same time: a zeroed needle on its own would claim "no
+        // signal", but greyed-and-zero reads as "not measuring".
+        //
+        // Deliberately placed before everything below so the gauge, the S-unit
+        // label, the raw readout and the 30-second history strip all agree.
+        // In particular the strip now records a floor across each over rather
+        // than a flat line at the frozen value, which was the same untruth
+        // drawn sideways.
+        if (sMetersFrozenByTx) value = 0;
+
         const gaugeKey   = receiver === 'B' ? 'smeterB' : 'smeter';
         const history     = receiver === 'B' ? window.sMeterHistoryB : window.sMeterHistory;
         const canvasId    = receiver === 'B' ? 'sMeterCanvasB' : 'sMeterCanvas';
@@ -3134,6 +3209,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const sLabel = document.getElementById(labelId);
         if (sLabel) sLabel.textContent = sUnit;
     }
+    window.updateSMeter = updateSMeter;
 
     // Update MIC bar meter (0-255 raw value)
     function updateMICMeter(value) {
@@ -3160,8 +3236,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeDigitInteraction('A');
     initializeDigitInteraction('B');
     const s = document.getElementById('powerSlider'); if (s) updateSliderFill(s);
-    fetchRadioStatus();
-    state.pollingInterval = setInterval(fetchRadioStatus, 500);
 
     // Robustly track editing state for the power slider to prevent backend/UI jumps
     const powerSlider = document.getElementById('powerSlider');
@@ -3244,6 +3318,28 @@ document.addEventListener('DOMContentLoaded', function() {
         return `bandSeg_${vfo}_${band}`;
     }
 
+    // The server (BandPlanService) reports this when the frequency falls
+    // outside every allocation in the operator's own IARU region.
+    const OOB_BAND = 'unknown';
+    function isOutOfBand(band) {
+        return typeof band === 'string' && band.toLowerCase() === OOB_BAND;
+    }
+
+    // Paint (or clear) the out-of-band state on a Segment dropdown. The
+    // dropdown carries the warning as well as the colour, because a
+    // partially-sighted operator gets the accessible name, not the red.
+    function setSegmentOutOfBand(select, vfo, on) {
+        select.classList.toggle('segment-oob', on);
+        if (!('labelOriginal' in select.dataset)) {
+            select.dataset.labelOriginal = select.getAttribute('aria-label') || `VFO ${vfo} band segment`;
+        }
+        const label = on
+            ? `VFO ${vfo} out of band — frequency is outside every allocation in your region`
+            : select.dataset.labelOriginal;
+        select.setAttribute('aria-label', label);
+        select.setAttribute('title', label);
+    }
+
     // Set the Segment dropdown to reflect whichever segment of the band
     // contains the current frequency. Called from the FrequencyA/B SignalR
     // handlers so the dropdown stays in sync when the operator tunes via
@@ -3252,9 +3348,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // initial connect before BandA arrives).
     function syncSegmentSelectToFrequency(vfo, hz) {
         const select = document.getElementById(`segmentSelect${vfo}`);
+        // Disabled means the dropdown holds a single OOB or "--" placeholder,
+        // so there is no segment to select. populateSegmentSelect re-runs on
+        // the next band change and picks the sync back up.
         if (!select || select.disabled) return;
         const band = state.lastBand && state.lastBand[vfo];
-        if (!band) return;
+        if (!band || isOutOfBand(band)) return;
         const plan = window.bandPlan || 'UK';
         if (!window.bandPlanData || !window.getBandSegmentForHz) {
             // Fallback if helper not loaded — use inline lookup against the plan.
@@ -3291,18 +3390,25 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!bandPlanData) return;
 
         const segments = (bandPlanData[plan] || {})[band] || null;
+        const oob = isOutOfBand(band);
         select.innerHTML = '';
 
         if (!segments) {
+            // Two different "no segments" cases, and they mean different
+            // things to the operator: OOB is a warning (you are outside your
+            // region's allocations), whereas "--" just means this band has no
+            // activity plan in the JSON — 4m outside Region 1, say.
             const opt = document.createElement('option');
             opt.value = '';
-            opt.textContent = '--';
+            opt.textContent = oob ? 'OOB' : '--';
             select.appendChild(opt);
             select.disabled = true;
+            setSegmentOutOfBand(select, vfo, oob);
             return;
         }
 
         select.disabled = false;
+        setSegmentOutOfBand(select, vfo, false);
         const placeholder = document.createElement('option');
         placeholder.value = '';
         placeholder.textContent = '--';
@@ -3315,11 +3421,34 @@ document.addEventListener('DOMContentLoaded', function() {
             select.appendChild(opt);
         }
 
-        // Restore last used segment for this band
+        // Restore last used segment for this band. This is only a fallback
+        // for the moment before we know the frequency — the radio's actual
+        // frequency wins immediately below, because the dropdown's job is to
+        // say where the operator *is*, not where they last went.
         const saved = localStorage.getItem(segmentStorageKey(vfo, band));
         if (saved && select.querySelector(`option[value="${saved}"]`)) {
             select.value = saved;
         }
+
+        // Use lastVfoHz (top-level, written directly by the FrequencyA/B
+        // SignalR handlers) rather than state.lastBackendFreq — that one is
+        // written inside a try/catch from a scope where `state` isn't
+        // visible, so it throws and is swallowed on every update and holds a
+        // stale frequency. Getting this wrong showed up as the dropdown
+        // dropping to "--" when tuning back in from out of band: FrequencyA
+        // arrives before BandA, so the good sync early-returns against the
+        // still-disabled OOB placeholder and this call is the last word.
+        const hz = (lastVfoHz && lastVfoHz[vfo]) || (state.lastBackendFreq && state.lastBackendFreq[vfo]);
+        if (typeof hz !== 'number' || hz <= 0) return;
+
+        // Only override the saved value when the frequency really lands in
+        // the band we just populated. On a band-button click we are called
+        // before the radio has retuned, so hz is still the *old* band's —
+        // syncing blindly would flash "--" until the new frequency arrived.
+        const live = window.getBandSegmentForHz
+            ? window.getBandSegmentForHz(plan, band, hz)
+            : null;
+        if (live) syncSegmentSelectToFrequency(vfo, hz);
     }
 
     // Called when the user picks a segment from the dropdown.
@@ -3329,9 +3458,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const bandPlanData = window.bandPlanData;
         if (!bandPlanData) return;
 
-        // Determine the current band for this VFO
+        // Determine the current band for this VFO. Out of band there is no
+        // segment to tune to and nothing worth remembering, so bail before
+        // we touch the radio or localStorage.
         const band = state.lastBand[vfo];
-        if (!band) return;
+        if (!band || isOutOfBand(band)) return;
 
         const segments = (bandPlanData[plan] || {})[band];
         if (!segments || !segments[segKey]) return;

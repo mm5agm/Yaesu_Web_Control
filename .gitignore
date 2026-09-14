@@ -5,10 +5,10 @@
 *.userosscache
 *.sln.docstates
 appsettings.user.json
-
+.cursor
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
-
+.DS_Store
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
@@ -28,8 +28,11 @@ bld/
 # Visual Studio cache/options directory
 .vs/
 
-# Visual Studio Code
-.vscode/
+# Visual Studio Code — keep shared run/debug profiles tracked
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
 *.code-workspace
 
 # Rider
@@ -158,6 +161,8 @@ docs/design/*
 !docs/design/*.md
 # …and the developer guide for adding a new radio.
 !docs/adding-a-radio.md
+# …and the Raspberry Pi Docker testing runbook.
+!docs/pi-docker-testing.md
 
 # Runtime logs
 *.log
@@ -182,3 +187,19 @@ Backup*.ps1
 # Local planning notes
 plan.txt
 .tmp_*
+
+# Local Docker volume (docker-compose default)
+data/
+
+# Generated at build time from the Radio_Web_Control_Core subtree (core/js is
+# the single source of truth). See core/js/README.md.
+/wwwroot/js/calibration/calibration-engine.js
+/wwwroot/js/cw/cw-reader-panel.js
+
+# Bench recordings. The .wav is the evidence for a CW bench run and is worth
+# keeping locally so a decoder change can be re-scored without going back to
+# the air, but it is megabytes of receiver noise and belongs nowhere near git.
+# bench/arrl/ additionally holds ARRL practice files, which are ARRL copyright
+# and must never be committed or redistributed - so this rule is the whole
+# directory, not a *.wav pattern.
+bench/

@@ -2,6 +2,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Yaesu_Web_Control.Services;
+using RadioWebControl.Core.Services; // AdifParser now lives in the shared core
 
 namespace Yaesu_Web_Control.Controllers
 {
@@ -704,7 +705,7 @@ namespace Yaesu_Web_Control.Controllers
             {
                 var hz = AdifParser.FreqMHzToHz(r.Frequency);
                 if (!hz.HasValue) { skippedNoFreq++; continue; }
-                var mode = AdifParser.AdifModeToYwc(r.Mode);
+                var mode = AdifParser.AdifModeToRadioMode(r.Mode);
                 if (!seen.Add((hz.Value, mode))) continue;
                 newMemories.Add(new AppMemory
                 {

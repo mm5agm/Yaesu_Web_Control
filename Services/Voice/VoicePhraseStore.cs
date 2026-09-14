@@ -91,6 +91,10 @@ namespace Yaesu_Web_Control.Services.Voice
                 // Older files are reset to defaults rather than partially migrated.
                 if (config == null || config.Version < 7)
                     return BuildDefaults();
+                // v7 → v8+ is additive (ATU commands), so don't reset — just
+                // fill in any core command keys the older pack is missing,
+                // leaving the user's own phrases and translations untouched.
+                BackfillMissingCommands(config);
                 return config;
             }
             catch
@@ -319,9 +323,34 @@ namespace Yaesu_Web_Control.Services.Voice
             }
         }
 
+        /// <summary>
+        /// Additive upgrade for packs saved by an older build: fill in only the
+        /// SimpleCommands keys that are entirely absent (e.g. the ATU tuner
+        /// commands added in v8), using the built-in defaults. Keys the user
+        /// already has — even if they've edited or translated the phrases — are
+        /// left exactly as they are, so this never overwrites customisation.
+        /// The in-memory Version is advanced so a subsequent Save persists the
+        /// upgraded pack; the file on disk is untouched until then.
+        /// </summary>
+        private static void BackfillMissingCommands(VoicePhrasesConfig config)
+        {
+            var defaults = BuildDefaults();
+            config.SimpleCommands ??= new();
+            foreach (var (key, phrases) in defaults.SimpleCommands)
+            {
+                if (!config.SimpleCommands.ContainsKey(key))
+                    config.SimpleCommands[key] = new List<string>(phrases);
+            }
+            if (config.Version < defaults.Version)
+                config.Version = defaults.Version;
+        }
+
         public static VoicePhrasesConfig BuildDefaults() => new()
         {
-            Version = 7,
+            // v8 added the ATU tuner commands (AtuOn / AtuOff / AtuTune).
+            // Existing v7 packs aren't reset — BackfillMissingCommands adds
+            // just the new keys on load so a user's customisations survive.
+            Version = 8,
             SimpleCommands = new()
             {
                 ["SwapVFO"]          = ["swap v f o", "swap v f os", "swap a and b", "swap a b", "switch v f o", "switch a and b"],
@@ -336,6 +365,11 @@ namespace Yaesu_Web_Control.Services.Voice
                 ["TxOff"]            = ["stop transmitting", "go to receive", "transmit off"],
                 ["SplitOn"]          = ["split on", "enable split", "split transmit"],
                 ["SplitOff"]         = ["split off", "disable split", "simplex"],
+                // ATU. No bare "tune" — it would collide with the "tune up" /
+                // "tune down" nudges above.
+                ["AtuOn"]            = ["tuner on", "antenna tuner on", "a t u on"],
+                ["AtuOff"]           = ["tuner off", "antenna tuner off", "a t u off"],
+                ["AtuTune"]          = ["tune antenna", "tune the antenna", "start tuner", "auto tune"],
                 ["Help"]             = ["help", "command help", "what can I say", "list commands"],
                 ["NudgeIfWidthUp"]   = ["filter wider", "wider filter", "increase bandwidth", "i f width up"],
                 ["NudgeIfWidthDown"] = ["filter narrower", "narrower filter", "decrease bandwidth", "i f width down"],

@@ -1,27 +1,30 @@
 namespace Yaesu_Web_Control.Services
 {
     /// <summary>
-    /// Single source of truth for the HTTP port YWC is actually listening on.
-    /// Resolved once at startup in <c>Program.cs</c> by probing the user's
-    /// configured port and (if necessary) the nine fallbacks above it, then
-    /// registered as a singleton so every consumer — Kestrel, the browser
-    /// launcher, the system-tray tooltip and right-click menu, and the
-    /// Settings page UI — reads the same value.
-    ///
-    /// Replaces the previous pattern where the port was hardcoded as "8080"
-    /// in five different places that had to be kept in sync by hand
-    /// (Issue #13).
+    /// Single source of truth for the HTTP (and optional HTTPS) ports YWC is
+    /// actually listening on. Resolved once at startup in <c>Program.cs</c>.
     /// </summary>
     public sealed class HttpPortInfo
     {
         public int Port { get; }
+        public int? HttpsPort { get; }
+        public bool HttpsActive { get; }
 
-        /// <summary>Convenience: e.g. <c>http://localhost:8080</c>.</summary>
-        public string RootUrl => $"http://localhost:{Port}";
+        /// <summary>Preferred local URL — HTTPS when active, else HTTP.</summary>
+        public string RootUrl => HttpsActive && HttpsPort is int hp
+            ? $"https://localhost:{hp}"
+            : $"http://localhost:{Port}";
 
-        public HttpPortInfo(int port)
+        public string HttpRootUrl => $"http://localhost:{Port}";
+        public string? HttpsRootUrl => HttpsActive && HttpsPort is int hp
+            ? $"https://localhost:{hp}"
+            : null;
+
+        public HttpPortInfo(int port, int? httpsPort = null, bool httpsActive = false)
         {
             Port = port;
+            HttpsPort = httpsPort;
+            HttpsActive = httpsActive;
         }
     }
 }

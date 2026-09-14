@@ -8,24 +8,30 @@ export class FTdx101Meters {
     /**
      * @param {object} meterPanel        An initialised MeterPanel instance
      * @param {object} calibrationEngine An object exposing calibrateNumeric(key, raw)
+     * @param {number} maxPowerWatts     The radio's rated output, used to clamp the
+     *                                   Power reading to its dial. The shipped
+     *                                   per-model PWR tables are still copies of the
+     *                                   FTdx101MP's and run to 200 W, so without this
+     *                                   a 100 W radio can calibrate past full scale.
      */
-    constructor(meterPanel, calibrationEngine) {
+    constructor(meterPanel, calibrationEngine, maxPowerWatts = 200) {
         this._meterPanel   = meterPanel;
         this._calibration  = calibrationEngine;
+        this._maxPowerWatts = maxPowerWatts;
 
         // TX state
         this._isTransmitting = false;
 
         // Smoothing: rolling-average windows for power and SWR.
-        // Power uses a longer window (15 samples ≈ 1.5 s at 10 Hz polling)
-        // because the PWR calibration curve gets steep above 100 W — each raw
-        // ADC unit is ~1.6 W there, so even a few units of ADC noise visibly
-        // jolts the gauge needle. SWR stays at 7 samples (~0.7 s) so the
-        // operator sees a high SWR fault quickly enough to react.
+        // TX meters poll every fast cycle (~4–5 Hz at the default 200 ms
+        // MeterPollIntervalMs), so 4 power samples ≈ 0.8 s and 3 SWR samples
+        // ≈ 0.6 s. Window duration scales with MeterPollIntervalMs. Power needs
+        // the longer window because the PWR calibration curve gets steep above
+        // 100 W — even a few ADC units of noise visibly jolts the needle.
         this._powerHistory        = [];
         this._swrHistory          = [];
-        this._powerHistoryLength  = 15;
-        this._swrHistoryLength    = 7;
+        this._powerHistoryLength  = 4;
+        this._swrHistoryLength    = 3;
         this._wasTransmittingPower = false;
         this._wasTransmittingSWR   = false;
 
@@ -110,7 +116,7 @@ export class FTdx101Meters {
         if (this._powerHistory.length > this._powerHistoryLength) this._powerHistory.shift();
         const rawAvg      = this._powerHistory.reduce((s, v) => s + v, 0) / this._powerHistory.length;
         const watts       = this._calibration.calibrateNumeric('PWR', rawAvg);
-        const clampedWatts = Math.round(Math.max(0, Math.min(watts, 200)));
+        const clampedWatts = Math.round(Math.max(0, Math.min(watts, this._maxPowerWatts)));
         this._meterPanel.update('power', clampedWatts);
         return { skip: false, gaugeKey: 'power', displayValue: { watts: clampedWatts, rawAvg } };
     }
@@ -126,14 +132,37 @@ export class FTdx101Meters {
             this._swrHistory = [];
         }
         this._wasTransmittingSWR = true;
+
+        // A raw zero is not a measurement to be averaged in -- it is the server
+        // saying the over has ended (MeterPollingService zeroes the TX-only
+        // meters on the TX-off edge). Averaging it against the readings from the
+        // over invented a value that was never measured: one real 255 and one
+        // terminal zero average to 127.5, which the SWR table maps to exactly
+        // 3.0, and that is the 3.0 the needle used to stick at (issue #124).
+        // Resetting here is right under either reading of the value, because a
+        // raw zero genuinely is 1.0:1 -- no reflected power.
+        if (raw === 0) {
+            this._swrHistory = [];
+            this._meterPanel.update('swr', 0);
+            return { skip: false, gaugeKey: 'swr', displayValue: { swr: 1.0 } };
+        }
+
         this._swrHistory.push(raw);
         if (this._swrHistory.length > this._swrHistoryLength) this._swrHistory.shift();
-        // Require at least 2 readings before displaying — single-reading bursts are likely noise.
-        if (this._swrHistory.length < 2) return { skip: true };
+        // Draw on the first reading of the over. There used to be a "wait for 2
+        // readings, single bursts are likely noise" gate here, and it made the
+        // gauge dead exactly when it mattered: SWRMeter is broadcast on change
+        // only, so an over that sits at a steady value -- a genuinely bad load
+        // pinned at 255, say -- delivers exactly one update and the gate never
+        // opened. The needle stayed at 0 through a 10:1 SWR (issue #124). Noise
+        // is still handled, by averaging the last three readings below.
         const rawAvg    = this._swrHistory.reduce((s, v) => s + v, 0) / this._swrHistory.length;
         const swr       = this._calibration.calibrateNumeric('SWR', rawAvg);
         const swrClamped = Math.min(swr, 10.0);
-        this._meterPanel.update('swr', (swrClamped - 1.0) * 127.5);
+        // The face stops at 3.0, so pin the needle there rather than handing the
+        // gauge library a value off the end of its own range and trusting it to
+        // clamp. The true ratio still reaches the readout below (issue #128).
+        this._meterPanel.update('swr', Math.min(255, (swrClamped - 1.0) * 127.5));
         return { skip: false, gaugeKey: 'swr', displayValue: { swr: swrClamped } };
     }
 

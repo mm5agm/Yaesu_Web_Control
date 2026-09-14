@@ -1,4 +1,4 @@
-namespace Yaesu_Web_Control.Models
+namespace RadioWebControl.Core.Models
 {
     /// <summary>
     /// A single DX spot received from a cluster server.

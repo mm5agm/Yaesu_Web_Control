@@ -6,7 +6,9 @@ using System.Diagnostics;
 using Yaesu_Web_Control.Hubs;
 using Yaesu_Web_Control.Models;
 using Yaesu_Web_Control.Services;
+#if WINDOWS
 using Yaesu_Web_Control.Services.Sdr;
+#endif
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
@@ -20,7 +22,16 @@ namespace Yaesu_Web_Control.Pages
         private readonly IHostApplicationLifetime _lifetime;
         private readonly IHubContext<RadioHub> _hubContext;
         private readonly HttpPortInfo _portInfo;
+#if WINDOWS
         private readonly SdrManager _sdrManager;
+#endif
+
+        /// <summary>True when this host was built as the Windows product (tray/voice/SDR).</summary>
+#if WINDOWS
+        public bool IsWindowsHost { get; } = true;
+#else
+        public bool IsWindowsHost { get; } = false;
+#endif
 
         /// <summary>
         /// The port YWC is actually listening on right now. This is the port
@@ -65,8 +76,11 @@ namespace Yaesu_Web_Control.Pages
             RadioInitializationService radioInitializationService,
             IHostApplicationLifetime lifetime,
             IHubContext<RadioHub> hubContext,
-            HttpPortInfo portInfo,
-            SdrManager sdrManager)
+            HttpPortInfo portInfo
+#if WINDOWS
+            , SdrManager sdrManager
+#endif
+            )
         {
             _settingsService = settingsService;
             _logger = logger;
@@ -74,7 +88,9 @@ namespace Yaesu_Web_Control.Pages
             _lifetime = lifetime;
             _hubContext = hubContext;
             _portInfo = portInfo;
+#if WINDOWS
             _sdrManager = sdrManager;
+#endif
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -89,7 +105,9 @@ namespace Yaesu_Web_Control.Pages
             Settings.SdrSampleRateHz = Settings.SdrSampleRateHzA;
             // Auto-detect the SDRplay install dir so the page can show the
             // user where the resolver is finding it (or that it's not).
+#if WINDOWS
             DetectedSdrplayInstallPath = SdrplayDllResolver.DetectInstallDir();
+#endif
             NetworkAddresses = GetLocalIPAddresses();
             return Page();
         }
@@ -114,6 +132,11 @@ namespace Yaesu_Web_Control.Pages
             ModelState.Remove("Settings.DxClusterPostLoginCommands");
             // Accessibility TX shortcut is optional — empty = disabled.
             ModelState.Remove("Settings.TxToggleKey");
+            // Remote audio device names may be empty when the feature is off.
+            // When enabled we require explicit RX/TX picks (see check below).
+            ModelState.Remove("Settings.AudioRadioRxDevice");
+            ModelState.Remove("Settings.AudioRadioTxDevice");
+            ModelState.Remove("Settings.HttpsSanHosts");
 
             if (!ModelState.IsValid)
             {
@@ -133,13 +156,37 @@ namespace Yaesu_Web_Control.Pages
                 return Page();
             }
 
-            // Validate Serial Port format
-            if (!Settings.SerialPort.StartsWith("COM", StringComparison.OrdinalIgnoreCase))
+            // Validate Serial Port format (Windows COM* vs Unix /dev/cu.*|/dev/tty.*)
+            if (!IsValidSerialPort(Settings.SerialPort))
             {
                 ModelState.AddModelError("Settings.SerialPort",
-                    "Serial port must start with 'COM' (e.g., COM3, COM4).");
+                    OperatingSystem.IsWindows()
+                        ? "Serial port must start with 'COM' (e.g., COM3, COM4)."
+                        : "Serial port must be a device path (e.g. /dev/cu.usbserial-…).");
                 NetworkAddresses = GetLocalIPAddresses();
                 return Page();
+            }
+
+            // Remote Audio: refuse blank devices when enabled. Empty TX used to
+            // open the PC speakers → browser-mic feedback into the room.
+            if (Settings.AudioStreamingEnabled)
+            {
+                if (string.IsNullOrWhiteSpace(Settings.AudioRadioRxDevice))
+                {
+                    ModelState.AddModelError("Settings.AudioRadioRxDevice",
+                        "Pick the radio’s USB recording / capture device (often “Microphone (USB Audio CODEC)” or a name you gave it).");
+                }
+                if (string.IsNullOrWhiteSpace(Settings.AudioRadioTxDevice))
+                {
+                    ModelState.AddModelError("Settings.AudioRadioTxDevice",
+                        "Pick the radio’s USB Speakers / playback device — not your PC speakers. Blank TX causes mic feedback.");
+                }
+                if (!ModelState.IsValid)
+                {
+                    StatusMessage = "❌ Settings not saved — Remote Audio needs explicit radio RX and TX devices.";
+                    NetworkAddresses = GetLocalIPAddresses();
+                    return Page();
+                }
             }
 
             try
@@ -154,6 +201,8 @@ namespace Yaesu_Web_Control.Pages
                 var oldRadioModel = current.RadioModel;
                 var oldWebAddress = current.WebAddress;
                 var oldHttpPort   = current.HttpPort;
+                var oldHttpsEnabled = current.HttpsEnabled;
+                var oldHttpsPort    = current.HttpsPort;
 
                 // Capture pre-change CAT connection values so the radio reconnect
                 // below only fires when something that actually affects the CAT
@@ -169,7 +218,10 @@ namespace Yaesu_Web_Control.Pages
                 // instead of needing a full app restart.
                 var oldSdrA       = current.SdrDeviceKeyA ?? string.Empty;
                 var oldSdrB       = current.SdrDeviceKeyB ?? string.Empty;
-                var oldSdrIfHz    = current.SdrIfFrequencyHz;
+                var oldSdrIfHzA   = current.SdrIfFrequencyHzA;
+                var oldSdrIfHzB   = current.SdrIfFrequencyHzB;
+                var oldSdrTrimA   = current.SdrFrequencyTrimHzA;
+                var oldSdrTrimB   = current.SdrFrequencyTrimHzB;
                 var oldSdrSrHzA   = current.SdrSampleRateHzA;
                 var oldSdrSrHzB   = current.SdrSampleRateHzB;
                 var oldSdrFft     = current.SdrFftSize;
@@ -181,6 +233,8 @@ namespace Yaesu_Web_Control.Pages
                 current.HttpPort          = (Settings.HttpPort >= 1 && Settings.HttpPort <= 65535)
                     ? Settings.HttpPort
                     : 8080;
+                current.AutoShutdownWhenNoBrowsers = Settings.AutoShutdownWhenNoBrowsers;
+                current.OpenBrowserOnStartup = Settings.OpenBrowserOnStartup;
                 current.SerialPort        = Settings.SerialPort;
                 current.BaudRate          = Settings.BaudRate;
                 current.WebAddress        = Settings.WebAddress;
@@ -188,7 +242,11 @@ namespace Yaesu_Web_Control.Pages
                 current.SdrDeviceKeyB     = Settings.SdrDeviceKeyB ?? string.Empty;
                 current.SdrDeviceKey      = string.Empty;  // legacy field — kept blank in v2.3.0+ files
                 current.SdrplayInstallPath = Settings.SdrplayInstallPath ?? string.Empty;
-                current.SdrIfFrequencyHz  = Settings.SdrIfFrequencyHz;
+                current.SdrIfFrequencyHzA = Settings.SdrIfFrequencyHzA;
+                current.SdrIfFrequencyHzB = Settings.SdrIfFrequencyHzB;
+                current.SdrIfFrequencyHz  = 0;             // legacy field — kept zero once the per-VFO fields exist
+                current.SdrFrequencyTrimHzA = Math.Clamp(Settings.SdrFrequencyTrimHzA, -10_000, 10_000);
+                current.SdrFrequencyTrimHzB = Math.Clamp(Settings.SdrFrequencyTrimHzB, -10_000, 10_000);
                 // Settings page binds a single Sample Rate dropdown — treat that
                 // as a "reset both VFOs to this rate" control. Per-VFO divergence
                 // happens at runtime via the span buttons on the main page.
@@ -237,6 +295,14 @@ namespace Yaesu_Web_Control.Pages
                 if (Settings.CwMessages != null && Settings.CwMessages.Count == 5)
                     current.CwMessages = Settings.CwMessages;
 
+                // Reader Mode. The width is clamped rather than validated away:
+                // a value outside this range would be handed to CodeForHz and
+                // come back as the nearest real filter anyway, so rejecting the
+                // whole save over it would cost the operator their other edits
+                // for nothing.
+                current.CwReaderFilterHz = Math.Clamp(Settings.CwReaderFilterHz, 50, 1000);
+                current.CwReaderUseApf   = Settings.CwReaderUseApf;
+
                 // DX cluster settings — copy through. Normalise callsign to upper case.
                 current.DxClusterEnabled         = Settings.DxClusterEnabled;
                 current.DxClusterHost            = (Settings.DxClusterHost ?? "").Trim();
@@ -255,7 +321,33 @@ namespace Yaesu_Web_Control.Pages
                 current.VoiceControlEnabled = Settings.VoiceControlEnabled;
                 current.VoiceSpokenConfirmationEnabled = Settings.VoiceSpokenConfirmationEnabled;
 
+                // Remote audio + optional HTTPS
+                current.AudioStreamingEnabled = Settings.AudioStreamingEnabled;
+                current.AudioRadioRxDevice = Settings.AudioRadioRxDevice ?? "";
+                current.AudioRadioTxDevice = Settings.AudioRadioTxDevice ?? "";
+                // AudioRxGain / AudioTxGain are live-only (Mic & Gain / pop-out → /api/audio/gain).
+                // Do not overwrite them from this form — the inputs were removed from Settings.
+
+                // Radio Display — Settings only toggles the feature. Device / FPS /
+                // quality / max-width are owned by the Radio Display panel APIs.
+                current.VideoDisplayEnabled = Settings.VideoDisplayEnabled;
+
+                current.HttpsEnabled = Settings.HttpsEnabled;
+                current.HttpsPort = (Settings.HttpsPort >= 1 && Settings.HttpsPort <= 65535)
+                    ? Settings.HttpsPort
+                    : 8443;
+                current.HttpsSanHosts = Settings.HttpsSanHosts ?? "";
+
+                // Diagnostics
+                current.DetailedLogging = Settings.DetailedLogging;
+
                 await _settingsService.SaveSettingsAsync(current);
+
+                // Apply the log level immediately rather than at next startup.
+                // A user who has just been asked for a detailed log needs it to
+                // cover the fault they are about to reproduce, and restarting
+                // to enable logging can clear the state that caused it.
+                Yaesu_Web_Control.Services.LogLevelController.Apply(current.DetailedLogging);
 
                 // Only reconnect the radio if something that actually affects the
                 // CAT link changed — Radio Model (different init command set),
@@ -292,14 +384,21 @@ namespace Yaesu_Web_Control.Pages
                 bool sdrChanged =
                        !string.Equals(oldSdrA,  current.SdrDeviceKeyA ?? string.Empty, StringComparison.Ordinal)
                     || !string.Equals(oldSdrB,  current.SdrDeviceKeyB ?? string.Empty, StringComparison.Ordinal)
-                    || oldSdrIfHz   != current.SdrIfFrequencyHz
+                    || oldSdrIfHzA  != current.SdrIfFrequencyHzA
+                    || oldSdrIfHzB  != current.SdrIfFrequencyHzB
+                    || oldSdrTrimA  != current.SdrFrequencyTrimHzA
+                    || oldSdrTrimB  != current.SdrFrequencyTrimHzB
                     || oldSdrSrHzA  != current.SdrSampleRateHzA
                     || oldSdrSrHzB  != current.SdrSampleRateHzB
                     || oldSdrFft    != current.SdrFftSize;
                 if (sdrChanged)
                 {
+#if WINDOWS
                     _logger.LogInformation("Settings: SDR settings changed — restarting SdrManager workers");
                     _sdrManager.RequestRestart();
+#else
+                    _logger.LogInformation("Settings: SDR settings changed — ignored on this host (SDR not available)");
+#endif
                 }
 
                 StatusMessage = "✓ Settings saved successfully.";
@@ -317,6 +416,8 @@ namespace Yaesu_Web_Control.Pages
                     reasons.Add($"web server address ({oldWebAddress} → {current.WebAddress})");
                 if (oldHttpPort != current.HttpPort)
                     reasons.Add($"HTTP port ({oldHttpPort} → {current.HttpPort})");
+                if (oldHttpsEnabled != current.HttpsEnabled || oldHttpsPort != current.HttpsPort)
+                    reasons.Add("HTTPS settings");
                 if (reasons.Count > 0)
                 {
                     RestartRequiredReason = string.Join(" and ", reasons);
@@ -434,6 +535,17 @@ namespace Yaesu_Web_Control.Pages
             }
 
             return addresses;
+        }
+
+        /// <summary>
+        /// Windows: COM ports. Unix: serial device nodes under /dev (prefer cu.*).
+        /// </summary>
+        private static bool IsValidSerialPort(string? port)
+        {
+            if (string.IsNullOrWhiteSpace(port)) return false;
+            if (OperatingSystem.IsWindows())
+                return port.StartsWith("COM", StringComparison.OrdinalIgnoreCase);
+            return port.StartsWith("/dev/", StringComparison.Ordinal);
         }
 
         /// <summary>

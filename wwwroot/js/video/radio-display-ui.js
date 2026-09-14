@@ -1,0 +1,1331 @@
+/**
+ * Radio Display UI wiring: status poll + MJPEG img stream + controls.
+ */
+import { RadioDisplayPanel } from './radio-display-panel.js?v=11';
+import { RadioDisplayHotspots } from './radio-display-hotspots.js?v=6';
+
+const STATUS_POLL_MS = 4000;
+const RECONNECT_MS = 2500;
+const RECONNECT_MAX_MS = 15000;
+const ALLOWED_FPS = [15, 30, 60];
+const ALLOWED_QUALITY = [40, 65, 85];
+const CHANNEL_NAME = 'ywc-radio-display';
+const AUTO_START_KEY = 'ywc.radioDisplayAutoStart';
+const CONTROLS_DOCKED_KEY = 'ywc.radioDisplayControlsDocked';
+const CONTROLS_VISIBLE_KEY = 'ywc.radioDisplayControlsVisible';
+const CONTROLS_WIDTH_KEY = 'ywc.radioDisplayControlsWidth';
+/** Default docked column width (matches CSS fallback).
+ *  Wide enough that Span (10×2.65rem) and Color (11×2.15rem) fit on one
+ *  nowrap row with the label + body padding — 22rem clipped the last buttons. */
+const SCOPE_WIDTH_DEFAULT_REM = 33;
+const SCOPE_WIDTH_MIN_REM = 16;
+const SCOPE_WIDTH_MAX_REM = 40;
+const SCOPE_WIDTH_NUDGE_PX = 16;
+
+let panel = null;
+let uiMode = 'index';
+let statusTimer = null;
+let reconnectTimer = null;
+let reconnectAttempt = 0;
+let lastServerStatus = '';
+let lastFrameSeq = 0;
+let blankPolls = 0;
+let enabled = false;
+let streamActive = false;
+/** Operator asked for a live stream (Start, Auto, or pop-out handoff). */
+let wantStream = false;
+/** Host reported disconnect; do not reopen index:N until Start / device change. */
+let holdDisconnected = false;
+let holdDisconnectedDetail = '';
+/** Start is in flight; ignore a leftover disconnected status from the previous halt. */
+let awaitingCapture = false;
+let currentDeviceKey = '';
+let currentTargetFps = 15;
+let currentJpegQuality = 85;
+let deviceRates = [];
+let currentCaptureSize = '';
+let deviceSizes = [];
+let controlsBound = false;
+let channel = null;
+/** True while the docked-column splitter is being dragged. */
+let scopeColumnDragging = false;
+
+function getChannel() {
+  if (channel) return channel;
+  if (typeof BroadcastChannel === 'undefined') return null;
+  channel = new BroadcastChannel(CHANNEL_NAME);
+  return channel;
+}
+
+function postChannel(msg) {
+  try { getChannel()?.postMessage(msg); } catch { /* ignore */ }
+}
+
+function isAutoStart() {
+  return localStorage.getItem(AUTO_START_KEY) === '1';
+}
+
+function setAutoStart(on) {
+  localStorage.setItem(AUTO_START_KEY, on ? '1' : '0');
+}
+
+function parseRates(raw) {
+  if (Array.isArray(raw)) {
+    return raw.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  }
+  return [];
+}
+
+function fpsChoices(rates) {
+  const parsed = parseRates(rates);
+  const cap = parsed.length ? Math.max.apply(null, parsed) : 0;
+  const list = cap > 0 ? ALLOWED_FPS.filter((f) => f <= cap) : ALLOWED_FPS.slice();
+  return list.length ? list : [ALLOWED_FPS[0]];
+}
+
+function normalizeFps(fps, rates = deviceRates) {
+  const n = Number(fps);
+  const allowed = fpsChoices(rates);
+  if (allowed.includes(n)) return n;
+  return allowed.reduce((best, a) =>
+    Math.abs(a - n) < Math.abs(best - n) ? a : best);
+}
+
+function applyDeviceFpsCap(rates, selected) {
+  const sel = document.getElementById('radioDisplayFpsSelect');
+  const parsed = parseRates(rates);
+  if (parsed.length) deviceRates = parsed;
+  const allowed = fpsChoices(deviceRates);
+  const want = normalizeFps(selected ?? currentTargetFps, deviceRates);
+  if (sel && document.activeElement !== sel) {
+    const same =
+      sel.options.length === allowed.length &&
+      allowed.every((f, i) => sel.options[i] && sel.options[i].value === String(f));
+    if (!same) {
+      sel.innerHTML = '';
+      allowed.forEach((f) => {
+        const opt = document.createElement('option');
+        opt.value = String(f);
+        opt.textContent = f + ' fps';
+        sel.appendChild(opt);
+      });
+    }
+    if (sel.value !== String(want)) sel.value = String(want);
+  }
+  currentTargetFps = want;
+  return want;
+}
+
+function syncFpsSelect(fps) {
+  applyDeviceFpsCap(deviceRates, fps);
+}
+
+/**
+ * Rebuild the capture-size list. Hidden entirely when the host reports no
+ * sizes — macOS and the OpenCV fallback cannot enumerate pins, and an
+ * Auto-only dropdown is just a control that does nothing.
+ */
+function applyDeviceSizes(sizes, selected) {
+  const wrap = document.getElementById('radioDisplaySizeWrap');
+  const sel = document.getElementById('radioDisplaySizeSelect');
+  if (Array.isArray(sizes)) deviceSizes = sizes.slice();
+  const want = deviceSizes.includes(selected ?? currentCaptureSize)
+    ? (selected ?? currentCaptureSize)
+    : '';
+  currentCaptureSize = want;
+  if (wrap) wrap.hidden = deviceSizes.length === 0;
+  if (!sel) return;
+
+  const signature = deviceSizes.join(',');
+  if (sel.dataset.sizes !== signature) {
+    sel.dataset.sizes = signature;
+    sel.replaceChildren();
+    const auto = document.createElement('option');
+    auto.value = '';
+    auto.textContent = 'Auto size';
+    sel.appendChild(auto);
+    for (const s of deviceSizes) {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s.replace('x', '×');
+      sel.appendChild(opt);
+    }
+  }
+  if (sel.value !== want && document.activeElement !== sel) sel.value = want;
+}
+
+function syncSizeSelect(size) {
+  applyDeviceSizes(deviceSizes, size);
+}
+
+function normalizeQuality(q) {
+  const n = Number(q);
+  if (!Number.isFinite(n)) return 85;
+  if (ALLOWED_QUALITY.includes(n)) return n;
+  return ALLOWED_QUALITY.reduce((best, a) =>
+    Math.abs(a - n) < Math.abs(best - n) ? a : best);
+}
+
+function syncQualitySelect(quality) {
+  const sel = document.getElementById('radioDisplayQualitySelect');
+  if (!sel) return;
+  const want = String(normalizeQuality(quality));
+  if (sel.value !== want && document.activeElement !== sel) {
+    sel.value = want;
+  }
+}
+
+function syncAutoStartCheckbox() {
+  const el = document.getElementById('radioDisplayAutoStart');
+  if (el) el.checked = isAutoStart();
+}
+
+function syncStreamButton() {
+  const btn = document.getElementById('radioDisplayStreamBtn');
+  if (!btn) return;
+  let icon = btn.querySelector('i');
+  if (!icon) {
+    icon = document.createElement('i');
+    icon.setAttribute('aria-hidden', 'true');
+    btn.replaceChildren(icon);
+  }
+  if (wantStream) {
+    btn.className = 'btn btn-sm btn-outline-danger';
+    icon.className = 'bi bi-stop-fill';
+    btn.setAttribute('aria-label', 'Stop stream');
+    btn.disabled = false;
+  } else {
+    btn.className = 'btn btn-sm btn-outline-success';
+    icon.className = 'bi bi-play-fill';
+    btn.setAttribute('aria-label', 'Start stream');
+    btn.disabled = !enabled || !currentDeviceKey;
+  }
+}
+
+function syncDisconnectedControls() {
+  const held = holdDisconnected;
+  const fpsSel = document.getElementById('radioDisplayFpsSelect');
+  const qualSel = document.getElementById('radioDisplayQualitySelect');
+  const sizeSel = document.getElementById('radioDisplaySizeSelect');
+  const autoEl = document.getElementById('radioDisplayAutoStart');
+  const devSel = document.getElementById('radioDisplayDeviceSelect');
+  if (sizeSel) sizeSel.disabled = held;
+  if (fpsSel) fpsSel.disabled = held;
+  if (qualSel) qualSel.disabled = held;
+  if (autoEl) autoEl.disabled = held;
+  if (devSel) {
+    devSel.title = held
+      ? 'Device disconnected — refresh the list, confirm the intended camera, then Start. Select a different device to switch intentionally.'
+      : '';
+  }
+}
+
+function streamUrl() {
+  return '/api/video/stream?t=' + Date.now();
+}
+
+function reconnectDelayMs() {
+  const ms = Math.min(RECONNECT_MAX_MS, RECONNECT_MS * Math.pow(1.5, reconnectAttempt));
+  reconnectAttempt += 1;
+  return ms;
+}
+
+function clearDisconnectedHold() {
+  holdDisconnected = false;
+  holdDisconnectedDetail = '';
+}
+
+function onDeviceLost(detail) {
+  awaitingCapture = false;
+  holdDisconnected = true;
+  holdDisconnectedDetail = detail || '';
+  wantStream = false;
+  stopStream();
+  panel?.setStatus('disconnected', detail || undefined);
+  syncStreamButton();
+  syncDisconnectedControls();
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  const delay = reconnectDelayMs();
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (holdDisconnected) return;
+    if (!enabled || !panel || panel.isHiddenByUser()) return;
+    if (!wantStream || !currentDeviceKey) return;
+    startStream();
+  }, delay);
+}
+
+function onStreamInterrupted() {
+  if (!streamActive) return;
+  streamActive = false;
+  panel?.hideFrame();
+  if (holdDisconnected) return;
+  scheduleReconnect();
+  pollStatus({ attachStream: false });
+}
+
+function bindStreamImage() {
+  const img = document.getElementById('radioDisplayImg');
+  if (!img) return;
+  img.onerror = onStreamInterrupted;
+  img.onstalled = onStreamInterrupted;
+  img.onabort = onStreamInterrupted;
+  img.onload = () => {
+    reconnectAttempt = 0;
+    blankPolls = 0;
+    panel?.markFrameLoaded();
+  };
+}
+
+function notifyPopoutReady() {
+  postChannel({ type: 'popout-ready' });
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ type: 'ywc-radio-display-popout-ready' }, window.location.origin);
+    }
+  } catch { /* ignore cross-origin */ }
+}
+
+function startStream() {
+  if (!panel || !enabled || !wantStream) return;
+  if (panel.isHiddenByUser()) return;
+  if (!currentDeviceKey) {
+    stopStream();
+    panel.setStatus('idle', 'select a device');
+    syncStreamButton();
+    return;
+  }
+  streamActive = true;
+  const img = document.getElementById('radioDisplayImg');
+  if (img) {
+    img.onerror = null;
+    img.onstalled = null;
+    img.onabort = null;
+    img.onload = null;
+  }
+  panel.setStreamUrl(streamUrl());
+  if (uiMode === 'popout') notifyPopoutReady();
+  bindStreamImage();
+  syncStreamButton();
+}
+
+function stopStream() {
+  streamActive = false;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  panel?.clearStream();
+  syncStreamButton();
+}
+
+async function requestStart() {
+  if (!enabled || !currentDeviceKey) return;
+  try {
+    const res = await fetch('/api/video/start', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    clearDisconnectedHold();
+    wantStream = true;
+    awaitingCapture = true;
+    startStream();
+    syncStreamButton();
+    syncDisconnectedControls();
+  } catch (e) {
+    console.warn('Radio Display start failed', e);
+    alert('Could not start capture: ' + (e.message || e));
+  }
+}
+
+function requestStop() {
+  wantStream = false;
+  stopStream();
+  if (panel && enabled) {
+    panel.setStatus('idle', currentDeviceKey ? 'stopped' : 'select a device');
+  }
+  syncStreamButton();
+}
+
+function reattachToIndex() {
+  // Ask Home to attach first so the host never drops the last viewer
+  // (USB HDMI dongles native-crash if the capture graph is torn down
+  // and immediately reopened).
+  postChannel({ type: 'reattach', stream: wantStream });
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage(
+        { type: 'ywc-radio-display-reattach', stream: wantStream },
+        window.location.origin);
+    }
+  } catch { /* ignore cross-origin */ }
+  setTimeout(() => {
+    stopStream();
+    window.close();
+  }, 250);
+}
+
+function onReattachFromPopout(stream) {
+  if (uiMode !== 'index' || !panel) return;
+  panel.show();
+  applyControlsLayout({ refreshIfDocked: true });
+  panel.applyFit();
+  if (holdDisconnected) {
+    wantStream = false;
+    pollStatus();
+  } else {
+    wantStream = !!stream || isAutoStart();
+    if (wantStream && enabled && currentDeviceKey) {
+      requestStart();
+    } else {
+      pollStatus();
+    }
+  }
+  syncStreamButton();
+}
+
+function deviceOptionMatches(d, want) {
+  if (!want) return false;
+  const key = d.key || '';
+  if (key && key === want) return true;
+  if (holdDisconnected) return false;
+  if (d.index == null) return false;
+  return want === ('index:' + d.index) || want === String(d.index);
+}
+
+function selectMatchesSavedKey(sel, want) {
+  if (!sel) return true;
+  if ((sel.value || '') === (want || '')) return true;
+  if (holdDisconnected) return false;
+  if (!want) return false;
+  const opt = sel.selectedOptions && sel.selectedOptions[0];
+  if (!opt) return false;
+  const idx = opt.dataset && opt.dataset.index;
+  return idx != null && (want === ('index:' + idx) || want === String(idx));
+}
+
+function truncateLabel(text, maxLen) {
+  const s = String(text || '');
+  if (s.length <= maxLen) return s;
+  return s.slice(0, Math.max(0, maxLen - 1)) + '…';
+}
+
+async function loadDeviceSelect(selectedKey) {
+  const sel = document.getElementById('radioDisplayDeviceSelect');
+  if (!sel) return;
+  try {
+    const res = await fetch('/api/video/devices');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const want = selectedKey || currentDeviceKey || '';
+    const maxLabel = uiMode === 'popout' ? 28 : 42;
+    sel.innerHTML = '';
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = '(None)';
+    sel.appendChild(none);
+    let matched = false;
+    (data.devices || []).forEach(function (d) {
+      const key = d.key || '';
+      const full = d.label || key;
+      const opt = document.createElement('option');
+      opt.value = key;
+      if (d.index != null) opt.dataset.index = String(d.index);
+      if (d.rates && d.rates.length) opt.dataset.rates = d.rates.join(',');
+      opt.textContent = truncateLabel(full, maxLabel);
+      opt.title = full;
+      if (deviceOptionMatches(d, want)) {
+        opt.selected = true;
+        matched = true;
+      }
+      sel.appendChild(opt);
+    });
+    if (want && !matched) {
+      const orphan = document.createElement('option');
+      orphan.value = want;
+      const suffix = holdDisconnected ? ' (unavailable)' : ' (not present)';
+      orphan.textContent = truncateLabel(want + suffix, maxLabel);
+      orphan.title = want + suffix;
+      orphan.selected = true;
+      sel.appendChild(orphan);
+    }
+    if (!want) none.selected = true;
+    const selected = sel.selectedOptions && sel.selectedOptions[0];
+    const listedRates = selected && selected.dataset ? selected.dataset.rates : '';
+    if (listedRates) applyDeviceFpsCap(listedRates, currentTargetFps);
+    if ((data.devices || []).length === 0 && data.notes && panel) {
+      panel.setStatus('idle', String(data.notes));
+    }
+  } catch (e) {
+    console.warn('Radio Display device list failed', e);
+  }
+}
+
+async function setDeviceKey(key) {
+  try {
+    stopStream();
+    const res = await fetch('/api/video/device', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key || '' })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    clearDisconnectedHold();
+    currentDeviceKey = data.deviceKey || '';
+    if (data.rates) applyDeviceFpsCap(data.rates, currentTargetFps);
+    // Sizes belong to the old device. Blank the list; the next status poll
+    // repopulates it from whatever the new one advertises.
+    applyDeviceSizes([], '');
+    syncStreamButton();
+    syncDisconnectedControls();
+    if (wantStream && currentDeviceKey && !panel.isHiddenByUser()) {
+      setTimeout(() => requestStart(), 600);
+    } else if (!currentDeviceKey) {
+      panel.setStatus('idle', 'select a device');
+    } else {
+      panel.setStatus('idle');
+    }
+  } catch (e) {
+    console.warn('Radio Display device change failed', e);
+    alert('Could not change capture device: ' + (e.message || e));
+    await loadDeviceSelect(currentDeviceKey);
+  }
+}
+
+async function setTargetFps(fps) {
+  const want = normalizeFps(fps);
+  try {
+    const res = await fetch('/api/video/fps', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fps: want })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    currentTargetFps = normalizeFps(data.targetFps ?? want, data.rates ?? deviceRates);
+    applyDeviceFpsCap(data.rates ?? deviceRates, currentTargetFps);
+  } catch (e) {
+    console.warn('Radio Display FPS change failed', e);
+    alert('Could not change frame rate: ' + (e.message || e));
+    syncFpsSelect(currentTargetFps);
+  }
+}
+
+/**
+ * Persist the capture size. The pin is chosen when the device is opened, so
+ * the host restarts the capture; a running stream drops for a second or two.
+ */
+async function setCaptureSize(size) {
+  const want = deviceSizes.includes(size) ? size : '';
+  try {
+    const res = await fetch('/api/video/size', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size: want })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    applyDeviceSizes(data.sizes ?? deviceSizes, data.captureSize ?? want);
+  } catch (e) {
+    console.warn('Radio Display capture size change failed', e);
+    alert('Could not change capture size: ' + (e.message || e));
+    syncSizeSelect(currentCaptureSize);
+  }
+}
+
+async function setJpegQuality(quality) {
+  const want = normalizeQuality(quality);
+  try {
+    const res = await fetch('/api/video/jpeg-quality', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quality: want })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    currentJpegQuality = normalizeQuality(data.jpegQuality ?? want);
+    syncQualitySelect(currentJpegQuality);
+  } catch (e) {
+    console.warn('Radio Display image quality change failed', e);
+    alert('Could not change image quality: ' + (e.message || e));
+    syncQualitySelect(currentJpegQuality);
+  }
+}
+
+/**
+ * @param {{ attachStream?: boolean }} [options]
+ */
+async function pollStatus(options = {}) {
+  const attachStream = options.attachStream !== false;
+  try {
+    const res = await fetch('/api/video/status');
+    if (!res.ok) return;
+    const data = await res.json();
+    enabled = !!data.enabled;
+    currentDeviceKey = data.deviceKey || '';
+    currentJpegQuality = normalizeQuality(data.jpegQuality);
+    applyDeviceFpsCap(data.rates, data.targetFps);
+    applyDeviceSizes(data.sizes, data.captureSize ?? '');
+
+    if (!panel) return;
+
+    if (!data.enabled) {
+      clearDisconnectedHold();
+      wantStream = false;
+      panel.setStatus('unconfigured');
+      lastServerStatus = 'unconfigured';
+      stopStream();
+      syncStreamButton();
+      return;
+    }
+
+    const sel = document.getElementById('radioDisplayDeviceSelect');
+    if (sel && document.activeElement !== sel && !selectMatchesSavedKey(sel, currentDeviceKey)) {
+      await loadDeviceSelect(currentDeviceKey);
+    }
+    syncFpsSelect(currentTargetFps);
+    syncQualitySelect(currentJpegQuality);
+    syncSizeSelect(currentCaptureSize);
+    syncStreamButton();
+
+    if (!currentDeviceKey) {
+      clearDisconnectedHold();
+      panel.setStatus('idle', 'select a device');
+      lastServerStatus = 'idle';
+      stopStream();
+      return;
+    }
+
+    const detail = data.width && data.height
+      ? `${data.width}×${data.height}` + (data.fps ? ` @ ${data.fps}fps` : '')
+      : (data.error || undefined);
+
+    let status = data.status || 'idle';
+    if (status === 'connecting' || status === 'streaming') {
+      awaitingCapture = false;
+      if (holdDisconnected && !data.halted && status !== 'disconnected') {
+        clearDisconnectedHold();
+        syncDisconnectedControls();
+      }
+    }
+
+    const serverHalted = !!data.halted || status === 'disconnected';
+    if (serverHalted) {
+      holdDisconnected = true;
+      if (data.error) holdDisconnectedDetail = data.error;
+      if (awaitingCapture && wantStream) {
+        panel.setStatus('connecting');
+        lastServerStatus = 'connecting';
+        return;
+      }
+      wantStream = false;
+      stopStream();
+      panel.setStatus('disconnected', holdDisconnectedDetail || data.error || undefined);
+      lastServerStatus = 'disconnected';
+      syncStreamButton();
+      syncDisconnectedControls();
+      if (attachStream) return;
+    }
+
+    if (holdDisconnected && !wantStream) {
+      panel.setStatus('disconnected', holdDisconnectedDetail || data.error || undefined);
+      lastServerStatus = 'disconnected';
+      syncStreamButton();
+      syncDisconnectedControls();
+      if (attachStream) return;
+    } else if (!wantStream) {
+      status = 'idle';
+      panel.setStatus('idle');
+      lastServerStatus = 'idle';
+      if (attachStream) return;
+    } else if (status === 'idle' && streamActive) {
+      status = 'connecting';
+    }
+    if (wantStream) panel.setStatus(status, detail);
+
+    const seq = Number(data.frameSeq) || 0;
+    const recovered = status === 'streaming' && lastServerStatus !== 'streaming';
+    const seqReset = status === 'streaming' && seq > 0 && lastFrameSeq > 0 && seq < lastFrameSeq;
+    lastFrameSeq = seq;
+
+    const img = document.getElementById('radioDisplayImg');
+    const looksBlank = streamActive && status === 'streaming' && img && !img.naturalWidth;
+    if (looksBlank) blankPolls += 1;
+    else blankPolls = 0;
+
+    lastServerStatus = status;
+
+    if (!attachStream || panel.isHiddenByUser() || !wantStream || holdDisconnected) return;
+
+    if (recovered || seqReset || blankPolls >= 2) {
+      blankPolls = 0;
+      startStream();
+      return;
+    }
+
+    if (!streamActive) {
+      startStream();
+    }
+  } catch (e) {
+    console.warn('Radio Display status poll failed', e);
+  }
+}
+
+function initRadioDisplayTooltips() {
+  if (typeof bootstrap === 'undefined') return false;
+  document.querySelectorAll('.radio-display-tip[data-bs-toggle="tooltip"]').forEach(el => {
+    bootstrap.Tooltip.getOrCreateInstance(el, {
+      delay: { show: 200, hide: 50 },
+      trigger: 'hover focus',
+      placement: 'top'
+    });
+  });
+  return true;
+}
+
+function ensureRadioDisplayTooltips() {
+  if (initRadioDisplayTooltips()) return;
+  window.addEventListener('load', () => initRadioDisplayTooltips(), { once: true });
+}
+
+function onPopoutReady() {
+  if (uiMode !== 'index') return;
+  stopStream();
+  panel?.hide();
+}
+
+function bindChannel() {
+  const ch = getChannel();
+  if (ch) {
+    ch.onmessage = (ev) => {
+      const msg = ev?.data;
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'reattach') onReattachFromPopout(!!msg.stream);
+      if (msg.type === 'popout-ready') onPopoutReady();
+    };
+  }
+
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== window.location.origin) return;
+    if (ev.data?.type === 'ywc-radio-display-reattach') {
+      onReattachFromPopout(!!ev.data.stream);
+    }
+    if (ev.data?.type === 'ywc-radio-display-popout-ready') onPopoutReady();
+  });
+}
+
+function closeScopeDialog() {
+  document.getElementById('radioDisplayScopeDialog')?.close();
+}
+
+function isControlsDocked() {
+  return localStorage.getItem(CONTROLS_DOCKED_KEY) !== '0';
+}
+
+function isControlsVisiblePreference() {
+  const stored = localStorage.getItem(CONTROLS_VISIBLE_KEY);
+  if (stored === '0') return false;
+  if (stored === '1') return true;
+  return isControlsDocked();
+}
+
+function setControlsVisiblePreference(visible) {
+  localStorage.setItem(CONTROLS_VISIBLE_KEY, visible ? '1' : '0');
+}
+
+function isScopeControlsVisible() {
+  const dlg = document.getElementById('radioDisplayScopeDialog');
+  const body = getRadioDisplayBody();
+  if (!dlg?.open) return false;
+  if (isControlsDocked()) return !!body?.classList.contains('controls-docked');
+  return true;
+}
+
+function getRadioDisplayBody() {
+  return document.querySelector('.radio-display-body');
+}
+
+function remToPx(rem) {
+  const root = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  return rem * root;
+}
+
+function getSavedScopeColumnWidthPx() {
+  try {
+    const raw = localStorage.getItem(CONTROLS_WIDTH_KEY);
+    if (raw == null || raw === '') return null;
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    // Pre-33rem default was exactly 22rem and clipped Span. Only that old
+    // default is treated as unset — values below it are intentional narrow
+    // widths (keyboard/mouse) and must not fall through to the new default.
+    if (Math.abs(n - remToPx(22)) < 2) return null;
+    return n;
+  } catch {
+    return null;
+  }
+}
+
+function saveScopeColumnWidthPx(px) {
+  try {
+    localStorage.setItem(CONTROLS_WIDTH_KEY, String(Math.round(px)));
+  } catch { /* private browsing */ }
+}
+
+function clearSavedScopeColumnWidth() {
+  try {
+    localStorage.removeItem(CONTROLS_WIDTH_KEY);
+  } catch { /* private browsing */ }
+}
+
+/**
+ * Clamp docked column width: min 16rem (or 40% of body on a tiny card),
+ * max min(40rem, 60% of body).
+ */
+function clampScopeColumnWidthPx(px, bodyWidth) {
+  const minRem = remToPx(SCOPE_WIDTH_MIN_REM);
+  const maxRem = remToPx(SCOPE_WIDTH_MAX_REM);
+  const bw = bodyWidth > 0 ? bodyWidth : remToPx(SCOPE_WIDTH_DEFAULT_REM) * 2;
+  const minPx = Math.min(minRem, bw * 0.4);
+  const maxPx = Math.min(maxRem, bw * 0.6);
+  // If the body is so narrow that min > max, favour keeping some video.
+  if (minPx > maxPx) return Math.max(0, maxPx);
+  return Math.max(minPx, Math.min(maxPx, px));
+}
+
+function applyScopeColumnWidth(px) {
+  const body = getRadioDisplayBody();
+  const dlg = document.getElementById('radioDisplayScopeDialog');
+  if (!body || !dlg) return;
+
+  if (!body.classList.contains('controls-docked')) {
+    body.style.removeProperty('--radio-display-scope-width');
+    const splitter = dlg.querySelector('.radio-display-scope-splitter');
+    for (const el of [dlg, splitter]) {
+      if (!el) continue;
+      el.removeAttribute('aria-valuenow');
+      el.removeAttribute('aria-valuemin');
+      el.removeAttribute('aria-valuemax');
+    }
+    return;
+  }
+
+  const bodyWidth = body.getBoundingClientRect().width;
+  // Prefer an explicit drag/keyboard value; otherwise re-apply the persisted
+  // preference (so a narrow first layout pass does not permanently shrink the
+  // column when the body later grows).
+  const desired = (px != null && Number.isFinite(px))
+    ? px
+    : (getSavedScopeColumnWidthPx() ?? remToPx(SCOPE_WIDTH_DEFAULT_REM));
+  const clamped = clampScopeColumnWidthPx(desired, bodyWidth);
+  body.style.setProperty('--radio-display-scope-width', `${Math.round(clamped)}px`);
+
+  const splitter = dlg.querySelector('.radio-display-scope-splitter');
+  const minPx = Math.min(remToPx(SCOPE_WIDTH_MIN_REM), bodyWidth * 0.4);
+  const maxPx = Math.min(remToPx(SCOPE_WIDTH_MAX_REM), bodyWidth * 0.6);
+  const ariaTarget = splitter || dlg;
+  ariaTarget.setAttribute('aria-valuenow', String(Math.round(clamped)));
+  ariaTarget.setAttribute('aria-valuemin', String(Math.round(Math.min(minPx, maxPx))));
+  ariaTarget.setAttribute('aria-valuemax', String(Math.round(Math.max(minPx, maxPx))));
+}
+
+function resetScopeColumnWidth() {
+  clearSavedScopeColumnWidth();
+  applyScopeColumnWidth(remToPx(SCOPE_WIDTH_DEFAULT_REM));
+  panel?.applyFit();
+}
+
+function bindScopeColumnResize(dlg) {
+  const splitter = dlg?.querySelector('.radio-display-scope-splitter');
+  if (!splitter || splitter.dataset.bound === '1') return;
+  splitter.dataset.bound = '1';
+  // makeDraggable (Index.cshtml) runs before this and sets cursor:grab on the
+  // first div child of every dialog, which is the splitter.  Clear that inline
+  // style so the CSS col-resize rule takes effect.
+  splitter.style.cursor = '';
+
+  let dragging = false;
+  let pointerId = null;
+
+  const onPointerMove = (e) => {
+    if (!dragging || (pointerId != null && e.pointerId !== pointerId)) return;
+    const body = getRadioDisplayBody();
+    if (!body?.classList.contains('controls-docked')) return;
+    const bodyRect = body.getBoundingClientRect();
+    // Column is on the right: width = body right edge − pointer X.
+    const next = bodyRect.right - e.clientX;
+    applyScopeColumnWidth(next);
+    panel?.applyFit();
+  };
+
+  const endDrag = (e) => {
+    if (!dragging) return;
+    if (pointerId != null && e?.pointerId != null && e.pointerId !== pointerId) return;
+    dragging = false;
+    scopeColumnDragging = false;
+    dlg.classList.remove('scope-resizing');
+    setBootstrapTooltipSuspended(splitter, false);
+    try {
+      if (pointerId != null) splitter.releasePointerCapture(pointerId);
+    } catch { /* ignore */ }
+    pointerId = null;
+    const body = getRadioDisplayBody();
+    if (body?.classList.contains('controls-docked')) {
+      const w = dlg.getBoundingClientRect().width;
+      if (w > 0) saveScopeColumnWidthPx(w);
+    }
+    panel?.applyFit();
+  };
+
+  splitter.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const body = getRadioDisplayBody();
+    if (!body?.classList.contains('controls-docked')) return;
+    // Suspend for the whole drag — hide() alone is not enough: the pointer
+    // stays over the splitter, so Bootstrap's hover trigger re-shows the tip
+    // (and never re-anchors it as the column moves).
+    setBootstrapTooltipSuspended(splitter, true);
+    dragging = true;
+    scopeColumnDragging = true;
+    pointerId = e.pointerId;
+    dlg.classList.add('scope-resizing');
+    try { splitter.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    e.preventDefault();
+  });
+
+  splitter.addEventListener('pointermove', onPointerMove);
+  splitter.addEventListener('pointerup', endDrag);
+  splitter.addEventListener('pointercancel', endDrag);
+
+  splitter.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    setBootstrapTooltipSuspended(splitter, true);
+    resetScopeColumnWidth();
+    setBootstrapTooltipSuspended(splitter, false);
+  });
+
+  splitter.addEventListener('keydown', (e) => {
+    const body = getRadioDisplayBody();
+    if (!body?.classList.contains('controls-docked')) return;
+    const bodyWidth = body.getBoundingClientRect().width;
+    // Prefer live layout / CSS var; never use || (a 0-width rect would
+    // incorrectly fall through to the default and "wrap" past the min).
+    const rectW = dlg.getBoundingClientRect().width;
+    const fromCss = parseFloat(body.style.getPropertyValue('--radio-display-scope-width'));
+    const current = (rectW > 0 ? rectW : null)
+      ?? (Number.isFinite(fromCss) && fromCss > 0 ? fromCss : null)
+      ?? getSavedScopeColumnWidthPx()
+      ?? remToPx(SCOPE_WIDTH_DEFAULT_REM);
+    let next = null;
+    if (e.key === 'ArrowLeft') next = current + SCOPE_WIDTH_NUDGE_PX;
+    else if (e.key === 'ArrowRight') next = current - SCOPE_WIDTH_NUDGE_PX;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = bodyWidth;
+    else return;
+    e.preventDefault();
+    // Focus trigger would re-show after a plain hide(); suspend for the nudge.
+    setBootstrapTooltipSuspended(splitter, true);
+    const clamped = clampScopeColumnWidthPx(next, bodyWidth);
+    applyScopeColumnWidth(clamped);
+    saveScopeColumnWidthPx(clamped);
+    panel?.applyFit();
+    setBootstrapTooltipSuspended(splitter, false);
+  });
+}
+
+function clearScopeDialogOverlayPos(dlg) {
+  if (!dlg) return;
+  dlg.style.left = '';
+  dlg.style.top = '';
+  dlg.style.transform = '';
+  dlg.style.position = '';
+}
+
+function applyScopeOverlayPosition(dlg) {
+  if (!dlg) return;
+  dlg.style.position = 'fixed';
+  try {
+    const saved = JSON.parse(localStorage.getItem('dlgPos_radioDisplayScopeDialog') || 'null');
+    if (saved?.left && saved?.top) {
+      dlg.style.left = saved.left;
+      dlg.style.top = saved.top;
+      dlg.style.transform = 'none';
+      return;
+    }
+  } catch { /* ignore */ }
+  dlg.style.left = '';
+  dlg.style.top = '';
+  dlg.style.transform = '';
+}
+
+function syncScopeControlsBtn(btn, dlg) {
+  if (!btn || !dlg) return;
+  const visible = isScopeControlsVisible();
+  btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+  btn.classList.toggle('active', visible);
+  const tip = btn.closest('.radio-display-tip');
+  if (tip) {
+    const title = visible ? 'Hide scope controls' : 'Show scope controls';
+    tip.setAttribute('data-bs-title', title);
+    tip.setAttribute('aria-label', title);
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+      const inst = bootstrap.Tooltip.getInstance(tip);
+      if (inst) inst.setContent({ '.tooltip-inner': title });
+    }
+  }
+}
+
+function hideScopeControls({ persist = true } = {}) {
+  const dlg = document.getElementById('radioDisplayScopeDialog');
+  const body = getRadioDisplayBody();
+  const btn = document.getElementById('radioDisplayScopeBtn');
+  body?.classList.remove('controls-docked');
+  dlg?.close();
+  applyScopeColumnWidth();
+  if (persist) setControlsVisiblePreference(false);
+  syncScopeControlsBtn(btn, dlg);
+  panel?.applyFit();
+}
+
+function showScopeControls({ refresh = true, persist = true } = {}) {
+  const dlg = document.getElementById('radioDisplayScopeDialog');
+  const body = getRadioDisplayBody();
+  const btn = document.getElementById('radioDisplayScopeBtn');
+  if (!dlg) return;
+
+  if (isControlsDocked()) {
+    body?.classList.add('controls-docked');
+    clearScopeDialogOverlayPos(dlg);
+    applyScopeColumnWidth();
+  } else {
+    body?.classList.remove('controls-docked');
+    applyScopeOverlayPosition(dlg);
+    applyScopeColumnWidth();
+  }
+
+  if (!dlg.open) {
+    if (typeof dlg.show === 'function') dlg.show();
+    else dlg.setAttribute('open', '');
+  }
+
+  if (persist) setControlsVisiblePreference(true);
+  if (refresh) window.notifyRadioScopeControls?.(c => c.refresh());
+  syncScopeControlsBtn(btn, dlg);
+  panel?.applyFit();
+}
+
+function applyControlsLayout({ refreshIfDocked = false } = {}) {
+  if (isControlsVisiblePreference()) {
+    showScopeControls({ refresh: refreshIfDocked, persist: false });
+  } else {
+    hideScopeControls({ persist: false });
+  }
+}
+
+function undockScopeControls() {
+  localStorage.setItem(CONTROLS_DOCKED_KEY, '0');
+  showScopeControls({ refresh: true });
+}
+
+function dockScopeControls() {
+  localStorage.setItem(CONTROLS_DOCKED_KEY, '1');
+  showScopeControls({ refresh: true });
+}
+
+function hideBootstrapTooltip(el) {
+  if (!el || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+  bootstrap.Tooltip.getInstance(el)?.hide();
+}
+
+/** Hide and suspend a tip for the duration of a drag/resize; restore afterwards. */
+function setBootstrapTooltipSuspended(el, suspended) {
+  if (!el || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+  const tip = bootstrap.Tooltip.getInstance(el);
+  if (!tip) return;
+  tip.hide();
+  if (suspended) tip.disable();
+  else tip.enable();
+}
+
+function initScopeLayoutTooltips(dlg) {
+  if (!dlg || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+  dlg.querySelectorAll('.radio-display-scope-undock-btn, .radio-display-scope-dock-btn').forEach(el => {
+    bootstrap.Tooltip.getInstance(el)?.dispose();
+    bootstrap.Tooltip.getOrCreateInstance(el, {
+      delay: { show: 200, hide: 50 },
+      trigger: 'hover focus',
+      placement: 'bottom',
+      container: dlg,
+      fallbackPlacements: ['top', 'left', 'right']
+    });
+  });
+  // Splitter tooltip — Bootstrap must own it so it renders reliably inside
+  // the <dialog> element (native title tooltips are suppressed by many browsers
+  // inside dialogs).  Move the text from title to data-bs-title so Bootstrap
+  // doesn't strip it on dispose, then init with placement 'right'.
+  const splitter = dlg.querySelector('.radio-display-scope-splitter');
+  if (splitter) {
+    bootstrap.Tooltip.getInstance(splitter)?.dispose();
+    const tip = splitter.getAttribute('title') || splitter.getAttribute('data-bs-title') || '';
+    if (tip) {
+      splitter.removeAttribute('title');
+      splitter.setAttribute('data-bs-title', tip);
+    }
+    bootstrap.Tooltip.getOrCreateInstance(splitter, {
+      delay: { show: 600, hide: 100 },
+      trigger: 'hover focus',
+      placement: 'right',
+      container: 'body',
+      fallbackPlacements: ['left', 'bottom', 'top']
+    });
+  }
+}
+
+function bindScopeDialog() {
+  const dlg = document.getElementById('radioDisplayScopeDialog');
+  const btn = document.getElementById('radioDisplayScopeBtn');
+  const closeBtn = document.getElementById('radioDisplayScopeCloseBtn');
+  const dockBtn = document.getElementById('radioDisplayScopeDockBtn');
+  const undockBtn = document.getElementById('radioDisplayScopeUndockBtn');
+  if (!dlg || !btn) return;
+
+  dlg.addEventListener('close', () => {
+    getRadioDisplayBody()?.classList.remove('controls-docked');
+    syncScopeControlsBtn(btn, dlg);
+  });
+
+  dlg.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    hideScopeControls();
+  });
+
+  closeBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    hideScopeControls();
+  });
+
+  undockBtn?.addEventListener('click', () => {
+    hideBootstrapTooltip(undockBtn);
+    undockScopeControls();
+  });
+
+  dockBtn?.addEventListener('click', () => {
+    hideBootstrapTooltip(dockBtn);
+    dockScopeControls();
+  });
+
+  btn.addEventListener('click', () => {
+    if (isScopeControlsVisible()) hideScopeControls();
+    else showScopeControls();
+  });
+
+  initScopeLayoutTooltips(dlg);
+  bindScopeColumnResize(dlg);
+  applyControlsLayout({ refreshIfDocked: true });
+
+  // Index already makes this dialog draggable with the other popovers.
+  // The pop-out page has no such helper, so bind a small drag here.
+  if (uiMode === 'popout') {
+    const handle = dlg.querySelector('.radio-display-scope-dialog-header');
+    if (handle) bindDialogDrag(dlg, handle);
+  }
+
+  // Re-clamp if the card / window changes size (Index card, pop-out resize).
+  if (typeof ResizeObserver !== 'undefined') {
+    const body = getRadioDisplayBody();
+    if (body && !body.dataset.scopeWidthRo) {
+      body.dataset.scopeWidthRo = '1';
+      new ResizeObserver(() => {
+        if (body.classList.contains('controls-docked') && !scopeColumnDragging) {
+          applyScopeColumnWidth();
+        }
+      }).observe(body);
+    }
+  }
+}
+
+function bindDialogDrag(dialog, handle) {
+  handle.style.cursor = 'grab';
+  handle.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || e.target.closest('button')) return;
+    if (getRadioDisplayBody()?.classList.contains('controls-docked')) return;
+    const r = dialog.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origLeft = r.left;
+    const origTop = r.top;
+    dialog.style.transform = 'none';
+    dialog.style.position = 'fixed';
+    const onMove = (ev) => {
+      dialog.style.left = `${origLeft + ev.clientX - startX}px`;
+      dialog.style.top = `${origTop + ev.clientY - startY}px`;
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      handle.style.cursor = 'grab';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    handle.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+}
+
+function syncFitFillToggle(mode) {
+  const contain = document.getElementById('radioDisplayFitContain');
+  const cover = document.getElementById('radioDisplayFitCover');
+  if (!contain || !cover) return;
+  const isCover = mode === 'cover';
+  contain.checked = !isCover;
+  cover.checked = isCover;
+}
+
+function bindFitFillToggle() {
+  const contain = document.getElementById('radioDisplayFitContain');
+  const cover = document.getElementById('radioDisplayFitCover');
+  if (!contain || !cover || !panel) return;
+
+  const onChange = () => {
+    panel.setFitMode(cover.checked ? 'cover' : 'contain');
+  };
+  contain.addEventListener('change', onChange);
+  cover.addEventListener('change', onChange);
+  syncFitFillToggle(panel.getFitMode());
+}
+
+function bindControls() {
+  bindScopeDialog();
+  bindFitFillToggle();
+
+  document.getElementById('radioDisplayFullscreenBtn')?.addEventListener('click', () => {
+    panel.requestFullscreen().catch(() => {});
+  });
+
+  document.getElementById('radioDisplayCloseBtn')?.addEventListener('click', () => {
+    closeScopeDialog();
+    requestStop();
+    if (uiMode === 'popout') {
+      window.close();
+      return;
+    }
+    panel.hide();
+  });
+
+  document.getElementById('radioDisplayShowBtn')?.addEventListener('click', () => {
+    panel.show();
+    if (isAutoStart()) requestStart();
+    else syncStreamButton();
+  });
+
+  document.getElementById('radioDisplayPopoutBtn')?.addEventListener('click', () => {
+    const qs = wantStream ? '?stream=1' : '';
+    const w = window.open('/RadioDisplay' + qs, 'ywc-radio-display', 'width=900,height=600');
+    if (w) w.focus();
+    closeScopeDialog();
+    // Hide the Index card immediately but keep the MJPEG viewer attached
+    // until the pop-out acquires, so the USB device is never released.
+    panel.hide();
+    setTimeout(() => {
+      if (uiMode === 'index' && panel?.isHiddenByUser()) stopStream();
+    }, 4000);
+  });
+
+  document.getElementById('radioDisplayReattachBtn')?.addEventListener('click', () => {
+    reattachToIndex();
+  });
+
+  if (!controlsBound) {
+    controlsBound = true;
+    document.getElementById('radioDisplayDeviceSelect')?.addEventListener('change', (ev) => {
+      setDeviceKey(ev.target.value || '');
+    });
+    document.getElementById('radioDisplayRefreshDevicesBtn')?.addEventListener('click', () => {
+      loadDeviceSelect(currentDeviceKey);
+    });
+    document.getElementById('radioDisplayFpsSelect')?.addEventListener('change', (ev) => {
+      setTargetFps(ev.target.value);
+    });
+    document.getElementById('radioDisplayQualitySelect')?.addEventListener('change', (ev) => {
+      setJpegQuality(ev.target.value);
+    });
+    document.getElementById('radioDisplaySizeSelect')?.addEventListener('change', (ev) => {
+      setCaptureSize(ev.target.value || '');
+    });
+    document.getElementById('radioDisplayStreamBtn')?.addEventListener('click', () => {
+      if (wantStream) requestStop();
+      else requestStart();
+    });
+    document.getElementById('radioDisplayAutoStart')?.addEventListener('change', (ev) => {
+      const on = !!ev.target.checked;
+      setAutoStart(on);
+      if (on && enabled && currentDeviceKey && !panel.isHiddenByUser()) {
+        requestStart();
+      }
+    });
+  }
+
+  syncAutoStartCheckbox();
+  syncStreamButton();
+  ensureRadioDisplayTooltips();
+}
+
+/**
+ * Index / pop-out entry point.
+ * @param {'index'|'popout'} [mode]
+ */
+export async function initRadioDisplayUi(mode = 'index') {
+  const container = document.getElementById('radioDisplayContainer');
+  if (!container) return;
+
+  uiMode = mode === 'popout' ? 'popout' : 'index';
+  panel = new RadioDisplayPanel(
+    'radioDisplayImg',
+    'radioDisplayContainer',
+    'radioDisplayBadge',
+    {
+      ignoreHidePreference: uiMode === 'popout',
+      naturalSize: uiMode === 'index'
+    }
+  );
+  bindChannel();
+  bindControls();
+
+  // Prototype: click-to-tune and clickable readouts / soft-buttons drawn over
+  // the captured TFT. Needs the scope control for span and band, so the
+  // pages construct that first. Exposed on window for the debug helpers.
+  window.radioDisplayHotspots = new RadioDisplayHotspots(
+    document.getElementById('radioDisplayImg'),
+    {
+      radioModel: container.dataset.radioModel || '',
+      dualReceiver: container.dataset.dualReceiver === 'true',
+      getScopeControl: () => (window.radioScopeControls || []).find(c => c.state) || window.radioScopeControl || null
+    });
+
+  const streamHint = uiMode === 'popout'
+    && new URLSearchParams(window.location.search).get('stream') === '1';
+  const autoWanted = isAutoStart() || streamHint;
+
+  // Probe status before attaching MJPEG so server halt blocks Auto/reload reopen.
+  await pollStatus({ attachStream: false });
+  syncDisconnectedControls();
+  wantStream = !holdDisconnected && autoWanted;
+
+  // Probe the device list before attaching MJPEG so enumeration never
+  // Open()s the dongle while the capture loop already holds it.
+  await loadDeviceSelect(currentDeviceKey);
+  if (wantStream && enabled && currentDeviceKey && !panel.isHiddenByUser()) {
+    await requestStart();
+  }
+  syncStreamButton();
+  if (statusTimer) clearInterval(statusTimer);
+  statusTimer = setInterval(pollStatus, STATUS_POLL_MS);
+
+  window.addEventListener('beforeunload', () => stopStream());
+}

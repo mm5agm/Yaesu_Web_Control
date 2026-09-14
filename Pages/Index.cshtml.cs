@@ -73,11 +73,11 @@ namespace Yaesu_Web_Control.Pages
         public string FmShiftDir { get; set; } = "0";
         public int FmOffsetHz { get; set; } = 600000;
         public string CtcssMode { get; set; } = "00";
-        public string CtcssTone { get; set; } = "01";
+        public string CtcssTone { get; set; } = "000";
 
-        public double SdrSampleRateHz  { get; set; } = 2_048_000;
-        public double SdrSampleRateHzA { get; set; } = 2_048_000;
-        public double SdrSampleRateHzB { get; set; } = 2_048_000;
+        public double SdrSampleRateHz  { get; set; } = 2_000_000;
+        public double SdrSampleRateHzA { get; set; } = 2_000_000;
+        public double SdrSampleRateHzB { get; set; } = 2_000_000;
 
         // Per-VFO spectrum DSP knobs — initial values for the Low/High/Zoom
         // sliders on each spectrum panel. Persisted server-side; see
@@ -98,8 +98,20 @@ namespace Yaesu_Web_Control.Pages
         // Default false; user enables via Settings > Accessibility.
         public bool ShowFrequencyArrowButtons { get; set; } = false;
 
+        /// <summary>True when Settings has Radio Display enabled, so Index can
+        /// hide the standalone Radio Scope card (those controls live on the
+        /// video panel instead) and render the video toolbar.</summary>
+        public bool VideoDisplayEnabled { get; set; } = false;
+
         // Optional browser key that toggles TX. Empty = disabled.
         public string TxToggleKey { get; set; } = string.Empty;
+
+        /// <summary>True on the Windows product host (tray/voice/SDR available).</summary>
+#if WINDOWS
+        public bool IsWindowsHost { get; } = true;
+#else
+        public bool IsWindowsHost { get; } = false;
+#endif
 
         // Voice control nudge step defaults for each VFO's mic button
         // dropdown, server-rendered so voice-control.js has a starting
@@ -153,6 +165,7 @@ namespace Yaesu_Web_Control.Pages
             BandPlan = settings.BandPlan switch { "UK" => "Region1", "USA" => "Region2", var v => v };
             RadioModel = settings.RadioModel;
             InstalledRoofingFilters = settings.InstalledRoofingFilters;
+            VideoDisplayEnabled = settings.VideoDisplayEnabled;
 
             // Load persisted MIC Gain, PROC, and other TX controls
             MicGain = _radioStateService.MicGain;

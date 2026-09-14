@@ -1,0 +1,354 @@
+using System.Text;
+using Microsoft.AspNetCore.Mvc;
+using Yaesu_Web_Control.Services;
+using Yaesu_Web_Control.Services.Video;
+
+namespace Yaesu_Web_Control.Controllers
+{
+    [ApiController]
+    [Route("api/video")]
+    public class VideoController : ControllerBase
+    {
+        private static readonly byte[] NewLine = Encoding.ASCII.GetBytes("\r\n");
+        private const string Boundary = "frame";
+
+        private readonly ISettingsService _settings;
+        private readonly VideoCaptureService _capture;
+        private readonly VideoSessionManager _sessions;
+        private readonly ILogger<VideoController> _logger;
+
+        public VideoController(
+            ISettingsService settings,
+            VideoCaptureService capture,
+            VideoSessionManager sessions,
+            ILogger<VideoController> logger)
+        {
+            _settings = settings;
+            _capture = capture;
+            _sessions = sessions;
+            _logger = logger;
+        }
+
+        [HttpGet("devices")]
+        public IActionResult ListDevices()
+        {
+            try
+            {
+                // Never probe-open cameras while the capture loop holds the
+                // dongle — that second Open is what kills the host on stop/pop-out.
+                var devices = VideoDeviceEnumerator.ListDevices(allowProbe: !_capture.IsCapturing)
+                    .ToList();
+                if (devices.Count == 0 && _capture.OpenDeviceIndex is int idx)
+                {
+                    var key = VideoDeviceKey.FromIndex(idx);
+                    devices.Add(new VideoDeviceInfo
+                    {
+                        Index = idx,
+                        Key = key,
+                        Label = $"Camera {idx} (in use)",
+                        Rates = VideoDeviceFpsCaps.PeekRates(key)
+                    });
+                }
+
+                var payload = devices.Select(d => new { key = d.Key, label = d.Label, index = d.Index, maxFps = d.MaxFps, rates = d.Rates });
+                if (OperatingSystem.IsMacOS() && devices.Count > 0)
+                {
+                    _logger.LogDebug(
+                        "Radio Display macOS cameras: {Cameras}",
+                        string.Join("; ", devices.Select(d => $"{d.Index}={d.Label} [{d.Key}]")));
+                }
+                if (OperatingSystem.IsWindows() &&
+                    devices.Count > 0 &&
+                    devices.All(d => d.Label.StartsWith("Camera ", StringComparison.Ordinal)))
+                {
+                    _logger.LogDebug(
+                        "Radio Display: DirectShow friendly names empty (CreateClassEnumerator hr={Hr})",
+                        WindowsDshowDevices.LastCreateClassEnumeratorHr);
+                }
+                string notes;
+                if (OperatingSystem.IsLinux())
+                {
+                    notes = "Linux: devices from /sys/class/video4linux. Map /dev/video* into Docker and add the video group.";
+                }
+                else if (OperatingSystem.IsMacOS() && devices.Count == 0)
+                {
+                    notes =
+                        "macOS: no cameras visible (Camera permission denied or missing). " +
+                        "Use scripts/macos/run-dev.sh or the DMG .app (not bare `dotnet run` / `make run`), " +
+                        "then allow Camera under System Settings → Privacy & Security → Camera → Yaesu Web Control, and refresh. " +
+                        "On Intel Macs also install Homebrew libavif (`brew install libavif`) — OpenCvSharp’s x64 native library links it.";
+                }
+                else if (OperatingSystem.IsMacOS())
+                {
+                    notes =
+                        "Select a USB webcam or HDMI capture dongle. Devices are matched by unique ID when Continuity Camera (iPhone) is present. " +
+                        "If open fails on Intel Mac with a libavif error, run: brew install libavif";
+                }
+                else
+                {
+                    notes = "Select a USB webcam or HDMI capture dongle. Indexes can shift when devices are replugged.";
+                }
+                return Ok(new { devices = payload, notes });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to enumerate video devices");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("status")]
+        public async Task<IActionResult> Status()
+        {
+            var s = await _settings.GetSettingsAsync();
+            var rates = VideoDeviceFpsCaps.RatesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
+            var targetFps = VideoFpsOptions.Normalize(s.VideoTargetFps, rates);
+            var sizes = VideoDeviceSizeCaps.SizesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
+            return Ok(new
+            {
+                enabled = s.VideoDisplayEnabled,
+                deviceKey = s.VideoCaptureDeviceKey ?? "",
+                status = _capture.Status,
+                halted = _capture.IsHaltedAfterDisconnect,
+                error = _capture.LastError,
+                width = _capture.FrameWidth,
+                height = _capture.FrameHeight,
+                fps = Math.Round(_capture.MeasuredFps, 1),
+                frameSeq = _capture.FrameSeq,
+                viewers = _sessions.ViewerCount,
+                maxWidth = s.VideoMaxWidth,
+                targetFps,
+                maxFps = VideoFpsOptions.Max(rates),
+                rates,
+                captureSize = VideoSizeOptions.Normalize(s.VideoCaptureSize, sizes),
+                sizes,
+                jpegQuality = VideoJpegQualityOptions.Normalize(s.VideoJpegQuality)
+            });
+        }
+
+        public sealed class DeviceRequest
+        {
+            public string? Key { get; set; }
+        }
+
+        /// <summary>
+        /// Persist the capture device key and reopen the stream if viewers are connected.
+        /// </summary>
+        [HttpPost("device")]
+        public async Task<IActionResult> SetDevice([FromBody] DeviceRequest? body)
+        {
+            var key = (body?.Key ?? "").Trim();
+            if (!string.IsNullOrEmpty(key) && !VideoDeviceKey.IsPersistableKey(key))
+                return BadRequest(new { error = "Invalid device key." });
+
+            var s = await _settings.GetSettingsAsync();
+            if (!s.VideoDisplayEnabled)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
+
+            s.VideoCaptureDeviceKey = key;
+            await _settings.SaveSettingsAsync(s);
+            _capture.ClearDisconnectHalt();
+            _capture.RequestRestart();
+            _logger.LogInformation("Radio Display device set to {Key}", string.IsNullOrEmpty(key) ? "(none)" : key);
+            var rates = VideoDeviceFpsCaps.RatesFor(key, allowDeviceOpen: !_capture.IsCapturing);
+            return Ok(new { deviceKey = s.VideoCaptureDeviceKey, status = _capture.Status, maxFps = VideoFpsOptions.Max(rates), rates });
+        }
+
+        public sealed class FpsRequest
+        {
+            public int? Fps { get; set; }
+        }
+
+        /// <summary>Persist encode FPS from the device-advertised list. Applied on the next frame cycle.</summary>
+        [HttpPost("fps")]
+        public async Task<IActionResult> SetFps([FromBody] FpsRequest? body)
+        {
+            var s = await _settings.GetSettingsAsync();
+            if (!s.VideoDisplayEnabled)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
+
+            var rates = VideoDeviceFpsCaps.RatesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
+            s.VideoTargetFps = VideoFpsOptions.Normalize(body?.Fps ?? s.VideoTargetFps, rates);
+            await _settings.SaveSettingsAsync(s);
+            return Ok(new { targetFps = s.VideoTargetFps, maxFps = VideoFpsOptions.Max(rates), rates });
+        }
+
+        public sealed class SizeRequest
+        {
+            public string? Size { get; set; }
+        }
+
+        /// <summary>
+        /// Persist the capture size ("" = automatic). Unlike fps and quality
+        /// this cannot be applied to a running graph — the pin is chosen when
+        /// the device is opened — so it restarts the capture.
+        /// </summary>
+        [HttpPost("size")]
+        public async Task<IActionResult> SetSize([FromBody] SizeRequest? body)
+        {
+            var s = await _settings.GetSettingsAsync();
+            if (!s.VideoDisplayEnabled)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
+
+            var sizes = VideoDeviceSizeCaps.SizesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
+            var requested = (body?.Size ?? "").Trim();
+            var normalized = VideoSizeOptions.Normalize(requested, sizes);
+            if (requested.Length > 0 && normalized.Length == 0)
+                return BadRequest(new { error = "This device does not offer that capture size.", sizes });
+
+            var changed = !string.Equals(s.VideoCaptureSize ?? "", normalized, StringComparison.Ordinal);
+            s.VideoCaptureSize = normalized;
+            await _settings.SaveSettingsAsync(s);
+
+            if (changed)
+            {
+                _capture.ClearDisconnectHalt();
+                _capture.RequestRestart();
+                _logger.LogInformation(
+                    "Radio Display capture size set to {Size}",
+                    normalized.Length == 0 ? "automatic" : normalized);
+            }
+
+            return Ok(new { captureSize = normalized, sizes, status = _capture.Status });
+        }
+
+        public sealed class JpegQualityRequest
+        {
+            public int? Quality { get; set; }
+        }
+
+        /// <summary>Persist JPEG quality (40 / 65 / 85). Applied on the next encode cycle.</summary>
+        [HttpPost("jpeg-quality")]
+        public async Task<IActionResult> SetJpegQuality([FromBody] JpegQualityRequest? body)
+        {
+            var s = await _settings.GetSettingsAsync();
+            if (!s.VideoDisplayEnabled)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
+
+            s.VideoJpegQuality = VideoJpegQualityOptions.Normalize(body?.Quality ?? s.VideoJpegQuality);
+            await _settings.SaveSettingsAsync(s);
+            return Ok(new { jpegQuality = s.VideoJpegQuality });
+        }
+
+        /// <summary>
+        /// Operator recovery after a disconnect halt. Clears the server-side halt
+        /// so the next stream request may open capture again.
+        /// </summary>
+        [HttpPost("start")]
+        public async Task<IActionResult> Start()
+        {
+            var s = await _settings.GetSettingsAsync();
+            if (!s.VideoDisplayEnabled)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });
+
+            if (string.IsNullOrWhiteSpace(s.VideoCaptureDeviceKey))
+                return BadRequest(new { error = "No video capture device selected." });
+
+            _capture.ClearDisconnectHalt();
+            _logger.LogInformation("Radio Display operator Start — disconnect halt cleared");
+            return Ok(new
+            {
+                status = _capture.Status,
+                halted = _capture.IsHaltedAfterDisconnect,
+                error = _capture.LastError
+            });
+        }
+
+        /// <summary>
+        /// MJPEG multipart stream. Opens capture on first viewer; releases on disconnect.
+        /// </summary>
+        [HttpGet("stream")]
+        public async Task Stream(CancellationToken cancellationToken)
+        {
+            var settings = await _settings.GetSettingsAsync();
+            if (!settings.VideoDisplayEnabled)
+            {
+                Response.StatusCode = StatusCodes.Status403Forbidden;
+                await Response.WriteAsync("Radio Display is disabled in Settings.", cancellationToken);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(settings.VideoCaptureDeviceKey))
+            {
+                Response.StatusCode = StatusCodes.Status403Forbidden;
+                await Response.WriteAsync("No video capture device selected in Settings.", cancellationToken);
+                return;
+            }
+
+            if (_capture.IsHaltedAfterDisconnect)
+            {
+                Response.StatusCode = StatusCodes.Status409Conflict;
+                var msg = string.IsNullOrWhiteSpace(_capture.LastError)
+                    ? "Capture device is disconnected. Refresh the device list, then press Start."
+                    : _capture.LastError + " Refresh the device list, then press Start.";
+                await Response.WriteAsync(msg, cancellationToken);
+                return;
+            }
+
+            var viewerId = Guid.NewGuid().ToString("N");
+            try
+            {
+                await _capture.AcquireViewerAsync(viewerId, cancellationToken);
+            }
+            catch (InvalidOperationException ex)
+            {
+                Response.StatusCode = StatusCodes.Status403Forbidden;
+                await Response.WriteAsync(ex.Message, cancellationToken);
+                return;
+            }
+
+            Response.StatusCode = StatusCodes.Status200OK;
+            Response.ContentType = $"multipart/x-mixed-replace; boundary={Boundary}";
+            Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+            Response.Headers.Pragma = "no-cache";
+            Response.Headers.Connection = "keep-alive";
+
+            // Disable response buffering so frames flush promptly.
+            var feature = HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>();
+            feature?.DisableBuffering();
+
+            long lastSeq = 0;
+            try
+            {
+                await Response.StartAsync(cancellationToken);
+
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    var frame = await _capture.WaitForFrameAsync(lastSeq, cancellationToken);
+                    if (frame is null)
+                    {
+                        // Keep the connection alive while reconnecting.
+                        await Task.Delay(200, cancellationToken);
+                        continue;
+                    }
+
+                    var (jpeg, seq) = frame.Value;
+                    lastSeq = seq;
+
+                    var header =
+                        $"--{Boundary}\r\n" +
+                        "Content-Type: image/jpeg\r\n" +
+                        $"Content-Length: {jpeg.Length}\r\n\r\n";
+                    var headerBytes = Encoding.ASCII.GetBytes(header);
+
+                    await Response.Body.WriteAsync(headerBytes, cancellationToken);
+                    await Response.Body.WriteAsync(jpeg, cancellationToken);
+                    await Response.Body.WriteAsync(NewLine, cancellationToken);
+                    await Response.Body.FlushAsync(cancellationToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // client disconnected
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Radio Display MJPEG stream ended");
+            }
+            finally
+            {
+                _capture.ReleaseViewer(viewerId);
+            }
+        }
+    }
+}

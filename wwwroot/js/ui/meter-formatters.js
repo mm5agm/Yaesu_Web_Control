@@ -28,8 +28,34 @@ export const MeterFormatters = {
     // SWR  (SWRGauge has no gaugeTitleSuffix — full text goes in span)
     // ----------------------------------------------------------------
 
+    // The gauge face is labelled 1.0 to 3.0 (see SWRGauge in gauge.js), so the
+    // needle pins at the top for anything above 3:1. A dead-flat 3:1 and a
+    // rig-damaging 10:1 therefore look identical on the dial — issue #128, and
+    // it is not academic: it cost real time while diagnosing #124, because a
+    // genuinely pinned reading and a fabricated 3.0 parked the needle in the
+    // same place. Rather than redraw the face non-linearly, the readout says
+    // when the needle has run out of scale.
+    SWR_GAUGE_FULL_SCALE: 3.0,
+
+    swrIsOffScale(ratio) {
+        return ratio > this.SWR_GAUGE_FULL_SCALE;
+    },
+
+    // Badge text. Short by necessity — the badge is absolutely positioned and
+    // centred under a 165px meter cell, so words would overflow into the
+    // neighbouring gauges. The marker plus the colour change carries it for a
+    // sighted operator; swrAnnouncement() below carries it for everyone else.
     swr(ratio) {
-        return `${ratio.toFixed(1)}:1`;
+        const text = `${ratio.toFixed(1)}:1`;
+        return this.swrIsOffScale(ratio) ? `${text} ▲` : text;
+    },
+
+    // What goes in canvas.dataset.reading, which is what the a11y live region
+    // announces on hover. No layout constraint here, so it gets the words. This
+    // is deliberately not identical to the badge text.
+    swrAnnouncement(ratio) {
+        const text = `${ratio.toFixed(1)}:1`;
+        return this.swrIsOffScale(ratio) ? `${text} — off scale` : text;
     },
 
     // ----------------------------------------------------------------

@@ -365,6 +365,43 @@ export const BAND_EDGES = {
 BAND_EDGES.UK  = BAND_EDGES.Region1;
 BAND_EDGES.USA = BAND_EDGES.Region2;
 
+// ── Nearest band ────────────────────────────────────────────────────────────
+//
+// Answers a different question to the tables above: not "may I transmit here"
+// but "which band was the operator aiming at". Used to mark a band button red
+// when the radio is outside every allocation in the operator's region — a UK
+// operator on 3.9 MHz is unmistakably *at* 80m, just not legally on it, and a
+// band grid with nothing lit at all doesn't say that.
+//
+// Distance is measured to the nearest edge of each band, so it works the same
+// whether the operator has drifted off the top of a band or off the bottom.
+// (An earlier attempt used a worldwide band envelope and only ever caught the
+// top: for nearly every band the worldwide *lower* edge is the same as the
+// region's, so tuning below a band fell outside the envelope and matched
+// nothing at all.)
+//
+// Never use this to decide whether transmitting is permitted — a returned band
+// name means the opposite, that the frequency is NOT inside it. `edges` should
+// be BAND_EDGES resolved to the configured region; that is the authority.
+export function nearestBandForHz(hz, edges) {
+    if (!hz || hz <= 0 || !Array.isArray(edges) || edges.length === 0) return null;
+
+    let best = null;
+    let bestDistance = Infinity;
+    for (const band of edges) {
+        if (typeof band?.lo !== 'number' || typeof band?.hi !== 'number') continue;
+        // Zero inside the band, otherwise the gap to the closer edge.
+        const distance = hz < band.lo ? band.lo - hz
+                       : hz > band.hi ? hz - band.hi
+                       : 0;
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = band.name;
+        }
+    }
+    return best;
+}
+
 // ── External JSON override ──────────────────────────────────────────────────
 //
 // The hardcoded BAND_PLANS / BAND_EDGES above are the shipped defaults — they
@@ -411,11 +448,23 @@ export function getSegments(bandPlan, band) {
 }
 
 /**
+ * The band-edge entry for a named band in a given region, or null.
+ * Segments are activity centres with no upper bound of their own, so the
+ * edges are what stops the top segment claiming everything above it.
+ */
+export function edgeForBand(bandPlan, band) {
+    const edges = BAND_EDGES[bandPlan] || BAND_EDGES['Region1'];
+    if (!Array.isArray(edges) || !band) return null;
+    const wanted = band.toLowerCase();
+    return edges.find(e => typeof e?.name === 'string' && e.name.toLowerCase() === wanted) || null;
+}
+
+/**
  * Which segment of the given band contains the given frequency.
  * Each segment "owns" from its representative frequency up to (but not
  * including) the next segment's frequency, in ascending order. Returns the
  * segment key (e.g. "FT8", "SSB") or null if the band isn't in the plan
- * or the frequency is below the band's first segment.
+ * or the frequency is outside the band's edges in this region.
  *
  * Used to keep the per-VFO Segment dropdown showing the segment the
  * operator is currently in, even when they tune via the spectrum or
@@ -424,6 +473,11 @@ export function getSegments(bandPlan, band) {
 export function segmentForHz(bandPlan, band, hz) {
     const segments = getSegments(bandPlan, band);
     if (!segments) return null;
+    // Segments have a lower bound but no upper one, so without this check
+    // the highest segment would keep claiming the frequency however far
+    // above the band the operator tunes. Out of band is not a segment.
+    const edge = edgeForBand(bandPlan, band);
+    if (edge && (hz < edge.lo || hz > edge.hi)) return null;
     // Sort segment keys by frequency ascending so we can pick the last one
     // whose freq <= hz. Object key order in modern JS is insertion order,
     // which is already ascending in the band-plan data, but sort
@@ -435,11 +489,13 @@ export function segmentForHz(bandPlan, band, hz) {
         if (hz >= seg.freq) match = key;
         else break;
     }
-    // If hz is below the lowest segment, default to the first (lowest-freq)
-    // segment. On HF that's typically CW — and 14.010 MHz is still in the
-    // 20 m CW sub-band even though it's below the CW watering hole at
-    // 14.025. Without this fallback the dropdown would go blank for
+    // Inside the band but below the lowest segment: default to the first
+    // (lowest-freq) segment. On HF that's typically CW — and 14.010 MHz is
+    // still in the 20 m CW sub-band even though it's below the CW watering
+    // hole at 14.025. Without this fallback the dropdown would go blank for
     // frequencies between the band edge and the first activity centre.
+    // The edge check above has already rejected genuinely-below-band, so
+    // this only ever fires for frequencies the operator may actually use.
     if (match === null && ordered.length > 0) match = ordered[0][0];
     return match;
 }

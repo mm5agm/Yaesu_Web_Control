@@ -52,6 +52,19 @@ namespace Yaesu_Web_Control.Services
 
                 var settings = await settingsService.GetSettingsAsync();
 
+                // Publish the radio model before anything that can return
+                // early. It is a settings fact, not something discovered by
+                // talking to the radio, and the three failure paths below - no
+                // COM port, COM port will not open, radio not answering FA; -
+                // all used to leave it empty. Anything reading it then behaves
+                // as though no radio were configured: ScopeController answers
+                // "No radio model is configured, so scope control is
+                // unavailable" even though Settings plainly names one, and it
+                // stays that way until the application is restarted. Powering
+                // the radio on after YWC is enough to trigger it.
+                radioStateService.IsSingleReceiver = RadioCapabilities.IsSingleReceiver(settings.RadioModel);
+                radioStateService.RadioModel = settings.RadioModel;
+
                 // Check if COM port is configured - if not, redirect to Settings
                 if (string.IsNullOrWhiteSpace(settings.SerialPort) || settings.SerialPort == "Not Set")
                 {
@@ -124,13 +137,11 @@ namespace Yaesu_Web_Control.Services
 
                 // Radio responded - it's ON
                 radioStateService.RadioPowerOn = true;
-                // Tell RadioStateService whether this is a single-receiver
-                // model. The dispatcher uses this to route P1=0 ("Fixed" on
-                // single-receiver radios) responses to whichever VFO is
-                // currently active per VS, instead of always writing to *A
-                // state. See #34 R2 controls-bleed fix.
-                radioStateService.IsSingleReceiver = RadioCapabilities.IsSingleReceiver(settings.RadioModel);
-                radioStateService.RadioModel = settings.RadioModel;
+                // IsSingleReceiver and RadioModel are set above, as soon as
+                // settings are read. IsSingleReceiver tells the dispatcher to
+                // route P1=0 ("Fixed" on single-receiver radios) responses to
+                // whichever VFO is active per VS rather than always writing to
+                // *A state. See #34 R2 controls-bleed fix.
                 logger.LogInformation("[RadioInitializationService] Radio responded to FA;: {Response}", faResponse);
 
                 // Safety: force the radio into RX before doing anything else.
@@ -188,16 +199,10 @@ namespace Yaesu_Web_Control.Services
                 // fast burst, and again in readQueries below) populate YWC's UI
                 // with whatever the radio currently has. Same anti-pattern as
                 // RF Power (#35), MIC GAIN / Speech Processor / PROC LEVEL (#16).
-                if (!string.IsNullOrEmpty(persistedState.AntennaA))
-                {
-                    stateTasks.Add(multiplexer.SendCommandAsync($"AN0{persistedState.AntennaA};", "Initialization", stoppingToken)
-                        .ContinueWith(t => { if (!t.IsFaulted) radioStateService.AntennaA = persistedState.AntennaA; }));
-                }
-                if (!string.IsNullOrEmpty(persistedState.AntennaB))
-                {
-                    stateTasks.Add(multiplexer.SendCommandAsync($"AN1{persistedState.AntennaB};", "Initialization", stoppingToken)
-                        .ContinueWith(t => { if (!t.IsFaulted) radioStateService.AntennaB = persistedState.AntennaB; }));
-                }
+                // Antenna (AN) is deliberately NOT restored from persisted state on
+                // connect (radio wins). AN0;/AN1; are sent during InitializeRadioAsync's
+                // fast burst and re-polled every fourth meter cycle by MeterPollingService,
+                // so the radio's actual selection is reflected without YWC overwriting it.
                 // Restore AF Gain — only on dual-receiver radios. On
                 // single-receiver the radio is the source of truth (same
                 // precedent as Mode #38, RF Power #35, MIC Gain #16); the
@@ -305,11 +310,18 @@ namespace Yaesu_Web_Control.Services
                         radioStateService.TxClarOn = xtVal == 1;
                 }
 
-                // For FTdx10/FT-710: read per-VFO offsets via CF (dispatcher updates state)
+                // For FTdx10/FT-710: read per-VFO clarifier offsets via CF.
+                // Read form is CF P1 P2 P3; — P1 0=MAIN/1=SUB, P2 is fixed at 0,
+                // P3 1=offset. So VFO B is CF101;, not CF011;: the old CF011;
+                // set P2=1, which the manual does not define, and it addressed
+                // VFO A a second time rather than VFO B. These must also go
+                // through SendCommandAndDispatchAsync — SendCommandAsync returns
+                // the answer without dispatching it, so with the plain call the
+                // radio replied and nothing ever read the reply. (2026-08-17)
                 if (settings.RadioModel is "FTdx10" or "FT-710")
                 {
-                    await multiplexer.SendCommandAsync("CF001;", "Initialization", stoppingToken);
-                    await multiplexer.SendCommandAsync("CF011;", "Initialization", stoppingToken);
+                    await multiplexer.SendCommandAndDispatchAsync("CF001;", "Initialization", stoppingToken);
+                    await multiplexer.SendCommandAndDispatchAsync("CF101;", "Initialization", stoppingToken);
                 }
 
                 // Read actual radio state — all dispatcher-handled commands.
@@ -369,6 +381,25 @@ namespace Yaesu_Web_Control.Services
                     "PC;",                   // RF Power (Issue #35) — radio is
                                              //   source of truth on connect
                     "ML0;", "ML1;",          // Monitor on/off / level
+                    // Front-panel METER SW selection. Needed so the FTdx101
+                    // meter restores put back the operator's own pair rather
+                    // than falling back to the POW+ALC default. Note that is
+                    // both restores, not just this service's shutdown one:
+                    // MeterPollingService returns the panel 10 s after TX
+                    // goes idle using the same expression, so without this
+                    // read the operator's pair was overwritten after the
+                    // first over of every session. This
+                    // used to live in CatMultiplexerService.GetInitialValues(),
+                    // but that method's only call site was deleted on
+                    // 2026-02-22 (5d83175, "Fixed initialization hang") and it
+                    // was dead code from then until its removal on 2026-08-17 —
+                    // so MS; had not actually been sent for months, and
+                    // RadioMeterSelection was always null on a fresh start.
+                    // Harmless on the other models:
+                    // MS is a documented read on FTdx10 / FT-710 / FTDX3000,
+                    // the dispatcher stores it verbatim, and only the FTdx101
+                    // branch ever replays it.
+                    "MS;",                   // METER SW (front-panel meter pair)
                     // CW
                     "KP;",                   // CW Pitch
                     "KS;",                   // CW Speed
@@ -378,6 +409,15 @@ namespace Yaesu_Web_Control.Services
                     "VX;",                   // VOX on/off
                     "VG;",                   // VOX Gain
                     "VD;",                   // VOX Delay
+                    // FM repeater CTCSS. MAIN only for both: CtcssMode and
+                    // CtcssTone are single state properties, so reading SUB
+                    // (CT1; / CN10;) would immediately overwrite MAIN's value
+                    // with the sub receiver's. Neither was ever read before, so
+                    // the FM panel showed its defaults no matter what the radio
+                    // was actually set to. Read forms are CT P1; and
+                    // CN P1 P2; — see CAT manual p.8. (2026-08-17)
+                    "CT0;",                  // CTCSS mode, MAIN
+                    "CN00;",                 // CTCSS tone number, MAIN
                 };
                 foreach (var q in readQueries)
                     await multiplexer.SendCommandAndDispatchAsync(q, "Initialization", stoppingToken);
@@ -601,32 +641,40 @@ namespace Yaesu_Web_Control.Services
                 logger?.LogWarning(ex, "[RadioInit] TX0; on shutdown failed — non-fatal");
             }
 
-            // FTdx101 power-meter restore (discussion #6, F1ubw). During normal
-            // operation MeterPollingService sets the radio's front-panel meter
-            // to MS13 (Comp + SWR) as the RM0 read workaround; without this
-            // restore, quitting YWC leaves the FTdx101's Power needle hidden
-            // until the operator power-cycles the radio or hits the METER button.
+            // FTdx101 meter restore (discussion #6, F1ubw). MeterPollingService
+            // borrows the radio's front-panel meter pair (MS13 = Comp + SWR) for
+            // the duration of each transmission as the RM0 read workaround; if YWC
+            // quits mid-borrow, without this restore the operator is left staring
+            // at Comp + SWR until they power-cycle the radio or hit METER.
+            //
+            // Restores the operator's own selection when YWC has seen one (from the
+            // MS; read at init or an auto-info push), falling back to the radio's
+            // default POW + ALC pair otherwise — which is what this always sent
+            // before the selection was tracked.
             //
             // Best-effort with a 1 s timeout so a hung send (e.g. radio
             // powered off, COM cable yanked) can't stall host shutdown.
-            // Only FTdx101MP/D set MS13; other radios don't touch the meter.
+            // Only FTdx101MP/D borrow the meters; other radios never touch MS.
             try
             {
                 var settingsService = scopeForLogger.ServiceProvider.GetRequiredService<ISettingsService>();
                 var settings = await settingsService.GetSettingsAsync();
                 if (settings.RadioModel is "FTdx101MP" or "FTdx101D")
                 {
-                    logger?.LogInformation("[RadioInit] Sending MS01 to restore FTdx101 power meter");
+                    var radioStateService = scopeForLogger.ServiceProvider.GetRequiredService<RadioStateService>();
+                    var restore = radioStateService.RadioMeterSelection
+                                  ?? CatCommands.DefaultFtdx101MeterSelection;
+                    logger?.LogInformation("[RadioInit] Sending MS{Restore} to restore FTdx101 front-panel meters", restore);
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     cts.CancelAfter(TimeSpan.FromSeconds(1));
                     await _multiplexer.SendCommandAsync(
-                        CatCommands.SetMeterPower + ";", "RadioInit-Shutdown", cts.Token);
-                    logger?.LogInformation("[RadioInit] MS01 send completed");
+                        $"MS{restore};", "RadioInit-Shutdown", cts.Token);
+                    logger?.LogInformation("[RadioInit] Meter restore send completed");
                 }
             }
             catch (Exception ex)
             {
-                logger?.LogWarning(ex, "[RadioInit] MS01 send failed — non-fatal");
+                logger?.LogWarning(ex, "[RadioInit] Meter restore send failed — non-fatal");
             }
 
             logger?.LogInformation("[RadioInit] Disconnecting multiplexer");

@@ -4,17 +4,19 @@
 //   1. Open a TCP listener on the chosen port (localhost only).
 //   2. Wait for YWC main to connect (single client).
 //   3. Open the SDR device (sdrplay or soapy).
-//   4. Configure it (IF freq, sample rate, FFT size).
+//   4. Configure it (IF freq, sample rate, hop size).
 //   5. Start streaming.
-//   6. Loop: TryReadIqFrame → FFT → frame-write to the TCP client.
+//   6. Loop: TryReadIqFrame → overlap window → FFT → crop → frame-write.
 //   7. On client disconnect, cancellation, or SDR error: clean up and exit.
 //
 // Designed for one-shot use. If anything goes wrong, the process exits with
 // a non-zero code; YWC's SdrManager (step 2 of the dual-SDR work) supervises
 // and restarts. Keeping the worker dumb keeps the supervisor sensible.
 
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using RadioWebControl.Core.Services.Spectrum;
 using Yaesu_Web_Control.Services.Sdr;
 
 namespace Yaesu_Web_Control.Workers.Sdr;
@@ -24,12 +26,32 @@ internal sealed class WorkerHost
     private readonly WorkerOptions     _opts;
     private readonly SpectrumProcessor _processor = new();
 
+    // The slice of the FFT that goes on the wire, or null for the whole
+    // stream. Written by the control reader's thread, read by the streaming
+    // loop; a stale read costs one frame at the old window, so a volatile
+    // reference to an immutable object is enough (a nullable struct cannot
+    // be volatile, hence the tiny class).
+    private sealed record ViewWindow(long CentreHz, long SpanHz);
+    private volatile ViewWindow? _view;
+
+    // Most bins one frame may carry. A browser canvas is at most a couple of
+    // thousand pixels wide, and every bin is a JSON number in a SignalR
+    // message to every client, so a 16k-point FFT must be thinned before it
+    // leaves here. SpectrumZoom keeps the peak of each group, so a CW carrier
+    // survives the thinning.
+    private const int MaxWireBins = 2048;
+
     public WorkerHost(WorkerOptions opts) => _opts = opts;
 
     public async Task<int> RunAsync(CancellationToken stoppingToken)
     {
+        if (_opts.ViewSpanHz > 0)
+            _view = new ViewWindow(_opts.ViewCentreHz, _opts.ViewSpanHz);
+
         Log($"starting (deviceKey={_opts.DeviceKey}, vfo={_opts.Vfo}, port={_opts.Port}, " +
-            $"ifHz={_opts.IfFrequencyHz}, sr={_opts.SampleRateHz}, fft={_opts.FftSize})");
+            $"ifHz={_opts.IfFrequencyHz}" + (_opts.TrimHz != 0 ? $"{_opts.TrimHz:+#;-#} trim" : "") +
+            $", sr={_opts.SampleRateHz}, fft={_opts.FftSize}, hop={_opts.HopSize}" +
+            (_view is { } v0 ? $", view={v0.CentreHz}±{v0.SpanHz / 2}" : "") + ")");
 
         // 1. Open TCP listener on localhost only.
         var listener = new TcpListener(IPAddress.Loopback, _opts.Port);
@@ -78,6 +100,14 @@ internal sealed class WorkerHost
             // new clamp/gain values land cleanly without a smear-in.
             _processor.ResetSmoothing();
         };
+        controlReader.ViewWindowReceived += v =>
+        {
+            // Span 0 means "the whole stream". The crop is applied per frame
+            // from _view, so this takes effect on the next FFT with no
+            // stream restart — the whole point of a software zoom.
+            _view = v.SpanHz > 0 ? new ViewWindow(v.CentreHz, v.SpanHz) : null;
+            Log($"view window -> {(v.SpanHz > 0 ? $"{v.CentreHz}±{v.SpanHz / 2} Hz" : "full span")}");
+        };
         _ = Task.Run(async () =>
         {
             try { await controlReader.RunAsync(stoppingToken).ConfigureAwait(false); }
@@ -89,18 +119,52 @@ internal sealed class WorkerHost
             await writer.WriteStatusAsync("connecting", stoppingToken).ConfigureAwait(false);
 
             device = CreateDevice(_opts.DeviceKey);
-            device.Configure(_opts.IfFrequencyHz, _opts.SampleRateHz, _opts.FftSize);
+            // The device delivers one hop of samples per read; the FFT runs
+            // over a sliding window of FftSize samples that each hop advances.
+            // With hop == FftSize this is exactly the old one-FFT-per-frame
+            // behaviour.
+            // The trim is the one place the hardware and the labels part
+            // company: the dongle is tuned off the nominal IF by its own
+            // crystal error, and every frame is still labelled nominal.
+            device.Configure(_opts.IfFrequencyHz + _opts.TrimHz, _opts.SampleRateHz, _opts.HopSize);
             device.StartStreaming();
 
             await writer.WriteStatusAsync("streaming", stoppingToken).ConfigureAwait(false);
             Log($"streaming '{device.Label}'");
 
-            float[] iqBuffer = new float[_opts.FftSize * 2];
+            float[] iqBuffer = new float[_opts.HopSize * 2];
+            var     window   = new SpectrumZoom.OverlapBuffer(_opts.FftSize);
+            double  hzPerBin = device.ActualSampleRateHz / _opts.FftSize;
             ulong sequence = 0;
+
+            // Averages a few seconds of IQ once, then logs the filter shape and
+            // the level of the centre bin — neither of which can be read off
+            // the display, whose bins are clamped and smoothed. See
+            // SpectrumProbe.cs.
+            var probe = new SpectrumProbe(_opts.FftSize);
 
             // FrameIntervalMs is enforced by the SDR's read-availability — we
             // pull as fast as the device emits and let TryReadIqFrameAsync block.
             const int frameTimeoutMs = 200;
+
+            // Cap what goes on the wire, not what gets computed.
+            //
+            // Frames are produced at sampleRate/fftSize, so a correctly-reported
+            // 2 MHz span emits 1953 a second. Every one of them was being
+            // broadcast to the browser as a separate SignalR message carrying
+            // 1024 numbers; SdrManager deliberately fire-and-forgets those so the
+            // read loop never blocks, which means nothing upstream was applying
+            // back-pressure and the client simply drowned.
+            //
+            // ComputeSpectrum still runs on every frame. That is the point: its
+            // EMA then averages the whole IQ stream rather than the sparse subset
+            // we happen to send, so throttling here improves the trace instead of
+            // thinning it. The cost is ~20 us of FFT per frame — under 5% of one
+            // core even at the widest span.
+            const int maxSendsPerSecond = 25;
+            long sendIntervalTicks = Stopwatch.Frequency / maxSendsPerSecond;
+            long lastSendTicks = -sendIntervalTicks;
+            var  sendClock = Stopwatch.StartNew();
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -108,20 +172,50 @@ internal sealed class WorkerHost
                     .ConfigureAwait(false);
                 if (!got) continue;
 
-                float[] bins = _processor.ComputeSpectrum(iqBuffer, _opts.FftSize);
+                window.Push(iqBuffer);
+                if (!window.IsFull) continue;
+
+                float[] bins = _processor.ComputeSpectrum(window.Window, _opts.FftSize);
+
+                // After ComputeSpectrum, so the probe subtracts the same DC
+                // estimate the display just used and therefore measures the
+                // corrected stream rather than the raw one.
+                var (dcI, dcQ) = _processor.DcEstimate;
+                if (probe.Add(window.Window, dcI, dcQ))
+                    foreach (string line in probe.Format(device.ActualSampleRateHz, _opts.IfFrequencyHz))
+                        Log(line);
+
+                long nowTicks = sendClock.ElapsedTicks;
+                if (nowTicks - lastSendTicks < sendIntervalTicks) continue;
+                lastSendTicks = nowTicks;
+
+                // Cut the wanted window out of the full spectrum, or thin the
+                // full spectrum to the wire cap when no window is set. Either
+                // way the frame carries the centre and width of what it
+                // actually holds, so the browser draws its axis from that.
+                long tuneHz   = _opts.IfFrequencyHz;
+                long fullSpan = (long)device.ActualSampleRateHz;
+                var  view     = _view;
+                SpectrumZoom.View cut = view is { } w
+                    ? SpectrumZoom.Crop(bins, hzPerBin, tuneHz, w.CentreHz, w.SpanHz, MaxWireBins)
+                    : bins.Length <= MaxWireBins
+                        ? new SpectrumZoom.View(bins, tuneHz, fullSpan)
+                        : SpectrumZoom.Crop(bins, hzPerBin, tuneHz, tuneHz, fullSpan, MaxWireBins);
+                float[] wire = cut.Bins;
 
                 // Round to 1 dp before transmission (same precision as the
-                // current SignalR path, keeps frames small).
-                for (int i = 0; i < bins.Length; i++)
-                    bins[i] = MathF.Round(bins[i], 1);
+                // current SignalR path, keeps frames small). After the send
+                // gate, so it is not paid for frames that are never sent.
+                for (int i = 0; i < wire.Length; i++)
+                    wire[i] = MathF.Round(wire[i], 1);
 
                 try
                 {
                     await writer.WriteSpectrumAsync(
                         ++sequence,
-                        _opts.IfFrequencyHz,
-                        (long)_opts.SampleRateHz,
-                        bins,
+                        cut.CentreHz,
+                        cut.SpanHz,
+                        wire,
                         stoppingToken).ConfigureAwait(false);
                 }
                 catch (IOException ex)
@@ -182,5 +276,9 @@ internal sealed record WorkerOptions(
     string Vfo,            // "A" or "B"
     int    Port,           // localhost TCP port to listen on
     long   IfFrequencyHz,
+    int    TrimHz,         // hardware tune offset from IfFrequencyHz; frames stay labelled IfFrequencyHz
     double SampleRateHz,
-    int    FftSize);
+    int    FftSize,
+    int    HopSize,        // samples read per FFT; == FftSize means no overlap
+    long   ViewCentreHz,   // initial crop window; 0/0 sends the whole span
+    long   ViewSpanHz);

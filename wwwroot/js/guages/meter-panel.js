@@ -3,8 +3,9 @@
 // exposes update() as the single point of entry for needle changes.
 // No calibration, no WebSocket, no DOM queries beyond canvas IDs.
 
-import { createGauge } from './gaugeFactory.js';
-import { updateGaugeValue } from './update-engine.js';
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
+import { createGauge } from './gaugeFactory.js?v=1';
+import { updateGaugeValue } from './update-engine.js?v=1';
 
 export class MeterPanel {
 

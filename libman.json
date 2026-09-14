@@ -27,6 +27,23 @@
       "files": [
         "gauge.min.js"
       ]
+    },
+    {
+      "library": "microsoft-signalr@8.0.0",
+      "destination": "wwwroot/lib/microsoft-signalr/",
+      "files": [
+        "signalr.min.js"
+      ]
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "bootstrap-icons@1.11.3",
+      "destination": "wwwroot/lib/bootstrap-icons/",
+      "files": [
+        "font/bootstrap-icons.min.css",
+        "font/fonts/bootstrap-icons.woff2",
+        "font/fonts/bootstrap-icons.woff"
+      ]
     }
   ]
 }

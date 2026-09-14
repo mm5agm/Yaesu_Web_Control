@@ -378,9 +378,15 @@ public sealed record VCTuneAssemblyValidationReport
         }
 
         // Static helper methods must be present.
+#if WINDOWS
         ok &= CheckTypeMethods(recType,
             ["GetGrammarVariants", "IsVCTuneIntent"],
             notes, "VCTuneRecognizer");
+#else
+        ok &= CheckTypeMethods(recType,
+            ["IsVCTuneIntent"],
+            notes, "VCTuneRecognizer");
+#endif
 
         // Instance capability and dispatch methods must be present.
         ok &= CheckTypeMethods(recType,

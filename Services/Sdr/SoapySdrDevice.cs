@@ -37,7 +37,18 @@ namespace Yaesu_Web_Control.Services.Sdr
             _fftSize = fftSize;
             _device  = SoapySdrInterop.OpenDevice(Key);
             SoapySdrInterop.ConfigureRxChannel(_device, centreFrequencyHz, sampleRateHz);
+
+            // SoapySDR is asked for this rate exactly and only setSampleRate is
+            // bound, so there is nothing to read back — unlike the SDRplay path,
+            // which reaches a narrow span by decimating a fixed hardware rate and
+            // therefore lands on a value that can differ from the request. If a
+            // Soapy backend is ever found to silently substitute a nearby rate,
+            // bind SoapySDRDevice_getSampleRate and report that instead.
+            ActualSampleRateHz = sampleRateHz;
         }
+
+        /// <inheritdoc/>
+        public double ActualSampleRateHz { get; private set; }
 
         /// <inheritdoc/>
         public void StartStreaming()

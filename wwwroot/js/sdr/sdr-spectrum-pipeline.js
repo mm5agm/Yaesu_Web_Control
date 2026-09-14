@@ -16,7 +16,8 @@
 // Uses the same { property, value } message envelope as the rest of the app
 // so the existing WsUpdatePipeline can be reused for dispatching.
 
-import { WsUpdatePipeline } from '../websocket/ws-update-pipeline.js';
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
+import { WsUpdatePipeline } from '../websocket/ws-update-pipeline.js?v=1';
 
 export class SdrSpectrumPipeline {
 
@@ -75,9 +76,29 @@ export class SdrSpectrumPipeline {
             }
             this._pipeline.handleMessage(msg);
         });
-        conn.start().catch(() => { /* reconnect is handled by withAutomaticReconnect */ });
+        conn.start()
+            .catch(() => { /* reconnect is handled by withAutomaticReconnect */ });
 
         this._connection = conn;
+    }
+
+    /**
+     * Close the SignalR connection immediately.
+     *
+     * Call this on `pagehide` (i.e. when navigating away or being frozen into
+     * the bfcache). Without it, the browser keeps the socket half-open while the
+     * page is frozen, so the server still counts this page as a live client.
+     * When the page returns and a fresh connection forms, the worker's per-frame
+     * broadcast (`Clients.All.SendAsync`) back-pressures on that zombie client —
+     * spectrum frames are large, its send buffer fills, and frame delivery to
+     * the *new* connection stalls for several seconds until the transport reaps
+     * the zombie. Stopping here lets the server drop it at once, so the reloaded
+     * page starts receiving frames in ~100ms instead of ~7s.
+     */
+    disconnect() {
+        const conn = this._connection;
+        this._connection = null;
+        if (conn) { try { conn.stop(); } catch { /* may already be closed */ } }
     }
 
     /**
@@ -121,6 +142,37 @@ export class SdrSpectrumPipeline {
      */
     onFrequencyB(handler) {
         this._pipeline.register('FrequencyB', (value) => handler(value));
+    }
+
+    /**
+     * Register a handler for the radio's CW sidetone pitch. The value is the
+     * raw KP code (0-75); the handler receives it already converted to Hz,
+     * 300 + code x 10, which is what the Pitch slider on the CW panel shows.
+     * Click-to-tune needs it so that clicking a CW signal lands the operator
+     * at the pitch rather than at zero beat.
+     * @param {function(number)} handler
+     */
+    onCwPitch(handler) {
+        this._pipeline.register('CwPitch', (code) => {
+            const n = Number(code);
+            if (Number.isFinite(n)) handler(300 + Math.max(0, Math.min(75, n)) * 10);
+        });
+    }
+
+    /**
+     * Register a handler for VFO A's mode string, e.g. "CW-U" / "USB".
+     * @param {function(string)} handler
+     */
+    onModeA(handler) {
+        this._pipeline.register('ModeA', (value) => handler(value));
+    }
+
+    /**
+     * Register a handler for VFO B's mode string.
+     * @param {function(string)} handler
+     */
+    onModeB(handler) {
+        this._pipeline.register('ModeB', (value) => handler(value));
     }
 
     /**

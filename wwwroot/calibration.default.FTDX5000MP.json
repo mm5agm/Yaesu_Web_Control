@@ -5,28 +5,28 @@
       "type": "numeric",
       "points": [
         {
-          "Radio": "5",
-          "raw": 30
+          "Radio": "10",
+          "raw": 54
         },
         {
           "Radio": "25",
-          "raw": 76
+          "raw": 75
         },
         {
           "Radio": "50",
-          "raw": 112
+          "raw": 114
         },
         {
           "Radio": "100",
-          "raw": 157
+          "raw": 160
         },
         {
           "Radio": "150",
-          "raw": 190
+          "raw": 192
         },
         {
           "Radio": "200",
-          "raw": 222
+          "raw": 224
         }
       ],
       "isGauge": true,
@@ -212,7 +212,7 @@
         },
         {
           "Radio": "S1",
-          "raw": 5
+          "raw": 4
         },
         {
           "Radio": "S3",
@@ -220,23 +220,23 @@
         },
         {
           "Radio": "S5",
-          "raw": 67
+          "raw": 65
         },
         {
           "Radio": "S7",
-          "raw": 97
+          "raw": 95
         },
         {
           "Radio": "S9",
-          "raw": 130
+          "raw": 131
         },
         {
           "Radio": "\u002B20",
-          "raw": 172
+          "raw": 171
         },
         {
           "Radio": "\u002B40",
-          "raw": 212
+          "raw": 208
         },
         {
           "Radio": "\u002B60",

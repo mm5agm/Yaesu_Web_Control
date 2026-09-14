@@ -24,6 +24,18 @@ namespace Yaesu_Web_Control.Services.Sdr
         /// <param name="fftSize">Number of IQ samples per frame delivered by <see cref="TryReadIqFrameAsync"/>.</param>
         void Configure(long centreFrequencyHz, double sampleRateHz, int fftSize);
 
+        /// <summary>
+        /// The span the hardware actually produces, in Hz, valid after
+        /// <see cref="Configure"/>. This is not always the <c>sampleRateHz</c> that
+        /// was requested: a device may only support certain rates, and reaching a
+        /// narrow span by decimating a fixed hardware rate lands on
+        /// <c>hardwareRate / integerFactor</c> rather than on the exact request.
+        /// Report <b>this</b> to the client — it is what the frequency scale must
+        /// be drawn from, and echoing the request back instead skews the scale by
+        /// the rounding error.
+        /// </summary>
+        double ActualSampleRateHz { get; }
+
         /// <summary>Begin hardware streaming.  <see cref="Configure"/> must have been called first.</summary>
         void StartStreaming();
 

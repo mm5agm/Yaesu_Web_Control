@@ -153,9 +153,13 @@
                         HandleInitialization(message);
                         break;
                     case "MD":
-                        // Example: MD01; (VFO A, LSB), MD12; (VFO B, USB)
-                        // Single-receiver: P1 is "0 Fixed" — routes via SetPerVfo's
-                        // 300 ms buffer so A/B-press broadcasts land on ActiveVfo.
+                        // Example: MD01; (VFO A, LSB), MD12; (VFO B, USB).
+                        // MD is per-VFO at CAT level on every supported model
+                        // (FTdx10 manual: P1 0=MAIN, 1=SUB) — not P1=0-Fixed
+                        // like GT/PA/SH. Route by P1 the same way AN does,
+                        // including on single-receiver: using SetPerVfo here
+                        // wrote an inactive-VFO mode change onto the active
+                        // VFO's slot.
                         if (message.Length >= 5)
                         {
                             var modeCode = message[3];
@@ -180,10 +184,8 @@
                             };
                             if (mode != null)
                             {
-                                SetPerVfo(message[2], routeB => {
-                                    if (routeB) _stateService.ModeB = mode;
-                                    else        _stateService.ModeA = mode;
-                                });
+                                if (message[2] == '1') _stateService.ModeB = mode;
+                                else                   _stateService.ModeA = mode;
                             }
                         }
                         break;
@@ -480,6 +482,45 @@
                         if (message.Length >= 4 && int.TryParse(message.Substring(2, 1), out int txVfo))
                             _stateService.TxVfo = txVfo;
                         break;
+                    case "SS":
+                        // SS P1 P2 {5-char field}; — SPECTRUM SCOPE. The radio
+                        // announces scope changes made at its own front panel,
+                        // one message per sub-command, tagged with the band.
+                        //
+                        // Measured on an FTdx101MP, 2026-08-15: SPAN (P2=5),
+                        // MODE (6) and HOLD (8) all report. A mode change
+                        // arrives as TWO messages a few ms apart — the new mode
+                        // and the span that mode carries, because the radio
+                        // stores span per display mode. MARKER and LEVEL were
+                        // never observed, which may mean they do not report or
+                        // may only mean they were not touched during the test;
+                        // routing on P2 instead of listing sub-commands means it
+                        // costs nothing to be wrong about that.
+                        //
+                        // FTdx10 CAT manual (ENG 2308-F) marks SS AI as O — the
+                        // same live-sync path as the 101. P1 is "0: Fixed" on
+                        // that radio, so a frame is always MAIN even if P1 is
+                        // not the digit 0 (otherwise applyRemote would drop it
+                        // as "the other band").
+                        //
+                        // Deliberately not stored: the scope panel holds this
+                        // state in the browser and re-reads it on every expand,
+                        // and it is the only consumer. See BroadcastTransient.
+                        if (ScopeCommands.TryParseAnnouncement(message, out var ssBand, out var ssSetting, out var ssField))
+                        {
+                            var dual = RadioCapabilities.HasPerReceiverScopes(_stateService.RadioModel ?? "");
+                            _stateService.BroadcastTransient("ScopeSetting", new
+                            {
+                                band    = (dual && ssBand == '1') ? "sub" : "main",
+                                setting = ssSetting.ToString(),
+                                field   = ssField
+                            });
+                        }
+                        else
+                        {
+                            _logger.LogDebug("[SS] DROPPED: unparseable frame '{Raw}'", message);
+                        }
+                        break;
                     case "VS":
                         // VS{n}; — VFO SELECT: 0=VFO-A active (operating/RX),
                         // 1=VFO-B active. On single-receiver radios this is
@@ -492,6 +533,16 @@
                         {
                             var previous = _stateService.ActiveVfo;
                             _stateService.ActiveVfo = activeVfo;
+                            // Single-receiver, not in split: front-panel A/B moves
+                            // the operating VFO for both RX and TX, but FT often
+                            // stays at 0. Mirror ActiveVfo into TxVfo so the RX/TX
+                            // selectors and any TxVfo readers stay coherent.
+                            if (_stateService.IsSingleReceiver
+                                && _stateService.SplitMode == 0
+                                && _stateService.TxVfo != activeVfo)
+                            {
+                                _stateService.TxVfo = activeVfo;
+                            }
                             if (_stateService.IsSingleReceiver
                                 && _stateService.IsInitialized
                                 && previous != activeVfo)
@@ -597,6 +648,25 @@
                             });
                         }
                         break;
+                    case "MS":
+                        // MS{P1}; or MS{P1}{P2}; — front-panel METER SW selection.
+                        // Stored verbatim: the parameter encoding differs per model
+                        // (see RadioStateService.RadioMeterSelection) and YWC only
+                        // ever needs to replay it, never to understand it. Sent at
+                        // init from RadioInitializationService's readQueries, and
+                        // pushed by the radio's auto-information whenever the
+                        // operator changes meters. (It was NOT sent between
+                        // 2026-02-22 and 2026-08-15: the read sat in
+                        // CatMultiplexerService.GetInitialValues(), which lost its
+                        // only caller in 5d83175 and became dead code. That method
+                        // was deleted 2026-08-17 — see git history if you need the
+                        // original list of reads.)
+                        {
+                            var msDigits = message.Substring(2).TrimEnd(';');
+                            if (msDigits.Length is 1 or 2 && msDigits.All(char.IsDigit))
+                                _stateService.ReportMeterSelection(msDigits);
+                        }
+                        break;
                     case "MG":
                         // MG{NNN}; — MIC Gain 000-100
                         if (message.Length >= 6 && int.TryParse(message.Substring(2, 3), out int mgVal))
@@ -628,14 +698,25 @@
                             _stateService.FmOffsetHz = roVal;
                         break;
                     case "CT":
-                        // CT{nn}; — CTCSS mode: 00=off, 01=ENC, 02=DEC, 03=T-DEC
-                        if (message.Length >= 5)
+                        // CT P1 P2; — P1 0=MAIN/1=SUB, P2 0=OFF, 1=CTCSS
+                        // ENC/DEC, 2=CTCSS ENC. Stored as the P1P2 pair, so
+                        // MAIN only — a SUB answer (CT1x;) would otherwise be
+                        // stored as "1x" and match no dropdown option.
+                        if (message.Length >= 5 && message[2] == '0')
                             _stateService.CtcssMode = message.Substring(2, 2);
                         break;
                     case "CN":
-                        // CN{nn}; — CTCSS/DCS tone number
-                        if (message.Length >= 5)
-                            _stateService.CtcssTone = message.Substring(2, 2);
+                        // CN P1 P2 P3P3P3; — CTCSS tone number (8 chars).
+                        // P1 0=MAIN/1=SUB, P2 0=CTCSS, P3 tone index 000-049
+                        // (000=67.0 Hz .. 049=254.1 Hz — Yaesu Table 1).
+                        // This used to read Substring(2, 2), i.e. P1P2 — the
+                        // address, not the tone — so the tone the radio
+                        // reported was thrown away and "00" was stored as if it
+                        // were a tone index. Only MAIN is tracked: CtcssTone is
+                        // a single state property, so a SUB answer would
+                        // overwrite MAIN's. (2026-08-17)
+                        if (message.Length >= 8 && message[2] == '0')
+                            _stateService.CtcssTone = message.Substring(4, 3);
                         break;
                     case "KS":
                         // KS{nnn}; — CW keyer speed 004-060 WPM

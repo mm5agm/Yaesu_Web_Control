@@ -21,8 +21,17 @@
         // METER READING COMMANDS (RM)
         public const string MeterPower = "RM5";    // Power output meter (0-255)
         public const string MeterSWR = "RM6";      // SWR meter (0-255) — NOTE: RM6 returns stale/wrong values on FTdx101MP; use SetMetersSWR+MeterBoth instead
-        public const string SetMetersCompAndSWR = "MS13"; // Select Compression(left) + SWR(right) for RM0 read
-        public const string SetMeterPower       = "MS01"; // Restore the default Power meter on shutdown so the user's radio is left in a normal state
+        public const string SetMetersCompAndSWR = "MS13"; // FTdx101MP/D ONLY: Compression(left) + SWR(right) for the RM0 read
+        public const string SetMeterPower       = "MS00"; // FTdx101MP/D ONLY: POW(MAIN) + ALC(SUB) — the radio's own default pair
+
+        // Fallback used when restoring the operator's meters and YWC never saw an
+        // MS answer (radio powered up mid-session, init answer lost, etc.). The MS
+        // digits are MAIN then SUB, not left then right: MAIN 0=POW 1=COMP 2=TEMP,
+        // SUB 0=ALC 1=VDD 2=ID 3=SWR. So POW + ALC is MS00, not MS01 (which is
+        // POW + VDD). Bench-confirmed on the FTdx101MP 2026-08-15: sending MS00;
+        // put the front panel back to PO and ALC. The pre-existing shutdown restore
+        // hard-coded MS01 and had been leaving the operator on POW + VDD.
+        public const string DefaultFtdx101MeterSelection = "00";
         public const string MeterBoth = "RM0";            // Read both currently-selected meters: RM0LLLRRR;
         public const string MeterALC = "RM4";      // ALC meter (0-255)
         public const string MeterComp = "RM3";     // Compression meter (0-255)
@@ -191,12 +200,18 @@
             return 0;
         }
 
-        public static int ParseRm0LeftMeter(string response)
+        // Returns null when the response is missing or malformed -- NOT zero.
+        // These used to return 0 on every failure path, which made "the radio
+        // did not answer" indistinguishable from "the SWR is 1.0:1". A single
+        // dropped CAT response mid-over published a fabricated zero, and on a
+        // genuinely bad load the meter dipped to perfect for one poll cycle
+        // (issue #124). The caller skips the update when it gets null.
+        public static int? ParseRm0LeftMeter(string response)
         {
             // Parse left-side meter from RM0 response: RM0LLLRRR;
             // Positions 3-5 are the left meter value (0-255).
             if (string.IsNullOrEmpty(response) || !response.StartsWith("RM0"))
-                return 0;
+                return null;
             int semicolonIndex = response.IndexOf(';');
             if (semicolonIndex > 0)
                 response = response.Substring(0, semicolonIndex);
@@ -205,15 +220,16 @@
                 if (int.TryParse(response.Substring(3, 3), out int value))
                     return value;
             }
-            return 0;
+            return null;
         }
 
-        public static int ParseRm0RightMeter(string response)
+        // Null on a missing or malformed response -- see ParseRm0LeftMeter.
+        public static int? ParseRm0RightMeter(string response)
         {
             // Parse right-side meter from RM0 response: RM0LLLRRR;
             // Positions 6-8 are the right meter value (0-255).
             if (string.IsNullOrEmpty(response) || !response.StartsWith("RM0"))
-                return 0;
+                return null;
             int semicolonIndex = response.IndexOf(';');
             if (semicolonIndex > 0)
                 response = response.Substring(0, semicolonIndex);
@@ -222,7 +238,7 @@
                 if (int.TryParse(response.Substring(6, 3), out int value))
                     return value;
             }
-            return 0;
+            return null;
         }
 
         public static int ParseMeterReading(string response)
@@ -294,7 +310,9 @@
         // re-query burst after front-panel A/B presses.
         public static readonly string[] SingleReceiverPerVfoQueries =
         {
-            "MD0;",          // mode — per-VFO at CAT level; re-read after VS for safety
+            // Mode is per-VFO at CAT (MD0=A, MD1=B) even on single-receiver.
+            // Both are re-read after VS; the dispatcher routes by P1.
+            "MD0;", "MD1;",
             "RF0;",          // roofing filter
             "GT0;",          // AGC
             "PA0;",          // IPO/AMP
@@ -310,6 +328,383 @@
             "RG0;",          // RF Gain
             "SQ0;",          // Squelch
         };
+    }
+
+    /// <summary>
+    /// Frame construction for SS (SPECTRUM SCOPE) — the radio's OWN display,
+    /// not YWC's SDR spectrum panel. See docs/design/scope-control-via-cat.md.
+    ///
+    /// Frame shape, confirmed against a real FTdx101MP rather than inferred from
+    /// the CAT manual (whose table is mangled by the PDF layout):
+    ///
+    ///     Set / Answer   SS P1 P2 P3P4P5P6P7 ;    10 characters
+    ///     Read           SS P1 P2 ;                5 characters
+    ///
+    /// P3-P7 is ONE five-character value field, not five one-character fields.
+    /// LEVEL uses all five ("+05.0"); every other sub-command uses the first
+    /// character and pads the rest with zeros. Reading SS04; on the bench
+    /// answered SS04+05.0; which is what settles it.
+    ///
+    /// Everything here builds the padded field in one place on purpose. Writing
+    /// the pad at each call site is exactly the kind of detail that gets
+    /// miscounted, and the radio is tolerant enough of a malformed tail to hide
+    /// the mistake — the write probe accidentally sent a NUL in the pad and the
+    /// radio still applied the value.
+    /// </summary>
+    public static class ScopeCommands
+    {
+        public const string Opcode = "SS";
+
+        // P2 sub-command selectors.
+        public const char Speed  = '0';
+        public const char Peak   = '1';
+        public const char Marker = '2';
+        public const char Color  = '3';
+        public const char Level  = '4';
+        public const char Span   = '5';
+        public const char Mode   = '6';
+        public const char AfFft  = '7';
+        public const char Hold   = '8';   // absent on FT-710
+
+        /// <summary>P1: 0 = MAIN scope, 1 = SUB scope. Fixed at 0 on every
+        /// model except the FTdx101 family.</summary>
+        public static char BandDigit(bool isSub) => isSub ? '1' : '0';
+
+        /// <summary>Read frame, e.g. Read('0', Span) => "SS05;".</summary>
+        public static string Read(char band, char subCommand) =>
+            $"{Opcode}{band}{subCommand};";
+
+        /// <summary>
+        /// Set frame for the single-character sub-commands (everything except
+        /// LEVEL), e.g. Set('0', Span, '4') => "SS0540000;".
+        /// </summary>
+        public static string Set(char band, char subCommand, char value) =>
+            $"{Opcode}{band}{subCommand}{value}0000;";
+
+        /// <summary>
+        /// Set frame for AF-FFT / OSCILLOSCOPE (P2=7). Unlike the other
+        /// single-character sub-commands, P3/P4/P5 are three independent axes
+        /// packed into one field: FFT ATT, OSC ATT, OSC timebase. Writing any
+        /// one of them with Set() would zero the other two, so they must go
+        /// out together. P6-P7 are documented as fixed 0.
+        ///
+        /// P3 0/1/2 = AF-FFT ATT 0/10/20 dB
+        /// P4 0/1/2 = OSC level ATT 0/10/20 dB
+        /// P5 0-5   = OSC time 1/3/10/30/100/300 ms
+        /// </summary>
+        public static string SetAfFft(char band, char fftAtt, char oscAtt, char oscTime)
+        {
+            fftAtt  = ClampDigit(fftAtt,  '2');
+            oscAtt  = ClampDigit(oscAtt,  '2');
+            oscTime = ClampDigit(oscTime, '5');
+            return $"{Opcode}{band}{AfFft}{fftAtt}{oscAtt}{oscTime}00;";
+        }
+
+        /// <summary>
+        /// Unpacks the P2=7 five-character field into the three axes the UI
+        /// exposes. "11200" => FFT ATT 10 dB, OSC ATT 10 dB, OSC 10 ms.
+        /// Missing characters default to '0' rather than throwing — a short
+        /// or null field is treated as unknown-but-harmless, same as Value().
+        /// </summary>
+        public static (char FftAtt, char OscAtt, char OscTime) ParseAfFft(string? field)
+        {
+            var f = (field ?? "00000").PadRight(5, '0');
+            return (f[0], f[1], f[2]);
+        }
+
+        /// <summary>
+        /// Set frame for COLOR (P2=3). P3/P4/P5 are independent axes packed into
+        /// one field: scope colour, narrow-band colour, NB-colour on/off.
+        /// Writing any one of them with Set() would zero the other two.
+        ///
+        /// P3 0–9/A = colour 1–11
+        /// P4 0–6   = narrow-band colour 1–7
+        /// P5 0/1   = narrow-band colour off/on
+        /// </summary>
+        public static string SetColor(char band, char color, char nbColor, char nbOn)
+        {
+            color   = ClampColor(color);
+            nbColor = ClampDigit(nbColor, '6');
+            nbOn    = ClampDigit(nbOn,    '1');
+            return $"{Opcode}{band}{Color}{color}{nbColor}{nbOn}00;";
+        }
+
+        /// <summary>
+        /// Unpacks the P2=3 five-character field. "41100" => colour 5, NB colour 2, NB on.
+        /// </summary>
+        public static (char Color, char NbColor, char NbOn) ParseColor(string? field)
+        {
+            var f = (field ?? "00000").PadRight(5, '0');
+            return (char.ToUpperInvariant(f[0]), f[1], f[2]);
+        }
+
+        /// <summary>
+        /// Parses a scope colour POST body. Accepts a 1-character palette (0–9/A),
+        /// a 3-character triple, or a tagged single axis: <c>n3</c> (NB colour),
+        /// <c>o1</c> (NB on/off). Untagged axes are filled from a radio read by
+        /// the caller.
+        /// </summary>
+        public static bool TryParseColorRequest(
+            string value,
+            out char color,
+            out char nbColor,
+            out char nbOn,
+            out bool hasColor,
+            out bool hasNbColor,
+            out bool hasNbOn)
+        {
+            color = nbColor = nbOn = '0';
+            hasColor = hasNbColor = hasNbOn = false;
+            if (value.Length is 0 or > 3) return false;
+
+            if (value.Length == 3 && value[0] is not ('n' or 'N' or 'o' or 'O' or 'a' or 'A' or 't' or 'T'))
+            {
+                if (!TryColorDigit(value[0].ToString(), out color)) return false;
+                if (!TryScopeDigit(value[1].ToString(), 0, 6, out nbColor)) return false;
+                if (!TryScopeDigit(value[2].ToString(), 0, 1, out nbOn)) return false;
+                hasColor = hasNbColor = hasNbOn = true;
+                return true;
+            }
+
+            if (value.Length == 2)
+            {
+                var tag = char.ToLowerInvariant(value[0]);
+                if (tag == 'n')
+                {
+                    if (!TryScopeDigit(value[1].ToString(), 0, 6, out nbColor)) return false;
+                    hasNbColor = true;
+                    return true;
+                }
+                if (tag == 'o')
+                {
+                    if (!TryScopeDigit(value[1].ToString(), 0, 1, out nbOn)) return false;
+                    hasNbOn = true;
+                    return true;
+                }
+                return false;
+            }
+
+            if (value.Length == 1)
+            {
+                if (!TryColorDigit(value, out color)) return false;
+                hasColor = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Parses an AF-FFT / OSC POST body. Accepts a 1-digit FFT ATT, a 3-digit
+        /// triple, or a tagged single axis: <c>a1</c> (OSC ATT), <c>t2</c> (OSC time).
+        /// </summary>
+        public static bool TryParseAfFftRequest(
+            string value,
+            out char fftAtt,
+            out char oscAtt,
+            out char oscTime,
+            out bool hasFftAtt,
+            out bool hasOscAtt,
+            out bool hasOscTime)
+        {
+            fftAtt = oscAtt = oscTime = '0';
+            hasFftAtt = hasOscAtt = hasOscTime = false;
+            if (value.Length is 0 or > 3) return false;
+
+            if (value.Length == 3 && value[0] is not ('a' or 'A' or 't' or 'T'))
+            {
+                if (!TryScopeDigit(value[0].ToString(), 0, 2, out fftAtt)) return false;
+                if (!TryScopeDigit(value[1].ToString(), 0, 2, out oscAtt)) return false;
+                if (!TryScopeDigit(value[2].ToString(), 0, 5, out oscTime)) return false;
+                hasFftAtt = hasOscAtt = hasOscTime = true;
+                return true;
+            }
+
+            if (value.Length == 2)
+            {
+                var tag = char.ToLowerInvariant(value[0]);
+                if (tag == 'a')
+                {
+                    if (!TryScopeDigit(value[1].ToString(), 0, 2, out oscAtt)) return false;
+                    hasOscAtt = true;
+                    return true;
+                }
+                if (tag == 't')
+                {
+                    if (!TryScopeDigit(value[1].ToString(), 0, 5, out oscTime)) return false;
+                    hasOscTime = true;
+                    return true;
+                }
+                return false;
+            }
+
+            if (value.Length == 1)
+            {
+                if (!TryScopeDigit(value, 0, 2, out fftAtt)) return false;
+                hasFftAtt = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryColorDigit(string value, out char digit)
+        {
+            digit = '0';
+            if (value.Length != 1) return false;
+            var c = char.ToUpperInvariant(value[0]);
+            if (c is >= '0' and <= '9' or 'A')
+            {
+                digit = c;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TryScopeDigit(string value, int min, int max, out char digit)
+        {
+            digit = '0';
+            if (value.Length != 1 || value[0] < '0' || value[0] > '9') return false;
+            var n = value[0] - '0';
+            if (n < min || n > max) return false;
+            digit = value[0];
+            return true;
+        }
+
+        private static char ClampDigit(char value, char max)
+        {
+            if (value < '0') return '0';
+            return value > max ? max : value;
+        }
+
+        private static char ClampColor(char value)
+        {
+            value = char.ToUpperInvariant(value);
+            return value is >= '0' and <= '9' or 'A' ? value : '0';
+        }
+
+        /// <summary>
+        /// Set frame for LEVEL, which is the one sub-command that uses the whole
+        /// five-character field: -30.0 to +30.0 in 0.5 dB steps, always signed
+        /// and always zero-padded to two integer digits ("+05.0", "-30.0").
+        /// </summary>
+        public static string SetLevel(char band, double db)
+        {
+            // Clamp then snap to the radio's 0.5 dB grid; a value off the grid
+            // is not a rounding nicety, the radio rejects the frame.
+            var clamped = Math.Clamp(db, -30.0, 30.0);
+            var snapped = Math.Round(clamped * 2, MidpointRounding.AwayFromZero) / 2;
+            var sign    = snapped < 0 ? '-' : '+';
+            var field   = $"{sign}{Math.Abs(snapped):00.0}";
+            return $"{Opcode}{band}{Level}{field};";
+        }
+
+        /// <summary>
+        /// Unsolicited SS announcement (front-panel change) → band digit, P2
+        /// sub-command, and the five-character value field.
+        ///
+        /// Accepts the 10-character on-wire form (`SS0510000;`), the 9-character
+        /// body after the multiplexer strips the terminator, and a shorter
+        /// value field padded on the right with zeros. The previous dispatcher
+        /// insisted on length 10 including `;`, so a stripped 9-character frame
+        /// vanished — which would look exactly like "the radio never announces".
+        /// </summary>
+        public static bool TryParseAnnouncement(string? message, out char band, out char setting, out string field)
+        {
+            band = '0';
+            setting = '0';
+            field = "00000";
+            if (string.IsNullOrEmpty(message)) return false;
+
+            var ss = message.Trim();
+            if (ss.EndsWith(';')) ss = ss[..^1];
+            if (ss.Length < 5) return false;
+            if (ss[0] != 'S' || ss[1] != 'S') return false;
+
+            band = ss[2];
+            setting = ss[3];
+            var raw = ss[4..];
+            field = raw.Length >= 5 ? raw[..5] : raw.PadRight(5, '0');
+            return true;
+        }
+
+        /// <summary>
+        /// Extracts the five-character value field from an SS answer, or null if
+        /// the answer is not the expected shape. "SS0540000;" => "40000".
+        ///
+        /// The terminator is optional on the way in. On the wire the radio always
+        /// sends it, but CatMultiplexerService strips it before handing the
+        /// answer back, so a parser that insists on it works perfectly against a
+        /// raw serial probe and then returns null for everything in the actual
+        /// app. It did exactly that once already.
+        /// </summary>
+        public static string? ValueField(string? answer, char band, char subCommand)
+        {
+            if (string.IsNullOrEmpty(answer)) return null;
+            var a = answer.TrimEnd();
+            if (a.EndsWith(';')) a = a[..^1];
+            if (a.Length != 9) return null;
+            if (a[0] != 'S' || a[1] != 'S') return null;
+            if (a[2] != band || a[3] != subCommand) return null;
+            return a.Substring(4, 5);
+        }
+
+        /// <summary>
+        /// The P3 character of an SS answer — the value for every sub-command
+        /// except LEVEL. Returns null if the answer did not parse.
+        /// </summary>
+        public static char? Value(string? answer, char band, char subCommand) =>
+            ValueField(answer, band, subCommand) is { Length: > 0 } f ? f[0] : null;
+
+        // ── MODE (P2=6) composition ──────────────────────────────────────────
+        //
+        // The twelve mode values are not an arbitrary list, they are a 2x3x3
+        // grid, which is why the UI offers three small selectors rather than one
+        // twelve-entry dropdown:
+        //
+        //   0,1,2  3DSS      CENTER / CURSOR / FIX          (no size variants)
+        //   3,4,5  W/F       CENTER  x  L / N / S
+        //   6,7,8  W/F       CURSOR  x  L / N / S
+        //   9,A,B  W/F       FIX     x  L / N / S
+        //
+        // The FT-710 uses the same positions with only two sizes
+        // (EXPAND / NORMAL) and documents the third slot of each group as "-",
+        // i.e. it does not exist. Callers must therefore range-check `size`
+        // against RadioCapabilities.ScopeSizeLabels for the model.
+
+        public const int PlacementCenter = 0;
+        public const int PlacementCursor = 1;
+        public const int PlacementFix    = 2;
+
+        /// <summary>
+        /// Composes the P3 mode character from the three axes the UI exposes.
+        /// 3DSS has no size variants, so <paramref name="size"/> is ignored when
+        /// <paramref name="is3dss"/> is true.
+        /// </summary>
+        public static char ModeValue(bool is3dss, int placement, int size)
+        {
+            placement = Math.Clamp(placement, 0, 2);
+            if (is3dss) return (char)('0' + placement);
+
+            var index = 3 + placement * 3 + Math.Clamp(size, 0, 2);
+            // 10 and 11 are 'A' and 'B', not '10' and '11'.
+            return index < 10 ? (char)('0' + index) : (char)('A' + index - 10);
+        }
+
+        /// <summary>Decomposes a P3 mode character back into the three axes.</summary>
+        public static (bool Is3dss, int Placement, int Size) ParseMode(char value)
+        {
+            var index = value switch
+            {
+                >= '0' and <= '9' => value - '0',
+                >= 'A' and <= 'B' => value - 'A' + 10,
+                >= 'a' and <= 'b' => value - 'a' + 10,
+                _                 => 0
+            };
+            if (index < 3) return (true, index, 0);
+            var offset = index - 3;
+            return (false, offset / 3, offset % 3);
+        }
     }
 
     public static class IFCommandParser

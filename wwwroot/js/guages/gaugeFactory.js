@@ -2,7 +2,20 @@
 // Creates gauge instances based on a type string.
 // No layout logic, no DOM queries, no calibration logic.
 
-import { SMeterGauge, PowerGauge, SWRGauge, ALCGauge, TempGauge, CompressionGauge, IDDGauge, VDDGauge } from './gauge.js';
+// The ?v=1 below is a ONE-TIME cache-buster. Do not bump it.
+//
+// An import made from inside a module never passes through Razor, so it cannot
+// carry the app version the way the page's own imports do — the URL is baked
+// into this file. That leaves two holes, and this fixes the second of them:
+// a browser holding a stale copy of gauge.js keeps serving it however many
+// times gaugeFactory.js is re-fetched, because the URL never changed.
+//
+// Program.cs now sends "no-cache, must-revalidate" on static files, which
+// prevents this happening again — but it cannot reach a copy cached BEFORE
+// that header existed. Changing the URL once is the only thing that can.
+// Once every user is past that upgrade the marker is inert, and bumping it
+// achieves nothing the version-tied parent import has not already done.
+import { SMeterGauge, PowerGauge, SWRGauge, ALCGauge, TempGauge, CompressionGauge, IDDGauge, VDDGauge } from './gauge.js?v=1';
 
 // Registry of gauge constructors.
 // Add new meter types here as your UI grows.

@@ -1,18 +1,35 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFrameworks>net10.0-windows;net10.0</TargetFrameworks>
     <RollForward>Minor</RollForward>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
+    <!-- Allow restoring/building the Windows TFM on macOS/Linux CI or dev machines
+         (packaging still targets win-x64 on Windows runners). -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- Disable automatic content inclusion so we can manage wwwroot ourselves -->
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="YaesuWebControl.Tests" />
+  </ItemGroup>
+
+  <!-- Windows product build: WinForms tray host, voice (SAPI), SDR worker companion. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <OutputType>WinExe</OutputType>
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>x64</Platforms>
     <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
 
-    <!-- Disable automatic content inclusion so we can manage wwwroot ourselves -->
-    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+  <!-- macOS / Linux CAT-only host: console process, no WinForms / voice / SDR worker. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -43,6 +60,45 @@
     <Content Remove="scripts\probe\**" />
     <EmbeddedResource Remove="scripts\probe\**" />
     <None Remove="scripts\probe\**" />
+    <!-- core/ is the Radio_Web_Control_Core git subtree and is its own .csproj
+         (ProjectReference below), the same arrangement as Workers/ above. The
+         Web SDK globs **/*.cs, so without this removal every file in there is
+         compiled TWICE — once into RadioWebControl.Core.dll and once straight
+         into this assembly — which surfaces as duplicate-type errors rather
+         than as anything naming the real cause. -->
+    <Compile Remove="core\**" />
+    <Content Remove="core\**" />
+    <EmbeddedResource Remove="core\**" />
+    <None Remove="core\**" />
+    <!-- tools/ holds standalone bench utilities, each its own .csproj (CwBench
+         is a console harness that runs the Core CW decoder over a .wav file).
+         Same reason as core/ above: the Web SDK globs **/*.cs, and a second
+         Program.cs in this assembly is an error that names neither the file
+         nor the cause. -->
+    <Compile Remove="tools\**" />
+    <Content Remove="tools\**" />
+    <EmbeddedResource Remove="tools\**" />
+    <None Remove="tools\**" />
+    <!-- Tests/ holds the YWC test project (Tests/YaesuWebControl.Tests),
+         which ProjectReferences this one. Same reason as core/ and tools/
+         above: the Web SDK globs **/*.cs, so without this removal the test
+         classes compile into the app as well, where the xunit attributes they
+         carry cannot resolve because the app has no xunit reference. The
+         error that produces names the attributes, not the glob. -->
+    <Compile Remove="Tests\**" />
+    <Content Remove="Tests\**" />
+    <EmbeddedResource Remove="Tests\**" />
+    <None Remove="Tests\**" />
+  </ItemGroup>
+
+  <!-- Radio-agnostic code shared with Icom Web Control. Pulled in as a git
+       subtree, NOT a submodule, so a plain `git clone` of this repository still
+       builds with no extra steps. Deliberately NOT conditioned on
+       TargetFramework: the core targets net10.0, which both this project's
+       Windows TFM and its macOS/Linux CAT-only TFM can load. See core/README.md
+       for the subtree commands. -->
+  <ItemGroup>
+    <ProjectReference Include="core\RadioWebControl.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -55,6 +111,32 @@
     <Compile Remove="Services\SerialPortCatClient.cs" />
   </ItemGroup>
 
+  <!-- CAT-only TFM: omit WinForms tray, SAPI/NAudio voice stack, and
+       FolderBrowserDialog-based SDR controller. VCTuneRecognizer stays
+       (intent dispatch for VC-Tune UI); its GrammarBuilder surface is
+       #if WINDOWS. Mac menu-bar tray lives in MacSystemTrayService. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <Compile Remove="Services\SystemTrayService.cs" />
+    <Compile Remove="Controllers\SdrController.cs" />
+    <Compile Remove="Controllers\VoiceController.cs" />
+    <Compile Remove="Services\Voice\VoiceControlService.cs" />
+    <Compile Remove="Services\Voice\VoiceGrammar.cs" />
+    <Compile Remove="Services\Voice\VoiceTtsService.cs" />
+    <Compile Remove="Services\Voice\MicrophoneCapture.cs" />
+    <Compile Remove="Services\Voice\AudioOutput.cs" />
+    <Compile Remove="Services\Voice\IntentDispatcher.cs" />
+    <Compile Remove="Services\Voice\VoicePhraseStore.cs" />
+    <Compile Remove="Services\Voice\VoiceHelpBuilder.cs" />
+    <Compile Remove="Services\Voice\VoicePhraseValidator.cs" />
+  </ItemGroup>
+
+  <!-- Windows TFM does not need the Avalonia-backed macOS tray / capture helpers. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <Compile Remove="Services\MacSystemTrayService.cs" />
+    <Compile Remove="Services\Video\MacAvFoundationCapture.cs" />
+    <Compile Remove="Services\Video\MacJpegEncoder.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Remove="layout-old.cshtml" />
   </ItemGroup>
@@ -65,16 +147,28 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="Markdig" Version="1.2.0" />
     <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+    <PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
+    <!-- Native runtimes: pin to published versions (linux/osx packs skip 4.11). -->
+    <PackageReference Include="OpenCvSharp4.official.runtime.linux-x64.slim" Version="4.13.0.20260225" />
+    <!-- linux-arm (20260211) used RID linux-arm, so linux-arm64 publish omitted natives. -->
+    <PackageReference Include="OpenCvSharp4.runtime.linux-arm64" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.runtime.osx.arm64" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.runtime.osx.x64" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
+    <PackageReference Include="PortAudioSharp2" Version="1.0.6" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="System.IO.Ports" Version="10.0.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <!-- System.Speech: Windows SAPI 5 grammar-based speech recognition.
          In-process voice control, replaces the parked Alexa work. See
-         docs/VoiceControl/v1-plan.md. Windows-only — the surrounding
-         project is already net10.0-windows so no portability change. -->
+         docs/VoiceControl/v1-plan.md. -->
     <PackageReference Include="System.Speech" Version="10.0.1" />
     <!-- NAudio.WinMM: WaveIn/WaveOut (MME) device enumeration + capture/playback
          only. Lets the user pick a specific microphone and announcement speaker
@@ -87,10 +181,18 @@
     <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
   </ItemGroup>
 
+  <!-- Avalonia TrayIcon for the macOS menu-bar status item on the CAT-only host.
+       Pin Tmds.DBus.Protocol above the vulnerable 0.21.2 pulled transitively by
+       Avalonia's Linux backend (NU1903 / GHSA-xrw6-gwf8-vvr9). -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.9" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2" />
+  </ItemGroup>
+
   <!-- Voice control grammar files shipped alongside the exe so
        VoiceControlService can load them at startup. Only .srgs is shipped;
        the README in this folder is documentation, not loaded by code. -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <Content Include="Grammars\*.srgs">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
@@ -104,8 +206,17 @@
     worker is an .exe, not a library — we don't want to link against it,
     we just want MSBuild to build it before us and the post-build copy
     target below to land its output next to YWC's exe.
+
+    `dotnet publish -f net10.0 -r osx-*` (macOS DMGs) still restores every
+    TFM, so the Windows inner graph would otherwise pull this worker and
+    forward RuntimeIdentifier=osx-arm64 / SelfContained into a
+    net10.0-windows + PlatformTarget=x64 project. That restore fails in
+    milliseconds with MSB4181 and no inner error (SDK 10.0.400 on
+    macos-latest). Restrict the reference to an empty RID (local
+    `dotnet build`) or a win-* RID (Windows publish); CAT-only osx/linux
+    publishes never ship the worker.
   -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows' AND ('$(RuntimeIdentifier)' == '' OR $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win')))">
     <ProjectReference Include="Workers\Yaesu_Sdr_Worker\Yaesu_Sdr_Worker.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <Private>false</Private>
@@ -129,56 +240,90 @@
        The CI workflow uses the latter (RID=win-x64) for the
        installer; local dev typically uses the former. v2.3.0 shipped
        with only the no-RID form and the CI publish failed. -->
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == ''">
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.exe" Visible="false">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows' And '$(RuntimeIdentifier)' == ''">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.exe" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.exe</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.dll" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.dll" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.dll</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.deps.json" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.deps.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.deps.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.deps.json</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.runtimeconfig.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.runtimeconfig.json</Link>
     </None>
   </ItemGroup>
 
-  <ItemGroup Condition="'$(RuntimeIdentifier)' != ''">
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.exe" Visible="false">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows' And '$(RuntimeIdentifier)' != ''">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.exe" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.exe</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.dll" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.dll" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.dll</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.deps.json" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.deps.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.deps.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.deps.json</Link>
     </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false">
+    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.runtimeconfig.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Yaesu_Sdr_Worker.runtimeconfig.json</Link>
     </None>
   </ItemGroup>
+
+  <!--
+    Staging guard. The <None> items above are ordinary evaluation-time items:
+    their Exists() conditions are read before anything is built, and the copy
+    itself is PreserveNewest. That chain does work - a touched file in the
+    worker, or a touched file linked into it from Services/Sdr, both rebuild
+    the worker and restage it (verified 2026-08-30). What it cannot survive is
+    the staged copy being unwritable or the worker output being absent when
+    the items were evaluated, and its failure mode is the dangerous kind: YWC
+    launches a worker that does not contain the change, and nothing in the
+    build output says so. That cost a whole hardware test round chasing an SDR
+    fix that was never in the running code.
+
+    So copy again here, after the worker's ProjectReference has genuinely
+    built, and refuse to finish if there is nothing to copy. The empty-RID
+    case collapses $(RuntimeIdentifier) out of the path, so one target covers
+    both layouts. Cheap, and it turns a silent stale worker into a build
+    error.
+  -->
+  <Target Name="StageSdrWorker" AfterTargets="Build"
+          Condition="'$(TargetFramework)' == 'net10.0-windows' AND ('$(RuntimeIdentifier)' == '' OR $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win')))">
+    <PropertyGroup>
+      <SdrWorkerOutDir>Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\</SdrWorkerOutDir>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.dll')"
+           Text="Yaesu_Sdr_Worker did not produce $(SdrWorkerOutDir)Yaesu_Sdr_Worker.dll. YWC would start and then fail to open any SDR, so this is an error rather than a warning." />
+    <ItemGroup>
+      <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.exe" Condition="Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.exe')" />
+      <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.dll" />
+      <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.deps.json" Condition="Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.deps.json')" />
+      <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.runtimeconfig.json" Condition="Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.runtimeconfig.json')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SdrWorkerStaged)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
 
   <PropertyGroup>
-    <Version>1.5.6</Version>
-    <FileVersion>1.5.6.0</FileVersion>
-    <AssemblyVersion>1.5.6.0</AssemblyVersion>
+    <Version>2.5.0</Version>
+    <FileVersion>2.5.0.0</FileVersion>
+    <AssemblyVersion>2.5.0.0</AssemblyVersion>
     <AssemblyTitle>Yaesu Web Control</AssemblyTitle>
     <Product>Yaesu Web Control</Product>
     <Description>Browser-based CAT controller for Yaesu HF transceivers</Description>
@@ -217,6 +362,59 @@
     </Content>
   </ItemGroup>
 
+  <!-- Shared browser modules from the Radio_Web_Control_Core subtree (core/js).
+       The engine is authored once in core/js and copied into wwwroot at build
+       time; the copies are git-ignored so core/js stays the single source of
+       truth (see core/js/README.md). Runs before AssignTargetPaths so the
+       freshly-copied files are first-class Content THIS build, not next build:
+       EnableDefaultContentItems is false and the wwwroot glob above is evaluated
+       before any target runs, so on a clean checkout the file is absent when the
+       glob is computed and would 404 until a second build. Exclude="@(Content)"
+       drops anything that glob already found on a later build, so we never add a
+       duplicate Content item. -->
+  <Target Name="CopySharedCoreJs" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <_SharedCoreJs Include="core\js\**\*.js" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_SharedCoreJs)"
+          DestinationFiles="@(_SharedCoreJs->'wwwroot\js\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <!-- Write the ignore rule for what we just generated, so nobody has to
+         remember to. Adding a file under core/js used to mean hand-editing
+         .gitignore in both apps as well, and that step was missed for
+         core/js/cw the first time round - the generated copy showed up as
+         untracked in IWC. This target knows exactly what it produced, so it
+         emits one .gitignore per destination directory naming only those
+         files (plus itself). App-authored siblings such as
+         calibration-tables.js are deliberately not covered. -->
+    <WriteLinesToFile File="wwwroot\js\%(_SharedCoreJs.RecursiveDir).gitignore"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true"
+                      Lines="# Generated at build time from the Radio_Web_Control_Core subtree.;# core/js is the single source of truth - see core/js/README.md.;# Edit these in core/js and push the subtree. Never edit the copy here.;.gitignore;@(_SharedCoreJs-&gt;'%(Filename)%(Extension)')" />
+    <ItemGroup>
+      <Content Include="@(_SharedCoreJs->'wwwroot\js\%(RecursiveDir)%(Filename)%(Extension)')"
+               Exclude="@(Content)">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+
+  <!-- ObjC helper for Radio Display FPS. C# objc_msgSend of CMTime aborts
+       (NSException) on 59.94 fps HDMI pins; this dylib uses @try and the
+       range's own minFrameDuration. -->
+  <Target Name="BuildMacAvFpsDylib"
+          AfterTargets="Build"
+          Condition="'$(TargetFramework)' == 'net10.0' AND $([MSBuild]::IsOSPlatform('OSX'))">
+    <Exec Command="clang -dynamiclib -fobjc-arc -O2 -framework AVFoundation -framework CoreMedia -framework Foundation -o &quot;$(OutputPath)libYwcMacAvFps.dylib&quot; &quot;$(MSBuildProjectDirectory)/Services/Video/MacAvFoundationFps.m&quot;" />
+  </Target>
+
+  <Target Name="PublishMacAvFpsDylib"
+          AfterTargets="Publish"
+          Condition="'$(TargetFramework)' == 'net10.0' AND $([MSBuild]::IsOSPlatform('OSX'))">
+    <Copy SourceFiles="$(OutputPath)libYwcMacAvFps.dylib"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(OutputPath)libYwcMacAvFps.dylib')" />
+  </Target>
+
 </Project>
-
-
