@@ -1687,9 +1687,7 @@ connection.on("RadioStateUpdate", function (update) {
     if (update.property === "IfWidthA") {
         const widget = window.ifWidthButtonA;
         if (widget) {
-            const code = String(update.value);
-            const known = widget.options?.some((o) => String(o.id) === code);
-            if (known) widget.setState({ selectedId: code }, { silent: true });
+            widget.setState({ selectedId: String(update.value) }, { silent: true });
         }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ ifWidthCode: update.value });
         updateContourSliderBounds('A');
@@ -1697,27 +1695,31 @@ connection.on("RadioStateUpdate", function (update) {
     if (update.property === "IfWidthB") {
         const widget = window.ifWidthButtonB;
         if (widget) {
-            const code = String(update.value);
-            const known = widget.options?.some((o) => String(o.id) === code);
-            if (known) widget.setState({ selectedId: code }, { silent: true });
+            widget.setState({ selectedId: String(update.value) }, { silent: true });
         }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ ifWidthCode: update.value });
         updateContourSliderBounds('B');
     }
 
     // --- IF SHIFT ---
-    if (update.property === "IfShiftA" && !ifShiftDragging.A) {
-        const slider = document.getElementById('ifShiftSliderA');
-        const label = document.getElementById('ifShiftValueA');
-        if (slider) slider.value = update.value;
-        if (label) label.textContent = update.value;
+    if (update.property === "IfShiftA") {
+        const widget = window.ifShiftButtonA;
+        if (widget && !widget.menuOpen) {
+            const hz = typeof window.snapIfShiftHz === "function"
+                ? window.snapIfShiftHz(update.value)
+                : (parseInt(update.value, 10) || 0);
+            widget.setState({ selectedId: String(hz) }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ ifShiftHz: parseInt(update.value) || 0 });
     }
-    if (update.property === "IfShiftB" && !ifShiftDragging.B) {
-        const slider = document.getElementById('ifShiftSliderB');
-        const label = document.getElementById('ifShiftValueB');
-        if (slider) slider.value = update.value;
-        if (label) label.textContent = update.value;
+    if (update.property === "IfShiftB") {
+        const widget = window.ifShiftButtonB;
+        if (widget && !widget.menuOpen) {
+            const hz = typeof window.snapIfShiftHz === "function"
+                ? window.snapIfShiftHz(update.value)
+                : (parseInt(update.value, 10) || 0);
+            widget.setState({ selectedId: String(hz) }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ ifShiftHz: parseInt(update.value) || 0 });
     }
 
@@ -2348,26 +2350,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setupAfGainSlider('B');
 });
 
-// IF Shift slider: send only on release, block SignalR updates while dragging
-const ifShiftDragging = { A: false, B: false };
-
-function setupIfShiftSlider(receiver) {
-    const slider = document.getElementById(`ifShiftSlider${receiver}`);
-    if (!slider) return;
-    const sendShift = () => {
-        if (window.radioControl) window.radioControl.setIfShift(receiver, parseInt(slider.value));
-    };
-    slider.addEventListener('mousedown',  () => { ifShiftDragging[receiver] = true; });
-    slider.addEventListener('touchstart', () => { ifShiftDragging[receiver] = true; }, { passive: true });
-    // Document-level mouseup catches releases anywhere, not just over the slider element
-    document.addEventListener('mouseup', () => {
-        if (ifShiftDragging[receiver]) { ifShiftDragging[receiver] = false; sendShift(); }
-    });
-    slider.addEventListener('touchend',   () => { ifShiftDragging[receiver] = false; sendShift(); });
-    // Keyboard arrow keys fire 'change' after the value settles
-    slider.addEventListener('change', sendShift);
-}
-
 // IF SHIFT has no effect in AM or FM: measured on an FTdx101MP on
 // 2026-09-19 (#166) -- parked 5 kHz off a broadcast carrier, +1000 and
 // -1000 sound identical, and the radio's own filter display shows no
@@ -2379,44 +2361,22 @@ const IF_SHIFT_FIXED_TITLE =
 function updateIfShiftForMode(receiver, mode) {
     const m = (mode || '').toUpperCase();
     const fixed = m === 'AM' || m === 'AM-N' || m.includes('FM');
-    const slider = document.getElementById(`ifShiftSlider${receiver}`);
-    const zero   = document.getElementById(`ifShiftZero${receiver}`);
-    // The tooltip has to live on the wrapper: a disabled control dispatches no
-    // mouse events, so a title on the slider itself never shows (2026-09-20).
-    const wrap = document.getElementById(`ifShiftWrap${receiver}`);
-    for (const el of [slider, zero]) {
-        if (!el) continue;
-        if (fixed) {
-            if (!el.dataset.ifsTitle) el.dataset.ifsTitle = el.title || '';
-            if (!el.dataset.ifsLabel) el.dataset.ifsLabel = el.getAttribute('aria-label') || '';
-            el.removeAttribute('title');
-            if (el.dataset.ifsLabel) {
-                el.setAttribute('aria-label', `${el.dataset.ifsLabel} - ${IF_SHIFT_FIXED_TITLE}`);
-            }
-            el.disabled = true;
-        } else if (el.disabled) {
-            el.disabled = false;
-            el.title = el.dataset.ifsTitle || '';
-            if (el.dataset.ifsLabel) el.setAttribute('aria-label', el.dataset.ifsLabel);
-        }
-    }
-    if (wrap) {
-        if (fixed) {
-            wrap.title = IF_SHIFT_FIXED_TITLE;
-            wrap.classList.add('is-inert');
-        } else {
-            wrap.removeAttribute('title');
-            wrap.classList.remove('is-inert');
-        }
+    const widget = window[`ifShiftButton${receiver}`];
+    if (!widget) return;
+    widget.setDisabled(fixed);
+    if (fixed) {
+        widget.root.title = IF_SHIFT_FIXED_TITLE;
+    } else {
+        widget.root.removeAttribute('title');
     }
 }
 window.updateIfShiftForMode = updateIfShiftForMode;
 
 function resetIfShift(receiver) {
-    const slider = document.getElementById(`ifShiftSlider${receiver}`);
-    const label  = document.getElementById(`ifShiftValue${receiver}`);
-    if (slider) slider.value = 0;
-    if (label)  label.textContent = '0';
+    const widget = window[`ifShiftButton${receiver}`];
+    if (widget) widget.setState({ selectedId: "0" }, { silent: true });
+    const panel = receiver === "B" ? window.filterScopePanelB : window.filterScopePanelA;
+    if (panel) panel.setState({ ifShiftHz: 0 });
     if (window.radioControl) window.radioControl.setIfShift(receiver, 0);
 }
 window.resetIfShift = resetIfShift;
@@ -2530,12 +2490,10 @@ async function _setClarifier(vfo, rxOn, txOn, offsetHz) {
 
 function resetIfWidth(receiver) {
     const widget = window[`ifWidthButton${receiver}`];
-    if (!widget?.options?.length) return;
-    // Default is the last option (widest bandwidth — 3.0 kHz for FTdx101, 3.4 kHz for FTdx10)
-    const defaultOpt = widget.options[widget.options.length - 1];
-    if (!defaultOpt) return;
-    widget.setState({ selectedId: String(defaultOpt.id) }, { silent: true });
-    if (window.radioControl) window.radioControl.setIfWidth(receiver, defaultOpt.id);
+    if (!widget) return;
+    const defaultId = widget.clickSelectId ?? "0";
+    widget.setState({ selectedId: String(defaultId) }, { silent: true });
+    if (window.radioControl) window.radioControl.setIfWidth(receiver, defaultId);
 }
 window.resetIfWidth = resetIfWidth;
 
@@ -2632,11 +2590,6 @@ async function setApfFreq(vfo, hz) {
     } catch (e) { console.error('APF freq failed:', e); }
 }
 window.setApfFreq = setApfFreq;
-
-document.addEventListener('DOMContentLoaded', function() {
-    setupIfShiftSlider('A');
-    setupIfShiftSlider('B');
-});
 
 
 (function () {

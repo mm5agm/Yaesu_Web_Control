@@ -599,8 +599,8 @@ export class ToggleButton {
 }
 
 /**
- * Yaesu key: left-click cycles discrete options; right-click opens a
- * slider or option-list context menu.
+ * Yaesu key: left-click cycles discrete options (or jumps to a reset
+ * option); right-click opens a slider or option-list context menu.
  *
  * With linkSliderToOptions, the slider indexes the same option list
  * (e.g. IF Width): cycle and slider stay in sync; face shows label · option.
@@ -613,6 +613,11 @@ export class CycleContextButton {
      *   options?: { id: string, label: string }[],
      *   selectedId?: string,
      *   offId?: string | null,
+     *   clickAction?: "cycle" | "select",
+     *   clickSelectId?: string,
+     *   extraLabels?: Record<string, string>,
+     *   sliderAlias?: Record<string, string>,
+     *   offIds?: string[],
      *   linkSliderToOptions?: boolean,
      *   showLed?: boolean,
      *   a11yKey?: string,
@@ -629,6 +634,12 @@ export class CycleContextButton {
             { id: "0", label: "OFF" },
             { id: "1", label: "ON" },
         ]).map((o) => ({ id: String(o.id), label: String(o.label) }));
+        this.clickAction = config.clickAction === "select" ? "select" : "cycle";
+        this.clickSelectId =
+            config.clickSelectId != null ? String(config.clickSelectId) : "0";
+        this.extraLabels = { ...(config.extraLabels ?? {}) };
+        this.sliderAlias = { ...(config.sliderAlias ?? {}) };
+        this.offIds = config.offIds ? new Set(config.offIds.map(String)) : null;
         this.linkSliderToOptions = Boolean(config.linkSliderToOptions);
         this.offId =
             config.offId !== undefined
@@ -654,9 +665,8 @@ export class CycleContextButton {
             if (this.linkSliderToOptions) {
                 this.min = 0;
                 this.max = Math.max(0, this.options.length - 1);
-                const idx = this.options.findIndex((o) => o.id === this.selectedId);
+                const idx = this._sliderIndexFor(this.selectedId);
                 this.value = idx >= 0 ? idx : 0;
-                if (idx < 0 && this.options[0]) this.selectedId = this.options[0].id;
             } else {
                 this.min = Number(ctx.min ?? 1);
                 this.max = Number(ctx.max ?? 15);
@@ -700,28 +710,40 @@ export class CycleContextButton {
     /**
      * Replace the option list (and, when linked, the slider range).
      * @param {{ id: string, label: string }[]} options
-     * @param {{ silent?: boolean, selectedId?: string }} [opts]
+     * @param {{
+     *   silent?: boolean,
+     *   selectedId?: string,
+     *   extraLabels?: Record<string, string>,
+     *   sliderAlias?: Record<string, string>,
+     *   offIds?: string[],
+     *   clickSelectId?: string,
+     * }} [opts]
      */
     setOptions(options, opts = {}) {
         this.options = (options ?? []).map((o) => ({
             id: String(o.id),
             label: String(o.label),
         }));
+        if (opts.extraLabels) this.extraLabels = { ...opts.extraLabels };
+        if (opts.sliderAlias) this.sliderAlias = { ...opts.sliderAlias };
+        if (opts.offIds) this.offIds = new Set(opts.offIds.map(String));
+        if (opts.clickSelectId != null) this.clickSelectId = String(opts.clickSelectId);
         if (opts.selectedId !== undefined) {
             this.selectedId = String(opts.selectedId);
         }
         if (this.linkSliderToOptions && this.contextType === "slider") {
-            this.min = 0;
-            this.max = Math.max(0, this.options.length - 1);
-            let idx = this.options.findIndex((o) => o.id === this.selectedId);
-            if (idx < 0) idx = 0;
-            this.selectedId = this.options[idx]?.id ?? "";
-            this.value = idx;
-            if (this.slider) {
-                this.slider.min = String(this.min);
-                this.slider.max = String(this.max);
+            this._applySliderIndex();
+            if (
+                this._sliderIndexFor(this.selectedId) < 0 &&
+                this.extraLabels[this.selectedId] == null
+            ) {
+                this.selectedId = this.options[0]?.id ?? "";
+                this._applySliderIndex();
             }
-        } else if (!this.options.some((o) => o.id === this.selectedId)) {
+        } else if (
+            !this.options.some((o) => o.id === this.selectedId) &&
+            this.extraLabels[this.selectedId] == null
+        ) {
             this.selectedId = this.options[0]?.id ?? "";
         }
         this._sync();
@@ -745,7 +767,7 @@ export class CycleContextButton {
         if (partial.selectedId !== undefined) {
             this.selectedId = String(partial.selectedId);
             if (this.linkSliderToOptions && this.contextType === "slider") {
-                const idx = this.options.findIndex((o) => o.id === this.selectedId);
+                const idx = this._sliderIndexFor(this.selectedId);
                 if (idx >= 0) this.value = idx;
             }
         }
@@ -766,10 +788,53 @@ export class CycleContextButton {
     }
 
     _optionLabel() {
+        const id = String(this.selectedId);
         return (
-            this.options.find((o) => String(o.id) === String(this.selectedId))?.label ??
+            this.options.find((o) => o.id === id)?.label ??
+            this.extraLabels[id] ??
             this.selectedId
         );
+    }
+
+    _clickSelectLabel() {
+        const id = String(this.clickSelectId);
+        return (
+            this.extraLabels[id] ??
+            this.options.find((o) => o.id === id)?.label ??
+            this.clickSelectId
+        );
+    }
+
+    _isOn() {
+        const id = String(this.selectedId);
+        if (this.offIds instanceof Set && this.offIds.size > 0) {
+            return !this.offIds.has(id);
+        }
+        if (this.offId == null) return true;
+        return id !== this.offId;
+    }
+
+    _sliderIndexFor(id) {
+        const sid = String(id);
+        let idx = this.options.findIndex((o) => o.id === sid);
+        if (idx >= 0) return idx;
+        const alias = this.sliderAlias?.[sid];
+        if (alias != null) {
+            idx = this.options.findIndex((o) => o.id === String(alias));
+            if (idx >= 0) return idx;
+        }
+        return -1;
+    }
+
+    _applySliderIndex() {
+        this.min = 0;
+        this.max = Math.max(0, this.options.length - 1);
+        const idx = this._sliderIndexFor(this.selectedId);
+        this.value = idx >= 0 ? idx : 0;
+        if (this.slider) {
+            this.slider.min = String(this.min);
+            this.slider.max = String(this.max);
+        }
     }
 
     _contextLabel() {
@@ -855,11 +920,18 @@ export class CycleContextButton {
             }
             if (!this.options.length) return;
             this._setMenuOpen(false);
-            const idx = this.options.findIndex((o) => o.id === this.selectedId);
-            const next = (idx < 0 ? 0 : idx + 1) % this.options.length;
-            this.selectedId = this.options[next].id;
-            if (this.linkSliderToOptions && this.contextType === "slider") {
-                this.value = next;
+            if (this.clickAction === "select") {
+                this.selectedId = this.clickSelectId;
+                if (this.linkSliderToOptions && this.contextType === "slider") {
+                    this._applySliderIndex();
+                }
+            } else {
+                const idx = this.options.findIndex((o) => o.id === this.selectedId);
+                const next = (idx < 0 ? 0 : idx + 1) % this.options.length;
+                this.selectedId = this.options[next].id;
+                if (this.linkSliderToOptions && this.contextType === "slider") {
+                    this.value = next;
+                }
             }
             this._sync();
             this.onChange(this.getState());
@@ -933,12 +1005,16 @@ export class CycleContextButton {
     _sync() {
         const optionLabel = this._optionLabel();
         const contextLabel = this._contextLabel();
-        const isOn = this.offId == null ? true : this.selectedId !== this.offId;
+        const isOn = this._isOn();
 
         if (this.linkSliderToOptions) {
             this.labelEl.textContent = `${this.label} · ${optionLabel}`;
             this.button.setAttribute("aria-label", `${this.label}: ${optionLabel}`);
-            this.button.title = `${this.label}: left-click to cycle, right-click for slider`;
+            const clickHint =
+                this.clickAction === "select"
+                    ? `left-click to reset to ${this._clickSelectLabel()}, right-click for slider`
+                    : "left-click to cycle, right-click for slider";
+            this.button.title = `${this.label}: ${clickHint}`;
         } else {
             // Off faceplate keeps the key name (DNR/NR), like NB — not the option "OFF".
             const faceLabel = isOn ? optionLabel : this.label;

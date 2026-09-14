@@ -752,24 +752,24 @@ The trapezium is the DSP filter — the IF Width setting — and it grows and sh
 - **Green bars** inside the trapezoid are the spectrum of the receiver's audio — what the filter is actually passing, the same thing the radio's own filter display draws. YWC gets that audio from the radio's USB sound device: set **Radio RX device** under **Settings → Remote Audio** (§18.2) and the bars appear; remote audio itself does not need to be switched on, and nothing is played anywhere. The host analyses the audio and sends the result to every open main page about twelve times a second; the USB device is opened only while a main page is showing and released when the last one closes. If Remote Audio *is* playing in the browser, the bars come from that instead, with slightly less delay. A switch on the same Settings card, **Show the radio's RX audio in the Filter Function Display**, turns the feed off if you would rather not have the device open. With no RX device set the trapezoid is drawn empty. Earlier versions filled it with a moving pattern that was not derived from any signal at all; that has been removed, because it looked exactly like received signal and it was described here as if it were.
 - A **"Roof Nk" label** in the top-right corner shows the currently selected roofing filter (e.g. "Roof 3k", "Roof 12k", "Roof 600"). The trapezium does not change with it, so the label is how you see which roofing filter is in circuit — and, when it is narrower than the IF Width, the bars show its effect as described above.
 - **Passband width** reflects the current IF Width setting.
-- **Passband position** shifts left or right as the IF Shift slider is adjusted — the display updates live while dragging the slider. Where the passband sits in SSB was measured on my FTdx101MP with the audio feed above, one width at a time: widths of 850 Hz and below are centred on 1500 Hz, the IF centre (300 Hz is roughly 1350–1650 Hz), and the wider settings narrow in from the 3 kHz default with about a third taken off the low side and two-thirds off the high (2.4 kHz is roughly 300–2700 Hz). Earlier versions drew every SSB width starting at 300 Hz and growing upward, which put the trapezium in the wrong place at everything but 3 kHz — and, once the bars were real, put the signal outside it. In CW the passband is centred on your CW pitch for the narrow widths, measured the same way; once a width is too wide to sit centred on the pitch (from about 800 Hz with a 700 Hz pitch) its low edge stops at about 250 Hz and it grows upward from there, so a 3.5 kHz CW filter fills the display much as the radio's own draws it. Earlier versions centred every CW width on the pitch, which sent the wide ones off the left of the display.
+- **Passband position** shifts left or right as the IF Shift key is adjusted — the display updates live while dragging the right-click slider. Left-click resets the shift to 0. Where the passband sits in SSB was measured on my FTdx101MP with the audio feed above, one width at a time: widths of 850 Hz and below are centred on 1500 Hz, the IF centre (300 Hz is roughly 1350–1650 Hz), and the wider settings narrow in from the 3 kHz default with about a third taken off the low side and two-thirds off the high (2.4 kHz is roughly 300–2700 Hz). Earlier versions drew every SSB width starting at 300 Hz and growing upward, which put the trapezium in the wrong place at everything but 3 kHz — and, once the bars were real, put the signal outside it. In CW the passband is centred on your CW pitch for the narrow widths, measured the same way; once a width is too wide to sit centred on the pitch (from about 800 Hz with a 700 Hz pitch) its low edge stops at about 250 Hz and it grows upward from there, so a 3.5 kHz CW filter fills the display much as the radio's own draws it. Earlier versions centred every CW width on the pitch, which sent the wide ones off the left of the display.
 - A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as you adjust Contour frequency (right-click the Contour key).
-- A **dark vertical bar** marks the Manual Notch frequency while Man Notch is on, and a **cyan wedge** marks the APF peak while APF is on (CW). Both sit at the frequency the radio is set to, so they move with the IF Shift slider along with the rest of the passband.
+- A **dark vertical bar** marks the Manual Notch frequency while Man Notch is on, and a **cyan wedge** marks the APF peak while APF is on (CW). Both sit at the frequency the radio is set to, so they move with the IF Shift control along with the rest of the passband.
 - The display updates automatically whenever any filter parameter changes, whether adjusted from the browser or from the radio's front panel.
 
 ---
 
 ### 5.8 IF Width, Audio Filter, IF Shift, and AF Gain
 
-**IF Width** — Yaesu-style key. Left-click cycles bandwidths; right-click opens a slider across the same discrete widths (mode-aware labels).
+**IF Width** — Yaesu-style key. Left-click resets to the radio's default width (3.0 kHz on the FTdx10); right-click opens a slider of the discrete widths (mode-aware labels). The orange LED lights when the width is not that default. There is no separate "Default" step on the slider — the default is 3.0 kHz.
 
-The IF Width key is **mode-aware**: the SH command code sent to the radio is the same in every mode, but the resulting bandwidth differs per mode. In SSB code 8 gives 1650 Hz; in CW the same code gives 400 Hz. The cycle list and slider ends are rebuilt automatically when you change mode so they show the actual bandwidth the radio will use.
+The IF Width key is **mode-aware**: the SH command code sent to the radio is the same in every mode, but the resulting bandwidth differs per mode. In SSB code 8 gives 1650 Hz; in CW the same code gives 400 Hz. The slider ends are rebuilt automatically when you change mode so they show the actual bandwidth the radio will use.
 
 - **SSB modes** (LSB, USB, DATA-L, DATA-U) show the wide SSB widths — from 300 Hz up to around 3.2 kHz (4 kHz on FTdx10/FT-710).
 - **CW, RTTY, and PSK modes** show the narrow widths — from 50 Hz up to 3 kHz or so.
 - **AM and FM modes** hide the IF Width key — the SH command does not apply in those modes (the radio uses fixed filters, or a separate narrow/wide mode toggle). Audio Filter and IF Shift stay available.
 
-The first entry ("Default") is the radio's mode-dependent default, which varies by the selected roofing filter. The current width is read from the radio on connect; selecting a new value sends it immediately.
+The current width is read from the radio on connect; selecting a new value sends it immediately.
 
 Selecting a roofing filter narrower than the current IF Width makes the radio reduce the IF Width to match, and the dropdown updates to show the new value — see the Roofing Filter note in [§5.7](#57-receiver-controls).
 
@@ -779,9 +779,7 @@ Selecting a roofing filter narrower than the current IF Width makes the radio re
 >
 > What the firmware *did* extend is **HCUT** — the audio high-cut filter that shapes audio inside the IF passband. HCUT now goes up to 4000 Hz (was 3000 Hz). You can now adjust HCUT directly from YWC's **Audio Filter** popout (§5.18) — no need to dig through the radio's own touch-screen menu.
 
-**IF Shift** — Shifts the passband centre ±1000 Hz in 20 Hz steps. Drag the slider or use the keyboard arrow keys. The current offset is shown next to the slider.
-
-**Zero button** — Resets IF Shift to 0 Hz instantly.
+**IF Shift** — Yaesu-style key. Left-click resets the shift to **0**; right-click opens a slider across ±1000 Hz in 20 Hz steps. The centre step is labelled **0**. The current offset is shown on the key. The orange LED lights when the shift is not 0.
 
 IF Shift is persisted and restored on startup.
 

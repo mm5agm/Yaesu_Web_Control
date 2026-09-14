@@ -1354,19 +1354,8 @@
                                 onclick="window.audioFilter && window.audioFilter.open('A')">
                             Audio Filter
                         </button>
-                        <label class="mb-0 text-nowrap ms-1 fw-bold">IF Shift: <span id="ifShiftValueA" class="fw-bold">@Model.RadioState.IfShiftA</span></label>
-                        <span class="ctl-tip-wrap d-flex align-items-center gap-2 flex-shrink-0" id="ifShiftWrapA">
-                        <input type="range" class="form-range ifshift-slider flex-shrink-0"
-                               id="ifShiftSliderA"
-                               aria-label="VFO A IF shift"
-                               title="VFO A IF shift"
-                               min="-1000" max="1000" step="20" value="@Model.RadioState.IfShiftA"
-                               style="width: clamp(70px, 8vw, 120px); height: 18px;"
-                               oninput="document.getElementById('ifShiftValueA').textContent = this.value; if(window.filterScopePanelA) window.filterScopePanelA.setState({ifShiftHz: parseInt(this.value)||0})">
-                        <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
-                                id="ifShiftZeroA"
-                                onclick="resetIfShift('A')" title="Zero IF Shift">Zero</button>
-                        </span>
+                        <div id="ifShiftButtonA"
+                             data-value="@Model.RadioState.IfShiftA"></div>
                     </div>
 
                     <!-- VFO A status line — live band/mode/freq/power summary, banner-coloured -->
@@ -1623,19 +1612,8 @@
                                 onclick="window.audioFilter && window.audioFilter.open('B')">
                             Audio Filter
                         </button>
-                        <label class="mb-0 text-nowrap ms-1 fw-bold">IF Shift: <span id="ifShiftValueB" class="fw-bold">@Model.RadioState.IfShiftB</span></label>
-                        <span class="ctl-tip-wrap d-flex align-items-center gap-2 flex-shrink-0" id="ifShiftWrapB">
-                        <input type="range" class="form-range ifshift-slider flex-shrink-0"
-                               id="ifShiftSliderB"
-                               aria-label="VFO B IF shift"
-                               title="VFO B IF shift"
-                               min="-1000" max="1000" step="20" value="@Model.RadioState.IfShiftB"
-                               style="width: clamp(70px, 8vw, 120px); height: 18px;"
-                               oninput="document.getElementById('ifShiftValueB').textContent = this.value; if(window.filterScopePanelB) window.filterScopePanelB.setState({ifShiftHz: parseInt(this.value)||0})">
-                        <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
-                                id="ifShiftZeroB"
-                                onclick="resetIfShift('B')" title="Zero IF Shift">Zero</button>
-                        </span>
+                        <div id="ifShiftButtonB"
+                             data-value="@Model.RadioState.IfShiftB"></div>
                     </div>
 
                     <!-- VFO B status line — live band/mode/freq summary, banner-coloured -->
