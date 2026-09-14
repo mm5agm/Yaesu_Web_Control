@@ -14,12 +14,19 @@
 //
 // A zone is WHERE something is drawn AND WHAT clicking it should do, because
 // the same soft-key means different things on different radios. EXPAND is the
-// proof: on the FTdx101 it expands the scope vertically and has no CAT
-// command (L/N/S is cycled by touching the waterfall itself); on the FTdx10
-// it cycles L/N/S over CAT; on the FT-710 it toggles EXPAND/NORMAL. So each
-// zone in LAYOUTS carries an `action` from the ACTIONS vocabulary below, and
-// the radio model is looked up exactly once, in builtinFor(). Nothing in the
-// hover/click path asks which radio it is talking to.
+// proof: on the FTdx101 and the FTdx10 it expands the scope vertically over
+// the readout row and has no CAT command (FTdx10 OM p26; L/N/S is cycled by
+// touching the waterfall itself, OM p25); on the FT-710 it toggles
+// EXPAND/NORMAL, which IS the SS size. So each zone in LAYOUTS carries an
+// `action` from the ACTIONS vocabulary below, and the radio model is looked
+// up exactly once, in builtinFor(). Nothing in the hover/click path asks
+// which radio it is talking to.
+//
+// EXPAND is also the limit of what the table can know. With it on, the scope
+// grows upward over the ATT/IPO/R.FIL/AGC readouts (Fabio's FTdx10 shots,
+// 2026-09-14), and nothing over CAT says so - SS reports W/F vs 3DSS, the
+// placement and the L/N/S size, never EXPAND. Both tables assume EXPAND off;
+// with it on, the readout zones sit over scope and the plot's top is wrong.
 //
 // Frequency under the cursor is worked out from the VFO marker line, not from
 // the left-hand edge of the box. The radio draws the marker at the VFO
@@ -85,8 +92,8 @@ const RINGS = {
 // What a zone can do. `readout.*` cycles a receiver setting through its ring
 // (label + state key); `scope.*` calls into RadioScopeControl; `none` is a
 // soft-key with no CAT equivalent — the hint says so on hover and click.
-// A zone's own `hint` overrides the default here (EXPAND is 'L / N / S' on
-// the FTdx10 and 'EXPAND / NORMAL' on the FT-710, both `scope.size`).
+// A zone's own `hint` overrides the default here (EXPAND is 'EXPAND / NORMAL'
+// on the FT-710, where it is `scope.size`).
 const ACTIONS = {
     'readout.ant':     { label: 'ANT',   key: 'ant' },
     'readout.att':     { label: 'ATT',   key: 'att' },
@@ -103,9 +110,11 @@ const ACTIONS = {
 };
 
 // `hideWhen` conditions, evaluated against the scope state. A hidden zone is
-// not hit-tested, so a soft-key row the radio has taken off the screen does
-// not take ghost clicks (Fabio, FTdx10, 2026-09-12: the row disappears in
-// L size and in 3DSS).
+// not hit-tested, so a soft-key the radio has taken off the screen does not
+// take ghost clicks. No built-in table uses them today: the FTdx10's button
+// row was thought to leave the screen in size L and in 3DSS, and Fabio's
+// screenshots (2026-09-14, every size, EXPAND on and off) show it is always
+// there. Kept for the next radio that does move something SS can see.
 const CONDITIONS = {
     '3dss':   ss => !!ss.is3dss,
     'size:0': ss => !ss.is3dss && (ss.size | 0) === 0,
@@ -151,9 +160,11 @@ const LAYOUTS = {
     // FTdx10 MONO W/F. Pixel boxes from Fabio 2026-09-12 on an 800-wide
     // frame (treated as 800×600, the EXT MONITOR PIXEL we recommend).
     // No ANT (one jack). No MONO / HOLD / MEM CH on this layout. Button
-    // row is CURSOR, 3DSS, MULTI, EXPAND, SPAN, SPEED, and EXPAND cycles
-    // L/N/S over CAT here. The row leaves the screen in L size and in 3DSS.
-    // plot covers spectrum+waterfall; marker is the upper strip only.
+    // row is CURSOR, 3DSS, MULTI, EXPAND, SPAN, SPEED, always on screen
+    // (Fabio 2026-09-14). EXPAND is the vertical expand, no CAT, same as
+    // the '101 - L/N/S is the waterfall touch (OM p25) and our scope panel.
+    // plot covers spectrum+waterfall; marker is the upper strip only, and
+    // that strip stays inside the spectrum in all three sizes.
     FTdx10: {
         scope: {
             plot:   [0.000, 0.433, 1.000, 0.767],
@@ -164,12 +175,12 @@ const LAYOUTS = {
             ipo:    { rect: [0.139, 0.283, 0.275, 0.400], action: 'readout.ipo' },
             rfil:   { rect: [0.276, 0.283, 0.413, 0.400], action: 'readout.rfil' },
             agc:    { rect: [0.414, 0.283, 0.550, 0.400], action: 'readout.agc' },
-            cursor: { rect: [0.000, 0.800, 0.163, 0.900], action: 'scope.placement', hideWhen: ['size:0', '3dss'] },
-            dss3:   { rect: [0.163, 0.800, 0.325, 0.900], action: 'scope.3dss',      hideWhen: ['size:0', '3dss'] },
-            multi:  { rect: [0.325, 0.800, 0.488, 0.900], action: 'none', hint: 'MULTI has no CAT command — press it on the radio', hideWhen: ['size:0', '3dss'] },
-            expand: { rect: [0.488, 0.800, 0.650, 0.900], action: 'scope.size', hint: 'L / N / S', hideWhen: ['size:0', '3dss'] },
-            span:   { rect: [0.650, 0.800, 0.813, 0.900], action: 'scope.span',      hideWhen: ['size:0', '3dss'] },
-            speed:  { rect: [0.813, 0.800, 0.975, 0.900], action: 'scope.speed',     hideWhen: ['size:0', '3dss'] },
+            cursor: { rect: [0.000, 0.800, 0.163, 0.900], action: 'scope.placement' },
+            dss3:   { rect: [0.163, 0.800, 0.325, 0.900], action: 'scope.3dss' },
+            multi:  { rect: [0.325, 0.800, 0.488, 0.900], action: 'none', hint: 'MULTI has no CAT command — press it on the radio' },
+            expand: { rect: [0.488, 0.800, 0.650, 0.900], action: 'none', hint: 'EXPAND has no CAT command — press it on the radio' },
+            span:   { rect: [0.650, 0.800, 0.813, 0.900], action: 'scope.span' },
+            speed:  { rect: [0.813, 0.800, 0.975, 0.900], action: 'scope.speed' },
         },
     },
 };

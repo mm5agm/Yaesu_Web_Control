@@ -10,9 +10,12 @@ first pass on the FTdx10.
 FTdx10 MONO W/F layout is in `LAYOUTS.FTdx10` from pixel boxes Fabio
 measured 2026-09-12 on an 800-wide frame (converted as 800×600). No ANT
 (one jack); no MONO / HOLD / MEM CH on the soft-button row; SPEED is a
-hotspot; EXPAND cycles L / N / S over CAT. Fabio also found the whole
-soft-button row disappears in size L and in 3DSS, so those zones are hidden
-then (see `hideWhen`). **FT-710** stays off — it has the same exportable TFT
+hotspot; EXPAND is the vertical expand with no CAT command, as on the '101
+(I had it down as L / N / S over CAT — wrong, see the table below). Fabio's
+screenshots of 2026-09-14 (S / N / L, EXPAND on and off) show the
+soft-button row is always on screen, so no FTdx10 zone is hidden any more;
+what they also show is EXPAND pushing the scope up over the readout row,
+which nothing over CAT reports (Known gaps). **FT-710** stays off — it has the same exportable TFT
 but nobody has measured it, and its `SS` tables are unverified anyway.
 IF-OUT axis correction is not part of this overlay and is not applicable to
 the FTdx10 (no IF tap).
@@ -86,7 +89,7 @@ something different on each radio:
 
 | Soft-key | FTdx101MP/D | FTdx10 | FT-710 |
 |---|---|---|---|
-| EXPAND | vertical expand, **no CAT** (L/N/S is cycled by touching the waterfall, OM p25) | **L / N / S** over CAT (`SS` size) | EXPAND / NORMAL over CAT (`SS` P2=6) |
+| EXPAND | vertical expand, **no CAT** (L/N/S is cycled by touching the waterfall, OM p25) | vertical expand, **no CAT** (OM p26; L/N/S is the waterfall touch here too, OM p25) | EXPAND / NORMAL over CAT (`SS` P2=6) |
 | ANT | 1 → 2 → 3 | not on screen — one jack | not on screen — one jack |
 | SPEED | not on this row | next FFT speed | ? |
 
@@ -111,13 +114,15 @@ zone's `action` string, looked up in `ACTIONS`:
 | `none` | nothing — the `hint` flashes red ("… has no CAT command — press it on the radio") | — |
 
 `hint` is the hover text; an action supplies a default, a zone can
-override it (`'L / N / S'` on the FTdx10's EXPAND). `hideWhen` is a list
-of `CONDITIONS` keys — `'3dss'`, `'size:0'`, `'size:1'`, `'size:2'` —
+override it (`'EXPAND / NORMAL'` on the FT-710's EXPAND). `hideWhen` is a
+list of `CONDITIONS` keys — `'3dss'`, `'size:0'`, `'size:1'`, `'size:2'` —
 evaluated against `RadioScopeControl.state`; when any is true the zone is
 not hit-tested and the debug overlay draws it dashed with "(hidden)". If
 the scope state is not known yet (no control mounted) every zone stays
-live. This is what stops the FTdx10 ghost-clicking a button row that is
-not on screen.
+live. It was added for the FTdx10's button row, which Fabio first reported
+as leaving the screen in size L and in 3DSS; his 2026-09-14 screenshots
+show it present in every size, so no built-in table uses it now. It stays
+for the next radio that does move something `SS` can see.
 
 Cycling needs the current value. The overlay keeps its own small state
 cache, seeded from `/api/cat/status` (which now also returns `att`, `ipo`,
@@ -180,7 +185,10 @@ assumed.
   in the table. EXPAND/MULTI as *layouts*, the dual MAIN/SUB view and 3DSS
   all move or reshape the scope box, and none of those layouts is readable
   over CAT (`SS` reports W/F vs 3DSS and the size, not MONO/EXPAND/MULTI).
-  `hideWhen` covers the cases `SS` *can* see; the rest still needs one of:
+  EXPAND is the one that bites: on both radios it grows the scope upward
+  over the ATT/IPO/R.FIL/AGC row (Fabio's FTdx10 shots, 2026-09-14), so
+  with it on the readout zones sit over scope and the plot's top edge is
+  wrong. `hideWhen` covers the cases `SS` *can* see; the rest still needs one of:
   detect the box from the frame (the waterfall band is a distinctive
   horizontal run of colour), a layout selector in the toolbar, or a table
   per layout with the operator telling us which one is up.
