@@ -666,19 +666,21 @@ Your antenna choice is **remembered per band per VFO**. Set Ant 1 on 20 m and An
 
 Existing installs auto-populate empty slots on the next startup with whatever the radio currently has, so you don't need to manually click through every band to seed it.
 
-**Roofing Filter** — Select the roofing filter bandwidth: 12 kHz, 3 kHz, 1.2 kHz, 600 Hz, 300 Hz
+**Roofing Filter** — Yaesu-style key under Band / Mode. Click to open a single-column list of fitted roofing widths (e.g. 12 kHz, 3 kHz, 1.2 kHz, 600 Hz, 300 Hz on FTdx101MP/D). Not shown on FT-710 (no CAT roofing control).
 
 **Control column** (the two-column grid of Yaesu-style keys to the right):
 
 | Control | Options |
 |---------|---------|
 | AGC | Yaesu-style key. Left-click toggles OFF ↔ last speed. Right-click opens OFF / FAST / MID / SLOW / AUTO. |
-| IPO/AMP | Yaesu-style key. Left-click toggles IPO ↔ last AMP. Right-click opens IPO / AMP1 / AMP2. |
+| IPO/AMP | Yaesu-style key. Left-click cycles IPO → AMP1 → AMP2 → IPO. Right-click opens IPO / AMP1 / AMP2. |
 | ATT | Yaesu-style key. Left-click toggles OFF ↔ last attenuation. Right-click opens OFF / 6 dB / 12 dB / 18 dB. |
 | NR / DNR | Yaesu-style key. Left-click cycles OFF → NR1 → NR2 → OFF (FTdx101MP/D, FTDX3000, FTDX5000) or OFF → DNR → OFF (FTdx10 / FT-710). Right-click opens a 1–15 slider for NR depth / DNR algorithm. |
 | NB | Yaesu-style key. Left-click toggles ON/OFF. Right-click opens a 1–20 slider for noise blanker depth. |
 | Auto Notch | Yaesu-style key. Left-click toggles ON/OFF. |
 | Notch | Yaesu-style key. Left-click toggles manual notch ON/OFF. Right-click opens a 10–3200 Hz frequency slider. |
+| Contour | Yaesu-style key. Left-click toggles Contour ON/OFF. Right-click opens a frequency slider (passband-bounded; radio hard limit 100–3200 Hz, or 100–4000 Hz on FTDX3000). |
+| APF | Yaesu-style key. Left-click toggles APF ON/OFF. Right-click opens a −250…+250 Hz offset slider (CW audio peak filter). |
 | RF Gain | Slider 0–255. Controls the RF preamplifier gain. At 255 (maximum) sensitivity is highest; reducing RF Gain is useful when a strong nearby signal is causing overload that AGC and IPO cannot handle. |
 | Squelch | Slider 0–255. Only shown when the VFO is in FM or FM-N mode. 0 = squelch fully open (hear everything); higher values cut off weaker signals. |
 
@@ -691,7 +693,7 @@ All of these settings are read from the radio when the app connects.
 - A **"Roof Nk" label** in the top-right corner shows the currently selected roofing filter (e.g. "Roof 3k", "Roof 12k", "Roof 600"). This is useful because the DSP filter is the *active* limit when the roofing filter is wider than the DSP setting — in that case the trapezium looks identical for several roofing choices (12k and 3k both produce the same shape if the DSP filter is set to 3 kHz, since both roofing filters are at least as wide as 3 kHz). The label is the only way to see which roofing is actually in circuit when this happens.
 - **Passband width** reflects the current IF Width setting, automatically constrained by the selected Roofing Filter if it is narrower than the DSP setting. If the roofing filter is wider, the DSP filter is what you see.
 - **Passband position** shifts left or right as the IF Shift slider is adjusted — the display updates live while dragging the slider.
-- A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as the contour frequency slider is adjusted.
+- A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as you adjust Contour frequency (right-click the Contour key).
 - The display updates automatically whenever any filter parameter changes, whether adjusted from the browser or from the radio's front panel.
 
 ---
@@ -1389,7 +1391,7 @@ YWC keeps the previous spectrum frame visible during the pause rather than blank
 
 ### 6.4 Roofing Filters
 
-Select which optional roofing filters are fitted to your radio. The app uses this list to show only the installed filters in the Roofing Filter dropdown on the main page. FTdx101MP comes fully loaded; FTdx101D, FTdx10, and FTDX3000 allow optional filter selection.
+Select which optional roofing filters are fitted to your radio. The app uses this list to show only the installed filters in the Roofing Yaesu-style key on the main page. FTdx101MP comes fully loaded; FTdx101D, FTdx10, and FTDX3000 allow optional filter selection.
 
 ---
 

@@ -114,6 +114,15 @@
                      || Model.InstalledRoofingFilters.Contains(o.Value))
             .ToArray();
 
+    // Active set for the Yaesu-style Roofing key (FT-710 has no CAT roofing).
+    var activeRoofingOptions = isFt710
+        ? Array.Empty<(string Value, string Label)>()
+        : isFtdx10 ? roofingOptionsFtdx10
+        : isFtdx3000 ? roofingOptions3000
+        : roofingOptions;
+    var roofingOptionsJson = System.Text.Json.JsonSerializer.Serialize(
+        activeRoofingOptions.Select(o => new { id = o.Value, label = o.Label }));
+
     // CTCSS tones — these codes go on the wire as CN's P3, so they must be
     // Yaesu's Table 1 (CAT manual p.8) exactly: 3 digits, 000-049, 000 = 67.0 Hz.
     // This list used to be a generic 1-based 2-digit EIA list, which was off by
@@ -1099,6 +1108,13 @@
                                     </select>
                                 }
                             </div>
+                            @if (!isFt710)
+                            {
+                                <div id="roofingButtonA"
+                                     class="mt-1"
+                                     data-selected="@(Model.RadioState.RoofingFilterA ?? "")"
+                                     data-options="@roofingOptionsJson"></div>
+                            }
                         </div>
                         <!-- Voice control mic button + step selector VFO A — large PTT target for accessibility, step select left of the button, both enlarged per Colin's testing feedback; shown only when voice control is enabled (voice-control.js) -->
                         <div class="flex-shrink-0" id="voiceMicContainerA" style="display:none;">
@@ -1214,6 +1230,22 @@
                                      data-enabled="@Model.RadioState.ManualNotchA"
                                      data-value="@Model.RadioState.ManualNotchFreqA"></div>
                             </div>
+                            <div class="vfo-control-item">
+                                <div id="contourButtonA"
+                                     data-enabled="@(Model.RadioState.ContourOnA ? "1" : "0")"
+                                     data-value="@Model.RadioState.ContourFreqA"
+                                     data-min="100"
+                                     data-max="@contourMaxFreq"
+                                     data-step="@contourStep"></div>
+                            </div>
+                            <div class="vfo-control-item">
+                                <div id="apfButtonA"
+                                     data-enabled="@(Model.RadioState.ApfOnA ? "1" : "0")"
+                                     data-value="@Model.RadioState.ApfFreqA"
+                                     data-min="-250"
+                                     data-max="250"
+                                     data-step="@apfStep"></div>
+                            </div>
                             <div class="vfo-control-item" style="grid-column: 1 / -1;">
                                 <label class="vfo-control-label">RF Gain</label>
                                 <input type="range" id="rfGainSliderA" aria-label="VFO A RF gain" title="VFO A RF gain (0=min, 255=max)" min="0" max="255" step="1" value="@Model.RadioState.RfGainA"
@@ -1233,7 +1265,7 @@
                         </div>
                     </div>
 
-                    <!-- Segment selector + Contour/APF controls on one row -->
+                    <!-- Segment selector -->
                     <div class="d-flex align-items-center gap-1 mb-1 flex-wrap" style="margin-top: 2px;">
                         <span class="fw-bold" style="font-size: 0.8rem; white-space: nowrap;">Segment</span>
                         <select class="form-select form-select-sm segment-select" id="segmentSelectA"
@@ -1242,32 +1274,6 @@
                                 onchange="window.onSegmentChange && window.onSegmentChange('A', this.value)">
                             <option value="">--</option>
                         </select>
-                        <button type="button" id="contourBtnA"
-                                class="btn btn-sm @(Model.RadioState.ContourOnA ? "btn-success" : "btn-outline-secondary") flex-shrink-0"
-                                style="color: black; font-weight: bold;"
-                                aria-label="VFO A Contour filter" title="Toggle Contour audio peak filter"
-                                onclick="toggleContour('A')">@(Model.RadioState.ContourOnA ? "Contour On" : "Contour Off")</button>
-                        <input type="range" id="contourFreqSliderA"
-                               min="100" max="@contourMaxFreq" step="@contourStep"
-                               value="@Model.RadioState.ContourFreqA"
-                               style="width: clamp(60px, 8vw, 110px); height: 16px;"
-                               oninput="document.getElementById('contourFreqValueA').textContent = this.value + ' Hz'"
-                               onchange="setContourFreq('A', parseInt(this.value))"
-                               aria-label="VFO A Contour frequency">
-                        <span id="contourFreqValueA" style="font-size: 0.8rem; white-space: nowrap; min-width: 46px;">@(Model.RadioState.ContourFreqA) Hz</span>
-                        <button type="button" id="apfBtnA"
-                                class="btn btn-sm @(Model.RadioState.ApfOnA ? "btn-success" : "btn-outline-secondary") flex-shrink-0"
-                                style="color: black; font-weight: bold;"
-                                aria-label="VFO A APF filter" title="Toggle APF audio peak filter (CW)"
-                                onclick="toggleApf('A')">@(Model.RadioState.ApfOnA ? "APF On" : "APF Off")</button>
-                        <input type="range" id="apfFreqSliderA"
-                               min="-250" max="250" step="@apfStep"
-                               value="@Model.RadioState.ApfFreqA"
-                               style="width: clamp(60px, 8vw, 110px); height: 16px;"
-                               oninput="document.getElementById('apfFreqValueA').textContent = this.value + ' Hz'"
-                               onchange="setApfFreq('A', parseInt(this.value))"
-                               aria-label="VFO A APF frequency">
-                        <span id="apfFreqValueA" style="font-size: 0.8rem; white-space: nowrap; min-width: 46px;">@(Model.RadioState.ApfFreqA) Hz</span>
                     </div>
 
                     <!-- Frequency + Roofing + AF Gain on one row -->
@@ -1285,37 +1291,6 @@
                                 title="Keyboard — enter VFO A frequency">
                             <strong>123</strong>
                         </button>
-                        @if (!isFt710)
-                        {
-                        <label class="mb-0 text-nowrap ms-1 fw-bold">Roofing:</label>
-                        <select class="form-select form-select-sm fw-bold flex-shrink-0" id="roofingFilterSelectA"
-                                aria-label="VFO A roofing filter"
-                                title="VFO A roofing filter"
-                                style="width: auto;"
-                                onchange="window.radioControl.setRoofingFilter('A', this.value)">
-                            @if (isFtdx10)
-                            {
-                                @foreach (var opt in roofingOptionsFtdx10)
-                                {
-                                    <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterA==opt.Value ? "selected" : null)">@opt.Label</option>
-                                }
-                            }
-                            else if (isFtdx3000)
-                            {
-                                @foreach (var opt in roofingOptions3000)
-                                {
-                                    <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterA==opt.Value ? "selected" : null)">@opt.Label</option>
-                                }
-                            }
-                            else
-                            {
-                                @foreach (var opt in roofingOptions)
-                                {
-                                    <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterA==opt.Value ? "selected" : null)">@opt.Label</option>
-                                }
-                            }
-                        </select>
-                        }
                         <label class="mb-0 text-nowrap ms-1 fw-bold">AF Gain: <span id="afGainValueA" class="fw-bold">@Model.AfGainA</span></label>
                         <input type="range" class="flex-shrink-0"
                                id="afGainSliderA"
@@ -1452,6 +1427,13 @@
                                     </select>
                                 }
                             </div>
+                            @if (!isFt710)
+                            {
+                                <div id="roofingButtonB"
+                                     class="mt-1"
+                                     data-selected="@(Model.RadioState.RoofingFilterB ?? "")"
+                                     data-options="@roofingOptionsJson"></div>
+                            }
                         </div>
                         @if (!isSingleReceiver)
                         {
@@ -1532,6 +1514,22 @@
                                      data-enabled="@Model.RadioState.ManualNotchB"
                                      data-value="@Model.RadioState.ManualNotchFreqB"></div>
                             </div>
+                            <div class="vfo-control-item">
+                                <div id="contourButtonB"
+                                     data-enabled="@(Model.RadioState.ContourOnB ? "1" : "0")"
+                                     data-value="@Model.RadioState.ContourFreqB"
+                                     data-min="100"
+                                     data-max="@contourMaxFreq"
+                                     data-step="@contourStep"></div>
+                            </div>
+                            <div class="vfo-control-item">
+                                <div id="apfButtonB"
+                                     data-enabled="@(Model.RadioState.ApfOnB ? "1" : "0")"
+                                     data-value="@Model.RadioState.ApfFreqB"
+                                     data-min="-250"
+                                     data-max="250"
+                                     data-step="@apfStep"></div>
+                            </div>
                             <div class="vfo-control-item" style="grid-column: 1 / -1;">
                                 <label class="vfo-control-label">RF Gain</label>
                                 <input type="range" id="rfGainSliderB" aria-label="VFO B RF gain" title="VFO B RF gain (0=min, 255=max)" min="0" max="255" step="1" value="@Model.RadioState.RfGainB"
@@ -1551,7 +1549,7 @@
                         </div>
                     </div>
 
-                    <!-- Segment selector + Contour/APF controls on one row -->
+                    <!-- Segment selector -->
                     <div class="d-flex align-items-center gap-1 mb-1 flex-wrap" style="margin-top: 2px;">
                         <span class="fw-bold" style="font-size: 0.8rem; white-space: nowrap;">Segment</span>
                         <select class="form-select form-select-sm segment-select" id="segmentSelectB"
@@ -1560,32 +1558,6 @@
                                 onchange="window.onSegmentChange && window.onSegmentChange('B', this.value)">
                             <option value="">--</option>
                         </select>
-                        <button type="button" id="contourBtnB"
-                                class="btn btn-sm @(Model.RadioState.ContourOnB ? "btn-success" : "btn-outline-secondary") flex-shrink-0"
-                                style="color: black; font-weight: bold;"
-                                aria-label="VFO B Contour filter" title="Toggle Contour audio peak filter"
-                                onclick="toggleContour('B')">@(Model.RadioState.ContourOnB ? "Contour On" : "Contour Off")</button>
-                        <input type="range" id="contourFreqSliderB"
-                               min="100" max="@contourMaxFreq" step="@contourStep"
-                               value="@Model.RadioState.ContourFreqB"
-                               style="width: clamp(60px, 8vw, 110px); height: 16px;"
-                               oninput="document.getElementById('contourFreqValueB').textContent = this.value + ' Hz'"
-                               onchange="setContourFreq('B', parseInt(this.value))"
-                               aria-label="VFO B Contour frequency">
-                        <span id="contourFreqValueB" style="font-size: 0.8rem; white-space: nowrap; min-width: 46px;">@(Model.RadioState.ContourFreqB) Hz</span>
-                        <button type="button" id="apfBtnB"
-                                class="btn btn-sm @(Model.RadioState.ApfOnB ? "btn-success" : "btn-outline-secondary") flex-shrink-0"
-                                style="color: black; font-weight: bold;"
-                                aria-label="VFO B APF filter" title="Toggle APF audio peak filter (CW)"
-                                onclick="toggleApf('B')">@(Model.RadioState.ApfOnB ? "APF On" : "APF Off")</button>
-                        <input type="range" id="apfFreqSliderB"
-                               min="-250" max="250" step="@apfStep"
-                               value="@Model.RadioState.ApfFreqB"
-                               style="width: clamp(60px, 8vw, 110px); height: 16px;"
-                               oninput="document.getElementById('apfFreqValueB').textContent = this.value + ' Hz'"
-                               onchange="setApfFreq('B', parseInt(this.value))"
-                               aria-label="VFO B APF frequency">
-                        <span id="apfFreqValueB" style="font-size: 0.8rem; white-space: nowrap; min-width: 46px;">@(Model.RadioState.ApfFreqB) Hz</span>
                     </div>
 
                     <!-- Frequency + Roofing + AF Gain on one row -->
@@ -1603,37 +1575,6 @@
                                 title="Keyboard — enter VFO B frequency">
                             <strong>123</strong>
                         </button>
-                        @if (!isFt710)
-                        {
-                        <label class="mb-0 text-nowrap ms-1 fw-bold">Roofing:</label>
-                        <select class="form-select form-select-sm fw-bold flex-shrink-0" id="roofingFilterSelectB"
-                                aria-label="VFO B roofing filter"
-                                title="VFO B roofing filter"
-                                style="width: auto;"
-                                onchange="window.radioControl.setRoofingFilter('B', this.value)">
-                            @if (isFtdx10)
-                            {
-                                @foreach (var opt in roofingOptionsFtdx10)
-                                {
-                                    <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterB==opt.Value ? "selected" : null)">@opt.Label</option>
-                                }
-                            }
-                            else if (isFtdx3000)
-                            {
-                                @foreach (var opt in roofingOptions3000)
-                                {
-                                    <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterB==opt.Value ? "selected" : null)">@opt.Label</option>
-                                }
-                            }
-                            else
-                            {
-                                @foreach (var opt in roofingOptions)
-                                {
-                                    <option value="@opt.Value" selected="@(Model.RadioState.RoofingFilterB==opt.Value ? "selected" : null)">@opt.Label</option>
-                                }
-                            }
-                        </select>
-                        }
                         <label class="mb-0 text-nowrap ms-1 fw-bold">AF Gain: <span id="afGainValueB" class="fw-bold">@Model.AfGainB</span></label>
                         <input type="range" class="flex-shrink-0"
                                id="afGainSliderB"
@@ -5217,6 +5158,12 @@
         window.setNrLevel      = setNrLevel;
         initNrCycleButtons();
         initVfoKeyButtons();
+        // Contour keys are created above; tighten their slider range to the
+        // current passband (FilterScopePanel already exists by this point).
+        if (typeof window.updateContourSliderBounds === "function") {
+            window.updateContourSliderBounds("A");
+            window.updateContourSliderBounds("B");
+        }
         window.setRfGain                  = setRfGain;
         window.setSquelch                 = setSquelch;
         window._updateSquelchVisibility   = _updateSquelchVisibility;

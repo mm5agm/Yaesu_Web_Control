@@ -1488,14 +1488,16 @@ connection.on("RadioStateUpdate", function (update) {
 
     // --- ROOFING FILTER ---
     if (update.property === "RoofingFilterA") {
-        const selectEl = document.getElementById('roofingFilterSelectA');
-        if (selectEl) selectEl.value = update.value;
+        if (window.roofingButtonA) {
+            window.roofingButtonA.setState({ selectedId: String(update.value) }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ roofingCode: update.value });
         updateContourSliderBounds('A');
     }
     if (update.property === "RoofingFilterB") {
-        const selectEl = document.getElementById('roofingFilterSelectB');
-        if (selectEl) selectEl.value = update.value;
+        if (window.roofingButtonB) {
+            window.roofingButtonB.setState({ selectedId: String(update.value) }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ roofingCode: update.value });
         updateContourSliderBounds('B');
     }
@@ -1645,56 +1647,60 @@ connection.on("RadioStateUpdate", function (update) {
     // --- CONTOUR ---
     if (update.property === "ContourOnA") {
         contourState.A.on = update.value === true || update.value === 'true' || update.value === 1;
-        _updateContourBtn('A');
+        if (window.contourButtonA) {
+            window.contourButtonA.setState({ enabled: contourState.A.on }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ contourOn: contourState.A.on });
     }
     if (update.property === "ContourOnB") {
         contourState.B.on = update.value === true || update.value === 'true' || update.value === 1;
-        _updateContourBtn('B');
+        if (window.contourButtonB) {
+            window.contourButtonB.setState({ enabled: contourState.B.on }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ contourOn: contourState.B.on });
     }
     if (update.property === "ContourFreqA") {
         contourState.A.freqHz = parseInt(update.value) || 800;
-        const slider = document.getElementById('contourFreqSliderA');
-        const label  = document.getElementById('contourFreqValueA');
-        if (slider) slider.value = contourState.A.freqHz;
-        if (label)  label.textContent = contourState.A.freqHz + ' Hz';
+        if (window.contourButtonA) {
+            window.contourButtonA.setState({ value: contourState.A.freqHz }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ contourFreqHz: contourState.A.freqHz });
     }
     if (update.property === "ContourFreqB") {
         contourState.B.freqHz = parseInt(update.value) || 800;
-        const slider = document.getElementById('contourFreqSliderB');
-        const label  = document.getElementById('contourFreqValueB');
-        if (slider) slider.value = contourState.B.freqHz;
-        if (label)  label.textContent = contourState.B.freqHz + ' Hz';
+        if (window.contourButtonB) {
+            window.contourButtonB.setState({ value: contourState.B.freqHz }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ contourFreqHz: contourState.B.freqHz });
     }
 
     // --- APF ---
     if (update.property === "ApfOnA") {
         apfState.A.on = update.value === true || update.value === 'true' || update.value === 1;
-        _updateApfBtn('A');
+        if (window.apfButtonA) {
+            window.apfButtonA.setState({ enabled: apfState.A.on }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ apfOn: apfState.A.on });
     }
     if (update.property === "ApfOnB") {
         apfState.B.on = update.value === true || update.value === 'true' || update.value === 1;
-        _updateApfBtn('B');
+        if (window.apfButtonB) {
+            window.apfButtonB.setState({ enabled: apfState.B.on }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ apfOn: apfState.B.on });
     }
     if (update.property === "ApfFreqA") {
         apfState.A.freqHz = parseInt(update.value) || 0;
-        const slider = document.getElementById('apfFreqSliderA');
-        const label  = document.getElementById('apfFreqValueA');
-        if (slider) slider.value = apfState.A.freqHz;
-        if (label)  label.textContent = apfState.A.freqHz + ' Hz';
+        if (window.apfButtonA) {
+            window.apfButtonA.setState({ value: apfState.A.freqHz }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ apfFreqHz: apfState.A.freqHz });
     }
     if (update.property === "ApfFreqB") {
         apfState.B.freqHz = parseInt(update.value) || 0;
-        const slider = document.getElementById('apfFreqSliderB');
-        const label  = document.getElementById('apfFreqValueB');
-        if (slider) slider.value = apfState.B.freqHz;
-        if (label)  label.textContent = apfState.B.freqHz + ' Hz';
+        if (window.apfButtonB) {
+            window.apfButtonB.setState({ value: apfState.B.freqHz }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ apfFreqHz: apfState.B.freqHz });
     }
 
@@ -2126,16 +2132,34 @@ window.addEventListener('DOMContentLoaded', () => {
         txClarOn = initMode === 'tx' || initMode === 'rxtx';
     }
 
-    // Contour/APF: seed JS state from server-rendered HTML values
+    // Contour/APF: seed JS state from Yaesu-key widgets (or data attrs before init).
     for (const vfo of ['A', 'B']) {
-        const cBtn = document.getElementById(`contourBtn${vfo}`);
-        if (cBtn) contourState[vfo].on = cBtn.classList.contains('btn-success');
-        const cSlider = document.getElementById(`contourFreqSlider${vfo}`);
-        if (cSlider) contourState[vfo].freqHz = parseInt(cSlider.value) || 800;
-        const aBtn = document.getElementById(`apfBtn${vfo}`);
-        if (aBtn) apfState[vfo].on = aBtn.classList.contains('btn-success');
-        const aSlider = document.getElementById(`apfFreqSlider${vfo}`);
-        if (aSlider) apfState[vfo].freqHz = parseInt(aSlider.value) || 0;
+        const contour = window[`contourButton${vfo}`];
+        if (contour) {
+            const s = contour.getState();
+            contourState[vfo].on = s.enabled;
+            contourState[vfo].freqHz = s.value;
+        } else {
+            const root = document.getElementById(`contourButton${vfo}`);
+            if (root) {
+                contourState[vfo].on = root.dataset.enabled === '1' || root.dataset.enabled === 'true';
+                const hz = parseInt(root.dataset.value, 10);
+                if (!Number.isNaN(hz)) contourState[vfo].freqHz = hz;
+            }
+        }
+        const apf = window[`apfButton${vfo}`];
+        if (apf) {
+            const s = apf.getState();
+            apfState[vfo].on = s.enabled;
+            apfState[vfo].freqHz = s.value;
+        } else {
+            const root = document.getElementById(`apfButton${vfo}`);
+            if (root) {
+                apfState[vfo].on = root.dataset.enabled === '1' || root.dataset.enabled === 'true';
+                const hz = parseInt(root.dataset.value, 10);
+                if (!Number.isNaN(hz)) apfState[vfo].freqHz = hz;
+            }
+        }
     }
 });
 
@@ -2346,39 +2370,19 @@ function resetIfWidth(receiver) {
 }
 window.resetIfWidth = resetIfWidth;
 
-function _updateContourBtn(vfo) {
-    const btn = document.getElementById(`contourBtn${vfo}`);
-    if (!btn) return;
-    const on = contourState[vfo].on;
-    btn.textContent = on ? 'Contour On' : 'Contour Off';
-    btn.className = btn.className.replace(/btn-success|btn-outline-secondary/g, '').trim();
-    btn.classList.add(on ? 'btn-success' : 'btn-outline-secondary');
-}
-
-function _updateApfBtn(vfo) {
-    const btn = document.getElementById(`apfBtn${vfo}`);
-    if (!btn) return;
-    const on = apfState[vfo].on;
-    btn.textContent = on ? 'APF On' : 'APF Off';
-    btn.className = btn.className.replace(/btn-success|btn-outline-secondary/g, '').trim();
-    btn.classList.add(on ? 'btn-success' : 'btn-outline-secondary');
-}
-
-async function toggleContour(vfo) {
-    const newOn = !contourState[vfo].on;
-    contourState[vfo].on = newOn;
-    _updateContourBtn(vfo);
+async function setContourOn(vfo, on) {
+    contourState[vfo].on = on;
     const panel = vfo === 'B' ? window.filterScopePanelB : window.filterScopePanelA;
-    if (panel) panel.setState({ contourOn: newOn });
+    if (panel) panel.setState({ contourOn: on });
     try {
         await fetch(`/api/cat/contour/${vfo.toLowerCase()}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ on: newOn, freqHz: contourState[vfo].freqHz })
+            body: JSON.stringify({ on, freqHz: contourState[vfo].freqHz })
         });
     } catch (e) { console.error('Contour toggle failed:', e); }
 }
-window.toggleContour = toggleContour;
+window.setContourOn = setContourOn;
 
 async function setContourFreq(vfo, hz) {
     contourState[vfo].freqHz = hz;
@@ -2396,7 +2400,7 @@ window.setContourFreq = setContourFreq;
 
 // Recompute the contour slider's min/max for a VFO based on the current
 // passband (mode + IF Width + roofing). The radio's hard CAT range is
-// preserved as an outer clamp via the slider's initial min/max values,
+// preserved as an outer clamp via the widget's initial min/max values,
 // so we never let the user set a value the radio can't accept. If the
 // existing contour value falls outside the new (narrower) range, clamp
 // it in place and send the clamped value to the radio.
@@ -2406,55 +2410,45 @@ window.setContourFreq = setContourFreq;
 // FilterScopePanel instances are constructed.
 function updateContourSliderBounds(vfo) {
     const panel = window['filterScopePanel' + vfo];
-    if (!panel || typeof panel.getPassband !== 'function') return;
-    const slider = document.getElementById('contourFreqSlider' + vfo);
-    if (!slider) return;
+    const widget = window[`contourButton${vfo}`];
+    if (!panel || typeof panel.getPassband !== 'function' || !widget) return;
 
     // Cache the radio's hard limits on first run (the values rendered
     // server-side from the radio model: 100..3200 for FTdx101, 100..4000
     // for FTDX3000). After that, future updates only narrow within those.
-    if (slider._hardMin == null) slider._hardMin = parseInt(slider.min);
-    if (slider._hardMax == null) slider._hardMax = parseInt(slider.max);
+    if (widget._hardMin == null) widget._hardMin = widget.min;
+    if (widget._hardMax == null) widget._hardMax = widget.max;
 
     const { lo, hi } = panel.getPassband();
-    const newMin = Math.max(slider._hardMin, Math.round(lo));
-    const newMax = Math.min(slider._hardMax, Math.round(hi));
+    const newMin = Math.max(widget._hardMin, Math.round(lo));
+    const newMax = Math.min(widget._hardMax, Math.round(hi));
     if (newMin >= newMax) return;
 
-    // Capture the OLD value before changing min/max — once we set the new
-    // max, the browser auto-clamps slider.value to fit, so reading it
-    // afterwards would always give the clamped (= new max) value and we'd
-    // never realise the value had actually moved.
-    const oldVal  = parseInt(slider.value);
+    const oldVal = widget.getState().value;
     const clamped = Math.max(newMin, Math.min(newMax, oldVal));
 
-    slider.min = newMin;
-    slider.max = newMax;
+    widget.setState({ min: newMin, max: newMax, value: clamped }, { silent: true });
+    contourState[vfo].freqHz = clamped;
 
     if (clamped !== oldVal) {
-        slider.value = clamped;
-        const label = document.getElementById('contourFreqValue' + vfo);
-        if (label) label.textContent = clamped + ' Hz';
         setContourFreq(vfo, clamped);  // updates panel state + sends CAT
     }
 }
 window.updateContourSliderBounds = updateContourSliderBounds;
 
-async function toggleApf(vfo) {
-    const newOn = !apfState[vfo].on;
-    apfState[vfo].on = newOn;
-    _updateApfBtn(vfo);
+async function setApfOn(vfo, on) {
+    apfState[vfo].on = on;
     const panel = vfo === 'B' ? window.filterScopePanelB : window.filterScopePanelA;
-    if (panel) panel.setState({ apfOn: newOn });
+    if (panel) panel.setState({ apfOn: on });
     try {
         await fetch(`/api/cat/apf/${vfo.toLowerCase()}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ on: newOn, freqHz: apfState[vfo].freqHz })
+            body: JSON.stringify({ on, freqHz: apfState[vfo].freqHz })
         });
     } catch (e) { console.error('APF toggle failed:', e); }
 }
-window.toggleApf = toggleApf;
+window.setApfOn = setApfOn;
 
 async function setApfFreq(vfo, hz) {
     apfState[vfo].freqHz = hz;
@@ -2557,11 +2551,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Update roofing filter dropdown
+    // Update roofing filter Yaesu-key
     function updateRoofingFilterSelect(receiver, filterCode) {
-        const selectEl = document.getElementById(`roofingFilterSelect${receiver}`);
-        if (selectEl && filterCode) {
-            selectEl.value = filterCode;
+        const widget = window[`roofingButton${receiver}`];
+        if (widget && filterCode) {
+            widget.setState({ selectedId: String(filterCode) }, { silent: true });
         }
     }
 
@@ -3034,11 +3028,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check if there's a warning (filter not installed)
             if (data.warning) {
                 showMessageBox(data.message, 'Roofing Filter');
-                // Update dropdown to show actual filter
-                const selectEl = document.getElementById(`roofingFilterSelect${receiver}`);
-                if (selectEl && data.filter) {
-                    selectEl.value = data.filter;
-                }
+                // Update key to show actual filter
+                if (data.filter) updateRoofingFilterSelect(receiver, data.filter);
             }
         } catch (error) {
             showMessageBox('Error setting roofing filter. Check console for details.', 'Error');
