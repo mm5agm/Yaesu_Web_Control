@@ -5,7 +5,7 @@ import { installBootstrapShim } from '/js/flex/bootstrap-shim.js?v=1';
 export { installBootstrapShim };
 
 const PRESET_KEY = 'ywc.flexLayout.preset';
-const LAYOUT_VERSION = 'v2';
+const LAYOUT_VERSION = 'v3';
 const LAYOUT_URLS = {
     desktop: '/js/flex/layouts/desktop.json',
     tablet: '/js/flex/layouts/tablet.json',
@@ -61,6 +61,8 @@ function filterLayoutJson(json, flags) {
     if (!flags?.spectrumA) drop.add('spectrumA');
     if (!flags?.spectrumB) drop.add('spectrumB');
     if (!flags?.vfoB) drop.add('vfoB');
+    if (!flags?.radioDisplay) drop.add('radioDisplay');
+    if (!flags?.radioScope) drop.add('radioScope');
     if (drop.size === 0) return structuredClone(json);
 
     const clone = structuredClone(json);
@@ -235,6 +237,8 @@ export function initFlexWorkspace(host, flags) {
             meters: { type: 'tab', id: 'meters', name: 'Meters', component: 'meters', enableWindowReMount: true },
             controls: { type: 'tab', id: 'controls', name: 'Controls', component: 'controls' },
             remoteAudio: { type: 'tab', id: 'remoteAudio', name: 'Remote Audio', component: 'remoteAudio' },
+            radioDisplay: { type: 'tab', id: 'radioDisplay', name: 'Radio Display', component: 'radioDisplay' },
+            radioScope: { type: 'tab', id: 'radioScope', name: 'Radio Scope', component: 'radioScope' },
             spectrumA: { type: 'tab', id: 'spectrumA', name: 'Spectrum A', component: 'spectrumA', enableWindowReMount: true },
             spectrumB: { type: 'tab', id: 'spectrumB', name: 'Spectrum B', component: 'spectrumB', enableWindowReMount: true },
             vfoA: { type: 'tab', id: 'vfoA', name: 'VFO A', component: 'vfoA' },

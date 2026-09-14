@@ -486,6 +486,72 @@
     </div>
 </dialog>
 
+<!-- CW Reader — non-modal and draggable, like DX Spots. Markup/IDs must match
+     Classic Index so CwReaderPanel / CwQsoForm bind unchanged. Styles live in
+     flex-widgets.css (.ywc-flex-body scope). -->
+<dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:620px; max-width:95vw;" aria-labelledby="cwReaderTitle">
+    <div class="cwr-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="cwReaderTitle">CW Reader</strong>
+        <div class="d-flex align-items-center gap-2">
+            <button id="cwReaderStartBtn" class="btn btn-sm btn-success" type="button">Start</button>
+            <button id="cwReaderClearBtn" class="btn btn-sm btn-outline-secondary" type="button">Clear</button>
+            <button id="cwReaderModeBtn" class="btn btn-sm btn-outline-info" type="button" aria-pressed="false"
+                    title="Set CW mode, a narrow filter and APF for decoding. Your current settings are put back when you stop.">Reader Mode</button>
+            <button id="cwReaderLogBtn" class="btn btn-sm btn-outline-warning" type="button"
+                    title="Log this contact to ywc-log.adi, using what the copy suggests">Log QSO</button>
+            <div class="form-check form-switch mb-0" style="cursor:default;">
+                <input class="form-check-input" type="checkbox" id="cwReaderAutoScroll" checked>
+                <label class="form-check-label small" for="cwReaderAutoScroll">Follow</label>
+            </div>
+            <div class="form-check form-switch mb-0" style="cursor:default;">
+                <input class="form-check-input" type="checkbox" id="cwPhasorToggle">
+                <label class="form-check-label small" for="cwPhasorToggle"
+                       title="X-Y tuning figure: tune until it stops turning">Tune</label>
+            </div>
+            <button class="btn btn-sm ywc-dialog-close"
+                    onclick="document.getElementById('cwReaderDialog').close()"
+                    aria-label="Close CW reader panel">&#10005;</button>
+        </div>
+    </div>
+    <div class="p-2">
+        <div class="d-flex gap-2 align-items-start">
+            <div class="flex-grow-1" style="min-width:0;">
+                <div id="cwReaderOut" role="log" aria-live="polite" aria-label="Decoded CW text"></div>
+                <div class="cwr-legend mt-1">
+                    Colour marks what <em>looks like</em> QSO traffic, and nothing is hidden or corrected:
+                    <span class="cw-tok-proc">CQ DE 73</span>,
+                    <span class="cw-tok-rst">5NN</span>,
+                    <span class="cw-tok-call">a call heard more than once</span>,
+                    <span class="cw-tok-call1">a call heard once</span>.
+                </div>
+            </div>
+            <div id="cwPhasorBox" style="display:none; flex:0 0 auto; width:200px;">
+                <canvas id="cwSpectrumCanvas" width="200" height="90"
+                        style="width:200px; height:90px; display:block; border:1px solid #444; border-radius:6px;"
+                        aria-label="CW passband spectrum with a marker at the wanted pitch"></canvas>
+                <div id="cwSpectrumInfo" class="mb-1"
+                     style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
+                    Waiting.
+                </div>
+                <canvas id="cwPhasorCanvas" width="200" height="200"
+                        style="width:200px; display:block; border:1px solid #444; border-radius:6px;"
+                        aria-label="CW tuning phasor"></canvas>
+                <div id="cwPhasorInfo" class="mt-1"
+                     style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
+                    Waiting.
+                </div>
+            </div>
+        </div>
+        <div id="cwReaderStatus" class="mt-2 px-1">Stopped.</div>
+        <div class="text-muted small px-1 mt-1">
+            A machine reading Morse out of noise. On a strong clean signal it is close to
+            perfect; on a marginal one it prints plausible-looking rubbish that looks no
+            different. The line above tells you which you are looking at.
+        </div>
+        <div id="cwQsoForm" class="px-1"></div>
+    </div>
+</dialog>
+
 <!-- DX Watch alert toast container — populated by site.js when a watched spot arrives.
      Position is user-draggable; saved in localStorage as dxAlertPos. Defaults to
      bottom-right of the viewport on first run. -->

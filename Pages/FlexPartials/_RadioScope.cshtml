@@ -1,0 +1,9 @@
+@{
+    // Standalone CAT Radio Scope dock panel. Shown when the model supports SS
+    // and Video Display is off (when video is on, scope controls dock beside
+    // the MJPEG stream instead). Wraps the shared Classic partial so #radioScopeCard
+    // stays the RadioScopeControl root.
+}
+<div class="ywc-radio-scope-panel">
+    <partial name="_RadioScopePartial" model="@Model.RadioModel" />
+</div>

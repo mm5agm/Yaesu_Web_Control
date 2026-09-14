@@ -25,6 +25,18 @@
           "id": "remoteAudio",
           "name": "Remote Audio",
           "component": "remoteAudio"
+        },
+        {
+          "type": "tab",
+          "id": "radioDisplay",
+          "name": "Radio Display",
+          "component": "radioDisplay"
+        },
+        {
+          "type": "tab",
+          "id": "radioScope",
+          "name": "Radio Scope",
+          "component": "radioScope"
         }
       ]
     },

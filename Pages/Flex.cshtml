@@ -45,6 +45,8 @@ document.getElementById('messageBoxOkBtn')?.addEventListener('click', () => {
     <template id="tpl-meters">@await Html.PartialAsync("FlexPartials/_Meters")</template>
     <template id="tpl-controls">@await Html.PartialAsync("FlexPartials/_Controls")</template>
     <template id="tpl-remote-audio">@await Html.PartialAsync("FlexPartials/_RemoteAudio")</template>
+    <template id="tpl-radio-display">@await Html.PartialAsync("FlexPartials/_RadioDisplay")</template>
+    <template id="tpl-radio-scope">@await Html.PartialAsync("FlexPartials/_RadioScope")</template>
     <template id="tpl-spectrum-a">@await Html.PartialAsync("FlexPartials/_SpectrumA")</template>
     <template id="tpl-spectrum-b">@await Html.PartialAsync("FlexPartials/_SpectrumB")</template>
     <template id="tpl-vfo-a">@await Html.PartialAsync("FlexPartials/_Vfo", FlexVfoPanelModel.A(Model))</template>
@@ -57,12 +59,19 @@ document.getElementById('messageBoxOkBtn')?.addEventListener('click', () => {
 @await Html.PartialAsync("FlexPartials/_FlexDialogs")
 
 @section Scripts {
+@{
+    var supportsScope = Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(Model.RadioModel);
+    var radioDisplay = Model.VideoDisplayEnabled;
+    var radioScope = supportsScope && !Model.VideoDisplayEnabled;
+}
 <script>
 window.ywcFlexFlags = {
   remoteAudio: true,
   spectrumA: @Model.IsWindowsHost.ToString().ToLower(),
   spectrumB: @Model.IsWindowsHost.ToString().ToLower(),
-  vfoB: true
+  vfoB: true,
+  radioDisplay: @radioDisplay.ToString().ToLower(),
+  radioScope: @radioScope.ToString().ToLower()
 };
 </script>
 @await Html.PartialAsync("FlexPartials/_FlexScripts")

@@ -1275,13 +1275,29 @@ function bindControls() {
   ensureRadioDisplayTooltips();
 }
 
+function onBeforeUnloadStopStream() {
+  stopStream();
+}
+
 /**
  * Index / pop-out entry point.
+ * Safe to call again after a FlexLayout remount (new #radioDisplayContainer).
  * @param {'index'|'popout'} [mode]
  */
 export async function initRadioDisplayUi(mode = 'index') {
   const container = document.getElementById('radioDisplayContainer');
   if (!container) return;
+
+  // Same live element already bound — skip (Classic Index / repeated Flex calls).
+  if (container.dataset.ywcRdBound === '1' && panel?._container === container) {
+    return;
+  }
+
+  if (statusTimer) {
+    clearInterval(statusTimer);
+    statusTimer = null;
+  }
+  window.removeEventListener('beforeunload', onBeforeUnloadStopStream);
 
   uiMode = mode === 'popout' ? 'popout' : 'index';
   panel = new RadioDisplayPanel(
@@ -1290,9 +1306,11 @@ export async function initRadioDisplayUi(mode = 'index') {
     'radioDisplayBadge',
     {
       ignoreHidePreference: uiMode === 'popout',
-      naturalSize: uiMode === 'index'
+      // Flex dock fills its pane; Classic Index sizes to the TFT aspect ratio.
+      naturalSize: uiMode === 'index' && !document.body.classList.contains('ywc-flex-body')
     }
   );
+  container.dataset.ywcRdBound = '1';
   bindChannel();
   bindControls();
 
@@ -1315,5 +1333,5 @@ export async function initRadioDisplayUi(mode = 'index') {
   if (statusTimer) clearInterval(statusTimer);
   statusTimer = setInterval(pollStatus, STATUS_POLL_MS);
 
-  window.addEventListener('beforeunload', () => stopStream());
+  window.addEventListener('beforeunload', onBeforeUnloadStopStream);
 }

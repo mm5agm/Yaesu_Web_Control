@@ -7,6 +7,8 @@ const TEMPLATE_BY_COMPONENT = {
     meters: 'tpl-meters',
     controls: 'tpl-controls',
     remoteAudio: 'tpl-remote-audio',
+    radioDisplay: 'tpl-radio-display',
+    radioScope: 'tpl-radio-scope',
     spectrumA: 'tpl-spectrum-a',
     spectrumB: 'tpl-spectrum-b',
     vfoA: 'tpl-vfo-a',

@@ -7,23 +7,31 @@
         window.ywcIsWindowsHost = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IsWindowsHost));
     </script>
     <script type="module">
-        import { MeterPanel }           from "/js/guages/meter-panel.js?v=2";
-        import { SMeterHistoryPanel }   from "/js/guages/smeter-history-panel.js?v=2";
-        import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=1";
-        import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=4";
-        import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=5";
-        import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=4";
-        import "/js/ui/if-width-tables.js?v=3";
-        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=6";
-        import { loadLabels }           from "/js/ui/a11y-labels.js?v=1";
-        import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=14";
-        import { initMemoriesPanel }   from "/js/ui/memories.js?v=11";
-        import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=1";
-        import { initRemoteAudioFlex }    from "/js/audio/remote-audio-flex-ui.js?v=2";
-        import { initFlexWorkspace, installBootstrapShim } from "/js/flex/flex-layout.js?v=5";
-        import { initMetersFit } from "/js/flex/meters-fit.js?v=3";
-        import { initVfoFit } from "/js/flex/vfo-fit.js?v=3";
-        import { initWidgetFit } from "/js/flex/widget-fit.js?v=2";
+        import { MeterPanel }           from "/js/guages/meter-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { SMeterHistoryPanel }   from "/js/guages/smeter-history-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import "/js/ui/if-width-tables.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { loadLabels }           from "/js/ui/a11y-labels.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initMemoriesPanel }   from "/js/ui/memories.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        // Side-effect import: publishes window.radioFeatureSetup, which the
+        // shared CW panel calls if the host app provides it. Loaded before
+        // the panels that offer it so the global is there when they render.
+        import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initRemoteAudioFlex }    from "/js/audio/remote-audio-flex-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initFlexWorkspace, installBootstrapShim } from "/js/flex/flex-layout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initMetersFit } from "/js/flex/meters-fit.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initVfoFit } from "/js/flex/vfo-fit.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initWidgetFit } from "/js/flex/widget-fit.js?v=@Yaesu_Web_Control.AppVersion.Current";
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
@@ -150,10 +158,38 @@
             window.ywcVfoFit?.refit();
         }
 
+        const _flexScopeBound = new WeakSet();
+        function mountFlexRadioScope() {
+            window.radioScopeControls = window.radioScopeControls || [];
+            const bind = (el) => {
+                if (!el || _flexScopeBound.has(el)) return;
+                _flexScopeBound.add(el);
+                window.radioScopeControls.push(new RadioScopeControl(el));
+            };
+            // Drop stale controls whose roots were remounted away.
+            window.radioScopeControls = window.radioScopeControls.filter(c => c?.card && document.contains(c.card));
+            bind(document.getElementById('radioScopeCard'));
+            bind(document.getElementById('radioDisplayScopeDialog'));
+            window.radioScopeControl = window.radioScopeControls[0] || null;
+        }
+
+        async function mountFlexRadioDisplay() {
+            if (!document.getElementById('radioDisplayContainer')) return;
+            await initRadioDisplayUi('index');
+            mountFlexRadioScope();
+            const scopeDlg = document.getElementById('radioDisplayScopeDialog');
+            if (scopeDlg && !document.querySelector('.radio-display-body')?.classList.contains('controls-docked')) {
+                const handle = scopeDlg.querySelector('div:not(.radio-display-scope-splitter)') || scopeDlg.querySelector('div');
+                if (handle && typeof makeDraggable === 'function') makeDraggable(scopeDlg, handle);
+            }
+        }
+
         window.addEventListener('ywc-flex-template-mounted', (e) => {
             if (e.detail?.component === 'meters') mountFlexMeters();
             if (e.detail?.component === 'vfoA' || e.detail?.component === 'vfoB')
                 mountFlexFilterScopes();
+            if (e.detail?.component === 'radioDisplay') mountFlexRadioDisplay();
+            if (e.detail?.component === 'radioScope') mountFlexRadioScope();
         });
 
         window.ywcVfoFit = initVfoFit();
@@ -381,6 +417,22 @@
             window.dxSpotsPanel = new DxSpotsPanel();
             window.dxSpotsPanel.init();
             window.dxSpotsPanel.setVfoFrequency(@Model.RadioState.FrequencyA);
+
+            // The CW reader is independent of the SDR and of the cluster: it
+            // needs only the audio bridge, which it taps rather than opening a
+            // second stream on the radio's codec.
+            window.cwReaderPanel = new CwReaderPanel();
+            window.cwReaderPanel.init();
+
+            window.cwQsoForm = new CwQsoForm();
+            window.cwQsoForm.init('cwQsoForm');
+            document.getElementById('cwReaderLogBtn')
+                ?.addEventListener('click', () => window.cwQsoForm.toggle());
+
+            // Radio Display / CAT Radio Scope may already be mounted via Flex
+            // templates; bind if present (also re-bound on template-mounted).
+            mountFlexRadioDisplay();
+            mountFlexRadioScope();
 
             spectrumPipeline.onFrequencyA(hz => {
                 spectrumPanelA?.setVfoFrequency(hz);
@@ -1209,10 +1261,11 @@
             }, { passive: true });
         }
 
-        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog'].forEach(id => {
+        ['voxDialog', 'cwDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'cwReaderDialog', 'radioDisplayScopeDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
-            makeDraggable(dlg, dlg.querySelector('div'));
+            if (id === 'radioDisplayScopeDialog' && document.querySelector('.radio-display-body')?.classList.contains('controls-docked')) return;
+            makeDraggable(dlg, dlg.querySelector('div:not(.radio-display-scope-splitter)') || dlg.querySelector('div'));
             try {
                 const saved = JSON.parse(localStorage.getItem('dlgPos_' + id) || 'null');
                 if (saved && saved.left && saved.top) {

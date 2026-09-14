@@ -73,7 +73,7 @@
         "children": [
           {
             "type": "tabset",
-            "weight": 34,
+            "weight": 25,
             "children": [
               {
                 "type": "tab",
@@ -85,7 +85,7 @@
           },
           {
             "type": "tabset",
-            "weight": 33,
+            "weight": 25,
             "children": [
               {
                 "type": "tab",
@@ -97,7 +97,25 @@
           },
           {
             "type": "tabset",
-            "weight": 33,
+            "weight": 25,
+            "children": [
+              {
+                "type": "tab",
+                "id": "radioDisplay",
+                "name": "Radio Display",
+                "component": "radioDisplay"
+              },
+              {
+                "type": "tab",
+                "id": "radioScope",
+                "name": "Radio Scope",
+                "component": "radioScope"
+              }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 25,
             "children": [
               {
                 "type": "tab",
