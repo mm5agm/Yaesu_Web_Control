@@ -1,6 +1,6 @@
 /**
- * Wire Yaesu-key widgets for Band, Mode, Roofing, AGC, IPO, ATT, NB, Contour,
- * APF, Auto Notch, Man Notch.
+ * Wire Yaesu-key widgets for Band, Mode, Roofing, IF Width, IF Shift, AGC,
+ * IPO, ATT, NB, Contour, APF, Auto Notch, Man Notch.
  */
 import {
     ToggleDropdownButton,
@@ -8,7 +8,7 @@ import {
     ToggleButton,
     CycleContextButton,
 } from "/js/ui/toggle-dropdown-button.js";
-import { rebuildIfWidthSelect, ifWidthOptionsFor } from "/js/ui/if-width-tables.js";
+import { rebuildIfWidthSelect, ifWidthKeyConfig } from "/js/ui/if-width-tables.js";
 
 function debounce(fn, ms) {
     let timer = null;
@@ -353,16 +353,21 @@ function initIfWidthButton(vfo) {
     const root = document.getElementById(`ifWidthButton${vfo}`);
     if (!root) return null;
     const model = resolveRadioModel();
-    const table = ifWidthOptionsFor(model, root.dataset.mode);
-    const selectedId = root.dataset.selected || "0";
-    const options = table?.map((o) => ({ id: o.code, label: o.label }))
-        ?? [{ id: selectedId, label: "…" }];
+    const cfg = ifWidthKeyConfig(model, root.dataset.mode);
+    const selectedId = root.dataset.selected || cfg?.defaultId || "0";
+    const options = cfg?.options ?? [{ id: selectedId, label: "…" }];
     let lastId = selectedId;
 
     const widget = new CycleContextButton(root, {
         label: "IF Width",
         options,
         selectedId,
+        clickAction: "select",
+        clickSelectId: cfg?.defaultId ?? "0",
+        extraLabels: cfg?.extraLabels,
+        sliderAlias: cfg?.sliderAlias,
+        offIds: cfg?.offIds,
+        showLed: true,
         linkSliderToOptions: true,
         context: { type: "slider" },
         a11yKey: `controls.ifWidth${vfo}`,
@@ -390,6 +395,81 @@ function initIfWidthButton(vfo) {
     rebuildIfWidthSelect(widget, model, root.dataset.mode);
     return widget;
 }
+
+const IF_SHIFT_MIN = -1000;
+const IF_SHIFT_MAX = 1000;
+const IF_SHIFT_STEP = 20;
+
+function ifShiftLabel(hz) {
+    if (hz === 0) return "0";
+    return hz > 0 ? `+${hz} Hz` : `${hz} Hz`;
+}
+
+function ifShiftOptions() {
+    const options = [];
+    for (let hz = IF_SHIFT_MIN; hz <= IF_SHIFT_MAX; hz += IF_SHIFT_STEP) {
+        options.push({ id: String(hz), label: ifShiftLabel(hz) });
+    }
+    return options;
+}
+
+function snapIfShiftHz(hz) {
+    const n = Number(hz);
+    if (!Number.isFinite(n)) return 0;
+    const snapped = Math.round(n / IF_SHIFT_STEP) * IF_SHIFT_STEP;
+    return Math.min(IF_SHIFT_MAX, Math.max(IF_SHIFT_MIN, snapped));
+}
+
+function initIfShiftButton(vfo) {
+    const root = document.getElementById(`ifShiftButton${vfo}`);
+    if (!root) return null;
+    const options = ifShiftOptions();
+    const selectedId = String(snapIfShiftHz(root.dataset.value));
+    let lastId = selectedId;
+
+    const postShift = debounce((hz) => {
+        if (window.radioControl?.setIfShift) {
+            window.radioControl.setIfShift(vfo, hz);
+        }
+    }, 150);
+
+    const widget = new CycleContextButton(root, {
+        label: "IF Shift",
+        options,
+        selectedId,
+        clickAction: "select",
+        clickSelectId: "0",
+        offId: "0",
+        showLed: true,
+        linkSliderToOptions: true,
+        context: { type: "slider" },
+        a11yKey: `controls.ifShift${vfo}`,
+        onChange: (state) => {
+            const hz = snapIfShiftHz(state.selectedId);
+            const panel = vfo === "B" ? window.filterScopePanelB : window.filterScopePanelA;
+            if (panel) panel.setState({ ifShiftHz: hz });
+            if (state.selectedId !== lastId) {
+                lastId = state.selectedId;
+                postShift(hz);
+            }
+        },
+    });
+
+    const originalSetState = widget.setState.bind(widget);
+    widget.setState = (partial = {}, opts = {}) => {
+        originalSetState(partial, opts);
+        lastId = widget.getState().selectedId;
+    };
+    const originalSetOptions = widget.setOptions.bind(widget);
+    widget.setOptions = (next, opts = {}) => {
+        originalSetOptions(next, opts);
+        lastId = widget.getState().selectedId;
+    };
+
+    return widget;
+}
+
+window.snapIfShiftHz = snapIfShiftHz;
 
 function initAgcButton(vfo) {
     return initOffToggleDropdown(document.getElementById(`agcButton${vfo}`), {
@@ -556,6 +636,7 @@ export function initVfoKeyButtons() {
         const mode = initModeButton(vfo);
         const roofing = initRoofingButton(vfo);
         const ifWidth = initIfWidthButton(vfo);
+        const ifShift = initIfShiftButton(vfo);
         const agc = initAgcButton(vfo);
         const ipo = initIpoButton(vfo);
         const att = initAttButton(vfo);
@@ -570,6 +651,7 @@ export function initVfoKeyButtons() {
         if (mode) window[`modeButton${vfo}`] = mode;
         if (roofing) window[`roofingButton${vfo}`] = roofing;
         if (ifWidth) window[`ifWidthButton${vfo}`] = ifWidth;
+        if (ifShift) window[`ifShiftButton${vfo}`] = ifShift;
         if (agc) window[`agcButton${vfo}`] = agc;
         if (ipo) window[`ipoButton${vfo}`] = ipo;
         if (att) window[`attButton${vfo}`] = att;
@@ -585,6 +667,7 @@ export function initVfoKeyButtons() {
             mode,
             roofing,
             ifWidth,
+            ifShift,
             agc,
             ipo,
             att,
