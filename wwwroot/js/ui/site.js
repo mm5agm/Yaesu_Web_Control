@@ -1154,11 +1154,9 @@ function sMeterLabel(val) {
 // (e.g., via SignalR update or front panel knob change).
 // ---------------------------------------------------------------------------
 function updateModeSelect(receiver, mode) {
-    const select = document.getElementById(`modeSelect${receiver}`);
-    if (select) {
-        select.value = mode;
-    } else {
-
+    const widget = window[`modeButton${receiver}`];
+    if (widget && mode) {
+        widget.setState({ selectedId: String(mode) }, { silent: true });
     }
 }
 
@@ -1592,76 +1590,78 @@ connection.on("RadioStateUpdate", function (update) {
 
     // --- AGC ---
     if (update.property === "AgcA") {
-        const selectEl = document.getElementById('agcSelectA');
-        // Values 5/6 (AUTO-FAST/MID/SLOW) are normalised to 4 (AUTO) by the dispatcher,
-        // but guard here too in case of a race.
-        if (selectEl) selectEl.value = (update.value === "5" || update.value === "6") ? "4" : update.value;
+        const code = (update.value === "5" || update.value === "6") ? "4" : update.value;
+        if (window.agcButtonA) window.agcButtonA.setState({ selectedId: String(code) }, { silent: true });
     }
     if (update.property === "AgcB") {
-        const selectEl = document.getElementById('agcSelectB');
-        if (selectEl) selectEl.value = (update.value === "5" || update.value === "6") ? "4" : update.value;
+        const code = (update.value === "5" || update.value === "6") ? "4" : update.value;
+        if (window.agcButtonB) window.agcButtonB.setState({ selectedId: String(code) }, { silent: true });
     }
 
     // --- IPO/AMP ---
     if (update.property === "IpoA") {
-        const el = document.getElementById('ipoSelectA');
-        if (el) el.value = update.value;
+        if (window.ipoButtonA) window.ipoButtonA.setState({ selectedId: String(update.value) }, { silent: true });
     }
     if (update.property === "IpoB") {
-        const el = document.getElementById('ipoSelectB');
-        if (el) el.value = update.value;
+        if (window.ipoButtonB) window.ipoButtonB.setState({ selectedId: String(update.value) }, { silent: true });
     }
 
     // --- ATTENUATOR ---
     if (update.property === "AttA") {
-        const el = document.getElementById('attSelectA');
-        if (el) el.value = update.value;
+        if (window.attButtonA) window.attButtonA.setState({ selectedId: String(update.value) }, { silent: true });
     }
     if (update.property === "AttB") {
-        const el = document.getElementById('attSelectB');
-        if (el) el.value = update.value;
+        if (window.attButtonB) window.attButtonB.setState({ selectedId: String(update.value) }, { silent: true });
     }
 
     // --- NOISE REDUCTION ---
     if (update.property === "NrA") {
-        const el = document.getElementById('nrSelectA');
-        if (el) el.value = update.value;
+        if (window.nrCycleButtonA) {
+            window.nrCycleButtonA.setState({ selectedId: String(update.value) }, { silent: true });
+        }
     }
     if (update.property === "NrB") {
-        const el = document.getElementById('nrSelectB');
-        if (el) el.value = update.value;
+        if (window.nrCycleButtonB) {
+            window.nrCycleButtonB.setState({ selectedId: String(update.value) }, { silent: true });
+        }
     }
 
     // --- MANUAL NOTCH FREQUENCY ---
     if (update.property === "ManualNotchFreqA") {
-        const el = document.getElementById('manualNotchFreqA');
-        if (el) { el.value = update.value; document.getElementById('manualNotchFreqValueA').textContent = update.value + ' Hz'; }
+        if (window.manNotchButtonA) {
+            window.manNotchButtonA.setState({ value: Number(update.value) }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ manualNotchFreqHz: parseInt(update.value) || 800 });
     }
     if (update.property === "ManualNotchFreqB") {
-        const el = document.getElementById('manualNotchFreqB');
-        if (el) { el.value = update.value; document.getElementById('manualNotchFreqValueB').textContent = update.value + ' Hz'; }
+        if (window.manNotchButtonB) {
+            window.manNotchButtonB.setState({ value: Number(update.value) }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ manualNotchFreqHz: parseInt(update.value) || 800 });
     }
 
     // --- NOISE BLANKER ---
     if (update.property === "NbA") {
-        const el = document.getElementById('nbSelectA');
-        if (el) el.value = update.value;
+        if (window.nbButtonA) {
+            window.nbButtonA.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
     }
     if (update.property === "NbB") {
-        const el = document.getElementById('nbSelectB');
-        if (el) el.value = update.value;
+        if (window.nbButtonB) {
+            window.nbButtonB.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
     }
 
     // --- AUTO NOTCH ---
     if (update.property === "AutoNotchA") {
-        const el = document.getElementById('autoNotchSelectA');
-        if (el) el.value = update.value;
+        if (window.autoNotchButtonA) {
+            window.autoNotchButtonA.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
     }
     if (update.property === "AutoNotchB") {
-        const el = document.getElementById('autoNotchSelectB');
-        if (el) el.value = update.value;
+        if (window.autoNotchButtonB) {
+            window.autoNotchButtonB.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
     }
 
     // --- IF WIDTH ---
@@ -1788,13 +1788,15 @@ connection.on("RadioStateUpdate", function (update) {
 
     // --- MANUAL NOTCH ---
     if (update.property === "ManualNotchA") {
-        const el = document.getElementById('manualNotchSelectA');
-        if (el) el.value = update.value;
+        if (window.manNotchButtonA) {
+            window.manNotchButtonA.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ manualNotchOn: update.value === '1' });
     }
     if (update.property === "ManualNotchB") {
-        const el = document.getElementById('manualNotchSelectB');
-        if (el) el.value = update.value;
+        if (window.manNotchButtonB) {
+            window.manNotchButtonB.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ manualNotchOn: update.value === '1' });
     }
 
@@ -1825,22 +1827,26 @@ connection.on("RadioStateUpdate", function (update) {
 
     // --- NB LEVEL ---
     if (update.property === "NbLevelA") {
-        const el = document.getElementById('nbLevelSelectA');
-        if (el) el.value = update.value;
+        if (window.nbButtonA) {
+            window.nbButtonA.setState({ value: Number(update.value) }, { silent: true });
+        }
     }
     if (update.property === "NbLevelB") {
-        const el = document.getElementById('nbLevelSelectB');
-        if (el) el.value = update.value;
+        if (window.nbButtonB) {
+            window.nbButtonB.setState({ value: Number(update.value) }, { silent: true });
+        }
     }
 
     // --- NR LEVEL (DNR algorithm on FTdx10) ---
     if (update.property === "NrLevelA") {
-        const el = document.getElementById('nrLevelSelectA');
-        if (el) el.value = update.value;
+        if (window.nrCycleButtonA) {
+            window.nrCycleButtonA.setState({ value: Number(update.value) }, { silent: true });
+        }
     }
     if (update.property === "NrLevelB") {
-        const el = document.getElementById('nrLevelSelectB');
-        if (el) el.value = update.value;
+        if (window.nrCycleButtonB) {
+            window.nrCycleButtonB.setState({ value: Number(update.value) }, { silent: true });
+        }
     }
 
     // --- RF GAIN ---
@@ -2074,44 +2080,47 @@ const lastVfoBand = { A: null, B: null };
 // operator's own IARU region, so no band button is selected. On its own that
 // just looks like nothing is happening. Here we mark the nearest band in the
 // operator's region instead: a UK operator on 3.9 MHz gets a red 80m button,
-// which says "you are at 80m, but not where you are allowed to be" — and so
-// does one on 3.4 MHz, having drifted off the bottom.
+// Paint the out-of-band marker on the Band Yaesu key.
+//
+// The server reports "Unknown" for a frequency outside every allocation in the
+// operator's own IARU region, so no band is selected. Mark the Band key red
+// and show the nearest band in the operator's region instead: a UK operator
+// on 3.9 MHz gets a red 80m key — "you are at 80m, but not where you are
+// allowed to be".
 function applyBandOutOfBand(receiver) {
-    const inputs = document.querySelectorAll(`input[name="band-${receiver}"]`);
-
-    // A checked button means we are in band, whatever lastVfoBand still says.
-    // Clicking a band button checks it immediately and tunes; the frequency
-    // update then lands before the BandA broadcast that clears lastVfoBand, so
-    // without this the button flashes red on the way in.
-    const anyChecked = Array.from(inputs).some(radio => radio.checked);
+    const widget = window[`bandButton${receiver}`];
+    if (!widget || !widget.root) return;
 
     const band = lastVfoBand[receiver];
-    const isOutOfBand = !anyChecked && !!band && band.toLowerCase() === 'unknown';
+    const selected = widget.getState().selectedId;
+    const isOutOfBand = !!band && band.toLowerCase() === 'unknown';
     const oobBand = (isOutOfBand && typeof window.nearestBandForHz === 'function')
         ? window.nearestBandForHz(lastVfoHz[receiver])
         : null;
 
-    inputs.forEach(radio => {
-        const label = radio.closest('.band-radio-label');
-        if (!label) return;
+    const marked = !!oobBand;
+    widget.root.classList.toggle('toggle-dd--oob', marked);
 
-        const marked = !!oobBand && radio.value.toLowerCase() === oobBand.toLowerCase();
-        label.classList.toggle('band-oob', marked);
-
-        // Red is no use to an operator using a screen reader, so say it in the
-        // tooltip too. Stash the original on the way in and release it on the
-        // way out, rather than caching it forever — a11y-labels.js rewrites
-        // these titles from labels.json whenever the window regains focus.
+    if (widget.button) {
         if (marked) {
-            if (!('titleOriginal' in label.dataset)) {
-                label.dataset.titleOriginal = label.getAttribute('title') || '';
+            if (!('titleOriginal' in widget.button.dataset)) {
+                widget.button.dataset.titleOriginal = widget.button.getAttribute('title') || '';
             }
-            label.setAttribute('title', `${label.dataset.titleOriginal} — out of band for your region`);
-        } else if ('titleOriginal' in label.dataset) {
-            label.setAttribute('title', label.dataset.titleOriginal);
-            delete label.dataset.titleOriginal;
+            const nearest = oobBand;
+            widget.button.setAttribute(
+                'title',
+                `${nearest} — out of band for your region`
+            );
+            // Keep the displayed selection on the nearest band so the key still
+            // names something meaningful while the frequency is OOB.
+            if (selected?.toLowerCase() !== nearest.toLowerCase()) {
+                widget.setState({ selectedId: nearest }, { silent: true });
+            }
+        } else if ('titleOriginal' in widget.button.dataset) {
+            widget.button.setAttribute('title', widget.button.dataset.titleOriginal);
+            delete widget.button.dataset.titleOriginal;
         }
-    });
+    }
 }
 
 // a11y-labels.js reapplies titles from labels.json on every window focus,
@@ -2123,45 +2132,23 @@ window.refreshBandOutOfBand = function () {
 
 // Update band button selection for a specific receiver (called via SignalR)
 function updateBandButton(receiver, band) {
-    // ...removed debug logging...
-    if (!band) {
-        // ...removed debug logging...
-        return;
-    }
+    if (!band) return;
     lastVfoBand[receiver] = band;
     const bandLower = band.toLowerCase();
-    const inputs = document.querySelectorAll(`input[name="band-${receiver}"]`);
-    // ...removed debug logging...
-
-    let foundMatch = false;
-    inputs.forEach(radio => {
-        const matches = (radio.value.toLowerCase() === bandLower);
-        if (matches) {
-            foundMatch = true;
-            // ...removed debug logging...
+    const widget = window[`bandButton${receiver}`];
+    if (widget && bandLower !== 'unknown') {
+        // Normalise "20m" / "20M" / "20" style values to option ids.
+        const id = bandLower.endsWith('m') ? bandLower : `${bandLower}m`;
+        const match = widget.options?.find(
+            (o) => o.id.toLowerCase() === id || o.id.toLowerCase() === bandLower
+        );
+        if (match) {
+            widget.setState({ selectedId: match.id }, { silent: true });
         }
-        radio.checked = matches;
-    });
-
-    if (typeof syncBandAriaChecked === 'function') syncBandAriaChecked(receiver);
-    applyBandOutOfBand(receiver);
-
-    if (!foundMatch) {
-        // ...removed debug logging...
     }
-    // ...removed debug logging...
+    applyBandOutOfBand(receiver);
 }
-
-// Sync aria-checked and tabindex on band-radio-label[role="radio"] elements
-// after the underlying radio input's checked state is changed programmatically.
-function syncBandAriaChecked(receiver) {
-    document.querySelectorAll(`input[name="band-${receiver}"]`).forEach(input => {
-        const label = input.closest('label[role="radio"]');
-        if (!label) return;
-        label.setAttribute('aria-checked', input.checked ? 'true' : 'false');
-        label.tabIndex = input.checked ? 0 : -1;
-    });
-}
+window.updateBandButton = updateBandButton;
 
 // Outer DOMContentLoaded - initial UI wiring
 window.addEventListener('DOMContentLoaded', () => {
@@ -2238,34 +2225,6 @@ window.addEventListener('DOMContentLoaded', () => {
         const aSlider = document.getElementById(`apfFreqSlider${vfo}`);
         if (aSlider) apfState[vfo].freqHz = parseInt(aSlider.value) || 0;
     }
-
-    // Event delegation for band button changes
-    document.addEventListener('change', function(e) {
-        if (e.target.type === 'radio' && e.target.name && e.target.name.startsWith('band-')) {
-            const receiver = e.target.getAttribute('data-receiver');
-            const band = e.target.value;
-            syncBandAriaChecked(receiver);
-            if (receiver && band && window.radioControl && window.radioControl.setBand) {
-                window.radioControl.setBand(receiver, band);
-            }
-        }
-    });
-
-    // Keyboard navigation for band radiogroups (arrow keys move between bands)
-    document.querySelectorAll('.band-radio-grid[role="radiogroup"]').forEach(grid => {
-        grid.addEventListener('keydown', function(e) {
-            const radios = Array.from(grid.querySelectorAll('label[role="radio"]'));
-            const idx = radios.indexOf(document.activeElement);
-            if (idx === -1) return;
-            let next = -1;
-            if (e.key === 'ArrowRight' || e.key === 'ArrowDown')      next = (idx + 1) % radios.length;
-            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp')    next = (idx - 1 + radios.length) % radios.length;
-            else return;
-            e.preventDefault();
-            radios[next].focus();
-            radios[next].click();
-        });
-    });
 });
 
 // Touch up/down button handler for mobile frequency editing
@@ -2714,20 +2673,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     window.updateFrequencyDisplay = updateFrequencyDisplay;
 
-    // Update band, mode, and antenna radio/toggle buttons to reflect current state.
-    // NOTE: The Razor page renders mode buttons as <input type="radio" name="modeA" value="USB">
-    // and band/antenna buttons similarly.  We update .checked directly.
+    // Update band, mode, and antenna to reflect current state.
     function highlightButtons(receiver, band, mode, antenna) {
-        // Band buttons (rendered by _BandButtonsPartial as input[name="band-A/B"])
-        document.querySelectorAll(`input[name="band-${receiver}"]`).forEach(btn => {
-            btn.checked = (btn.value === band);
-        });
-        if (typeof syncBandAriaChecked === 'function') syncBandAriaChecked(receiver);
+        if (band && window[`bandButton${receiver}`]) {
+            window[`bandButton${receiver}`].setState({ selectedId: String(band) }, { silent: true });
+        }
 
-        // Mode dropdown - update the selected value
-        const modeSelect = document.getElementById(`modeSelect${receiver}`);
-        if (modeSelect && mode) {
-            modeSelect.value = mode;
+        if (mode && window[`modeButton${receiver}`]) {
+            window[`modeButton${receiver}`].setState({ selectedId: String(mode) }, { silent: true });
         }
 
         // Antenna buttons
@@ -3538,6 +3491,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Expose to the outer SignalR handler (FrequencyA/B), which lives outside
     // this IIFE and would otherwise get a ReferenceError trying to call it.
     window.syncSegmentSelectToFrequency = syncSegmentSelectToFrequency;
+    window.populateSegmentSelect = populateSegmentSelect;
 
     function populateSegmentSelect(vfo, band) {
         const select = document.getElementById(`segmentSelect${vfo}`);
@@ -3634,8 +3588,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set mode first so the radio doesn't shift frequency when mode changes,
         // then tune to the target frequency.
         if (window.radioControl) {
-            const modeSelect = document.getElementById(`modeSelect${vfo}`);
-            if (modeSelect) modeSelect.value = mode;
+            if (window[`modeButton${vfo}`]) {
+                window[`modeButton${vfo}`].setState({ selectedId: String(mode) }, { silent: true });
+            }
             await window.setMode(vfo, mode);
             await window.radioControl.setFrequency(vfo, freq);
         }
@@ -3662,17 +3617,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (_origUpdateBandButton) _origUpdateBandButton(receiver, band);
         onBandChanged(receiver, band);
     };
-
-    // Also update segment immediately when a band button is clicked (before poll)
-    document.addEventListener('change', function(e) {
-        if (e.target.type === 'radio' && e.target.name && e.target.name.startsWith('band-')) {
-            const receiver = e.target.getAttribute('data-receiver');
-            const band = e.target.value;
-            if (receiver && band && window.bandPlanData) {
-                populateSegmentSelect(receiver, band);
-            }
-        }
-    });
 
     // Populate segments on first load once bandPlanData is ready
     function tryPopulateSegmentsOnLoad() {
