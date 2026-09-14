@@ -104,6 +104,9 @@ const TABLES = {
 // FTdx101D shares the FTdx101MP tables.
 TABLES['FTdx101D'] = TABLES['FTdx101MP'];
 
+// SH code 0 is the radio's own default. On FTdx10 / FTdx101 that is 3.0 kHz.
+const SH0_DEFAULT_HZ = 3000;
+
 function hzLabel(hz) {
     if (hz === 'default') return 'Default';
     if (hz >= 1000) {
@@ -136,6 +139,36 @@ function ifWidthOptionsFor(model, mode) {
         .sort((a, b) => parseInt(a.code) - parseInt(b.code));
 }
 
+// Returns slider options plus reset metadata. Code 0 ("Default") is omitted
+// from the slider; left-click still sends it as the radio's own default.
+function ifWidthKeyConfig(model, mode) {
+    const all = ifWidthOptionsFor(model, mode);
+    if (!all) return null;
+    const defaultRow = all.find((o) => o.hz === "default");
+    const sliderRows = all.filter((o) => o.hz !== "default");
+    const defaultId = defaultRow
+        ? defaultRow.code
+        : (sliderRows.find((o) => o.hz === SH0_DEFAULT_HZ)?.code ?? sliderRows[sliderRows.length - 1]?.code ?? "0");
+    const extraLabels = {};
+    const sliderAlias = {};
+    const offIds = [defaultId];
+    if (defaultRow) {
+        extraLabels[defaultId] = hzLabel(SH0_DEFAULT_HZ);
+        const twin = sliderRows.find((o) => o.hz === SH0_DEFAULT_HZ);
+        if (twin) {
+            sliderAlias[defaultId] = twin.code;
+            if (!offIds.includes(twin.code)) offIds.push(twin.code);
+        }
+    }
+    return {
+        options: sliderRows.map((o) => ({ id: o.code, label: o.label })),
+        defaultId,
+        extraLabels,
+        sliderAlias,
+        offIds,
+    };
+}
+
 // Rebuild an IF Width Yaesu-key widget with the options for the current mode.
 // Preserves the currently selected code if it still exists in the new options.
 // Hides only the key in AM/FM (Audio Filter / IF Shift stay visible).
@@ -145,8 +178,8 @@ function rebuildIfWidthSelect(widget, model, mode) {
         model ||
         (typeof window.getConfiguredRadioModel === "function" && window.getConfiguredRadioModel()) ||
         document.getElementById("vfoRow")?.dataset?.radioModel;
-    const options = ifWidthOptionsFor(resolved, mode);
-    if (!options) {
+    const cfg = ifWidthKeyConfig(resolved, mode);
+    if (!cfg) {
         widget.root.style.display = "none";
         widget.setDisabled(true);
         return;
@@ -155,11 +188,20 @@ function rebuildIfWidthSelect(widget, model, mode) {
     widget.setDisabled(false);
 
     const previousCode = String(widget.getState().selectedId ?? "");
-    const menuOptions = options.map((o) => ({ id: o.code, label: o.label }));
-    const keep = menuOptions.some((o) => o.id === previousCode)
-        ? previousCode
-        : menuOptions[0]?.id ?? "";
-    widget.setOptions(menuOptions, { silent: true, selectedId: keep });
+    const keep =
+        previousCode === cfg.defaultId ||
+        cfg.options.some((o) => o.id === previousCode) ||
+        cfg.extraLabels[previousCode] != null
+            ? previousCode
+            : cfg.defaultId;
+    widget.setOptions(cfg.options, {
+        silent: true,
+        selectedId: keep,
+        extraLabels: cfg.extraLabels,
+        sliderAlias: cfg.sliderAlias,
+        offIds: cfg.offIds,
+        clickSelectId: cfg.defaultId,
+    });
 }
 
 // Expose to non-module code (site.js loads as a regular script).
@@ -167,7 +209,8 @@ window.IfWidth = {
     modeGroup,
     ifWidthHzFor,
     ifWidthOptionsFor,
+    ifWidthKeyConfig,
     rebuildIfWidthSelect,
 };
 
-export { modeGroup, ifWidthHzFor, ifWidthOptionsFor, rebuildIfWidthSelect };
+export { modeGroup, ifWidthHzFor, ifWidthOptionsFor, ifWidthKeyConfig, rebuildIfWidthSelect };

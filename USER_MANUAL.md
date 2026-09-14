@@ -692,7 +692,7 @@ All of these settings are read from the radio when the app connects.
 - **Green animated bars** inside the trapezoid represent signals passing through the filter. No signals are shown outside the passband, making it immediately clear which audio frequencies are being received.
 - A **"Roof Nk" label** in the top-right corner shows the currently selected roofing filter (e.g. "Roof 3k", "Roof 12k", "Roof 600"). This is useful because the DSP filter is the *active* limit when the roofing filter is wider than the DSP setting — in that case the trapezium looks identical for several roofing choices (12k and 3k both produce the same shape if the DSP filter is set to 3 kHz, since both roofing filters are at least as wide as 3 kHz). The label is the only way to see which roofing is actually in circuit when this happens.
 - **Passband width** reflects the current IF Width setting, automatically constrained by the selected Roofing Filter if it is narrower than the DSP setting. If the roofing filter is wider, the DSP filter is what you see.
-- **Passband position** shifts left or right as the IF Shift slider is adjusted — the display updates live while dragging the slider.
+- **Passband position** shifts left or right as the IF Shift key is adjusted — the display updates live while dragging the right-click slider. Left-click resets the shift to 0.
 - A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as you adjust Contour frequency (right-click the Contour key).
 - The display updates automatically whenever any filter parameter changes, whether adjusted from the browser or from the radio's front panel.
 
@@ -700,15 +700,15 @@ All of these settings are read from the radio when the app connects.
 
 ### 5.8 IF Width, Audio Filter, IF Shift, and AF Gain
 
-**IF Width** — Yaesu-style key. Left-click cycles bandwidths; right-click opens a slider across the same discrete widths (mode-aware labels).
+**IF Width** — Yaesu-style key. Left-click resets to the radio's default width (3.0 kHz on the FTdx10); right-click opens a slider of the discrete widths (mode-aware labels). The orange LED lights when the width is not that default. There is no separate "Default" step on the slider — the default is 3.0 kHz.
 
-The IF Width key is **mode-aware**: the SH command code sent to the radio is the same in every mode, but the resulting bandwidth differs per mode. In SSB code 8 gives 1650 Hz; in CW the same code gives 400 Hz. The cycle list and slider ends are rebuilt automatically when you change mode so they show the actual bandwidth the radio will use.
+The IF Width key is **mode-aware**: the SH command code sent to the radio is the same in every mode, but the resulting bandwidth differs per mode. In SSB code 8 gives 1650 Hz; in CW the same code gives 400 Hz. The slider ends are rebuilt automatically when you change mode so they show the actual bandwidth the radio will use.
 
 - **SSB modes** (LSB, USB, DATA-L, DATA-U) show the wide SSB widths — from 300 Hz up to around 3.2 kHz (4 kHz on FTdx10/FT-710).
 - **CW, RTTY, and PSK modes** show the narrow widths — from 50 Hz up to 3 kHz or so.
 - **AM and FM modes** hide the IF Width key — the SH command does not apply in those modes (the radio uses fixed filters, or a separate narrow/wide mode toggle). Audio Filter and IF Shift stay available.
 
-The first entry ("Default") is the radio's mode-dependent default, which varies by the selected roofing filter. The current width is read from the radio on connect; selecting a new value sends it immediately.
+The current width is read from the radio on connect; selecting a new value sends it immediately.
 
 **Audio Filter button** — Opens the **Audio Filter** popout dialog for this VFO, where you can adjust the per-mode LCUT FREQ, LCUT SLOPE, HCUT FREQ and HCUT SLOPE. See [§5.18](#518-audio-filter-popout) for the full description. Replaces the IF Low Cut dropdown that was in this row in v2.3.9 and earlier — that control was sending a CAT command no current Yaesu HF radio actually supports, so it was a no-op. The new Audio Filter popout uses EX menu commands that the radio honours.
 
@@ -716,9 +716,7 @@ The first entry ("Default") is the radio's mode-dependent default, which varies 
 >
 > What the firmware *did* extend is **HCUT** — the audio high-cut filter that shapes audio inside the IF passband. HCUT now goes up to 4000 Hz (was 3000 Hz). You can now adjust HCUT directly from YWC's **Audio Filter** popout (§5.18) — no need to dig through the radio's own touch-screen menu.
 
-**IF Shift** — Shifts the passband centre ±1000 Hz in 20 Hz steps. Drag the slider or use the keyboard arrow keys. The current offset is shown next to the slider.
-
-**Zero button** — Resets IF Shift to 0 Hz instantly.
+**IF Shift** — Yaesu-style key. Left-click resets the shift to **0**; right-click opens a slider across ±1000 Hz in 20 Hz steps. The centre step is labelled **0**. The current offset is shown on the key. The orange LED lights when the shift is not 0.
 
 IF Shift is persisted and restored on startup.
 
