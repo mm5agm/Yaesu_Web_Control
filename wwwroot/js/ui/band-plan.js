@@ -426,9 +426,20 @@ if (globalThis.__ywcBandPlanOverlay) {
 // region's, so tuning below a band fell outside the envelope and matched
 // nothing at all.)
 //
-// Never use this to decide whether transmitting is permitted — a returned band
-// name means the opposite, that the frequency is NOT inside it. `edges` should
-// be BAND_EDGES resolved to the configured region; that is the authority.
+// Never use nearestBandForHz to decide whether transmitting is permitted — a
+// returned band name means the opposite, that the frequency is NOT inside it.
+// `edges` should be BAND_EDGES resolved to the configured region.
+
+/** Band name for an in-allocation frequency, or `"Unknown"` when outside every edge. */
+export function bandForHz(hz, edges) {
+    if (!hz || hz <= 0 || !Array.isArray(edges) || edges.length === 0) return null;
+    for (const band of edges) {
+        if (typeof band?.lo !== 'number' || typeof band?.hi !== 'number') continue;
+        if (hz >= band.lo && hz <= band.hi) return band.name;
+    }
+    return 'Unknown';
+}
+
 export function nearestBandForHz(hz, edges) {
     if (!hz || hz <= 0 || !Array.isArray(edges) || edges.length === 0) return null;
 

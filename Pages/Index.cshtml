@@ -1136,6 +1136,7 @@
                              scope column can sit in the leftover middle gap) -->
                         <div class="flex-shrink-0 d-flex flex-column gap-1">
                             <div id="bandButtonA" data-selected="@(Model.SelectedBandA ?? "")"></div>
+                            <div id="segmentButtonA" class="mt-1" data-selected=""></div>
                             <div class="d-flex align-items-center gap-2 mt-1">
                                 <div id="modeButtonA" data-selected="@(Model.RadioState.ModeA ?? "USB")"></div>
                                 @if (hasAntennaSelector)
@@ -1316,18 +1317,7 @@
                         </div>
                     </div>
 
-                    <!-- Segment selector -->
-                    <div class="d-flex align-items-center gap-1 mb-1 flex-wrap" style="margin-top: 2px;">
-                        <span class="fw-bold" style="font-size: 0.8rem; white-space: nowrap;">Segment</span>
-                        <select class="form-select form-select-sm segment-select" id="segmentSelectA"
-                                aria-label="VFO A band segment"
-                                title="VFO A band segment"
-                                onchange="window.onSegmentChange && window.onSegmentChange('A', this.value)">
-                            <option value="">--</option>
-                        </select>
-                    </div>
-
-                    <!-- Frequency + Roofing + AF Gain on one row -->
+                    <!-- Frequency + AF Gain on one row -->
                     <div class="vfo-freq-row d-flex align-items-center flex-wrap gap-2 mb-1" style="margin-top: -2px;">
                         <span id="freqA" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO A frequency" title="VFO A frequency" data-a11y-key="vfo.a.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
                         <span class="frequency-display digit-display">MHz</span>
@@ -1354,20 +1344,8 @@
 
                     <!-- IF Width and IF Shift -->
                     <div class="d-flex align-items-center gap-2 mb-0" style="flex-wrap: wrap;">
-                        <label class="mb-0 text-nowrap fw-bold">IF Width:</label>
-                        <span class="ctl-tip-wrap d-inline-block flex-shrink-0" id="ifWidthWrapA">
-                        <select class="form-select form-select-sm fw-bold flex-shrink-0" id="ifWidthSelectA"
-                                aria-label="VFO A IF width"
-                                title="VFO A IF width"
-                                style="width: auto;"
-                                onchange="window.radioControl.setIfWidth('A', this.value)">
-                            @foreach (var opt in ifWidthOptions)
-                            {
-                                bool isDefault = string.IsNullOrEmpty(Model.RadioState.IfWidthA) && opt.Value == ifWidthDefaultA;
-                                <option value="@opt.Value" selected="@(Model.RadioState.IfWidthA==opt.Value||isDefault ? "selected" : null)">@opt.Label</option>
-                            }
-                        </select>
-                        </span>
+                        <div id="ifWidthButtonA"
+                             data-selected="@(string.IsNullOrEmpty(Model.RadioState.IfWidthA) ? ifWidthDefaultA : Model.RadioState.IfWidthA)"></div>
                         <button type="button" class="btn btn-secondary btn-sm fw-bold flex-shrink-0 ms-2"
                                 id="audioFilterBtnA"
                                 aria-label="VFO A Audio Filter"
@@ -1461,6 +1439,7 @@
                              scope column can sit in the leftover middle gap) -->
                         <div class="flex-shrink-0 d-flex flex-column gap-1">
                             <div id="bandButtonB" data-selected="@(Model.SelectedBandB ?? "")"></div>
+                            <div id="segmentButtonB" class="mt-1" data-selected=""></div>
                             <div class="d-flex align-items-center gap-2 mt-1">
                                 <div id="modeButtonB" data-selected="@(Model.RadioState.ModeB ?? "USB")"></div>
                                 @if (hasAntennaSelector)
@@ -1606,18 +1585,7 @@
                         </div>
                     </div>
 
-                    <!-- Segment selector -->
-                    <div class="d-flex align-items-center gap-1 mb-1 flex-wrap" style="margin-top: 2px;">
-                        <span class="fw-bold" style="font-size: 0.8rem; white-space: nowrap;">Segment</span>
-                        <select class="form-select form-select-sm segment-select" id="segmentSelectB"
-                                aria-label="VFO B band segment"
-                                title="VFO B band segment"
-                                onchange="window.onSegmentChange && window.onSegmentChange('B', this.value)">
-                            <option value="">--</option>
-                        </select>
-                    </div>
-
-                    <!-- Frequency + Roofing + AF Gain on one row -->
+                    <!-- Frequency + AF Gain on one row -->
                     <div class="vfo-freq-row d-flex align-items-center flex-wrap gap-2 mb-1" style="margin-top: -2px;">
                         <span id="freqB" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO B frequency" title="VFO B frequency" data-a11y-key="vfo.b.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
                         <span class="frequency-display digit-display">MHz</span>
@@ -1644,20 +1612,8 @@
 
                     <!-- IF Width and IF Shift -->
                     <div class="d-flex align-items-center gap-2 mb-0" style="flex-wrap: wrap;">
-                        <label class="mb-0 text-nowrap fw-bold">IF Width:</label>
-                        <span class="ctl-tip-wrap d-inline-block flex-shrink-0" id="ifWidthWrapB">
-                        <select class="form-select form-select-sm fw-bold flex-shrink-0" id="ifWidthSelectB"
-                                aria-label="VFO B IF width"
-                                title="VFO B IF width"
-                                style="width: auto;"
-                                onchange="window.radioControl.setIfWidth('B', this.value)">
-                            @foreach (var opt in ifWidthOptions)
-                            {
-                                bool isDefault = string.IsNullOrEmpty(Model.RadioState.IfWidthB) && opt.Value == ifWidthDefaultB;
-                                <option value="@opt.Value" selected="@(Model.RadioState.IfWidthB==opt.Value||isDefault ? "selected" : null)">@opt.Label</option>
-                            }
-                        </select>
-                        </span>
+                        <div id="ifWidthButtonB"
+                             data-selected="@(string.IsNullOrEmpty(Model.RadioState.IfWidthB) ? ifWidthDefaultB : Model.RadioState.IfWidthB)"></div>
                         <button type="button" class="btn btn-secondary btn-sm fw-bold flex-shrink-0 ms-2"
                                 id="audioFilterBtnB"
                                 aria-label="VFO B Audio Filter"
@@ -2594,7 +2550,7 @@
         import { axisOffsetHz }         from "/js/sdr/if-out-offset.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import "/js/ui/if-width-tables.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, bandForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { loadLabels }           from "/js/ui/a11y-labels.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -2617,10 +2573,12 @@
         window.getBandSegments = getSegments;
         window.getBandSegmentForHz = segmentForHz;
 
-        // Out-of-band marker (site.js applyBandOutOfBand) needs the nearest band
-        // resolved to the operator's own region. Resolve BAND_EDGES inside the
-        // arrow so it picks up any loadBandPlanFromServer() overlay applied later.
+        // Band key + out-of-band marker (site.js) resolve against the operator's
+        // own region. Resolve BAND_EDGES inside the arrow so they pick up any
+        // loadBandPlanFromServer() overlay applied later.
         const _ywcRegion0 = '@Model.BandPlan';
+        window.bandForHz = (hz) =>
+            bandForHz(hz, BAND_EDGES[_ywcRegion0] || BAND_EDGES.Region1);
         window.nearestBandForHz = (hz) =>
             nearestBandForHz(hz, BAND_EDGES[_ywcRegion0] || BAND_EDGES.Region1);
 
@@ -3144,23 +3102,9 @@
                 window.updateContourSliderBounds('B');
             }
 
-            // ── Mode-aware IF Width dropdown ─────────────────────────────────
-            // Populate the IF Width dropdowns based on the current mode. The
-            // SH command codes are mode-dependent: same code = different Hz
-            // in CW vs SSB. The dropdown labels must reflect the current mode.
+            // Radio model for mode-aware IF Width labels (menus populated after
+            // initVfoKeyButtons creates the Yaesu keys).
             window._radioModel = '@Model.RadioModel';
-            if (window.IfWidth) {
-                window.IfWidth.rebuildIfWidthSelect(
-                    document.getElementById('ifWidthSelectA'),
-                    window._radioModel,
-                    '@Model.RadioState.ModeA'
-                );
-                window.IfWidth.rebuildIfWidthSelect(
-                    document.getElementById('ifWidthSelectB'),
-                    window._radioModel,
-                    '@Model.RadioState.ModeB'
-                );
-            }
             // IF Shift is greyed out in AM / FM, where the radio ignores it.
             if (window.updateIfShiftForMode) {
                 window.updateIfShiftForMode('A', '@Model.RadioState.ModeA');
@@ -5262,6 +5206,18 @@
         window.setNrLevel      = setNrLevel;
         initNrCycleButtons();
         initVfoKeyButtons();
+        // BandA/B SignalR may have arrived before the Yaesu keys existed;
+        // replay from last frequency (or cached band) now that widgets exist.
+        if (typeof window.syncBandButtonsFromFrequency === "function") {
+            window.syncBandButtonsFromFrequency();
+        }
+        // Mode-aware IF Width menus (keys exist now).
+        if (window.IfWidth && window._radioModel) {
+            window.IfWidth.rebuildIfWidthSelect(
+                window.ifWidthButtonA, window._radioModel, '@Model.RadioState.ModeA');
+            window.IfWidth.rebuildIfWidthSelect(
+                window.ifWidthButtonB, window._radioModel, '@Model.RadioState.ModeB');
+        }
         // Contour keys are created above; tighten their slider range to the
         // current passband (FilterScopePanel already exists by this point).
         if (typeof window.updateContourSliderBounds === "function") {

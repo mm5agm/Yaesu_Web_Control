@@ -3,7 +3,7 @@
 // The SH command takes the same code for all modes on each radio, but the
 // resulting bandwidth differs by mode. In SSB code 8 = 1650 Hz; in CW the
 // same code 8 = 400 Hz. This module provides the mode-aware lookup used by
-// both the dropdown rebuild logic in site.js and the Filter Function Display
+// both the IF Width Yaesu-key rebuild logic in site.js and the Filter Function Display
 // in filter-scope-panel.js.
 //
 // Data is sourced from Table 3 of each radio's official CAT manual.
@@ -136,74 +136,26 @@ function ifWidthOptionsFor(model, mode) {
         .sort((a, b) => parseInt(a.code) - parseInt(b.code));
 }
 
-// Tooltip for the IF Width select while it does not apply. The widths are
-// the FTdx101's (operating manual, WIDTH table); other models are not far
-// off, but the point of the message is "fixed", not the number.
-const FIXED_WIDTH_TITLE =
-    'IF Width does not apply in AM or FM - the radio uses a fixed filter ' +
-    '(FTdx101: 9 kHz AM, 6 kHz AM-N, 16 kHz FM, 9 kHz FM-N).';
-
-// Rebuild a <select> element with the options for the current mode.
+// Rebuild an IF Width Yaesu-key widget with the options for the current mode.
 // Preserves the currently selected code if it still exists in the new options.
-//
-// In AM / FM the select is disabled and shows a single "Fixed" entry. This
-// used to try to hide the whole row instead, and never managed it:
-// Bootstrap's .d-flex is display:flex !important, so the inline
-// display:none lost every time -- which was as well, because the same row
-// holds the Audio Filter button and IF Shift. The stale code from the
-// previous mode ("400 Hz" after CW) was left showing instead.
-function rebuildIfWidthSelect(selectEl, model, mode) {
-    if (!selectEl) return;
+// Hides only the key in AM/FM (Audio Filter / IF Shift stay visible).
+function rebuildIfWidthSelect(widget, model, mode) {
+    if (!widget || typeof widget.setOptions !== "function") return;
     const options = ifWidthOptionsFor(model, mode);
-    const wrap = selectEl.closest('.ctl-tip-wrap');
     if (!options) {
-        if (!selectEl.dataset.ifwLabel) selectEl.dataset.ifwLabel = selectEl.getAttribute('aria-label') || '';
-        if (!selectEl.dataset.ifwCode)  selectEl.dataset.ifwCode  = selectEl.value || '';
-        selectEl.innerHTML = '';
-        const optEl = document.createElement('option');
-        optEl.value = '';
-        optEl.textContent = 'Fixed';
-        selectEl.appendChild(optEl);
-        selectEl.disabled = true;
-        // The tooltip goes on the wrapper: a disabled control never fires the
-        // hover that would show its own title.
-        selectEl.removeAttribute('title');
-        selectEl.setAttribute('aria-label',
-            `${selectEl.dataset.ifwLabel || 'IF width'} - ${FIXED_WIDTH_TITLE}`);
-        if (wrap) {
-            wrap.title = FIXED_WIDTH_TITLE;
-            wrap.classList.add('is-inert');
-        }
+        widget.root.style.display = "none";
+        widget.setDisabled(true);
         return;
     }
-    if (selectEl.disabled) {
-        selectEl.disabled = false;
-        const label = selectEl.dataset.ifwLabel || '';
-        if (label) {
-            selectEl.setAttribute('aria-label', label);
-            selectEl.title = label;
-        }
-        if (wrap) {
-            wrap.removeAttribute('title');
-            wrap.classList.remove('is-inert');
-        }
-    }
+    widget.root.style.display = "";
+    widget.setDisabled(false);
 
-    // The code from before a spell in AM / FM, if we have one, otherwise
-    // whatever is selected now.
-    const previousCode = selectEl.dataset.ifwCode || selectEl.value;
-    delete selectEl.dataset.ifwCode;
-    selectEl.innerHTML = '';
-    for (const opt of options) {
-        const optEl = document.createElement('option');
-        optEl.value = opt.code;
-        optEl.textContent = opt.label;
-        selectEl.appendChild(optEl);
-    }
-    // Preserve the selected code if still valid.
-    if (Array.from(selectEl.options).some(o => o.value === previousCode)) {
-        selectEl.value = previousCode;
-    }
+    const previousCode = String(widget.getState().selectedId ?? "");
+    const menuOptions = options.map((o) => ({ id: o.code, label: o.label }));
+    const keep = menuOptions.some((o) => o.id === previousCode)
+        ? previousCode
+        : menuOptions[0]?.id ?? "";
+    widget.setOptions(menuOptions, { silent: true, selectedId: keep });
 }
 
 // Expose to non-module code (site.js loads as a regular script).

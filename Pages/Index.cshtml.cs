@@ -196,9 +196,15 @@ namespace Yaesu_Web_Control.Pages
             CtcssMode = _radioStateService.CtcssMode;
             CtcssTone = _radioStateService.CtcssTone;
 
+            // Band keys must match frequency, not a possibly-stale Band*
+            // property. Derive from Hz so SSR data-selected is correct even
+            // before SignalR reconnects.
+            SelectedBandA = _radioStateService.GetBandFromFrequency(_radioStateService.FrequencyA);
+            SelectedBandB = _radioStateService.GetBandFromFrequency(_radioStateService.FrequencyB);
+
             // VFO A (keep as is)
             State.vfoA.frequency = _radioStateService.FrequencyA;
-            State.vfoA.band = _radioStateService.BandA;
+            State.vfoA.band = SelectedBandA;
             State.vfoA.sMeter = _radioStateService.SMeterA ?? 0;
             State.vfoA.power = _radioStateService.Power;
             State.vfoA.mode = _radioStateService.ModeA ?? "";
@@ -206,7 +212,7 @@ namespace Yaesu_Web_Control.Pages
 
             // VFO B (remove power assignment)
             State.vfoB.frequency = _radioStateService.FrequencyB;
-            State.vfoB.band = _radioStateService.BandB;
+            State.vfoB.band = SelectedBandB;
             State.vfoB.sMeter = _radioStateService.SMeterB ?? 0;
             State.vfoB.mode = _radioStateService.ModeB ?? "";
             State.vfoB.antenna = _radioStateService.AntennaB ?? "";

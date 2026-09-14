@@ -63,11 +63,15 @@ namespace Yaesu_Web_Control.Services
             _logger.LogInformation("RadioStateService constructed with initial state: ModeA={ModeA}, ModeB={ModeB}, Power={Power}, AntennaA={AntennaA}, AntennaB={AntennaB}, MicGain={MicGain}",
                 _initialState.ModeA, _initialState.ModeB, _initialState.Power, _initialState.AntennaA, _initialState.AntennaB, _initialState.MicGain);
 
-            // Initialize properties from _initialState
+            // Initialize properties from _initialState.
+            // FrequencyA/B setters call UpdateBandFromFrequency(), which is the
+            // source of truth for BandA/B. Do NOT assign persisted BandA/B
+            // afterwards — a stale Band (e.g. "160m") would overwrite the
+            // frequency-derived value and leave the UI showing the wrong band
+            // until the next band-crossing QSY (dual-receiver radios have no
+            // FA/FB backstop poll to heal this on a quiet dial).
             FrequencyA = _initialState.FrequencyA;
             FrequencyB = _initialState.FrequencyB;
-            BandA = _initialState.BandA;
-            BandB = _initialState.BandB;
             ModeA = _initialState.ModeA ?? "";
             ModeB = _initialState.ModeB ?? "";
             AntennaA = _initialState.AntennaA ?? "";
