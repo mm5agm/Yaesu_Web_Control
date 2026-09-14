@@ -141,7 +141,11 @@ function ifWidthOptionsFor(model, mode) {
 // Hides only the key in AM/FM (Audio Filter / IF Shift stay visible).
 function rebuildIfWidthSelect(widget, model, mode) {
     if (!widget || typeof widget.setOptions !== "function") return;
-    const options = ifWidthOptionsFor(model, mode);
+    const resolved =
+        model ||
+        (typeof window.getConfiguredRadioModel === "function" && window.getConfiguredRadioModel()) ||
+        document.getElementById("vfoRow")?.dataset?.radioModel;
+    const options = ifWidthOptionsFor(resolved, mode);
     if (!options) {
         widget.root.style.display = "none";
         widget.setDisabled(true);
