@@ -1,5 +1,6 @@
 /**
- * Wire Yaesu-key widgets for Band, Mode, AGC, IPO, ATT, NB, Auto Notch, Man Notch.
+ * Wire Yaesu-key widgets for Band, Mode, Roofing, AGC, IPO, ATT, NB, Contour,
+ * APF, Auto Notch, Man Notch.
  */
 import {
     ToggleDropdownButton,
@@ -73,12 +74,32 @@ const ATT_OPTIONS = [
 ];
 
 /**
- * Menu-only key (Band / Mode): left-click opens menu; right-click disabled.
+ * Parse [{id,label},…] from data-options on a Yaesu-key root.
+ * @param {HTMLElement} root
+ * @returns {{ id: string, label: string }[]}
+ */
+function parseOptionsFromRoot(root) {
+    try {
+        const raw = root.dataset.options;
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .filter((o) => o && o.id != null && o.label != null)
+            .map((o) => ({ id: String(o.id), label: String(o.label) }));
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Menu-only key (Band / Mode / Roofing): left-click opens menu; right-click disabled.
  * @param {HTMLElement | null} root
- * @param {{ label: string, options: { id: string, label: string }[], a11yKey?: string, onSelect: (id: string) => void }} cfg
+ * @param {{ label: string, options: { id: string, label: string }[], menuClass?: string, a11yKey?: string, onSelect: (id: string) => void }} cfg
  */
 function initMenuOnlyButton(root, cfg) {
     if (!root) return null;
+    if (!cfg.options?.length) return null;
     const selectedId = root.dataset.selected || cfg.options[0].id;
     let lastId = selectedId;
 
@@ -148,7 +169,7 @@ function initOffToggleDropdown(root, cfg) {
 }
 
 /**
- * ToggleSlider (NB / Man Notch).
+ * ToggleSlider (NB / Contour / APF / Man Notch).
  * @param {HTMLElement | null} root
  * @param {{
  *   label: string,
@@ -164,9 +185,13 @@ function initOffToggleDropdown(root, cfg) {
 function initToggleSlider(root, cfg) {
     if (!root) return null;
     const enabled = root.dataset.enabled === "1" || root.dataset.enabled === "true";
+    const min = Number(root.dataset.min ?? cfg.min);
+    const max = Number(root.dataset.max ?? cfg.max);
+    const step = Number(root.dataset.step ?? cfg.step ?? 1);
+    const parsedValue = parseInt(root.dataset.value, 10);
     const value = Math.min(
-        cfg.max,
-        Math.max(cfg.min, parseInt(root.dataset.value, 10) || cfg.min)
+        max,
+        Math.max(min, Number.isNaN(parsedValue) ? min : parsedValue)
     );
 
     let lastEnabled = enabled;
@@ -176,9 +201,9 @@ function initToggleSlider(root, cfg) {
 
     const widget = new ToggleSliderButton(root, {
         label: cfg.label,
-        min: cfg.min,
-        max: cfg.max,
-        step: cfg.step ?? 1,
+        min,
+        max,
+        step,
         valueSuffix: cfg.valueSuffix ?? "",
         value,
         enabled,
@@ -258,9 +283,32 @@ function initModeButton(vfo) {
     return initMenuOnlyButton(document.getElementById(`modeButton${vfo}`), {
         label: "Mode",
         options: MODE_OPTIONS,
+        menuClass: "toggle-dd__menu--grid",
         a11yKey: `vfo.${vfo.toLowerCase()}.mode`,
         onSelect: (id) => {
             if (typeof window.setMode === "function") window.setMode(vfo, id);
+        },
+    });
+}
+
+function initRoofingButton(vfo) {
+    const root = document.getElementById(`roofingButton${vfo}`);
+    if (!root) return null;
+    const options = parseOptionsFromRoot(root);
+    if (!options.length) return null;
+    // Prefer the server-selected code when it is in the fitted list.
+    if (root.dataset.selected && !options.some((o) => o.id === root.dataset.selected)) {
+        root.dataset.selected = options[0].id;
+    }
+    return initMenuOnlyButton(root, {
+        label: "Roofing",
+        options,
+        // Single-column menu (no toggle-dd__menu--grid).
+        a11yKey: `controls.roofing${vfo}`,
+        onSelect: (id) => {
+            if (window.radioControl?.setRoofingFilter) {
+                window.radioControl.setRoofingFilter(vfo, id);
+            }
         },
     });
 }
@@ -388,28 +436,68 @@ function initManNotchButton(vfo) {
     });
 }
 
+function initContourButton(vfo) {
+    return initToggleSlider(document.getElementById(`contourButton${vfo}`), {
+        label: "Contour",
+        min: 100,
+        max: 3200,
+        step: 10,
+        valueSuffix: " Hz",
+        a11yKey: `controls.contour${vfo}`,
+        onEnabled: (enabled) => {
+            if (typeof window.setContourOn === "function") window.setContourOn(vfo, enabled);
+        },
+        onValue: (value) => {
+            if (typeof window.setContourFreq === "function") window.setContourFreq(vfo, value);
+        },
+    });
+}
+
+function initApfButton(vfo) {
+    return initToggleSlider(document.getElementById(`apfButton${vfo}`), {
+        label: "APF",
+        min: -250,
+        max: 250,
+        step: 10,
+        valueSuffix: " Hz",
+        a11yKey: `controls.apf${vfo}`,
+        onEnabled: (enabled) => {
+            if (typeof window.setApfOn === "function") window.setApfOn(vfo, enabled);
+        },
+        onValue: (value) => {
+            if (typeof window.setApfFreq === "function") window.setApfFreq(vfo, value);
+        },
+    });
+}
+
 export function initVfoKeyButtons() {
     const result = {};
     for (const vfo of ["A", "B"]) {
         const band = initBandButton(vfo);
         const mode = initModeButton(vfo);
+        const roofing = initRoofingButton(vfo);
         const agc = initAgcButton(vfo);
         const ipo = initIpoButton(vfo);
         const att = initAttButton(vfo);
         const nb = initNbButton(vfo);
         const autoNotch = initAutoNotchButton(vfo);
         const manNotch = initManNotchButton(vfo);
+        const contour = initContourButton(vfo);
+        const apf = initApfButton(vfo);
 
         if (band) window[`bandButton${vfo}`] = band;
         if (mode) window[`modeButton${vfo}`] = mode;
+        if (roofing) window[`roofingButton${vfo}`] = roofing;
         if (agc) window[`agcButton${vfo}`] = agc;
         if (ipo) window[`ipoButton${vfo}`] = ipo;
         if (att) window[`attButton${vfo}`] = att;
         if (nb) window[`nbButton${vfo}`] = nb;
         if (autoNotch) window[`autoNotchButton${vfo}`] = autoNotch;
         if (manNotch) window[`manNotchButton${vfo}`] = manNotch;
+        if (contour) window[`contourButton${vfo}`] = contour;
+        if (apf) window[`apfButton${vfo}`] = apf;
 
-        result[vfo] = { band, mode, agc, ipo, att, nb, autoNotch, manNotch };
+        result[vfo] = { band, mode, roofing, agc, ipo, att, nb, autoNotch, manNotch, contour, apf };
     }
     return result;
 }
