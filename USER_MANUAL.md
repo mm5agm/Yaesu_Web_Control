@@ -655,9 +655,9 @@ All keys have accessible labels for screen readers.
 
 ### 5.7 Receiver Controls
 
-Each VFO panel has a row of dropdowns for the main receiver settings. All are two-way — if you change a setting on the radio's front panel, the dropdown updates automatically.
+Each VFO panel has Yaesu-style keys and dropdowns for the main receiver settings. All are two-way — if you change a setting on the radio's front panel, the control updates automatically.
 
-**Mode** — Select the operating mode:
+**Mode** — Yaesu-style key. Click to open the mode list:
 LSB, USB, CW-U, CW-L, FM, FM-N, AM, AM-N, RTTY-L, RTTY-U, DATA-L, DATA-U, DATA-FM, DATA-FM-N, PSK
 
 **Antenna** — Select the antenna connector: ANT 1, ANT 2, ANT 3.
@@ -668,25 +668,23 @@ Existing installs auto-populate empty slots on the next startup with whatever th
 
 **Roofing Filter** — Select the roofing filter bandwidth: 12 kHz, 3 kHz, 1.2 kHz, 600 Hz, 300 Hz
 
-**Control column** (the two-column grid of dropdowns to the right):
+**Control column** (the two-column grid of Yaesu-style keys to the right):
 
 | Control | Options |
 |---------|---------|
-| AGC | OFF, FAST, MID, SLOW, AUTO |
-| IPO/AMP | IPO, AMP1, AMP2 |
-| ATT | OFF, 6 dB, 12 dB, 18 dB |
-| NR | OFF, NR1, NR2 |
-| NB | OFF, ON |
-| NB Level | 1–20 (noise blanker depth; only relevant when NB is ON) |
-| Auto Notch | OFF, ON |
-| Man Notch | OFF, ON |
-| Notch Hz | Slider 10–3200 Hz (only relevant when Man Notch is ON) |
+| AGC | Yaesu-style key. Left-click toggles OFF ↔ last speed. Right-click opens OFF / FAST / MID / SLOW / AUTO. |
+| IPO/AMP | Yaesu-style key. Left-click toggles IPO ↔ last AMP. Right-click opens IPO / AMP1 / AMP2. |
+| ATT | Yaesu-style key. Left-click toggles OFF ↔ last attenuation. Right-click opens OFF / 6 dB / 12 dB / 18 dB. |
+| NR / DNR | Yaesu-style key. Left-click cycles OFF → NR1 → NR2 → OFF (FTdx101MP/D, FTDX3000, FTDX5000) or OFF → DNR → OFF (FTdx10 / FT-710). Right-click opens a 1–15 slider for NR depth / DNR algorithm. |
+| NB | Yaesu-style key. Left-click toggles ON/OFF. Right-click opens a 1–20 slider for noise blanker depth. |
+| Auto Notch | Yaesu-style key. Left-click toggles ON/OFF. |
+| Notch | Yaesu-style key. Left-click toggles manual notch ON/OFF. Right-click opens a 10–3200 Hz frequency slider. |
 | RF Gain | Slider 0–255. Controls the RF preamplifier gain. At 255 (maximum) sensitivity is highest; reducing RF Gain is useful when a strong nearby signal is causing overload that AGC and IPO cannot handle. |
 | Squelch | Slider 0–255. Only shown when the VFO is in FM or FM-N mode. 0 = squelch fully open (hear everything); higher values cut off weaker signals. |
 
 All of these settings are read from the radio when the app connects.
 
-**Filter Function Display** — A compact real-time display positioned alongside the band buttons, between the band button column and the receiver controls column. It shows the shape of the active DSP filter passband, matching the style of the filter scope on the FTdx101MP front panel.
+**Filter Function Display** — A compact real-time display positioned alongside the Band key, between the band/mode column and the receiver controls column. It shows the shape of the active DSP filter passband, matching the style of the filter scope on the FTdx101MP front panel.
 
 - The **red-bordered trapezoid** represents the active **DSP filter passband** (the IF Width setting). The sloped sides reflect the filter roll-off characteristic at the passband edges.
 - **Green animated bars** inside the trapezoid represent signals passing through the filter. No signals are shown outside the passband, making it immediately clear which audio frequencies are being received.
@@ -728,7 +726,7 @@ IF Shift is persisted and restored on startup.
 
 ### 5.9 Band and Segment Selection
 
-**Band buttons** — Click a band button (160m, 80m, 40m, etc.) to switch the VFO to that band. The radio tunes to the last-used frequency on that band. You can also navigate between band buttons with the keyboard: **Tab** moves focus into the band group, then the **left/right arrow keys** move between bands and activate the selected one immediately.
+**Band key** — Click the Band Yaesu-style key to open a grid of bands (160m, 80m, 40m, etc.). Selecting a band switches the VFO to that band; the radio tunes to the last-used frequency on that band. Right-click is unused on this key (it only opens the menu on left-click).
 
 Available bands depend on your band plan setting:
 
@@ -762,13 +760,13 @@ The last segment you used on each band is remembered, so when you return to a ba
 
 **60m — Japan:** No 60m secondary allocation; the 60m band does not appear for the Japan plan.
 
-**Quick Memory Bank (Store / Recall / V/M)** — on their own row below the band buttons, labelled **QMB**, are three Quick Memory Bank buttons. The QMB is the radio's own scratch memory stack, separate from the labelled memory channels in the Memory Panel (§5.15) — think of it as a quick "put this frequency somewhere I can jump back to" without naming or saving anything.
+**Quick Memory Bank (Store / Recall / V/M)** — on their own row below the filter scope (VFO A), labelled **QMB**, are three Quick Memory Bank buttons. The QMB is the radio's own scratch memory stack, separate from the labelled memory channels in the Memory Panel (§5.15) — think of it as a quick "put this frequency somewhere I can jump back to" without naming or saving anything.
 
 - **Store** writes the current VFO frequency and mode to the next QMB slot (the same as pressing and holding the front-panel **[QMB]** key).
 - **Recall** steps into the QMB and moves to a stored slot; the radio's display shows **QMB**. Pressing Recall again steps to the next stored slot, exactly like short-pressing the front-panel **[QMB]** key.
 - **V/M** leaves QMB mode and returns to normal VFO tuning (the front-panel **[V/M]** key).
 
-![The QMB row on the main control panel — the three buttons Store, Recall and V/M sit on their own row labelled QMB, directly below the band buttons and above the Mode and antenna selectors](pictures/QMB_Button_Placement.png)
+![The QMB row on the main control panel — the three buttons Store, Recall and V/M sit on their own row labelled QMB under the filter scope](pictures/QMB_Button_Placement.png)
 
 Recall is *modal* — once the radio is in QMB mode it stays there until you press **V/M**, so the V/M button is how you get back out without touching the rig. This matters most if you operate entirely from the browser. The radio sends no confirmation back over CAT for these three actions, so the radio's own display (showing **QMB** or not) is the thing to watch. The QMB buttons only appear for radio models that support it.
 
@@ -2293,8 +2291,7 @@ On touch devices, tap a digit in the frequency display to select it (it highligh
 | **Esc** | Exit full-screen mode |
 | Mouse wheel (on spectrum) | Tune VFO A up or down in 1 kHz steps |
 | Click on spectrum | Tune VFO A to the clicked frequency |
-| **Tab** (in band buttons) | Move focus into the band button group |
-| **← / →** (in band buttons) | Move to the previous/next band and switch immediately |
+| Band / Mode key | Click to open the option menu; choose a band or mode |
 | Numeric entry button (**⑁**) next to MHz | Open the on-screen frequency keyboard for that VFO |
 | **0–9** (frequency keyboard open) | Type the digit at the cursor position |
 | **← →** (frequency keyboard open) | Move the cursor left or right |
@@ -2694,8 +2691,8 @@ All interactive controls in the app have accessible labels that screen readers a
 
 | Element | What is announced |
 |---------|------------------|
-| Band buttons | Full band name — e.g., "20 metres, radio button" |
-| Band button group | Announced as a radio group; arrow keys move between bands |
+| Band key | Current band — e.g., "Band: 20m" — click to open the band menu |
+| Mode key | Current mode — e.g., "Mode: USB" — click to open the mode menu |
 | Meter gauges | Meter name and current reading — e.g., "S meter, VFO A: S5", "Amplifier supply voltage meter: 50.2 V" |
 | Frequency display | "VFO A frequency" with current value in MHz |
 | Sliders, dropdowns, buttons | Their purpose — e.g., "Transmit power", "VFO A mode" |
@@ -2740,7 +2737,7 @@ When the app loads, NVDA does not automatically read through the page. Two desig
 - The main control panel uses `role="application"`, which tells NVDA to stay in forms/interaction mode rather than reading the page from top to bottom in browse mode.
 - The navigation bar at the top of the page is hidden from the accessibility tree so it is not announced when the page loads or when you return to the tab.
 
-**Band navigation:** When Tab moves focus into a band button group, NVDA announces *"Band — use arrow keys to change band, group"*. Press the **left/right arrow keys** to move between bands. Each band change is announced immediately (e.g., "20 metres, radio button, checked").
+**Band / Mode navigation:** Tab to the Band or Mode Yaesu-style key and press Enter or Space to open its menu. Arrow keys move between menu items; Enter selects. Escape closes the menu.
 
 > **Note:** NVDA reads abbreviations aloud. "SWR" is read as three separate letters ("S W R"). "PA" may be expanded to "Power Amplifier". The default labels in this app are written to avoid ambiguous abbreviations.
 
@@ -2762,7 +2759,7 @@ Once running, Narrator reads aloud the element that has keyboard focus. To navig
 
 ### 16.6 Customising Screen Reader Labels
 
-Every control in the app — band buttons, meters, VFO controls, the on-screen frequency keyboard, spectrum span buttons, and the navigation bar home link — has a text label that screen readers announce. You can change any of these labels through the built-in **Accessibility Labels** editor.
+Every control in the app — Band/Mode keys, meters, VFO controls, the on-screen frequency keyboard, spectrum span buttons, and the navigation bar home link — has a text label that screen readers announce. You can change any of these labels through the built-in **Accessibility Labels** editor.
 
 **Editing labels:**
 
@@ -2779,9 +2776,9 @@ To restore all labels to their factory defaults, click **Reset to Defaults** at 
 
 | Section | Controls covered |
 |---------|-----------------|
-| Band Buttons | Band buttons — 160m through 4m |
+| Band Keys | Legacy per-band label keys (160m through 4m) |
 | Meters | All meter gauges (S-meter, SWR, Power, etc.) |
-| VFO Controls | Frequency displays, up/down buttons, mode selector |
+| VFO Controls | Frequency displays, up/down buttons, Band and Mode keys |
 | Radio Controls | AGC, IPO/AMP, ATT, NR, NB, Notch, Roofing filter, AF gain, IF width, IF shift, TX power, Mic gain |
 | Frequency Keyboard | On-screen frequency keyboard — all buttons including digits 0–9 |
 | Spectrum Display | Spectrum canvas and the span buttons (1k to 2M) for each VFO |

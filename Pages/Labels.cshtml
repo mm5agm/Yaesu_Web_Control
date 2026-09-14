@@ -5,9 +5,9 @@
 
     var sectionMeta = new (string Key, string Title, string Description, string HeaderClass)[]
     {
-        ("bands",    "Band Buttons",        "Announced when a band button is activated",      "bg-success bg-opacity-10"),
+        ("bands",    "Band Keys",           "Announced when the Band key or a band menu item is activated", "bg-success bg-opacity-10"),
         ("meters",   "Meters",              "Signal and power meter displays",                "bg-primary bg-opacity-10"),
-        ("vfo",      "VFO Controls",        "Frequency displays and up/down buttons",         "bg-info bg-opacity-10"),
+        ("vfo",      "VFO Controls",        "Frequency displays, mode/band keys, and up/down buttons", "bg-info bg-opacity-10"),
         ("keyboard", "Frequency Keyboard",  "On-screen frequency keyboard buttons",           "bg-warning bg-opacity-10"),
         ("controls",  "Radio Controls",      "Sliders, toggles, and selectors",                "bg-secondary bg-opacity-10"),
         ("spectrum",  "Spectrum Display",   "SDR spectrum panel and span buttons",            "bg-dark bg-opacity-10"),
@@ -49,8 +49,10 @@
         ["vfo.a.down"]      = "VFO A — frequency down button",
         ["vfo.b.up"]        = "VFO B — frequency up button",
         ["vfo.b.down"]      = "VFO B — frequency down button",
-        ["vfo.a.mode"]      = "VFO A — mode selector",
-        ["vfo.b.mode"]      = "VFO B — mode selector",
+        ["vfo.a.mode"]      = "VFO A — mode key",
+        ["vfo.b.mode"]      = "VFO B — mode key",
+        ["vfo.a.band"]      = "VFO A — band key",
+        ["vfo.b.band"]      = "VFO B — band key",
         // Frequency keyboard
         ["keyboard.openA"]       = "Open keyboard — VFO A",
         ["keyboard.openB"]       = "Open keyboard — VFO B",
