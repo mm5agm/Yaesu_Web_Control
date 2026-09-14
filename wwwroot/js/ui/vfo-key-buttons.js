@@ -6,6 +6,7 @@ import {
     ToggleDropdownButton,
     ToggleSliderButton,
     ToggleButton,
+    CycleContextButton,
 } from "/js/ui/toggle-dropdown-button.js";
 
 function debounce(fn, ms) {
@@ -93,14 +94,21 @@ function parseOptionsFromRoot(root) {
 }
 
 /**
- * Menu-only key (Band / Mode / Roofing): left-click opens menu; right-click disabled.
+ * Menu-only key (Band / Segment / Mode / Roofing): left-click opens menu; right-click disabled.
  * @param {HTMLElement | null} root
  * @param {{ label: string, options: { id: string, label: string }[], menuClass?: string, a11yKey?: string, onSelect: (id: string) => void }} cfg
  */
 function initMenuOnlyButton(root, cfg) {
     if (!root) return null;
     if (!cfg.options?.length) return null;
-    const selectedId = root.dataset.selected || cfg.options[0].id;
+    // Allow empty-string selectedId only when explicitly provided (Segment "--").
+    // An empty data-selected on Band would otherwise leave the face blank until
+    // SignalR arrives — fall back to the first option as a temporary stand-in.
+    const rawSelected = root.dataset.selected;
+    const selectedId =
+        rawSelected !== undefined && rawSelected !== ""
+            ? rawSelected
+            : (cfg.allowEmptySelected ? "" : cfg.options[0].id);
     let lastId = selectedId;
 
     const widget = new ToggleDropdownButton(root, {
@@ -269,12 +277,25 @@ function initBandButton(vfo) {
         a11yKey: `vfo.${vfo.toLowerCase()}.band`,
         onSelect: (id) => {
             if (window.radioControl?.setBand) window.radioControl.setBand(vfo, id);
-            // Segment dropdown used to refresh from the band-radio change
+            // Segment key used to refresh from the band-radio change
             // listener; drive it from the menu pick so it still updates before
             // the SignalR Band* round-trip.
             if (typeof window.populateSegmentSelect === "function" && window.bandPlanData) {
                 window.populateSegmentSelect(vfo, id);
             }
+        },
+    });
+}
+
+function initSegmentButton(vfo) {
+    return initMenuOnlyButton(document.getElementById(`segmentButton${vfo}`), {
+        label: "Segment",
+        options: [{ id: "", label: "--" }],
+        allowEmptySelected: true,
+        // Single-column menu (no toggle-dd__menu--grid).
+        a11yKey: `vfo.${vfo.toLowerCase()}.segment`,
+        onSelect: (id) => {
+            if (typeof window.onSegmentChange === "function") window.onSegmentChange(vfo, id);
         },
     });
 }
@@ -311,6 +332,43 @@ function initRoofingButton(vfo) {
             }
         },
     });
+}
+
+function initIfWidthButton(vfo) {
+    const root = document.getElementById(`ifWidthButton${vfo}`);
+    if (!root) return null;
+    const selectedId = root.dataset.selected || "0";
+    let lastId = selectedId;
+
+    const widget = new CycleContextButton(root, {
+        label: "IF Width",
+        options: [{ id: selectedId, label: "…" }],
+        selectedId,
+        linkSliderToOptions: true,
+        context: { type: "slider" },
+        a11yKey: `controls.ifWidth${vfo}`,
+        onChange: (state) => {
+            if (state.selectedId !== lastId) {
+                lastId = state.selectedId;
+                if (window.radioControl?.setIfWidth) {
+                    window.radioControl.setIfWidth(vfo, state.selectedId);
+                }
+            }
+        },
+    });
+
+    const originalSetState = widget.setState.bind(widget);
+    widget.setState = (partial = {}, opts = {}) => {
+        originalSetState(partial, opts);
+        lastId = widget.getState().selectedId;
+    };
+    const originalSetOptions = widget.setOptions.bind(widget);
+    widget.setOptions = (options, opts = {}) => {
+        originalSetOptions(options, opts);
+        lastId = widget.getState().selectedId;
+    };
+
+    return widget;
 }
 
 function initAgcButton(vfo) {
@@ -474,8 +532,10 @@ export function initVfoKeyButtons() {
     const result = {};
     for (const vfo of ["A", "B"]) {
         const band = initBandButton(vfo);
+        const segment = initSegmentButton(vfo);
         const mode = initModeButton(vfo);
         const roofing = initRoofingButton(vfo);
+        const ifWidth = initIfWidthButton(vfo);
         const agc = initAgcButton(vfo);
         const ipo = initIpoButton(vfo);
         const att = initAttButton(vfo);
@@ -486,8 +546,10 @@ export function initVfoKeyButtons() {
         const apf = initApfButton(vfo);
 
         if (band) window[`bandButton${vfo}`] = band;
+        if (segment) window[`segmentButton${vfo}`] = segment;
         if (mode) window[`modeButton${vfo}`] = mode;
         if (roofing) window[`roofingButton${vfo}`] = roofing;
+        if (ifWidth) window[`ifWidthButton${vfo}`] = ifWidth;
         if (agc) window[`agcButton${vfo}`] = agc;
         if (ipo) window[`ipoButton${vfo}`] = ipo;
         if (att) window[`attButton${vfo}`] = att;
@@ -497,7 +559,21 @@ export function initVfoKeyButtons() {
         if (contour) window[`contourButton${vfo}`] = contour;
         if (apf) window[`apfButton${vfo}`] = apf;
 
-        result[vfo] = { band, mode, roofing, agc, ipo, att, nb, autoNotch, manNotch, contour, apf };
+        result[vfo] = {
+            band,
+            segment,
+            mode,
+            roofing,
+            ifWidth,
+            agc,
+            ipo,
+            att,
+            nb,
+            autoNotch,
+            manNotch,
+            contour,
+            apf,
+        };
     }
     return result;
 }

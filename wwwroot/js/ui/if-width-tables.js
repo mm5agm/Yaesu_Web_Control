@@ -3,7 +3,7 @@
 // The SH command takes the same code for all modes on each radio, but the
 // resulting bandwidth differs by mode. In SSB code 8 = 1650 Hz; in CW the
 // same code 8 = 400 Hz. This module provides the mode-aware lookup used by
-// both the dropdown rebuild logic in site.js and the Filter Function Display
+// both the IF Width Yaesu-key rebuild logic in site.js and the Filter Function Display
 // in filter-scope-panel.js.
 //
 // Data is sourced from Table 3 of each radio's official CAT manual.
@@ -136,32 +136,26 @@ function ifWidthOptionsFor(model, mode) {
         .sort((a, b) => parseInt(a.code) - parseInt(b.code));
 }
 
-// Rebuild a <select> element with the options for the current mode.
+// Rebuild an IF Width Yaesu-key widget with the options for the current mode.
 // Preserves the currently selected code if it still exists in the new options.
-function rebuildIfWidthSelect(selectEl, model, mode) {
-    if (!selectEl) return;
+// Hides only the key in AM/FM (Audio Filter / IF Shift stay visible).
+function rebuildIfWidthSelect(widget, model, mode) {
+    if (!widget || typeof widget.setOptions !== "function") return;
     const options = ifWidthOptionsFor(model, mode);
-    // Hide the entire row when the dropdown does not apply (AM/FM modes).
-    // The row contains both the label and the select — walk up to find it.
-    const row = selectEl.closest('.d-flex');
     if (!options) {
-        if (row) row.style.display = 'none';
+        widget.root.style.display = "none";
+        widget.setDisabled(true);
         return;
     }
-    if (row) row.style.display = '';
+    widget.root.style.display = "";
+    widget.setDisabled(false);
 
-    const previousCode = selectEl.value;
-    selectEl.innerHTML = '';
-    for (const opt of options) {
-        const optEl = document.createElement('option');
-        optEl.value = opt.code;
-        optEl.textContent = opt.label;
-        selectEl.appendChild(optEl);
-    }
-    // Preserve the selected code if still valid.
-    if (Array.from(selectEl.options).some(o => o.value === previousCode)) {
-        selectEl.value = previousCode;
-    }
+    const previousCode = String(widget.getState().selectedId ?? "");
+    const menuOptions = options.map((o) => ({ id: o.code, label: o.label }));
+    const keep = menuOptions.some((o) => o.id === previousCode)
+        ? previousCode
+        : menuOptions[0]?.id ?? "";
+    widget.setOptions(menuOptions, { silent: true, selectedId: keep });
 }
 
 // Expose to non-module code (site.js loads as a regular script).

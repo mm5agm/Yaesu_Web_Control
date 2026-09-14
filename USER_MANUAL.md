@@ -700,15 +700,15 @@ All of these settings are read from the radio when the app connects.
 
 ### 5.8 IF Width, Audio Filter, IF Shift, and AF Gain
 
-**IF Width** — Sets the DSP filter bandwidth.
+**IF Width** — Yaesu-style key. Left-click cycles bandwidths; right-click opens a slider across the same discrete widths (mode-aware labels).
 
-The IF Width dropdown is **mode-aware**: the SH command code sent to the radio is the same in every mode, but the resulting bandwidth differs per mode. In SSB code 8 gives 1650 Hz; in CW the same code gives 400 Hz. The dropdown labels are rebuilt automatically when you change mode so they show the actual bandwidth the radio will use.
+The IF Width key is **mode-aware**: the SH command code sent to the radio is the same in every mode, but the resulting bandwidth differs per mode. In SSB code 8 gives 1650 Hz; in CW the same code gives 400 Hz. The cycle list and slider ends are rebuilt automatically when you change mode so they show the actual bandwidth the radio will use.
 
 - **SSB modes** (LSB, USB, DATA-L, DATA-U) show the wide SSB widths — from 300 Hz up to around 3.2 kHz (4 kHz on FTdx10/FT-710).
 - **CW, RTTY, and PSK modes** show the narrow widths — from 50 Hz up to 3 kHz or so.
-- **AM and FM modes** hide the IF Width dropdown — the SH command does not apply in those modes (the radio uses fixed filters, or a separate narrow/wide mode toggle).
+- **AM and FM modes** hide the IF Width key — the SH command does not apply in those modes (the radio uses fixed filters, or a separate narrow/wide mode toggle). Audio Filter and IF Shift stay available.
 
-The first entry in the dropdown ("Default") is the radio's mode-dependent default, which varies by the selected roofing filter. The current width is read from the radio on connect; selecting a new value sends it immediately.
+The first entry ("Default") is the radio's mode-dependent default, which varies by the selected roofing filter. The current width is read from the radio on connect; selecting a new value sends it immediately.
 
 **Audio Filter button** — Opens the **Audio Filter** popout dialog for this VFO, where you can adjust the per-mode LCUT FREQ, LCUT SLOPE, HCUT FREQ and HCUT SLOPE. See [§5.18](#518-audio-filter-popout) for the full description. Replaces the IF Low Cut dropdown that was in this row in v2.3.9 and earlier — that control was sending a CAT command no current Yaesu HF radio actually supports, so it was a no-op. The new Audio Filter popout uses EX menu commands that the radio honours.
 
@@ -741,7 +741,7 @@ Available bands depend on your band plan setting:
 
 Region 1 is the only plan that includes the 4m (70 MHz) band. Japan has no 60m secondary allocation.
 
-**Segment dropdown** — After selecting a band, a dropdown appears above the frequency display showing common operating segments for that band. Select a segment to jump directly to its standard frequency and set the appropriate mode:
+**Segment** — Yaesu-style key under Band. Click to open a single-column list of common operating segments for the current band. Select a segment to jump directly to its standard frequency and set the appropriate mode:
 
 | Segment | Example (20m) | Mode set |
 |---------|--------------|---------|
@@ -750,9 +750,9 @@ Region 1 is the only plan that includes the 4m (70 MHz) band. Japan has no 60m s
 | SSB | 14.150 MHz | USB |
 | RTTY | 14.080 MHz | RTTY-U |
 
-The last segment you used on each band is remembered, so when you return to a band the dropdown re-selects your previous segment.
+The last segment you used on each band is remembered, so when you return to a band the key re-selects your previous segment. Out of band, the key shows **OOB** in red and is disabled.
 
-**Auto-sync to current frequency** — the Segment dropdown also follows your actual tuning. When you change frequency by any means (clicking the spectrum, turning the radio's front-panel knob, typing on the on-screen frequency keyboard), the dropdown updates to show the segment that contains your new frequency. If you tune into a gap between segments (e.g. 14.150 — between FT8 at 14.074 and SSB at 14.225 on 20m), the dropdown shows the closest segment at or below your frequency. This keeps the dropdown's display honest — it always tells you where you actually are, not where you last clicked.
+**Auto-sync to current frequency** — the Segment key also follows your actual tuning. When you change frequency by any means (clicking the spectrum, turning the radio's front-panel knob, typing on the on-screen frequency keyboard), the key updates to show the segment that contains your new frequency. If you tune into a gap between segments (e.g. 14.150 — between FT8 at 14.074 and SSB at 14.225 on 20m), the key shows the closest segment at or below your frequency. This keeps the display honest — it always tells you where you actually are, not where you last clicked.
 
 **Per-band IF and mode memory** — When you switch away from a band the app saves the current IF Width, IF Shift, and Mode for that band. When you return to the band those settings are automatically restored on the radio. This means, for example, you can have a 500 Hz CW filter on 40m and a 2.4 kHz SSB filter on 20m and the app will switch between them as you change bands. Settings are saved per-VFO (VFO A and VFO B are independent) and persist between sessions.
 

@@ -1227,7 +1227,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window._updateSquelchVisibility === 'function') window._updateSquelchVisibility('A', update.value);
         if (window.IfWidth && window._radioModel) {
             window.IfWidth.rebuildIfWidthSelect(
-                document.getElementById('ifWidthSelectA'), window._radioModel, update.value);
+                window.ifWidthButtonA, window._radioModel, update.value);
         }
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeA', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('A', update.value);
@@ -1241,7 +1241,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window._updateSquelchVisibility === 'function') window._updateSquelchVisibility('B', update.value);
         if (window.IfWidth && window._radioModel) {
             window.IfWidth.rebuildIfWidthSelect(
-                document.getElementById('ifWidthSelectB'), window._radioModel, update.value);
+                window.ifWidthButtonB, window._radioModel, update.value);
         }
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeB', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('B', update.value);
@@ -1291,11 +1291,20 @@ connection.on("RadioStateUpdate", function (update) {
         if (window.radioControl && window.radioControl._state) {
             window.radioControl._state.lastBackendFreq.A = update.value;
         }
-        // BandA only broadcasts when the band *changes*, so an operator who is
-        // already out of band at page load would never get the red marker from
-        // updateBandButton alone. Re-apply it whenever the frequency moves.
+        // Keep the Band key aligned with Hz. BandA only broadcasts when the
+        // band *name* changes, and a SignalR BandA that arrived before the
+        // Yaesu key existed is easy to miss — derive from frequency whenever
+        // it moves (also heals OOB / stale-persisted band mismatches).
         lastVfoHz.A = update.value;
-        try { applyBandOutOfBand('A'); } catch (e) { console.error('applyBandOutOfBand A error:', e); }
+        try {
+            if (typeof window.bandForHz === 'function') {
+                const derived = window.bandForHz(update.value);
+                if (derived) updateBandButton('A', derived);
+                else applyBandOutOfBand('A');
+            } else {
+                applyBandOutOfBand('A');
+            }
+        } catch (e) { console.error('band sync A error:', e); }
         try { window.updateFrequencyDisplay('A', update.value); } catch (e) { console.error('updateFrequencyDisplay A error:', e); }
         // Clear editing mode once the radio echoes back our sent frequency.
         if (window.radioControl && window.radioControl._state) {
@@ -1316,7 +1325,15 @@ connection.on("RadioStateUpdate", function (update) {
             window.radioControl._state.lastBackendFreq.B = update.value;
         }
         lastVfoHz.B = update.value;
-        try { applyBandOutOfBand('B'); } catch (e) { console.error('applyBandOutOfBand B error:', e); }
+        try {
+            if (typeof window.bandForHz === 'function') {
+                const derived = window.bandForHz(update.value);
+                if (derived) updateBandButton('B', derived);
+                else applyBandOutOfBand('B');
+            } else {
+                applyBandOutOfBand('B');
+            }
+        } catch (e) { console.error('band sync B error:', e); }
         try { window.updateFrequencyDisplay('B', update.value); } catch (e) { console.error('updateFrequencyDisplay B error:', e); }
         // Clear editing mode once the radio echoes back our sent frequency.
         if (window.radioControl && window.radioControl._state) {
@@ -1580,19 +1597,21 @@ connection.on("RadioStateUpdate", function (update) {
 
     // --- IF WIDTH ---
     if (update.property === "IfWidthA") {
-        const el = document.getElementById('ifWidthSelectA');
-        if (el) {
-            const exists = Array.from(el.options).some(o => o.value === String(update.value));
-            if (exists) el.value = update.value;
+        const widget = window.ifWidthButtonA;
+        if (widget) {
+            const code = String(update.value);
+            const known = widget.options?.some((o) => String(o.id) === code);
+            if (known) widget.setState({ selectedId: code }, { silent: true });
         }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ ifWidthCode: update.value });
         updateContourSliderBounds('A');
     }
     if (update.property === "IfWidthB") {
-        const el = document.getElementById('ifWidthSelectB');
-        if (el) {
-            const exists = Array.from(el.options).some(o => o.value === String(update.value));
-            if (exists) el.value = update.value;
+        const widget = window.ifWidthButtonB;
+        if (widget) {
+            const code = String(update.value);
+            const known = widget.options?.some((o) => String(o.id) === code);
+            if (known) widget.setState({ selectedId: code }, { silent: true });
         }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ ifWidthCode: update.value });
         updateContourSliderBounds('B');
@@ -2068,6 +2087,24 @@ function updateBandButton(receiver, band) {
 }
 window.updateBandButton = updateBandButton;
 
+// Called after the Band Yaesu keys are created so a SignalR BandA/FrequencyA
+// that arrived earlier (while window.bandButtonA was still null) is applied.
+window.syncBandButtonsFromFrequency = function () {
+    for (const receiver of ['A', 'B']) {
+        const hz = lastVfoHz[receiver];
+        if (hz > 0 && typeof window.bandForHz === 'function') {
+            const derived = window.bandForHz(hz);
+            if (derived) {
+                updateBandButton(receiver, derived);
+                continue;
+            }
+        }
+        if (lastVfoBand[receiver]) {
+            updateBandButton(receiver, lastVfoBand[receiver]);
+        }
+    }
+};
+
 // Outer DOMContentLoaded - initial UI wiring
 window.addEventListener('DOMContentLoaded', () => {
     pollInitStatus();
@@ -2360,13 +2397,13 @@ async function _setClarifier(vfo, rxOn, txOn, offsetHz) {
 }
 
 function resetIfWidth(receiver) {
-    const select = document.getElementById(`ifWidthSelect${receiver}`);
-    if (!select) return;
+    const widget = window[`ifWidthButton${receiver}`];
+    if (!widget?.options?.length) return;
     // Default is the last option (widest bandwidth — 3.0 kHz for FTdx101, 3.4 kHz for FTdx10)
-    const defaultOpt = select.options[select.options.length - 1];
+    const defaultOpt = widget.options[widget.options.length - 1];
     if (!defaultOpt) return;
-    select.value = defaultOpt.value;
-    if (window.radioControl) window.radioControl.setIfWidth(receiver, defaultOpt.value);
+    widget.setState({ selectedId: String(defaultOpt.id) }, { silent: true });
+    if (window.radioControl) window.radioControl.setIfWidth(receiver, defaultOpt.id);
 }
 window.resetIfWidth = resetIfWidth;
 
@@ -3252,9 +3289,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // -------------------------------------------------------------------------
-    // Band Segment Dropdown
+    // Band Segment Yaesu key
     // -------------------------------------------------------------------------
-    // Populates the segment select for a VFO based on the current band and
+    // Populates the segment menu for a VFO based on the current band and
     // band plan, restores the last-used segment from localStorage, and tunes
     // the radio when the user picks a segment.
 
@@ -3269,33 +3306,31 @@ document.addEventListener('DOMContentLoaded', function() {
         return typeof band === 'string' && band.toLowerCase() === OOB_BAND;
     }
 
-    // Paint (or clear) the out-of-band state on a Segment dropdown. The
-    // dropdown carries the warning as well as the colour, because a
-    // partially-sighted operator gets the accessible name, not the red.
-    function setSegmentOutOfBand(select, vfo, on) {
-        select.classList.toggle('segment-oob', on);
-        if (!('labelOriginal' in select.dataset)) {
-            select.dataset.labelOriginal = select.getAttribute('aria-label') || `VFO ${vfo} band segment`;
-        }
+    // Paint (or clear) the out-of-band state on a Segment key. The key
+    // carries the warning as well as the colour, because a partially-sighted
+    // operator gets the accessible name, not the red.
+    function setSegmentOutOfBand(widget, vfo, on) {
+        if (!widget) return;
+        widget.root.classList.toggle('toggle-dd--oob', on);
         const label = on
             ? `VFO ${vfo} out of band — frequency is outside every allocation in your region`
-            : select.dataset.labelOriginal;
-        select.setAttribute('aria-label', label);
-        select.setAttribute('title', label);
+            : null;
+        widget._ariaOverride = label;
+        widget._sync();
     }
 
-    // Set the Segment dropdown to reflect whichever segment of the band
+    // Set the Segment key to reflect whichever segment of the band
     // contains the current frequency. Called from the FrequencyA/B SignalR
-    // handlers so the dropdown stays in sync when the operator tunes via
+    // handlers so the key stays in sync when the operator tunes via
     // the radio's knob, the spectrum click, or the on-screen freq keyboard.
-    // No-op if the band's dropdown hasn't been populated yet (e.g. on
+    // No-op if the band's menu hasn't been populated yet (e.g. on
     // initial connect before BandA arrives).
     function syncSegmentSelectToFrequency(vfo, hz) {
-        const select = document.getElementById(`segmentSelect${vfo}`);
-        // Disabled means the dropdown holds a single OOB or "--" placeholder,
+        const widget = window[`segmentButton${vfo}`];
+        // Disabled means the key holds a single OOB or "--" placeholder,
         // so there is no segment to select. populateSegmentSelect re-runs on
         // the next band change and picks the sync back up.
-        if (!select || select.disabled) return;
+        if (!widget || widget.disabled) return;
         const band = state.lastBand && state.lastBand[vfo];
         if (!band || isOutOfBand(band)) return;
         const plan = window.bandPlan || 'UK';
@@ -3303,7 +3338,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Fallback if helper not loaded — use inline lookup against the plan.
             // Mirror the band-plan.js segmentForHz logic exactly, including the
             // "below-lowest → first segment" fallback, so 14.010 etc don't
-            // produce a blank dropdown when the helper isn't loaded.
+            // produce a blank key when the helper isn't loaded.
             const segments = (window.bandPlanData && window.bandPlanData[plan] && window.bandPlanData[plan][band]) || null;
             if (!segments) return;
             const ordered = Object.entries(segments).sort((a, b) => a[1].freq - b[1].freq);
@@ -3314,11 +3349,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 else break;
             }
             if (!match && ordered.length > 0) match = ordered[0][0];
-            if (select.value !== match) select.value = match;
+            if (widget.getState().selectedId !== match) {
+                widget.setState({ selectedId: match }, { silent: true });
+            }
             return;
         }
         const key = window.getBandSegmentForHz(plan, band, hz) || '';
-        if (select.value !== key) select.value = key;
+        if (widget.getState().selectedId !== key) {
+            widget.setState({ selectedId: key }, { silent: true });
+        }
     }
     // Expose to the outer SignalR handler (FrequencyA/B), which lives outside
     // this IIFE and would otherwise get a ReferenceError trying to call it.
@@ -3326,8 +3365,8 @@ document.addEventListener('DOMContentLoaded', function() {
     window.populateSegmentSelect = populateSegmentSelect;
 
     function populateSegmentSelect(vfo, band) {
-        const select = document.getElementById(`segmentSelect${vfo}`);
-        if (!select) return;
+        const widget = window[`segmentButton${vfo}`];
+        if (!widget) return;
 
         // Wait until band-plan.js has been imported by the module script.
         const bandPlanData = window.bandPlanData;
@@ -3336,50 +3375,45 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const segments = (bandPlanData[plan] || {})[band] || null;
         const oob = isOutOfBand(band);
-        select.innerHTML = '';
 
         if (!segments) {
             // Two different "no segments" cases, and they mean different
             // things to the operator: OOB is a warning (you are outside your
             // region's allocations), whereas "--" just means this band has no
             // activity plan in the JSON — 4m outside Region 1, say.
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = oob ? 'OOB' : '--';
-            select.appendChild(opt);
-            select.disabled = true;
-            setSegmentOutOfBand(select, vfo, oob);
+            widget.setOptions([{ id: '', label: oob ? 'OOB' : '--' }], {
+                silent: true,
+                selectedId: '',
+            });
+            widget.setDisabled(true);
+            setSegmentOutOfBand(widget, vfo, oob);
             return;
         }
 
-        select.disabled = false;
-        setSegmentOutOfBand(select, vfo, false);
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = '--';
-        select.appendChild(placeholder);
+        widget.setDisabled(false);
+        setSegmentOutOfBand(widget, vfo, false);
 
+        const options = [{ id: '', label: '--' }];
         for (const [key, seg] of Object.entries(segments)) {
-            const opt = document.createElement('option');
-            opt.value = key;
-            opt.textContent = seg.label;
-            select.appendChild(opt);
+            options.push({ id: key, label: seg.label });
         }
 
         // Restore last used segment for this band. This is only a fallback
         // for the moment before we know the frequency — the radio's actual
-        // frequency wins immediately below, because the dropdown's job is to
+        // frequency wins immediately below, because the key's job is to
         // say where the operator *is*, not where they last went.
         const saved = localStorage.getItem(segmentStorageKey(vfo, band));
-        if (saved && select.querySelector(`option[value="${saved}"]`)) {
-            select.value = saved;
-        }
+        const savedOk = saved && options.some((o) => o.id === saved);
+        widget.setOptions(options, {
+            silent: true,
+            selectedId: savedOk ? saved : '',
+        });
 
         // Use lastVfoHz (top-level, written directly by the FrequencyA/B
         // SignalR handlers) rather than state.lastBackendFreq — that one is
         // written inside a try/catch from a scope where `state` isn't
         // visible, so it throws and is swallowed on every update and holds a
-        // stale frequency. Getting this wrong showed up as the dropdown
+        // stale frequency. Getting this wrong showed up as the key
         // dropping to "--" when tuning back in from out of band: FrequencyA
         // arrives before BandA, so the good sync early-returns against the
         // still-disabled OOB placeholder and this call is the last word.
@@ -3396,7 +3430,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (live) syncSegmentSelectToFrequency(vfo, hz);
     }
 
-    // Called when the user picks a segment from the dropdown.
+    // Called when the user picks a segment from the menu.
     window.onSegmentChange = async function(vfo, segKey) {
         if (!segKey) return;
         const plan = window.bandPlan || 'UK';
@@ -3429,14 +3463,14 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     // Hook into the band state change: when lastBand is updated, repopulate
-    // the segment select. We patch setBand and updateBandButton so both
+    // the segment menu. We patch setBand and updateBandButton so both
     // UI-driven and SignalR-driven band changes trigger the update.
     const _origUpdateBandButton = window.updateBandButton;
 
     // Re-populate segments whenever band state changes. Skip if the band is
     // unchanged — the BandA SignalR event fires on every frequency change,
     // not only on real band transitions, so repopulating here would reset the
-    // dropdown to its localStorage value and stomp on the auto-sync we did
+    // key to its localStorage value and stomp on the auto-sync we did
     // from the matching FrequencyA event.
     function onBandChanged(vfo, band) {
         if (state.lastBand[vfo] === band) return;
@@ -3468,9 +3502,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // radio to the last-clicked band segment for each VFO. That behaviour
     // overwrote whatever frequency the operator had set manually on the rig,
     // which Jacek SP3L reported as #33: "YWC changes radio frequency to some
-    // default value". The dropdown UI value is restored by populateSegmentSelect
+    // default value". The key UI value is restored by populateSegmentSelect
     // on DOMContentLoaded; the radio is NOT auto-tuned. If the user wants to
-    // jump to a saved segment, they click the dropdown manually.
+    // jump to a saved segment, they click the menu manually.
 
     // --- Raw Meter Label Visibility State (S-Meter and Power Out) ---
     // Use localStorage to sync across tabs/pages
