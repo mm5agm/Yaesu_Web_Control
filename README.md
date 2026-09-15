@@ -1,7 +1,7 @@
 
 # Yaesu Web Control
 
-![Latest release](https://img.shields.io/badge/Latest%20release-v2.5.0-blue?style=flat-square)
+![Latest release](https://img.shields.io/badge/Latest%20release-v2.5.1-blue?style=flat-square)
 ![Downloads](https://img.shields.io/github/downloads/mm5agm/Yaesu_Web_Control/latest/Yaesu_Web_Control_Setup.exe?label=Downloads&style=flat-square)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue?style=flat-square)
 
@@ -349,6 +349,12 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 ---
 
 ## Release Notes
+
+## 2026-09-15 - v2.5.1
+
+*Hotfix. v2.5.0 was installed without the SDR worker, so the spectrum display could not open any SDR. Nothing else has changed.*
+
+- **`Yaesu_Sdr_Worker.exe` is back in the installer** ([#142](https://github.com/mm5agm/Yaesu_Web_Control/pull/142)). YWC opens each SDR in a separate worker process, and the v2.5.0 (and v2.4.3-pre6) installers went out without that worker, so on an installed copy the spectrum panel could not start its SDR. A build-script condition was answered before the worker had been compiled, which on a clean build machine meant "not there"; on my own PC the previous build's copy was always present, so I never saw it. Thanks to the user who noticed the file was missing. The release build now stops if the worker is not in the package, so this cannot slip out again. If you installed v2.5.0 and use an SDR, install this one over it.
 
 ## 2026-09-14 - v2.5.0
 
