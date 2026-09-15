@@ -352,6 +352,14 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-09-15 - v2.5.2-pre1 (pre-release)
+
+*Diagnostic pre-release for [#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143). Logging only - nothing about how the app behaves has changed. Install it if you are seeing "localhost refused to connect" after the first page; otherwise stay on v2.5.1.*
+
+- **A hard crash is now written to the log before the process dies.** Until now an exception on a background thread (a timer, the serial port's receive handler, a Windows message handler) took the whole process down with nothing in `ywc-<date>.log` - the log just stopped. Dave G0CER's report in #143 was exactly that shape, and the log could not say whether YWC had crashed or been killed by something else. The exception type and stack now go into the log first.
+- **The idle-shutdown countdown logs when it is cancelled**, not only when it starts, so "a page change cancelled it within a second" and "it ran out and the app quit" no longer look the same. The start line is also reworded: it used to say *All browser tabs closed. Shutting down in 30s* on every page change, which reads like the app deciding to quit when it is routine.
+- The log's first lines now record the exe path, process ID, OS and .NET runtime, so a Task Manager check or an Event Viewer entry can be matched to a log.
+
 ## 2026-09-15 - v2.5.1
 
 *Hotfix. v2.5.0 was installed without the SDR worker, so the spectrum display could not open any SDR. Nothing else has changed.*

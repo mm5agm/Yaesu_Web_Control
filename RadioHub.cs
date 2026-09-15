@@ -39,7 +39,7 @@ namespace Yaesu_Web_Control.Hubs
         public override async Task OnConnectedAsync()
         {
             _connections.TryAdd(Context.ConnectionId, 0);
-            CancelShutdown();
+            CancelShutdown("browser connected");
 
             // Replay the full state snapshot to this client only. Regular
             // broadcasts fire on change, so without this a browser that
@@ -77,7 +77,13 @@ namespace Yaesu_Web_Control.Hubs
                     return;
                 }
 
-                _logger.LogInformation("All browser tabs closed. Shutting down in {s}s if none reconnect.",
+                // This fires on every page change too: the page being left
+                // drops its connection a moment before the new page opens its
+                // own, and the cancel below follows within a second. Worded so
+                // a log reader does not take the routine case for a fault
+                // (issue #143 -- it was read as the app deciding to quit).
+                _logger.LogInformation(
+                    "Last live browser connection dropped (page change or tab closed). Shutting down in {s}s unless one reconnects.",
                     ShutdownGrace.TotalSeconds);
                 ScheduleShutdown();
             }
@@ -91,7 +97,7 @@ namespace Yaesu_Web_Control.Hubs
             // the previous tab's OnDisconnectedAsync can miss that cancel —
             // the disconnect then schedules shutdown because this connection
             // has not heartbeated yet. Count a heartbeat as "a browser is here".
-            CancelShutdown();
+            CancelShutdown("browser heartbeat");
             return Task.CompletedTask;
         }
 
@@ -117,7 +123,11 @@ namespace Yaesu_Web_Control.Hubs
             }
         }
 
-        private static void CancelShutdown()
+        // Logged when there was a countdown to cancel, so the log can tell
+        // "timer cancelled by a reconnect" from "timer fired and the process
+        // went" -- without this a navigation and a shutdown started the same
+        // way and only one of them wrote a second line.
+        private void CancelShutdown(string reason)
         {
             lock (_shutdownLock)
             {
@@ -126,6 +136,7 @@ namespace Yaesu_Web_Control.Hubs
                     _shutdownCts.Cancel();
                     _shutdownCts.Dispose();
                     _shutdownCts = null;
+                    _logger.LogInformation("Shutdown countdown cancelled ({Reason}).", reason);
                 }
             }
         }
