@@ -946,6 +946,119 @@ fieldset.calibration-card {
     min-width: 0;
 }
 
+/* Compact linear SWR / Power bars (PoC) — leftmost column of the
+   operating-controls row. Radials in #meterGaugesRow stay untouched. */
+#operatingControlsRow .op-col--linear-meters {
+    min-width: 0;
+    gap: 0.35rem;
+}
+
+#operatingControlsRow .linear-meter-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+#operatingControlsRow .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: #333;
+    line-height: 1;
+}
+
+#operatingControlsRow .linear-meter-row canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+#operatingControlsRow .linear-meter-value {
+    flex: 0 0 3.6rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #dc3545;
+    color: #fff;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+#operatingControlsRow .linear-meter-value--comp {
+    background: #ffc107;
+    color: #000;
+}
+
+#operatingControlsRow .linear-meter-value--alc {
+    background: #0dcaf0;
+    color: #000;
+}
+
+/* Per-VFO linear S-meter (between frequency row and RF/AF stack). */
+.linear-meter-row--vfo {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+    width: 100%;
+    margin: 0.15rem 0 0.25rem;
+    transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+.linear-meter-row--vfo .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: #333;
+    line-height: 1;
+}
+
+.linear-meter-row--vfo canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+.linear-meter-row--vfo .linear-meter-value {
+    flex: 0 0 3.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #198754;
+    color: #fff;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+/* Single-receiver: inactive VFO's S-meter is not a live reading for that
+   panel — grey it the same way TX freezes the radial S-meters. */
+.linear-meter-row--vfo.linear-smeter-inactive {
+    filter: grayscale(1);
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+/* TX freeze dimming for VFO linear S-meters (class toggled on the row). */
+.linear-meter-row--vfo.meters-tx-dim {
+    filter: grayscale(1);
+    opacity: 0.3;
+}
+
 #operatingControlsRow .op-slider-row {
     display: flex;
     align-items: center;
