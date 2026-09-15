@@ -12,8 +12,8 @@
     position: absolute;
     font-size: 0.8rem;
     font-weight: bold;
-    color: #333;
-    text-shadow: 0 1px 2px #fff, 0 0 2px #fff;
+    color: var(--ywc-gauge-tick, #c8c8c8);
+    text-shadow: 0 1px 2px #000, 0 0 2px #000;
     pointer-events: none;
     user-select: none;
     white-space: nowrap;
@@ -181,7 +181,7 @@ html {
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-    box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+    box-shadow: 0 0 0 0.1rem var(--yaesu-face, #2a2a2a), 0 0 0 0.25rem rgba(255, 179, 71, 0.45);
 }
 
 html {
@@ -191,7 +191,7 @@ html {
 
 body {
     margin-bottom: 60px;
-    color: #000;
+    color: var(--yaesu-ink, #e6e6e6);
     font-weight: 700;
 }
 
@@ -245,10 +245,10 @@ body {
    which digit will be stepped by ▲/▼, ArrowUp/Down, and PageUp/PageDown.
    Without this rule the selection was invisible. */
 .frequency-display .digit.selected {
-    background-color: #ffe066;
+    background-color: var(--ywc-lcd-selected, #ffe066);
     color: #000;
     border-radius: 0.15em;
-    box-shadow: inset 0 0 0 1px #b58900;
+    box-shadow: inset 0 0 0 1px var(--ywc-lcd-selected-edge, #b58900);
     padding: 0 0.05em;
 }
 
@@ -256,7 +256,7 @@ body {
    see that the display is focused (so ArrowUp/Down will step a digit). */
 .frequency-display:focus,
 .frequency-display:focus-visible {
-    outline: 2px solid #0d6efd;
+    outline: 2px solid var(--ywc-focus, #ffb347);
     outline-offset: 2px;
 }
 
@@ -271,9 +271,9 @@ body {
 
 /* Active button state */
 .btn-outline-primary.active {
-    background-color: #0d6efd;
-    color: white;
-    border-color: #0d6efd;
+    background-color: var(--ywc-vfo-a, #4fb4e6);
+    color: #121212;
+    border-color: var(--ywc-vfo-a, #4fb4e6);
 }
 
 
@@ -302,7 +302,7 @@ pre, code { tab-size: 4; }
 .band-radio-group input[type="radio"] {
     width: 1.15rem;
     height: 1.15rem;
-    border: 2px solid #495057; /* dark grey - clearly visible on white */
+    border: 2px solid #9aa3ad; /* visible on charcoal */
     cursor: pointer;
     flex-shrink: 0;
 }
@@ -310,13 +310,13 @@ pre, code { tab-size: 4; }
 /* When checked, colour the dot to match the receiver panel colour */
 .border-primary .form-check-input[type="radio"],
 .border-primary .band-radio-group input[type="radio"] {
-    accent-color: #0d6efd; /* blue for Receiver A */
+    accent-color: var(--ywc-vfo-a, #4fb4e6); /* blue for Receiver A */
 }
 
 .border-success .form-check-input[type="radio"],
 .border-success .band-radio-group input[type="radio"],
 .border-success .band-radio-grid input[type="radio"] {
-    accent-color: #198754; /* green for Receiver B */
+    accent-color: var(--ywc-vfo-b, #58cf9a); /* green for Receiver B */
 }
 
 /* Labels are clickable */
@@ -333,34 +333,16 @@ pre, code { tab-size: 4; }
     /* No fixed width or negative margin */
 }
 
-/* Form controls: match body colour so dropdowns and inputs are also black + bold */
+/* Form controls: ink colour comes from theme-yaesu.css (charcoal + amber). */
 .form-select,
 .form-control {
-    color: #000;
     font-weight: 700;
 }
 
-/* Outline-secondary buttons: black text so off-state toggles (PROC, ATU, VOX, CW, FM Rep) are readable */
+/* Outline-secondary: ink on charcoal — theme-yaesu.css owns colour tokens.
+   Dark dialogs no longer need a special-case override. */
 .btn-outline-secondary {
-    color: #000;
     font-weight: 700;
-}
-
-/* ...but the dark dialogs (background #222) invert that into black on
-   near-black, visible only on hover because Bootstrap's hover fills the
-   button. That is how the CW Reader's Clear button, the VOX toggle's off
-   state and the Voice panel's "Stop talking" all shipped invisible. Same
-   trap the dialog close button hit before it was given .ywc-dialog-close.
-
-   Listed by dialog id because the dark treatment is an inline style with no
-   class to hang this on. If you add another dark dialog containing an
-   outline-secondary button, add it here too - or give the dialogs a shared
-   class and key this off that instead, which would be the better fix. */
-#cwReaderDialog .btn-outline-secondary,
-#voxDialog .btn-outline-secondary,
-#voiceDialog .btn-outline-secondary {
-    color: #adb5bd;          /* 7.3:1 on #222 - passes AA and AAA */
-    border-color: #6c757d;
 }
 
 /* Mode select - sized to fit longest option (D-FM-N), sits below band buttons */
@@ -494,7 +476,7 @@ pre, code { tab-size: 4; }
 .vfo-control-label {
     font-size: 0.78rem;
     font-weight: 700;
-    color: #000;
+    color: var(--yaesu-ink, #e6e6e6);
     margin-bottom: 0;
     white-space: nowrap;
 }
@@ -513,18 +495,19 @@ pre, code { tab-size: 4; }
     align-items: center;
     gap: 0.3rem;
     padding: 0.25rem 0.5rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid #555;
     border-radius: 0.25rem;
-    background-color: #fff;
+    background-color: var(--yaesu-face-lo, #1a1a1a);
     transition: all 0.15s ease-in-out;
     cursor: pointer;
     user-select: none;
     font-size: 0.9rem;
+    color: var(--yaesu-ink, #e6e6e6);
 }
 
 .band-radio-label:hover {
-    background-color: #f8f9fa;
-    border-color: #0d6efd;
+    background-color: var(--yaesu-face-hi, #3d3d3d);
+    border-color: var(--ywc-focus, #ffb347);
 }
 
 .band-radio-label input[type="radio"] {
@@ -551,16 +534,16 @@ pre, code { tab-size: 4; }
 
 /* Receiver A (blue) checked state */
 .border-primary .band-radio-label:has(input:checked) {
-    background-color: #cfe2ff;
-    border-color: #0d6efd;
-    color: #084298;
+    background-color: rgba(79, 180, 230, 0.28);
+    border-color: var(--ywc-vfo-a, #4fb4e6);
+    color: #d6effa;
 }
 
 /* Receiver B (green) checked state */
 .border-success .band-radio-label:has(input:checked) {
-    background-color: #d1e7dd;
-    border-color: #198754;
-    color: #0f5132;
+    background-color: rgba(88, 207, 154, 0.28);
+    border-color: var(--ywc-vfo-b, #58cf9a);
+    color: #d6f5e8;
 }
 
 /* Out-of-band marker: nearest band in the operator's region is flagged red
@@ -569,9 +552,9 @@ pre, code { tab-size: 4; }
    so it reads as a warning, not a selection. */
 .band-radio-label.band-oob,
 .band-radio-label.band-oob:hover {
-    background-color: #dc3545;
+    background-color: var(--ywc-tx, #dc3545);
     border-color: #842029;
-    color: #000;
+    color: #fff;
 }
 .band-radio-label.band-oob span { font-weight: bold; }
 
@@ -601,9 +584,9 @@ pre, code { tab-size: 4; }
 .segment-select.segment-oob:disabled,
 .segment-select.segment-oob:hover,
 .segment-select.segment-oob:focus {
-    background-color: #dc3545;
+    background-color: var(--ywc-tx, #dc3545);
     border-color: #842029;
-    color: #000;
+    color: #fff;
     font-weight: bold;
     opacity: 1;
 }
@@ -631,7 +614,7 @@ pre, code { tab-size: 4; }
 /* WebKit (Chrome, Edge, Safari) */
 #powerSliderA::-webkit-slider-runnable-track {
     height: 18px;
-    background: linear-gradient(90deg, #e6f4ea 0%, #e9ecef 60%, #dee2e6 100%);
+    background: linear-gradient(90deg, #1a3a24 0%, #2a2a2a 60%, #1a1a1a 100%);
     border-radius: 9px;
 }
 #powerSliderA::-webkit-slider-thumb {
@@ -639,8 +622,8 @@ pre, code { tab-size: 4; }
     appearance: none;
     width: 18px;
     height: 18px;
-    background: #28a745;
-    border: 2px solid #b7e4c7;
+    background: var(--yaesu-led-on, #ff7a18);
+    border: 2px solid #ffd39a;
     border-radius: 50%;
     cursor: pointer;
     margin-top: 0; /* Center thumb on track */
@@ -649,14 +632,14 @@ pre, code { tab-size: 4; }
 /* Firefox */
 #powerSliderA::-moz-range-track {
     height: 18px;
-    background: linear-gradient(90deg, #e6f4ea 0%, #e9ecef 60%, #dee2e6 100%);
+    background: linear-gradient(90deg, #1a3a24 0%, #2a2a2a 60%, #1a1a1a 100%);
     border-radius: 9px;
 }
 #powerSliderA::-moz-range-thumb {
     width: 18px;
     height: 18px;
-    background: #28a745;
-    border: 2px solid #b7e4c7;
+    background: var(--yaesu-led-on, #ff7a18);
+    border: 2px solid #ffd39a;
     border-radius: 50%;
     cursor: pointer;
 }
@@ -664,14 +647,14 @@ pre, code { tab-size: 4; }
 /* IE/Edge */
 #powerSliderA::-ms-fill-lower,
 #powerSliderA::-ms-fill-upper {
-    background: linear-gradient(90deg, #e6f4ea 0%, #e9ecef 60%, #dee2e6 100%);
+    background: linear-gradient(90deg, #1a3a24 0%, #2a2a2a 60%, #1a1a1a 100%);
     border-radius: 9px;
 }
 #powerSliderA::-ms-thumb {
     width: 18px;
     height: 18px;
-    background: #28a745;
-    border: 2px solid #b7e4c7;
+    background: var(--yaesu-led-on, #ff7a18);
+    border: 2px solid #ffd39a;
     border-radius: 50%;
     cursor: pointer;
 }
@@ -685,23 +668,23 @@ pre, code { tab-size: 4; }
 /* IF Shift slider: visible track outline matching Notch slider style */
 .ifshift-slider::-webkit-slider-runnable-track {
     height: 6px;
-    background: #e9ecef;
+    background: #141414;
     border-radius: 3px;
-    border: 1px solid #6c757d;
+    border: 1px solid #555;
 }
 .ifshift-slider::-moz-range-track {
     height: 6px;
-    background: #e9ecef;
+    background: #141414;
     border-radius: 3px;
-    border: 1px solid #6c757d;
+    border: 1px solid #555;
 }
 .ifshift-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 16px;
     height: 16px;
-    background: #0d6efd;
-    border: 2px solid #cfe2ff;
+    background: var(--yaesu-led-on, #ff7a18);
+    border: 2px solid #ffd39a;
     border-radius: 50%;
     cursor: pointer;
     margin-top: -6px;
@@ -709,8 +692,8 @@ pre, code { tab-size: 4; }
 .ifshift-slider::-moz-range-thumb {
     width: 16px;
     height: 16px;
-    background: #0d6efd;
-    border: 2px solid #cfe2ff;
+    background: var(--yaesu-led-on, #ff7a18);
+    border: 2px solid #ffd39a;
     border-radius: 50%;
     cursor: pointer;
 }
@@ -892,7 +875,8 @@ fieldset.calibration-card {
 
 /* Raw meter label for calibration support */
 .raw-meter-label {
-    background: #e0e7ff;
+    background: rgba(255, 122, 24, 0.2);
+    color: var(--ywc-lcd, #f2a33c);
     border-radius: 6px;
     padding: 2px 4px;
     position: relative;
@@ -909,7 +893,8 @@ fieldset.calibration-card {
     white-space: nowrap;
 }
 #raw-powerout-label {
-    background: #e0e7ff;
+    background: rgba(255, 122, 24, 0.2);
+    color: var(--ywc-lcd, #f2a33c);
     border-radius: 6px;
     padding: 2px 10px 2px 10px;
     margin-bottom: 2px;
@@ -966,7 +951,7 @@ fieldset.calibration-card {
     font-size: 0.75rem;
     font-weight: 700;
     text-align: right;
-    color: #333;
+    color: var(--yaesu-ink, #e6e6e6);
     line-height: 1;
 }
 
@@ -1019,7 +1004,7 @@ fieldset.calibration-card {
     font-size: 0.75rem;
     font-weight: 700;
     text-align: right;
-    color: #333;
+    color: var(--yaesu-ink, #e6e6e6);
     line-height: 1;
 }
 
@@ -1344,7 +1329,7 @@ fieldset.calibration-card {
 .fkb-open-btn {
     padding: 1px 6px;
     font-size: 0.9rem;
-    color: #000 !important;
+    color: var(--ywc-lcd, #f2a33c) !important;
 }
 
 /* ── Memories Panel Dialog ───────────────────────────────────────────────── */
@@ -1721,11 +1706,11 @@ fieldset.calibration-card {
 .radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:hover::after,
 .radio-display-body.controls-docked #radioDisplayScopeDialog.scope-resizing .radio-display-scope-splitter::after {
     width: 3px;
-    background: #0d6efd;
+    background: var(--yaesu-led-on, #ff7a18);
 }
 .radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:hover::before,
 .radio-display-body.controls-docked #radioDisplayScopeDialog.scope-resizing .radio-display-scope-splitter::before {
-    background-image: radial-gradient(circle, #0d6efd 1.5px, transparent 1.5px);
+    background-image: radial-gradient(circle, var(--yaesu-led-on, #ff7a18) 1.5px, transparent 1.5px);
 }
 /* Keyboard focus — yellow, distinct from hover */
 .radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus {
@@ -1798,7 +1783,7 @@ fieldset.calibration-card {
     color: #9aa0a6 !important;
 }
 #radioDisplayScopeDialog .scope-level-slider {
-    accent-color: #0d6efd;
+    accent-color: var(--yaesu-led-on, #ff7a18);
 }
 
 /* Compact even rows: global .btn-outline-secondary is font-weight 700 for VFO
@@ -1844,7 +1829,7 @@ fieldset.calibration-card {
     transform: rotate(90deg);
 }
 .radio-scope-controls .radio-scope-multi > summary:focus-visible {
-    outline: 2px solid #6ea8fe;
+    outline: 2px solid var(--ywc-focus, #ffb347);
     outline-offset: 1px;
 }
 .radio-scope-controls .radio-scope-multi-body {
@@ -1906,7 +1891,7 @@ fieldset.calibration-card {
     line-height: 1;
 }
 .radio-scope-controls .btn:focus-visible {
-    outline: 2px solid #6ea8fe;
+    outline: 2px solid var(--ywc-focus, #ffb347);
     outline-offset: 1px;
 }
 
@@ -1920,9 +1905,9 @@ fieldset.calibration-card {
     --bs-btn-hover-bg: #4c4c4c;
     --bs-btn-hover-border-color: #8a8a8a;
     --bs-btn-hover-color: #fff;
-    --bs-btn-active-bg: #0d6efd;
-    --bs-btn-active-border-color: #0d6efd;
-    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--yaesu-led-on, #ff7a18);
+    --bs-btn-active-border-color: var(--yaesu-led-on, #ff7a18);
+    --bs-btn-active-color: #121212;
     --bs-btn-disabled-color: #8a8a8a;
     --bs-btn-disabled-bg: #2c2c2c;
     --bs-btn-disabled-border-color: #4a4a4a;
@@ -1933,9 +1918,9 @@ fieldset.calibration-card {
     border-color: #8a8a8a;
 }
 #radioDisplayScopeDialog .btn-outline-secondary.active {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-    color: #fff;
+    background-color: var(--yaesu-led-on, #ff7a18);
+    border-color: var(--yaesu-led-on, #ff7a18);
+    color: #121212;
 }
 #radioDisplayScopeDialog .btn-outline-secondary:disabled,
 #radioDisplayScopeDialog .btn-outline-secondary.disabled {

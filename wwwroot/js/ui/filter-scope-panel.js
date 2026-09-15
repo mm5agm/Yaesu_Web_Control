@@ -245,7 +245,7 @@ export class FilterScopePanel {
         const scopeH = H - axisH;
 
         // --- Background ---
-        ctx.fillStyle = '#1e2a38';
+        ctx.fillStyle = '#1a1a1a';
         ctx.fillRect(0, 0, W, H);
 
         const x = hz => this._hzToX(hz, W, rangeLo, rangeHi);
@@ -271,7 +271,7 @@ export class FilterScopePanel {
 
         // Subtle fill inside the trapezoid
         trapPath();
-        ctx.fillStyle = 'rgba(74,138,191,0.10)';
+        ctx.fillStyle = 'rgba(255,122,24,0.12)';
         ctx.fill();
 
         // Clip to trapezoid, then draw signal bars inside it (live FFT or random)
@@ -348,14 +348,14 @@ export class FilterScopePanel {
             const cwCentre = this._cwPitchHz() + (this._state.ifShiftHz || 0);
             const apfPx   = x(cwCentre + (this._state.apfFreqHz || 0));
             const peakHalf = Math.max(3, Math.round(W * 0.015));
-            ctx.fillStyle = 'rgba(0,229,204,0.7)';
+            ctx.fillStyle = 'rgba(242,163,60,0.7)';
             ctx.beginPath();
             ctx.moveTo(apfPx, pbTop + 4);
             ctx.lineTo(apfPx - peakHalf, pbBot - 4);
             ctx.lineTo(apfPx + peakHalf, pbBot - 4);
             ctx.closePath();
             ctx.fill();
-            ctx.strokeStyle = '#00e5cc';
+            ctx.strokeStyle = '#f2a33c';
             ctx.lineWidth   = 1;
             ctx.stroke();
         }
@@ -366,7 +366,7 @@ export class FilterScopePanel {
             const arrowX = x(1500 + shift);
             const dir    = shift > 0 ? 1 : -1;
             const aSize  = 5;
-            ctx.fillStyle = 'rgba(200,220,255,0.8)';
+            ctx.fillStyle = 'rgba(255,179,71,0.85)';
             ctx.beginPath();
             ctx.moveTo(arrowX + dir * aSize, 4);
             ctx.lineTo(arrowX - dir * aSize, 4 - aSize);
@@ -376,7 +376,7 @@ export class FilterScopePanel {
         }
 
         // --- Grid lines ---
-        ctx.strokeStyle = 'rgba(100,120,140,0.3)';
+        ctx.strokeStyle = 'rgba(80,80,80,0.45)';
         ctx.lineWidth   = 0.5;
         const step = rangeHz <= 4000 ? 500 : rangeHz <= 7000 ? 1000 : 2000;
         // First grid line at the lowest multiple of step strictly INSIDE
@@ -391,7 +391,7 @@ export class FilterScopePanel {
         }
 
         // --- Frequency axis ---
-        ctx.fillStyle = '#8899aa';
+        ctx.fillStyle = '#9aa3ad';
         ctx.font      = '9px sans-serif';
         ctx.textBaseline = 'bottom';
         const firstLabelHz = Math.ceil(rangeLo / step) * step;
@@ -429,7 +429,7 @@ export class FilterScopePanel {
             const roofLabel = roofHz >= 1000
                 ? 'Roof ' + (roofHz / 1000).toString().replace(/\.0$/, '') + 'k'
                 : 'Roof ' + roofHz;
-            ctx.fillStyle    = '#aab8c4';
+            ctx.fillStyle    = '#9aa3ad';
             ctx.font         = '9px sans-serif';
             ctx.textAlign    = 'right';
             ctx.textBaseline = 'top';

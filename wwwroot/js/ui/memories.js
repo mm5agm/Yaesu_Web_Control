@@ -7,18 +7,18 @@ function _memPrompt(message, defaultValue = '') {
     return new Promise(resolve => {
         const dlg = document.createElement('dialog');
         dlg.style.cssText = [
-            'border-radius:10px', 'border:2px solid #555', 'background:#1e1e2e',
-            'color:#e0e0e0', 'padding:20px 24px', 'max-width:420px', 'width:90vw',
+            'border-radius:10px', 'border:2px solid #555', 'background:#1a1a1a',
+            'color:#e6e6e6', 'padding:20px 24px', 'max-width:420px', 'width:90vw',
             'z-index:10001', 'box-shadow:0 10px 40px rgba(0,0,0,0.7)'
         ].join(';');
         dlg.innerHTML =
             `<p style="margin:0 0 12px;font-size:0.88rem">${_esc(message)}</p>` +
             `<input type="text" maxlength="12" value="${_esc(defaultValue)}" ` +
             `style="width:100%;padding:6px 10px;border-radius:5px;border:1px solid #666;` +
-            `background:#2d2d44;color:#e0e0e0;font-size:0.88rem;margin-bottom:14px;box-sizing:border-box;">` +
+            `background:#2a2a2a;color:#e6e6e6;font-size:0.88rem;margin-bottom:14px;box-sizing:border-box;">` +
             `<div style="display:flex;justify-content:flex-end;gap:8px">` +
-            `<button data-r="cancel" style="padding:4px 14px;border-radius:5px;border:1px solid #666;background:#2d2d44;color:#ccc;cursor:pointer;font-size:0.85rem">Cancel</button>` +
-            `<button data-r="ok" style="padding:4px 14px;border-radius:5px;border:1px solid #4a9;background:#2a5a3a;color:#cfe;cursor:pointer;font-size:0.85rem">OK</button>` +
+            `<button data-r="cancel" style="padding:4px 14px;border-radius:5px;border:1px solid #666;background:#2a2a2a;color:#ccc;cursor:pointer;font-size:0.85rem">Cancel</button>` +
+            `<button data-r="ok" style="padding:4px 14px;border-radius:5px;border:1px solid #ff7a18;background:#3d2a10;color:#ffd39a;cursor:pointer;font-size:0.85rem">OK</button>` +
             `</div>`;
         document.body.appendChild(dlg);
         dlg.showModal();
@@ -42,8 +42,8 @@ function _memSelect(message, currentValue) {
     return new Promise(resolve => {
         const dlg = document.createElement('dialog');
         dlg.style.cssText = [
-            'border-radius:10px', 'border:2px solid #555', 'background:#1e1e2e',
-            'color:#e0e0e0', 'padding:20px 24px', 'max-width:320px', 'width:90vw',
+            'border-radius:10px', 'border:2px solid #555', 'background:#1a1a1a',
+            'color:#e6e6e6', 'padding:20px 24px', 'max-width:320px', 'width:90vw',
             'z-index:10001', 'box-shadow:0 10px 40px rgba(0,0,0,0.7)'
         ].join(';');
         const opts = _MODES.map(m =>
@@ -52,10 +52,10 @@ function _memSelect(message, currentValue) {
         dlg.innerHTML =
             `<p style="margin:0 0 12px;font-size:0.88rem">${_esc(message)}</p>` +
             `<select style="width:100%;padding:6px 10px;border-radius:5px;border:1px solid #666;` +
-            `background:#2d2d44;color:#e0e0e0;font-size:0.88rem;margin-bottom:14px;box-sizing:border-box;">${opts}</select>` +
+            `background:#2a2a2a;color:#e6e6e6;font-size:0.88rem;margin-bottom:14px;box-sizing:border-box;">${opts}</select>` +
             `<div style="display:flex;justify-content:flex-end;gap:8px">` +
-            `<button data-r="cancel" style="padding:4px 14px;border-radius:5px;border:1px solid #666;background:#2d2d44;color:#ccc;cursor:pointer;font-size:0.85rem">Cancel</button>` +
-            `<button data-r="ok" style="padding:4px 14px;border-radius:5px;border:1px solid #4a9;background:#2a5a3a;color:#cfe;cursor:pointer;font-size:0.85rem">OK</button>` +
+            `<button data-r="cancel" style="padding:4px 14px;border-radius:5px;border:1px solid #666;background:#2a2a2a;color:#ccc;cursor:pointer;font-size:0.85rem">Cancel</button>` +
+            `<button data-r="ok" style="padding:4px 14px;border-radius:5px;border:1px solid #ff7a18;background:#3d2a10;color:#ffd39a;cursor:pointer;font-size:0.85rem">OK</button>` +
             `</div>`;
         document.body.appendChild(dlg);
         dlg.showModal();
@@ -73,8 +73,8 @@ function _memConfirm(message) {
     return new Promise(resolve => {
         const dlg = document.createElement('dialog');
         dlg.style.cssText = [
-            'border-radius:10px', 'border:2px solid #555', 'background:#1e1e2e',
-            'color:#e0e0e0', 'padding:20px 24px', 'max-width:420px', 'width:90vw',
+            'border-radius:10px', 'border:2px solid #555', 'background:#1a1a1a',
+            'color:#e6e6e6', 'padding:20px 24px', 'max-width:420px', 'width:90vw',
             'z-index:10001', 'box-shadow:0 10px 40px rgba(0,0,0,0.7)'
         ].join(';');
         dlg.innerHTML =
@@ -82,8 +82,8 @@ function _memConfirm(message) {
                 _esc(message)
             }</p>` +
             `<div style="display:flex;justify-content:flex-end;gap:8px">` +
-            `<button data-r="0" style="padding:4px 14px;border-radius:5px;border:1px solid #666;background:#2d2d44;color:#ccc;cursor:pointer;font-size:0.85rem">Cancel</button>` +
-            `<button data-r="1" style="padding:4px 14px;border-radius:5px;border:1px solid #4a9;background:#2a5a3a;color:#cfe;cursor:pointer;font-size:0.85rem">OK</button>` +
+            `<button data-r="0" style="padding:4px 14px;border-radius:5px;border:1px solid #666;background:#2a2a2a;color:#ccc;cursor:pointer;font-size:0.85rem">Cancel</button>` +
+            `<button data-r="1" style="padding:4px 14px;border-radius:5px;border:1px solid #ff7a18;background:#3d2a10;color:#ffd39a;cursor:pointer;font-size:0.85rem">OK</button>` +
             `</div>`;
         document.body.appendChild(dlg);
         dlg.showModal();
@@ -323,16 +323,16 @@ function _ensureContextMenu() {
     menu.id = 'memCtxMenu';
     menu.style.cssText = [
         'position:fixed', 'z-index:10002', 'display:none',
-        'background:#1e1e2e', 'border:1px solid #555', 'border-radius:6px',
+        'background:#1a1a1a', 'border:1px solid #555', 'border-radius:6px',
         'box-shadow:0 4px 20px rgba(0,0,0,0.6)', 'min-width:140px',
         'overflow:hidden', 'font-size:0.85rem', 'user-select:none'
     ].join(';');
 
     const items = [
-        { id: 'memCtxRecall', label: '↵ Recall',       color: '#e0e0e0' },
+        { id: 'memCtxRecall', label: '↵ Recall',       color: '#e6e6e6' },
         { id: 'memCtxSep',    label: null,              color: null },
-        { id: 'memCtxRename', label: '✎ Rename',       color: '#e0e0e0' },
-        { id: 'memCtxMode',   label: '⇄ Change Mode',  color: '#e0e0e0' },
+        { id: 'memCtxRename', label: '✎ Rename',       color: '#e6e6e6' },
+        { id: 'memCtxMode',   label: '⇄ Change Mode',  color: '#e6e6e6' },
         { id: 'memCtxDelete', label: '✕ Delete',       color: '#f88' },
     ];
     menu.innerHTML = items.map(it =>
@@ -343,7 +343,7 @@ function _ensureContextMenu() {
     document.body.appendChild(menu);
 
     menu.querySelectorAll('div[id]').forEach(el => {
-        el.addEventListener('mouseenter', () => el.style.background = '#2d2d44');
+        el.addEventListener('mouseenter', () => el.style.background = '#3d3d3d');
         el.addEventListener('mouseleave', () => el.style.background = '');
     });
 
