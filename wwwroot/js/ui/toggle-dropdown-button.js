@@ -1064,3 +1064,169 @@ export class CycleContextButton {
         }
     }
 }
+
+function escapeAttr(value) {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+/**
+ * Yaesu key whose face is a fixed label. Left-click opens a menu of
+ * commands (not a selected state). Picking an item fires it every time,
+ * including repeats of the same command — e.g. QMB Recall stepping slots.
+ */
+export class ActionMenuButton {
+    /**
+     * @param {HTMLElement} root
+     * @param {{
+     *   label?: string,
+     *   actions?: { id: string, label: string, title?: string, ariaLabel?: string }[],
+     *   a11yKey?: string,
+     *   title?: string,
+     *   menuClass?: string,
+     *   variant?: "yaesu" | "toolbar",
+     *   onAction?: (id: string) => void
+     * }} [config]
+     */
+    constructor(root, config = {}) {
+        this.root = root;
+        this.label = config.label ?? "Function";
+        this.actions = (config.actions ?? []).map((a) => ({
+            id: String(a.id),
+            label: String(a.label),
+            title: a.title != null ? String(a.title) : "",
+            ariaLabel: a.ariaLabel != null ? String(a.ariaLabel) : String(a.label),
+        }));
+        this.a11yKey = config.a11yKey ?? null;
+        this.title = config.title ?? "Click for options";
+        this.menuClass = config.menuClass ?? "";
+        this.variant = config.variant === "toolbar" ? "toolbar" : "yaesu";
+        this.onAction = config.onAction ?? (() => {});
+        this.menuOpen = false;
+        this._ariaOverride = null;
+
+        this._onDocPointer = this._onDocPointer.bind(this);
+        this._onKeydown = this._onKeydown.bind(this);
+
+        this._render();
+        this._bind();
+        this._sync();
+    }
+
+    _render() {
+        const isToolbar = this.variant === "toolbar";
+        if (isToolbar) {
+            this.root.classList.add("dropdown", "qmb-toolbar-key");
+        } else {
+            this.root.classList.add("toggle-dd", "toggle-dd--no-led", "dropdown");
+        }
+        const a11yAttr = this.a11yKey ? ` data-a11y-key="${escapeAttr(this.a11yKey)}"` : "";
+        const itemClass = isToolbar
+            ? "dropdown-item qmb-toolbar-key__item"
+            : "dropdown-item toggle-dd__item";
+        const items = this.actions
+            .map((action) => {
+                const titleAttr = action.title
+                    ? ` title="${escapeAttr(action.title)}"`
+                    : "";
+                return `
+                <li role="none">
+                    <button type="button"
+                            class="${itemClass}"
+                            role="menuitem"
+                            data-action-id="${escapeAttr(action.id)}"
+                            aria-label="${escapeAttr(action.ariaLabel)}"${titleAttr}>
+                        ${escapeAttr(action.label)}
+                    </button>
+                </li>`;
+            })
+            .join("");
+
+        const buttonClass = isToolbar
+            ? "btn btn-sm btn-outline-secondary"
+            : "btn toggle-dd__btn toggle-dd__btn--menu";
+        const hintHtml = isToolbar
+            ? ""
+            : `<span class="toggle-dd__menu-hint" aria-hidden="true"></span>`;
+        const menuClass = isToolbar
+            ? `dropdown-menu qmb-toolbar-key__menu ${this.menuClass}`
+            : `dropdown-menu toggle-dd__menu ${this.menuClass}`;
+
+        this.root.innerHTML = `
+            <button type="button"
+                    class="${buttonClass}"
+                    title="${escapeAttr(this.title)}"
+                    aria-haspopup="menu"
+                    aria-expanded="false"${a11yAttr}>
+                <span class="${isToolbar ? "qmb-toolbar-key__label" : "toggle-dd__label"}"></span>
+                ${hintHtml}
+            </button>
+            <ul class="${menuClass}" role="menu">${items}</ul>
+        `;
+
+        this.button = this.root.querySelector("button[aria-haspopup='menu']");
+        this.labelEl = this.root.querySelector(isToolbar ? ".qmb-toolbar-key__label" : ".toggle-dd__label");
+        this.menu = this.root.querySelector("[role='menu']");
+    }
+
+    _bind() {
+        this.button.addEventListener("click", (event) => {
+            event.preventDefault();
+            this._setMenuOpen(!this.menuOpen);
+        });
+
+        this.button.addEventListener("contextmenu", (event) => {
+            event.preventDefault();
+        });
+
+        this.menu.addEventListener("click", (event) => {
+            const item = event.target.closest("[data-action-id]");
+            if (!item) return;
+            event.preventDefault();
+            const id = item.getAttribute("data-action-id");
+            this._setMenuOpen(false);
+            this.onAction(id);
+        });
+    }
+
+    _setMenuOpen(open) {
+        this.menuOpen = open;
+        this.menu.classList.toggle("show", open);
+        this.button.setAttribute("aria-expanded", open ? "true" : "false");
+
+        if (open) {
+            document.addEventListener("pointerdown", this._onDocPointer, true);
+            document.addEventListener("keydown", this._onKeydown);
+        } else {
+            document.removeEventListener("pointerdown", this._onDocPointer, true);
+            document.removeEventListener("keydown", this._onKeydown);
+        }
+    }
+
+    _onDocPointer(event) {
+        if (!this.root.contains(event.target)) {
+            this._setMenuOpen(false);
+        }
+    }
+
+    _onKeydown(event) {
+        if (event.key === "Escape") {
+            this._setMenuOpen(false);
+            this.button.focus();
+        }
+    }
+
+    _sync() {
+        this.labelEl.textContent = this.label;
+        if (this._ariaOverride) {
+            this.button.setAttribute("aria-label", this._ariaOverride);
+            this.button.setAttribute("title", this._ariaOverride);
+        } else {
+            this.button.setAttribute("aria-label", this.title);
+            this.button.setAttribute("title", this.title);
+        }
+    }
+}

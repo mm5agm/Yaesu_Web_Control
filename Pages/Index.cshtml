@@ -18,8 +18,8 @@
     // slider and the Power dial are right on first paint, and so the browser
     // agrees with the range check CatController.SetPower applies to the same value.
     int maxPowerWatts = Yaesu_Web_Control.Services.RadioCapabilities.MaxPowerWatts(Model.RadioModel);
-    // Quick Memory Bank Store/Recall buttons (Thomas OZ1JTE request) — rendered
-    // once, under VFO A's filter/audio scope, since QMB is a radio-global function.
+    // Quick Memory Bank Store/Recall (Thomas OZ1JTE request) — rendered once
+    // in the ATU / Tune / Mon toolbar, since QMB is a radio-global function.
     bool hasQmb = Yaesu_Web_Control.Services.RadioCapabilities.SupportsQmb(Model.RadioModel);
     // Render VC Tune controls only when both the model supports VC Tune (FTdx101MP)
     // AND the hardware ID is positively confirmed to support VT CAT commands.
@@ -145,7 +145,7 @@
 }
 
 <!-- Cache-busted CSS reference -->
-<link rel="stylesheet" href="~/css/site.css?v=20260818a" />
+<link rel="stylesheet" href="~/css/site.css?v=20260915a" />
 <link rel="stylesheet" href="~/css/closer-to-raw-power.css?v=20260226n" />
 <link rel="stylesheet" href="~/css/toggle-dropdown-button.css" asp-append-version="true" />
 <style>
@@ -608,8 +608,9 @@
                                style="width: clamp(80px, 10vw, 150px); height: 18px;"
                                oninput="document.getElementById('procLevelValue').innerText = this.value;"
                                onchange="setProcLevel(this.value);">
+                        <div class="d-flex align-items-center gap-1 flex-nowrap ms-2">
                         <button id="atuBtn"
-                                class="btn btn-sm ms-2 @(Model.AtuEnabled ? "btn-success" : "btn-outline-secondary")"
+                                class="btn btn-sm @(Model.AtuEnabled ? "btn-success" : "btn-outline-secondary")"
                                 data-a11y-key="controls.atu"
                                 aria-label="Antenna tuner — short tap toggles on/off, long press starts auto-tune"
                                 title="Tap to toggle ATU on/off; press and hold to start auto-tune"
@@ -621,18 +622,29 @@
                            becomes a red "Stop" while a tune cycle is running. *@
                         <button id="atuTuneBtn"
                                 type="button"
-                                class="btn btn-sm ms-1 btn-outline-secondary"
+                                class="btn btn-sm btn-outline-secondary"
                                 data-a11y-key="controls.atuTune"
                                 aria-label="Start antenna auto-tune"
                                 title="Start antenna auto-tune"
                                 onclick="atuTuneButtonClick()"
                                 style="touch-action: manipulation;">Tune</button>
+                        @if (hasQmb)
+                        {
+                            <!-- Quick Memory Bank (QMB) — global radio function, shown once.
+                                 Store (QI;) pushes the current VFO into the QMB stack; Recall
+                                 (QR;) recalls / cycles through the stored slots. Same btn-sm
+                                 face as Tune / Mon; left-click opens Store / Recall / V/M. -->
+                            <div id="qmbControls" class="d-inline-flex">
+                                <div id="qmbButton"></div>
+                                <span id="qmbStatus" class="visually-hidden" role="status" aria-live="polite"></span>
+                            </div>
+                        }
                         <button id="monitorOnBtn"
-                                class="btn btn-sm ms-2 @(Model.MonitorOn ? "btn-warning" : "btn-outline-secondary")"
+                                class="btn btn-sm @(Model.MonitorOn ? "btn-warning" : "btn-outline-secondary")"
                                 aria-label="TX monitor — currently @(Model.MonitorOn ? "on" : "off")"
                                 title="Toggle TX monitor / sidetone on/off"
                                 onclick="toggleMonitor()">Mon</button>
-                        <label class="mb-0 text-nowrap ms-1"><span id="monLevelValue" class="fw-bold">@Model.MonitorLevelA</span></label>
+                        <label class="mb-0 text-nowrap"><span id="monLevelValue" class="fw-bold">@Model.MonitorLevelA</span></label>
                         <input type="range" class="flex-shrink-0"
                                id="monLevelSlider"
                                aria-label="TX monitor / sidetone level"
@@ -642,6 +654,7 @@
                                style="width: clamp(60px, 8vw, 110px); height: 18px;"
                                oninput="document.getElementById('monLevelValue').innerText = this.value;"
                                onchange="setMonitorLevel(this.value);">
+                        </div>
                         <button id="voxBtn"
                                 class="btn btn-sm ms-2 @(Model.VoxOn ? "btn-warning" : "btn-outline-secondary")"
                                 aria-label="VOX controls"
@@ -1154,43 +1167,6 @@
                                     Save to Mem
                                 </button>
                                 <span id="saveMemStatusA" class="visually-hidden" role="status" aria-live="polite"></span>
-                                @if (hasQmb)
-                                {
-                                    <!-- Quick Memory Bank (QMB) — global radio function, shown once.
-                                         Store (QI;) pushes the current VFO into the QMB stack; Recall
-                                         (QR;) recalls / cycles through the stored slots. Buttons only,
-                                         per Thomas OZ1JTE's request (no stack-contents display). -->
-                                    <div class="d-flex flex-column gap-1" id="qmbControls">
-                                        <span class="vfo-control-label" aria-hidden="true">QMB</span>
-                                        <div class="d-flex align-items-stretch gap-1">
-                                            <button id="qmbStoreBtn" type="button"
-                                                    class="btn btn-outline-secondary btn-sm flex-fill"
-                                                    style="padding:1px 4px;"
-                                                    onclick="qmbStore()"
-                                                    aria-label="Store current VFO to Quick Memory Bank"
-                                                    title="Store the current VFO frequency and mode into the radio's Quick Memory Bank">
-                                                Store
-                                            </button>
-                                            <button id="qmbRecallBtn" type="button"
-                                                    class="btn btn-outline-secondary btn-sm flex-fill"
-                                                    style="padding:1px 4px;"
-                                                    onclick="qmbRecall()"
-                                                    aria-label="Recall from Quick Memory Bank"
-                                                    title="Recall from the Quick Memory Bank — the display switches to QMB; repeated presses step through the stored slots. Use V/M to return to VFO.">
-                                                Recall
-                                            </button>
-                                            <button id="qmbVfoBtn" type="button"
-                                                    class="btn btn-outline-secondary btn-sm flex-fill"
-                                                    style="padding:1px 4px;"
-                                                    onclick="qmbVfo()"
-                                                    aria-label="Return to VFO mode (V/M key)"
-                                                    title="Return to VFO mode — leaves QMB (mirrors the radio's V/M key).">
-                                                V/M
-                                            </button>
-                                        </div>
-                                        <span id="qmbStatus" class="visually-hidden" role="status" aria-live="polite"></span>
-                                    </div>
-                                }
                             </div>
                             </div>
                         </div>
