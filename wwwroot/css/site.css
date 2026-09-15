@@ -456,6 +456,7 @@ pre, code { tab-size: 4; }
 .vfo-col--tune #filterScopeContainerA,
 .vfo-col--tune #filterScopeContainerB {
     width: 100%;
+    overflow: visible;
 }
 
 .vfo-col--tune canvas {
