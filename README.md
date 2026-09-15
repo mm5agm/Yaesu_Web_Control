@@ -11,7 +11,9 @@ Yaesu Web Control (**YWC**) is a continuation of my FTdx101_WebApp with more Yae
 
 ## ✨ Added since the last release
 
-**v2.5.0 is the biggest release since the SDR spectrum display arrived.** Five things are in it that were not in v2.4.2 at all: the radio's own screen in the browser — and you can click it — a Morse reader, a Morse sender, remote audio both ways, and YWC running on macOS, Linux and a Raspberry Pi. Two of those are Fabio Valente's (CR7CDC) work, and this release is as much his as mine.
+> **v2.5.0 users: install v2.5.1.** The v2.5.0 installer went out without `Yaesu_Sdr_Worker.exe`, the separate process that runs each SDR, so the spectrum display could not start an SDR on an installed copy. A user spotted the missing file the same day — thank you. v2.5.1 puts it back and changes nothing else; install it over v2.5.0 and your settings are kept. The release build now refuses to package an installer without the worker. Details in the [v2.5.1 notes](#2026-09-15---v251).
+
+**v2.5.0 was the biggest release since the SDR spectrum display arrived.** Five things are in it that were not in v2.4.2 at all: the radio's own screen in the browser — and you can click it — a Morse reader, a Morse sender, remote audio both ways, and YWC running on macOS, Linux and a Raspberry Pi. Two of those are Fabio Valente's (CR7CDC) work, and this release is as much his as mine.
 
 ### The radio's own screen in the browser — and you can click it
 
