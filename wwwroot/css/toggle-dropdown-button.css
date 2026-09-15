@@ -266,19 +266,21 @@
     font-size: 0.75rem;
 }
 
-/* QMB in operating-controls column 4: same btn-sm outline face as Tune. */
+/* QMB in operating-controls column 4: same btn-sm outline face and
+   full column width as DX Spots / Voice. */
 .qmb-toolbar-key {
     position: relative;
-    flex: 0 0 auto;
-    width: auto;
-    align-self: center;
     overflow: visible;
 }
 
-.qmb-toolbar-key > .dropdown,
-.qmb-toolbar-key.dropdown {
-    position: relative;
-    display: inline-block;
+#operatingControlsRow #qmbControls,
+#operatingControlsRow #qmbButton.qmb-toolbar-key {
+    display: block !important;
+    width: 100%;
+}
+
+#operatingControlsRow #qmbButton > .btn {
+    width: 100%;
 }
 
 .dropdown-menu.qmb-toolbar-key__menu.show {
