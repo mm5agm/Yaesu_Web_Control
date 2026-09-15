@@ -16,6 +16,7 @@
 // Once every user is past that upgrade the marker is inert, and bumping it
 // achieves nothing the version-tied parent import has not already done.
 import { SMeterGauge, PowerGauge, SWRGauge, ALCGauge, TempGauge, CompressionGauge, IDDGauge, VDDGauge } from './gauge.js?v=1';
+import { LinearPowerGauge, LinearSWRGauge, LinearALCGauge, LinearCompressionGauge, LinearSMeterGauge } from './linear-gauge.js?v=1';
 
 // Registry of gauge constructors.
 // Add new meter types here as your UI grows.
@@ -27,7 +28,13 @@ const gaugeRegistry = {
     temp:   TempGauge,
     compression: CompressionGauge,
     idd: IDDGauge,
-    vdd: VDDGauge
+    vdd: VDDGauge,
+    // Compact horizontal bar faces (PoC) — siblings of the radials.
+    powerLinear:        LinearPowerGauge,
+    swrLinear:          LinearSWRGauge,
+    alcLinear:          LinearALCGauge,
+    compressionLinear:  LinearCompressionGauge,
+    smeterLinear:       LinearSMeterGauge
 };
 
 // High-contrast colour overrides applied when Windows High Contrast mode is active.
@@ -94,3 +101,8 @@ export function createTempGauge(canvasId, options = {})   { return createGauge('
 export function createCompressionGauge(canvasId, options = {}) { return createGauge('compression', canvasId, options); }
 export function createIDDGauge(canvasId, options = {})    { return createGauge('idd', canvasId, options); }
 export function createVDDGauge(canvasId, options = {})    { return createGauge('vdd', canvasId, options); }
+export function createLinearPowerGauge(canvasId, options = {}) { return createGauge('powerLinear', canvasId, options); }
+export function createLinearSWRGauge(canvasId, options = {})   { return createGauge('swrLinear',   canvasId, options); }
+export function createLinearALCGauge(canvasId, options = {})   { return createGauge('alcLinear',   canvasId, options); }
+export function createLinearCompressionGauge(canvasId, options = {}) { return createGauge('compressionLinear', canvasId, options); }
+export function createLinearSMeterGauge(canvasId, options = {}) { return createGauge('smeterLinear', canvasId, options); }
