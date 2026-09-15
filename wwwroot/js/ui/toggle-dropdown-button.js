@@ -1,3 +1,15 @@
+function wheelStep(event, step) {
+    if (!event.deltaY || !Number.isFinite(step) || step <= 0) return 0;
+    return event.deltaY < 0 ? step : -step;
+}
+
+function nextOptionIndex(options, selectedId, direction) {
+    if (!options.length || !direction) return -1;
+    const current = options.findIndex((option) => String(option.id) === String(selectedId));
+    const index = current < 0 ? (direction > 0 ? 0 : options.length - 1) : current + direction;
+    return (index + options.length) % options.length;
+}
+
 /**
  * Yaesu key: left-click toggles, cycles, or opens the menu; right-click opens options.
  */
@@ -259,6 +271,22 @@ export class ToggleDropdownButton {
             }, 50);
         });
 
+        this.button.addEventListener("wheel", (event) => {
+            if (this.disabled || !this.options.length) return;
+            const direction = event.deltaY < 0 ? -1 : 1;
+            const index = nextOptionIndex(this.options, this.selectedId, direction);
+            if (index < 0) return;
+            event.preventDefault();
+            this.selectedId = String(this.options[index].id);
+            if (this.offId != null) {
+                this.enabled = this.selectedId !== this.offId;
+                if (this.enabled) this._lastOnId = this.selectedId;
+            }
+            this._setMenuOpen(false);
+            this._sync();
+            this.onChange(this.getState());
+        }, { passive: false });
+
         this.menu.addEventListener("click", (event) => {
             const item = event.target.closest("[data-option-id]");
             if (!item) {
@@ -460,6 +488,16 @@ export class ToggleSliderButton {
                 this._ignoreNextClick = false;
             }, 50);
         });
+
+        this.button.addEventListener("wheel", (event) => {
+            if (this.disabled) return;
+            const delta = wheelStep(event, this.step);
+            if (!delta) return;
+            event.preventDefault();
+            this.value = Math.min(this.max, Math.max(this.min, this.value + delta));
+            this._sync();
+            this.onChange(this.getState());
+        }, { passive: false });
 
         this.slider.addEventListener("input", () => {
             this.value = Number(this.slider.value);
@@ -946,6 +984,27 @@ export class CycleContextButton {
                 this._ignoreNextClick = false;
             }, 50);
         });
+
+        this.button.addEventListener("wheel", (event) => {
+            if (this.disabled) return;
+            const direction = event.deltaY < 0 ? -1 : 1;
+            if (this.contextType === "slider") {
+                const delta = wheelStep(event, 1);
+                if (!delta) return;
+                event.preventDefault();
+                this.value = Math.min(this.max, Math.max(this.min, this.value + delta));
+                if (this.linkSliderToOptions && this.options[this.value]) {
+                    this.selectedId = this.options[this.value].id;
+                }
+            } else {
+                const index = nextOptionIndex(this.contextOptions, this.contextId, direction);
+                if (index < 0) return;
+                event.preventDefault();
+                this.contextId = String(this.contextOptions[index].id);
+            }
+            this._sync();
+            this.onChange(this.getState());
+        }, { passive: false });
 
         if (this.contextType === "slider") {
             this.slider.addEventListener("input", () => {
