@@ -176,10 +176,16 @@ If this project has helped you, please consider sponsoring it. Even small contri
 
 ## ⚠️ Windows Security Warnings on First Install
 
-Because the installer is not code-signed, Windows and third-party antivirus tools will warn you before it runs. This is expected — the file is not malware. Follow these steps if you hit a block:
+The installer is not code-signed (a signing certificate is a recurring cost I haven't taken on for a free program), so Windows and antivirus tools treat it as an unknown, newly downloaded executable and may warn about it or block it. This is expected — the installer is built by GitHub Actions directly from the source in this repository, and GitHub shows a SHA-256 digest beside each file on the release page — run `Get-FileHash Yaesu_Web_Control_Setup.exe` in PowerShell and the two should match. Follow whichever of these matches what you see:
+
+**Microsoft Defender deletes the download and says "This program is dangerous and executes commands from an attacker"**
+This is Defender's cloud/machine-learning detection (the name it shows ends in `!ml`, e.g. `Trojan:Win32/Wacatac.B!ml`) — a false positive that hits many unsigned installers of self-contained .NET applications, and it varies from PC to PC. To install: open **Windows Security → Virus & threat protection → Protection history**, click the entry for `Yaesu_Web_Control_Setup.exe`, choose **Actions → Allow** (or **Restore**), then download the installer again. Don't switch Defender off — allowing this one file is enough. If this happens to you, please post the detection name shown in Protection history in a Discussion; I report each one to Microsoft as a false positive, and that is what makes it stop happening for the next person.
 
 **Norton (or other antivirus) flags the file as malware**
-This is a false positive caused by the executable being unsigned and newly downloaded. In Norton, go to **Security → History**, find the quarantined file, and choose **Restore & Exclude** (or the equivalent Allow option in your antivirus).
+This is the same false positive, caused by the executable being unsigned and newly downloaded. In Norton, go to **Security → History**, find the quarantined file, and choose **Restore & Exclude** (or the equivalent Allow option in your antivirus).
+
+**"Windows protected your PC" (SmartScreen) or an Unknown Publisher prompt when you run the installer**
+Click **More info → Run anyway**.
 
 **Right-click → Properties → Unblock**
 Windows marks files downloaded from the internet as untrusted. Before running the installer, right-click the file, choose **Properties**, and if you see an **Unblock** checkbox at the bottom of the General tab, tick it and click OK.
