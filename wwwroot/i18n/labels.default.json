@@ -98,6 +98,7 @@
     "manualNotchB": "Manual notch, VFO B",
     "roofingA":     "Roofing filter, VFO A",
     "roofingB":     "Roofing filter, VFO B",
+    "qmb":          "Quick Memory Bank — click for Store, Recall and V/M",
     "atu":          "Antenna tuner on or off — tap to toggle, press and hold to auto-tune",
     "atuTune":      "Start antenna auto-tune"
   }

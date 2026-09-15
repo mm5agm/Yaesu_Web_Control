@@ -1,12 +1,13 @@
 /**
  * Wire Yaesu-key widgets for Band, Mode, Roofing, IF Width, IF Shift, AGC,
- * IPO, ATT, NB, Contour, APF, Auto Notch, Man Notch.
+ * IPO, ATT, NB, Contour, APF, Auto Notch, Man Notch, and QMB.
  */
 import {
     ToggleDropdownButton,
     ToggleSliderButton,
     ToggleButton,
     CycleContextButton,
+    ActionMenuButton,
 } from "/js/ui/toggle-dropdown-button.js";
 import { rebuildIfWidthSelect, ifWidthKeyConfig } from "/js/ui/if-width-tables.js";
 
@@ -628,8 +629,54 @@ function initApfButton(vfo) {
     });
 }
 
+/**
+ * QMB is a radio-global command menu (Store / Recall / V/M), not a
+ * selected-state key. Shown once, in the ATU / Tune / Mon toolbar.
+ * @returns {ActionMenuButton | null}
+ */
+function initQmbButton() {
+    const root = document.getElementById("qmbButton");
+    if (!root) return null;
+
+    const widget = new ActionMenuButton(root, {
+        label: "QMB",
+        a11yKey: "controls.qmb",
+        title: "Quick Memory Bank — click for Store, Recall and V/M",
+        variant: "toolbar",
+        actions: [
+            {
+                id: "store",
+                label: "Store",
+                ariaLabel: "Store current VFO to Quick Memory Bank",
+                title: "Store the current VFO frequency and mode into the radio's Quick Memory Bank",
+            },
+            {
+                id: "recall",
+                label: "Recall",
+                ariaLabel: "Recall from Quick Memory Bank",
+                title: "Recall from the Quick Memory Bank — the display switches to QMB; repeated presses step through the stored slots. Use V/M to return to VFO.",
+            },
+            {
+                id: "vfo",
+                label: "V/M",
+                ariaLabel: "Return to VFO mode (V/M key)",
+                title: "Return to VFO mode — leaves QMB (mirrors the radio's V/M key).",
+            },
+        ],
+        onAction: (id) => {
+            if (id === "store") window.qmbStore?.();
+            else if (id === "recall") window.qmbRecall?.();
+            else if (id === "vfo") window.qmbVfo?.();
+        },
+    });
+
+    window.qmbButton = widget;
+    return widget;
+}
+
 export function initVfoKeyButtons() {
     const result = {};
+    result.qmb = initQmbButton();
     for (const vfo of ["A", "B"]) {
         const band = initBandButton(vfo);
         const segment = initSegmentButton(vfo);
