@@ -115,6 +115,22 @@ jobs:
           Get-ChildItem -Name
         shell: pwsh
 
+      # The SDR panel spawns Yaesu_Sdr_Worker.exe from the install folder.
+      # v2.4.3-pre6 and v2.5.0 shipped without it: the publish step silently
+      # left it out (its csproj items were evaluated before the worker had
+      # built), so those installers had no SDR support. The listing above
+      # recorded that each time and nobody read it. Now the build stops here.
+      - name: Verify the SDR worker is in the publish output
+        shell: pwsh
+        run: |
+          $missing = @('Yaesu_Sdr_Worker.exe', 'Yaesu_Sdr_Worker.dll', 'Yaesu_Sdr_Worker.runtimeconfig.json') |
+            Where-Object { -not (Test-Path (Join-Path publish $_)) }
+          if ($missing) {
+            Write-Error "publish\ is missing $($missing -join ', ') - the installer would ship without SDR support. See StageSdrWorker / PublishSdrWorker in Yaesu_Web_Control.csproj."
+            exit 1
+          }
+          Write-Host "Yaesu_Sdr_Worker.exe present in publish\"
+
       - name: Build NSIS installer
         run: |
           $makensis = (Get-Command makensis.exe -ErrorAction SilentlyContinue)?.Source

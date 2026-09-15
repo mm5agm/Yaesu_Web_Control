@@ -223,85 +223,33 @@
     </ProjectReference>
   </ItemGroup>
 
-  <!-- Make the worker's build output participate in YWC's standard
-       output + publish copy. CopyToOutputDirectory lands it in bin/
-       for `dotnet run`; CopyToPublishDirectory lands it in publish/
-       for `dotnet publish` (used by installer.nsi). The worker's
-       ProjectReference above guarantees these files exist by the
-       time YWC's copy runs.
-
-       Two ItemGroups because the worker's output folder differs
-       depending on whether a RuntimeIdentifier is set:
-         - `dotnet build`  /  `dotnet run`  → no RID → output at
-           bin/<config>/<tfm>/
-         - `dotnet publish -r win-x64`     → RID set → output at
-           bin/<config>/<tfm>/<rid>/
-       The CI workflow uses the latter (RID=win-x64) for the
-       installer; local dev typically uses the former. v2.3.0 shipped
-       with only the no-RID form and the CI publish failed. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows' And '$(RuntimeIdentifier)' == ''">
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.exe" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.exe')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <Link>Yaesu_Sdr_Worker.exe</Link>
-    </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.dll" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.dll')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <Link>Yaesu_Sdr_Worker.dll</Link>
-    </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.deps.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.deps.json')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <Link>Yaesu_Sdr_Worker.deps.json</Link>
-    </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\Yaesu_Sdr_Worker.runtimeconfig.json')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <Link>Yaesu_Sdr_Worker.runtimeconfig.json</Link>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows' And '$(RuntimeIdentifier)' != ''">
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.exe" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.exe')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <Link>Yaesu_Sdr_Worker.exe</Link>
-    </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.dll" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.dll')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <Link>Yaesu_Sdr_Worker.dll</Link>
-    </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.deps.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.deps.json')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <Link>Yaesu_Sdr_Worker.deps.json</Link>
-    </None>
-    <None Include="Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.runtimeconfig.json" Visible="false" Condition="Exists('Workers\Yaesu_Sdr_Worker\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\Yaesu_Sdr_Worker.runtimeconfig.json')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <Link>Yaesu_Sdr_Worker.runtimeconfig.json</Link>
-    </None>
-  </ItemGroup>
-
   <!--
-    Staging guard. The <None> items above are ordinary evaluation-time items:
-    their Exists() conditions are read before anything is built, and the copy
-    itself is PreserveNewest. That chain does work - a touched file in the
-    worker, or a touched file linked into it from Services/Sdr, both rebuild
-    the worker and restage it (verified 2026-08-30). What it cannot survive is
-    the staged copy being unwritable or the worker output being absent when
-    the items were evaluated, and its failure mode is the dangerous kind: YWC
-    launches a worker that does not contain the change, and nothing in the
-    build output says so. That cost a whole hardware test round chasing an SDR
-    fix that was never in the running code.
+    Staging the worker next to YWC's exe: ONE mechanism, this target.
 
-    So copy again here, after the worker's ProjectReference has genuinely
-    built, and refuse to finish if there is nothing to copy. The empty-RID
-    case collapses $(RuntimeIdentifier) out of the path, so one target covers
-    both layouts. Cheap, and it turns a silent stale worker into a build
-    error.
+    Until 2026-09-15 this was done with evaluation-time <None> items carrying
+    CopyToOutputDirectory / CopyToPublishDirectory and an Exists() condition
+    on the worker's output. Exists() is answered when the project is LOADED,
+    which is before the ProjectReference above has built the worker, so on a
+    clean machine - every CI runner - the condition was false, the item list
+    was empty, and `dotnet publish` shipped no worker at all. It looked fine
+    on a dev box only because the worker's output survives from the previous
+    build. The Exists() conditions arrived in d348a50 (2026-08-05), so
+    v2.4.2 (2026-08-01) still shipped the worker and v2.4.3-pre6 and
+    v2.5.0 did not - checked by unpacking the three installers. On those
+    two the SDR panel could not open any device (reported by a user on
+    v2.5.0). The build log's "List publish output" step recorded the
+    absence both times; nothing read it.
+
+    So: no evaluation-time items. This target runs after the worker has
+    genuinely built, refuses to finish if there is nothing to copy, copies
+    into $(OutDir) for `dotnet run`, and adds the same files to
+    ResolvedFileToPublish so `dotnet publish` carries them into publish/
+    (which installer.nsi packs wholesale). The empty-RID case collapses
+    $(RuntimeIdentifier) out of the path, so one target covers both the
+    local `dotnet build` layout (bin/<config>/<tfm>/) and the CI publish
+    layout (bin/<config>/<tfm>/<rid>/). The workflow additionally checks
+    publish/ for the exe before NSIS runs, so this cannot silently regress
+    again.
   -->
   <Target Name="StageSdrWorker" AfterTargets="Build"
           Condition="'$(TargetFramework)' == 'net10.0-windows' AND ('$(RuntimeIdentifier)' == '' OR $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win')))">
@@ -310,13 +258,29 @@
     </PropertyGroup>
     <Error Condition="!Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.dll')"
            Text="Yaesu_Sdr_Worker did not produce $(SdrWorkerOutDir)Yaesu_Sdr_Worker.dll. YWC would start and then fail to open any SDR, so this is an error rather than a warning." />
+    <Error Condition="!Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.exe')"
+           Text="Yaesu_Sdr_Worker did not produce $(SdrWorkerOutDir)Yaesu_Sdr_Worker.exe (the apphost). YWC launches the worker by its exe, so this is an error rather than a warning." />
     <ItemGroup>
-      <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.exe" Condition="Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.exe')" />
+      <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.exe" />
       <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.dll" />
       <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.deps.json" Condition="Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.deps.json')" />
       <SdrWorkerStaged Include="$(SdrWorkerOutDir)Yaesu_Sdr_Worker.runtimeconfig.json" Condition="Exists('$(SdrWorkerOutDir)Yaesu_Sdr_Worker.runtimeconfig.json')" />
     </ItemGroup>
     <Copy SourceFiles="@(SdrWorkerStaged)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- The publish half. ComputeResolvedFilesToPublishList is where the SDK
+       settles what goes into publish/; anything added to ResolvedFileToPublish
+       after it is copied by the same machinery as the app's own files.
+       DependsOnTargets makes sure the staging errors above have run first. -->
+  <Target Name="PublishSdrWorker" AfterTargets="ComputeResolvedFilesToPublishList" DependsOnTargets="StageSdrWorker"
+          Condition="'$(TargetFramework)' == 'net10.0-windows' AND ('$(RuntimeIdentifier)' == '' OR $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win')))">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(SdrWorkerStaged)">
+        <RelativePath>%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
   </Target>
 
   <PropertyGroup>
