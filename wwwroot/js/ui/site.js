@@ -76,6 +76,27 @@ function isTypingIntoEditable() {
     return false;
 }
 
+// Make every range input usable without dragging. Yaesu context sliders have
+// their own wheel handler; this delegated handler covers standalone sliders
+// and reuses their normal input/change wiring.
+document.addEventListener('wheel', function (event) {
+    const slider = event.target.closest?.('input[type="range"]');
+    if (!slider || slider.disabled || event.ctrlKey || !event.deltaY) return;
+
+    const min = Number(slider.min || 0);
+    const max = Number(slider.max || 100);
+    const step = Number(slider.step || 1);
+    const current = Number(slider.value);
+    if (![min, max, step, current].every(Number.isFinite) || step <= 0 || max <= min) return;
+
+    const next = Math.min(max, Math.max(min, current + (event.deltaY < 0 ? step : -step)));
+    if (next === current) return;
+
+    event.preventDefault();
+    slider.value = String(next);
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+}, { passive: false });
+
 // --- Fullscreen Toggle: 'f' or 'F' to enter, 'Esc' to exit ---
 document.addEventListener('keydown', function (e) {
     // Ignore if typing in an input, textarea, or contenteditable
