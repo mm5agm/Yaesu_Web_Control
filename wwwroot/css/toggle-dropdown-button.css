@@ -10,7 +10,16 @@
     display: inline-block;
 }
 
+/* Standalone Yaesu keys (PROC / MON / ATU in the operating bar) carry the
+   same custom properties without needing a .toggle-dd wrapper. */
 .toggle-dd__btn {
+    --yaesu-face: #2a2a2a;
+    --yaesu-face-hi: #3d3d3d;
+    --yaesu-face-lo: #1a1a1a;
+    --yaesu-led-off: #4a4a4a;
+    --yaesu-led-on: #ff7a18;
+    --yaesu-ink: #e6e6e6;
+
     --bs-btn-color: var(--yaesu-ink);
     --bs-btn-hover-color: #f3f3f3;
     --bs-btn-active-color: #f3f3f3;
@@ -257,7 +266,7 @@
     font-size: 0.75rem;
 }
 
-/* QMB in the ATU / Tune / Mon toolbar: same btn-sm outline face as Tune. */
+/* QMB in operating-controls column 4: same btn-sm outline face as Tune. */
 .qmb-toolbar-key {
     position: relative;
     flex: 0 0 auto;
@@ -370,4 +379,72 @@
 
 .toggle-dd--oob .toggle-dd__label {
     color: #ffb4b4;
+}
+
+/* PROC / MON in the operating-controls bar: Yaesu LED key + always-visible slider. */
+.yaesu-level-key {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: nowrap;
+}
+
+.yaesu-level-key > .toggle-dd__btn {
+    flex: 0 0 auto;
+    min-width: 5.5rem;
+    width: auto;
+}
+
+#operatingControlsRow .op-col--buttons > .toggle-dd__btn {
+    min-width: 5.5rem;
+    width: 100%;
+}
+
+.yaesu-level-key__level {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.yaesu-level-key__level input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 3.5rem;
+    max-width: 8rem;
+    height: 18px;
+}
+
+#operatingControlsRow .yaesu-level-key__level input[type="range"] {
+    max-width: none;
+}
+
+.yaesu-level-key__level .fw-bold {
+    min-width: 1.6rem;
+    text-align: right;
+}
+
+/* ATU Yaesu key: red face while an auto-tune cycle is running. */
+#atuBtn.is-tuning {
+    --bs-btn-color: #fff;
+    color: #fff;
+    background: linear-gradient(180deg, #e35d5d 0%, #c82333 42%, #8b1414 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px #8b1414,
+        0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+#atuBtn.is-tuning .toggle-dd__led {
+    background: #ffd39a;
+    box-shadow:
+        0 0 5px 1px rgba(255, 200, 100, 0.9),
+        inset 0 0 2px #fff;
+}
+
+#atuBtn.is-tuning:hover,
+#atuBtn.is-tuning:focus-visible {
+    color: #fff;
+    background: linear-gradient(180deg, #ef7070 0%, #d32f3f 42%, #9a1818 100%);
 }

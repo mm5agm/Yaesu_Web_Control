@@ -1,0 +1,115 @@
+@model string
+@{
+    // Analogue meter gauges + optional S-meter history strips.
+    // Kept as a partial so the operating-controls row below is not layout-coupled
+    // to this strip (the old padding-left: 280px under the history canvas).
+    // Relocating the gauges is a one-line <partial> move in Index.cshtml.
+    var radioModel = Model ?? "";
+    bool isSingleReceiver = Yaesu_Web_Control.Services.RadioCapabilities.IsSingleReceiver(radioModel);
+    bool isFtdx10  = radioModel == "FTdx10";
+    bool isFt710   = radioModel == "FT-710";
+    bool isFtdx5000 = radioModel == "FTDX5000MP" || radioModel == "FTDX5000D";
+}
+
+<!-- Gauges row. The id is the hook site.js uses to add
+     .meters-tx-dim while transmitting; data-meter-scope="rx"
+     on a cell marks it as one the radio stops measuring
+     during an over. -->
+<div id="meterGaugesRow" class="d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
+    <!-- S-Meter rolling history strip — leftmost so the live trace
+         reads left-to-right toward the S-meter needle. Hidden
+         until the toolbar's S-hist toggle is on. Sized to match
+         the meter cells alongside it. Moved from inside the VFO
+         panels in v2.3.9 (Jacek SP3L #34 / Colin's design call).
+         v2.4.0: restored as a VFO A / VFO B pair — dual-receiver
+         radios (FTdx101MP/D) have an independently calibrated
+         S-meter per receiver (SM0;/SM1;); single-receiver radios
+         only get the VFO A pair since there's no SUB receiver. -->
+    @* 110px, not the 135px of the gauge cells beside it. The
+       operating-controls row used to be pulled up under these
+       dials; the strips are solid filled rectangles so they
+       needed headroom. The panel sizes its canvas from
+       clientHeight via a ResizeObserver. *@
+    <div id="sMeterHistoryContainer"
+         class="text-center smeter-history-container"
+         style="display:none; position: relative; height: 110px; width: 260px; flex-shrink: 0; margin: 0; padding: 0;">
+        <canvas id="sMeterHistoryCanvas"
+                role="img" aria-hidden="true"
+                aria-label="S-meter 30-second history — VFO A"
+                data-a11y-key="meters.smeterHistoryA"
+                style="display:block; width:100%; height:100%; border-radius:3px;"></canvas>
+    </div>
+    <!-- S-Meter A (MAIN) — moved from per-VFO panels to the top
+         row in v2.3.9. Always live (unlike SWR/Power/etc which
+         are TX-only). -->
+    <div class="text-center" data-meter-scope="rx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+        <div class="analog-meter-container">
+            <canvas id="sMeterCanvas" role="img" aria-hidden="true" aria-label="S meter A" data-a11y-key="meters.smeterA"></canvas>
+        </div>
+    </div>
+    @if (!isSingleReceiver)
+    {
+        <!-- S-Meter B (SUB) — dual-receiver radios only. -->
+        @* 110px to match VFO A's strip — see the note there. *@
+        <div id="sMeterHistoryContainerB"
+             class="text-center smeter-history-container"
+             style="display:none; position: relative; height: 110px; width: 260px; flex-shrink: 0; margin: 0; padding: 0;">
+            <canvas id="sMeterHistoryCanvasB"
+                    role="img" aria-hidden="true"
+                    aria-label="S-meter 30-second history — VFO B"
+                    data-a11y-key="meters.smeterHistoryB"
+                    style="display:block; width:100%; height:100%; border-radius:3px;"></canvas>
+        </div>
+        <div class="text-center" data-meter-scope="rx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+            <div class="analog-meter-container">
+                <canvas id="sMeterCanvasB" role="img" aria-hidden="true" aria-label="S meter B" data-a11y-key="meters.smeterB"></canvas>
+            </div>
+        </div>
+    }
+    <!-- SWR Meter -->
+    <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+        <div class="analog-meter-container">
+            <canvas id="swrMeterCanvas" role="img" aria-hidden="true" aria-label="SWR meter" data-a11y-key="meters.swr"></canvas>
+        </div>
+    </div>
+    <!-- Power Meter -->
+    <div class="text-center power-meter-container" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+        <div class="analog-meter-container">
+            <canvas id="powerMeterCanvas" role="img" aria-hidden="true" aria-label="Power output meter" data-a11y-key="meters.power"></canvas>
+        </div>
+    </div>
+    <!-- Compression Meter -->
+    <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+        <div class="analog-meter-container">
+            <canvas id="compressionMeterCanvas" role="img" aria-hidden="true" aria-label="Compression meter" data-a11y-key="meters.compression"></canvas>
+        </div>
+    </div>
+    <!-- ALC Meter -->
+    <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+        <div class="analog-meter-container">
+            <canvas id="alcMeterCanvas" role="img" aria-hidden="true" aria-label="ALC meter" data-a11y-key="meters.alc"></canvas>
+        </div>
+    </div>
+    @if (!isFtdx10 && !isFt710 && !isFtdx5000)
+    {
+        <!-- PA Temperature Meter — FTdx101/FTDX3000 only (high-voltage PA board).
+             FTDX5000 excluded: no temperature read-code in its RM meter set. -->
+        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+            <div class="analog-meter-container">
+                <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
+            </div>
+        </div>
+        <!-- IDD Meter — FTdx101/FTDX3000 only -->
+        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+            <div class="analog-meter-container">
+                <canvas id="iddMeterCanvas" role="img" aria-hidden="true" aria-label="Drain current meter" data-a11y-key="meters.idd"></canvas>
+            </div>
+        </div>
+        <!-- VDD Meter — FTdx101/FTDX3000 only -->
+        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
+            <div class="analog-meter-container">
+                <canvas id="vddMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier supply voltage meter" data-a11y-key="meters.vdd"></canvas>
+            </div>
+        </div>
+    }
+</div>

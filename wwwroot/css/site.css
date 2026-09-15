@@ -927,6 +927,76 @@ fieldset.calibration-card {
     margin-top: 8px !important; /* Minimal gap to visually group with Raw Power Out */
 }
 
+/* Operating controls bar — Bootstrap row below the gauges partial.
+   Not layout-coupled to the S-meter history strip any more.
+   Resize with Bootstrap col-* on each .op-col in Index.cshtml. */
+#operatingControlsRow {
+    margin-top: 0.35rem;
+    margin-bottom: 0.5rem;
+}
+
+#operatingControlsRow .op-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+}
+
+#operatingControlsRow .op-col--levels {
+    min-width: 0;
+}
+
+#operatingControlsRow .op-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: nowrap;
+}
+
+#operatingControlsRow .op-slider-row input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 4.5rem;
+    height: 18px;
+}
+
+#operatingControlsRow .op-col--buttons > .btn {
+    width: 100%;
+}
+
+#operatingControlsRow .op-col--extras {
+    min-width: 0;
+}
+
+#operatingControlsRow .op-extras-block {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.45rem;
+}
+
+#operatingControlsRow .op-extras-meters {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 10rem;
+    flex: 1 1 10rem;
+}
+
+#operatingControlsRow .op-clar-offset {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex: 1 1 8rem;
+    min-width: 0;
+    flex-wrap: nowrap;
+}
+
+#operatingControlsRow #clarOffsetSlider {
+    flex: 1 1 5rem;
+    min-width: 4.5rem;
+    height: 18px;
+}
+
 /* ── VOX / CW / FM Repeater floating panels ─────────────────────────────── */
 /* Non-modal: all three can be open simultaneously, draggable, positioned across the top */
 #voxDialog > div:first-child,
