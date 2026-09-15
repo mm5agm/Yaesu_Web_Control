@@ -735,7 +735,7 @@ Selecting a narrower roofing filter can change the IF Width as well. If IF Width
 | AGC | Yaesu-style key. Left-click toggles OFF ↔ last speed. Right-click opens OFF / FAST / MID / SLOW / AUTO. |
 | IPO/AMP | Yaesu-style key. Left-click cycles IPO → AMP1 → AMP2 → IPO. Right-click opens IPO / AMP1 / AMP2. |
 | ATT | Yaesu-style key. Left-click toggles OFF ↔ last attenuation. Right-click opens OFF / 6 dB / 12 dB / 18 dB. |
-| NR / DNR | Yaesu-style key. Left-click cycles OFF → NR1 → NR2 → OFF (FTdx101MP/D, FTDX3000, FTDX5000) or OFF → DNR → OFF (FTdx10 / FT-710). Right-click opens a 1–15 slider for NR depth / DNR algorithm. |
+| DNR | Yaesu-style key. Left-click toggles ON/OFF. Right-click opens a 1–15 slider for DNR level (DNR algorithm on FTdx10 / FT-710). There is no NR1/NR2 on any supported radio. |
 | NB | Yaesu-style key. Left-click toggles ON/OFF. Right-click opens a 1–20 slider for noise blanker depth. |
 | Auto Notch | Yaesu-style key. Left-click toggles ON/OFF. |
 | Notch | Yaesu-style key. Left-click toggles manual notch ON/OFF. Right-click opens a 10–3200 Hz frequency slider. |
