@@ -2169,6 +2169,7 @@ window.syncBandButtonsFromFrequency = function () {
 
 // Outer DOMContentLoaded - initial UI wiring
 window.addEventListener('DOMContentLoaded', () => {
+    ensureSaveMemTooltips();
     pollInitStatus();
 
     // VFO-B show/hide toggle — click handler is in Index.cshtml (applyVisibility).
@@ -2390,8 +2391,13 @@ window.resetClarifier = resetClarifier;
 async function saveVfoToMemory(vfo) {
     const btn    = document.getElementById('saveMemBtn' + vfo);
     const status = document.getElementById('saveMemStatus' + vfo);
+    const icon   = btn?.querySelector('.save-mem-key__icon');
+    const resetBtn = () => {
+        if (icon) icon.className = 'bi bi-floppy-fill save-mem-key__icon';
+        btn?.classList.remove('is-saved', 'is-error', 'is-busy');
+    };
     try {
-        if (btn) { btn.disabled = true; btn.textContent = '…'; }
+        if (btn) { btn.disabled = true; btn.classList.add('is-busy'); }
         if (status) status.textContent = '';
         // Use the dedicated save-vfo endpoint: the backend reads the full
         // live radio state from RadioStateService and captures every advanced
@@ -2405,26 +2411,62 @@ async function saveVfoToMemory(vfo) {
         if (resp.ok) {
             if (status) status.textContent = `VFO ${vfo} saved to memories`;
             window.refreshMemoriesPanel?.();
-            if (btn) {
-                btn.textContent = '✓ Saved';
-                btn.classList.replace('btn-outline-secondary', 'btn-success');
+            if (btn && icon) {
+                btn.classList.remove('is-busy');
+                btn.classList.add('is-saved');
+                icon.className = 'bi bi-check-lg save-mem-key__icon';
                 setTimeout(() => {
-                    btn.textContent = 'Save to Mem';
-                    btn.classList.replace('btn-success', 'btn-outline-secondary');
+                    resetBtn();
                     btn.disabled = false;
                 }, 1500);
+            } else if (btn) {
+                btn.disabled = false;
             }
         } else {
             if (status) status.textContent = `Failed to save VFO ${vfo}`;
-            if (btn) { btn.textContent = '✗ Failed'; btn.disabled = false; }
+            if (btn && icon) {
+                btn.classList.remove('is-busy');
+                btn.classList.add('is-error');
+                icon.className = 'bi bi-x-lg save-mem-key__icon';
+                btn.disabled = false;
+                setTimeout(resetBtn, 1500);
+            } else if (btn) {
+                btn.disabled = false;
+            }
         }
     } catch (e) {
         if (status) status.textContent = `Error saving VFO ${vfo}`;
-        if (btn) { btn.textContent = '✗ Error'; btn.disabled = false; }
+        if (btn && icon) {
+            btn.classList.remove('is-busy');
+            btn.classList.add('is-error');
+            icon.className = 'bi bi-x-lg save-mem-key__icon';
+            btn.disabled = false;
+            setTimeout(resetBtn, 1500);
+        } else if (btn) {
+            btn.disabled = false;
+        }
         console.error('Save to memory failed:', e);
     }
 }
 window.saveVfoToMemory = saveVfoToMemory;
+
+function initSaveMemTooltips() {
+    if (typeof bootstrap === 'undefined') return false;
+    document.querySelectorAll('.save-mem-tip[data-bs-toggle="tooltip"]').forEach(el => {
+        bootstrap.Tooltip.getOrCreateInstance(el, {
+            delay: { show: 200, hide: 50 },
+            trigger: 'hover focus',
+            placement: el.getAttribute('data-bs-placement') || 'top',
+            fallbackPlacements: ['bottom', 'right', 'left']
+        });
+    });
+    return true;
+}
+
+function ensureSaveMemTooltips() {
+    if (initSaveMemTooltips()) return;
+    window.addEventListener('load', () => initSaveMemTooltips(), { once: true });
+}
 
 async function _setClarifier(vfo, rxOn, txOn, offsetHz) {
     try {

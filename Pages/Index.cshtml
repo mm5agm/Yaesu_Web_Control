@@ -149,8 +149,6 @@
 <link rel="stylesheet" href="~/css/closer-to-raw-power.css?v=20260226n" />
 <link rel="stylesheet" href="~/css/toggle-dropdown-button.css" asp-append-version="true" />
 <style>
-    #saveMemBtnA, #saveMemBtnB { font-weight: 700 !important; font-size: 0.85rem !important; color: #212529 !important; }
-
     /* Dual-receiver (FTdx101) active-band highlight: a subtle amber ring on
        the VFO panel the main tuning knob currently controls (MAIN or SUB).
        box-shadow so it never shifts layout; both receivers stay full-colour. */
@@ -1101,7 +1099,7 @@
                 </div>
                 <div class="card-body p-2">
                     <div class="vfo-body-grid">
-                        <!-- Col 1: frequency, RF/AF, band/segment/mode, filter scope -->
+                        <!-- Col 1: frequency (+ filter scope), RF/AF, band/segment/mode -->
                         <div class="vfo-col vfo-col--tune">
                             <div class="vfo-freq-row">
                                 <span id="freqA" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO A frequency" title="VFO A frequency" data-a11y-key="vfo.a.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
@@ -1117,6 +1115,10 @@
                                         title="Keyboard — enter VFO A frequency">
                                     <strong>123</strong>
                                 </button>
+                                <div class="filter-scope-freq-slot" id="filterScopeContainerA">
+                                    <canvas id="filterScopeCanvasA" role="img" aria-hidden="true"
+                                            aria-label="VFO A filter display" data-a11y-key="filter.scopeA"></canvas>
+                                </div>
                             </div>
                             <!-- Compact linear S-meter between frequency and RF gain.
                                  On single-receiver radios the inactive VFO's meter
@@ -1157,6 +1159,16 @@
                                 <div id="segmentButtonA" data-selected=""></div>
                                 <div class="d-flex align-items-center gap-2">
                                     <div id="modeButtonA" data-selected="@(Model.RadioState.ModeA ?? "USB")"></div>
+                                    <span class="d-inline-block save-mem-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                                          data-bs-title="Save VFO A frequency, mode, and all current settings to app memories."
+                                          aria-label="Save VFO A to memories">
+                                        <button id="saveMemBtnA" type="button"
+                                                class="btn toggle-dd__btn toggle-dd__btn--icon save-mem-key flex-shrink-0"
+                                                onclick="saveVfoToMemory('A')"
+                                                aria-label="Save VFO A to memories">
+                                            <i class="bi bi-floppy-fill save-mem-key__icon" aria-hidden="true"></i>
+                                        </button>
+                                    </span>
                                     @if (hasAntennaSelector)
                                     {
                                         <select class="form-select form-select-sm vfo-ant-select" id="antennaSelectA"
@@ -1178,21 +1190,7 @@
                                     }
                                 </div>
                             </div>
-                            <div class="filter-scope-column-slot">
-                            <div class="d-flex flex-column gap-1" id="filterScopeContainerA">
-                                <canvas id="filterScopeCanvasA" role="img" aria-hidden="true"
-                                        aria-label="VFO A filter display" data-a11y-key="filter.scopeA"></canvas>
-                                <button id="saveMemBtnA" type="button"
-                                        class="btn btn-outline-secondary btn-sm w-100"
-                                        style="padding:1px 4px;"
-                                        onclick="saveVfoToMemory('A')"
-                                        aria-label="Save VFO A to memories"
-                                        title="Save VFO A frequency, mode and clarifier to app memories">
-                                    Save to Mem
-                                </button>
-                                <span id="saveMemStatusA" class="visually-hidden" role="status" aria-live="polite"></span>
-                            </div>
-                            </div>
+                            <span id="saveMemStatusA" class="visually-hidden" role="status" aria-live="polite"></span>
                         </div>
 
                         <!-- Col 2: roofing, IF width, IF shift, audio filter -->
@@ -1360,7 +1358,7 @@
                 </div>
                 <div class="card-body p-2">
                     <div class="vfo-body-grid">
-                        <!-- Col 1: frequency, RF/AF, band/segment/mode, filter scope -->
+                        <!-- Col 1: frequency (+ filter scope), RF/AF, band/segment/mode -->
                         <div class="vfo-col vfo-col--tune">
                             <div class="vfo-freq-row">
                                 <span id="freqB" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO B frequency" title="VFO B frequency" data-a11y-key="vfo.b.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
@@ -1376,6 +1374,10 @@
                                         title="Keyboard — enter VFO B frequency">
                                     <strong>123</strong>
                                 </button>
+                                <div class="filter-scope-freq-slot" id="filterScopeContainerB">
+                                    <canvas id="filterScopeCanvasB" role="img" aria-hidden="true"
+                                            aria-label="VFO B filter display" data-a11y-key="filter.scopeB"></canvas>
+                                </div>
                             </div>
                             <!-- Compact linear S-meter between frequency and RF gain.
                                  On single-receiver radios the inactive VFO's meter
@@ -1416,6 +1418,16 @@
                                 <div id="segmentButtonB" data-selected=""></div>
                                 <div class="d-flex align-items-center gap-2">
                                     <div id="modeButtonB" data-selected="@(Model.RadioState.ModeB ?? "USB")"></div>
+                                    <span class="d-inline-block save-mem-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                                          data-bs-title="Save VFO B frequency, mode, and all current settings to app memories."
+                                          aria-label="Save VFO B to memories">
+                                        <button id="saveMemBtnB" type="button"
+                                                class="btn toggle-dd__btn toggle-dd__btn--icon save-mem-key flex-shrink-0"
+                                                onclick="saveVfoToMemory('B')"
+                                                aria-label="Save VFO B to memories">
+                                            <i class="bi bi-floppy-fill save-mem-key__icon" aria-hidden="true"></i>
+                                        </button>
+                                    </span>
                                     @if (hasAntennaSelector)
                                     {
                                         <select class="form-select form-select-sm vfo-ant-select" id="antennaSelectB"
@@ -1437,21 +1449,7 @@
                                     }
                                 </div>
                             </div>
-                            <div class="filter-scope-column-slot">
-                            <div class="d-flex flex-column gap-1" id="filterScopeContainerB">
-                                <canvas id="filterScopeCanvasB" role="img" aria-hidden="true"
-                                        aria-label="VFO B filter display" data-a11y-key="filter.scopeB"></canvas>
-                                <button id="saveMemBtnB" type="button"
-                                        class="btn btn-outline-secondary btn-sm w-100"
-                                        style="padding:1px 4px;"
-                                        onclick="saveVfoToMemory('B')"
-                                        aria-label="Save VFO B to memories"
-                                        title="Save VFO B frequency, mode and clarifier to app memories">
-                                    Save to Mem
-                                </button>
-                                <span id="saveMemStatusB" class="visually-hidden" role="status" aria-live="polite"></span>
-                            </div>
-                            </div>
+                            <span id="saveMemStatusB" class="visually-hidden" role="status" aria-live="polite"></span>
                         </div>
 
                         <!-- Col 2: roofing, IF width, IF shift, audio filter -->
