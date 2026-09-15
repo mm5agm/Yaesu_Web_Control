@@ -675,7 +675,7 @@ Existing installs auto-populate empty slots on the next startup with whatever th
 | AGC | OFF, FAST, MID, SLOW, AUTO |
 | IPO/AMP | IPO, AMP1, AMP2 |
 | ATT | OFF, 6 dB, 12 dB, 18 dB |
-| NR | OFF, NR1, NR2 |
+| DNR | OFF, ON |
 | NB | OFF, ON |
 | NB Level | 1–20 (noise blanker depth; only relevant when NB is ON) |
 | Auto Notch | OFF, ON |
@@ -1664,12 +1664,12 @@ The editor shows all your saved memories in a table. For each memory you can edi
 | Roofing | Roofing filter code (e.g. 7 = 3 kHz on FTdx101). Ignored on FTdx10/FT-710 |
 | NB | Noise blanker on/off |
 | NB Lvl | Noise blanker level, 1–20 |
-| NR | Noise reduction (Off / NR1 / NR2) |
+| NR | Digital noise reduction (Off / On) |
 | AGC | AGC mode (Off / Fast / Mid / Slow / Auto) |
 | Power | Transmit power in watts |
 | Notes | Free-text notes, up to 100 characters |
 
-**Each advanced field is applied on recall only if you have set a value.** Leave any field blank and the radio's current value for that setting is left alone. This means you can save a memory that only changes frequency and mode (the simple use case), or one that fully configures the radio (e.g. "20m FT8" with antenna 2, IF Width 8, NR2, 50 W, AGC Auto).
+**Each advanced field is applied on recall only if you have set a value.** Leave any field blank and the radio's current value for that setting is left alone. This means you can save a memory that only changes frequency and mode (the simple use case), or one that fully configures the radio (e.g. "20m FT8" with antenna 2, IF Width 8, DNR on, 50 W, AGC Auto).
 
 > **Important:** Advanced fields are **app-side only**. They are stored in `memories.json` on your PC but the radio's own memory channels (used by the Import/Export buttons) cannot hold these fields. Exporting to the radio writes only label, frequency, mode, and clarifier values.
 

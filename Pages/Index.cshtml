@@ -1242,28 +1242,23 @@
                                 </select>
                             </div>
                             <div class="vfo-control-item">
-                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR" : "NR")</label>
+                                @* DNR is ON/OFF on every supported radio (NR P2 is 0/1 in the FTdx101,
+                                   FTdx10, FT-710, FTDX3000 and FTDX5000 CAT manuals). There is no NR1/NR2;
+                                   the 1-15 DNR level below is the only depth control. Kees ON9KVE, #144. *@
+                                <label class="vfo-control-label">DNR</label>
                                 <select class="form-select form-select-sm" id="nrSelectA"
-                                        aria-label="VFO A @(isFtdx10 || isFt710 ? "digital noise reduction" : "noise reduction")"
-                                        title="VFO A @(isFtdx10 || isFt710 ? "digital noise reduction" : "noise reduction")"
+                                        aria-label="VFO A digital noise reduction"
+                                        title="VFO A digital noise reduction"
                                         onchange="window.radioControl.setNr('A', this.value)">
                                     <option value="0" selected="@(Model.RadioState.NrA == "0" ? "selected" : null)">OFF</option>
-                                    @if (isFtdx10 || isFt710)
-                                    {
-                                        <option value="1" selected="@(Model.RadioState.NrA == "1" ? "selected" : null)">ON</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="1" selected="@(Model.RadioState.NrA == "1" ? "selected" : null)">NR1</option>
-                                        <option value="2" selected="@(Model.RadioState.NrA == "2" ? "selected" : null)">NR2</option>
-                                    }
+                                    <option value="1" selected="@(Model.RadioState.NrA == "1" ? "selected" : null)">ON</option>
                                 </select>
                             </div>
                             <div class="vfo-control-item">
-                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR No." : "NR Lvl")</label>
+                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR No." : "DNR Lvl")</label>
                                 <select class="form-select form-select-sm" id="nrLevelSelectA"
-                                        aria-label="VFO A @(isFtdx10 || isFt710 ? "DNR algorithm" : "NR level") (1-15)"
-                                        title="VFO A @(isFtdx10 || isFt710 ? "DNR algorithm (1=lightest, 15=heaviest)" : "NR depth (1=light, 15=heavy)")"
+                                        aria-label="VFO A @(isFtdx10 || isFt710 ? "DNR algorithm" : "DNR level") (1-15)"
+                                        title="VFO A @(isFtdx10 || isFt710 ? "DNR algorithm (1=lightest, 15=heaviest)" : "DNR level (1=light, 15=heavy)")"
                                         onchange="setNrLevel('A', this.value)">
                                     @for (int i = 1; i <= 15; i++) {
                                         <option value="@i" selected="@(Model.RadioState.NrLevelA == i ? "selected" : null)">@i</option>
@@ -1659,28 +1654,23 @@
                                 </select>
                             </div>
                             <div class="vfo-control-item">
-                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR" : "NR")</label>
+                                @* DNR is ON/OFF on every supported radio (NR P2 is 0/1 in the FTdx101,
+                                   FTdx10, FT-710, FTDX3000 and FTDX5000 CAT manuals). There is no NR1/NR2;
+                                   the 1-15 DNR level below is the only depth control. Kees ON9KVE, #144. *@
+                                <label class="vfo-control-label">DNR</label>
                                 <select class="form-select form-select-sm" id="nrSelectB"
-                                        aria-label="VFO B @(isFtdx10 || isFt710 ? "digital noise reduction" : "noise reduction")"
-                                        title="VFO B @(isFtdx10 || isFt710 ? "digital noise reduction" : "noise reduction")"
+                                        aria-label="VFO B digital noise reduction"
+                                        title="VFO B digital noise reduction"
                                         onchange="window.radioControl.setNr('B', this.value)">
                                     <option value="0" selected="@(Model.RadioState.NrB == "0" ? "selected" : null)">OFF</option>
-                                    @if (isFtdx10 || isFt710)
-                                    {
-                                        <option value="1" selected="@(Model.RadioState.NrB == "1" ? "selected" : null)">ON</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="1" selected="@(Model.RadioState.NrB == "1" ? "selected" : null)">NR1</option>
-                                        <option value="2" selected="@(Model.RadioState.NrB == "2" ? "selected" : null)">NR2</option>
-                                    }
+                                    <option value="1" selected="@(Model.RadioState.NrB == "1" ? "selected" : null)">ON</option>
                                 </select>
                             </div>
                             <div class="vfo-control-item">
-                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR No." : "NR Lvl")</label>
+                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR No." : "DNR Lvl")</label>
                                 <select class="form-select form-select-sm" id="nrLevelSelectB"
-                                        aria-label="VFO B @(isFtdx10 || isFt710 ? "DNR algorithm" : "NR level") (1-15)"
-                                        title="VFO B @(isFtdx10 || isFt710 ? "DNR algorithm (1=lightest, 15=heaviest)" : "NR depth (1=light, 15=heavy)")"
+                                        aria-label="VFO B @(isFtdx10 || isFt710 ? "DNR algorithm" : "DNR level") (1-15)"
+                                        title="VFO B @(isFtdx10 || isFt710 ? "DNR algorithm (1=lightest, 15=heaviest)" : "DNR level (1=light, 15=heavy)")"
                                         onchange="setNrLevel('B', this.value)">
                                     @for (int i = 1; i <= 15; i++) {
                                         <option value="@i" selected="@(Model.RadioState.NrLevelB == i ? "selected" : null)">@i</option>
