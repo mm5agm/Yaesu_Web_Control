@@ -5165,6 +5165,7 @@
             const aCol  = document.getElementById('vfoACol');
             const bCol  = document.getElementById('vfoBCol');
             const btn   = document.getElementById('vfoBToggleBtn');
+            const vfoRow = document.getElementById('vfoRow');
             if (bCol) bCol.style.display = visible ? '' : 'none';
             if (aCol) {
                 if (visible) {
@@ -5175,6 +5176,7 @@
                     aCol.classList.add('col-12');
                 }
             }
+            vfoRow?.classList.toggle('vfo-b-hidden', !visible);
             if (btn) {
                 btn.textContent = visible ? 'Hide B' : 'Show B';
                 btn.title = visible ? 'Hide VFO-B panel' : 'Show VFO-B panel';

@@ -451,6 +451,9 @@ pre, code { tab-size: 4; }
 .filter-scope-freq-slot {
     flex: 1 1 auto;
     min-width: 5rem;
+    /* Cap width so the canvas does not stretch across the full freq row when
+       VFO B is hidden and VFO A expands to col-12. */
+    max-width: 10rem;
     margin-left: auto;
     overflow: visible;
 }
