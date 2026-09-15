@@ -481,6 +481,43 @@
                     <!-- Operating controls — independent of the gauges strip layout.
                          Resize with Bootstrap col-* on each .op-col. -->
                     <div id="operatingControlsRow" class="row g-2 align-items-start">
+                        <!-- Column 0 — Compact linear meters (PoC). Radials in
+                             #meterGaugesRow stay in place. Steal width from the
+                             extras column (was col-6 → col-4). -->
+                        <div class="col-2 op-col op-col--linear-meters">
+                            <div class="linear-meter-row">
+                                <span class="linear-meter-label">SWR</span>
+                                <canvas id="swrLinearCanvas"
+                                        role="img" aria-hidden="true"
+                                        aria-label="SWR meter (linear)"
+                                        data-a11y-key="meters.linearSwr"></canvas>
+                                <span id="swrLinearValue" class="linear-meter-value linear-meter-value--swr">1.0:1</span>
+                            </div>
+                            <div class="linear-meter-row">
+                                <span class="linear-meter-label">PWR</span>
+                                <canvas id="powerLinearCanvas"
+                                        role="img" aria-hidden="true"
+                                        aria-label="Power output meter (linear)"
+                                        data-a11y-key="meters.linearPower"></canvas>
+                                <span id="powerLinearValue" class="linear-meter-value linear-meter-value--pwr">0 W</span>
+                            </div>
+                            <div class="linear-meter-row">
+                                <span class="linear-meter-label">COMP</span>
+                                <canvas id="compressionLinearCanvas"
+                                        role="img" aria-hidden="true"
+                                        aria-label="Compression meter (linear)"
+                                        data-a11y-key="meters.linearCompression"></canvas>
+                                <span id="compressionLinearValue" class="linear-meter-value linear-meter-value--comp">0 dB</span>
+                            </div>
+                            <div class="linear-meter-row">
+                                <span class="linear-meter-label">ALC</span>
+                                <canvas id="alcLinearCanvas"
+                                        role="img" aria-hidden="true"
+                                        aria-label="ALC meter (linear)"
+                                        data-a11y-key="meters.linearAlc"></canvas>
+                                <span id="alcLinearValue" class="linear-meter-value linear-meter-value--alc">0V</span>
+                            </div>
+                        </div>
                         <!-- Column 1 — TX levels (a little wider for key + slider) -->
                         <div class="col-3 op-col op-col--levels">
                             <div class="op-slider-row">
@@ -635,7 +672,7 @@
                         </div>
 
                         <!-- Column 5 — Remote Audio / Clarifier -->
-                        <div class="col-6 op-col op-col--extras">
+                        <div class="col-4 op-col op-col--extras">
                             <!-- Remote Audio — visible when Settings → Remote Audio is enabled -->
                             <div id="remoteAudioBar" class="op-extras-block" style="display:none;">
                                 <strong class="text-nowrap"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
@@ -1090,6 +1127,18 @@
                                     <strong>123</strong>
                                 </button>
                             </div>
+                            <!-- Compact linear S-meter between frequency and RF gain.
+                                 On single-receiver radios the inactive VFO's meter
+                                 is greyed via .linear-smeter-inactive (applyVfoActiveStyling). -->
+                            <div id="sMeterLinearRowA" class="linear-meter-row linear-meter-row--vfo"
+                                 data-meter-scope="rx" data-linear-smeter="A">
+                                <span class="linear-meter-label">S</span>
+                                <canvas id="sMeterLinearCanvasA"
+                                        role="img" aria-hidden="true"
+                                        aria-label="S meter A (linear)"
+                                        data-a11y-key="meters.linearSmeterA"></canvas>
+                                <span id="sMeterLinearValueA" class="linear-meter-value linear-meter-value--smeter">S0</span>
+                            </div>
                             <div class="vfo-gain-stack">
                                 <div class="vfo-control-item">
                                     <label class="vfo-control-label">RF Gain</label>
@@ -1337,6 +1386,18 @@
                                         title="Keyboard — enter VFO B frequency">
                                     <strong>123</strong>
                                 </button>
+                            </div>
+                            <!-- Compact linear S-meter between frequency and RF gain.
+                                 On single-receiver radios the inactive VFO's meter
+                                 is greyed via .linear-smeter-inactive (applyVfoActiveStyling). -->
+                            <div id="sMeterLinearRowB" class="linear-meter-row linear-meter-row--vfo"
+                                 data-meter-scope="rx" data-linear-smeter="B">
+                                <span class="linear-meter-label">S</span>
+                                <canvas id="sMeterLinearCanvasB"
+                                        role="img" aria-hidden="true"
+                                        aria-label="S meter B (linear)"
+                                        data-a11y-key="meters.linearSmeterB"></canvas>
+                                <span id="sMeterLinearValueB" class="linear-meter-value linear-meter-value--smeter">S0</span>
                             </div>
                             <div class="vfo-gain-stack">
                                 <div class="vfo-control-item">
@@ -2469,6 +2530,17 @@
                 smeterB:     { type: 'smeter', canvasId: 'sMeterCanvasB', gaugeTitleId: 'sMeterValueB' },
                 power:       { canvasId: 'powerMeterCanvas', maxValue: @maxPowerWatts },
                 swr:         { canvasId: 'swrMeterCanvas' },
+                // Compact horizontal bar siblings (PoC). Same display scale as
+                // the radials; MeterPanel.update mirrors automatically.
+                powerLinear:       { type: 'powerLinear',       canvasId: 'powerLinearCanvas', maxValue: @maxPowerWatts },
+                swrLinear:         { type: 'swrLinear',         canvasId: 'swrLinearCanvas' },
+                compressionLinear: { type: 'compressionLinear', canvasId: 'compressionLinearCanvas' },
+                alcLinear:         { type: 'alcLinear',         canvasId: 'alcLinearCanvas' },
+                // Per-VFO linear S-meters (between frequency and RF gain). Present
+                // on both single- and dual-receiver layouts — inactive greying for
+                // single-receiver is CSS via applyVfoActiveStyling.
+                smeterLinearA:     { type: 'smeterLinear', canvasId: 'sMeterLinearCanvasA', gaugeTitleId: 'sMeterLinearValueA' },
+                smeterLinearB:     { type: 'smeterLinear', canvasId: 'sMeterLinearCanvasB', gaugeTitleId: 'sMeterLinearValueB' },
                 compression: { canvasId: 'compressionMeterCanvas' },
                 alc:         { canvasId: 'alcMeterCanvas' },
                 temp:        { canvasId: 'tempMeterCanvas' },

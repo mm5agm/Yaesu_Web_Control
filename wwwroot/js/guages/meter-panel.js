@@ -64,10 +64,27 @@ export class MeterPanel {
      * The caller is responsible for calibrating and clamping the value
      * to the gauge's display scale before calling update().
      *
+     * For meters that have a compact linear sibling, also mirrors the same
+     * display-scale value so the orchestrator stays single-face.
+     *
      * @param {string} key    Logical meter name matching a key in the config
      * @param {number} value  Display-scale value for the gauge needle
      */
     update(key, value) {
+        this._updateOne(key, value);
+        // Compact linear siblings share the same display scale as the radials.
+        const linearSibling = {
+            power: 'powerLinear',
+            swr: 'swrLinear',
+            alc: 'alcLinear',
+            compression: 'compressionLinear',
+            smeter: 'smeterLinearA',
+            smeterB: 'smeterLinearB'
+        }[key];
+        if (linearSibling) this._updateOne(linearSibling, value);
+    }
+
+    _updateOne(key, value) {
         const gauge = this.gauges[key];
         if (!gauge) return;
         updateGaugeValue(gauge, value);

@@ -446,6 +446,9 @@ function updateTxIndicators(isTransmitting) {
     sMetersFrozenByTx = !!isTransmitting;
     document.getElementById('meterGaugesRow')
         ?.classList.toggle('meters-tx-dim', sMetersFrozenByTx);
+    // VFO linear S-meters live outside #meterGaugesRow — dim them the same way.
+    document.querySelectorAll('[data-linear-smeter]')
+        .forEach(el => el.classList.toggle('meters-tx-dim', sMetersFrozenByTx));
     if (window.ftdx101Meters) {
         window.ftdx101Meters.setTransmitting(isTransmitting);
     }
@@ -477,10 +480,15 @@ function updateMeterDomLabel(property, result) {
             const formatted = window.MeterFormatters.powerOverlay(dv.watts);
             const el = document.getElementById('powerMeterValue');
             if (el) el.textContent = formatted;
+            // Compact linear sibling readout (freestanding — includes unit).
+            const linEl = document.getElementById('powerLinearValue');
+            if (linEl) linEl.textContent = window.MeterFormatters.powerLabel(dv.watts);
             const rawEl = document.getElementById('raw-powerout-label');
             if (rawEl) rawEl.textContent = 'Raw Power Out: ' + Math.round(dv.rawAvg);
             const canvas = document.getElementById('powerMeterCanvas');
             if (canvas) canvas.dataset.reading = formatted;
+            const linCanvas = document.getElementById('powerLinearCanvas');
+            if (linCanvas) linCanvas.dataset.reading = window.MeterFormatters.powerLabel(dv.watts);
             break;
         }
         case 'SWRMeter': {
@@ -499,10 +507,22 @@ function updateMeterDomLabel(property, result) {
                     badge.style.color      = offScale ? '#000000' : '#ffffff';
                 }
             }
+            // Compact linear sibling readout — same formatted text + off-scale colour.
+            const linEl = document.getElementById('swrLinearValue');
+            if (linEl) {
+                linEl.textContent = formatted;
+                linEl.style.background = offScale ? '#ffc107' : '#dc3545';
+                linEl.style.color      = offScale ? '#000000' : '#ffffff';
+            }
             const canvas = document.getElementById('swrMeterCanvas');
             if (canvas) {
                 canvas.dataset.reading = window.MeterFormatters.swrAnnouncement(dv.swr);
                 canvas.dataset.offScale = offScale ? 'true' : 'false';
+            }
+            const linCanvas = document.getElementById('swrLinearCanvas');
+            if (linCanvas) {
+                linCanvas.dataset.reading = window.MeterFormatters.swrAnnouncement(dv.swr);
+                linCanvas.dataset.offScale = offScale ? 'true' : 'false';
             }
             break;
         }
@@ -510,8 +530,12 @@ function updateMeterDomLabel(property, result) {
             const formatted = window.MeterFormatters.compressionOverlay(dv.db);
             const el = document.getElementById('compressionMeterValue');
             if (el) el.textContent = formatted;
+            const linEl = document.getElementById('compressionLinearValue');
+            if (linEl) linEl.textContent = `${formatted} dB`;
             const canvas = document.getElementById('compressionMeterCanvas');
             if (canvas) canvas.dataset.reading = formatted;
+            const linCanvas = document.getElementById('compressionLinearCanvas');
+            if (linCanvas) linCanvas.dataset.reading = `${formatted} dB`;
             break;
         }
         case 'ALCMeter': {
@@ -529,8 +553,12 @@ function updateMeterDomLabel(property, result) {
                 else                      bar.classList.add('bg-danger');
             }
             if (meterEl) meterEl.textContent = alcFormatted;
+            const linEl = document.getElementById('alcLinearValue');
+            if (linEl) linEl.textContent = alcFormatted;
             const alcCanvas = document.getElementById('alcMeterCanvas');
             if (alcCanvas) alcCanvas.dataset.reading = alcFormatted;
+            const linCanvas = document.getElementById('alcLinearCanvas');
+            if (linCanvas) linCanvas.dataset.reading = alcFormatted;
             break;
         }
         case 'IDDMeter': {
@@ -759,8 +787,10 @@ document.addEventListener('DOMContentLoaded', () => { getTxSyncChannel(); });
 // activeVfo (VS: 0 = MAIN/A, 1 = SUB/B). The radio auto-broadcasts VS when
 // you press MAIN⇄SUB-select on the front panel, so this follows live.
 // Single-receiver radios do not grey or lock either panel; both stay fully
-// editable. Clears any leftover .vfo-inactive / .vfo-tx-editable from
-// earlier builds. See docs/decisions/0003-single-vs-dual-receiver-ui.md.
+// editable — except the per-VFO linear S-meter, which greys on the inactive
+// VFO (only one receiver is actually measuring). Clears any leftover
+// .vfo-inactive / .vfo-tx-editable from earlier builds.
+// See docs/decisions/0003-single-vs-dual-receiver-ui.md.
 function applyVfoActiveStyling() {
     const vfoRow = document.getElementById('vfoRow');
     if (!vfoRow) return;
@@ -773,17 +803,25 @@ function applyVfoActiveStyling() {
     document.getElementById('spectrumContainerA')?.classList.remove('vfo-inactive');
     document.getElementById('spectrumContainerB')?.classList.remove('vfo-inactive');
 
+    const smA = document.getElementById('sMeterLinearRowA');
+    const smB = document.getElementById('sMeterLinearRowB');
     const singleReceiver = vfoRow.dataset.singleReceiver === 'true';
     if (singleReceiver) {
         // No active-band amber ring on single-receiver — RX/TX selectors
         // already show which VFO is receiving / transmitting.
         aCol.classList.remove('vfo-active');
         bCol.classList.remove('vfo-active');
+        // Only one physical S-meter: grey the inactive VFO's linear face.
+        smA?.classList.toggle('linear-smeter-inactive', activeVfo !== 0);
+        smB?.classList.toggle('linear-smeter-inactive', activeVfo !== 1);
         return;
     }
 
     aCol.classList.toggle('vfo-active', activeVfo === 0);
     bCol.classList.toggle('vfo-active', activeVfo === 1);
+    // Dual-receiver: both S-meters are live (SM0/SM1).
+    smA?.classList.remove('linear-smeter-inactive');
+    smB?.classList.remove('linear-smeter-inactive');
 }
 
 // Apply the styling at page-load time too, before any SignalR update has
@@ -3274,6 +3312,8 @@ window.setApfFreq = setApfFreq;
         const history     = receiver === 'B' ? window.sMeterHistoryB : window.sMeterHistory;
         const canvasId    = receiver === 'B' ? 'sMeterCanvasB' : 'sMeterCanvas';
         const labelId     = receiver === 'B' ? 'sMeterValueB' : 'sMeterValue';
+        const linearLabelId = receiver === 'B' ? 'sMeterLinearValueB' : 'sMeterLinearValueA';
+        const linearCanvasId = receiver === 'B' ? 'sMeterLinearCanvasB' : 'sMeterLinearCanvasA';
 
         // The S-meter gauge has hardcoded tick positions on a 0-255 scale and
         // ignores calibration tables for needle placement. To make the user's
@@ -3301,6 +3341,11 @@ window.setApfFreq = setApfFreq;
         // when gaugeTitleShow is true (set in gauge.js).
         const sLabel = document.getElementById(labelId);
         if (sLabel) sLabel.textContent = sUnit;
+        // Compact linear sibling in the VFO panel.
+        const linLabel = document.getElementById(linearLabelId);
+        if (linLabel) linLabel.textContent = sUnit;
+        const linCanvas = document.getElementById(linearCanvasId);
+        if (linCanvas) linCanvas.dataset.reading = sUnit;
     }
     window.updateSMeter = updateSMeter;
 
