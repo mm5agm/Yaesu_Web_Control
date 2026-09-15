@@ -149,6 +149,8 @@
 <link rel="stylesheet" href="~/css/closer-to-raw-power.css?v=20260226n" />
 <link rel="stylesheet" href="~/css/toggle-dropdown-button.css" asp-append-version="true" />
 <style>
+    #saveMemBtnA, #saveMemBtnB { font-weight: 700 !important; font-size: 0.85rem !important; color: var(--yaesu-ink, #e6e6e6) !important; }
+
     /* Dual-receiver (FTdx101) active-band highlight: a subtle amber ring on
        the VFO panel the main tuning knob currently controls (MAIN or SUB).
        box-shadow so it never shifts layout; both receivers stay full-colour. */
@@ -285,10 +287,10 @@
                     <i class="bi bi-exclamation-triangle-fill me-2"></i>Warning
                 </h6>
             </div>
-            <div class="modal-body py-3" style="background: #fff;">
-                <p id="messageBoxText" class="mb-0" style="font-size: 0.9rem; color: #000;"></p>
+            <div class="modal-body py-3" style="background: var(--yaesu-face, #2a2a2a);">
+                <p id="messageBoxText" class="mb-0" style="font-size: 0.9rem; color: var(--yaesu-ink, #e6e6e6);"></p>
             </div>
-            <div class="modal-footer py-2 justify-content-center" style="background: #f8f9fa; border-top: 1px solid #dee2e6;">
+            <div class="modal-footer py-2 justify-content-center" style="background: var(--yaesu-face-lo, #1a1a1a); border-top: 1px solid #4a4a4a;">
                 <button type="button" class="btn btn-danger btn-sm px-4" data-bs-dismiss="modal" style="min-width: 80px;">OK</button>
             </div>
         </div>
