@@ -225,7 +225,7 @@ namespace Yaesu_Web_Control.Services
         private string _autoNotchB = "0";
         public string AutoNotchB { get => _autoNotchB; set => SetField(ref _autoNotchB, value); }
 
-        // NR command Noise Reduction: "0"=OFF "1"=NR1 "2"=NR2
+        // NR command Digital Noise Reduction: "0"=OFF "1"=ON (no NR1/NR2 on any supported radio, #144)
         private string _nrA = "0";
         public string NrA { get => _nrA; set => SetField(ref _nrA, value); }
         private string _nrB = "0";
@@ -586,10 +586,9 @@ namespace Yaesu_Web_Control.Services
 
         // NR Level (RL command) per VFO: 1–15.
         // On FTdx10 / FT-710 this is the DNR algorithm selector (Jacek
-        // SP3L #47 -- the FTdx10 has no NR1/NR2 distinction, only ON/OFF
-        // plus this 1–15 algorithm number, semantically like "NB Level").
-        // On FTdx101 this is the level that applies to whichever NR type
-        // (NR1 or NR2) is currently selected.
+        // SP3L #47). The FTdx101 has the same shape: DNR is ON/OFF and this
+        // 1–15 value is its DNR LEVEL (Kees ON9KVE #144 -- the NR1/NR2 the
+        // UI used to offer never existed on any supported radio).
         private int _nrLevelA = 1;
         public int NrLevelA { get => _nrLevelA; set => SetField(ref _nrLevelA, value); }
         private int _nrLevelB = 1;

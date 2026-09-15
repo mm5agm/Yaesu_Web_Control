@@ -1256,10 +1256,12 @@
                                     <div id="attButtonA" data-selected="@Model.RadioState.AttA"></div>
                                 </div>
                                 <div class="vfo-control-item">
+                                    @* DNR is ON/OFF on every supported radio (NR P2 is 0/1 in the FTdx101,
+                                       FTdx10, FT-710, FTDX3000 and FTDX5000 CAT manuals). There is no NR1/NR2;
+                                       the 1-15 DNR level is the only depth control. Kees ON9KVE, #144. *@
                                     <div id="nrButtonA"
                                          data-vfo="A"
-                                         data-label="@(isFtdx10 || isFt710 ? "DNR" : "NR")"
-                                         data-dnr="@(isFtdx10 || isFt710 ? "true" : "false")"
+                                         data-label="DNR"
                                          data-selected="@Model.RadioState.NrA"
                                          data-level="@Model.RadioState.NrLevelA"></div>
                                 </div>
@@ -1475,7 +1477,6 @@
                                 Audio Filter
                             </button>
                         </div>
-
                         <!-- Col 3: remaining keys -->
                         <div class="vfo-col vfo-col--keys">
                             @if (!isSingleReceiver)
@@ -1518,10 +1519,10 @@
                                     <div id="attButtonB" data-selected="@Model.RadioState.AttB"></div>
                                 </div>
                                 <div class="vfo-control-item">
+                                    @* DNR is ON/OFF on every supported radio (NR P2 is 0/1). Kees ON9KVE, #144. *@
                                     <div id="nrButtonB"
                                          data-vfo="B"
-                                         data-label="@(isFtdx10 || isFt710 ? "DNR" : "NR")"
-                                         data-dnr="@(isFtdx10 || isFt710 ? "true" : "false")"
+                                         data-label="DNR"
                                          data-selected="@Model.RadioState.NrB"
                                          data-level="@Model.RadioState.NrLevelB"></div>
                                 </div>

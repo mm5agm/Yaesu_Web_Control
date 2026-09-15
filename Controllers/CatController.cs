@@ -1335,7 +1335,7 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("nr/{receiver}")]
         public async Task<IActionResult> SetNr(string receiver, [FromBody] NrRequest request)
         {
-            var validCodes = new[] { "0", "1", "2" };
+            var validCodes = new[] { "0", "1" }; // NR P2 is OFF/ON on every supported radio (#144)
             if (!validCodes.Contains(request.Code))
                 return BadRequest(new { error = $"Invalid NR code: {request.Code}" });
 
