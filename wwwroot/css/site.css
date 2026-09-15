@@ -39,59 +39,88 @@
     min-height: 120px;
     position: relative;
 }
-/* --- Fullscreen mode (#163) -------------------------------------------
-   The fullscreen element is <body>: site.js calls body.requestFullscreen().
-   That makes body a screen-sized box in the top layer, so body must be the
-   scroll container itself -- whatever it clips is unreachable, because
-   there is no outer scrollbar left to fall back on. body is also the
-   containing block the sticky header tracks (see _Layout.cshtml), so the
-   scrolling has to stay here; moving it to <main> would make the header
-   scroll away exactly as it did in v2.2.1.
-
-   #163 was `overflow: hidden` on this rule. Measured on Index at 1280x720:
-   793px of page below the fold with no way to reach it -- the VFO A/B row
-   started at y=1006 and the clarifier row at y=1460.
-
-   The old block also carried a pile of `main[role="main"]` rules meant to
-   size main and stretch the first row. Index sets ViewData["BodyRole"] =
-   "application" for screen readers, so <main> is role="application" there
-   and NOT ONE of those rules has ever matched on the control panel page --
-   including the `overflow-y: auto` that was itself trying to fix this bug.
-   Hence the plain `main` selector below: do not reintroduce a role-based
-   one, it silently stops matching the moment a page sets its own role. */
-body.fullscreen-mode {
+/* Stronger fullscreen override: target body.fullscreen-mode and descendants */
+body.fullscreen-mode,
+body.fullscreen-mode html,
+body.fullscreen-mode > main[role="main"],
+body.fullscreen-mode main[role="main"],
+body.fullscreen-mode main[role="main"] > .row:first-of-type,
+body.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
+body.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
     height: 100vh !important;
-    width: 100vw !important;
-    max-width: 100vw !important;
+    min-height: 100vh !important;
+    width: 98vw !important;
+    max-width: 98vw !important;
     margin: 0 !important;
     padding: 0 !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
+    overflow: hidden !important;
     box-sizing: border-box !important;
 }
 
-/* Main flows naturally and is free to grow past the fold; body scrolls it.
-   Deliberately no height and no overflow of its own -- a nested scroller
-   here would both double-clip and break the sticky header. */
-body.fullscreen-mode main {
-    height: auto !important;
-    min-height: 0 !important;
-    margin: 0 auto !important;
-    padding-bottom: 0 !important;
-    overflow: visible !important;
-    box-sizing: border-box !important;
+body.fullscreen-mode main[role="main"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: stretch !important;
+    align-items: stretch !important;
+}
+body.fullscreen-mode main[role="main"] > .row:first-of-type {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+}
+body.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
+body.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
+    flex: 1 1 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+/* Ensure fullscreen fills viewport vertically */
+.fullscreen-mode,
+.fullscreen-mode html,
+.fullscreen-mode body {
+    height: 100vh !important;
+    min-height: 100vh !important;
+    width: 100vw !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
 }
 
-body.fullscreen-mode .navbar {
-    margin-bottom: 0 !important;
+/* Flex layout for main and first row in fullscreen */
+.fullscreen-mode main[role="main"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: stretch !important;
+    align-items: stretch !important;
+}
+.fullscreen-mode main[role="main"] > .row:first-of-type {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    height: 100% !important;
+    min-height: 100% !important;
+}
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
+    flex: 1 1 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    min-height: 100% !important;
+}
+.fullscreen-mode main[role="main"] > .row:first-of-type {
+    height: 100% !important;
+    min-height: 100% !important;
+}
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
+    height: 100% !important;
+    min-height: 100% !important;
 }
 
-body.fullscreen-mode footer {
-    display: none !important;
-}
-
-/* Meter Calibration fullscreen fix -- separate page, its own container,
-   genuinely wants to fill the viewport. */
+/* Meter Calibration fullscreen fix */
 .fullscreen-mode .meter-calibration-container {
     width: 100vw !important;
     height: 100vh !important;
@@ -103,6 +132,43 @@ body.fullscreen-mode footer {
     flex-direction: column !important;
     align-items: stretch !important;
     justify-content: flex-start !important;
+}
+/* --- Fullscreen mode overrides --- */
+
+.fullscreen-mode footer {
+    display: none !important;
+}
+
+
+/* Fullscreen main area: fill viewport vertically, restrict width to avoid horizontal scrollbar */
+.fullscreen-mode main[role="main"] {
+    height: 100vh !important;
+    min-height: 100vh !important;
+    width: 98vw !important;
+    max-width: 98vw !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    margin: 0 auto !important;
+    padding-bottom: 0 !important;
+    box-sizing: border-box;
+}
+
+.fullscreen-mode .navbar {
+    margin-bottom: 0 !important;
+}
+
+/* Ensure first row and columns fill vertical space in fullscreen */
+.fullscreen-mode main[role="main"] > .row:first-of-type {
+    height: 100% !important;
+    min-height: 100% !important;
+}
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
+    height: 100% !important;
+    min-height: 100% !important;
+}
+.fullscreen-mode main[role="main"].pb-3 {
+    padding-bottom: 0 !important;
 }
 html {
     font-size: 14px;
@@ -311,27 +377,102 @@ pre, code { tab-size: 4; }
     font-weight: bold;
 }
 
-/* Slot that absorbs leftover width between the band buttons and the
-   AGC column, then centers the filter/audio-scope stack in that gap. */
-.filter-scope-column-slot {
-    flex: 1 1 auto;
-    display: flex;
-    justify-content: center;
-    min-width: 240px;
+/* Three-column VFO body: tune | band/filter | remaining keys */
+.vfo-body-grid {
+    display: grid;
+    grid-template-columns: minmax(17.5rem, 1.2fr) minmax(8.75rem, auto) minmax(15rem, 1fr);
+    column-gap: 0.75rem;
+    row-gap: 0.4rem;
+    align-items: start;
 }
 
-/* Right-hand controls column — 2-column grid of label+select pairs.
-   Its row (.receiver-controls-group) wraps: none of the three columns can
-   shrink, so between 150 % and 175 % browser zoom — narrower than the
-   sum of their minimums but not yet narrow enough for the two VFO cards
-   to stack — this column used to run out of the card and under VFO B
-   (#157). Wrapping puts it below the band buttons instead. */
+.vfo-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.vfo-freq-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.35rem 0.45rem;
+    width: 100%;
+}
+
+.vfo-freq-row .frequency-display {
+    flex: 0 0 auto;
+}
+
+/* RF / AF / squelch — same width as the frequency row; labels share one column. */
+.vfo-gain-stack {
+    display: grid;
+    grid-template-columns: 4.4rem minmax(0, 1fr) 2.2rem;
+    column-gap: 0.4rem;
+    row-gap: 0.2rem;
+    align-items: center;
+    width: 100%;
+}
+
+.vfo-gain-stack .vfo-control-item {
+    display: contents;
+}
+
+.vfo-gain-stack .vfo-control-item[style*="display: none"],
+.vfo-gain-stack .vfo-control-item[style*="display:none"] {
+    display: none;
+}
+
+.vfo-gain-stack input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    height: 16px;
+}
+
+/* Band / Segment / Mode sit under AF Gain in the tune column. */
+.vfo-band-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.35fr);
+    column-gap: 0.3rem;
+    align-items: center;
+    width: 100%;
+}
+
+.vfo-band-row > .d-flex {
+    min-width: 0;
+}
+
+.vfo-band-row > .d-flex .toggle-dd {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.vfo-band-row .vfo-ant-select {
+    flex: 0 0 auto;
+}
+
+.filter-scope-column-slot,
+.vfo-col--tune #filterScopeContainerA,
+.vfo-col--tune #filterScopeContainerB {
+    width: 100%;
+}
+
+.vfo-col--tune canvas {
+    display: block;
+    width: 100%;
+    height: 80px;
+    border-radius: 4px;
+}
+
+/* Right-hand remaining keys — 2-column grid */
 .vfo-controls-column {
     flex-shrink: 0;
     display: grid;
     grid-template-columns: repeat(2, minmax(110px, 1fr));
     gap: 0.3rem 0.4rem;
     align-content: start;
+    width: 100%;
 }
 
 .vfo-control-item {
@@ -1637,67 +1778,4 @@ fieldset.calibration-card {
     background: #e74c3c;
     color: #fff;
     border-color: #ff6b5a;
-}
-
-/* Controls the radio ignores in the current mode (IF Width and IF Shift in
-   AM / FM). A disabled form control dispatches no mouse events at all, so its
-   own title attribute never produces a tooltip -- the hover simply never
-   happens. The fix is Bootstrap's documented one: hang the tooltip on a
-   wrapper and switch pointer events off on the dead control inside it, so the
-   pointer falls through to the wrapper and the title appears.
-   Reported 2026-09-20: the tooltips were there in markup and invisible. */
-.ctl-tip-wrap.is-inert { cursor: not-allowed; }
-.ctl-tip-wrap.is-inert :disabled { pointer-events: none; }
-
-/* ── Spectrum tuning-step context menu ───────────────────────────────────────
-   Right-clicking the spectrum picks how far one wheel notch moves the dial
-   (discussion #168). Built on demand by spectrum-panel.js and appended to
-   <body>, so it is positioned against the viewport rather than the card — a
-   menu inside the spectrum card would be clipped by the canvas's overflow. */
-.spectrum-step-menu {
-    position: fixed;
-    z-index: 1080;                 /* above Bootstrap modals' backdrop (1050) */
-    min-width: 8rem;
-    padding: 0.25rem 0;
-    background: var(--bs-body-bg, #fff);
-    color: var(--bs-body-color, #212529);
-    border: 1px solid rgba(0, 0, 0, 0.2);
-    border-radius: 0.375rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.35);
-}
-
-.spectrum-step-menu-title {
-    padding: 0.25rem 0.75rem 0.35rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    opacity: 0.7;
-    border-bottom: 1px solid rgba(128, 128, 128, 0.35);
-}
-
-.spectrum-step-menu-item {
-    display: block;
-    width: 100%;
-    padding: 0.3rem 0.75rem;
-    text-align: left;
-    background: none;
-    border: 0;
-    color: inherit;
-    font-size: 0.9rem;
-}
-
-.spectrum-step-menu-item:hover,
-.spectrum-step-menu-item:focus {
-    background: rgba(13, 110, 253, 0.15);
-    outline: none;
-}
-
-/* The current step is marked with a tick rather than colour alone, so it is
-   still identifiable for colour-blind operators and in high-contrast mode. */
-.spectrum-step-menu-item.active {
-    font-weight: 700;
-}
-
-.spectrum-step-menu-item.active::after {
-    content: " \2713";
 }
