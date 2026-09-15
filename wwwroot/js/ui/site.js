@@ -95,6 +95,7 @@ document.addEventListener('wheel', function (event) {
     event.preventDefault();
     slider.value = String(next);
     slider.dispatchEvent(new Event('input', { bubbles: true }));
+    slider.dispatchEvent(new Event('change', { bubbles: true }));
 }, { passive: false });
 
 // --- Fullscreen Toggle: 'f' or 'F' to enter, 'Esc' to exit ---
