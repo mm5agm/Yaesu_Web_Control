@@ -257,9 +257,63 @@
     font-size: 0.75rem;
 }
 
+/* QMB in the ATU / Tune / Mon toolbar: same btn-sm outline face as Tune. */
+.qmb-toolbar-key {
+    position: relative;
+    flex: 0 0 auto;
+    width: auto;
+    align-self: center;
+    overflow: visible;
+}
+
+.qmb-toolbar-key > .dropdown,
+.qmb-toolbar-key.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-menu.qmb-toolbar-key__menu.show {
+    display: grid;
+    grid-template-columns: repeat(3, max-content);
+    gap: 0.25rem;
+    min-width: 0;
+    padding: 0.25rem;
+    margin-top: 0.15rem;
+    background: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    box-shadow: 0 0.25rem 0.6rem rgba(0, 0, 0, 0.12);
+    z-index: 30;
+}
+
+.qmb-toolbar-key__item.dropdown-item {
+    display: inline-block;
+    width: auto;
+    margin: 0;
+    padding: 0.25rem 0.5rem;
+    color: #000;
+    font-weight: 700;
+    font-size: 0.875rem;
+    letter-spacing: normal;
+    text-align: center;
+    background: #fff;
+    border: 1px solid #6c757d;
+    border-radius: 0.2rem;
+    box-shadow: none;
+}
+
+.qmb-toolbar-key__item.dropdown-item:hover,
+.qmb-toolbar-key__item.dropdown-item:focus,
+.qmb-toolbar-key__item.dropdown-item:focus-visible {
+    color: #000;
+    background: #e9ecef;
+    box-shadow: none;
+}
+
 /* Compact fit for VFO key columns */
 .vfo-controls-column .toggle-dd,
 .vfo-col--band .toggle-dd,
+.vfo-col--tune .toggle-dd,
 .vfo-band-row .toggle-dd {
     display: block;
     width: 100%;
@@ -267,6 +321,7 @@
 
 .vfo-controls-column .toggle-dd__btn,
 .vfo-col--band .toggle-dd__btn,
+.vfo-col--tune .toggle-dd__btn,
 .vfo-band-row .toggle-dd__btn {
     width: 100%;
     min-width: 0;
@@ -276,12 +331,14 @@
 
 .vfo-controls-column .toggle-dd__label,
 .vfo-col--band .toggle-dd__label,
+.vfo-col--tune .toggle-dd__label,
 .vfo-band-row .toggle-dd__label {
     font-size: 0.72rem;
 }
 
 .vfo-controls-column .toggle-dd__led,
 .vfo-col--band .toggle-dd__led,
+.vfo-col--tune .toggle-dd__led,
 .vfo-band-row .toggle-dd__led {
     width: 0.7rem;
     height: 0.2rem;
@@ -290,6 +347,7 @@
 
 .vfo-controls-column .toggle-dd__menu--slider,
 .vfo-col--band .toggle-dd__menu--slider,
+.vfo-col--tune .toggle-dd__menu--slider,
 .vfo-band-row .toggle-dd__menu--slider {
     min-width: 14rem;
 }
