@@ -120,10 +120,11 @@ export class FilterScopePanel {
     }
 
     _sizeCanvas(canvas) {
-        const w = 160;
+        const parentW = canvas.parentElement?.clientWidth || 160;
+        const w = Math.max(160, Math.round(parentW));
         canvas.width        = w;
         canvas.height       = 80;
-        canvas.style.width  = w + 'px';
+        canvas.style.width  = '100%';
         canvas.style.height = '80px';
     }
 
