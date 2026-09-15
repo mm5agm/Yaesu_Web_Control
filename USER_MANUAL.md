@@ -495,6 +495,8 @@ The vertical axis is calibrated in S-units (S1, S5, S9, S9+30, S9+60) using the 
 
 ### 5.3 Power, Mic Gain and Speech Processor
 
+These sit in the operating-controls row under the meters, together with ATU, CW, DX, Voice, **Remote Audio** and **Clarifier**. Remote Audio and Clarifier share the last column of that row.
+
 **Power slider** — Sets the transmit power from 5 W to 200 W (FTdx101MP, FTDX5000MP and FTDX5000D) or 5 W to 100 W (FTdx101D, FTDX3000, FTdx10, FT-710 and FT-991A). Drag the slider to set the desired power level. The current value is shown to the right of the slider. The Power meter beside it is scaled to the same figure, so full output always reads at the top of the dial whatever the radio.
 
 The radio is the source of truth for RF Power. On connect, YWC reads the radio's current Power setting via the `PC;` CAT command and reflects whatever the radio reports — so if you change Power on the radio's front panel while YWC is closed, the new value appears in YWC when you reopen it. (Earlier versions overwrote the radio's setting with YWC's last-saved value on connect; that was incorrect and is fixed in v2.3.7.)
@@ -503,9 +505,13 @@ The slider snaps to 5 W steps for ease of dragging, but the numerical label show
 
 **MIC Gain / Data Out Gain slider** — Sets the microphone gain (0–100). When the radio is in a data mode (DATA-U, DATA-L, PSK, RTTY, or DATA-FM), the label changes to **Data Out Gain** automatically.
 
-**PROC button** — Toggles the speech processor on and off. The button is amber when the processor is active and grey when off. The speech processor increases the average power of your transmitted audio, which can improve readability at the other end — particularly useful for SSB DX and pile-ups.
+**PROC button** — Toggles the speech processor on and off. The Yaesu-style key shows an orange LED when the processor is active. The speech processor increases the average power of your transmitted audio, which can improve readability at the other end — particularly useful for SSB DX and pile-ups.
 
-**PROC Level slider** — Sets the speech processor compression level (0–100). A typical starting point is around 50. Higher values increase average power further but can make the audio sound over-processed and harder to copy. Monitor the compression meter while speaking and aim for 6–10 dB of compression. Both the PROC on/off state and the level are saved and restored when the app restarts.
+**PROC Level slider** — Sets the speech processor compression level (0–100), beside the PROC key. A typical starting point is around 50. Higher values increase average power further but can make the audio sound over-processed and harder to copy. Monitor the compression meter while speaking and aim for 6–10 dB of compression. Both the PROC on/off state and the level are saved and restored when the app restarts.
+
+**Clarifier** — RIT/XIT for the selected VFO, in the same operating-controls row. Pick **VFO A** or **VFO B**, set mode to **OFF**, **RX**, **TX** or **RX+TX**, and drag the offset slider (±9990 Hz). **−** / **+** nudge 10 Hz; **Reset** returns the offset to 0 without changing mode.
+
+**Remote Audio** — when enabled in Settings, the connect / mute / Mic & Gain controls appear above the Clarifier in that last column. See [§18](#18-remote-audio).
 
 ---
 
@@ -655,9 +661,9 @@ All keys have accessible labels for screen readers.
 
 ### 5.7 Receiver Controls
 
-Each VFO panel has a row of dropdowns for the main receiver settings. All are two-way — if you change a setting on the radio's front panel, the dropdown updates automatically.
+Each VFO panel has Yaesu-style keys and dropdowns for the main receiver settings. All are two-way — if you change a setting on the radio's front panel, the control updates automatically.
 
-**Mode** — Select the operating mode:
+**Mode** — Yaesu-style key. Click to open the mode list:
 LSB, USB, CW-U, CW-L, FM, FM-N, AM, AM-N, RTTY-L, RTTY-U, DATA-L, DATA-U, DATA-FM, DATA-FM-N, PSK
 
 **Antenna** — Select the antenna connector: ANT 1, ANT 2, ANT 3.
@@ -666,49 +672,49 @@ Your antenna choice is **remembered per band per VFO**. Set Ant 1 on 20 m and An
 
 Existing installs auto-populate empty slots on the next startup with whatever the radio currently has, so you don't need to manually click through every band to seed it.
 
-**Roofing Filter** — Select the roofing filter bandwidth: 12 kHz, 3 kHz, 1.2 kHz, 600 Hz, 300 Hz
+**Roofing Filter** — Yaesu-style key under Band / Mode. Click to open a single-column list of fitted roofing widths (e.g. 12 kHz, 3 kHz, 1.2 kHz, 600 Hz, 300 Hz on FTdx101MP/D). Not shown on FT-710 (no CAT roofing control).
 
-**Control column** (the two-column grid of dropdowns to the right):
+**Control column** (the two-column grid of Yaesu-style keys to the right):
 
 | Control | Options |
 |---------|---------|
-| AGC | OFF, FAST, MID, SLOW, AUTO |
-| IPO/AMP | IPO, AMP1, AMP2 |
-| ATT | OFF, 6 dB, 12 dB, 18 dB |
-| NR | OFF, NR1, NR2 |
-| NB | OFF, ON |
-| NB Level | 1–20 (noise blanker depth; only relevant when NB is ON) |
-| Auto Notch | OFF, ON |
-| Man Notch | OFF, ON |
-| Notch Hz | Slider 10–3200 Hz (only relevant when Man Notch is ON) |
+| AGC | Yaesu-style key. Left-click toggles OFF ↔ last speed. Right-click opens OFF / FAST / MID / SLOW / AUTO. |
+| IPO/AMP | Yaesu-style key. Left-click cycles IPO → AMP1 → AMP2 → IPO. Right-click opens IPO / AMP1 / AMP2. |
+| ATT | Yaesu-style key. Left-click toggles OFF ↔ last attenuation. Right-click opens OFF / 6 dB / 12 dB / 18 dB. |
+| NR / DNR | Yaesu-style key. Left-click cycles OFF → NR1 → NR2 → OFF (FTdx101MP/D, FTDX3000, FTDX5000) or OFF → DNR → OFF (FTdx10 / FT-710). Right-click opens a 1–15 slider for NR depth / DNR algorithm. |
+| NB | Yaesu-style key. Left-click toggles ON/OFF. Right-click opens a 1–20 slider for noise blanker depth. |
+| Auto Notch | Yaesu-style key. Left-click toggles ON/OFF. |
+| Notch | Yaesu-style key. Left-click toggles manual notch ON/OFF. Right-click opens a 10–3200 Hz frequency slider. |
+| Contour | Yaesu-style key. Left-click toggles Contour ON/OFF. Right-click opens a frequency slider (passband-bounded; radio hard limit 100–3200 Hz, or 100–4000 Hz on FTDX3000). |
+| APF | Yaesu-style key. Left-click toggles APF ON/OFF. Right-click opens a −250…+250 Hz offset slider (CW audio peak filter). |
 | RF Gain | Slider 0–255. Controls the RF preamplifier gain. At 255 (maximum) sensitivity is highest; reducing RF Gain is useful when a strong nearby signal is causing overload that AGC and IPO cannot handle. |
 | Squelch | Slider 0–255. Only shown when the VFO is in FM or FM-N mode. 0 = squelch fully open (hear everything); higher values cut off weaker signals. |
 
 All of these settings are read from the radio when the app connects.
 
-**Filter Function Display** — A compact real-time display positioned alongside the band buttons, between the band button column and the receiver controls column. It shows the shape of the active DSP filter passband, matching the style of the filter scope on the FTdx101MP front panel.
+**Filter Function Display** — A compact real-time display positioned alongside the Band key, between the band/mode column and the receiver controls column. It shows the shape of the active DSP filter passband, matching the style of the filter scope on the FTdx101MP front panel.
 
 - The **red-bordered trapezoid** represents the active **DSP filter passband** (the IF Width setting). The sloped sides reflect the filter roll-off characteristic at the passband edges.
 - **Green animated bars** inside the trapezoid represent signals passing through the filter. No signals are shown outside the passband, making it immediately clear which audio frequencies are being received.
 - A **"Roof Nk" label** in the top-right corner shows the currently selected roofing filter (e.g. "Roof 3k", "Roof 12k", "Roof 600"). This is useful because the DSP filter is the *active* limit when the roofing filter is wider than the DSP setting — in that case the trapezium looks identical for several roofing choices (12k and 3k both produce the same shape if the DSP filter is set to 3 kHz, since both roofing filters are at least as wide as 3 kHz). The label is the only way to see which roofing is actually in circuit when this happens.
 - **Passband width** reflects the current IF Width setting, automatically constrained by the selected Roofing Filter if it is narrower than the DSP setting. If the roofing filter is wider, the DSP filter is what you see.
-- **Passband position** shifts left or right as the IF Shift slider is adjusted — the display updates live while dragging the slider.
-- A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as the contour frequency slider is adjusted.
+- **Passband position** shifts left or right as the IF Shift key is adjusted — the display updates live while dragging the right-click slider. Left-click resets the shift to 0.
+- A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as you adjust Contour frequency (right-click the Contour key).
 - The display updates automatically whenever any filter parameter changes, whether adjusted from the browser or from the radio's front panel.
 
 ---
 
 ### 5.8 IF Width, Audio Filter, IF Shift, and AF Gain
 
-**IF Width** — Sets the DSP filter bandwidth.
+**IF Width** — Yaesu-style key. Left-click resets to the radio's default width (3.0 kHz on the FTdx10); right-click opens a slider of the discrete widths (mode-aware labels). The orange LED lights when the width is not that default. There is no separate "Default" step on the slider — the default is 3.0 kHz.
 
-The IF Width dropdown is **mode-aware**: the SH command code sent to the radio is the same in every mode, but the resulting bandwidth differs per mode. In SSB code 8 gives 1650 Hz; in CW the same code gives 400 Hz. The dropdown labels are rebuilt automatically when you change mode so they show the actual bandwidth the radio will use.
+The IF Width key is **mode-aware**: the SH command code sent to the radio is the same in every mode, but the resulting bandwidth differs per mode. In SSB code 8 gives 1650 Hz; in CW the same code gives 400 Hz. The slider ends are rebuilt automatically when you change mode so they show the actual bandwidth the radio will use.
 
 - **SSB modes** (LSB, USB, DATA-L, DATA-U) show the wide SSB widths — from 300 Hz up to around 3.2 kHz (4 kHz on FTdx10/FT-710).
 - **CW, RTTY, and PSK modes** show the narrow widths — from 50 Hz up to 3 kHz or so.
-- **AM and FM modes** hide the IF Width dropdown — the SH command does not apply in those modes (the radio uses fixed filters, or a separate narrow/wide mode toggle).
+- **AM and FM modes** hide the IF Width key — the SH command does not apply in those modes (the radio uses fixed filters, or a separate narrow/wide mode toggle). Audio Filter and IF Shift stay available.
 
-The first entry in the dropdown ("Default") is the radio's mode-dependent default, which varies by the selected roofing filter. The current width is read from the radio on connect; selecting a new value sends it immediately.
+The current width is read from the radio on connect; selecting a new value sends it immediately.
 
 **Audio Filter button** — Opens the **Audio Filter** popout dialog for this VFO, where you can adjust the per-mode LCUT FREQ, LCUT SLOPE, HCUT FREQ and HCUT SLOPE. See [§5.18](#518-audio-filter-popout) for the full description. Replaces the IF Low Cut dropdown that was in this row in v2.3.9 and earlier — that control was sending a CAT command no current Yaesu HF radio actually supports, so it was a no-op. The new Audio Filter popout uses EX menu commands that the radio honours.
 
@@ -716,9 +722,7 @@ The first entry in the dropdown ("Default") is the radio's mode-dependent defaul
 >
 > What the firmware *did* extend is **HCUT** — the audio high-cut filter that shapes audio inside the IF passband. HCUT now goes up to 4000 Hz (was 3000 Hz). You can now adjust HCUT directly from YWC's **Audio Filter** popout (§5.18) — no need to dig through the radio's own touch-screen menu.
 
-**IF Shift** — Shifts the passband centre ±1000 Hz in 20 Hz steps. Drag the slider or use the keyboard arrow keys. The current offset is shown next to the slider.
-
-**Zero button** — Resets IF Shift to 0 Hz instantly.
+**IF Shift** — Yaesu-style key. Left-click resets the shift to **0**; right-click opens a slider across ±1000 Hz in 20 Hz steps. The centre step is labelled **0**. The current offset is shown on the key. The orange LED lights when the shift is not 0.
 
 IF Shift is persisted and restored on startup.
 
@@ -728,7 +732,7 @@ IF Shift is persisted and restored on startup.
 
 ### 5.9 Band and Segment Selection
 
-**Band buttons** — Click a band button (160m, 80m, 40m, etc.) to switch the VFO to that band. The radio tunes to the last-used frequency on that band. You can also navigate between band buttons with the keyboard: **Tab** moves focus into the band group, then the **left/right arrow keys** move between bands and activate the selected one immediately.
+**Band key** — Click the Band Yaesu-style key to open a grid of bands (160m, 80m, 40m, etc.). Selecting a band switches the VFO to that band; the radio tunes to the last-used frequency on that band. Right-click is unused on this key (it only opens the menu on left-click).
 
 Available bands depend on your band plan setting:
 
@@ -741,7 +745,7 @@ Available bands depend on your band plan setting:
 
 Region 1 is the only plan that includes the 4m (70 MHz) band. Japan has no 60m secondary allocation.
 
-**Segment dropdown** — After selecting a band, a dropdown appears above the frequency display showing common operating segments for that band. Select a segment to jump directly to its standard frequency and set the appropriate mode:
+**Segment** — Yaesu-style key under Band. Click to open a single-column list of common operating segments for the current band. Select a segment to jump directly to its standard frequency and set the appropriate mode:
 
 | Segment | Example (20m) | Mode set |
 |---------|--------------|---------|
@@ -750,9 +754,9 @@ Region 1 is the only plan that includes the 4m (70 MHz) band. Japan has no 60m s
 | SSB | 14.150 MHz | USB |
 | RTTY | 14.080 MHz | RTTY-U |
 
-The last segment you used on each band is remembered, so when you return to a band the dropdown re-selects your previous segment.
+The last segment you used on each band is remembered, so when you return to a band the key re-selects your previous segment. Out of band, the key shows **OOB** in red and is disabled.
 
-**Auto-sync to current frequency** — the Segment dropdown also follows your actual tuning. When you change frequency by any means (clicking the spectrum, turning the radio's front-panel knob, typing on the on-screen frequency keyboard), the dropdown updates to show the segment that contains your new frequency. If you tune into a gap between segments (e.g. 14.150 — between FT8 at 14.074 and SSB at 14.225 on 20m), the dropdown shows the closest segment at or below your frequency. This keeps the dropdown's display honest — it always tells you where you actually are, not where you last clicked.
+**Auto-sync to current frequency** — the Segment key also follows your actual tuning. When you change frequency by any means (clicking the spectrum, turning the radio's front-panel knob, typing on the on-screen frequency keyboard), the key updates to show the segment that contains your new frequency. If you tune into a gap between segments (e.g. 14.150 — between FT8 at 14.074 and SSB at 14.225 on 20m), the key shows the closest segment at or below your frequency. This keeps the display honest — it always tells you where you actually are, not where you last clicked.
 
 **Per-band IF and mode memory** — When you switch away from a band the app saves the current IF Width, IF Shift, and Mode for that band. When you return to the band those settings are automatically restored on the radio. This means, for example, you can have a 500 Hz CW filter on 40m and a 2.4 kHz SSB filter on 20m and the app will switch between them as you change bands. Settings are saved per-VFO (VFO A and VFO B are independent) and persist between sessions.
 
@@ -762,13 +766,13 @@ The last segment you used on each band is remembered, so when you return to a ba
 
 **60m — Japan:** No 60m secondary allocation; the 60m band does not appear for the Japan plan.
 
-**Quick Memory Bank (Store / Recall / V/M)** — on their own row below the band buttons, labelled **QMB**, are three Quick Memory Bank buttons. The QMB is the radio's own scratch memory stack, separate from the labelled memory channels in the Memory Panel (§5.15) — think of it as a quick "put this frequency somewhere I can jump back to" without naming or saving anything.
+**Quick Memory Bank (Store / Recall / V/M)** — on their own row below the filter scope (VFO A), labelled **QMB**, are three Quick Memory Bank buttons. The QMB is the radio's own scratch memory stack, separate from the labelled memory channels in the Memory Panel (§5.15) — think of it as a quick "put this frequency somewhere I can jump back to" without naming or saving anything.
 
 - **Store** writes the current VFO frequency and mode to the next QMB slot (the same as pressing and holding the front-panel **[QMB]** key).
 - **Recall** steps into the QMB and moves to a stored slot; the radio's display shows **QMB**. Pressing Recall again steps to the next stored slot, exactly like short-pressing the front-panel **[QMB]** key.
 - **V/M** leaves QMB mode and returns to normal VFO tuning (the front-panel **[V/M]** key).
 
-![The QMB row on the main control panel — the three buttons Store, Recall and V/M sit on their own row labelled QMB, directly below the band buttons and above the Mode and antenna selectors](pictures/QMB_Button_Placement.png)
+![The QMB row on the main control panel — the three buttons Store, Recall and V/M sit on their own row labelled QMB under the filter scope](pictures/QMB_Button_Placement.png)
 
 Recall is *modal* — once the radio is in QMB mode it stays there until you press **V/M**, so the V/M button is how you get back out without touching the rig. This matters most if you operate entirely from the browser. The radio sends no confirmation back over CAT for these three actions, so the radio's own display (showing **QMB** or not) is the thing to watch. The QMB buttons only appear for radio models that support it.
 
@@ -789,20 +793,20 @@ The button updates automatically — if the radio is powered off or stops respon
 
 Click the button to toggle the connection. While connecting, it briefly shows "Connecting…". On reconnect the app re-reads all radio settings so the controls reflect the current radio state. Useful if the radio was powered on after the app started, or after a USB cable was unplugged and re-plugged.
 
-**ATU button** — Controls the radio's automatic antenna tuner. The button matches the Yaesu front-panel TUNE button's behaviour: short tap and long press do different things.
+**ATU button** — Controls the radio's automatic antenna tuner. The Yaesu-style **ATU** key matches the front-panel TUNE button's behaviour: short tap and long press do different things. On = orange LED lit (tuner network engaged); Off = LED dark (bypassed).
 
-- **Short tap** toggles the ATU between **ATU On** (green) and **ATU Off** (grey). On = the tuner network is engaged in the signal path; Off = bypassed.
-- **Long press (≥500 ms)** starts the radio's auto-tune cycle. The button turns red and shows **Tuning…** while the radio searches for a low-SWR match — typically 2-7 seconds. When tuning completes the button returns to **ATU On** automatically. Tap the red button during a running tune to stop it early. **Because the tune cycle didn't complete, the ATU is left bypassed (Off)** — the radio doesn't retain partial tuning data, so to find a match you'd need to long-press again for a fresh cycle.
+- **Short tap** toggles the ATU on and off.
+- **Long press (≥500 ms)** starts the radio's auto-tune cycle. The key turns red and shows **Tuning…** while the radio searches for a low-SWR match — typically 2-7 seconds. When tuning completes the key returns to idle with the LED reflecting the settled on/off state. Tap the red key during a running tune to stop it early. **Because the tune cycle didn't complete, the ATU is left bypassed (Off)** — the radio doesn't retain partial tuning data, so to find a match you'd need to long-press again for a fresh cycle.
 
-**Tune button** — Next to the ATU button is a separate **Tune** button that starts the same auto-tune cycle with a single plain click. I added it because the long-press gesture on the ATU button isn't reachable by keyboard, screen reader, or voice — this button is. It has its own label and `aria-label` so a screen reader announces it, it takes keyboard focus in the normal tab order, and it's driven by the "tune antenna" voice command (see [§17.1](#171-what-you-can-say)). Click it and it turns red and reads **Stop** while a cycle runs; click the red **Stop** to cancel the cycle early, exactly as tapping the red ATU button does. Because the Yaesu `AC` command reports its tuning field as a fixed value, the radio never tells the app when a cycle has finished on its own — so the Stop state is timed on the app's side and clears itself shortly after a normal cycle would have completed.
+**Tune button** — Below the ATU key is a separate **Tune** button that starts the same auto-tune cycle with a single plain click. I added it because the long-press gesture on the ATU button isn't reachable by keyboard, screen reader, or voice — this button is. It has its own label and `aria-label` so a screen reader announces it, it takes keyboard focus in the normal tab order, and it's driven by the "tune antenna" voice command (see [§17.1](#171-what-you-can-say)). Click it and it turns red and reads **Stop** while a cycle runs; click the red **Stop** to cancel the cycle early, exactly as tapping the red ATU key does. Because the Yaesu `AC` command reports its tuning field as a fixed value, the radio never tells the app when a cycle has finished on its own — so the Stop state is timed on the app's side and clears itself shortly after a normal cycle would have completed.
 
 On single-receiver radios (FTdx10, FT-710, FTDX3000) the radio firmware stores the ATU on/off state per VFO. Swapping the active VFO via the **A↔B** button updates YWC's ATU display to match whichever VFO is now active — even if the on/off settings differ between the two. The radio has only one physical tuner, but it remembers per-VFO which setting to apply.
 
 Only applies to radios fitted with an internal or external ATU.
 
-**Mon button** — Toggles the TX monitor (sidetone) on and off. The button is amber when the monitor is active and grey when off. Click to toggle.
+**Mon button** — Toggles the TX monitor (sidetone) on and off. The Yaesu-style **MON** key shows an orange LED when the monitor is active. Click to toggle.
 
-**Mon level slider** — Sets the TX monitor volume (0–100). Controls how much of the transmitted audio you hear in the headphones during TX. Drag and release to apply. Both the on/off state and the level are read from the radio when the app connects.
+**Mon level slider** — Sets the TX monitor volume (0–100), beside the MON key. Controls how much of the transmitted audio you hear in the headphones during TX. Drag and release to apply. Both the on/off state and the level are read from the radio when the app connects.
 
 **TX timeout warning** — If the radio has been transmitting continuously for longer than a configurable threshold (default **120 seconds**), a red banner appears across the top of the page reading *"TX has been ON for more than N seconds — check your microphone, keyer or VOX!"* and a tone beeps every three seconds until the warning is cleared. The warning triggers regardless of how TX was started (app button, hardware PTT, VOX, CAT) and automatically clears the moment the radio returns to receive.
 
@@ -820,7 +824,7 @@ All three panels can be open at the same time and can be dragged anywhere on scr
 
 **MIC Gain** — Drag the slider to set the microphone gain (0–100). The value is sent to the radio as you release.
 
-**PROC** — Speech processor toggle. Shows **Proc On** (green) or **Proc Off** (grey).
+**PROC** — Speech processor toggle. Yaesu-style key with an orange LED when on; level slider beside it.
 
 **PROC Level** — Speech processor level slider (0–100).
 
@@ -1391,7 +1395,7 @@ YWC keeps the previous spectrum frame visible during the pause rather than blank
 
 ### 6.4 Roofing Filters
 
-Select which optional roofing filters are fitted to your radio. The app uses this list to show only the installed filters in the Roofing Filter dropdown on the main page. FTdx101MP comes fully loaded; FTdx101D, FTdx10, and FTDX3000 allow optional filter selection.
+Select which optional roofing filters are fitted to your radio. The app uses this list to show only the installed filters in the Roofing Yaesu-style key on the main page. FTdx101MP comes fully loaded; FTdx101D, FTdx10, and FTDX3000 allow optional filter selection.
 
 ---
 
@@ -1536,15 +1540,15 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 
 | Setting | Description |
 |---------|-------------|
-| Enable remote audio | Opt-in. When off, no audio devices are opened and the Index bar is hidden. |
+| Enable remote audio | Opt-in. When off, no audio devices are opened and the Index Remote Audio controls (operating-controls row, last column) are hidden. |
 | Radio RX device (capture) | PortAudio input used for what you **hear** in the browser — usually the Yaesu USB **recording** endpoint (`Microphone (USB Audio CODEC)` / `Line (USB Audio CODEC)`, or a name you gave it in the OS). **Required** when remote audio is enabled (no system-default fallback). On Windows the list is limited to **WASAPI** endpoints so the same USB CODEC is not repeated under MME / DirectSound / WDM-KS. Names that look like a USB codec are sorted to the top and marked with a radio icon (📻). |
 | Radio TX device (playback) | PortAudio output for browser **mic → radio** — usually Yaesu USB **Speakers** / playback (`Speakers (USB Audio CODEC)`). **Required** when enabled. Do **not** leave blank or pick PC speakers / headphones: that loops the browser mic into the room and never reaches the radio. Same WASAPI-only listing and radio-icon hint as RX. |
-| RX / TX gain | Software gain in the bridge (0.05–4). Adjusted live via **Mic & Gain** on the Index Remote Audio bar (or inline on the pop-out) — not on the Settings page. |
+| RX / TX gain | Software gain in the bridge (0.05–4). Adjusted live via **Mic & Gain** on the Index Remote Audio controls (or inline on the pop-out) — not on the Settings page. |
 | Audio codec | Chosen on the Index **Mic & Gain** dialog or the pop-out (not a host setting). **Opus** (default) compresses speech to ~32 kb/s per direction; **PCM16** is uncompressed ~768 kb/s. See [§18.6](#186-audio-codecs-opus-vs-pcm16). |
 
 Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
 
-On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window that owns the audio session. Use this before opening Settings (or any other page) so RX/TX keep running — navigating away from Home otherwise closes the in-page session. While audio is in the pop-out, Home still shows status/levels/mutes, and the filter-scope FFT on Home stays live. Only one audio session is allowed at a time; handing off briefly reconnects.
+On the Index **Remote Audio** controls (last column of the operating-controls row under the meters), **Pop out** opens a small dedicated window that owns the audio session. Use this before opening Settings (or any other page) so RX/TX keep running — navigating away from Home otherwise closes the in-page session. While audio is in the pop-out, Home still shows status/levels/mutes, and the filter-scope FFT on Home stays live. Only one audio session is allowed at a time; handing off briefly reconnects.
 
 ---
 
@@ -2293,8 +2297,7 @@ On touch devices, tap a digit in the frequency display to select it (it highligh
 | **Esc** | Exit full-screen mode |
 | Mouse wheel (on spectrum) | Tune VFO A up or down in 1 kHz steps |
 | Click on spectrum | Tune VFO A to the clicked frequency |
-| **Tab** (in band buttons) | Move focus into the band button group |
-| **← / →** (in band buttons) | Move to the previous/next band and switch immediately |
+| Band / Mode key | Click to open the option menu; choose a band or mode |
 | Numeric entry button (**⑁**) next to MHz | Open the on-screen frequency keyboard for that VFO |
 | **0–9** (frequency keyboard open) | Type the digit at the cursor position |
 | **← →** (frequency keyboard open) | Move the cursor left or right |
@@ -2694,8 +2697,8 @@ All interactive controls in the app have accessible labels that screen readers a
 
 | Element | What is announced |
 |---------|------------------|
-| Band buttons | Full band name — e.g., "20 metres, radio button" |
-| Band button group | Announced as a radio group; arrow keys move between bands |
+| Band key | Current band — e.g., "Band: 20m" — click to open the band menu |
+| Mode key | Current mode — e.g., "Mode: USB" — click to open the mode menu |
 | Meter gauges | Meter name and current reading — e.g., "S meter, VFO A: S5", "Amplifier supply voltage meter: 50.2 V" |
 | Frequency display | "VFO A frequency" with current value in MHz |
 | Sliders, dropdowns, buttons | Their purpose — e.g., "Transmit power", "VFO A mode" |
@@ -2740,7 +2743,7 @@ When the app loads, NVDA does not automatically read through the page. Two desig
 - The main control panel uses `role="application"`, which tells NVDA to stay in forms/interaction mode rather than reading the page from top to bottom in browse mode.
 - The navigation bar at the top of the page is hidden from the accessibility tree so it is not announced when the page loads or when you return to the tab.
 
-**Band navigation:** When Tab moves focus into a band button group, NVDA announces *"Band — use arrow keys to change band, group"*. Press the **left/right arrow keys** to move between bands. Each band change is announced immediately (e.g., "20 metres, radio button, checked").
+**Band / Mode navigation:** Tab to the Band or Mode Yaesu-style key and press Enter or Space to open its menu. Arrow keys move between menu items; Enter selects. Escape closes the menu.
 
 > **Note:** NVDA reads abbreviations aloud. "SWR" is read as three separate letters ("S W R"). "PA" may be expanded to "Power Amplifier". The default labels in this app are written to avoid ambiguous abbreviations.
 
@@ -2762,7 +2765,7 @@ Once running, Narrator reads aloud the element that has keyboard focus. To navig
 
 ### 16.6 Customising Screen Reader Labels
 
-Every control in the app — band buttons, meters, VFO controls, the on-screen frequency keyboard, spectrum span buttons, and the navigation bar home link — has a text label that screen readers announce. You can change any of these labels through the built-in **Accessibility Labels** editor.
+Every control in the app — Band/Mode keys, meters, VFO controls, the on-screen frequency keyboard, spectrum span buttons, and the navigation bar home link — has a text label that screen readers announce. You can change any of these labels through the built-in **Accessibility Labels** editor.
 
 **Editing labels:**
 
@@ -2779,9 +2782,9 @@ To restore all labels to their factory defaults, click **Reset to Defaults** at 
 
 | Section | Controls covered |
 |---------|-----------------|
-| Band Buttons | Band buttons — 160m through 4m |
+| Band Keys | Legacy per-band label keys (160m through 4m) |
 | Meters | All meter gauges (S-meter, SWR, Power, etc.) |
-| VFO Controls | Frequency displays, up/down buttons, mode selector |
+| VFO Controls | Frequency displays, up/down buttons, Band and Mode keys |
 | Radio Controls | AGC, IPO/AMP, ATT, NR, NB, Notch, Roofing filter, AF gain, IF width, IF shift, TX power, Mic gain |
 | Frequency Keyboard | On-screen frequency keyboard — all buttons including digits 0–9 |
 | Spectrum Display | Spectrum canvas and the span buttons (1k to 2M) for each VFO |
@@ -3114,7 +3117,7 @@ Local testing on the same PC can use `http://localhost:8080` without HTTPS.
 ### 18.4 Operating
 
 1. Open the Index page (over HTTPS if remote).
-2. Click **Start audio** on the Remote Audio bar. Grant microphone permission when asked.
+2. Click **Start audio** on the Remote Audio controls (operating-controls row under the meters). Grant microphone permission when asked.
 3. You should hear RX audio; speak into the mic (levels show on the bar). Use **Mic & Gain** to pick the browser microphone, choose **Opus** or **PCM16**, and adjust RX/TX software gain (codec and mic choice are remembered in the browser; gain is saved on the host).
 4. Use **TX** / your TX toggle key to key the radio (on Home or on the Remote Audio pop-out). Audio flows continuously (like Mumble); CAT controls PTT.
 5. **Mute mic** / **Mute RX** as needed. **Stop** ends the session and closes host audio devices.
@@ -3126,7 +3129,7 @@ The status line shows the active codec while streaming (for example `Streaming (
 
 Audio on the Index page stops when you leave Home (for example to open **Settings**). To keep streaming:
 
-1. Click **Pop out** on the Remote Audio bar. A small **Remote Audio** window opens.
+1. Click **Pop out** on the Remote Audio controls. A small **Remote Audio** window opens.
 2. If you were already streaming, YWC hands the session to that window (brief reconnect). Otherwise click **Start audio** in the pop-out.
 3. Leave the pop-out open while you use Settings or other pages. Home shows status such as *In pop-out window (streaming)*; mute switches on Home still control the pop-out session. Filter-scope on Home keeps receiving live RX spectrum from the pop-out. The pop-out has its own **TX** button (same PTT as Home) and a **VFO A / VFO B** badge for the current transmit VFO; it also honours the same **TX toggle key** from Settings when that window is focused. TX on/off stays in sync with the main window when Home is open.
 4. **Stop** on Home stops the pop-out session. **Close** in the pop-out (or closing the window) ends audio and returns control to Home.
@@ -3146,7 +3149,7 @@ Audio on the Index page stops when you leave Home (for example to open **Setting
 | Pop-out blocked | Allow pop-ups for the YWC origin; click **Pop out** / **Open pop-out** again. |
 | Devices missing from the list | Unplug/replug USB; Refresh device list; check OS privacy permissions for microphone (host process). |
 | Session connects but no RX (RX meter stuck at 0) on macOS | macOS treats the radio USB **recording** endpoint as a microphone. Grant **System Settings → Privacy & Security → Microphone → Yaesu Web Control**. If the app was built without `NSMicrophoneUsageDescription`, macOS never prompts and PortAudio still “opens” the device but returns silence — rebuild/reinstall a DMG that includes that key (see `scripts/macos/build-dmg.sh`), then allow Microphone when prompted. |
-| Wrong browser mic | Open **Mic & Gain** on the Remote Audio bar (or use the pop-out controls) and pick the right browser microphone. Choice is remembered in the browser. |
+| Wrong browser mic | Open **Mic & Gain** on the Remote Audio controls (or use the pop-out controls) and pick the right browser microphone. Choice is remembered in the browser. |
 | Opus unavailable / forced to PCM16 | The browser needs WebCodecs `AudioEncoder` / `AudioDecoder` (current Chrome, Edge, or Chromium). Older Safari/Firefox builds may only offer PCM16. |
 | Voice Control vs radio USB | Keep Voice Control’s mic on your headset; leave Remote Audio devices on the Yaesu USB endpoints. |
 

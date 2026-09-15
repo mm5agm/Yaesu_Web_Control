@@ -3,7 +3,7 @@
 // The SH command takes the same code for all modes on each radio, but the
 // resulting bandwidth differs by mode. In SSB code 8 = 1650 Hz; in CW the
 // same code 8 = 400 Hz. This module provides the mode-aware lookup used by
-// both the dropdown rebuild logic in site.js and the Filter Function Display
+// both the IF Width Yaesu-key rebuild logic in site.js and the Filter Function Display
 // in filter-scope-panel.js.
 //
 // Data is sourced from Table 3 of each radio's official CAT manual.
@@ -104,6 +104,9 @@ const TABLES = {
 // FTdx101D shares the FTdx101MP tables.
 TABLES['FTdx101D'] = TABLES['FTdx101MP'];
 
+// SH code 0 is the radio's own default. On FTdx10 / FTdx101 that is 3.0 kHz.
+const SH0_DEFAULT_HZ = 3000;
+
 function hzLabel(hz) {
     if (hz === 'default') return 'Default';
     if (hz >= 1000) {
@@ -136,32 +139,69 @@ function ifWidthOptionsFor(model, mode) {
         .sort((a, b) => parseInt(a.code) - parseInt(b.code));
 }
 
-// Rebuild a <select> element with the options for the current mode.
+// Returns slider options plus reset metadata. Code 0 ("Default") is omitted
+// from the slider; left-click still sends it as the radio's own default.
+function ifWidthKeyConfig(model, mode) {
+    const all = ifWidthOptionsFor(model, mode);
+    if (!all) return null;
+    const defaultRow = all.find((o) => o.hz === "default");
+    const sliderRows = all.filter((o) => o.hz !== "default");
+    const defaultId = defaultRow
+        ? defaultRow.code
+        : (sliderRows.find((o) => o.hz === SH0_DEFAULT_HZ)?.code ?? sliderRows[sliderRows.length - 1]?.code ?? "0");
+    const extraLabels = {};
+    const sliderAlias = {};
+    const offIds = [defaultId];
+    if (defaultRow) {
+        extraLabels[defaultId] = hzLabel(SH0_DEFAULT_HZ);
+        const twin = sliderRows.find((o) => o.hz === SH0_DEFAULT_HZ);
+        if (twin) {
+            sliderAlias[defaultId] = twin.code;
+            if (!offIds.includes(twin.code)) offIds.push(twin.code);
+        }
+    }
+    return {
+        options: sliderRows.map((o) => ({ id: o.code, label: o.label })),
+        defaultId,
+        extraLabels,
+        sliderAlias,
+        offIds,
+    };
+}
+
+// Rebuild an IF Width Yaesu-key widget with the options for the current mode.
 // Preserves the currently selected code if it still exists in the new options.
-function rebuildIfWidthSelect(selectEl, model, mode) {
-    if (!selectEl) return;
-    const options = ifWidthOptionsFor(model, mode);
-    // Hide the entire row when the dropdown does not apply (AM/FM modes).
-    // The row contains both the label and the select — walk up to find it.
-    const row = selectEl.closest('.d-flex');
-    if (!options) {
-        if (row) row.style.display = 'none';
+// Hides only the key in AM/FM (Audio Filter / IF Shift stay visible).
+function rebuildIfWidthSelect(widget, model, mode) {
+    if (!widget || typeof widget.setOptions !== "function") return;
+    const resolved =
+        model ||
+        (typeof window.getConfiguredRadioModel === "function" && window.getConfiguredRadioModel()) ||
+        document.getElementById("vfoRow")?.dataset?.radioModel;
+    const cfg = ifWidthKeyConfig(resolved, mode);
+    if (!cfg) {
+        widget.root.style.display = "none";
+        widget.setDisabled(true);
         return;
     }
-    if (row) row.style.display = '';
+    widget.root.style.display = "";
+    widget.setDisabled(false);
 
-    const previousCode = selectEl.value;
-    selectEl.innerHTML = '';
-    for (const opt of options) {
-        const optEl = document.createElement('option');
-        optEl.value = opt.code;
-        optEl.textContent = opt.label;
-        selectEl.appendChild(optEl);
-    }
-    // Preserve the selected code if still valid.
-    if (Array.from(selectEl.options).some(o => o.value === previousCode)) {
-        selectEl.value = previousCode;
-    }
+    const previousCode = String(widget.getState().selectedId ?? "");
+    const keep =
+        previousCode === cfg.defaultId ||
+        cfg.options.some((o) => o.id === previousCode) ||
+        cfg.extraLabels[previousCode] != null
+            ? previousCode
+            : cfg.defaultId;
+    widget.setOptions(cfg.options, {
+        silent: true,
+        selectedId: keep,
+        extraLabels: cfg.extraLabels,
+        sliderAlias: cfg.sliderAlias,
+        offIds: cfg.offIds,
+        clickSelectId: cfg.defaultId,
+    });
 }
 
 // Expose to non-module code (site.js loads as a regular script).
@@ -169,7 +209,8 @@ window.IfWidth = {
     modeGroup,
     ifWidthHzFor,
     ifWidthOptionsFor,
+    ifWidthKeyConfig,
     rebuildIfWidthSelect,
 };
 
-export { modeGroup, ifWidthHzFor, ifWidthOptionsFor, rebuildIfWidthSelect };
+export { modeGroup, ifWidthHzFor, ifWidthOptionsFor, ifWidthKeyConfig, rebuildIfWidthSelect };

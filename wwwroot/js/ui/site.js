@@ -446,6 +446,9 @@ function updateTxIndicators(isTransmitting) {
     sMetersFrozenByTx = !!isTransmitting;
     document.getElementById('meterGaugesRow')
         ?.classList.toggle('meters-tx-dim', sMetersFrozenByTx);
+    // VFO linear S-meters live outside #meterGaugesRow — dim them the same way.
+    document.querySelectorAll('[data-linear-smeter]')
+        .forEach(el => el.classList.toggle('meters-tx-dim', sMetersFrozenByTx));
     if (window.ftdx101Meters) {
         window.ftdx101Meters.setTransmitting(isTransmitting);
     }
@@ -477,10 +480,15 @@ function updateMeterDomLabel(property, result) {
             const formatted = window.MeterFormatters.powerOverlay(dv.watts);
             const el = document.getElementById('powerMeterValue');
             if (el) el.textContent = formatted;
+            // Compact linear sibling readout (freestanding — includes unit).
+            const linEl = document.getElementById('powerLinearValue');
+            if (linEl) linEl.textContent = window.MeterFormatters.powerLabel(dv.watts);
             const rawEl = document.getElementById('raw-powerout-label');
             if (rawEl) rawEl.textContent = 'Raw Power Out: ' + Math.round(dv.rawAvg);
             const canvas = document.getElementById('powerMeterCanvas');
             if (canvas) canvas.dataset.reading = formatted;
+            const linCanvas = document.getElementById('powerLinearCanvas');
+            if (linCanvas) linCanvas.dataset.reading = window.MeterFormatters.powerLabel(dv.watts);
             break;
         }
         case 'SWRMeter': {
@@ -499,10 +507,22 @@ function updateMeterDomLabel(property, result) {
                     badge.style.color      = offScale ? '#000000' : '#ffffff';
                 }
             }
+            // Compact linear sibling readout — same formatted text + off-scale colour.
+            const linEl = document.getElementById('swrLinearValue');
+            if (linEl) {
+                linEl.textContent = formatted;
+                linEl.style.background = offScale ? '#ffc107' : '#dc3545';
+                linEl.style.color      = offScale ? '#000000' : '#ffffff';
+            }
             const canvas = document.getElementById('swrMeterCanvas');
             if (canvas) {
                 canvas.dataset.reading = window.MeterFormatters.swrAnnouncement(dv.swr);
                 canvas.dataset.offScale = offScale ? 'true' : 'false';
+            }
+            const linCanvas = document.getElementById('swrLinearCanvas');
+            if (linCanvas) {
+                linCanvas.dataset.reading = window.MeterFormatters.swrAnnouncement(dv.swr);
+                linCanvas.dataset.offScale = offScale ? 'true' : 'false';
             }
             break;
         }
@@ -510,8 +530,12 @@ function updateMeterDomLabel(property, result) {
             const formatted = window.MeterFormatters.compressionOverlay(dv.db);
             const el = document.getElementById('compressionMeterValue');
             if (el) el.textContent = formatted;
+            const linEl = document.getElementById('compressionLinearValue');
+            if (linEl) linEl.textContent = `${formatted} dB`;
             const canvas = document.getElementById('compressionMeterCanvas');
             if (canvas) canvas.dataset.reading = formatted;
+            const linCanvas = document.getElementById('compressionLinearCanvas');
+            if (linCanvas) linCanvas.dataset.reading = `${formatted} dB`;
             break;
         }
         case 'ALCMeter': {
@@ -529,8 +553,12 @@ function updateMeterDomLabel(property, result) {
                 else                      bar.classList.add('bg-danger');
             }
             if (meterEl) meterEl.textContent = alcFormatted;
+            const linEl = document.getElementById('alcLinearValue');
+            if (linEl) linEl.textContent = alcFormatted;
             const alcCanvas = document.getElementById('alcMeterCanvas');
             if (alcCanvas) alcCanvas.dataset.reading = alcFormatted;
+            const linCanvas = document.getElementById('alcLinearCanvas');
+            if (linCanvas) linCanvas.dataset.reading = alcFormatted;
             break;
         }
         case 'IDDMeter': {
@@ -759,8 +787,10 @@ document.addEventListener('DOMContentLoaded', () => { getTxSyncChannel(); });
 // activeVfo (VS: 0 = MAIN/A, 1 = SUB/B). The radio auto-broadcasts VS when
 // you press MAIN⇄SUB-select on the front panel, so this follows live.
 // Single-receiver radios do not grey or lock either panel; both stay fully
-// editable. Clears any leftover .vfo-inactive / .vfo-tx-editable from
-// earlier builds. See docs/decisions/0003-single-vs-dual-receiver-ui.md.
+// editable — except the per-VFO linear S-meter, which greys on the inactive
+// VFO (only one receiver is actually measuring). Clears any leftover
+// .vfo-inactive / .vfo-tx-editable from earlier builds.
+// See docs/decisions/0003-single-vs-dual-receiver-ui.md.
 function applyVfoActiveStyling() {
     const vfoRow = document.getElementById('vfoRow');
     if (!vfoRow) return;
@@ -773,17 +803,25 @@ function applyVfoActiveStyling() {
     document.getElementById('spectrumContainerA')?.classList.remove('vfo-inactive');
     document.getElementById('spectrumContainerB')?.classList.remove('vfo-inactive');
 
+    const smA = document.getElementById('sMeterLinearRowA');
+    const smB = document.getElementById('sMeterLinearRowB');
     const singleReceiver = vfoRow.dataset.singleReceiver === 'true';
     if (singleReceiver) {
         // No active-band amber ring on single-receiver — RX/TX selectors
         // already show which VFO is receiving / transmitting.
         aCol.classList.remove('vfo-active');
         bCol.classList.remove('vfo-active');
+        // Only one physical S-meter: grey the inactive VFO's linear face.
+        smA?.classList.toggle('linear-smeter-inactive', activeVfo !== 0);
+        smB?.classList.toggle('linear-smeter-inactive', activeVfo !== 1);
         return;
     }
 
     aCol.classList.toggle('vfo-active', activeVfo === 0);
     bCol.classList.toggle('vfo-active', activeVfo === 1);
+    // Dual-receiver: both S-meters are live (SM0/SM1).
+    smA?.classList.remove('linear-smeter-inactive');
+    smB?.classList.remove('linear-smeter-inactive');
 }
 
 // Apply the styling at page-load time too, before any SignalR update has
@@ -1150,11 +1188,9 @@ function sMeterLabel(val) {
 // (e.g., via SignalR update or front panel knob change).
 // ---------------------------------------------------------------------------
 function updateModeSelect(receiver, mode) {
-    const select = document.getElementById(`modeSelect${receiver}`);
-    if (select) {
-        select.value = mode;
-    } else {
-
+    const widget = window[`modeButton${receiver}`];
+    if (widget && mode) {
+        widget.setState({ selectedId: String(mode) }, { silent: true });
     }
 }
 
@@ -1229,7 +1265,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window._updateSquelchVisibility === 'function') window._updateSquelchVisibility('A', update.value);
         if (window.IfWidth && window._radioModel) {
             window.IfWidth.rebuildIfWidthSelect(
-                document.getElementById('ifWidthSelectA'), window._radioModel, update.value);
+                window.ifWidthButtonA, window._radioModel, update.value);
         }
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeA', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('A', update.value);
@@ -1243,7 +1279,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window._updateSquelchVisibility === 'function') window._updateSquelchVisibility('B', update.value);
         if (window.IfWidth && window._radioModel) {
             window.IfWidth.rebuildIfWidthSelect(
-                document.getElementById('ifWidthSelectB'), window._radioModel, update.value);
+                window.ifWidthButtonB, window._radioModel, update.value);
         }
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeB', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('B', update.value);
@@ -1293,11 +1329,20 @@ connection.on("RadioStateUpdate", function (update) {
         if (window.radioControl && window.radioControl._state) {
             window.radioControl._state.lastBackendFreq.A = update.value;
         }
-        // BandA only broadcasts when the band *changes*, so an operator who is
-        // already out of band at page load would never get the red marker from
-        // updateBandButton alone. Re-apply it whenever the frequency moves.
+        // Keep the Band key aligned with Hz. BandA only broadcasts when the
+        // band *name* changes, and a SignalR BandA that arrived before the
+        // Yaesu key existed is easy to miss — derive from frequency whenever
+        // it moves (also heals OOB / stale-persisted band mismatches).
         lastVfoHz.A = update.value;
-        try { applyBandOutOfBand('A'); } catch (e) { console.error('applyBandOutOfBand A error:', e); }
+        try {
+            if (typeof window.bandForHz === 'function') {
+                const derived = window.bandForHz(update.value);
+                if (derived) updateBandButton('A', derived);
+                else applyBandOutOfBand('A');
+            } else {
+                applyBandOutOfBand('A');
+            }
+        } catch (e) { console.error('band sync A error:', e); }
         try { window.updateFrequencyDisplay('A', update.value); } catch (e) { console.error('updateFrequencyDisplay A error:', e); }
         // Clear editing mode once the radio echoes back our sent frequency.
         if (window.radioControl && window.radioControl._state) {
@@ -1318,7 +1363,15 @@ connection.on("RadioStateUpdate", function (update) {
             window.radioControl._state.lastBackendFreq.B = update.value;
         }
         lastVfoHz.B = update.value;
-        try { applyBandOutOfBand('B'); } catch (e) { console.error('applyBandOutOfBand B error:', e); }
+        try {
+            if (typeof window.bandForHz === 'function') {
+                const derived = window.bandForHz(update.value);
+                if (derived) updateBandButton('B', derived);
+                else applyBandOutOfBand('B');
+            } else {
+                applyBandOutOfBand('B');
+            }
+        } catch (e) { console.error('band sync B error:', e); }
         try { window.updateFrequencyDisplay('B', update.value); } catch (e) { console.error('updateFrequencyDisplay B error:', e); }
         // Clear editing mode once the radio echoes back our sent frequency.
         if (window.radioControl && window.radioControl._state) {
@@ -1490,125 +1543,133 @@ connection.on("RadioStateUpdate", function (update) {
 
     // --- ROOFING FILTER ---
     if (update.property === "RoofingFilterA") {
-        const selectEl = document.getElementById('roofingFilterSelectA');
-        if (selectEl) selectEl.value = update.value;
+        if (window.roofingButtonA) {
+            window.roofingButtonA.setState({ selectedId: String(update.value) }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ roofingCode: update.value });
         updateContourSliderBounds('A');
     }
     if (update.property === "RoofingFilterB") {
-        const selectEl = document.getElementById('roofingFilterSelectB');
-        if (selectEl) selectEl.value = update.value;
+        if (window.roofingButtonB) {
+            window.roofingButtonB.setState({ selectedId: String(update.value) }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ roofingCode: update.value });
         updateContourSliderBounds('B');
     }
 
     // --- AGC ---
     if (update.property === "AgcA") {
-        const selectEl = document.getElementById('agcSelectA');
-        // Values 5/6 (AUTO-FAST/MID/SLOW) are normalised to 4 (AUTO) by the dispatcher,
-        // but guard here too in case of a race.
-        if (selectEl) selectEl.value = (update.value === "5" || update.value === "6") ? "4" : update.value;
+        const code = (update.value === "5" || update.value === "6") ? "4" : update.value;
+        if (window.agcButtonA) window.agcButtonA.setState({ selectedId: String(code) }, { silent: true });
     }
     if (update.property === "AgcB") {
-        const selectEl = document.getElementById('agcSelectB');
-        if (selectEl) selectEl.value = (update.value === "5" || update.value === "6") ? "4" : update.value;
+        const code = (update.value === "5" || update.value === "6") ? "4" : update.value;
+        if (window.agcButtonB) window.agcButtonB.setState({ selectedId: String(code) }, { silent: true });
     }
 
     // --- IPO/AMP ---
     if (update.property === "IpoA") {
-        const el = document.getElementById('ipoSelectA');
-        if (el) el.value = update.value;
+        if (window.ipoButtonA) window.ipoButtonA.setState({ selectedId: String(update.value) }, { silent: true });
     }
     if (update.property === "IpoB") {
-        const el = document.getElementById('ipoSelectB');
-        if (el) el.value = update.value;
+        if (window.ipoButtonB) window.ipoButtonB.setState({ selectedId: String(update.value) }, { silent: true });
     }
 
     // --- ATTENUATOR ---
     if (update.property === "AttA") {
-        const el = document.getElementById('attSelectA');
-        if (el) el.value = update.value;
+        if (window.attButtonA) window.attButtonA.setState({ selectedId: String(update.value) }, { silent: true });
     }
     if (update.property === "AttB") {
-        const el = document.getElementById('attSelectB');
-        if (el) el.value = update.value;
+        if (window.attButtonB) window.attButtonB.setState({ selectedId: String(update.value) }, { silent: true });
     }
 
     // --- NOISE REDUCTION ---
     if (update.property === "NrA") {
-        const el = document.getElementById('nrSelectA');
-        if (el) el.value = update.value;
+        if (window.nrCycleButtonA) {
+            window.nrCycleButtonA.setState({ selectedId: String(update.value) }, { silent: true });
+        }
     }
     if (update.property === "NrB") {
-        const el = document.getElementById('nrSelectB');
-        if (el) el.value = update.value;
+        if (window.nrCycleButtonB) {
+            window.nrCycleButtonB.setState({ selectedId: String(update.value) }, { silent: true });
+        }
     }
 
     // --- MANUAL NOTCH FREQUENCY ---
     if (update.property === "ManualNotchFreqA") {
-        const el = document.getElementById('manualNotchFreqA');
-        if (el) { el.value = update.value; document.getElementById('manualNotchFreqValueA').textContent = update.value + ' Hz'; }
+        if (window.manNotchButtonA) {
+            window.manNotchButtonA.setState({ value: Number(update.value) }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ manualNotchFreqHz: parseInt(update.value) || 800 });
     }
     if (update.property === "ManualNotchFreqB") {
-        const el = document.getElementById('manualNotchFreqB');
-        if (el) { el.value = update.value; document.getElementById('manualNotchFreqValueB').textContent = update.value + ' Hz'; }
+        if (window.manNotchButtonB) {
+            window.manNotchButtonB.setState({ value: Number(update.value) }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ manualNotchFreqHz: parseInt(update.value) || 800 });
     }
 
     // --- NOISE BLANKER ---
     if (update.property === "NbA") {
-        const el = document.getElementById('nbSelectA');
-        if (el) el.value = update.value;
+        if (window.nbButtonA) {
+            window.nbButtonA.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
     }
     if (update.property === "NbB") {
-        const el = document.getElementById('nbSelectB');
-        if (el) el.value = update.value;
+        if (window.nbButtonB) {
+            window.nbButtonB.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
     }
 
     // --- AUTO NOTCH ---
     if (update.property === "AutoNotchA") {
-        const el = document.getElementById('autoNotchSelectA');
-        if (el) el.value = update.value;
+        if (window.autoNotchButtonA) {
+            window.autoNotchButtonA.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
     }
     if (update.property === "AutoNotchB") {
-        const el = document.getElementById('autoNotchSelectB');
-        if (el) el.value = update.value;
+        if (window.autoNotchButtonB) {
+            window.autoNotchButtonB.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
     }
 
     // --- IF WIDTH ---
     if (update.property === "IfWidthA") {
-        const el = document.getElementById('ifWidthSelectA');
-        if (el) {
-            const exists = Array.from(el.options).some(o => o.value === String(update.value));
-            if (exists) el.value = update.value;
+        const widget = window.ifWidthButtonA;
+        if (widget) {
+            widget.setState({ selectedId: String(update.value) }, { silent: true });
         }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ ifWidthCode: update.value });
         updateContourSliderBounds('A');
     }
     if (update.property === "IfWidthB") {
-        const el = document.getElementById('ifWidthSelectB');
-        if (el) {
-            const exists = Array.from(el.options).some(o => o.value === String(update.value));
-            if (exists) el.value = update.value;
+        const widget = window.ifWidthButtonB;
+        if (widget) {
+            widget.setState({ selectedId: String(update.value) }, { silent: true });
         }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ ifWidthCode: update.value });
         updateContourSliderBounds('B');
     }
 
     // --- IF SHIFT ---
-    if (update.property === "IfShiftA" && !ifShiftDragging.A) {
-        const slider = document.getElementById('ifShiftSliderA');
-        const label = document.getElementById('ifShiftValueA');
-        if (slider) slider.value = update.value;
-        if (label) label.textContent = update.value;
+    if (update.property === "IfShiftA") {
+        const widget = window.ifShiftButtonA;
+        if (widget && !widget.menuOpen) {
+            const hz = typeof window.snapIfShiftHz === "function"
+                ? window.snapIfShiftHz(update.value)
+                : (parseInt(update.value, 10) || 0);
+            widget.setState({ selectedId: String(hz) }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ ifShiftHz: parseInt(update.value) || 0 });
     }
-    if (update.property === "IfShiftB" && !ifShiftDragging.B) {
-        const slider = document.getElementById('ifShiftSliderB');
-        const label = document.getElementById('ifShiftValueB');
-        if (slider) slider.value = update.value;
-        if (label) label.textContent = update.value;
+    if (update.property === "IfShiftB") {
+        const widget = window.ifShiftButtonB;
+        if (widget && !widget.menuOpen) {
+            const hz = typeof window.snapIfShiftHz === "function"
+                ? window.snapIfShiftHz(update.value)
+                : (parseInt(update.value, 10) || 0);
+            widget.setState({ selectedId: String(hz) }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ ifShiftHz: parseInt(update.value) || 0 });
     }
 
@@ -1645,68 +1706,74 @@ connection.on("RadioStateUpdate", function (update) {
     // --- CONTOUR ---
     if (update.property === "ContourOnA") {
         contourState.A.on = update.value === true || update.value === 'true' || update.value === 1;
-        _updateContourBtn('A');
+        if (window.contourButtonA) {
+            window.contourButtonA.setState({ enabled: contourState.A.on }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ contourOn: contourState.A.on });
     }
     if (update.property === "ContourOnB") {
         contourState.B.on = update.value === true || update.value === 'true' || update.value === 1;
-        _updateContourBtn('B');
+        if (window.contourButtonB) {
+            window.contourButtonB.setState({ enabled: contourState.B.on }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ contourOn: contourState.B.on });
     }
     if (update.property === "ContourFreqA") {
         contourState.A.freqHz = parseInt(update.value) || 800;
-        const slider = document.getElementById('contourFreqSliderA');
-        const label  = document.getElementById('contourFreqValueA');
-        if (slider) slider.value = contourState.A.freqHz;
-        if (label)  label.textContent = contourState.A.freqHz + ' Hz';
+        if (window.contourButtonA) {
+            window.contourButtonA.setState({ value: contourState.A.freqHz }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ contourFreqHz: contourState.A.freqHz });
     }
     if (update.property === "ContourFreqB") {
         contourState.B.freqHz = parseInt(update.value) || 800;
-        const slider = document.getElementById('contourFreqSliderB');
-        const label  = document.getElementById('contourFreqValueB');
-        if (slider) slider.value = contourState.B.freqHz;
-        if (label)  label.textContent = contourState.B.freqHz + ' Hz';
+        if (window.contourButtonB) {
+            window.contourButtonB.setState({ value: contourState.B.freqHz }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ contourFreqHz: contourState.B.freqHz });
     }
 
     // --- APF ---
     if (update.property === "ApfOnA") {
         apfState.A.on = update.value === true || update.value === 'true' || update.value === 1;
-        _updateApfBtn('A');
+        if (window.apfButtonA) {
+            window.apfButtonA.setState({ enabled: apfState.A.on }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ apfOn: apfState.A.on });
     }
     if (update.property === "ApfOnB") {
         apfState.B.on = update.value === true || update.value === 'true' || update.value === 1;
-        _updateApfBtn('B');
+        if (window.apfButtonB) {
+            window.apfButtonB.setState({ enabled: apfState.B.on }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ apfOn: apfState.B.on });
     }
     if (update.property === "ApfFreqA") {
         apfState.A.freqHz = parseInt(update.value) || 0;
-        const slider = document.getElementById('apfFreqSliderA');
-        const label  = document.getElementById('apfFreqValueA');
-        if (slider) slider.value = apfState.A.freqHz;
-        if (label)  label.textContent = apfState.A.freqHz + ' Hz';
+        if (window.apfButtonA) {
+            window.apfButtonA.setState({ value: apfState.A.freqHz }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ apfFreqHz: apfState.A.freqHz });
     }
     if (update.property === "ApfFreqB") {
         apfState.B.freqHz = parseInt(update.value) || 0;
-        const slider = document.getElementById('apfFreqSliderB');
-        const label  = document.getElementById('apfFreqValueB');
-        if (slider) slider.value = apfState.B.freqHz;
-        if (label)  label.textContent = apfState.B.freqHz + ' Hz';
+        if (window.apfButtonB) {
+            window.apfButtonB.setState({ value: apfState.B.freqHz }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ apfFreqHz: apfState.B.freqHz });
     }
 
     // --- MANUAL NOTCH ---
     if (update.property === "ManualNotchA") {
-        const el = document.getElementById('manualNotchSelectA');
-        if (el) el.value = update.value;
+        if (window.manNotchButtonA) {
+            window.manNotchButtonA.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ manualNotchOn: update.value === '1' });
     }
     if (update.property === "ManualNotchB") {
-        const el = document.getElementById('manualNotchSelectB');
-        if (el) el.value = update.value;
+        if (window.manNotchButtonB) {
+            window.manNotchButtonB.setState({ enabled: update.value === "1" || update.value === 1 }, { silent: true });
+        }
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ manualNotchOn: update.value === '1' });
     }
 
@@ -1737,22 +1804,26 @@ connection.on("RadioStateUpdate", function (update) {
 
     // --- NB LEVEL ---
     if (update.property === "NbLevelA") {
-        const el = document.getElementById('nbLevelSelectA');
-        if (el) el.value = update.value;
+        if (window.nbButtonA) {
+            window.nbButtonA.setState({ value: Number(update.value) }, { silent: true });
+        }
     }
     if (update.property === "NbLevelB") {
-        const el = document.getElementById('nbLevelSelectB');
-        if (el) el.value = update.value;
+        if (window.nbButtonB) {
+            window.nbButtonB.setState({ value: Number(update.value) }, { silent: true });
+        }
     }
 
     // --- NR LEVEL (DNR algorithm on FTdx10) ---
     if (update.property === "NrLevelA") {
-        const el = document.getElementById('nrLevelSelectA');
-        if (el) el.value = update.value;
+        if (window.nrCycleButtonA) {
+            window.nrCycleButtonA.setState({ value: Number(update.value) }, { silent: true });
+        }
     }
     if (update.property === "NrLevelB") {
-        const el = document.getElementById('nrLevelSelectB');
-        if (el) el.value = update.value;
+        if (window.nrCycleButtonB) {
+            window.nrCycleButtonB.setState({ value: Number(update.value) }, { silent: true });
+        }
     }
 
     // --- RF GAIN ---
@@ -1986,44 +2057,47 @@ const lastVfoBand = { A: null, B: null };
 // operator's own IARU region, so no band button is selected. On its own that
 // just looks like nothing is happening. Here we mark the nearest band in the
 // operator's region instead: a UK operator on 3.9 MHz gets a red 80m button,
-// which says "you are at 80m, but not where you are allowed to be" — and so
-// does one on 3.4 MHz, having drifted off the bottom.
+// Paint the out-of-band marker on the Band Yaesu key.
+//
+// The server reports "Unknown" for a frequency outside every allocation in the
+// operator's own IARU region, so no band is selected. Mark the Band key red
+// and show the nearest band in the operator's region instead: a UK operator
+// on 3.9 MHz gets a red 80m key — "you are at 80m, but not where you are
+// allowed to be".
 function applyBandOutOfBand(receiver) {
-    const inputs = document.querySelectorAll(`input[name="band-${receiver}"]`);
-
-    // A checked button means we are in band, whatever lastVfoBand still says.
-    // Clicking a band button checks it immediately and tunes; the frequency
-    // update then lands before the BandA broadcast that clears lastVfoBand, so
-    // without this the button flashes red on the way in.
-    const anyChecked = Array.from(inputs).some(radio => radio.checked);
+    const widget = window[`bandButton${receiver}`];
+    if (!widget || !widget.root) return;
 
     const band = lastVfoBand[receiver];
-    const isOutOfBand = !anyChecked && !!band && band.toLowerCase() === 'unknown';
+    const selected = widget.getState().selectedId;
+    const isOutOfBand = !!band && band.toLowerCase() === 'unknown';
     const oobBand = (isOutOfBand && typeof window.nearestBandForHz === 'function')
         ? window.nearestBandForHz(lastVfoHz[receiver])
         : null;
 
-    inputs.forEach(radio => {
-        const label = radio.closest('.band-radio-label');
-        if (!label) return;
+    const marked = !!oobBand;
+    widget.root.classList.toggle('toggle-dd--oob', marked);
 
-        const marked = !!oobBand && radio.value.toLowerCase() === oobBand.toLowerCase();
-        label.classList.toggle('band-oob', marked);
-
-        // Red is no use to an operator using a screen reader, so say it in the
-        // tooltip too. Stash the original on the way in and release it on the
-        // way out, rather than caching it forever — a11y-labels.js rewrites
-        // these titles from labels.json whenever the window regains focus.
+    if (widget.button) {
         if (marked) {
-            if (!('titleOriginal' in label.dataset)) {
-                label.dataset.titleOriginal = label.getAttribute('title') || '';
+            if (!('titleOriginal' in widget.button.dataset)) {
+                widget.button.dataset.titleOriginal = widget.button.getAttribute('title') || '';
             }
-            label.setAttribute('title', `${label.dataset.titleOriginal} — out of band for your region`);
-        } else if ('titleOriginal' in label.dataset) {
-            label.setAttribute('title', label.dataset.titleOriginal);
-            delete label.dataset.titleOriginal;
+            const nearest = oobBand;
+            widget.button.setAttribute(
+                'title',
+                `${nearest} — out of band for your region`
+            );
+            // Keep the displayed selection on the nearest band so the key still
+            // names something meaningful while the frequency is OOB.
+            if (selected?.toLowerCase() !== nearest.toLowerCase()) {
+                widget.setState({ selectedId: nearest }, { silent: true });
+            }
+        } else if ('titleOriginal' in widget.button.dataset) {
+            widget.button.setAttribute('title', widget.button.dataset.titleOriginal);
+            delete widget.button.dataset.titleOriginal;
         }
-    });
+    }
 }
 
 // a11y-labels.js reapplies titles from labels.json on every window focus,
@@ -2035,45 +2109,41 @@ window.refreshBandOutOfBand = function () {
 
 // Update band button selection for a specific receiver (called via SignalR)
 function updateBandButton(receiver, band) {
-    // ...removed debug logging...
-    if (!band) {
-        // ...removed debug logging...
-        return;
-    }
+    if (!band) return;
     lastVfoBand[receiver] = band;
     const bandLower = band.toLowerCase();
-    const inputs = document.querySelectorAll(`input[name="band-${receiver}"]`);
-    // ...removed debug logging...
-
-    let foundMatch = false;
-    inputs.forEach(radio => {
-        const matches = (radio.value.toLowerCase() === bandLower);
-        if (matches) {
-            foundMatch = true;
-            // ...removed debug logging...
+    const widget = window[`bandButton${receiver}`];
+    if (widget && bandLower !== 'unknown') {
+        // Normalise "20m" / "20M" / "20" style values to option ids.
+        const id = bandLower.endsWith('m') ? bandLower : `${bandLower}m`;
+        const match = widget.options?.find(
+            (o) => o.id.toLowerCase() === id || o.id.toLowerCase() === bandLower
+        );
+        if (match) {
+            widget.setState({ selectedId: match.id }, { silent: true });
         }
-        radio.checked = matches;
-    });
-
-    if (typeof syncBandAriaChecked === 'function') syncBandAriaChecked(receiver);
-    applyBandOutOfBand(receiver);
-
-    if (!foundMatch) {
-        // ...removed debug logging...
     }
-    // ...removed debug logging...
+    applyBandOutOfBand(receiver);
 }
+window.updateBandButton = updateBandButton;
 
-// Sync aria-checked and tabindex on band-radio-label[role="radio"] elements
-// after the underlying radio input's checked state is changed programmatically.
-function syncBandAriaChecked(receiver) {
-    document.querySelectorAll(`input[name="band-${receiver}"]`).forEach(input => {
-        const label = input.closest('label[role="radio"]');
-        if (!label) return;
-        label.setAttribute('aria-checked', input.checked ? 'true' : 'false');
-        label.tabIndex = input.checked ? 0 : -1;
-    });
-}
+// Called after the Band Yaesu keys are created so a SignalR BandA/FrequencyA
+// that arrived earlier (while window.bandButtonA was still null) is applied.
+window.syncBandButtonsFromFrequency = function () {
+    for (const receiver of ['A', 'B']) {
+        const hz = lastVfoHz[receiver];
+        if (hz > 0 && typeof window.bandForHz === 'function') {
+            const derived = window.bandForHz(hz);
+            if (derived) {
+                updateBandButton(receiver, derived);
+                continue;
+            }
+        }
+        if (lastVfoBand[receiver]) {
+            updateBandButton(receiver, lastVfoBand[receiver]);
+        }
+    }
+};
 
 // Outer DOMContentLoaded - initial UI wiring
 window.addEventListener('DOMContentLoaded', () => {
@@ -2139,45 +2209,35 @@ window.addEventListener('DOMContentLoaded', () => {
         txClarOn = initMode === 'tx' || initMode === 'rxtx';
     }
 
-    // Contour/APF: seed JS state from server-rendered HTML values
+    // Contour/APF: seed JS state from Yaesu-key widgets (or data attrs before init).
     for (const vfo of ['A', 'B']) {
-        const cBtn = document.getElementById(`contourBtn${vfo}`);
-        if (cBtn) contourState[vfo].on = cBtn.classList.contains('btn-success');
-        const cSlider = document.getElementById(`contourFreqSlider${vfo}`);
-        if (cSlider) contourState[vfo].freqHz = parseInt(cSlider.value) || 800;
-        const aBtn = document.getElementById(`apfBtn${vfo}`);
-        if (aBtn) apfState[vfo].on = aBtn.classList.contains('btn-success');
-        const aSlider = document.getElementById(`apfFreqSlider${vfo}`);
-        if (aSlider) apfState[vfo].freqHz = parseInt(aSlider.value) || 0;
-    }
-
-    // Event delegation for band button changes
-    document.addEventListener('change', function(e) {
-        if (e.target.type === 'radio' && e.target.name && e.target.name.startsWith('band-')) {
-            const receiver = e.target.getAttribute('data-receiver');
-            const band = e.target.value;
-            syncBandAriaChecked(receiver);
-            if (receiver && band && window.radioControl && window.radioControl.setBand) {
-                window.radioControl.setBand(receiver, band);
+        const contour = window[`contourButton${vfo}`];
+        if (contour) {
+            const s = contour.getState();
+            contourState[vfo].on = s.enabled;
+            contourState[vfo].freqHz = s.value;
+        } else {
+            const root = document.getElementById(`contourButton${vfo}`);
+            if (root) {
+                contourState[vfo].on = root.dataset.enabled === '1' || root.dataset.enabled === 'true';
+                const hz = parseInt(root.dataset.value, 10);
+                if (!Number.isNaN(hz)) contourState[vfo].freqHz = hz;
             }
         }
-    });
-
-    // Keyboard navigation for band radiogroups (arrow keys move between bands)
-    document.querySelectorAll('.band-radio-grid[role="radiogroup"]').forEach(grid => {
-        grid.addEventListener('keydown', function(e) {
-            const radios = Array.from(grid.querySelectorAll('label[role="radio"]'));
-            const idx = radios.indexOf(document.activeElement);
-            if (idx === -1) return;
-            let next = -1;
-            if (e.key === 'ArrowRight' || e.key === 'ArrowDown')      next = (idx + 1) % radios.length;
-            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp')    next = (idx - 1 + radios.length) % radios.length;
-            else return;
-            e.preventDefault();
-            radios[next].focus();
-            radios[next].click();
-        });
-    });
+        const apf = window[`apfButton${vfo}`];
+        if (apf) {
+            const s = apf.getState();
+            apfState[vfo].on = s.enabled;
+            apfState[vfo].freqHz = s.value;
+        } else {
+            const root = document.getElementById(`apfButton${vfo}`);
+            if (root) {
+                apfState[vfo].on = root.dataset.enabled === '1' || root.dataset.enabled === 'true';
+                const hz = parseInt(root.dataset.value, 10);
+                if (!Number.isNaN(hz)) apfState[vfo].freqHz = hz;
+            }
+        }
+    }
 });
 
 // Touch up/down button handler for mobile frequency editing
@@ -2240,31 +2300,11 @@ document.addEventListener('DOMContentLoaded', function() {
     setupAfGainSlider('B');
 });
 
-// IF Shift slider: send only on release, block SignalR updates while dragging
-const ifShiftDragging = { A: false, B: false };
-
-function setupIfShiftSlider(receiver) {
-    const slider = document.getElementById(`ifShiftSlider${receiver}`);
-    if (!slider) return;
-    const sendShift = () => {
-        if (window.radioControl) window.radioControl.setIfShift(receiver, parseInt(slider.value));
-    };
-    slider.addEventListener('mousedown',  () => { ifShiftDragging[receiver] = true; });
-    slider.addEventListener('touchstart', () => { ifShiftDragging[receiver] = true; }, { passive: true });
-    // Document-level mouseup catches releases anywhere, not just over the slider element
-    document.addEventListener('mouseup', () => {
-        if (ifShiftDragging[receiver]) { ifShiftDragging[receiver] = false; sendShift(); }
-    });
-    slider.addEventListener('touchend',   () => { ifShiftDragging[receiver] = false; sendShift(); });
-    // Keyboard arrow keys fire 'change' after the value settles
-    slider.addEventListener('change', sendShift);
-}
-
 function resetIfShift(receiver) {
-    const slider = document.getElementById(`ifShiftSlider${receiver}`);
-    const label  = document.getElementById(`ifShiftValue${receiver}`);
-    if (slider) slider.value = 0;
-    if (label)  label.textContent = '0';
+    const widget = window[`ifShiftButton${receiver}`];
+    if (widget) widget.setState({ selectedId: "0" }, { silent: true });
+    const panel = receiver === "B" ? window.filterScopePanelB : window.filterScopePanelA;
+    if (panel) panel.setState({ ifShiftHz: 0 });
     if (window.radioControl) window.radioControl.setIfShift(receiver, 0);
 }
 window.resetIfShift = resetIfShift;
@@ -2377,49 +2417,27 @@ async function _setClarifier(vfo, rxOn, txOn, offsetHz) {
 }
 
 function resetIfWidth(receiver) {
-    const select = document.getElementById(`ifWidthSelect${receiver}`);
-    if (!select) return;
-    // Default is the last option (widest bandwidth — 3.0 kHz for FTdx101, 3.4 kHz for FTdx10)
-    const defaultOpt = select.options[select.options.length - 1];
-    if (!defaultOpt) return;
-    select.value = defaultOpt.value;
-    if (window.radioControl) window.radioControl.setIfWidth(receiver, defaultOpt.value);
+    const widget = window[`ifWidthButton${receiver}`];
+    if (!widget) return;
+    const defaultId = widget.clickSelectId ?? "0";
+    widget.setState({ selectedId: String(defaultId) }, { silent: true });
+    if (window.radioControl) window.radioControl.setIfWidth(receiver, defaultId);
 }
 window.resetIfWidth = resetIfWidth;
 
-function _updateContourBtn(vfo) {
-    const btn = document.getElementById(`contourBtn${vfo}`);
-    if (!btn) return;
-    const on = contourState[vfo].on;
-    btn.textContent = on ? 'Contour On' : 'Contour Off';
-    btn.className = btn.className.replace(/btn-success|btn-outline-secondary/g, '').trim();
-    btn.classList.add(on ? 'btn-success' : 'btn-outline-secondary');
-}
-
-function _updateApfBtn(vfo) {
-    const btn = document.getElementById(`apfBtn${vfo}`);
-    if (!btn) return;
-    const on = apfState[vfo].on;
-    btn.textContent = on ? 'APF On' : 'APF Off';
-    btn.className = btn.className.replace(/btn-success|btn-outline-secondary/g, '').trim();
-    btn.classList.add(on ? 'btn-success' : 'btn-outline-secondary');
-}
-
-async function toggleContour(vfo) {
-    const newOn = !contourState[vfo].on;
-    contourState[vfo].on = newOn;
-    _updateContourBtn(vfo);
+async function setContourOn(vfo, on) {
+    contourState[vfo].on = on;
     const panel = vfo === 'B' ? window.filterScopePanelB : window.filterScopePanelA;
-    if (panel) panel.setState({ contourOn: newOn });
+    if (panel) panel.setState({ contourOn: on });
     try {
         await fetch(`/api/cat/contour/${vfo.toLowerCase()}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ on: newOn, freqHz: contourState[vfo].freqHz })
+            body: JSON.stringify({ on, freqHz: contourState[vfo].freqHz })
         });
     } catch (e) { console.error('Contour toggle failed:', e); }
 }
-window.toggleContour = toggleContour;
+window.setContourOn = setContourOn;
 
 async function setContourFreq(vfo, hz) {
     contourState[vfo].freqHz = hz;
@@ -2437,7 +2455,7 @@ window.setContourFreq = setContourFreq;
 
 // Recompute the contour slider's min/max for a VFO based on the current
 // passband (mode + IF Width + roofing). The radio's hard CAT range is
-// preserved as an outer clamp via the slider's initial min/max values,
+// preserved as an outer clamp via the widget's initial min/max values,
 // so we never let the user set a value the radio can't accept. If the
 // existing contour value falls outside the new (narrower) range, clamp
 // it in place and send the clamped value to the radio.
@@ -2447,55 +2465,45 @@ window.setContourFreq = setContourFreq;
 // FilterScopePanel instances are constructed.
 function updateContourSliderBounds(vfo) {
     const panel = window['filterScopePanel' + vfo];
-    if (!panel || typeof panel.getPassband !== 'function') return;
-    const slider = document.getElementById('contourFreqSlider' + vfo);
-    if (!slider) return;
+    const widget = window[`contourButton${vfo}`];
+    if (!panel || typeof panel.getPassband !== 'function' || !widget) return;
 
     // Cache the radio's hard limits on first run (the values rendered
     // server-side from the radio model: 100..3200 for FTdx101, 100..4000
     // for FTDX3000). After that, future updates only narrow within those.
-    if (slider._hardMin == null) slider._hardMin = parseInt(slider.min);
-    if (slider._hardMax == null) slider._hardMax = parseInt(slider.max);
+    if (widget._hardMin == null) widget._hardMin = widget.min;
+    if (widget._hardMax == null) widget._hardMax = widget.max;
 
     const { lo, hi } = panel.getPassband();
-    const newMin = Math.max(slider._hardMin, Math.round(lo));
-    const newMax = Math.min(slider._hardMax, Math.round(hi));
+    const newMin = Math.max(widget._hardMin, Math.round(lo));
+    const newMax = Math.min(widget._hardMax, Math.round(hi));
     if (newMin >= newMax) return;
 
-    // Capture the OLD value before changing min/max — once we set the new
-    // max, the browser auto-clamps slider.value to fit, so reading it
-    // afterwards would always give the clamped (= new max) value and we'd
-    // never realise the value had actually moved.
-    const oldVal  = parseInt(slider.value);
+    const oldVal = widget.getState().value;
     const clamped = Math.max(newMin, Math.min(newMax, oldVal));
 
-    slider.min = newMin;
-    slider.max = newMax;
+    widget.setState({ min: newMin, max: newMax, value: clamped }, { silent: true });
+    contourState[vfo].freqHz = clamped;
 
     if (clamped !== oldVal) {
-        slider.value = clamped;
-        const label = document.getElementById('contourFreqValue' + vfo);
-        if (label) label.textContent = clamped + ' Hz';
         setContourFreq(vfo, clamped);  // updates panel state + sends CAT
     }
 }
 window.updateContourSliderBounds = updateContourSliderBounds;
 
-async function toggleApf(vfo) {
-    const newOn = !apfState[vfo].on;
-    apfState[vfo].on = newOn;
-    _updateApfBtn(vfo);
+async function setApfOn(vfo, on) {
+    apfState[vfo].on = on;
     const panel = vfo === 'B' ? window.filterScopePanelB : window.filterScopePanelA;
-    if (panel) panel.setState({ apfOn: newOn });
+    if (panel) panel.setState({ apfOn: on });
     try {
         await fetch(`/api/cat/apf/${vfo.toLowerCase()}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ on: newOn, freqHz: apfState[vfo].freqHz })
+            body: JSON.stringify({ on, freqHz: apfState[vfo].freqHz })
         });
     } catch (e) { console.error('APF toggle failed:', e); }
 }
-window.toggleApf = toggleApf;
+window.setApfOn = setApfOn;
 
 async function setApfFreq(vfo, hz) {
     apfState[vfo].freqHz = hz;
@@ -2510,11 +2518,6 @@ async function setApfFreq(vfo, hz) {
     } catch (e) { console.error('APF freq failed:', e); }
 }
 window.setApfFreq = setApfFreq;
-
-document.addEventListener('DOMContentLoaded', function() {
-    setupIfShiftSlider('A');
-    setupIfShiftSlider('B');
-});
 
 
 (function () {
@@ -2582,20 +2585,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     window.updateFrequencyDisplay = updateFrequencyDisplay;
 
-    // Update band, mode, and antenna radio/toggle buttons to reflect current state.
-    // NOTE: The Razor page renders mode buttons as <input type="radio" name="modeA" value="USB">
-    // and band/antenna buttons similarly.  We update .checked directly.
+    // Update band, mode, and antenna to reflect current state.
     function highlightButtons(receiver, band, mode, antenna) {
-        // Band buttons (rendered by _BandButtonsPartial as input[name="band-A/B"])
-        document.querySelectorAll(`input[name="band-${receiver}"]`).forEach(btn => {
-            btn.checked = (btn.value === band);
-        });
-        if (typeof syncBandAriaChecked === 'function') syncBandAriaChecked(receiver);
+        if (band && window[`bandButton${receiver}`]) {
+            window[`bandButton${receiver}`].setState({ selectedId: String(band) }, { silent: true });
+        }
 
-        // Mode dropdown - update the selected value
-        const modeSelect = document.getElementById(`modeSelect${receiver}`);
-        if (modeSelect && mode) {
-            modeSelect.value = mode;
+        if (mode && window[`modeButton${receiver}`]) {
+            window[`modeButton${receiver}`].setState({ selectedId: String(mode) }, { silent: true });
         }
 
         // Antenna buttons
@@ -2604,11 +2601,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Update roofing filter dropdown
+    // Update roofing filter Yaesu-key
     function updateRoofingFilterSelect(receiver, filterCode) {
-        const selectEl = document.getElementById(`roofingFilterSelect${receiver}`);
-        if (selectEl && filterCode) {
-            selectEl.value = filterCode;
+        const widget = window[`roofingButton${receiver}`];
+        if (widget && filterCode) {
+            widget.setState({ selectedId: String(filterCode) }, { silent: true });
         }
     }
 
@@ -3081,11 +3078,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check if there's a warning (filter not installed)
             if (data.warning) {
                 showMessageBox(data.message, 'Roofing Filter');
-                // Update dropdown to show actual filter
-                const selectEl = document.getElementById(`roofingFilterSelect${receiver}`);
-                if (selectEl && data.filter) {
-                    selectEl.value = data.filter;
-                }
+                // Update key to show actual filter
+                if (data.filter) updateRoofingFilterSelect(receiver, data.filter);
             }
         } catch (error) {
             showMessageBox('Error setting roofing filter. Check console for details.', 'Error');
@@ -3181,6 +3175,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const history     = receiver === 'B' ? window.sMeterHistoryB : window.sMeterHistory;
         const canvasId    = receiver === 'B' ? 'sMeterCanvasB' : 'sMeterCanvas';
         const labelId     = receiver === 'B' ? 'sMeterValueB' : 'sMeterValue';
+        const linearLabelId = receiver === 'B' ? 'sMeterLinearValueB' : 'sMeterLinearValueA';
+        const linearCanvasId = receiver === 'B' ? 'sMeterLinearCanvasB' : 'sMeterLinearCanvasA';
 
         // The S-meter gauge has hardcoded tick positions on a 0-255 scale and
         // ignores calibration tables for needle placement. To make the user's
@@ -3208,6 +3204,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // when gaugeTitleShow is true (set in gauge.js).
         const sLabel = document.getElementById(labelId);
         if (sLabel) sLabel.textContent = sUnit;
+        // Compact linear sibling in the VFO panel.
+        const linLabel = document.getElementById(linearLabelId);
+        if (linLabel) linLabel.textContent = sUnit;
+        const linCanvas = document.getElementById(linearCanvasId);
+        if (linCanvas) linCanvas.dataset.reading = sUnit;
     }
     window.updateSMeter = updateSMeter;
 
@@ -3308,9 +3309,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // -------------------------------------------------------------------------
-    // Band Segment Dropdown
+    // Band Segment Yaesu key
     // -------------------------------------------------------------------------
-    // Populates the segment select for a VFO based on the current band and
+    // Populates the segment menu for a VFO based on the current band and
     // band plan, restores the last-used segment from localStorage, and tunes
     // the radio when the user picks a segment.
 
@@ -3325,33 +3326,31 @@ document.addEventListener('DOMContentLoaded', function() {
         return typeof band === 'string' && band.toLowerCase() === OOB_BAND;
     }
 
-    // Paint (or clear) the out-of-band state on a Segment dropdown. The
-    // dropdown carries the warning as well as the colour, because a
-    // partially-sighted operator gets the accessible name, not the red.
-    function setSegmentOutOfBand(select, vfo, on) {
-        select.classList.toggle('segment-oob', on);
-        if (!('labelOriginal' in select.dataset)) {
-            select.dataset.labelOriginal = select.getAttribute('aria-label') || `VFO ${vfo} band segment`;
-        }
+    // Paint (or clear) the out-of-band state on a Segment key. The key
+    // carries the warning as well as the colour, because a partially-sighted
+    // operator gets the accessible name, not the red.
+    function setSegmentOutOfBand(widget, vfo, on) {
+        if (!widget) return;
+        widget.root.classList.toggle('toggle-dd--oob', on);
         const label = on
             ? `VFO ${vfo} out of band — frequency is outside every allocation in your region`
-            : select.dataset.labelOriginal;
-        select.setAttribute('aria-label', label);
-        select.setAttribute('title', label);
+            : null;
+        widget._ariaOverride = label;
+        widget._sync();
     }
 
-    // Set the Segment dropdown to reflect whichever segment of the band
+    // Set the Segment key to reflect whichever segment of the band
     // contains the current frequency. Called from the FrequencyA/B SignalR
-    // handlers so the dropdown stays in sync when the operator tunes via
+    // handlers so the key stays in sync when the operator tunes via
     // the radio's knob, the spectrum click, or the on-screen freq keyboard.
-    // No-op if the band's dropdown hasn't been populated yet (e.g. on
+    // No-op if the band's menu hasn't been populated yet (e.g. on
     // initial connect before BandA arrives).
     function syncSegmentSelectToFrequency(vfo, hz) {
-        const select = document.getElementById(`segmentSelect${vfo}`);
-        // Disabled means the dropdown holds a single OOB or "--" placeholder,
+        const widget = window[`segmentButton${vfo}`];
+        // Disabled means the key holds a single OOB or "--" placeholder,
         // so there is no segment to select. populateSegmentSelect re-runs on
         // the next band change and picks the sync back up.
-        if (!select || select.disabled) return;
+        if (!widget || widget.disabled) return;
         const band = state.lastBand && state.lastBand[vfo];
         if (!band || isOutOfBand(band)) return;
         const plan = window.bandPlan || 'UK';
@@ -3359,7 +3358,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Fallback if helper not loaded — use inline lookup against the plan.
             // Mirror the band-plan.js segmentForHz logic exactly, including the
             // "below-lowest → first segment" fallback, so 14.010 etc don't
-            // produce a blank dropdown when the helper isn't loaded.
+            // produce a blank key when the helper isn't loaded.
             const segments = (window.bandPlanData && window.bandPlanData[plan] && window.bandPlanData[plan][band]) || null;
             if (!segments) return;
             const ordered = Object.entries(segments).sort((a, b) => a[1].freq - b[1].freq);
@@ -3370,19 +3369,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 else break;
             }
             if (!match && ordered.length > 0) match = ordered[0][0];
-            if (select.value !== match) select.value = match;
+            if (widget.getState().selectedId !== match) {
+                widget.setState({ selectedId: match }, { silent: true });
+            }
             return;
         }
         const key = window.getBandSegmentForHz(plan, band, hz) || '';
-        if (select.value !== key) select.value = key;
+        if (widget.getState().selectedId !== key) {
+            widget.setState({ selectedId: key }, { silent: true });
+        }
     }
     // Expose to the outer SignalR handler (FrequencyA/B), which lives outside
     // this IIFE and would otherwise get a ReferenceError trying to call it.
     window.syncSegmentSelectToFrequency = syncSegmentSelectToFrequency;
+    window.populateSegmentSelect = populateSegmentSelect;
 
     function populateSegmentSelect(vfo, band) {
-        const select = document.getElementById(`segmentSelect${vfo}`);
-        if (!select) return;
+        const widget = window[`segmentButton${vfo}`];
+        if (!widget) return;
 
         // Wait until band-plan.js has been imported by the module script.
         const bandPlanData = window.bandPlanData;
@@ -3391,50 +3395,45 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const segments = (bandPlanData[plan] || {})[band] || null;
         const oob = isOutOfBand(band);
-        select.innerHTML = '';
 
         if (!segments) {
             // Two different "no segments" cases, and they mean different
             // things to the operator: OOB is a warning (you are outside your
             // region's allocations), whereas "--" just means this band has no
             // activity plan in the JSON — 4m outside Region 1, say.
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = oob ? 'OOB' : '--';
-            select.appendChild(opt);
-            select.disabled = true;
-            setSegmentOutOfBand(select, vfo, oob);
+            widget.setOptions([{ id: '', label: oob ? 'OOB' : '--' }], {
+                silent: true,
+                selectedId: '',
+            });
+            widget.setDisabled(true);
+            setSegmentOutOfBand(widget, vfo, oob);
             return;
         }
 
-        select.disabled = false;
-        setSegmentOutOfBand(select, vfo, false);
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = '--';
-        select.appendChild(placeholder);
+        widget.setDisabled(false);
+        setSegmentOutOfBand(widget, vfo, false);
 
+        const options = [{ id: '', label: '--' }];
         for (const [key, seg] of Object.entries(segments)) {
-            const opt = document.createElement('option');
-            opt.value = key;
-            opt.textContent = seg.label;
-            select.appendChild(opt);
+            options.push({ id: key, label: seg.label });
         }
 
         // Restore last used segment for this band. This is only a fallback
         // for the moment before we know the frequency — the radio's actual
-        // frequency wins immediately below, because the dropdown's job is to
+        // frequency wins immediately below, because the key's job is to
         // say where the operator *is*, not where they last went.
         const saved = localStorage.getItem(segmentStorageKey(vfo, band));
-        if (saved && select.querySelector(`option[value="${saved}"]`)) {
-            select.value = saved;
-        }
+        const savedOk = saved && options.some((o) => o.id === saved);
+        widget.setOptions(options, {
+            silent: true,
+            selectedId: savedOk ? saved : '',
+        });
 
         // Use lastVfoHz (top-level, written directly by the FrequencyA/B
         // SignalR handlers) rather than state.lastBackendFreq — that one is
         // written inside a try/catch from a scope where `state` isn't
         // visible, so it throws and is swallowed on every update and holds a
-        // stale frequency. Getting this wrong showed up as the dropdown
+        // stale frequency. Getting this wrong showed up as the key
         // dropping to "--" when tuning back in from out of band: FrequencyA
         // arrives before BandA, so the good sync early-returns against the
         // still-disabled OOB placeholder and this call is the last word.
@@ -3451,7 +3450,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (live) syncSegmentSelectToFrequency(vfo, hz);
     }
 
-    // Called when the user picks a segment from the dropdown.
+    // Called when the user picks a segment from the menu.
     window.onSegmentChange = async function(vfo, segKey) {
         if (!segKey) return;
         const plan = window.bandPlan || 'UK';
@@ -3475,22 +3474,23 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set mode first so the radio doesn't shift frequency when mode changes,
         // then tune to the target frequency.
         if (window.radioControl) {
-            const modeSelect = document.getElementById(`modeSelect${vfo}`);
-            if (modeSelect) modeSelect.value = mode;
+            if (window[`modeButton${vfo}`]) {
+                window[`modeButton${vfo}`].setState({ selectedId: String(mode) }, { silent: true });
+            }
             await window.setMode(vfo, mode);
             await window.radioControl.setFrequency(vfo, freq);
         }
     };
 
     // Hook into the band state change: when lastBand is updated, repopulate
-    // the segment select. We patch setBand and updateBandButton so both
+    // the segment menu. We patch setBand and updateBandButton so both
     // UI-driven and SignalR-driven band changes trigger the update.
     const _origUpdateBandButton = window.updateBandButton;
 
     // Re-populate segments whenever band state changes. Skip if the band is
     // unchanged — the BandA SignalR event fires on every frequency change,
     // not only on real band transitions, so repopulating here would reset the
-    // dropdown to its localStorage value and stomp on the auto-sync we did
+    // key to its localStorage value and stomp on the auto-sync we did
     // from the matching FrequencyA event.
     function onBandChanged(vfo, band) {
         if (state.lastBand[vfo] === band) return;
@@ -3503,17 +3503,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (_origUpdateBandButton) _origUpdateBandButton(receiver, band);
         onBandChanged(receiver, band);
     };
-
-    // Also update segment immediately when a band button is clicked (before poll)
-    document.addEventListener('change', function(e) {
-        if (e.target.type === 'radio' && e.target.name && e.target.name.startsWith('band-')) {
-            const receiver = e.target.getAttribute('data-receiver');
-            const band = e.target.value;
-            if (receiver && band && window.bandPlanData) {
-                populateSegmentSelect(receiver, band);
-            }
-        }
-    });
 
     // Populate segments on first load once bandPlanData is ready
     function tryPopulateSegmentsOnLoad() {
@@ -3533,9 +3522,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // radio to the last-clicked band segment for each VFO. That behaviour
     // overwrote whatever frequency the operator had set manually on the rig,
     // which Jacek SP3L reported as #33: "YWC changes radio frequency to some
-    // default value". The dropdown UI value is restored by populateSegmentSelect
+    // default value". The key UI value is restored by populateSegmentSelect
     // on DOMContentLoaded; the radio is NOT auto-tuned. If the user wants to
-    // jump to a saved segment, they click the dropdown manually.
+    // jump to a saved segment, they click the menu manually.
 
     // --- Raw Meter Label Visibility State (S-Meter and Power Out) ---
     // Use localStorage to sync across tabs/pages
