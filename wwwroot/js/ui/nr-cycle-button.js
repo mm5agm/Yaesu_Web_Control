@@ -1,6 +1,7 @@
 /**
- * Wire CycleContextButton instances for VFO A/B NR (or DNR) keys.
- * Left-click cycles OFF/NR1/NR2 (or OFF/ON); right-click opens level 1–15.
+ * Wire CycleContextButton instances for VFO A/B DNR keys.
+ * Left-click toggles OFF/ON; right-click opens DNR level 1–15.
+ * NR P2 is 0/1 on every supported radio — there is no NR1/NR2 (#144).
  */
 import { CycleContextButton } from "/js/ui/toggle-dropdown-button.js";
 
@@ -23,21 +24,14 @@ export function initNrCycleButton(root) {
     if (!root) return null;
 
     const vfo = root.dataset.vfo || "A";
-    const label = root.dataset.label || "NR";
-    const isDnr = root.dataset.dnr === "true";
+    const label = root.dataset.label || "DNR";
     const selectedId = root.dataset.selected || "0";
     const level = Math.min(15, Math.max(1, parseInt(root.dataset.level, 10) || 1));
 
-    const options = isDnr
-        ? [
-              { id: "0", label: "OFF" },
-              { id: "1", label: "DNR" },
-          ]
-        : [
-              { id: "0", label: "OFF" },
-              { id: "1", label: "NR1" },
-              { id: "2", label: "NR2" },
-          ];
+    const options = [
+        { id: "0", label: "OFF" },
+        { id: "1", label: "DNR" },
+    ];
 
     let lastSelectedId = selectedId;
     let lastValue = level;
