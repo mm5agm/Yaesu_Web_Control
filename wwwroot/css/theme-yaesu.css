@@ -1,0 +1,377 @@
+/* Yaesu instrument palette — dark charcoal chassis, amber LCD, red TX.
+   Loaded after Bootstrap, before site.css. Classic geometry unchanged. */
+
+:root {
+    /* Chassis (same face as the Yaesu LED keys) */
+    --ywc-page: #121212;
+    --yaesu-face: #2a2a2a;
+    --yaesu-face-hi: #3d3d3d;
+    --yaesu-face-lo: #1a1a1a;
+    --yaesu-edge: #0d0d0d;
+
+    /* Ink */
+    --yaesu-ink: #e6e6e6;
+    --ywc-ink-muted: #9aa3ad;
+
+    /* LCD / LED */
+    --yaesu-led-off: #4a4a4a;
+    --yaesu-led-on: #ff7a18;
+    --ywc-lcd: #f2a33c;
+    --ywc-lcd-selected: #ffe066;
+    --ywc-lcd-selected-edge: #b58900;
+
+    /* Focus (amber — high contrast on charcoal) */
+    --ywc-focus: #ffb347;
+
+    /* VFO identity on dark (Main blue / Sub green) */
+    --ywc-vfo-a: #4fb4e6;
+    --ywc-vfo-b: #58cf9a;
+
+    /* TX / alarm fills — white text on these */
+    --ywc-tx: #dc3545;
+
+    /* Gauge track / ticks for canvas-adjacent CSS */
+    --ywc-gauge-track: #3a3a3a;
+    --ywc-gauge-tick: #c8c8c8;
+
+    /* Bootstrap body + surfaces */
+    --bs-body-bg: var(--ywc-page);
+    --bs-body-color: var(--yaesu-ink);
+    --bs-secondary-color: var(--ywc-ink-muted);
+    --bs-tertiary-bg: var(--yaesu-face-lo);
+    --bs-secondary-bg: var(--yaesu-face);
+    --bs-border-color: #4a4a4a;
+    --bs-border-color-translucent: rgba(255, 255, 255, 0.12);
+
+    /* Links + accents */
+    --bs-link-color: var(--ywc-lcd);
+    --bs-link-hover-color: #ffb347;
+    --bs-primary: var(--ywc-vfo-a);
+    --bs-primary-rgb: 79, 180, 230;
+    --bs-success: var(--ywc-vfo-b);
+    --bs-success-rgb: 88, 207, 154;
+    --bs-warning: #ffc107;
+    --bs-danger: var(--ywc-tx);
+    --bs-info: #0dcaf0;
+    --bs-focus-ring-color: rgba(255, 179, 71, 0.45);
+
+    /* Cards / navbar */
+    --bs-card-bg: var(--yaesu-face);
+    --bs-card-cap-bg: var(--yaesu-face-hi);
+    --bs-card-border-color: var(--yaesu-edge);
+    --bs-navbar-color: var(--yaesu-ink);
+    --bs-navbar-hover-color: #fff;
+    --bs-navbar-active-color: #fff;
+    --bs-navbar-brand-color: var(--yaesu-ink);
+    --bs-navbar-brand-hover-color: #fff;
+}
+
+html {
+    color-scheme: dark;
+}
+
+body {
+    background-color: var(--ywc-page);
+    color: var(--yaesu-ink);
+    font-weight: 700;
+}
+
+/* Charcoal panel face — brushed-metal edge matching the LED keys */
+.card {
+    background-color: var(--yaesu-face);
+    border-color: var(--yaesu-edge);
+    color: var(--yaesu-ink);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+        0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.card-header {
+    background-color: var(--yaesu-face-hi);
+    border-bottom-color: var(--yaesu-edge);
+    color: var(--yaesu-ink);
+}
+
+.card-body {
+    background-color: transparent;
+    color: var(--yaesu-ink);
+}
+
+.card-footer {
+    background-color: var(--yaesu-face-lo);
+    border-top-color: var(--yaesu-edge);
+}
+
+/* Navbar chrome */
+.ywc-navbar,
+header.ywc-header {
+    background-color: var(--yaesu-face-lo) !important;
+    border-bottom: 1px solid var(--yaesu-edge) !important;
+}
+
+.ywc-navbar .navbar-brand,
+.ywc-navbar .nav-link {
+    color: var(--yaesu-ink) !important;
+}
+
+.ywc-navbar .nav-link:hover,
+.ywc-navbar .nav-link:focus {
+    color: #fff !important;
+}
+
+.ywc-navbar .navbar-toggler {
+    border-color: #6e6e6e;
+}
+
+.ywc-navbar .navbar-toggler-icon {
+    /* Bootstrap dark toggler glyph (white bars) */
+    --bs-navbar-toggler-icon-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28230, 230, 230, 0.85%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+/* Forms on charcoal */
+.form-control,
+.form-select {
+    background-color: var(--yaesu-face-lo);
+    border-color: #555;
+    color: var(--yaesu-ink);
+    font-weight: 700;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--yaesu-face-lo);
+    border-color: var(--ywc-focus);
+    color: var(--yaesu-ink);
+    box-shadow: 0 0 0 0.25rem rgba(255, 179, 71, 0.35);
+}
+
+.form-control::placeholder {
+    color: var(--ywc-ink-muted);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+    background-color: #1f1f1f;
+    color: #8a8a8a;
+}
+
+.form-check-input {
+    background-color: var(--yaesu-face-lo);
+    border-color: #6e6e6e;
+}
+
+.form-check-input:checked {
+    background-color: var(--yaesu-led-on);
+    border-color: var(--yaesu-led-on);
+}
+
+.form-check-input:focus {
+    border-color: var(--ywc-focus);
+    box-shadow: 0 0 0 0.25rem rgba(255, 179, 71, 0.35);
+}
+
+/* Amber accent on range sliders */
+input[type="range"],
+.form-range {
+    accent-color: var(--yaesu-led-on);
+}
+
+/* Outline secondary — readable on charcoal (was forced black on light) */
+.btn-outline-secondary {
+    --bs-btn-color: var(--yaesu-ink);
+    --bs-btn-border-color: #6e6e6e;
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--yaesu-face-hi);
+    --bs-btn-hover-border-color: #8a8a8a;
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: #4a4a4a;
+    --bs-btn-active-border-color: var(--yaesu-led-on);
+    --bs-btn-disabled-color: #8a8a8a;
+    --bs-btn-disabled-border-color: #4a4a4a;
+    color: var(--yaesu-ink);
+    font-weight: 700;
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--ywc-vfo-a);
+    --bs-btn-border-color: var(--ywc-vfo-a);
+    --bs-btn-hover-bg: var(--ywc-vfo-a);
+    --bs-btn-hover-border-color: var(--ywc-vfo-a);
+    --bs-btn-hover-color: #121212;
+    --bs-btn-active-bg: var(--ywc-vfo-a);
+    --bs-btn-active-border-color: var(--ywc-vfo-a);
+    --bs-btn-active-color: #121212;
+}
+
+.btn-outline-success {
+    --bs-btn-color: var(--ywc-vfo-b);
+    --bs-btn-border-color: var(--ywc-vfo-b);
+    --bs-btn-hover-bg: var(--ywc-vfo-b);
+    --bs-btn-hover-border-color: var(--ywc-vfo-b);
+    --bs-btn-hover-color: #121212;
+    --bs-btn-active-bg: var(--ywc-vfo-b);
+    --bs-btn-active-border-color: var(--ywc-vfo-b);
+    --bs-btn-active-color: #121212;
+}
+
+.btn-outline-light {
+    --bs-btn-color: var(--yaesu-ink);
+    --bs-btn-border-color: #6e6e6e;
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--yaesu-face-hi);
+    --bs-btn-hover-border-color: #8a8a8a;
+    --bs-btn-active-bg: #4a4a4a;
+    --bs-btn-active-border-color: var(--yaesu-led-on);
+    --bs-btn-active-color: #fff;
+}
+
+.btn-primary {
+    --bs-btn-bg: #2a6f95;
+    --bs-btn-border-color: #2a6f95;
+    --bs-btn-hover-bg: var(--ywc-vfo-a);
+    --bs-btn-hover-border-color: var(--ywc-vfo-a);
+    --bs-btn-active-bg: #1f5a78;
+    --bs-btn-active-border-color: #1f5a78;
+}
+
+.btn-success {
+    --bs-btn-bg: #2a7a58;
+    --bs-btn-border-color: #2a7a58;
+    --bs-btn-hover-bg: var(--ywc-vfo-b);
+    --bs-btn-hover-border-color: var(--ywc-vfo-b);
+}
+
+/* Focus rings — amber everywhere site used Bootstrap blue */
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible,
+.form-check-input:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--ywc-focus);
+    outline-offset: 2px;
+}
+
+.btn:focus,
+.btn:active:focus,
+.btn-link.nav-link:focus,
+.form-control:focus,
+.form-check-input:focus {
+    box-shadow: 0 0 0 0.1rem var(--yaesu-face), 0 0 0 0.25rem rgba(255, 179, 71, 0.45);
+}
+
+/* Tables */
+.table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--yaesu-ink);
+    --bs-table-border-color: #4a4a4a;
+    --bs-table-striped-bg: rgba(255, 255, 255, 0.04);
+    --bs-table-hover-bg: rgba(255, 122, 24, 0.12);
+    color: var(--yaesu-ink);
+}
+
+/* Modals / dropdowns */
+.modal-content,
+.dropdown-menu {
+    background-color: var(--yaesu-face);
+    border-color: var(--yaesu-edge);
+    color: var(--yaesu-ink);
+}
+
+.dropdown-item {
+    color: var(--yaesu-ink);
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background-color: var(--yaesu-face-hi);
+    color: #fff;
+}
+
+.dropdown-item.active,
+.dropdown-item:active {
+    background-color: rgba(255, 122, 24, 0.35);
+    color: #fff;
+}
+
+.modal-header,
+.modal-footer {
+    border-color: #4a4a4a;
+}
+
+/* List groups / alerts on dark */
+.list-group-item {
+    background-color: var(--yaesu-face);
+    border-color: #4a4a4a;
+    color: var(--yaesu-ink);
+}
+
+.alert {
+    border-color: #4a4a4a;
+}
+
+.text-muted {
+    color: var(--ywc-ink-muted) !important;
+}
+
+.text-dark {
+    color: var(--yaesu-ink) !important;
+}
+
+.bg-white {
+    background-color: var(--yaesu-face) !important;
+}
+
+.bg-light {
+    background-color: var(--yaesu-face-lo) !important;
+    color: var(--yaesu-ink);
+}
+
+.border,
+.border-bottom,
+.border-top {
+    border-color: var(--bs-border-color) !important;
+}
+
+/* Active VFO primary/success headers stay vivid on dark */
+.bg-primary {
+    background-color: #2a6f95 !important;
+}
+
+.bg-success {
+    background-color: #2a7a58 !important;
+}
+
+.border-primary {
+    border-color: var(--ywc-vfo-a) !important;
+}
+
+.border-success {
+    border-color: var(--ywc-vfo-b) !important;
+}
+
+/* Frequency LCD well */
+.frequency-display {
+    color: var(--ywc-lcd);
+    text-shadow: 0 0 8px rgba(255, 122, 24, 0.35);
+}
+
+.vfo-freq-row .frequency-display.digit-display:first-of-type,
+#freqA.frequency-display,
+#freqB.frequency-display {
+    background: linear-gradient(180deg, #0a0a0a 0%, #161616 100%);
+    border: 1px solid var(--yaesu-edge);
+    border-radius: 0.2rem;
+    padding: 0.15rem 0.45rem;
+    box-shadow:
+        inset 0 2px 4px rgba(0, 0, 0, 0.65),
+        inset 0 0 12px rgba(255, 122, 24, 0.08);
+}
+
+/* Spectrum DSP bar (sits under dark header) */
+.spectrum-dsp-bar {
+    background-color: var(--yaesu-face-lo);
+    color: var(--yaesu-ink);
+    border-bottom: 1px solid var(--yaesu-edge);
+}

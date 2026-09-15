@@ -1,33 +1,20 @@
 .toggle-dd {
-    --yaesu-face: #2a2a2a;
-    --yaesu-face-hi: #3d3d3d;
-    --yaesu-face-lo: #1a1a1a;
-    --yaesu-led-off: #4a4a4a;
-    --yaesu-led-on: #ff7a18;
-    --yaesu-ink: #e6e6e6;
-
     position: relative;
     display: inline-block;
 }
 
 /* Standalone Yaesu keys (PROC / MON / ATU in the operating bar) carry the
-   same custom properties without needing a .toggle-dd wrapper. */
+   same custom properties without needing a .toggle-dd wrapper.
+   Face/LED/ink tokens live on :root in theme-yaesu.css. */
 .toggle-dd__btn {
-    --yaesu-face: #2a2a2a;
-    --yaesu-face-hi: #3d3d3d;
-    --yaesu-face-lo: #1a1a1a;
-    --yaesu-led-off: #4a4a4a;
-    --yaesu-led-on: #ff7a18;
-    --yaesu-ink: #e6e6e6;
-
     --bs-btn-color: var(--yaesu-ink);
     --bs-btn-hover-color: #f3f3f3;
     --bs-btn-active-color: #f3f3f3;
     --bs-btn-bg: transparent;
     --bs-btn-hover-bg: transparent;
     --bs-btn-active-bg: transparent;
-    --bs-btn-border-color: #0d0d0d;
-    --bs-btn-hover-border-color: #0d0d0d;
+    --bs-btn-border-color: var(--yaesu-edge, #0d0d0d);
+    --bs-btn-hover-border-color: var(--yaesu-edge, #0d0d0d);
     --bs-btn-focus-shadow-rgb: 255, 122, 24;
     --bs-btn-focus-box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
 
@@ -44,7 +31,7 @@
     font-weight: 600;
     letter-spacing: 0.04em;
     line-height: 1.1;
-    border: 1px solid #0d0d0d;
+    border: 1px solid var(--yaesu-edge, #0d0d0d);
     border-radius: 0.22rem;
     background: linear-gradient(180deg, var(--yaesu-face-hi) 0%, var(--yaesu-face) 42%, var(--yaesu-face-lo) 100%);
     box-shadow:
@@ -290,10 +277,13 @@
     min-width: 0;
     padding: 0.25rem;
     margin-top: 0.15rem;
-    background: #fff;
-    border: 1px solid #ced4da;
-    border-radius: 0.25rem;
-    box-shadow: 0 0.25rem 0.6rem rgba(0, 0, 0, 0.12);
+    background: linear-gradient(180deg, var(--yaesu-face-hi) 0%, var(--yaesu-face) 40%, var(--yaesu-face-lo) 100%);
+    border: 1px solid var(--yaesu-edge, #0d0d0d);
+    border-radius: 0.22rem;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 8px 18px rgba(0, 0, 0, 0.45);
     z-index: 30;
 }
 
@@ -302,23 +292,28 @@
     width: auto;
     margin: 0;
     padding: 0.25rem 0.5rem;
-    color: #000;
+    color: var(--yaesu-ink);
     font-weight: 700;
     font-size: 0.875rem;
     letter-spacing: normal;
     text-align: center;
-    background: #fff;
-    border: 1px solid #6c757d;
+    background: linear-gradient(180deg, #333 0%, #242424 100%);
+    border: 1px solid #555;
     border-radius: 0.2rem;
-    box-shadow: none;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.4);
 }
 
 .qmb-toolbar-key__item.dropdown-item:hover,
 .qmb-toolbar-key__item.dropdown-item:focus,
 .qmb-toolbar-key__item.dropdown-item:focus-visible {
-    color: #000;
-    background: #e9ecef;
-    box-shadow: none;
+    color: #f3f3f3;
+    background: linear-gradient(180deg, #3f3f3f 0%, #2a2a2a 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 122, 24, 0.28);
 }
 
 /* Compact fit for VFO key columns */

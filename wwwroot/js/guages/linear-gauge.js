@@ -27,10 +27,10 @@ export class LinearGauge {
             value: 0,
             highlights: [],
             majorTicks: [],
-            colorBar: '#dddddd',
+            colorBar: '#3a3a3a',
             colorBarProgress: '#198754',
-            colorMajorTicks: '#555555',
-            colorNumbers: '#555555',
+            colorMajorTicks: '#c8c8c8',
+            colorNumbers: '#c8c8c8',
             colorPlate: 'transparent',
             borders: false
         }, config);
@@ -123,7 +123,7 @@ export class LinearGauge {
         }
 
         // Track background
-        ctx.fillStyle = this.config.colorBar || '#dddddd';
+        ctx.fillStyle = this.config.colorBar || '#3a3a3a';
         ctx.fillRect(trackLeft, trackTop, trackWidth, trackHeight);
 
         // Highlight zones (under the fill so progress sits on top)
@@ -149,8 +149,8 @@ export class LinearGauge {
         // Tick marks + numbers — same count/labels as the radial face.
         const ticks = this.config.majorTicks || [];
         if (ticks.length > 1) {
-            ctx.strokeStyle = this.config.colorMajorTicks || '#555555';
-            ctx.fillStyle = this.config.colorNumbers || '#555555';
+            ctx.strokeStyle = this.config.colorMajorTicks || '#c8c8c8';
+            ctx.fillStyle = this.config.colorNumbers || '#c8c8c8';
             ctx.lineWidth = 1;
             // Slightly smaller than the radial overlay so nine labels fit a narrow bar.
             ctx.font = '8px sans-serif';
@@ -169,7 +169,7 @@ export class LinearGauge {
         }
 
         // Thin border around the track
-        ctx.strokeStyle = this.config.colorMajorTicks || '#555555';
+        ctx.strokeStyle = this.config.colorMajorTicks || '#c8c8c8';
         ctx.lineWidth = 1;
         ctx.strokeRect(trackLeft + 0.5, trackTop + 0.5, trackWidth - 1, trackHeight - 1);
     }
@@ -197,7 +197,7 @@ export class LinearPowerGauge extends LinearGauge {
                 { from: maxValue * 0.875, to: maxValue, color: 'rgba(255,0,0,.25)' }
             ],
             colorBarProgress: '#198754',
-            colorBar: '#dddddd',
+            colorBar: '#3a3a3a',
             value: 0,
             gaugeTitle: 'PWR',
             gaugeTitleId: 'powerLinearValue',
@@ -231,7 +231,7 @@ export class LinearSWRGauge extends LinearGauge {
                 { from: 127, to: 255, color: 'rgba(255,0,0,.25)' }
             ],
             colorBarProgress: '#198754',
-            colorBar: '#dddddd',
+            colorBar: '#3a3a3a',
             value: 0,
             gaugeTitle: 'SWR',
             gaugeTitleId: 'swrLinearValue',
@@ -261,7 +261,7 @@ export class LinearALCGauge extends LinearGauge {
                 { from: 230, to: 255, color: 'rgba(255,0,0,.25)' }
             ],
             colorBarProgress: '#198754',
-            colorBar: '#dddddd',
+            colorBar: '#3a3a3a',
             value: 0,
             gaugeTitle: 'ALC',
             gaugeTitleId: 'alcLinearValue',
@@ -291,7 +291,7 @@ export class LinearCompressionGauge extends LinearGauge {
                 { from: 10, to: 20, color: 'rgba(255,0,0,.25)' }
             ],
             colorBarProgress: '#198754',
-            colorBar: '#dddddd',
+            colorBar: '#3a3a3a',
             value: 0,
             gaugeTitle: 'COMP',
             gaugeTitleId: 'compressionLinearValue',
@@ -321,7 +321,7 @@ export class LinearSMeterGauge extends LinearGauge {
                 { from: 130, to: 255, color: 'rgba(255,0,0,.25)' }
             ],
             colorBarProgress: '#198754',
-            colorBar: '#dddddd',
+            colorBar: '#3a3a3a',
             value: 0,
             gaugeTitle: 'S',
             gaugeTitleId: options.gaugeTitleId || 'sMeterLinearValue',
