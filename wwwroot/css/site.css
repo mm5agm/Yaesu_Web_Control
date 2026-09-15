@@ -18,11 +18,6 @@
     user-select: none;
     white-space: nowrap;
 }
-/* Save-to-memory buttons under S-meters */
-#saveMemBtnA, #saveMemBtnB {
-    font-weight: 700 !important;
-}
-
 /* Ensure analog meter containers allow overlays to position absolutely */
 .analog-meter-container {
     position: relative;
@@ -448,21 +443,22 @@ pre, code { tab-size: 4; }
     min-width: 0;
 }
 
-.vfo-band-row .vfo-ant-select {
+.vfo-band-row .vfo-ant-select,
+.vfo-band-row .save-mem-key {
     flex: 0 0 auto;
 }
 
-.filter-scope-column-slot,
-.vfo-col--tune #filterScopeContainerA,
-.vfo-col--tune #filterScopeContainerB {
-    width: 100%;
+.filter-scope-freq-slot {
+    flex: 1 1 auto;
+    min-width: 5rem;
+    margin-left: auto;
     overflow: visible;
 }
 
-.vfo-col--tune canvas {
+.vfo-freq-row .filter-scope-freq-slot canvas {
     display: block;
     width: 100%;
-    height: 80px;
+    height: 44px;
     border-radius: 4px;
 }
 

@@ -122,10 +122,12 @@ export class FilterScopePanel {
     _sizeCanvas(canvas) {
         const parentW = canvas.parentElement?.clientWidth || 160;
         const w = Math.max(160, Math.round(parentW));
+        const cssH = parseFloat(getComputedStyle(canvas).height) || 44;
+        const h = Math.max(24, Math.round(cssH));
         canvas.width        = w;
-        canvas.height       = 80;
+        canvas.height       = h;
         canvas.style.width  = '100%';
-        canvas.style.height = '80px';
+        canvas.style.height = `${h}px`;
     }
 
     // Returns the display bounds in Hz based on the current mode AND
