@@ -495,6 +495,8 @@ The vertical axis is calibrated in S-units (S1, S5, S9, S9+30, S9+60) using the 
 
 ### 5.3 Power, Mic Gain and Speech Processor
 
+These sit in the operating-controls row under the meters, together with ATU, CW, DX, Voice, **Remote Audio** and **Clarifier**. Remote Audio and Clarifier share the last column of that row.
+
 **Power slider** — Sets the transmit power from 5 W to 200 W (FTdx101MP, FTDX5000MP and FTDX5000D) or 5 W to 100 W (FTdx101D, FTDX3000, FTdx10, FT-710 and FT-991A). Drag the slider to set the desired power level. The current value is shown to the right of the slider. The Power meter beside it is scaled to the same figure, so full output always reads at the top of the dial whatever the radio.
 
 The radio is the source of truth for RF Power. On connect, YWC reads the radio's current Power setting via the `PC;` CAT command and reflects whatever the radio reports — so if you change Power on the radio's front panel while YWC is closed, the new value appears in YWC when you reopen it. (Earlier versions overwrote the radio's setting with YWC's last-saved value on connect; that was incorrect and is fixed in v2.3.7.)
@@ -503,9 +505,13 @@ The slider snaps to 5 W steps for ease of dragging, but the numerical label show
 
 **MIC Gain / Data Out Gain slider** — Sets the microphone gain (0–100). When the radio is in a data mode (DATA-U, DATA-L, PSK, RTTY, or DATA-FM), the label changes to **Data Out Gain** automatically.
 
-**PROC button** — Toggles the speech processor on and off. The button is amber when the processor is active and grey when off. The speech processor increases the average power of your transmitted audio, which can improve readability at the other end — particularly useful for SSB DX and pile-ups.
+**PROC button** — Toggles the speech processor on and off. The Yaesu-style key shows an orange LED when the processor is active. The speech processor increases the average power of your transmitted audio, which can improve readability at the other end — particularly useful for SSB DX and pile-ups.
 
-**PROC Level slider** — Sets the speech processor compression level (0–100). A typical starting point is around 50. Higher values increase average power further but can make the audio sound over-processed and harder to copy. Monitor the compression meter while speaking and aim for 6–10 dB of compression. Both the PROC on/off state and the level are saved and restored when the app restarts.
+**PROC Level slider** — Sets the speech processor compression level (0–100), beside the PROC key. A typical starting point is around 50. Higher values increase average power further but can make the audio sound over-processed and harder to copy. Monitor the compression meter while speaking and aim for 6–10 dB of compression. Both the PROC on/off state and the level are saved and restored when the app restarts.
+
+**Clarifier** — RIT/XIT for the selected VFO, in the same operating-controls row. Pick **VFO A** or **VFO B**, set mode to **OFF**, **RX**, **TX** or **RX+TX**, and drag the offset slider (±9990 Hz). **−** / **+** nudge 10 Hz; **Reset** returns the offset to 0 without changing mode.
+
+**Remote Audio** — when enabled in Settings, the connect / mute / Mic & Gain controls appear above the Clarifier in that last column. See [§18](#18-remote-audio).
 
 ---
 
@@ -787,20 +793,20 @@ The button updates automatically — if the radio is powered off or stops respon
 
 Click the button to toggle the connection. While connecting, it briefly shows "Connecting…". On reconnect the app re-reads all radio settings so the controls reflect the current radio state. Useful if the radio was powered on after the app started, or after a USB cable was unplugged and re-plugged.
 
-**ATU button** — Controls the radio's automatic antenna tuner. The button matches the Yaesu front-panel TUNE button's behaviour: short tap and long press do different things.
+**ATU button** — Controls the radio's automatic antenna tuner. The Yaesu-style **ATU** key matches the front-panel TUNE button's behaviour: short tap and long press do different things. On = orange LED lit (tuner network engaged); Off = LED dark (bypassed).
 
-- **Short tap** toggles the ATU between **ATU On** (green) and **ATU Off** (grey). On = the tuner network is engaged in the signal path; Off = bypassed.
-- **Long press (≥500 ms)** starts the radio's auto-tune cycle. The button turns red and shows **Tuning…** while the radio searches for a low-SWR match — typically 2-7 seconds. When tuning completes the button returns to **ATU On** automatically. Tap the red button during a running tune to stop it early. **Because the tune cycle didn't complete, the ATU is left bypassed (Off)** — the radio doesn't retain partial tuning data, so to find a match you'd need to long-press again for a fresh cycle.
+- **Short tap** toggles the ATU on and off.
+- **Long press (≥500 ms)** starts the radio's auto-tune cycle. The key turns red and shows **Tuning…** while the radio searches for a low-SWR match — typically 2-7 seconds. When tuning completes the key returns to idle with the LED reflecting the settled on/off state. Tap the red key during a running tune to stop it early. **Because the tune cycle didn't complete, the ATU is left bypassed (Off)** — the radio doesn't retain partial tuning data, so to find a match you'd need to long-press again for a fresh cycle.
 
-**Tune button** — Next to the ATU button is a separate **Tune** button that starts the same auto-tune cycle with a single plain click. I added it because the long-press gesture on the ATU button isn't reachable by keyboard, screen reader, or voice — this button is. It has its own label and `aria-label` so a screen reader announces it, it takes keyboard focus in the normal tab order, and it's driven by the "tune antenna" voice command (see [§17.1](#171-what-you-can-say)). Click it and it turns red and reads **Stop** while a cycle runs; click the red **Stop** to cancel the cycle early, exactly as tapping the red ATU button does. Because the Yaesu `AC` command reports its tuning field as a fixed value, the radio never tells the app when a cycle has finished on its own — so the Stop state is timed on the app's side and clears itself shortly after a normal cycle would have completed.
+**Tune button** — Below the ATU key is a separate **Tune** button that starts the same auto-tune cycle with a single plain click. I added it because the long-press gesture on the ATU button isn't reachable by keyboard, screen reader, or voice — this button is. It has its own label and `aria-label` so a screen reader announces it, it takes keyboard focus in the normal tab order, and it's driven by the "tune antenna" voice command (see [§17.1](#171-what-you-can-say)). Click it and it turns red and reads **Stop** while a cycle runs; click the red **Stop** to cancel the cycle early, exactly as tapping the red ATU key does. Because the Yaesu `AC` command reports its tuning field as a fixed value, the radio never tells the app when a cycle has finished on its own — so the Stop state is timed on the app's side and clears itself shortly after a normal cycle would have completed.
 
 On single-receiver radios (FTdx10, FT-710, FTDX3000) the radio firmware stores the ATU on/off state per VFO. Swapping the active VFO via the **A↔B** button updates YWC's ATU display to match whichever VFO is now active — even if the on/off settings differ between the two. The radio has only one physical tuner, but it remembers per-VFO which setting to apply.
 
 Only applies to radios fitted with an internal or external ATU.
 
-**Mon button** — Toggles the TX monitor (sidetone) on and off. The button is amber when the monitor is active and grey when off. Click to toggle.
+**Mon button** — Toggles the TX monitor (sidetone) on and off. The Yaesu-style **MON** key shows an orange LED when the monitor is active. Click to toggle.
 
-**Mon level slider** — Sets the TX monitor volume (0–100). Controls how much of the transmitted audio you hear in the headphones during TX. Drag and release to apply. Both the on/off state and the level are read from the radio when the app connects.
+**Mon level slider** — Sets the TX monitor volume (0–100), beside the MON key. Controls how much of the transmitted audio you hear in the headphones during TX. Drag and release to apply. Both the on/off state and the level are read from the radio when the app connects.
 
 **TX timeout warning** — If the radio has been transmitting continuously for longer than a configurable threshold (default **120 seconds**), a red banner appears across the top of the page reading *"TX has been ON for more than N seconds — check your microphone, keyer or VOX!"* and a tone beeps every three seconds until the warning is cleared. The warning triggers regardless of how TX was started (app button, hardware PTT, VOX, CAT) and automatically clears the moment the radio returns to receive.
 
@@ -818,7 +824,7 @@ All three panels can be open at the same time and can be dragged anywhere on scr
 
 **MIC Gain** — Drag the slider to set the microphone gain (0–100). The value is sent to the radio as you release.
 
-**PROC** — Speech processor toggle. Shows **Proc On** (green) or **Proc Off** (grey).
+**PROC** — Speech processor toggle. Yaesu-style key with an orange LED when on; level slider beside it.
 
 **PROC Level** — Speech processor level slider (0–100).
 
@@ -1534,15 +1540,15 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 
 | Setting | Description |
 |---------|-------------|
-| Enable remote audio | Opt-in. When off, no audio devices are opened and the Index bar is hidden. |
+| Enable remote audio | Opt-in. When off, no audio devices are opened and the Index Remote Audio controls (operating-controls row, last column) are hidden. |
 | Radio RX device (capture) | PortAudio input used for what you **hear** in the browser — usually the Yaesu USB **recording** endpoint (`Microphone (USB Audio CODEC)` / `Line (USB Audio CODEC)`, or a name you gave it in the OS). **Required** when remote audio is enabled (no system-default fallback). On Windows the list is limited to **WASAPI** endpoints so the same USB CODEC is not repeated under MME / DirectSound / WDM-KS. Names that look like a USB codec are sorted to the top and marked with a radio icon (📻). |
 | Radio TX device (playback) | PortAudio output for browser **mic → radio** — usually Yaesu USB **Speakers** / playback (`Speakers (USB Audio CODEC)`). **Required** when enabled. Do **not** leave blank or pick PC speakers / headphones: that loops the browser mic into the room and never reaches the radio. Same WASAPI-only listing and radio-icon hint as RX. |
-| RX / TX gain | Software gain in the bridge (0.05–4). Adjusted live via **Mic & Gain** on the Index Remote Audio bar (or inline on the pop-out) — not on the Settings page. |
+| RX / TX gain | Software gain in the bridge (0.05–4). Adjusted live via **Mic & Gain** on the Index Remote Audio controls (or inline on the pop-out) — not on the Settings page. |
 | Audio codec | Chosen on the Index **Mic & Gain** dialog or the pop-out (not a host setting). **Opus** (default) compresses speech to ~32 kb/s per direction; **PCM16** is uncompressed ~768 kb/s. See [§18.6](#186-audio-codecs-opus-vs-pcm16). |
 
 Also configure **HTTPS** under [§6.2](#62-web-server-settings) if you will use a remote browser (not localhost). Full setup steps are in [§18 Remote Audio](#18-remote-audio).
 
-On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window that owns the audio session. Use this before opening Settings (or any other page) so RX/TX keep running — navigating away from Home otherwise closes the in-page session. While audio is in the pop-out, Home still shows status/levels/mutes, and the filter-scope FFT on Home stays live. Only one audio session is allowed at a time; handing off briefly reconnects.
+On the Index **Remote Audio** controls (last column of the operating-controls row under the meters), **Pop out** opens a small dedicated window that owns the audio session. Use this before opening Settings (or any other page) so RX/TX keep running — navigating away from Home otherwise closes the in-page session. While audio is in the pop-out, Home still shows status/levels/mutes, and the filter-scope FFT on Home stays live. Only one audio session is allowed at a time; handing off briefly reconnects.
 
 ---
 
@@ -3111,7 +3117,7 @@ Local testing on the same PC can use `http://localhost:8080` without HTTPS.
 ### 18.4 Operating
 
 1. Open the Index page (over HTTPS if remote).
-2. Click **Start audio** on the Remote Audio bar. Grant microphone permission when asked.
+2. Click **Start audio** on the Remote Audio controls (operating-controls row under the meters). Grant microphone permission when asked.
 3. You should hear RX audio; speak into the mic (levels show on the bar). Use **Mic & Gain** to pick the browser microphone, choose **Opus** or **PCM16**, and adjust RX/TX software gain (codec and mic choice are remembered in the browser; gain is saved on the host).
 4. Use **TX** / your TX toggle key to key the radio (on Home or on the Remote Audio pop-out). Audio flows continuously (like Mumble); CAT controls PTT.
 5. **Mute mic** / **Mute RX** as needed. **Stop** ends the session and closes host audio devices.
@@ -3123,7 +3129,7 @@ The status line shows the active codec while streaming (for example `Streaming (
 
 Audio on the Index page stops when you leave Home (for example to open **Settings**). To keep streaming:
 
-1. Click **Pop out** on the Remote Audio bar. A small **Remote Audio** window opens.
+1. Click **Pop out** on the Remote Audio controls. A small **Remote Audio** window opens.
 2. If you were already streaming, YWC hands the session to that window (brief reconnect). Otherwise click **Start audio** in the pop-out.
 3. Leave the pop-out open while you use Settings or other pages. Home shows status such as *In pop-out window (streaming)*; mute switches on Home still control the pop-out session. Filter-scope on Home keeps receiving live RX spectrum from the pop-out. The pop-out has its own **TX** button (same PTT as Home) and a **VFO A / VFO B** badge for the current transmit VFO; it also honours the same **TX toggle key** from Settings when that window is focused. TX on/off stays in sync with the main window when Home is open.
 4. **Stop** on Home stops the pop-out session. **Close** in the pop-out (or closing the window) ends audio and returns control to Home.
@@ -3143,7 +3149,7 @@ Audio on the Index page stops when you leave Home (for example to open **Setting
 | Pop-out blocked | Allow pop-ups for the YWC origin; click **Pop out** / **Open pop-out** again. |
 | Devices missing from the list | Unplug/replug USB; Refresh device list; check OS privacy permissions for microphone (host process). |
 | Session connects but no RX (RX meter stuck at 0) on macOS | macOS treats the radio USB **recording** endpoint as a microphone. Grant **System Settings → Privacy & Security → Microphone → Yaesu Web Control**. If the app was built without `NSMicrophoneUsageDescription`, macOS never prompts and PortAudio still “opens” the device but returns silence — rebuild/reinstall a DMG that includes that key (see `scripts/macos/build-dmg.sh`), then allow Microphone when prompted. |
-| Wrong browser mic | Open **Mic & Gain** on the Remote Audio bar (or use the pop-out controls) and pick the right browser microphone. Choice is remembered in the browser. |
+| Wrong browser mic | Open **Mic & Gain** on the Remote Audio controls (or use the pop-out controls) and pick the right browser microphone. Choice is remembered in the browser. |
 | Opus unavailable / forced to PCM16 | The browser needs WebCodecs `AudioEncoder` / `AudioDecoder` (current Chrome, Edge, or Chromium). Older Safari/Firefox builds may only offer PCM16. |
 | Voice Control vs radio USB | Keep Voice Control’s mic on your headset; leave Remote Audio devices on the Yaesu USB endpoints. |
 

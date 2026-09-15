@@ -19,7 +19,7 @@
     // agrees with the range check CatController.SetPower applies to the same value.
     int maxPowerWatts = Yaesu_Web_Control.Services.RadioCapabilities.MaxPowerWatts(Model.RadioModel);
     // Quick Memory Bank Store/Recall (Thomas OZ1JTE request) — rendered once
-    // in the ATU / Tune / Mon toolbar, since QMB is a radio-global function.
+    // in operating-controls column 4, since QMB is a radio-global function.
     bool hasQmb = Yaesu_Web_Control.Services.RadioCapabilities.SupportsQmb(Model.RadioModel);
     // Render VC Tune controls only when both the model supports VC Tune (FTdx101MP)
     // AND the hardware ID is positively confirmed to support VT CAT commands.
@@ -145,7 +145,7 @@
 }
 
 <!-- Cache-busted CSS reference -->
-<link rel="stylesheet" href="~/css/site.css?v=20260915a" />
+<link rel="stylesheet" href="~/css/site.css?v=20260915g" />
 <link rel="stylesheet" href="~/css/closer-to-raw-power.css?v=20260226n" />
 <link rel="stylesheet" href="~/css/toggle-dropdown-button.css" asp-append-version="true" />
 <style>
@@ -181,6 +181,14 @@
         filter: grayscale(1);
         opacity: 0.3;
         transition: opacity 0.25s ease, filter 0.25s ease;
+    }
+
+    /* Temporary gauges-row hide: keep the operating controls visible. */
+    #metersCardBody.gauges-hidden #meterGaugesRow {
+        display: none !important;
+    }
+    #metersCardBody.gauges-hidden #operatingControlsRow {
+        margin-top: 0 !important;
     }
 
     /* Voice command help popup (right-click a mic button). */
@@ -378,6 +386,13 @@
                     aria-pressed="false">
                 S-hist
             </button>
+            <button id="meterGaugesToggleBtn" class="btn btn-sm btn-outline-secondary"
+                    style="padding-top: 1px; padding-bottom: 1px;"
+                    title="Show/hide analogue meter gauges"
+                    aria-label="Show or hide the meter gauges row"
+                    aria-pressed="true">
+                Gauges
+            </button>
             <button id="vfoBToggleBtn" class="btn btn-sm btn-outline-secondary"
                     style="padding-top: 1px; padding-bottom: 1px;" title="Show/Hide VFO-B"
                     aria-label="Show or hide VFO B panel">
@@ -452,314 +467,274 @@
     <div class="row mt-3">
         <div class="col-12">
             <div class="card border-secondary">
-                <div class="card-body py-2">
-                    <!-- Gauges row. The id is the hook site.js uses to add
-                         .meters-tx-dim while transmitting; data-meter-scope="rx"
-                         on a cell marks it as one the radio stops measuring
-                         during an over. -->
-                    <div id="meterGaugesRow" class="d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
-                        <!-- S-Meter rolling history strip — leftmost so the live trace
-                             reads left-to-right toward the S-meter needle. Hidden
-                             until the toolbar's S-hist toggle is on. Sized to match
-                             the meter cells alongside it. Moved from inside the VFO
-                             panels in v2.3.9 (Jacek SP3L #34 / Colin's design call).
-                             v2.4.0: restored as a VFO A / VFO B pair — dual-receiver
-                             radios (FTdx101MP/D) have an independently calibrated
-                             S-meter per receiver (SM0;/SM1;); single-receiver radios
-                             only get the VFO A pair since there's no SUB receiver. -->
-                        @* 110px, not the 135px of the gauge cells beside it. The
-                           Power / MIC Gain row below is pulled up by
-                           margin-top:-18px so its labels sit close to the meters,
-                           and the analogue gauges tolerate that because they are
-                           transparent dials — but these strips are solid filled
-                           rectangles, so the slider thumbs visibly cut into them.
-                           Measured at 3840x2160: 15px of overlap. Only shows on
-                           wide screens; below about 2560px the gauge row wraps to
-                           two lines, which pushes the controls clear and hides it.
-                           Shrinking the strips rather than dropping the row keeps
-                           the labels under their gauges. The panel sizes its
-                           canvas from clientHeight via a ResizeObserver, so the
-                           trace re-renders to fit on its own. *@
-                        <div id="sMeterHistoryContainer"
-                             class="text-center smeter-history-container"
-                             style="display:none; position: relative; height: 110px; width: 260px; flex-shrink: 0; margin: 0; padding: 0;">
-                            <canvas id="sMeterHistoryCanvas"
-                                    role="img" aria-hidden="true"
-                                    aria-label="S-meter 30-second history — VFO A"
-                                    data-a11y-key="meters.smeterHistoryA"
-                                    style="display:block; width:100%; height:100%; border-radius:3px;"></canvas>
-                        </div>
-                        <!-- S-Meter A (MAIN) — moved from per-VFO panels to the top
-                             row in v2.3.9. Always live (unlike SWR/Power/etc which
-                             are TX-only). -->
-                        <div class="text-center" data-meter-scope="rx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                            <div class="analog-meter-container">
-                                <canvas id="sMeterCanvas" role="img" aria-hidden="true" aria-label="S meter A" data-a11y-key="meters.smeterA"></canvas>
+                <div id="metersCardBody" class="card-body py-2">
+                    <partial name="_MeterGaugesPartial" model="Model.RadioModel" />
+                    <!-- Operating controls — independent of the gauges strip layout.
+                         Resize with Bootstrap col-* on each .op-col. -->
+                    <div id="operatingControlsRow" class="row g-2 align-items-start">
+                        <!-- Column 1 — TX levels (a little wider for key + slider) -->
+                        <div class="col-3 op-col op-col--levels">
+                            <div class="op-slider-row">
+                                <label class="mb-0 text-nowrap">Power: <span id="powerValue" class="fw-bold">@Model.RadioState.Power W</span></label>
+                                <input type="range" class="flex-shrink-0" id="powerSlider"
+                                       aria-label="Transmit power"
+                                       title="Transmit power"
+                                       min="5" max="@maxPowerWatts" step="5"
+                                       value="@Model.RadioState.Power"
+                                       oninput="window.radioControl.updatePowerDisplay(window.txVfo === 1 ? 'B' : 'A', this.value)"
+                                       onchange="window.radioControl.setPower(window.txVfo === 1 ? 'B' : 'A', this.value)">
                             </div>
-                        </div>
-                        @if (!isSingleReceiver)
-                        {
-                            <!-- S-Meter B (SUB) — dual-receiver radios only. -->
-                            @* 110px to match VFO A's strip — see the note there. *@
-                            <div id="sMeterHistoryContainerB"
-                                 class="text-center smeter-history-container"
-                                 style="display:none; position: relative; height: 110px; width: 260px; flex-shrink: 0; margin: 0; padding: 0;">
-                                <canvas id="sMeterHistoryCanvasB"
-                                        role="img" aria-hidden="true"
-                                        aria-label="S-meter 30-second history — VFO B"
-                                        data-a11y-key="meters.smeterHistoryB"
-                                        style="display:block; width:100%; height:100%; border-radius:3px;"></canvas>
+                            <div class="op-slider-row">
+                                <label class="mb-0 text-nowrap"><span id="micGainLabel">MIC Gain</span>: <span id="micGainValue" class="fw-bold">@Model.MicGain</span></label>
+                                <input type="range" class="flex-shrink-0"
+                                       id="micGainSlider"
+                                       aria-label="Microphone gain"
+                                       title="Microphone gain"
+                                       min="0" max="100" step="1"
+                                       value="@Model.MicGain"
+                                       oninput="document.getElementById('micGainValue').innerText = this.value;"
+                                       onchange="setMicGain(this.value);">
                             </div>
-                            <div class="text-center" data-meter-scope="rx" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                                <div class="analog-meter-container">
-                                    <canvas id="sMeterCanvasB" role="img" aria-hidden="true" aria-label="S meter B" data-a11y-key="meters.smeterB"></canvas>
+                            <div class="yaesu-level-key">
+                                <button id="procBtn"
+                                        type="button"
+                                        class="btn toggle-dd__btn"
+                                        aria-pressed="@(Model.ProcEnabled ? "true" : "false")"
+                                        aria-label="Speech processor — currently @(Model.ProcEnabled ? "on" : "off")"
+                                        title="Speech processor on/off"
+                                        onclick="toggleProc()">
+                                    <span class="toggle-dd__led @(Model.ProcEnabled ? "is-on" : "")" aria-hidden="true"></span>
+                                    <span class="toggle-dd__label">PROC</span>
+                                </button>
+                                <div class="yaesu-level-key__level">
+                                    <span id="procLevelValue" class="fw-bold">@Model.ProcLevel</span>
+                                    <input type="range"
+                                           id="procLevelSlider"
+                                           aria-label="Speech processor level"
+                                           title="Speech processor level"
+                                           min="0" max="100" step="1"
+                                           value="@Model.ProcLevel"
+                                           oninput="document.getElementById('procLevelValue').innerText = this.value;"
+                                           onchange="setProcLevel(this.value);">
                                 </div>
                             </div>
-                        }
-                        <!-- SWR Meter -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                            <div class="analog-meter-container">
-                                <canvas id="swrMeterCanvas" role="img" aria-hidden="true" aria-label="SWR meter" data-a11y-key="meters.swr"></canvas>
+                            <div class="yaesu-level-key">
+                                <button id="monitorOnBtn"
+                                        type="button"
+                                        class="btn toggle-dd__btn"
+                                        aria-pressed="@(Model.MonitorOn ? "true" : "false")"
+                                        aria-label="TX monitor — currently @(Model.MonitorOn ? "on" : "off")"
+                                        title="Toggle TX monitor / sidetone on/off"
+                                        onclick="toggleMonitor()">
+                                    <span class="toggle-dd__led @(Model.MonitorOn ? "is-on" : "")" aria-hidden="true"></span>
+                                    <span class="toggle-dd__label">MON</span>
+                                </button>
+                                <div class="yaesu-level-key__level">
+                                    <span id="monLevelValue" class="fw-bold">@Model.MonitorLevelA</span>
+                                    <input type="range"
+                                           id="monLevelSlider"
+                                           aria-label="TX monitor / sidetone level"
+                                           title="TX monitor / sidetone level"
+                                           min="0" max="100" step="1"
+                                           value="@Model.MonitorLevelA"
+                                           oninput="document.getElementById('monLevelValue').innerText = this.value;"
+                                           onchange="setMonitorLevel(this.value);">
+                                </div>
                             </div>
                         </div>
-                        <!-- Power Meter -->
-                        <div class="text-center power-meter-container" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                            <div class="analog-meter-container">
-                                <canvas id="powerMeterCanvas" role="img" aria-hidden="true" aria-label="Power output meter" data-a11y-key="meters.power"></canvas>
+
+                        <!-- Column 2 — ATU / Tune / FM / VOX -->
+                        <div class="col-1 op-col op-col--buttons">
+                            <button id="atuBtn"
+                                    type="button"
+                                    class="btn toggle-dd__btn"
+                                    data-a11y-key="controls.atu"
+                                    data-atu-enabled="@(Model.AtuEnabled ? "true" : "false")"
+                                    aria-pressed="@(Model.AtuEnabled ? "true" : "false")"
+                                    aria-label="Antenna tuner — short tap toggles on/off, long press starts auto-tune"
+                                    title="Tap to toggle ATU on/off; press and hold to start auto-tune"
+                                    style="touch-action: manipulation; user-select: none;">
+                                <span class="toggle-dd__led @(Model.AtuEnabled ? "is-on" : "")" aria-hidden="true"></span>
+                                <span class="toggle-dd__label">ATU</span>
+                            </button>
+                            @* Explicit auto-tune button. The ATU button above also
+                               starts a tune on press-and-hold, but a long press can't
+                               be announced by a screen reader or performed by voice —
+                               this gives keyboard/AT/voice users a real control. It
+                               becomes a red "Stop" while a tune cycle is running. *@
+                            <button id="atuTuneBtn"
+                                    type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    data-a11y-key="controls.atuTune"
+                                    aria-label="Start antenna auto-tune"
+                                    title="Start antenna auto-tune"
+                                    onclick="atuTuneButtonClick()"
+                                    style="touch-action: manipulation;">Tune</button>
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    aria-label="FM repeater controls"
+                                    title="Open FM repeater controls panel"
+                                    onclick="document.getElementById('fmDialog').show()">FM Rep</button>
+                            <button id="voxBtn"
+                                    class="btn btn-sm @(Model.VoxOn ? "btn-warning" : "btn-outline-secondary")"
+                                    aria-label="VOX controls"
+                                    title="Open VOX controls panel"
+                                    onclick="document.getElementById('voxDialog').show()">VOX</button>
+                        </div>
+
+                        <!-- Column 3 — CW -->
+                        <div class="col-1 op-col op-col--buttons">
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    aria-label="CW keyer controls"
+                                    title="Open CW keyer controls panel"
+                                    onclick="document.getElementById('cwDialog').show()">CW</button>
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    aria-label="CW reader - decode received Morse to text"
+                                    title="Open the CW reader - decodes the received Morse to text"
+                                    onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">CW Read</button>
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    aria-label="CW send - type text and send it as Morse"
+                                    title="Open CW send - type a line, press Enter, the radio keys it"
+                                    onclick="window.cwSendPanel && window.cwSendPanel.toggle()">CW Send</button>
+                        </div>
+
+                        <!-- Column 4 — remaining -->
+                        <div class="col-1 op-col op-col--buttons">
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    aria-label="DX spots — list of cluster spots on current band"
+                                    title="Open DX spots list — see callsigns spotted on the current band"
+                                    onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">DX Spots</button>
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    aria-label="DX watch — alerts for spotted callsigns"
+                                    title="Open DX watch list — get alerts when watched callsigns are spotted"
+                                    onclick="document.getElementById('dxWatchDialog').show(); window.refreshDxWatchList && window.refreshDxWatchList();">DX Watch</button>
+                            @if (hasQmb)
+                            {
+                                <!-- Quick Memory Bank (QMB) — global radio function, shown once.
+                                     Store (QI;) pushes the current VFO into the QMB stack; Recall
+                                     (QR;) recalls / cycles through the stored slots. Left-click
+                                     opens Store / Recall / V/M. -->
+                                <div id="qmbControls" class="d-inline-flex">
+                                    <div id="qmbButton"></div>
+                                    <span id="qmbStatus" class="visually-hidden" role="status" aria-live="polite"></span>
+                                </div>
+                            }
+                            <button id="voiceBtn"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    aria-label="Voice announcements settings"
+                                    title="Voice announcements for band, mode, TX state etc. — useful for partially sighted operators"
+                                    onclick="document.getElementById('voiceDialog').show();">Voice</button>
+                        </div>
+
+                        <!-- Column 5 — Remote Audio / Clarifier -->
+                        <div class="col-6 op-col op-col--extras">
+                            <!-- Remote Audio — visible when Settings → Remote Audio is enabled -->
+                            <div id="remoteAudioBar" class="op-extras-block" style="display:none;">
+                                <strong class="text-nowrap"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
+                                <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                                      data-bs-title="Connect to transceiver audio" aria-label="Connect to transceiver audio">
+                                    <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioStartBtn"
+                                            aria-label="Connect to transceiver audio">
+                                        <i class="bi bi-telephone-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                                      data-bs-title="Disconnect transceiver audio" aria-label="Disconnect transceiver audio">
+                                    <button type="button" class="btn btn-sm btn-danger remote-audio-icon-btn" id="remoteAudioStopBtn" disabled
+                                            aria-label="Disconnect transceiver audio">
+                                        <i class="bi bi-telephone-x-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span class="d-inline-block remote-audio-tip" id="remoteAudioPopoutTip" data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-title="Popout audio, useful to navigate YWC without interrupting the audio stream"
+                                      aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary remote-audio-icon-btn" id="remoteAudioPopoutBtn"
+                                            aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
+                                        <i class="bi bi-window-plus remote-audio-btn-icon" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span class="d-inline-block remote-audio-tip" id="remoteAudioMicMuteTip" data-bs-toggle="tooltip"
+                                      data-bs-placement="top" data-bs-title="Mute microphone" aria-label="Mute microphone">
+                                    <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioMicMute"
+                                            aria-pressed="false" aria-label="Mute microphone" disabled>
+                                        <i class="bi bi-mic-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span class="d-inline-block remote-audio-tip" id="remoteAudioRxMuteTip" data-bs-toggle="tooltip"
+                                      data-bs-placement="top" data-bs-title="Deafen — mute received audio"
+                                      aria-label="Deafen — mute received audio">
+                                    <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioRxMute"
+                                            aria-pressed="false" aria-label="Deafen — mute received audio" disabled>
+                                        <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span class="d-inline-block remote-audio-tip" id="remoteAudioLevelsTip" data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-title="Browser microphone and software gain"
+                                      aria-label="Browser microphone and software gain">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="remoteAudioLevelsBtn"
+                                            aria-label="Open mic and gain settings">
+                                        <i class="bi bi-sliders remote-audio-btn-icon" aria-hidden="true"></i>&nbsp;Mic &amp; Gain
+                                    </button>
+                                </span>
+                                <span class="small text-muted" id="remoteAudioStatus">Idle</span>
+                                <div class="op-extras-meters">
+                                    <span class="small" title="Radio → browser level">RX</span>
+                                    <div class="progress flex-grow-1" style="height:8px; width:80px;">
+                                        <div id="remoteAudioRxMeter" class="progress-bar bg-info" style="width:0%"></div>
+                                    </div>
+                                    <span class="small" title="Browser mic → radio level">TX</span>
+                                    <div class="progress flex-grow-1" style="height:8px; width:80px;">
+                                        <div id="remoteAudioTxMeter" class="progress-bar bg-warning" style="width:0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Clarifier (RIT/XIT) -->
+                            <div id="clarifierRow" class="op-extras-block">
+                                <span class="fw-bold text-nowrap">Clarifier</span>
+                                <div class="btn-group btn-group-sm" id="clarVfoGroup" role="group" aria-label="Clarifier VFO selection">
+                                    <button type="button" class="btn btn-outline-primary active" id="clarVfoABtn"
+                                            onclick="selectClarVfo('A')" title="Apply clarifier to VFO A"
+                                            aria-label="Apply clarifier to VFO A">VFO A</button>
+                                    <button type="button" class="btn btn-outline-primary" id="clarVfoBBtn"
+                                            onclick="selectClarVfo('B')" title="Apply clarifier to VFO B"
+                                            aria-label="Apply clarifier to VFO B">VFO B</button>
+                                </div>
+                                <label class="mb-0 fw-bold text-nowrap" id="clarModeLabel">Mode:</label>
+                                <select class="form-select form-select-sm fw-bold flex-shrink-0" id="clarModeSelect"
+                                        style="width:auto;" onchange="setClarifierMode(this.value)"
+                                        aria-labelledby="clarModeLabel" aria-label="Clarifier mode">
+                                    <option value="off"  selected="@(clarModeInit=="off"  ? "selected" : null)">OFF</option>
+                                    <option value="rx"   selected="@(clarModeInit=="rx"   ? "selected" : null)">RX</option>
+                                    <option value="tx"   selected="@(clarModeInit=="tx"   ? "selected" : null)">TX</option>
+                                    <option value="rxtx" selected="@(clarModeInit=="rxtx" ? "selected" : null)">RX+TX</option>
+                                </select>
+                                <label class="mb-0 fw-bold text-nowrap">Offset:
+                                    <span id="clarOffsetValue">@Model.RadioState.ClarifierOffsetA</span> Hz
+                                </label>
+                                <div class="op-clar-offset">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0 px-2"
+                                            onclick="nudgeClarifier(-10)" title="−10 Hz"
+                                            aria-label="Decrease clarifier offset by 10 Hz">−</button>
+                                    <input type="range" id="clarOffsetSlider"
+                                           min="-9990" max="9990" step="10"
+                                           value="@Model.RadioState.ClarifierOffsetA"
+                                           oninput="document.getElementById('clarOffsetValue').textContent = this.value"
+                                           onchange="setClarifierOffset(parseInt(this.value))"
+                                           aria-label="Clarifier offset in Hz" aria-valuemin="-9990" aria-valuemax="9990">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0 px-2"
+                                            onclick="nudgeClarifier(10)" title="+10 Hz"
+                                            aria-label="Increase clarifier offset by 10 Hz">+</button>
+                                    <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
+                                            onclick="resetClarifier()"
+                                            title="Reset offset to 0 Hz (mode unchanged)"
+                                            aria-label="Reset clarifier offset to zero">Reset</button>
+                                </div>
                             </div>
                         </div>
-                        <!-- Compression Meter -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                            <div class="analog-meter-container">
-                                <canvas id="compressionMeterCanvas" role="img" aria-hidden="true" aria-label="Compression meter" data-a11y-key="meters.compression"></canvas>
-                            </div>
-                        </div>
-                        <!-- ALC Meter -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                            <div class="analog-meter-container">
-                                <canvas id="alcMeterCanvas" role="img" aria-hidden="true" aria-label="ALC meter" data-a11y-key="meters.alc"></canvas>
-                            </div>
-                        </div>
-                        @if (!isFtdx10 && !isFt710 && !isFtdx5000) {
-                        <!-- PA Temperature Meter — FTdx101/FTDX3000 only (high-voltage PA board).
-                             FTDX5000 excluded: no temperature read-code in its RM meter set. -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                            <div class="analog-meter-container">
-                                <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
-                            </div>
-                        </div>
-                        <!-- IDD Meter — FTdx101/FTDX3000 only -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                            <div class="analog-meter-container">
-                                <canvas id="iddMeterCanvas" role="img" aria-hidden="true" aria-label="Drain current meter" data-a11y-key="meters.idd"></canvas>
-                            </div>
-                        </div>
-                        <!-- VDD Meter — FTdx101/FTDX3000 only -->
-                        <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
-                            <div class="analog-meter-container">
-                                <canvas id="vddMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier supply voltage meter" data-a11y-key="meters.vdd"></canvas>
-                            </div>
-                        </div>
-                        }
-                    </div>
-                    <!-- Power and MIC Gain on one row.
-                         padding-left: 260px reserves the same width as the
-                         S-meter history strip in the meter row above (whether
-                         the strip is currently visible or not), so the Power
-                         label always sits directly under the S-meter gauge
-                         rather than under the (sometimes-hidden) history
-                         strip. v2.3.9 layout change.
-                         Padding on the flex container itself rather than a
-                         spacer child -- a child element would have its own
-                         flex slot and (with flex-wrap on) the spillover items
-                         would wrap to a new line at x=0, defeating the point. -->
-                    <div class="d-flex align-items-center gap-2 mb-2 closer-to-raw-power" style="margin-top: -18px !important; flex-wrap: wrap; padding-left: 280px;">
-                        <label class="mb-0 text-nowrap">Power: <span id="powerValue" class="fw-bold">@Model.RadioState.Power W</span></label>
-                        <input type="range" class="flex-shrink-0" id="powerSlider"
-                               aria-label="Transmit power"
-                               title="Transmit power"
-                               min="5" max="@maxPowerWatts" step="5"
-                               value="@Model.RadioState.Power"
-                               style="width: clamp(80px, 10vw, 150px); height: 18px;"
-                               oninput="window.radioControl.updatePowerDisplay(window.txVfo === 1 ? 'B' : 'A', this.value)"
-                               onchange="window.radioControl.setPower(window.txVfo === 1 ? 'B' : 'A', this.value)">
-                        <label class="mb-0 text-nowrap ms-2"><span id="micGainLabel">MIC Gain</span>: <span id="micGainValue" class="fw-bold">@Model.MicGain</span></label>
-                        <input type="range" class="flex-shrink-0"
-                               id="micGainSlider"
-                               aria-label="Microphone gain"
-                               title="Microphone gain"
-                               min="0" max="100" step="1"
-                               value="@Model.MicGain"
-                               style="width: clamp(80px, 10vw, 150px); height: 18px;"
-                               oninput="document.getElementById('micGainValue').innerText = this.value;"
-                               onchange="setMicGain(this.value);">
-                        <button id="procBtn"
-                                class="btn btn-sm ms-2 @(Model.ProcEnabled ? "btn-success" : "btn-outline-secondary")"
-                                aria-label="Speech processor"
-                                title="Speech processor on/off"
-                                onclick="toggleProc()">@(Model.ProcEnabled ? "Proc On" : "Proc Off")</button>
-                        <label class="mb-0 text-nowrap ms-2">PROC Level: <span id="procLevelValue" class="fw-bold">@Model.ProcLevel</span></label>
-                        <input type="range" class="flex-shrink-0"
-                               id="procLevelSlider"
-                               aria-label="Speech processor level"
-                               title="Speech processor level"
-                               min="0" max="100" step="1"
-                               value="@Model.ProcLevel"
-                               style="width: clamp(80px, 10vw, 150px); height: 18px;"
-                               oninput="document.getElementById('procLevelValue').innerText = this.value;"
-                               onchange="setProcLevel(this.value);">
-                        <div class="d-flex align-items-center gap-1 flex-nowrap ms-2">
-                        <button id="atuBtn"
-                                class="btn btn-sm @(Model.AtuEnabled ? "btn-success" : "btn-outline-secondary")"
-                                data-a11y-key="controls.atu"
-                                aria-label="Antenna tuner — short tap toggles on/off, long press starts auto-tune"
-                                title="Tap to toggle ATU on/off; press and hold to start auto-tune"
-                                style="touch-action: manipulation; user-select: none;">@(Model.AtuEnabled ? "ATU On" : "ATU Off")</button>
-                        @* Explicit auto-tune button. The ATU button above also
-                           starts a tune on press-and-hold, but a long press can't
-                           be announced by a screen reader or performed by voice —
-                           this gives keyboard/AT/voice users a real control. It
-                           becomes a red "Stop" while a tune cycle is running. *@
-                        <button id="atuTuneBtn"
-                                type="button"
-                                class="btn btn-sm btn-outline-secondary"
-                                data-a11y-key="controls.atuTune"
-                                aria-label="Start antenna auto-tune"
-                                title="Start antenna auto-tune"
-                                onclick="atuTuneButtonClick()"
-                                style="touch-action: manipulation;">Tune</button>
-                        @if (hasQmb)
-                        {
-                            <!-- Quick Memory Bank (QMB) — global radio function, shown once.
-                                 Store (QI;) pushes the current VFO into the QMB stack; Recall
-                                 (QR;) recalls / cycles through the stored slots. Same btn-sm
-                                 face as Tune / Mon; left-click opens Store / Recall / V/M. -->
-                            <div id="qmbControls" class="d-inline-flex">
-                                <div id="qmbButton"></div>
-                                <span id="qmbStatus" class="visually-hidden" role="status" aria-live="polite"></span>
-                            </div>
-                        }
-                        <button id="monitorOnBtn"
-                                class="btn btn-sm @(Model.MonitorOn ? "btn-warning" : "btn-outline-secondary")"
-                                aria-label="TX monitor — currently @(Model.MonitorOn ? "on" : "off")"
-                                title="Toggle TX monitor / sidetone on/off"
-                                onclick="toggleMonitor()">Mon</button>
-                        <label class="mb-0 text-nowrap"><span id="monLevelValue" class="fw-bold">@Model.MonitorLevelA</span></label>
-                        <input type="range" class="flex-shrink-0"
-                               id="monLevelSlider"
-                               aria-label="TX monitor / sidetone level"
-                               title="TX monitor / sidetone level"
-                               min="0" max="100" step="1"
-                               value="@Model.MonitorLevelA"
-                               style="width: clamp(60px, 8vw, 110px); height: 18px;"
-                               oninput="document.getElementById('monLevelValue').innerText = this.value;"
-                               onchange="setMonitorLevel(this.value);">
-                        </div>
-                        <button id="voxBtn"
-                                class="btn btn-sm ms-2 @(Model.VoxOn ? "btn-warning" : "btn-outline-secondary")"
-                                aria-label="VOX controls"
-                                title="Open VOX controls panel"
-                                onclick="document.getElementById('voxDialog').show()">VOX</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
-                                aria-label="CW keyer controls"
-                                title="Open CW keyer controls panel"
-                                onclick="document.getElementById('cwDialog').show()">CW</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
-                                aria-label="FM repeater controls"
-                                title="Open FM repeater controls panel"
-                                onclick="document.getElementById('fmDialog').show()">FM Rep</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
-                                aria-label="DX watch — alerts for spotted callsigns"
-                                title="Open DX watch list — get alerts when watched callsigns are spotted"
-                                onclick="document.getElementById('dxWatchDialog').show(); window.refreshDxWatchList && window.refreshDxWatchList();">DX Watch</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
-                                aria-label="DX spots — list of cluster spots on current band"
-                                title="Open DX spots list — see callsigns spotted on the current band"
-                                onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">DX Spots</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
-                                aria-label="CW reader - decode received Morse to text"
-                                title="Open the CW reader - decodes the received Morse to text"
-                                onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">CW Read</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
-                                aria-label="CW send - type text and send it as Morse"
-                                title="Open CW send - type a line, press Enter, the radio keys it"
-                                onclick="window.cwSendPanel && window.cwSendPanel.toggle()">CW Send</button>
-                        <button id="voiceBtn"
-                                class="btn btn-sm ms-1 btn-outline-secondary"
-                                aria-label="Voice announcements settings"
-                                title="Voice announcements for band, mode, TX state etc. — useful for partially sighted operators"
-                                onclick="document.getElementById('voiceDialog').show();">Voice</button>
                     </div>
 
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Remote Audio bar — visible when Settings → Remote Audio is enabled -->
-    <div id="remoteAudioBar" class="row mt-2 mb-2" style="display:none;">
-        <div class="col-12">
-            <div class="card border-secondary">
-                <div class="card-body py-2 d-flex flex-wrap align-items-center gap-3">
-                    <strong class="me-1"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
-                    <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Connect to transceiver audio" aria-label="Connect to transceiver audio">
-                        <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioStartBtn"
-                                aria-label="Connect to transceiver audio">
-                            <i class="bi bi-telephone-fill remote-audio-btn-icon" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Disconnect transceiver audio" aria-label="Disconnect transceiver audio">
-                        <button type="button" class="btn btn-sm btn-danger remote-audio-icon-btn" id="remoteAudioStopBtn" disabled
-                                aria-label="Disconnect transceiver audio">
-                            <i class="bi bi-telephone-x-fill remote-audio-btn-icon" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span class="d-inline-block remote-audio-tip" id="remoteAudioPopoutTip" data-bs-toggle="tooltip"
-                          data-bs-placement="top"
-                          data-bs-title="Popout audio, useful to navigate YWC without interrupting the audio stream"
-                          aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
-                        <button type="button" class="btn btn-sm btn-outline-secondary remote-audio-icon-btn" id="remoteAudioPopoutBtn"
-                                aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
-                            <i class="bi bi-window-plus remote-audio-btn-icon" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span class="d-inline-block remote-audio-tip" id="remoteAudioMicMuteTip" data-bs-toggle="tooltip"
-                          data-bs-placement="top" data-bs-title="Mute microphone" aria-label="Mute microphone">
-                        <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioMicMute"
-                                aria-pressed="false" aria-label="Mute microphone" disabled>
-                            <i class="bi bi-mic-fill remote-audio-btn-icon" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span class="d-inline-block remote-audio-tip" id="remoteAudioRxMuteTip" data-bs-toggle="tooltip"
-                          data-bs-placement="top" data-bs-title="Deafen — mute received audio"
-                          aria-label="Deafen — mute received audio">
-                        <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioRxMute"
-                                aria-pressed="false" aria-label="Deafen — mute received audio" disabled>
-                            <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span class="d-inline-block remote-audio-tip" id="remoteAudioLevelsTip" data-bs-toggle="tooltip"
-                          data-bs-placement="top"
-                          data-bs-title="Browser microphone and software gain"
-                          aria-label="Browser microphone and software gain">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="remoteAudioLevelsBtn"
-                                aria-label="Open mic and gain settings">
-                            <i class="bi bi-sliders remote-audio-btn-icon" aria-hidden="true"></i>&nbsp;Mic &amp; Gain
-                        </button>
-                    </span>
-                    <span class="small text-muted" id="remoteAudioStatus">Idle</span>
-                    <div class="d-flex align-items-center gap-2 ms-auto" style="min-width:180px;">
-                        <span class="small" title="Radio → browser level">RX</span>
-                        <div class="progress flex-grow-1" style="height:8px; width:80px;">
-                            <div id="remoteAudioRxMeter" class="progress-bar bg-info" style="width:0%"></div>
-                        </div>
-                        <span class="small" title="Browser mic → radio level">TX</span>
-                        <div class="progress flex-grow-1" style="height:8px; width:80px;">
-                            <div id="remoteAudioTxMeter" class="progress-bar bg-warning" style="width:0%"></div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -1531,55 +1506,6 @@
                             </div>
                         </div>
                     </div>
-<!-- Clarifier (RIT/XIT) strip -->
-<div class="row mt-2" id="clarifierRow">
-    <div class="col-12">
-        <div class="card border-secondary">
-            <div class="card-body py-2 px-3">
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span class="fw-bold text-nowrap">Clarifier</span>
-                    <div class="btn-group btn-group-sm" id="clarVfoGroup" role="group" aria-label="Clarifier VFO selection">
-                        <button type="button" class="btn btn-outline-primary active" id="clarVfoABtn"
-                                onclick="selectClarVfo('A')" title="Apply clarifier to VFO A"
-                                aria-label="Apply clarifier to VFO A">VFO A</button>
-                        <button type="button" class="btn btn-outline-primary" id="clarVfoBBtn"
-                                onclick="selectClarVfo('B')" title="Apply clarifier to VFO B"
-                                aria-label="Apply clarifier to VFO B">VFO B</button>
-                    </div>
-                    <label class="mb-0 fw-bold text-nowrap ms-1" id="clarModeLabel">Mode:</label>
-                    <select class="form-select form-select-sm fw-bold flex-shrink-0" id="clarModeSelect"
-                            style="width:auto;" onchange="setClarifierMode(this.value)"
-                            aria-labelledby="clarModeLabel" aria-label="Clarifier mode">
-                        <option value="off"  selected="@(clarModeInit=="off"  ? "selected" : null)">OFF</option>
-                        <option value="rx"   selected="@(clarModeInit=="rx"   ? "selected" : null)">RX</option>
-                        <option value="tx"   selected="@(clarModeInit=="tx"   ? "selected" : null)">TX</option>
-                        <option value="rxtx" selected="@(clarModeInit=="rxtx" ? "selected" : null)">RX+TX</option>
-                    </select>
-                    <label class="mb-0 fw-bold text-nowrap ms-1">Offset:
-                        <span id="clarOffsetValue">@Model.RadioState.ClarifierOffsetA</span> Hz
-                    </label>
-                    <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0 px-2"
-                            onclick="nudgeClarifier(-10)" title="−10 Hz"
-                            aria-label="Decrease clarifier offset by 10 Hz">−</button>
-                    <input type="range" id="clarOffsetSlider"
-                           min="-9990" max="9990" step="10"
-                           value="@Model.RadioState.ClarifierOffsetA"
-                           style="width: clamp(80px,12vw,180px); height:18px;"
-                           oninput="document.getElementById('clarOffsetValue').textContent = this.value"
-                           onchange="setClarifierOffset(parseInt(this.value))"
-                           aria-label="Clarifier offset in Hz" aria-valuemin="-9990" aria-valuemax="9990">
-                    <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0 px-2"
-                            onclick="nudgeClarifier(10)" title="+10 Hz"
-                            aria-label="Increase clarifier offset by 10 Hz">+</button>
-                    <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
-                            onclick="resetClarifier()"
-                            title="Reset offset to 0 Hz (mode unchanged)"
-                            aria-label="Reset clarifier offset to zero">Reset</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Memories Panel Dialog -->
 <dialog id="memoriesDialog" class="mem-dialog" aria-labelledby="memoriesTitle" aria-label="Radio memories panel">
@@ -2570,6 +2496,35 @@
                 });
             })();
 
+            // ── Analogue gauges row (temporary layout toggle) ───────────────
+            // Hides #meterGaugesRow (rendered by _MeterGaugesPartial) so the
+            // operating controls stay reachable while the dials are off.
+            // Choice persists in localStorage. Default is shown.
+            (function () {
+                const btn  = document.getElementById('meterGaugesToggleBtn');
+                const body = document.getElementById('metersCardBody');
+                if (!btn || !body) return;
+
+                const KEY = 'ywc.meterGaugesVisible';
+                const apply = (visible) => {
+                    body.classList.toggle('gauges-hidden', !visible);
+                    btn.classList.toggle('active', visible);
+                    btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    btn.title = visible
+                        ? 'Hide analogue meter gauges'
+                        : 'Show analogue meter gauges';
+                };
+                let visible = true;
+                try { visible = localStorage.getItem(KEY) !== '0'; } catch {}
+                apply(visible);
+
+                btn.addEventListener('click', () => {
+                    visible = !visible;
+                    try { localStorage.setItem(KEY, visible ? '1' : '0'); } catch {}
+                    apply(visible);
+                });
+            })();
+
             // ── Spectrum display (dual-VFO, v2.3.0+) ─────────────────────────
             // One SpectrumPanel per VFO. SdrSpectrumPipeline routes by sdrId.
             // SdrManager will only spawn worker(s) for VFO(s) actually configured.
@@ -3426,7 +3381,7 @@
 
         async function toggleProc() {
             const btn = document.getElementById('procBtn');
-            const enabled = btn.classList.contains('btn-success');
+            const enabled = btn.getAttribute('aria-pressed') === 'true';
             try {
                 const response = await fetch('/api/cat/proc', {
                     method: 'POST',
@@ -3456,9 +3411,10 @@
         function updateProcButton(enabled) {
             const btn = document.getElementById('procBtn');
             if (!btn) return;
-            btn.classList.toggle('btn-success', enabled);
-            btn.classList.toggle('btn-outline-secondary', !enabled);
-            btn.textContent = enabled ? 'Proc On' : 'Proc Off';
+            btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+            btn.setAttribute('aria-label', `Speech processor — currently ${enabled ? 'on' : 'off'}`);
+            const led = btn.querySelector('.toggle-dd__led');
+            if (led) led.classList.toggle('is-on', enabled);
         }
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -3477,7 +3433,7 @@
 
         async function toggleAtu() {
             const btn = document.getElementById('atuBtn');
-            const enabled = btn.classList.contains('btn-success');
+            const enabled = btn.getAttribute('aria-pressed') === 'true';
             try {
                 await fetch('/api/cat/atu', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3544,9 +3500,14 @@
             // Only restyle the on/off appearance if we're not mid-tune; the
             // tuning state owns the button look while it's running.
             if (btn.dataset.tuning === 'true') return;
-            btn.classList.toggle('btn-success', enabled);
-            btn.classList.toggle('btn-outline-secondary', !enabled);
-            btn.textContent = enabled ? 'ATU On' : 'ATU Off';
+            btn.dataset.atuEnabled = enabled ? 'true' : 'false';
+            btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+            btn.setAttribute('aria-label',
+                `Antenna tuner — currently ${enabled ? 'on' : 'off'}; short tap toggles, long press starts auto-tune`);
+            const led = btn.querySelector('.toggle-dd__led');
+            if (led) led.classList.toggle('is-on', enabled);
+            const label = btn.querySelector('.toggle-dd__label');
+            if (label) label.textContent = 'ATU';
         }
         // Drives the "Tuning..." visual when the radio reports an auto-tune
         // cycle in progress (AC P2 = 1). Called from the SignalR AtuTuning
@@ -3554,14 +3515,18 @@
         function updateAtuTuningState(tuning) {
             const btn = document.getElementById('atuBtn');
             if (!btn) return;
+            const label = btn.querySelector('.toggle-dd__label');
+            const led = btn.querySelector('.toggle-dd__led');
             if (tuning) {
                 btn.dataset.tuning = 'true';
-                btn.classList.remove('btn-success', 'btn-outline-secondary');
-                btn.classList.add('btn-danger');   // red while tuning
-                btn.textContent = 'Tuning…';
+                btn.classList.add('is-tuning');
+                if (label) label.textContent = 'Tuning…';
+                if (led) led.classList.add('is-on');
+                btn.setAttribute('aria-label', 'Antenna tuner — tuning in progress; tap to stop');
             } else {
                 btn.dataset.tuning = 'false';
-                btn.classList.remove('btn-danger');
+                btn.classList.remove('is-tuning');
+                if (label) label.textContent = 'ATU';
                 // Restore on/off styling from current state.
                 const onNow = btn.dataset.atuEnabled === 'true';
                 updateAtuButton(onNow);
@@ -3645,9 +3610,10 @@
         function _updateMonitorBtn(on) {
             const btn = document.getElementById('monitorOnBtn');
             if (!btn) return;
-            btn.classList.toggle('btn-warning', on);
-            btn.classList.toggle('btn-outline-secondary', !on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
             btn.setAttribute('aria-label', `TX monitor — currently ${on ? 'on' : 'off'}`);
+            const led = btn.querySelector('.toggle-dd__led');
+            if (led) led.classList.toggle('is-on', on);
         }
         async function toggleMonitor() {
             const newOn = !_monitorOn;
@@ -5044,6 +5010,7 @@
         window.setMicGain    = setMicGain;
         window.toggleProc    = toggleProc;
         window.setProcLevel  = setProcLevel;
+        window.updateProcButton = updateProcButton;
         window.toggleAtu        = toggleAtu;
         window.startAtuTune     = startAtuTune;
         window.stopAtuTune      = stopAtuTune;
