@@ -357,6 +357,45 @@ Log.Logger = new LoggerConfiguration()
 
 Log.Information("Yaesu Web Control starting (v{Version})", Yaesu_Web_Control.AppVersion.Current);
 
+// Record a hard crash before the process dies. ASP.NET Core catches exceptions
+// thrown inside a request, and BackgroundService failures stop the host with a
+// logged reason -- but a throw on a System.Threading.Timer callback, a
+// SerialPort.DataReceived handler, a raw Thread or a WinForms message handler
+// takes the whole process down with nothing in ywc-.log. Issue #143 (G0CER,
+// 2026-09-15) was exactly that shape: the process vanished between two log
+// lines and every deliberate exit path writes one, so the log could not say
+// whether it had crashed or been killed. The async sink is flushed explicitly
+// because the runtime terminates as soon as this handler returns.
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+{
+    var ex = e.ExceptionObject as Exception;
+    Log.Fatal(ex, "[Crash] Unhandled exception on a non-request thread (terminating={Terminating}): {Message}",
+        e.IsTerminating, ex?.Message ?? e.ExceptionObject?.ToString());
+    Log.CloseAndFlush();
+};
+// Faulted tasks nobody awaited do not crash the process since .NET 4.5, but
+// they are still a silent failure worth a line in the log.
+TaskScheduler.UnobservedTaskException += (_, e) =>
+{
+    Log.Warning(e.Exception, "[Crash] Unobserved task exception (process continues): {Message}", e.Exception.Message);
+    e.SetObserved();
+};
+
+// Process context for reports where the process disappears: which exe this
+// was, its PID (so a Task Manager check and an Event Viewer entry can be
+// matched to the log), and the OS it ran under.
+try
+{
+    var proc = Process.GetCurrentProcess();
+    Log.Information("Process {Pid}: {Exe}; OS {Os}; .NET {Runtime}",
+        proc.Id, proc.MainModule?.FileName ?? "(unknown exe)",
+        RuntimeInformation.OSDescription, RuntimeInformation.FrameworkDescription);
+}
+catch (Exception ex)
+{
+    Log.Debug(ex, "Could not read process details");
+}
+
 // Raise the thread-pool floor so cold start doesn't bottleneck on the pool's
 // ~1/sec starvation-recovery thread injection. Startup fires many concurrent
 // hosted services (radio init burst, meter polling, rigctld, SignalR) at once;
