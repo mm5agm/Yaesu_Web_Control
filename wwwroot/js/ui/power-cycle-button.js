@@ -11,6 +11,9 @@ export function initPowerCycleButton(root = document.getElementById("powerButton
     const max = Math.max(5, Number(root.dataset.maxPower) || 200);
     const value = Math.min(max, Math.max(5, Number(root.dataset.value) || 5));
     let lastValue = value;
+    const syncPowerMarker = (watts) => {
+        window.meterPanel?.setMarker?.("powerLinear", watts);
+    };
 
     const widget = new CycleContextButton(root, {
         label: "POWER",
@@ -23,6 +26,7 @@ export function initPowerCycleButton(root = document.getElementById("powerButton
         onChange: (state) => {
             if (state.value === undefined || state.value === lastValue) return;
             lastValue = state.value;
+            syncPowerMarker(state.value);
             window.radioControl?.setPower?.(
                 window.txVfo === 1 ? "B" : "A",
                 state.value
@@ -33,9 +37,12 @@ export function initPowerCycleButton(root = document.getElementById("powerButton
     const originalSetState = widget.setState.bind(widget);
     widget.setState = (partial = {}, opts = {}) => {
         originalSetState(partial, opts);
-        lastValue = widget.getState().value;
+        const currentValue = widget.getState().value;
+        lastValue = currentValue;
+        syncPowerMarker(currentValue);
     };
 
+    syncPowerMarker(value);
     window.powerCycleButton = widget;
     return widget;
 }

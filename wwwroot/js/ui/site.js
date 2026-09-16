@@ -1202,17 +1202,10 @@ function updateModeSelect(receiver, mode) {
 // In voice modes (SSB, AM, FM, etc.), this controls MIC Gain.
 // ---------------------------------------------------------------------------
 function updateMicGainLabel(mode) {
-    const label = document.getElementById('micGainLabel');
-    if (!label) return;
-
     // Data modes where "MIC Gain" actually controls Data Out level
     const dataModes = ['DATA-U', 'DATA-L', 'PSK', 'DATA-FM', 'DATA-FM-N', 'RTTY-U', 'RTTY-L'];
-
-    if (dataModes.includes(mode)) {
-        label.textContent = 'Data Out Gain';
-    } else {
-        label.textContent = 'MIC Gain';
-    }
+    const label = dataModes.includes(mode) ? 'Data Out Gain' : 'MIC Gain';
+    window.micGainCycleButton?.setLabel(label);
 }
 
 // ---------------------------------------------------------------------------
