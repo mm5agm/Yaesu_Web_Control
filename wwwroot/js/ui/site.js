@@ -587,24 +587,36 @@ function updateMeterDomLabel(property, result) {
             const formatted = window.MeterFormatters.iddOverlay(dv.amps);
             const el = document.getElementById('iddMeterValue');
             if (el) el.textContent = formatted;
+            const linEl = document.getElementById('iddLinearValue');
+            if (linEl) linEl.textContent = formatted;
             const canvas = document.getElementById('iddMeterCanvas');
             if (canvas) canvas.dataset.reading = formatted;
+            const linCanvas = document.getElementById('iddLinearCanvas');
+            if (linCanvas) linCanvas.dataset.reading = formatted;
             break;
         }
         case 'VDDMeter': {
             const formatted = window.MeterFormatters.vddOverlay(dv.volts);
             const el = document.getElementById('vddMeterValue');
             if (el) el.textContent = formatted;
+            const linEl = document.getElementById('vddLinearValue');
+            if (linEl) linEl.textContent = formatted;
             const canvas = document.getElementById('vddMeterCanvas');
             if (canvas) canvas.dataset.reading = formatted;
+            const linCanvas = document.getElementById('vddLinearCanvas');
+            if (linCanvas) linCanvas.dataset.reading = formatted;
             break;
         }
         case 'Temperature': {
             const formatted = window.MeterFormatters.tempOverlay(dv.tempC);
             const el = document.getElementById('paTemperatureValue');
             if (el) el.textContent = formatted;
+            const linEl = document.getElementById('tempLinearValue');
+            if (linEl) linEl.textContent = formatted;
             const canvas = document.getElementById('tempMeterCanvas');
             if (canvas) canvas.dataset.reading = formatted;
+            const linCanvas = document.getElementById('tempLinearCanvas');
+            if (linCanvas) linCanvas.dataset.reading = formatted;
             break;
         }
     }
@@ -3824,7 +3836,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // TX-only meter canvases have no reading until the radio transmits.
     // Pre-fill with '—' so hover always announces something (name + dash rather than name only).
     document.addEventListener('DOMContentLoaded', function () {
-        ['vddMeterCanvas', 'iddMeterCanvas', 'tempMeterCanvas', 'compressionMeterCanvas'].forEach(id => {
+        ['vddMeterCanvas', 'vddLinearCanvas', 'iddMeterCanvas', 'iddLinearCanvas',
+         'tempMeterCanvas', 'tempLinearCanvas', 'compressionMeterCanvas'].forEach(id => {
             const c = document.getElementById(id);
             if (c && !c.dataset.reading) c.dataset.reading = '—';
         });

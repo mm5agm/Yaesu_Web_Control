@@ -78,6 +78,9 @@ export class MeterPanel {
             swr: 'swrLinear',
             alc: 'alcLinear',
             compression: 'compressionLinear',
+            temp: 'tempLinear',
+            idd: 'iddLinear',
+            vdd: 'vddLinear',
             smeter: 'smeterLinearA',
             smeterB: 'smeterLinearB'
         }[key];
