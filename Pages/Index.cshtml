@@ -374,6 +374,13 @@
                     aria-pressed="false">
                 S-hist
             </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    data-open-shortcuts
+                    style="padding-top: 1px; padding-bottom: 1px;"
+                    title="Keyboard shortcuts (?)"
+                    aria-label="Show keyboard shortcuts">
+                ?
+            </button>
             <button id="vfoBToggleBtn" class="btn btn-sm btn-outline-secondary"
                     style="padding-top: 1px; padding-bottom: 1px;" title="Show/Hide VFO-B"
                     aria-label="Show or hide VFO B panel">
@@ -2796,6 +2803,7 @@
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initKeyboardShortcuts } from "/js/ui/keyboard-shortcuts.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
@@ -2832,6 +2840,7 @@
         document.addEventListener('DOMContentLoaded', function () {
             initFreqKeyboard();
             initMemoriesPanel();
+            initKeyboardShortcuts();
 
             // Radio-scope CAT controls. Bind each host (standalone card and/or
             // Radio Display Controls dialog) so SignalR updates reach every

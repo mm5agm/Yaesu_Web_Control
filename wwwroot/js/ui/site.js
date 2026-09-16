@@ -1018,6 +1018,13 @@ async function copyVfo(direction) {
     } catch {}
 }
 window.copyVfo = copyVfo;
+window.swapVfo = swapVfo;
+window.setActiveVfo = setActiveVfo;
+window.setRxVfo = setRxVfo;
+window.setTxVfo = setTxVfo;
+window.getActiveVfoLetter = function () {
+    return activeVfo === 1 ? 'B' : 'A';
+};
 
 async function checkTxStatus() {
     try {

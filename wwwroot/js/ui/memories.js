@@ -149,6 +149,8 @@ export function initMemoriesPanel() {
     window.refreshMemoriesPanel = () => {
         if (dialog.open) _loadAndRender();
     };
+    window.openMemoriesPanel = openMemoriesPanel;
+    window.closeMemoriesPanel = closeMemoriesPanel;
 }
 
 export function openMemoriesPanel() {
