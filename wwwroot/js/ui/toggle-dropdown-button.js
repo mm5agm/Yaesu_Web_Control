@@ -787,6 +787,14 @@ export class CycleContextButton {
         };
     }
 
+    setLabel(label) {
+        this.label = String(label ?? "");
+        if (this.options.length === 1 && this.options[0].id === this.selectedId) {
+            this.options[0].label = this.label;
+        }
+        this._sync();
+    }
+
     /**
      * Replace the option list (and, when linked, the slider range).
      * @param {{ id: string, label: string }[]} options
