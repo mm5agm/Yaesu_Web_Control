@@ -2299,6 +2299,8 @@ On touch devices, tap a digit in the frequency display to select it (it highligh
 
 Press **?** (or **h**) on the main control panel to open an in-app dialog that lists every live shortcut. The same table is summarised below. A **?** button in the top bar opens that dialog as well.
 
+While the help dialog is open, **↑ / ↓** (and Page Up / Page Down) scroll the list — they do not tune or IF-shift. The Spectrum / Scope section shows a two-column table (SDR vs Radio Scope) and highlights which target **z / w / s** currently drive; press **t** there (or the top-bar **SDR** / **Scope** button) to switch.
+
 Shortcuts apply on the **Index** (main control) page. They are **ignored while typing** in a text field, select box, the CW Send line, a DX Watch input, memory prompts, or while the on-screen frequency keypad is open. Browser chords such as **Ctrl/⌘+F** (find) are never captured.
 
 **Active VFO.** Most shortcuts act on the active / operating VFO (MAIN/SUB on dual-receiver radios, or the RX selector on single-receiver radios). **g** opens frequency entry for that VFO.
@@ -2310,10 +2312,12 @@ Shortcuts apply on the **Index** (main control) page. They are **ignored while t
 | **?** / **h** | Open / close the keyboard shortcuts help dialog |
 | **Esc** | Close the help dialog; also closes other panels (frequency keypad, Memories, …) and exits full-screen |
 | **g** | Open the on-screen frequency keypad for the active VFO |
-| **j** / **←** | Frequency step down |
-| **i** / **→** | Frequency step up |
-| **Shift** + j/i/←/→ | Step ×10 (1 kHz when the base step is 100 Hz) |
+| **j** / **←** | Frequency step down (100 Hz) |
+| **i** / **→** | Frequency step up (100 Hz) |
+| **Shift** + j/i/←/→ | Step ×10 (1 kHz) |
 | **Alt** + j/i/←/→ | Step ×100 (10 kHz) |
+| **Ctrl** + j/i/←/→ | Step 1 Hz |
+| **Ctrl+Shift** + j/i/←/→ | Step 50 Hz |
 | **Shift+Alt** + **j** / **i** | Jump to the previous / next DX spot on the spectrum overlay |
 | **m** | Open / focus the Memories panel |
 | **n** | Toggle active VFO (A ↔ B) |
@@ -2361,10 +2365,10 @@ FM uses **q** (not **f**) so full-screen can keep the existing **f** / **F** bin
 | **z** / **Z** | Zoom in / out (narrower / wider span) | Active display target |
 | **Alt+z** / **Alt+Z** | Jump to narrowest / widest span | Active display target |
 | **<** / **>** | Wider / narrower span | Active display target |
-| **w** / **W** | SDR vertical range, or Radio Scope level, −/+ 1 dB | Active display target |
-| **Alt+w** / **Alt+W** | Range / level −/+ 10 dB | Active display target |
+| **w** / **W** | SDR: vertical range −/+ 1 dB. Radio Scope: smaller / larger spectrum pane (L → N → S) | Active display target |
+| **Alt+w** / **Alt+W** | SDR: range −/+ 10 dB. Radio Scope: smallest / largest pane | Active display target |
 | **s** | Toggle Hold (freeze / live) | Active display target |
-| **S** | Reset SDR range to 60 dB, or Radio Scope level to 0 dB | Active display target |
+| **S** | SDR: reset range to 60 dB. Radio Scope: reset pane size to Normal | Active display target |
 | **v** / **V** | Remote Audio RX gain −/+ | Remote Audio controls present |
 | **Shift+M** | Mute / unmute Remote Audio RX | Remote Audio controls present |
 
