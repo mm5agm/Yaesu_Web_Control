@@ -253,15 +253,17 @@
     font-size: 0.75rem;
 }
 
-/* QMB in operating-controls column 4: same btn-sm outline face and
-   full column width as DX Spots / Voice. */
-.qmb-toolbar-key {
+/* QMB in operating-controls column 4: Yaesu action-key face, full column
+   width like DX Spots / Voice. Horizontal Store / Recall / V/M menu below. */
+.qmb-toolbar-key,
+#operatingControlsRow #qmbButton.toggle-dd {
     position: relative;
     overflow: visible;
 }
 
 #operatingControlsRow #qmbControls,
-#operatingControlsRow #qmbButton.qmb-toolbar-key {
+#operatingControlsRow #qmbButton.qmb-toolbar-key,
+#operatingControlsRow #qmbButton.toggle-dd {
     display: block !important;
     width: 100%;
 }
@@ -452,6 +454,84 @@
     width: 100%;
 }
 
+/* Visual-only Yaesu action keys (Tune / FM / VOX / CW / DX / Voice): same face
+   as the LED keys, but no LED row — these open panels or fire an action and
+   must not imply an on/off state. */
+.toggle-dd__btn--action {
+    justify-content: center;
+    min-height: 2.35rem;
+    padding: 0.35rem 0.55rem;
+}
+
+.toggle-dd__btn--action .toggle-dd__label {
+    margin: 0;
+}
+
+/* Compact Yaesu keys for the top status toolbar (Mem / Gauges / Apps). */
+.toggle-dd__btn--toolbar {
+    min-width: 4.75rem;
+    min-height: 1.9rem;
+    padding: 0.12rem 0.45rem 0.28rem;
+}
+
+.toggle-dd__btn--toolbar.toggle-dd__btn--action {
+    padding: 0.28rem 0.45rem;
+}
+
+.toggle-dd__btn--toolbar .toggle-dd__led {
+    width: 0.7rem;
+    height: 0.18rem;
+    margin: 0.02rem auto 0.18rem;
+}
+
+.toggle-dd__btn--toolbar .toggle-dd__label {
+    font-size: 0.75rem;
+}
+
+/* Apps launcher — one Yaesu key, menu of enabled Application Setup apps. */
+.apps-launcher {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.apps-launcher #appsButton.toggle-dd {
+    display: block;
+}
+
+.apps-launcher .toggle-dd__btn {
+    min-width: 4.75rem;
+}
+
+.apps-launcher--active .toggle-dd__btn {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 122, 24, 0.55),
+        0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.apps-launcher__tx {
+    position: absolute;
+    top: -0.35rem;
+    right: -0.4rem;
+    z-index: 2;
+    font-size: 0.65rem;
+    pointer-events: none;
+}
+
+.dropdown-menu.apps-launcher__menu {
+    min-width: 9rem;
+}
+
+.dropdown-menu.apps-launcher__menu .toggle-dd__item.is-running {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 122, 24, 0.4);
+    color: #ffe0b8;
+}
+
 .yaesu-level-key__level {
     display: flex;
     align-items: center;
@@ -477,7 +557,8 @@
 }
 
 /* ATU Yaesu key: red face while an auto-tune cycle is running. */
-#atuBtn.is-tuning {
+#atuBtn.is-tuning,
+#atuTuneBtn.is-tuning {
     --bs-btn-color: #fff;
     color: #fff;
     background: linear-gradient(180deg, #e35d5d 0%, #c82333 42%, #8b1414 100%);
@@ -496,7 +577,9 @@
 }
 
 #atuBtn.is-tuning:hover,
-#atuBtn.is-tuning:focus-visible {
+#atuBtn.is-tuning:focus-visible,
+#atuTuneBtn.is-tuning:hover,
+#atuTuneBtn.is-tuning:focus-visible {
     color: #fff;
     background: linear-gradient(180deg, #ef7070 0%, #d32f3f 42%, #9a1818 100%);
 }
