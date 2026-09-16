@@ -549,17 +549,9 @@
                             <div id="powerButton"
                                  data-max-power="@maxPowerWatts"
                                  data-value="@Model.RadioState.Power"></div>
-                            <div class="op-slider-row">
-                                <label class="mb-0 text-nowrap"><span id="micGainLabel">MIC Gain</span>: <span id="micGainValue" class="fw-bold">@Model.MicGain</span></label>
-                                <input type="range" class="flex-shrink-0"
-                                       id="micGainSlider"
-                                       aria-label="Microphone gain"
-                                       title="Microphone gain"
-                                       min="0" max="100" step="1"
-                                       value="@Model.MicGain"
-                                       oninput="document.getElementById('micGainValue').innerText = this.value;"
-                                       onchange="setMicGain(this.value);">
-                            </div>
+                            <div id="micGainButton"
+                                 data-label="MIC Gain"
+                                 data-value="@Model.MicGain"></div>
                             <div id="procButton"
                                  data-enabled="@(Model.ProcEnabled ? "1" : "0")"
                                  data-value="@Model.ProcLevel"></div>
@@ -2449,6 +2441,7 @@
         import { initProcCycleButton } from "/js/ui/proc-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMonitorCycleButton } from "/js/ui/monitor-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initPowerCycleButton } from "/js/ui/power-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initMicGainCycleButton } from "/js/ui/mic-gain-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initVfoKeyButtons }    from "/js/ui/vfo-key-buttons.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initKeyboardShortcuts, syncDisplayTargetButton } from "/js/ui/keyboard-shortcuts.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
@@ -2526,7 +2519,7 @@
                 swr:         { canvasId: 'swrMeterCanvas' },
                 // Compact horizontal bar siblings (PoC). Same display scale as
                 // the radials; MeterPanel.update mirrors automatically.
-                powerLinear:       { type: 'powerLinear',       canvasId: 'powerLinearCanvas', maxValue: @maxPowerWatts },
+                powerLinear:       { type: 'powerLinear',       canvasId: 'powerLinearCanvas', maxValue: @maxPowerWatts, markerValue: @Model.RadioState.Power },
                 swrLinear:         { type: 'swrLinear',         canvasId: 'swrLinearCanvas' },
                 compressionLinear: { type: 'compressionLinear', canvasId: 'compressionLinearCanvas' },
                 alcLinear:         { type: 'alcLinear',         canvasId: 'alcLinearCanvas' },
@@ -5119,6 +5112,7 @@
         initProcCycleButton();
         initMonitorCycleButton();
         initPowerCycleButton();
+        initMicGainCycleButton();
         initVfoKeyButtons();
         startAppStatusPolling();
         // BandA/B SignalR may have arrived before the Yaesu keys existed;
