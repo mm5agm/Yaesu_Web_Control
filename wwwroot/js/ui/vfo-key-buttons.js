@@ -55,6 +55,12 @@ const MODE_OPTIONS = [
     { id: "PSK", label: "PSK" },
 ];
 
+const ANTENNA_OPTIONS = [
+    { id: "1", label: "ANT 1" },
+    { id: "2", label: "ANT 2" },
+    { id: "3", label: "ANT 3" },
+];
+
 const AGC_OPTIONS = [
     { id: "0", label: "OFF" },
     { id: "1", label: "FAST" },
@@ -315,6 +321,17 @@ function initModeButton(vfo) {
         a11yKey: `vfo.${vfo.toLowerCase()}.mode`,
         onSelect: (id) => {
             if (typeof window.setMode === "function") window.setMode(vfo, id);
+        },
+    });
+}
+
+function initAntennaButton(vfo) {
+    return initMenuOnlyButton(document.getElementById(`antennaButton${vfo}`), {
+        label: "ANT",
+        options: ANTENNA_OPTIONS,
+        a11yKey: `vfo.${vfo.toLowerCase()}.antenna`,
+        onSelect: (id) => {
+            if (window.radioControl?.setAntenna) window.radioControl.setAntenna(vfo, id);
         },
     });
 }
@@ -801,6 +818,7 @@ export function initVfoKeyButtons() {
         const band = initBandButton(vfo);
         const segment = initSegmentButton(vfo);
         const mode = initModeButton(vfo);
+        const antenna = initAntennaButton(vfo);
         const roofing = initRoofingButton(vfo);
         const ifWidth = initIfWidthButton(vfo);
         const ifShift = initIfShiftButton(vfo);
@@ -816,6 +834,7 @@ export function initVfoKeyButtons() {
         if (band) window[`bandButton${vfo}`] = band;
         if (segment) window[`segmentButton${vfo}`] = segment;
         if (mode) window[`modeButton${vfo}`] = mode;
+        if (antenna) window[`antennaButton${vfo}`] = antenna;
         if (roofing) window[`roofingButton${vfo}`] = roofing;
         if (ifWidth) window[`ifWidthButton${vfo}`] = ifWidth;
         if (ifShift) window[`ifShiftButton${vfo}`] = ifShift;
@@ -832,6 +851,7 @@ export function initVfoKeyButtons() {
             band,
             segment,
             mode,
+            antenna,
             roofing,
             ifWidth,
             ifShift,
