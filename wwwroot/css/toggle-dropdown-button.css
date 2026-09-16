@@ -520,8 +520,20 @@
     pointer-events: none;
 }
 
-.dropdown-menu.apps-launcher__menu {
-    min-width: 9rem;
+.dropdown-menu.apps-launcher__menu.show {
+    display: grid;
+    grid-template-rows: repeat(2, auto);
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(6rem, max-content);
+    gap: 0.25rem;
+    min-width: 0;
+    padding: 0.3rem;
+}
+
+.dropdown-menu.apps-launcher__menu .toggle-dd__item {
+    width: 100%;
+    margin: 0;
+    white-space: nowrap;
 }
 
 .dropdown-menu.apps-launcher__menu .toggle-dd__item.is-running {
