@@ -1204,9 +1204,12 @@ export class ActionMenuButton {
             })
             .join("");
 
+        // Toolbar variant kept for callers that still opt in; default Yaesu
+        // face matches the operating-bar action keys (no LED). Menu hint marks
+        // that left-click opens commands rather than firing one action.
         const buttonClass = isToolbar
-            ? "btn btn-sm btn-outline-secondary"
-            : "btn toggle-dd__btn toggle-dd__btn--menu";
+            ? "btn toggle-dd__btn toggle-dd__btn--action"
+            : "btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--menu";
         const hintHtml = isToolbar
             ? ""
             : `<span class="toggle-dd__menu-hint" aria-hidden="true"></span>`;
@@ -1220,14 +1223,14 @@ export class ActionMenuButton {
                     title="${escapeAttr(this.title)}"
                     aria-haspopup="menu"
                     aria-expanded="false"${a11yAttr}>
-                <span class="${isToolbar ? "qmb-toolbar-key__label" : "toggle-dd__label"}"></span>
+                <span class="toggle-dd__label"></span>
                 ${hintHtml}
             </button>
             <ul class="${menuClass}" role="menu">${items}</ul>
         `;
 
         this.button = this.root.querySelector("button[aria-haspopup='menu']");
-        this.labelEl = this.root.querySelector(isToolbar ? ".qmb-toolbar-key__label" : ".toggle-dd__label");
+        this.labelEl = this.root.querySelector(".toggle-dd__label");
         this.menu = this.root.querySelector("[role='menu']");
     }
 

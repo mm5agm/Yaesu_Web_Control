@@ -631,7 +631,8 @@ function initApfButton(vfo) {
 
 /**
  * QMB is a radio-global command menu (Store / Recall / V/M), not a
- * selected-state key. Shown once, in the ATU / Tune / Mon toolbar.
+ * selected-state key. Shown once in operating-controls column 4 as a
+ * Yaesu action key matching Tune / CW / DX Spots.
  * @returns {ActionMenuButton | null}
  */
 function initQmbButton() {
@@ -642,7 +643,9 @@ function initQmbButton() {
         label: "QMB",
         a11yKey: "controls.qmb",
         title: "Quick Memory Bank — click for Store, Recall and V/M",
-        variant: "toolbar",
+        // Yaesu action-key face (same as Tune / CW / DX Spots). Horizontal
+        // Store / Recall / V/M strip kept via menuClass.
+        menuClass: "qmb-toolbar-key__menu",
         actions: [
             {
                 id: "store",
@@ -674,9 +677,57 @@ function initQmbButton() {
     return widget;
 }
 
+/**
+ * Top-toolbar Apps key: one Yaesu action menu listing only the apps the
+ * operator enabled in Application Setup. Hidden entirely when none are on.
+ * @returns {ActionMenuButton | null}
+ */
+function initAppsButton() {
+    const root = document.getElementById("appsButton");
+    const cfgEl = document.getElementById("appsLauncherConfig");
+    if (!root || !cfgEl) return null;
+
+    let apps = [];
+    try {
+        apps = JSON.parse(cfgEl.textContent || "[]");
+    } catch {
+        return null;
+    }
+    if (!Array.isArray(apps) || apps.length === 0) return null;
+
+    const launchers = {
+        wsjtx: () => window.launchWsjtx?.(),
+        jtalert: () => window.launchJtalert?.(),
+        log4om: () => window.launchLog4om?.(),
+        gridtracker: () => window.launchGridtracker?.(),
+        fldigi: () => window.launchFldigi?.(),
+    };
+
+    const widget = new ActionMenuButton(root, {
+        label: "Apps",
+        a11yKey: "controls.apps",
+        title: "Launch enabled applications",
+        menuClass: "apps-launcher__menu",
+        actions: apps.map((app) => ({
+            id: String(app.id),
+            label: String(app.label),
+            ariaLabel: `Launch ${app.label}`,
+            title: `Launch ${app.label}`,
+        })),
+        onAction: (id) => launchers[id]?.(),
+    });
+
+    // Compact face to match Mem / Gauges in the top toolbar.
+    root.querySelector(".toggle-dd__btn")?.classList.add("toggle-dd__btn--toolbar");
+
+    window.appsButton = widget;
+    return widget;
+}
+
 export function initVfoKeyButtons() {
     const result = {};
     result.qmb = initQmbButton();
+    result.apps = initAppsButton();
     for (const vfo of ["A", "B"]) {
         const band = initBandButton(vfo);
         const segment = initSegmentButton(vfo);
