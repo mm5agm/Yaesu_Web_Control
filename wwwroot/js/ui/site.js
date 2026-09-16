@@ -433,24 +433,10 @@ function syncRadioModel(model) {
     }
 }
 
-// Outer power slider max updater
+// Outer power control max updater
 function updatePowerSliderMax(maxPower) {
-    const slider = document.getElementById('powerSlider');
-    const labelMax = document.getElementById('powerMaxLabel');
     const actualMax = configuredMaxPower(maxPower);
-
-    if (slider) {
-        slider.max = actualMax;
-        slider.min = 5;
-        if (parseInt(slider.value, 10) > actualMax) {
-            slider.value = actualMax;
-            const display = document.getElementById('powerValue');
-            if (display && window.MeterFormatters) {
-                display.textContent = window.MeterFormatters.powerLabel(actualMax);
-            }
-        }
-    }
-    if (labelMax) labelMax.textContent = window.MeterFormatters.powerLabel(actualMax);
+    window.powerCycleButton?.setState({ min: 5, max: actualMax }, { silent: true });
 }
 
 // True while the radio is transmitting and therefore no longer measuring
@@ -645,11 +631,7 @@ async function setPower(receiver, watts) {
 
 // Placeholder - replaced by the IIFE's real implementation once it runs
 window.updatePowerDisplay = function(receiver, watts) {
-    // Find the power value display element
-    const powerValue = document.getElementById('powerValue');
-    if (powerValue) {
-        powerValue.innerText = window.MeterFormatters.powerLabel(watts);
-    }
+    window.powerCycleButton?.setState({ value: Number(watts) }, { silent: true });
 };
 
 // ---------------------------------------------------------------------------
@@ -724,29 +706,9 @@ async function checkRadioPowerStatus() {
 document.addEventListener('DOMContentLoaded', function() {
     checkRadioPowerStatus();
     checkTxStatus();
-    // Seed the power slider max from the server-rendered radio model.
+    // Seed the power control max from the server-rendered radio model.
     syncRadioModel(getConfiguredRadioModel());
     updatePowerSliderMax();
-
-    // Update powerValue label live as slider moves (outer/global version).
-    // NOTE: deliberately no longer initialises the label from slider.value
-    // on page load. The slider has step=5 so the browser snaps the
-    // server-rendered exact value (e.g. 91 W from the radio) to the
-    // nearest step (90 W). Reading that back into the label gave the
-    // operator a label that disagreed with what the radio is actually
-    // doing — Jacek SP3L reported this on #35 follow-up. The Razor
-    // template now renders the actual Power into the label directly;
-    // SignalR Power pushes update the label using the exact value, not
-    // the rounded slider position. The 'input' listener below only fires
-    // on user interaction (programmatic .value sets don't trigger it),
-    // so user-moves-slider still updates the label to the chosen step.
-    const slider = document.getElementById('powerSlider');
-    const display = document.getElementById('powerValue');
-    if (slider && display) {
-        slider.addEventListener('input', function () {
-            display.textContent = window.MeterFormatters.powerLabel(slider.value);
-        });
-    }
 });
 
 // ---------------------------------------------------------------------------
@@ -1457,21 +1419,7 @@ connection.on("RadioStateUpdate", function (update) {
     }
     if (update.property === "Power") {
         if (typeof window.updatePowerDisplay === 'function') window.updatePowerDisplay("A", update.value);
-        // Update both the per-VFO slider (dual-receiver layout) AND the
-        // unified `powerSlider` used on single-receiver radio layouts.
-        // The old code only updated powerSliderA, so on FTdx10 a front-
-        // panel power change moved the displayed value but left the slider
-        // visually frozen at the previous position — reported by SP3L-Jacek
-        // as #36 on v2.3.6.
-        const sliderA = document.getElementById('powerSliderA');
-        if (sliderA) sliderA.value = update.value;
-        const slider = document.getElementById('powerSlider');
-        if (slider) {
-            slider.value = update.value;
-            // Repaint the fill-percentage CSS custom property so the
-            // visual progress track matches the new position.
-            if (typeof updateSliderFill === 'function') updateSliderFill(slider);
-        }
+        window.powerCycleButton?.setState({ value: Number(update.value) }, { silent: true });
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('power', update.value);
     }
 
@@ -1892,6 +1840,12 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window._updateMonitorBtn === 'function') window._updateMonitorBtn(on);
     }
     if (update.property === "MonitorLevelA") {
+        if (window.monitorCycleButton) {
+            window.monitorCycleButton.setState(
+                { value: Number(update.value) },
+                { silent: true }
+            );
+        }
         const slider = document.getElementById('monLevelSlider');
         const label  = document.getElementById('monLevelValue');
         if (slider) slider.value = update.value;
@@ -3176,13 +3130,7 @@ window.setApfFreq = setApfFreq;
     }
 
     function updatePowerDisplay(receiver, watts) {
-        // Only one power control supported
-        // Only update the label from the slider value, never from backend
-        const display = document.getElementById('powerValue');
-        const slider = document.getElementById('powerSlider');
-        if (display && slider) {
-            display.textContent = window.MeterFormatters.powerLabel(slider.value);
-        }
+        window.powerCycleButton?.setState({ value: Number(watts) }, { silent: true });
     }
 
     async function setPower(receiver, watts) {
@@ -3207,23 +3155,10 @@ window.setApfFreq = setApfFreq;
     }
 
     function updatePowerSliderMax(maxPower) {
-        const slider = document.getElementById('powerSlider');
-        const labelMax = document.getElementById('powerMaxLabel');
         const actualMax = window.configuredMaxPower
             ? window.configuredMaxPower(maxPower)
             : (typeof maxPower === "number" ? maxPower : 200);
-
-        if (slider) {
-            slider.max = actualMax;
-            slider.min = 5;
-            if (parseInt(slider.value, 10) > actualMax) {
-                slider.value = actualMax;
-                const display = document.getElementById('powerValue');
-                if (display) display.textContent = window.MeterFormatters.powerLabel(actualMax);
-            }
-            updateSliderFill(slider);
-        }
-        if (labelMax) labelMax.textContent = window.MeterFormatters.powerLabel(actualMax);
+        window.powerCycleButton?.setState({ min: 5, max: actualMax }, { silent: true });
     }
 
     function updateSMeter(receiver, value) {
@@ -3316,49 +3251,6 @@ window.setApfFreq = setApfFreq;
     // Kick everything off
     initializeDigitInteraction('A');
     initializeDigitInteraction('B');
-    const s = document.getElementById('powerSlider'); if (s) updateSliderFill(s);
-
-    // Robustly track editing state for the power slider to prevent backend/UI jumps
-    const powerSlider = document.getElementById('powerSlider');
-    const powerDisplay = document.getElementById('powerValue');
-    if (powerSlider && powerDisplay) {
-        window.editingPower = false;
-        // Set editingPower true on any user interaction
-        powerSlider.addEventListener('input', function () {
-            window.editingPower = true;
-            powerDisplay.textContent = window.MeterFormatters.powerLabel(powerSlider.value);
-        });
-        powerSlider.addEventListener('mousedown', function () {
-            window.editingPower = true;
-        });
-        powerSlider.addEventListener('touchstart', function () {
-            window.editingPower = true;
-        });
-        powerSlider.addEventListener('focus', function () {
-            window.editingPower = true;
-        });
-        // Reset editingPower on all possible end events
-        powerSlider.addEventListener('change', function () {
-            window.editingPower = false;
-        });
-        powerSlider.addEventListener('mouseup', function () {
-            window.editingPower = false;
-        });
-        powerSlider.addEventListener('touchend', function () {
-            window.editingPower = false;
-        });
-        powerSlider.addEventListener('mouseleave', function () {
-            window.editingPower = false;
-        });
-        powerSlider.addEventListener('blur', function () {
-            window.editingPower = false;
-        });
-        // Defensive: clear editingPower if window loses focus
-        window.addEventListener('blur', function () {
-            window.editingPower = false;
-        });
-    }
-
     // Overwrite the interim window.radioControl with the real implementations
     window.radioControl = {
         setFrequency,

@@ -537,18 +537,11 @@
                                 </div>
                             }
                         </div>
-                        <!-- Column 1 — TX levels (a little wider for key + slider) -->
+                        <!-- Column 1 — TX levels -->
                         <div class="col-3 op-col op-col--levels">
-                            <div class="op-slider-row">
-                                <label class="mb-0 text-nowrap">Power: <span id="powerValue" class="fw-bold">@Model.RadioState.Power W</span></label>
-                                <input type="range" class="flex-shrink-0" id="powerSlider"
-                                       aria-label="Transmit power"
-                                       title="Transmit power"
-                                       min="5" max="@maxPowerWatts" step="5"
-                                       value="@Model.RadioState.Power"
-                                       oninput="window.radioControl.updatePowerDisplay(window.txVfo === 1 ? 'B' : 'A', this.value)"
-                                       onchange="window.radioControl.setPower(window.txVfo === 1 ? 'B' : 'A', this.value)">
-                            </div>
+                            <div id="powerButton"
+                                 data-max-power="@maxPowerWatts"
+                                 data-value="@Model.RadioState.Power"></div>
                             <div class="op-slider-row">
                                 <label class="mb-0 text-nowrap"><span id="micGainLabel">MIC Gain</span>: <span id="micGainValue" class="fw-bold">@Model.MicGain</span></label>
                                 <input type="range" class="flex-shrink-0"
@@ -560,52 +553,12 @@
                                        oninput="document.getElementById('micGainValue').innerText = this.value;"
                                        onchange="setMicGain(this.value);">
                             </div>
-                            <div class="yaesu-level-key">
-                                <button id="procBtn"
-                                        type="button"
-                                        class="btn toggle-dd__btn"
-                                        aria-pressed="@(Model.ProcEnabled ? "true" : "false")"
-                                        aria-label="Speech processor — currently @(Model.ProcEnabled ? "on" : "off")"
-                                        title="Speech processor on/off"
-                                        onclick="toggleProc()">
-                                    <span class="toggle-dd__led @(Model.ProcEnabled ? "is-on" : "")" aria-hidden="true"></span>
-                                    <span class="toggle-dd__label">PROC</span>
-                                </button>
-                                <div class="yaesu-level-key__level">
-                                    <span id="procLevelValue" class="fw-bold">@Model.ProcLevel</span>
-                                    <input type="range"
-                                           id="procLevelSlider"
-                                           aria-label="Speech processor level"
-                                           title="Speech processor level"
-                                           min="0" max="100" step="1"
-                                           value="@Model.ProcLevel"
-                                           oninput="document.getElementById('procLevelValue').innerText = this.value;"
-                                           onchange="setProcLevel(this.value);">
-                                </div>
-                            </div>
-                            <div class="yaesu-level-key">
-                                <button id="monitorOnBtn"
-                                        type="button"
-                                        class="btn toggle-dd__btn"
-                                        aria-pressed="@(Model.MonitorOn ? "true" : "false")"
-                                        aria-label="TX monitor — currently @(Model.MonitorOn ? "on" : "off")"
-                                        title="Toggle TX monitor / sidetone on/off"
-                                        onclick="toggleMonitor()">
-                                    <span class="toggle-dd__led @(Model.MonitorOn ? "is-on" : "")" aria-hidden="true"></span>
-                                    <span class="toggle-dd__label">MON</span>
-                                </button>
-                                <div class="yaesu-level-key__level">
-                                    <span id="monLevelValue" class="fw-bold">@Model.MonitorLevelA</span>
-                                    <input type="range"
-                                           id="monLevelSlider"
-                                           aria-label="TX monitor / sidetone level"
-                                           title="TX monitor / sidetone level"
-                                           min="0" max="100" step="1"
-                                           value="@Model.MonitorLevelA"
-                                           oninput="document.getElementById('monLevelValue').innerText = this.value;"
-                                           onchange="setMonitorLevel(this.value);">
-                                </div>
-                            </div>
+                            <div id="procButton"
+                                 data-enabled="@(Model.ProcEnabled ? "1" : "0")"
+                                 data-value="@Model.ProcLevel"></div>
+                            <div id="monitorButton"
+                                 data-enabled="@(Model.MonitorOn ? "1" : "0")"
+                                 data-value="@Model.MonitorLevelA"></div>
                         </div>
 
                         <!-- Column 2 — ATU / Tune / FM / VOX -->
@@ -2482,6 +2435,9 @@
         import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initNrCycleButtons }   from "/js/ui/nr-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initProcCycleButton } from "/js/ui/proc-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initMonitorCycleButton } from "/js/ui/monitor-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initPowerCycleButton } from "/js/ui/power-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initVfoKeyButtons }    from "/js/ui/vfo-key-buttons.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initKeyboardShortcuts, syncDisplayTargetButton } from "/js/ui/keyboard-shortcuts.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
@@ -3480,6 +3436,10 @@
         }
 
         async function toggleProc() {
+            if (window.procCycleButton?.button) {
+                window.procCycleButton.button.click();
+                return;
+            }
             const btn = document.getElementById('procBtn');
             const enabled = btn.getAttribute('aria-pressed') === 'true';
             try {
@@ -3497,6 +3457,10 @@
         }
 
         async function setProcLevel(value) {
+            if (window.procCycleButton) {
+                window.procCycleButton.setState({ value: Number(value) });
+                return;
+            }
             try {
                 await fetch('/api/cat/proclevel', {
                     method: 'POST',
@@ -3509,6 +3473,13 @@
         }
 
         function updateProcButton(enabled) {
+            if (window.procCycleButton) {
+                window.procCycleButton.setState(
+                    { selectedId: enabled ? '1' : '0' },
+                    { silent: true }
+                );
+                return;
+            }
             const btn = document.getElementById('procBtn');
             if (!btn) return;
             btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
@@ -3707,6 +3678,14 @@
         // --- MONITOR ON/OFF + LEVEL ---
         let _monitorOn = @(Model.MonitorOn ? "true" : "false");
         function _updateMonitorBtn(on) {
+            if (window.monitorCycleButton) {
+                _monitorOn = Boolean(on);
+                window.monitorCycleButton.setState(
+                    { selectedId: _monitorOn ? '1' : '0' },
+                    { silent: true }
+                );
+                return;
+            }
             const btn = document.getElementById('monitorOnBtn');
             if (!btn) return;
             btn.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -3715,6 +3694,10 @@
             if (led) led.classList.toggle('is-on', on);
         }
         async function toggleMonitor() {
+            if (window.monitorCycleButton?.button) {
+                window.monitorCycleButton.button.click();
+                return;
+            }
             const newOn = !_monitorOn;
             _monitorOn = newOn;
             _updateMonitorBtn(newOn);
@@ -3726,6 +3709,10 @@
             } catch (e) { console.error('toggleMonitor error:', e); }
         }
         async function setMonitorLevel(value) {
+            if (window.monitorCycleButton) {
+                window.monitorCycleButton.setState({ value: Number(value) });
+                return;
+            }
             try {
                 await fetch('/api/cat/monitorlevel/a', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -5115,6 +5102,9 @@
         window.setNbLevel      = setNbLevel;
         window.setNrLevel      = setNrLevel;
         initNrCycleButtons();
+        initProcCycleButton();
+        initMonitorCycleButton();
+        initPowerCycleButton();
         initVfoKeyButtons();
         startAppStatusPolling();
         // BandA/B SignalR may have arrived before the Yaesu keys existed;

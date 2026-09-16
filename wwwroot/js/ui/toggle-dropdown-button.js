@@ -698,7 +698,7 @@ export class CycleContextButton {
      *   showLed?: boolean,
      *   a11yKey?: string,
      *   context?:
-     *     | { type: "slider", min?: number, max?: number, value?: number }
+     *     | { type: "slider", min?: number, max?: number, step?: number, value?: number, valueSuffix?: string }
      *     | { type: "menu", options: { id: string, label: string }[], selectedId?: string, menuClass?: string },
      *   onChange?: (state: { selectedId: string, value?: number, contextId?: string }) => void
      * }} [config]
@@ -738,6 +738,8 @@ export class CycleContextButton {
         this.contextType = ctx.type === "menu" ? "menu" : "slider";
 
         if (this.contextType === "slider") {
+            this.step = Math.max(0.001, Number(ctx.step ?? 1));
+            this.valueSuffix = ctx.valueSuffix ?? "";
             if (this.linkSliderToOptions) {
                 this.min = 0;
                 this.max = Math.max(0, this.options.length - 1);
@@ -752,6 +754,8 @@ export class CycleContextButton {
             this.contextId = null;
             this.menuClass = "";
         } else {
+            this.step = 1;
+            this.valueSuffix = "";
             this.min = 1;
             this.max = 15;
             this.value = null;
@@ -836,10 +840,20 @@ export class CycleContextButton {
     }
 
     /**
-     * @param {{ selectedId?: string, value?: number, contextId?: string }} partial
+     * @param {{ selectedId?: string, value?: number, min?: number, max?: number, contextId?: string }} partial
      * @param {{ silent?: boolean }} [opts]
      */
     setState(partial = {}, opts = {}) {
+        if (this.contextType === "slider") {
+            if (partial.min !== undefined) {
+                const n = Number(partial.min);
+                if (!Number.isNaN(n)) this.min = n;
+            }
+            if (partial.max !== undefined) {
+                const n = Number(partial.max);
+                if (!Number.isNaN(n)) this.max = n;
+            }
+        }
         if (partial.selectedId !== undefined) {
             this.selectedId = String(partial.selectedId);
             if (this.linkSliderToOptions && this.contextType === "slider") {
@@ -855,6 +869,9 @@ export class CycleContextButton {
                     this.selectedId = this.options[this.value].id;
                 }
             }
+        }
+        if (this.contextType === "slider") {
+            this.value = Math.min(this.max, Math.max(this.min, this.value));
         }
         if (this.contextType === "menu" && partial.contextId !== undefined) {
             this.contextId = String(partial.contextId);
@@ -915,7 +932,7 @@ export class CycleContextButton {
 
     _contextLabel() {
         if (this.linkSliderToOptions) return this._optionLabel();
-        if (this.contextType === "slider") return String(this.value);
+        if (this.contextType === "slider") return `${this.value}${this.valueSuffix}`;
         return this.contextOptions.find((o) => o.id === this.contextId)?.label ?? this.contextId;
     }
 
@@ -936,7 +953,7 @@ export class CycleContextButton {
                            class="toggle-dd__slider"
                            min="${this.min}"
                            max="${this.max}"
-                           step="1"
+                           step="${this.step}"
                            value="${this.value}">
                     <span class="toggle-dd__slider-end"></span>
                 </div>
@@ -1027,7 +1044,7 @@ export class CycleContextButton {
             if (this.disabled) return;
             const direction = event.deltaY < 0 ? -1 : 1;
             if (this.contextType === "slider") {
-                const delta = wheelStep(event, 1);
+                const delta = wheelStep(event, this.step);
                 if (!delta) return;
                 event.preventDefault();
                 this.value = Math.min(this.max, Math.max(this.min, this.value + delta));
@@ -1131,26 +1148,29 @@ export class CycleContextButton {
         }
 
         if (this.contextType === "slider") {
-            this.valueEl.textContent = this.linkSliderToOptions ? optionLabel : String(this.value);
+            this.valueEl.textContent = this.linkSliderToOptions
+                ? optionLabel
+                : `${this.value}${this.valueSuffix}`;
             this.slider.min = String(this.min);
             this.slider.max = String(this.max);
+            this.slider.step = String(this.step);
             this.slider.value = String(this.value);
             this.slider.setAttribute("aria-valuenow", String(this.value));
             this.slider.setAttribute(
                 "aria-label",
                 this.linkSliderToOptions
                     ? `${this.label} ${this.options[0]?.label ?? ""} to ${this.options[this.options.length - 1]?.label ?? ""}`
-                    : `${this.label} level ${this.min} to ${this.max}`
+                    : `${this.label} level ${this.min}${this.valueSuffix} to ${this.max}${this.valueSuffix}`
             );
             if (this.endMinEl) {
                 this.endMinEl.textContent = this.linkSliderToOptions
                     ? this.options[0]?.label ?? String(this.min)
-                    : String(this.min);
+                    : `${this.min}${this.valueSuffix}`;
             }
             if (this.endMaxEl) {
                 this.endMaxEl.textContent = this.linkSliderToOptions
                     ? this.options[this.options.length - 1]?.label ?? String(this.max)
-                    : String(this.max);
+                    : `${this.max}${this.valueSuffix}`;
             }
         } else {
             for (const item of this.menu.querySelectorAll("[data-option-id]")) {

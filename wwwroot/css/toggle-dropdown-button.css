@@ -478,6 +478,38 @@
     flex-wrap: nowrap;
 }
 
+.yaesu-level-key--composite {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 2.65rem;
+    height: 2.65rem;
+    padding: 0.22rem 0.45rem 0.4rem;
+    border: 1px solid var(--yaesu-edge, #0d0d0d);
+    border-radius: 0.22rem;
+    background: linear-gradient(180deg, var(--yaesu-face-hi) 0%, var(--yaesu-face) 42%, var(--yaesu-face-lo) 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.yaesu-level-key--composite:hover,
+.yaesu-level-key--composite:focus-within {
+    background: linear-gradient(180deg, #454545 0%, #2e2e2e 42%, #1c1c1c 100%);
+}
+
+.yaesu-level-key.yaesu-level-key--composite > .toggle-dd__btn {
+    flex: 0 0 4.5rem;
+    min-width: 4.5rem;
+    width: 4.5rem;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
 .yaesu-level-key > .toggle-dd__btn {
     flex: 0 0 auto;
     min-width: 5.5rem;
