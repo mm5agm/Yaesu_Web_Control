@@ -1332,16 +1332,15 @@ connection.on("RadioStateUpdate", function (update) {
     // The radio does not auto-broadcast AN changes from the front panel,
     // so MeterPollingService polls AN0/AN1 every couple of seconds and
     // routes the response through the dispatcher → RadioStateService →
-    // SignalR. The antenna control is a <select>, not a radio-button group,
-    // so we update its .value directly.
+    // SignalR. Update the Yaesu-style antenna button directly.
     if (update.property === "AntennaA") {
-        const sel = document.getElementById('antennaSelectA');
-        if (sel) sel.value = update.value;
+        const button = window.antennaButtonA;
+        if (button) button.setState({ selectedId: String(update.value) }, { silent: true });
         if (window.radioControl && window.radioControl._state) window.radioControl._state.lastAntenna.A = update.value;
     }
     if (update.property === "AntennaB") {
-        const sel = document.getElementById('antennaSelectB');
-        if (sel) sel.value = update.value;
+        const button = window.antennaButtonB;
+        if (button) button.setState({ selectedId: String(update.value) }, { silent: true });
         if (window.radioControl && window.radioControl._state) window.radioControl._state.lastAntenna.B = update.value;
     }
 
@@ -2677,10 +2676,9 @@ window.setApfFreq = setApfFreq;
             window[`modeButton${receiver}`].setState({ selectedId: String(mode) }, { silent: true });
         }
 
-        // Antenna buttons
-        document.querySelectorAll(`input[name="antenna${receiver}"]`).forEach(btn => {
-            btn.checked = (btn.value === antenna);
-        });
+        if (antenna && window[`antennaButton${receiver}`]) {
+            window[`antennaButton${receiver}`].setState({ selectedId: String(antenna) }, { silent: true });
+        }
     }
 
     // Update roofing filter Yaesu-key

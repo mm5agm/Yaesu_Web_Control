@@ -13,6 +13,7 @@
     // Single- vs dual-receiver layout gates (RX/TX selectors, S-meter B, etc.)
     // — see docs/decisions/0003-single-vs-dual-receiver-ui.md.
     bool isSingleReceiver  = Yaesu_Web_Control.Services.RadioCapabilities.IsSingleReceiver(Model.RadioModel);
+    bool isFtdx101         = Model.RadioModel is "FTdx101MP" or "FTdx101D";
     bool hasAntennaSelector = Yaesu_Web_Control.Services.RadioCapabilities.HasAntennaSelector(Model.RadioModel);
     // Rated TX output. Server-rendered rather than derived in JavaScript so the
     // slider and the Power dial are right on first paint, and so the browser
@@ -1110,10 +1111,6 @@
                         </h5>
                         <div class="d-flex align-items-center gap-1 flex-wrap">
                             <span id="splitTxBadgeA" class="badge bg-danger" style="display:none;" aria-live="polite">SPLIT TX</span>
-                            <button type="button" id="zinBtnA" class="btn btn-outline-light btn-sm"
-                                    onclick="cwZeroIn('A')"
-                                    aria-label="VFO A CW Auto Zero In"
-                                    title="CW Auto Zero In on VFO A — nudges the VFO so the received CW signal sits at your configured CW pitch">ZIN</button>
                             @if (hasVcTune) {
                             <button type="button" id="vcTuneToggleBtnA" class="btn btn-outline-light btn-sm"
                                     onclick="vcTuneToggle('a')"
@@ -1207,10 +1204,12 @@
                                     <span id="squelchValueA" class="vfo-control-label" style="text-align: right;">@Model.RadioState.SquelchA</span>
                                 </div>
                             </div>
-                            <div class="vfo-band-row">
-                                <div id="bandButtonA" data-selected="@(Model.SelectedBandA ?? "")"></div>
-                                <div id="segmentButtonA" data-selected=""></div>
-                                <div class="d-flex align-items-center gap-2">
+                            <div class="vfo-band-row @(isFtdx101 ? "vfo-band-row--ftdx101" : "")">
+                                <div class="vfo-band-row__band-controls">
+                                    <div id="bandButtonA" data-selected="@(Model.SelectedBandA ?? "")"></div>
+                                    <div id="segmentButtonA" data-selected=""></div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 vfo-band-row__mode-controls">
                                     <div id="modeButtonA" data-selected="@(Model.RadioState.ModeA ?? "USB")"></div>
                                     <span class="d-inline-block save-mem-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                                           data-bs-title="Save VFO A frequency, mode, and all current settings to app memories."
@@ -1224,22 +1223,8 @@
                                     </span>
                                     @if (hasAntennaSelector)
                                     {
-                                        <select class="form-select form-select-sm vfo-ant-select" id="antennaSelectA"
-                                                aria-label="VFO A antenna"
-                                                title="VFO A antenna"
-                                                onchange="window.radioControl.setAntenna('A', this.value)">
-                                            @foreach (var ant in new[] { "1", "2", "3" })
-                                            {
-                                                @if (Model.RadioState.AntennaA == ant)
-                                                {
-                                                    <option value="@ant" selected>ANT @ant</option>
-                                                }
-                                                else
-                                                {
-                                                    <option value="@ant">ANT @ant</option>
-                                                }
-                                            }
-                                        </select>
+                                        <div id="antennaButtonA"
+                                             data-selected="@(Model.RadioState.AntennaA ?? "1")"></div>
                                     }
                                 </div>
                             </div>
@@ -1298,6 +1283,15 @@
                                      aria-live="polite"></div>
                             </div>
                             <div class="vfo-controls-column">
+                                <div class="vfo-control-item">
+                                    <button type="button" id="zinBtnA"
+                                            class="btn toggle-dd__btn toggle-dd__btn--action"
+                                            onclick="cwZeroIn('A')"
+                                            aria-label="VFO A CW Auto Zero In"
+                                            title="CW Auto Zero In on VFO A — nudges the VFO so the received CW signal sits at your configured CW pitch">
+                                        <span class="toggle-dd__label">ZIN</span>
+                                    </button>
+                                </div>
                                 <div class="vfo-control-item">
                                     <div id="agcButtonA" data-selected="@Model.RadioState.AgcA"></div>
                                 </div>
@@ -1371,10 +1365,6 @@
                         </h5>
                         <div class="d-flex align-items-center gap-1 flex-wrap">
                             <span id="splitTxBadgeB" class="badge bg-danger" style="display:none;" aria-live="polite">SPLIT TX</span>
-                            <button type="button" id="zinBtnB" class="btn btn-outline-light btn-sm"
-                                    onclick="cwZeroIn('B')"
-                                    aria-label="VFO B CW Auto Zero In"
-                                    title="CW Auto Zero In on VFO B — nudges the VFO so the received CW signal sits at your configured CW pitch">ZIN</button>
                             @if (hasVcTuneSub) {
                             <button type="button" id="vcTuneToggleBtnB" class="btn btn-outline-light btn-sm"
                                     style="display:none"
@@ -1469,10 +1459,12 @@
                                     <span id="squelchValueB" class="vfo-control-label" style="text-align: right;">@Model.RadioState.SquelchB</span>
                                 </div>
                             </div>
-                            <div class="vfo-band-row">
-                                <div id="bandButtonB" data-selected="@(Model.SelectedBandB ?? "")"></div>
-                                <div id="segmentButtonB" data-selected=""></div>
-                                <div class="d-flex align-items-center gap-2">
+                            <div class="vfo-band-row @(isFtdx101 ? "vfo-band-row--ftdx101" : "")">
+                                <div class="vfo-band-row__band-controls">
+                                    <div id="bandButtonB" data-selected="@(Model.SelectedBandB ?? "")"></div>
+                                    <div id="segmentButtonB" data-selected=""></div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 vfo-band-row__mode-controls">
                                     <div id="modeButtonB" data-selected="@(Model.RadioState.ModeB ?? "USB")"></div>
                                     <span class="d-inline-block save-mem-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                                           data-bs-title="Save VFO B frequency, mode, and all current settings to app memories."
@@ -1486,22 +1478,8 @@
                                     </span>
                                     @if (hasAntennaSelector)
                                     {
-                                        <select class="form-select form-select-sm vfo-ant-select" id="antennaSelectB"
-                                                aria-label="VFO B antenna"
-                                                title="VFO B antenna"
-                                                onchange="window.radioControl.setAntenna('B', this.value)">
-                                            @foreach (var ant in new[] { "1", "2", "3" })
-                                            {
-                                                @if (Model.RadioState.AntennaB == ant)
-                                                {
-                                                    <option value="@ant" selected>ANT @ant</option>
-                                                }
-                                                else
-                                                {
-                                                    <option value="@ant">ANT @ant</option>
-                                                }
-                                            }
-                                        </select>
+                                        <div id="antennaButtonB"
+                                             data-selected="@(Model.RadioState.AntennaB ?? "1")"></div>
                                     }
                                 </div>
                             </div>
@@ -1562,6 +1540,15 @@
                                 </div>
                             }
                             <div class="vfo-controls-column">
+                                <div class="vfo-control-item">
+                                    <button type="button" id="zinBtnB"
+                                            class="btn toggle-dd__btn toggle-dd__btn--action"
+                                            onclick="cwZeroIn('B')"
+                                            aria-label="VFO B CW Auto Zero In"
+                                            title="CW Auto Zero In on VFO B — nudges the VFO so the received CW signal sits at your configured CW pitch">
+                                        <span class="toggle-dd__label">ZIN</span>
+                                    </button>
+                                </div>
                                 <div class="vfo-control-item">
                                     <div id="agcButtonB" data-selected="@Model.RadioState.AgcB"></div>
                                 </div>
