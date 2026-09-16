@@ -10,11 +10,13 @@ public static class KeyboardShortcutRules
 {
     public const int BaseTuneStepHz = 100;
 
-    public static int ResolveTuneStepHz(bool shiftKey, bool altKey)
+    public static int ResolveTuneStepHz(bool shiftKey, bool altKey, bool ctrlKey = false)
     {
+        if (ctrlKey && shiftKey) return 50;
+        if (ctrlKey) return 1;
         if (shiftKey && altKey) return 0; // reserved for DX-spot hop
-        if (altKey) return BaseTuneStepHz * 100;
-        if (shiftKey) return BaseTuneStepHz * 10;
+        if (altKey) return 10_000;
+        if (shiftKey) return 1_000;
         return BaseTuneStepHz;
     }
 
