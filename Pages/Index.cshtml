@@ -409,7 +409,7 @@
                     aria-label="Toggle keyboard shortcuts between SDR spectrum and Radio Scope"
                     aria-pressed="false"
                     hidden>
-                SDR
+                Keys → SDR
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary"
                     data-open-shortcuts
@@ -2474,7 +2474,7 @@
         import { initKeyboardShortcuts, syncDisplayTargetButton } from "/js/ui/keyboard-shortcuts.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initNrCycleButtons }   from "/js/ui/nr-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initVfoKeyButtons }    from "/js/ui/vfo-key-buttons.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { initKeyboardShortcuts } from "/js/ui/keyboard-shortcuts.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initKeyboardShortcuts, syncDisplayTargetButton } from "/js/ui/keyboard-shortcuts.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
@@ -2711,6 +2711,7 @@
                 if (!window.ywcIsWindowsHost) {
                     const c = document.getElementById('spectrumContainer');
                     if (c) c.style.display = 'none';
+                    syncDisplayTargetButton();
                     return;
                 }
                 const aConfigured = sdrState.A !== 'unconfigured';
@@ -2759,6 +2760,8 @@
                     // Both configured — honour the active mode.
                     applyMode(currentMode);
                 }
+                // Keyboard z/w/s target button may enable once an SDR panel appears.
+                syncDisplayTargetButton();
             }
 
             // Promote a VFO to "streaming" the moment its first frame arrives, so
