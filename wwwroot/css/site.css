@@ -951,6 +951,15 @@ fieldset.calibration-card {
     min-width: 0;
 }
 
+/* Level keys use a stable compact face. Their labels contain changing numeric
+   values, so the default intrinsic button width would make each face resize
+   when the value changes (e.g. 5 W versus 100 W). */
+#operatingControlsRow .op-col--levels > .toggle-dd,
+#operatingControlsRow .op-col--levels > .toggle-dd > .toggle-dd__btn {
+    width: 10rem;
+    max-width: 100%;
+}
+
 /* Compact linear SWR / Power bars (PoC) — leftmost column of the
    operating-controls row. Radials in #meterGaugesRow stay untouched. */
 #operatingControlsRow .op-col--linear-meters {
