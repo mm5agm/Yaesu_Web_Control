@@ -27,8 +27,8 @@ export const SHORTCUT_HELP = [
     { group: 'Frequency & VFO', keys: 'i / →', action: 'Frequency step up (100 Hz)' },
     { group: 'Frequency & VFO', keys: 'Shift + j/i/←/→', action: 'Step ×10 (1 kHz)' },
     { group: 'Frequency & VFO', keys: 'Alt + j/i/←/→', action: 'Step ×100 (10 kHz)' },
-    { group: 'Frequency & VFO', keys: 'Ctrl + j/i/←/→', action: 'Step 1 Hz' },
-    { group: 'Frequency & VFO', keys: 'Ctrl + Shift + j/i/←/→', action: 'Step 50 Hz' },
+    { group: 'Frequency & VFO', keys: '[ / ]', action: 'Step 1 Hz' },
+    { group: 'Frequency & VFO', keys: 'Shift + [ / ]', action: 'Step 50 Hz' },
     { group: 'Frequency & VFO', keys: 'Shift + Alt + j/i', action: 'Tune to previous / next DX spot' },
     { group: 'Frequency & VFO', keys: 'n', action: 'Toggle active VFO (A ↔ B)' },
     { group: 'Frequency & VFO', keys: 'N', action: 'Copy VFO A → B (A = B)' },
@@ -65,7 +65,7 @@ export const SHORTCUT_HELP = [
     { group: 'Remote Audio', keys: 'v / V', action: 'RX gain −/+ one step', when: 'Remote Audio streaming' },
     { group: 'Remote Audio', keys: 'Shift + M', action: 'Mute / unmute RX audio', when: 'Remote Audio streaming' },
     // Help / cancel
-    { group: 'Help', keys: '?', action: 'Open this keyboard shortcuts dialog' },
+    { group: 'Help', keys: '? (Shift+/)', action: 'Open this keyboard shortcuts dialog' },
     { group: 'Help', keys: 'h', action: 'Open this keyboard shortcuts dialog (alias)' },
     { group: 'Help', keys: 'Esc', action: 'Close help / dialogs; exit full-screen' },
     { group: 'Help', keys: '↑ / ↓', action: 'Scroll this help dialog (while it is open)' },
@@ -78,7 +78,7 @@ export const SHORTCUT_HELP = [
 export const SPECTRUM_SCOPE_HELP = [
     { keys: 'z / Z', sdr: 'Narrower / wider span', scope: 'Narrower / wider Radio Scope span' },
     { keys: 'Alt + z / Alt + Z', sdr: 'Narrowest / widest span', scope: 'Narrowest / widest Radio Scope span' },
-    { keys: '< / >', sdr: 'Wider / narrower span', scope: 'Wider / narrower Radio Scope span' },
+    { keys: '< / > (Shift+, / Shift+.)', sdr: 'Wider / narrower span', scope: 'Wider / narrower Radio Scope span' },
     { keys: 'w / W', sdr: 'Vertical range −/+ 1 dB', scope: 'Smaller / larger spectrum pane (L/N/S)' },
     { keys: 'Alt + w / Alt + W', sdr: 'Range −/+ 10 dB', scope: 'Smallest / largest spectrum pane' },
     { keys: 'o / O', sdr: '—', scope: 'Reference level −/+ 1 dB' },
@@ -88,27 +88,31 @@ export const SPECTRUM_SCOPE_HELP = [
 ];
 
 /**
- * Resolve frequency step size in Hz from modifiers.
- * Base step is 100 Hz (audible on SSB/CW without racing the band).
+ * Resolve frequency step size in Hz from modifiers for j/i/arrow tune.
+ * Base step is 100 Hz. Fine 1 Hz / 50 Hz use bracket keys (see resolveBracketTuneStepHz).
  *
  *   (none)        → 100 Hz
  *   Shift         → 1 kHz
  *   Alt           → 10 kHz
- *   Ctrl          → 1 Hz
- *   Ctrl + Shift  → 50 Hz
  *   Shift + Alt   → 0 (DX-spot hop; not a Hz step)
  *
- * @param {{ shiftKey?: boolean, altKey?: boolean, ctrlKey?: boolean, metaKey?: boolean }} mods
+ * @param {{ shiftKey?: boolean, altKey?: boolean }} mods
  * @returns {number}
  */
 export function resolveTuneStepHz(mods = {}) {
-    const ctrl = !!(mods.ctrlKey || mods.metaKey);
-    if (ctrl && mods.shiftKey) return 50;
-    if (ctrl) return 1;
     if (mods.shiftKey && mods.altKey) return 0; // reserved for DX-spot hop
     if (mods.altKey) return 10_000;
     if (mods.shiftKey) return 1_000;
     return 100;
+}
+
+/**
+ * Fine-tune step from physical bracket keys ([ / ] and Shift+[ / ]).
+ * @param {{ shiftKey?: boolean }} mods
+ * @returns {number} 1 or 50
+ */
+export function resolveBracketTuneStepHz(mods = {}) {
+    return mods.shiftKey ? 50 : 1;
 }
 
 /**
@@ -184,19 +188,20 @@ function hasRadioScopeShortcutTarget() {
         || (Array.isArray(window.radioScopeControls) && window.radioScopeControls.some(c => c?.card)));
 }
 
-/** Prefer the Radio Display scope dialog (remote-display workflow), else the card. */
-function activeScopeRoot() {
-    const dlg = document.getElementById('radioDisplayScopeDialog');
-    if (dlg) return dlg;
-    const card = document.getElementById('radioScopeCard');
-    if (card) return card;
-    return getScopeControl()?.card || null;
-}
-
-function getScopeControl() {
+/** Prefer an open/visible Radio Scope host; never prefer a closed dialog. */
+function resolveScopeControl() {
     const list = Array.isArray(window.radioScopeControls) ? window.radioScopeControls : [];
-    // Prefer a control that already has radio state (same rule as hotspots).
+    const dlgEl = document.getElementById('radioDisplayScopeDialog');
+    const openDlg = list.find(c => c?.card === dlgEl && dlgEl?.open);
+    if (openDlg) return openDlg;
+
+    const cardEl = document.getElementById('radioScopeCard');
+    const cardCtrl = list.find(c => c?.card === cardEl);
+    if (cardCtrl && typeof cardCtrl._isOpen === 'function' && cardCtrl._isOpen()) return cardCtrl;
+    if (cardCtrl?.state) return cardCtrl;
+
     return list.find(c => c?.state && c?.card)
+        || cardCtrl
         || list.find(c => c?.card)
         || window.radioScopeControl
         || null;
@@ -219,7 +224,10 @@ function displayTargetLabel(target) {
     return target === 'scope' ? 'Radio Scope' : 'SDR spectrum';
 }
 
-function syncDisplayTargetButton() {
+/** @type {ReturnType<typeof setTimeout> | null} */
+let _targetPulseTimer = null;
+
+export function syncDisplayTargetButton() {
     const btn = document.querySelector('[data-kb-display-target]');
     if (!btn) return;
     const target = getDisplayShortcutTarget();
@@ -230,13 +238,30 @@ function syncDisplayTargetButton() {
     btn.hidden = false;
     const both = hasSdrShortcutTarget() && hasRadioScopeShortcutTarget();
     btn.disabled = !both;
-    const label = target === 'scope' ? 'Scope' : 'SDR';
-    btn.textContent = label;
+    const short = target === 'scope' ? 'Scope' : 'SDR';
+    btn.textContent = `Keys → ${short}`;
     btn.setAttribute('aria-pressed', target === 'scope' ? 'true' : 'false');
     btn.title = both
         ? `Keyboard z/w/s target: ${displayTargetLabel(target)} (press t to switch)`
         : `Keyboard z/w/s target: ${displayTargetLabel(target)}`;
     btn.setAttribute('aria-label', btn.title);
+    if (btn.dataset.bsToggle === 'tooltip' && typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        const tip = bootstrap.Tooltip.getInstance(btn);
+        if (tip) tip.setContent({ '.tooltip-inner': btn.title });
+    }
+}
+
+function pulseDisplayTargetButton() {
+    const btn = document.querySelector('[data-kb-display-target]');
+    if (!btn || btn.hidden) return;
+    btn.classList.remove('btn-outline-secondary');
+    btn.classList.add('btn-warning');
+    if (_targetPulseTimer) clearTimeout(_targetPulseTimer);
+    _targetPulseTimer = setTimeout(() => {
+        btn.classList.remove('btn-warning');
+        btn.classList.add('btn-outline-secondary');
+        _targetPulseTimer = null;
+    }, 1500);
 }
 
 /**
@@ -254,6 +279,7 @@ export function toggleDisplayShortcutTarget() {
         localStorage.setItem(DISPLAY_TARGET_KEY, 'sdr');
         announce('Shortcuts target SDR spectrum');
         syncDisplayTargetButton();
+        pulseDisplayTargetButton();
         refreshHelpTargetNote();
         return true;
     }
@@ -261,6 +287,7 @@ export function toggleDisplayShortcutTarget() {
         localStorage.setItem(DISPLAY_TARGET_KEY, 'scope');
         announce('Shortcuts target Radio Scope');
         syncDisplayTargetButton();
+        pulseDisplayTargetButton();
         refreshHelpTargetNote();
         return true;
     }
@@ -268,6 +295,7 @@ export function toggleDisplayShortcutTarget() {
     localStorage.setItem(DISPLAY_TARGET_KEY, next);
     announce(`Shortcuts target ${displayTargetLabel(next)}`);
     syncDisplayTargetButton();
+    pulseDisplayTargetButton();
     refreshHelpTargetNote();
     return true;
 }
@@ -577,97 +605,50 @@ function cycleSpan(direction, { extreme } = {}) {
     announce(`Span ${buttons[nextIdx].textContent.trim()}`);
 }
 
-/** Drive Radio Scope via the same buttons the panel wires to CAT. */
-async function withScopeButtons(selector, run) {
-    const root = activeScopeRoot();
-    if (!root) {
-        announce('Radio Scope unavailable');
-        return null;
-    }
-    const ctrl = (window.radioScopeControls || []).find(c => c?.card === root)
-        || getScopeControl();
-    // Hold / size need a known current value; span benefits from an active mark.
-    if (ctrl && !ctrl.state) {
-        try { await ctrl.refresh(); } catch { /* announce below if still empty */ }
-    }
-    const buttons = Array.from(root.querySelectorAll(selector));
-    return run(root, buttons, ctrl);
-}
-
-function pickActiveIndex(buttons, value) {
-    let idx = buttons.findIndex(b => b.classList.contains('active'));
-    if (idx < 0 && value != null && value !== '') {
-        idx = buttons.findIndex(b => b.dataset.value === String(value));
-    }
-    if (idx < 0) idx = Math.floor(buttons.length / 2);
-    return idx;
-}
-
+/** Drive Radio Scope via a single resolved control's CAT APIs. */
 function cycleRadioScopeSpan(direction, { extreme } = {}) {
-    void withScopeButtons('.scope-span-btn', (_root, buttons, ctrl) => {
-        if (!buttons.length) {
-            announce('Radio Scope span unavailable');
-            return;
-        }
-        const idx = pickActiveIndex(buttons, ctrl?.state?.span);
-        const nextIdx = extreme
-            ? (direction < 0 ? 0 : buttons.length - 1)
-            : Math.max(0, Math.min(buttons.length - 1, idx + direction));
-        if (nextIdx === idx && buttons[idx].classList.contains('active')) return;
-        buttons[nextIdx].click();
-        announce(`Radio Scope span ${buttons[nextIdx].textContent.trim()}`);
-    });
+    const ctrl = resolveScopeControl();
+    if (!ctrl?.cycleSpanBy) {
+        announce('Radio Scope unavailable');
+        return;
+    }
+    void (async () => {
+        await ctrl.cycleSpanBy(direction, { extreme });
+        const span = ctrl.state?.span;
+        const btn = ctrl.card?.querySelector(`.scope-span-btn[data-value="${span}"]`);
+        announce(btn ? `Radio Scope span ${btn.textContent.trim()}` : 'Radio Scope span');
+    })();
 }
 
 function cycleRadioScopeSize(direction, { extreme } = {}) {
-    void withScopeButtons('.scope-size-btn', (_root, buttons, ctrl) => {
-        const enabled = buttons.filter(b => !b.disabled);
-        if (!enabled.length) {
-            announce('Radio Scope size unavailable');
-            return;
-        }
-        // Buttons are L→S (large spectrum → small). direction > 0 = larger pane.
-        const idx = pickActiveIndex(enabled, ctrl?.state?.size);
-        const nextIdx = extreme
-            ? (direction > 0 ? 0 : enabled.length - 1)
-            : Math.max(0, Math.min(enabled.length - 1, idx - direction));
-        if (nextIdx === idx && enabled[idx].classList.contains('active')) return;
-        enabled[nextIdx].click();
-        announce(`Radio Scope size ${enabled[nextIdx].textContent.trim()}`);
-    });
-}
-
-function resetRadioScopeSize() {
-    void withScopeButtons('.scope-size-btn', (_root, buttons) => {
-        const enabled = buttons.filter(b => !b.disabled);
-        if (!enabled.length) {
-            announce('Radio Scope size unavailable');
-            return;
-        }
-        const normal = enabled.find(b => {
-            const t = b.textContent.trim().toUpperCase();
-            return t === 'N' || t === 'NORMAL';
-        }) || enabled[Math.floor(enabled.length / 2)];
-        normal.click();
-        announce(`Radio Scope size ${normal.textContent.trim()}`);
-    });
+    const ctrl = resolveScopeControl();
+    if (!ctrl?.cycleSizeBy) {
+        announce('Radio Scope size unavailable');
+        return;
+    }
+    void (async () => {
+        await ctrl.cycleSizeBy(direction, { extreme });
+        const size = ctrl.state?.size;
+        const btn = ctrl.card?.querySelector(`.scope-size-btn[data-value="${size}"]`);
+        announce(btn ? `Radio Scope size ${btn.textContent.trim()}` : 'Radio Scope size');
+    })();
 }
 
 function toggleRadioScopeHold() {
-    void withScopeButtons('.scope-toggle-btn[data-setting="hold"]', (root, buttons) => {
-        const btn = buttons[0] || root.querySelector('.scope-toggle-btn[data-setting="hold"]');
-        if (!btn) {
-            announce('Radio Scope hold unavailable');
-            return;
-        }
-        const wasOn = btn.classList.contains('active');
-        btn.click();
+    const ctrl = resolveScopeControl();
+    if (!ctrl?.toggleHold) {
+        announce('Radio Scope hold unavailable');
+        return;
+    }
+    void (async () => {
+        const wasOn = ctrl.state?.hold === '1';
+        await ctrl.toggleHold();
         announce(wasOn ? 'Radio Scope hold off' : 'Radio Scope hold on');
-    });
+    })();
 }
 
 function nudgeRadioScopeLevel(deltaDb) {
-    const ctrl = getScopeControl();
+    const ctrl = resolveScopeControl();
     if (!ctrl?.nudgeLevel) {
         announce('Radio Scope level unavailable');
         return;
@@ -682,7 +663,7 @@ function nudgeRadioScopeLevel(deltaDb) {
 }
 
 function resetRadioScopeLevel() {
-    const ctrl = getScopeControl();
+    const ctrl = resolveScopeControl();
     if (!ctrl?.resetLevel) {
         announce('Radio Scope level unavailable');
         return;
@@ -970,7 +951,7 @@ function handleHelpDialogKeys(e) {
     }
 
     // Allow toggling the display target while reading the compare table.
-    if ((key === 't' || key === 'T') && !e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    if (isCode(e, 'KeyT') && !e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
         toggleDisplayShortcutTarget();
@@ -1002,15 +983,11 @@ function shiftedLetter(e) {
     return !!e.shiftKey;
 }
 
-/**
- * Ctrl/Cmd + j/i/←/→ fine-tune chords (1 Hz / 50 Hz).
- * @param {KeyboardEvent} e
- */
-function isFineTuneChord(e) {
-    if (!(e.ctrlKey || e.metaKey)) return false;
-    return e.code === 'KeyJ' || e.code === 'KeyI'
-        || e.key === 'ArrowLeft' || e.key === 'ArrowRight'
-        || e.code === 'ArrowLeft' || e.code === 'ArrowRight';
+/** Help chord: physical Slash+Shift (UK/US) or glyph '?' / KeyH. */
+function isHelpChord(e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return false;
+    if (e.key === '?' || (isCode(e, 'Slash') && e.shiftKey)) return true;
+    return isCode(e, 'KeyH') && !e.shiftKey;
 }
 
 // ── Dispatcher ───────────────────────────────────────────────────────────────
@@ -1021,8 +998,8 @@ function isFineTuneChord(e) {
  */
 export function handleKey(e) {
     if (isBrowserFindChord(e)) return false;
-    // Leave other browser chords alone, but allow Ctrl/Cmd fine frequency steps.
-    if ((e.ctrlKey || e.metaKey) && !isFineTuneChord(e)) return false;
+    // Never capture Ctrl/Cmd chords — browsers / GPU overlays often steal them.
+    if (e.ctrlKey || e.metaKey) return false;
 
     // Help: allow ? / h even when a non-text control has focus, but not in text fields.
     const key = e.key;
@@ -1041,8 +1018,8 @@ export function handleKey(e) {
 
     if (isTypingIntoEditable()) return false;
 
-    // ? and h open help (Shift+/ produces "?" on US layouts — key is "?")
-    if (key === '?' || (key === 'h' && !e.altKey && !e.shiftKey)) {
+    // ? (Slash+Shift) and h open help — match by code so UK layouts work.
+    if (isHelpChord(e)) {
         e.preventDefault();
         if (isHelpOpen()) closeHelpDialog();
         else openHelpDialog();
@@ -1058,8 +1035,8 @@ export function handleKey(e) {
         return true;
     }
 
-    // Shift+M → RX mute (Space stays free for the optional TX PTT shortcut).
-    if ((key === 'M' || (key === 'm' && e.shiftKey)) && !e.altKey) {
+    // Shift+KeyM → RX mute (Caps Lock alone must not mute; Space stays free for TX PTT).
+    if (isCode(e, 'KeyM') && e.shiftKey && !e.altKey) {
         if (toggleRxMute()) {
             e.preventDefault();
             return true;
@@ -1068,7 +1045,7 @@ export function handleKey(e) {
     }
 
     // Toggle z/w/s target between SDR spectrum and Radio Scope.
-    if ((key === 't' || key === 'T') && !e.altKey && !e.shiftKey) {
+    if (isCode(e, 'KeyT') && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         toggleDisplayShortcutTarget();
         return true;
@@ -1103,8 +1080,8 @@ export function handleKey(e) {
         return true;
     }
 
-    // Memories / VFO
-    if (key === 'm' && !e.altKey && !e.shiftKey) {
+    // Memories / VFO — KeyM without Shift (Caps Lock must still open Memories).
+    if (isCode(e, 'KeyM') && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         toggleMemories();
         return true;
@@ -1127,19 +1104,26 @@ export function handleKey(e) {
         return true;
     }
 
+    // Fine tune: physical brackets — [ / ] = 1 Hz, Shift+[ / ] = 50 Hz.
+    if ((isCode(e, 'BracketLeft') || isCode(e, 'BracketRight')) && !e.altKey) {
+        const step = resolveBracketTuneStepHz(e);
+        e.preventDefault();
+        stepFrequency(isCode(e, 'BracketRight') ? step : -step);
+        return true;
+    }
+
     // Tune: j/i and arrows (arrows skipped while frequency digit editor has focus)
-    // Match by e.code so Ctrl/Alt chords still see KeyJ/KeyI on every layout.
+    // Match by e.code so Alt chords still see KeyJ/KeyI on every layout.
     const isTuneDown = isCode(e, 'KeyJ') || key === 'ArrowLeft' || e.code === 'ArrowLeft';
     const isTuneUp = isCode(e, 'KeyI') || key === 'ArrowRight' || e.code === 'ArrowRight';
     if ((isTuneDown || isTuneUp) && !(isFrequencyDisplayFocused() && (key === 'ArrowLeft' || key === 'ArrowRight' || e.code === 'ArrowLeft' || e.code === 'ArrowRight'))) {
-        if (e.shiftKey && e.altKey && !e.ctrlKey && !e.metaKey && (isCode(e, 'KeyJ') || isCode(e, 'KeyI'))) {
+        if (e.shiftKey && e.altKey && (isCode(e, 'KeyJ') || isCode(e, 'KeyI'))) {
             e.preventDefault();
             stepDxSpot(isCode(e, 'KeyI') ? 1 : -1);
             return true;
         }
-        // Don't steal Left/Right from band radiogroup / other widgets that use them
-        // (unless this is an explicit Ctrl fine-tune chord).
-        if ((key === 'ArrowLeft' || key === 'ArrowRight') && !e.ctrlKey && !e.metaKey && document.activeElement) {
+        // Don't steal Left/Right from band radiogroup / other widgets that use them.
+        if ((key === 'ArrowLeft' || key === 'ArrowRight') && document.activeElement) {
             const role = document.activeElement.getAttribute('role');
             if (role === 'radio' || role === 'slider' || document.activeElement.closest?.('[role="radiogroup"]')) {
                 return false;
@@ -1156,7 +1140,7 @@ export function handleKey(e) {
         }
     }
 
-    // IF width / default
+    // IF width / default — unshifted Slash only (Shift+/ is help).
     if (key === 'p' && !e.altKey) {
         e.preventDefault();
         cycleIfWidth(-1);
@@ -1167,7 +1151,7 @@ export function handleKey(e) {
         cycleIfWidth(1);
         return true;
     }
-    if (key === '/' && !e.altKey) {
+    if (isCode(e, 'Slash') && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         restoreDefaultIfWidth();
         return true;
@@ -1193,9 +1177,15 @@ export function handleKey(e) {
         cycleSpan(dir, { extreme: e.altKey });
         return true;
     }
-    if ((key === '<' || key === '>') && getDisplayShortcutTarget()) {
+    // < / > via Comma/Period+Shift (glyph fallback for layouts that emit <> directly)
+    if (getDisplayShortcutTarget() && (
+        (isCode(e, 'Comma') && e.shiftKey)
+        || (isCode(e, 'Period') && e.shiftKey)
+        || key === '<' || key === '>'
+    )) {
         e.preventDefault();
-        cycleSpan(key === '<' ? 1 : -1);
+        const wider = key === '<' || (isCode(e, 'Comma') && e.shiftKey);
+        cycleSpan(wider ? 1 : -1);
         return true;
     }
     if (isCode(e, 'KeyW') && getDisplayShortcutTarget()) {
@@ -1210,7 +1200,7 @@ export function handleKey(e) {
         nudgeRadioScopeLevel(shiftedLetter(e) ? mag : -mag);
         return true;
     }
-    if (key === 's' && !e.altKey && !e.shiftKey && getDisplayShortcutTarget()) {
+    if (isCode(e, 'KeyS') && !e.altKey && !shiftedLetter(e) && getDisplayShortcutTarget()) {
         e.preventDefault();
         toggleSpectrumHold();
         return true;
@@ -1268,7 +1258,7 @@ export function initKeyboardShortcuts() {
                 closeHelpDialog();
                 return;
             }
-            if (e.key === '?' || (e.key === 'h' && !e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey)) {
+            if (isHelpChord(e)) {
                 e.preventDefault();
                 e.stopPropagation();
                 closeHelpDialog();

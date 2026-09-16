@@ -2293,11 +2293,11 @@ On touch devices, tap a digit in the frequency display to select it (it highligh
 
 ## 13. Keyboard Shortcuts
 
-Press **?** (or **h**) on the main control panel to open an in-app dialog that lists every live shortcut. The same table is summarised below. A keyboard-icon button in the top bar (tooltip: *Keyboard shortcuts (?)*) opens that dialog as well.
+Press **?** (**Shift+/**) or **h** on the main control panel to open an in-app dialog that lists every live shortcut. The same table is summarised below. A keyboard-icon button in the top bar (tooltip: *Keyboard shortcuts (?)*) opens that dialog as well.
 
-While the help dialog is open, **↑ / ↓** (and Page Up / Page Down) scroll the list — they do not tune or IF-shift. The Spectrum / Scope section shows a two-column table (SDR vs Radio Scope) and highlights which target **z / w / s** currently drive; press **t** there (or the top-bar **SDR** / **Scope** button) to switch.
+While the help dialog is open, **↑ / ↓** (and Page Up / Page Down) scroll the list — they do not tune or IF-shift. The Spectrum / Scope section shows a two-column table (SDR vs Radio Scope) and highlights which target **z / w / s** currently drive; press **t** there (or the top-bar **Keys → SDR** / **Keys → Scope** button) to switch — the button flashes briefly so the change is easy to see.
 
-Shortcuts apply on the **Index** (main control) page. They are **ignored while typing** in a text field, select box, the CW Send line, a DX Watch input, memory prompts, or while the on-screen frequency keypad is open. Browser chords such as **Ctrl/⌘+F** (find) are never captured.
+Shortcuts apply on the **Index** (main control) page. They are **ignored while typing** in a text field, select box, the CW Send line, a DX Watch input, memory prompts, or while the on-screen frequency keypad is open. Browser chords such as **Ctrl/⌘+F** (find) are never captured. Some OS or GPU overlays can still steal keys (especially Ctrl chords); YWC therefore avoids Ctrl for primary shortcuts.
 
 **Active VFO.** Most shortcuts act on the active / operating VFO (MAIN/SUB on dual-receiver radios, or the RX selector on single-receiver radios). **g** opens frequency entry for that VFO.
 
@@ -2305,15 +2305,15 @@ Shortcuts apply on the **Index** (main control) page. They are **ignored while t
 
 | Key | Action |
 |---|---|
-| **?** / **h** | Open / close the keyboard shortcuts help dialog |
+| **?** (**Shift+/**) / **h** | Open / close the keyboard shortcuts help dialog |
 | **Esc** | Close the help dialog; also closes other panels (frequency keypad, Memories, …) and exits full-screen |
 | **g** | Open the on-screen frequency keypad for the active VFO |
 | **j** / **←** | Frequency step down (100 Hz) |
 | **i** / **→** | Frequency step up (100 Hz) |
 | **Shift** + j/i/←/→ | Step ×10 (1 kHz) |
 | **Alt** + j/i/←/→ | Step ×100 (10 kHz) |
-| **Ctrl** + j/i/←/→ | Step 1 Hz |
-| **Ctrl+Shift** + j/i/←/→ | Step 50 Hz |
+| **[** / **]** | Step 1 Hz |
+| **Shift** + **[** / **]** | Step 50 Hz |
 | **Shift+Alt** + **j** / **i** | Jump to the previous / next DX spot on the spectrum overlay |
 | **m** | Open / focus the Memories panel |
 | **n** | Toggle active VFO (A ↔ B) |
@@ -2345,7 +2345,7 @@ Shortcuts apply on the **Index** (main control) page. They are **ignored while t
 | **Alt+d** | DATA-L |
 | **p** | Narrow IF width (previous step in the dropdown) |
 | **P** | Widen IF width (next step) |
-| **/** | Restore default IF width |
+| **/** (unshifted) | Restore default IF width |
 | **↑** / **↓** | IF Shift ±20 Hz (when the frequency display is not focused) |
 | **Shift** + ↑/↓ | IF Shift ±100 Hz |
 
@@ -2353,14 +2353,14 @@ FM uses **q** (not **f**) so full-screen can keep the existing **f** / **F** bin
 
 ### 13.3 Spectrum, Radio Scope, and remote audio (conditional)
 
-**Display target.** The span / range / hold keys (**z**, **w**, **s**, and friends) act on either the **SDR spectrum** panel or the **Radio Scope** CAT controls — whichever is the current target. Press **t** (or the top-bar **SDR** / **Scope** button) to switch. The choice is remembered in the browser. If only one of the two is available, that one is used automatically (for example Radio Scope on a CAT-only host, or SDR when the radio has no CAT scope).
+**Display target.** The span / range / hold keys (**z**, **w**, **s**, and friends) act on either the **SDR spectrum** panel or the **Radio Scope** CAT controls — whichever is the current target. Press **t** (or the top-bar **Keys → SDR** / **Keys → Scope** button) to switch. The choice is remembered in the browser. If only one of the two is available, that one is used automatically (for example Radio Scope on a CAT-only host, or SDR when the radio has no CAT scope).
 
 | Key | Action | When |
 |---|---|---|
 | **t** | Toggle z/w/s target between SDR spectrum and Radio Scope | Both available |
 | **z** / **Z** | Zoom in / out (narrower / wider span) | Active display target |
 | **Alt+z** / **Alt+Z** | Jump to narrowest / widest span | Active display target |
-| **<** / **>** | Wider / narrower span | Active display target |
+| **<** / **>** (**Shift+,** / **Shift+.**) | Wider / narrower span | Active display target |
 | **w** / **W** | SDR: vertical range −/+ 1 dB. Radio Scope: smaller / larger spectrum pane (L → N → S) | Active display target |
 | **Alt+w** / **Alt+W** | SDR: range −/+ 10 dB. Radio Scope: smallest / largest pane | Active display target |
 | **o** / **O** | Radio Scope reference level −/+ 1 dB | Radio Scope target |
@@ -2370,7 +2370,7 @@ FM uses **q** (not **f**) so full-screen can keep the existing **f** / **F** bin
 | **v** / **V** | Remote Audio RX gain −/+ | Remote Audio controls present |
 | **Shift+M** | Mute / unmute Remote Audio RX | Remote Audio controls present |
 
-The optional **TX keyboard shortcut** in Settings (often Space) is unchanged — mute no longer uses Space.
+The optional **TX keyboard shortcut** in Settings (often Space) is unchanged — mute no longer uses Space. With Caps Lock on, bare **m** still opens Memories; mute stays **Shift+M**.
 
 ### 13.4 Frequency display — digit editing
 
@@ -2427,7 +2427,7 @@ The browser remembers your zoom level per site, so once you've set it, every YWC
 
 **Keeping the dialog and this section aligned.** The in-app **?** dialog is generated from the same shortcut registry as the dispatcher (`wwwroot/js/ui/keyboard-shortcuts.js` → `SHORTCUT_HELP`). When adding or renaming a shortcut, update that registry and this §13 table in the same change.
 
-'''## 14. Troubleshooting
+## 14. Troubleshooting
 
 ### 14.1 Reporting a bug
 
