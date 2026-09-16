@@ -508,6 +508,33 @@
                                         data-a11y-key="meters.linearAlc"></canvas>
                                 <span id="alcLinearValue" class="linear-meter-value linear-meter-value--alc">0V</span>
                             </div>
+                            @if (!isFtdx10 && !isFt710 && !isFtdx5000)
+                            {
+                                <div class="linear-meter-row">
+                                    <span class="linear-meter-label">TEMP</span>
+                                    <canvas id="tempLinearCanvas"
+                                            role="img" aria-hidden="true"
+                                            aria-label="Amplifier temperature meter (linear)"
+                                            data-a11y-key="meters.linearTemp"></canvas>
+                                    <span id="tempLinearValue" class="linear-meter-value linear-meter-value--temp">--°C</span>
+                                </div>
+                                <div class="linear-meter-row">
+                                    <span class="linear-meter-label">IDD</span>
+                                    <canvas id="iddLinearCanvas"
+                                            role="img" aria-hidden="true"
+                                            aria-label="Drain current meter (linear)"
+                                            data-a11y-key="meters.linearIdd"></canvas>
+                                    <span id="iddLinearValue" class="linear-meter-value linear-meter-value--idd">0.0A</span>
+                                </div>
+                                <div class="linear-meter-row">
+                                    <span class="linear-meter-label">VDD</span>
+                                    <canvas id="vddLinearCanvas"
+                                            role="img" aria-hidden="true"
+                                            aria-label="Amplifier supply voltage meter (linear)"
+                                            data-a11y-key="meters.linearVdd"></canvas>
+                                    <span id="vddLinearValue" class="linear-meter-value linear-meter-value--vdd">48.0V</span>
+                                </div>
+                            }
                         </div>
                         <!-- Column 1 — TX levels (a little wider for key + slider) -->
                         <div class="col-3 op-col op-col--levels">
@@ -694,7 +721,7 @@
                         <div class="col-4 op-col op-col--extras">
                             <!-- Remote Audio — visible when Settings → Remote Audio is enabled -->
                             <div id="remoteAudioBar" class="op-extras-block" style="display:none;">
-                                <strong class="text-nowrap"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
+                                <strong class="text-nowrap remote-audio-label"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
                                 <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                                       data-bs-title="Connect to transceiver audio" aria-label="Connect to transceiver audio">
                                     <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioStartBtn"
@@ -759,6 +786,7 @@
 
                             <!-- Clarifier (RIT/XIT) -->
                             <div id="clarifierRow" class="op-extras-block">
+                                <strong class="text-nowrap clarifier-label"><i class="bi bi-sliders" aria-hidden="true"></i> Clarifier</strong>
                                 <div id="clarVfoButton" data-selected="A"></div>
                                 <div id="clarModeButton" data-selected="@clarModeInit"></div>
                                 <label class="mb-0 fw-bold text-nowrap clar-offset-label">Offset:
@@ -2550,6 +2578,9 @@
                 swrLinear:         { type: 'swrLinear',         canvasId: 'swrLinearCanvas' },
                 compressionLinear: { type: 'compressionLinear', canvasId: 'compressionLinearCanvas' },
                 alcLinear:         { type: 'alcLinear',         canvasId: 'alcLinearCanvas' },
+                tempLinear:        { type: 'tempLinear',        canvasId: 'tempLinearCanvas' },
+                iddLinear:         { type: 'iddLinear',         canvasId: 'iddLinearCanvas' },
+                vddLinear:         { type: 'vddLinear',         canvasId: 'vddLinearCanvas' },
                 // Per-VFO linear S-meters (between frequency and RF gain). Present
                 // on both single- and dual-receiver layouts — inactive greying for
                 // single-receiver is CSS via applyVfoActiveStyling.
