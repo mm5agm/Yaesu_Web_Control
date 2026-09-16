@@ -686,6 +686,16 @@
                                     onclick="window.cwSendPanel && window.cwSendPanel.toggle()">
                                 <span class="toggle-dd__label">CW Send</span>
                             </button>
+                            <div id="radioDisplayShowRow" class="radio-display-toggle">
+                                <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                                      data-bs-title="Show Radio Scope" aria-label="Show Radio Scope">
+                                    <button type="button" class="btn toggle-dd__btn" id="radioDisplayShowBtn"
+                                            aria-label="Show Radio Scope" aria-pressed="false">
+                                        <span class="toggle-dd__led" aria-hidden="true"></span>
+                                        <span class="toggle-dd__label">Radio Scope</span>
+                                    </button>
+                                </span>
+                            </div>
                         </div>
 
                         <!-- Column 4 — remaining -->
@@ -970,18 +980,6 @@
             </div>
         </div>
     </div>
-    <div class="row mb-1" id="radioDisplayShowRow" style="display:none;">
-        <div class="col-12">
-            <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                  data-bs-title="Show Radio Display panel" aria-label="Show Radio Display panel">
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="radioDisplayShowBtn"
-                        aria-label="Show Radio Display panel">
-                    <i class="bi bi-display" aria-hidden="true"></i> Show Radio Display
-                </button>
-            </span>
-        </div>
-    </div>
-
     <!-- Spectrum Display — dual-VFO layout (v2.3.0+).
          Each panel has its own canvas. Mono A / Mono B / Multi toggle below
          hides/shows individual panels. Outer container hides itself when no

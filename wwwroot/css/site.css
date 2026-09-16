@@ -941,6 +941,12 @@ fieldset.calibration-card {
     gap: 0.4rem;
 }
 
+#operatingControlsRow .radio-display-toggle,
+#operatingControlsRow .radio-display-toggle > .radio-display-tip,
+#operatingControlsRow .radio-display-toggle > .radio-display-tip > #radioDisplayShowBtn {
+    width: 100%;
+}
+
 #operatingControlsRow .op-col--levels {
     min-width: 0;
 }
