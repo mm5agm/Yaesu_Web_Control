@@ -394,6 +394,15 @@
                 Gauges
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary"
+                    data-kb-display-target
+                    style="padding-top: 1px; padding-bottom: 1px;"
+                    title="Keyboard z/w/s target: SDR spectrum or Radio Scope (t)"
+                    aria-label="Toggle keyboard shortcuts between SDR spectrum and Radio Scope"
+                    aria-pressed="false"
+                    hidden>
+                SDR
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary"
                     data-open-shortcuts
                     style="padding-top: 1px; padding-bottom: 1px;"
                     title="Keyboard shortcuts (?)"
@@ -2491,7 +2500,6 @@
         document.addEventListener('DOMContentLoaded', function () {
             initFreqKeyboard();
             initMemoriesPanel();
-            initKeyboardShortcuts();
 
             // Radio-scope CAT controls. Bind each host (standalone card and/or
             // Radio Display Controls dialog) so SignalR updates reach every
@@ -2617,6 +2625,11 @@
             const spectrumPanelB = window.ywcIsWindowsHost
                 ? new SpectrumPanel('spectrumCanvasB', 'spectrumContainerB', @Model.RadioState.FrequencyB, 'B')
                 : null;
+            window.spectrumPanelA = spectrumPanelA;
+            window.spectrumPanelB = spectrumPanelB;
+
+            // After Radio Scope + spectrum panels exist so z/w/s target detection works.
+            initKeyboardShortcuts();
 
             // Region-specific band plan for FT8/CW/SSB markers on both panels.
             const _ywcRegion = '@Model.BandPlan';

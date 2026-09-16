@@ -49,14 +49,15 @@ export const SHORTCUT_HELP = [
     { group: 'Passband', keys: '/', action: 'Restore default IF width' },
     { group: 'Passband', keys: '↑ / ↓', action: 'IF Shift ±20 Hz (when frequency display is not focused)' },
     { group: 'Passband', keys: 'Shift + ↑/↓', action: 'IF Shift ±100 Hz' },
-    // Spectrum (Windows / SDR configured)
-    { group: 'Spectrum', keys: 'z / Z', action: 'Zoom in / out (narrower / wider span)', when: 'SDR configured' },
-    { group: 'Spectrum', keys: 'Alt + z / Alt + Z', action: 'Max zoom in / out (narrowest / widest span)', when: 'SDR configured' },
-    { group: 'Spectrum', keys: '< / >', action: 'Wider / narrower span (same as Z / z)', when: 'SDR configured' },
-    { group: 'Spectrum', keys: 'w / W', action: 'Spectrum range −/+ 1 dB', when: 'SDR configured' },
-    { group: 'Spectrum', keys: 'Alt + w / Alt + W', action: 'Spectrum range −/+ 10 dB', when: 'SDR configured' },
-    { group: 'Spectrum', keys: 's', action: 'Toggle spectrum hold (freeze / live)', when: 'SDR configured' },
-    { group: 'Spectrum', keys: 'S', action: 'Reset spectrum vertical range to 60 dB', when: 'SDR configured' },
+    // Spectrum / Radio Scope (target toggled with t — see Display target)
+    { group: 'Display target', keys: 't', action: 'Toggle z/w/s shortcuts between SDR spectrum and Radio Scope', when: 'SDR or Radio Scope available' },
+    { group: 'Spectrum / Scope', keys: 'z / Z', action: 'Zoom in / out (narrower / wider span)', when: 'Active display target' },
+    { group: 'Spectrum / Scope', keys: 'Alt + z / Alt + Z', action: 'Max zoom in / out (narrowest / widest span)', when: 'Active display target' },
+    { group: 'Spectrum / Scope', keys: '< / >', action: 'Wider / narrower span (same as Z / z)', when: 'Active display target' },
+    { group: 'Spectrum / Scope', keys: 'w / W', action: 'Vertical range / scope level −/+ 1 dB', when: 'Active display target' },
+    { group: 'Spectrum / Scope', keys: 'Alt + w / Alt + W', action: 'Range / level −/+ 10 dB', when: 'Active display target' },
+    { group: 'Spectrum / Scope', keys: 's', action: 'Toggle hold (freeze / live)', when: 'Active display target' },
+    { group: 'Spectrum / Scope', keys: 'S', action: 'Reset range to 60 dB (SDR) or level to 0 dB (Radio Scope)', when: 'Active display target' },
     // Panels / UI
     { group: 'Panels', keys: 'D', action: 'Toggle DX Spots list' },
     { group: 'Panels', keys: '@', action: 'Open DX Watch dialog' },
@@ -67,7 +68,7 @@ export const SHORTCUT_HELP = [
     { group: 'Panels', keys: 'f / F', action: 'Enter full-screen mode' },
     // Audio
     { group: 'Remote Audio', keys: 'v / V', action: 'RX gain −/+ one step', when: 'Remote Audio streaming' },
-    { group: 'Remote Audio', keys: 'Space', action: 'Mute / unmute RX audio (only if Space is not the TX shortcut)', when: 'Remote Audio streaming' },
+    { group: 'Remote Audio', keys: 'Shift + M', action: 'Mute / unmute RX audio', when: 'Remote Audio streaming' },
     // Help / cancel
     { group: 'Help', keys: '?', action: 'Open this keyboard shortcuts dialog' },
     { group: 'Help', keys: 'h', action: 'Open this keyboard shortcuts dialog (alias)' },
@@ -138,9 +139,99 @@ function isBrowserFindChord(e) {
     return (e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F');
 }
 
-function spaceIsTxShortcut() {
-    const configured = window.ywcTxToggleKey;
-    return configured === 'Space' || configured === ' ';
+// ── Display-target toggle (SDR spectrum ↔ Radio Scope) ───────────────────────
+
+const DISPLAY_TARGET_KEY = 'ywc.kbDisplayTarget';
+
+function hasSdrShortcutTarget() {
+    if (!window.ywcIsWindowsHost) return false;
+    return !!(window.spectrumPanelA || window.spectrumPanelB
+        || document.querySelector('.span-btn[data-vfo]'));
+}
+
+function hasRadioScopeShortcutTarget() {
+    if (window.radioScopeControl?.card) return true;
+    const list = window.radioScopeControls;
+    return Array.isArray(list) && list.some(c => c?.card);
+}
+
+function getScopeControl() {
+    if (typeof window.notifyRadioScopeControls === 'function') {
+        let found = null;
+        window.notifyRadioScopeControls(c => { if (!found && c?.card) found = c; });
+        if (found) return found;
+    }
+    return window.radioScopeControl || null;
+}
+
+/**
+ * @returns {'sdr' | 'scope' | null}
+ */
+export function getDisplayShortcutTarget() {
+    const sdr = hasSdrShortcutTarget();
+    const scope = hasRadioScopeShortcutTarget();
+    if (!sdr && !scope) return null;
+    if (sdr && !scope) return 'sdr';
+    if (!sdr && scope) return 'scope';
+    const stored = localStorage.getItem(DISPLAY_TARGET_KEY);
+    return stored === 'scope' ? 'scope' : 'sdr';
+}
+
+function displayTargetLabel(target) {
+    return target === 'scope' ? 'Radio Scope' : 'SDR spectrum';
+}
+
+function syncDisplayTargetButton() {
+    const btn = document.querySelector('[data-kb-display-target]');
+    if (!btn) return;
+    const target = getDisplayShortcutTarget();
+    if (!target) {
+        btn.hidden = true;
+        return;
+    }
+    btn.hidden = false;
+    const both = hasSdrShortcutTarget() && hasRadioScopeShortcutTarget();
+    btn.disabled = !both;
+    const label = target === 'scope' ? 'Scope' : 'SDR';
+    btn.textContent = label;
+    btn.setAttribute('aria-pressed', target === 'scope' ? 'true' : 'false');
+    btn.title = both
+        ? `Keyboard z/w/s target: ${displayTargetLabel(target)} (press t to switch)`
+        : `Keyboard z/w/s target: ${displayTargetLabel(target)}`;
+    btn.setAttribute('aria-label', btn.title);
+}
+
+/**
+ * Flip SDR ↔ Radio Scope when both exist; otherwise announce the only / missing target.
+ * @returns {boolean} true if handled
+ */
+export function toggleDisplayShortcutTarget() {
+    const sdr = hasSdrShortcutTarget();
+    const scope = hasRadioScopeShortcutTarget();
+    if (!sdr && !scope) {
+        announce('No spectrum or Radio Scope available');
+        return false;
+    }
+    if (sdr && !scope) {
+        localStorage.setItem(DISPLAY_TARGET_KEY, 'sdr');
+        announce('Shortcuts target SDR spectrum');
+        syncDisplayTargetButton();
+        refreshHelpTargetNote();
+        return true;
+    }
+    if (!sdr && scope) {
+        localStorage.setItem(DISPLAY_TARGET_KEY, 'scope');
+        announce('Shortcuts target Radio Scope');
+        syncDisplayTargetButton();
+        refreshHelpTargetNote();
+        return true;
+    }
+    const next = getDisplayShortcutTarget() === 'scope' ? 'sdr' : 'scope';
+    localStorage.setItem(DISPLAY_TARGET_KEY, next);
+    announce(`Shortcuts target ${displayTargetLabel(next)}`);
+    syncDisplayTargetButton();
+    refreshHelpTargetNote();
+    return true;
 }
 
 // ── Active VFO ───────────────────────────────────────────────────────────────
@@ -424,6 +515,18 @@ function spanButtons(vfo) {
 }
 
 function cycleSpan(direction, { extreme } = {}) {
+    const target = getDisplayShortcutTarget();
+    if (target === 'scope') {
+        const ctrl = getScopeControl();
+        if (!ctrl) return;
+        void ctrl.cycleSpanBy(direction, { extreme }).then(() => {
+            const span = ctrl.state?.span;
+            const btn = ctrl.card?.querySelector(`.scope-span-btn[data-value="${span}"]`);
+            announce(btn ? `Radio Scope span ${btn.textContent.trim()}` : 'Radio Scope span');
+        });
+        return;
+    }
+    if (target !== 'sdr') return;
     const ctx = activeSpectrumPanel();
     if (!ctx) return;
     const buttons = spanButtons(ctx.vfo);
@@ -443,6 +546,12 @@ function cycleSpan(direction, { extreme } = {}) {
 }
 
 function nudgeSpectrumRange(deltaDb) {
+    const target = getDisplayShortcutTarget();
+    if (target === 'scope') {
+        getScopeControl()?.nudgeLevel(deltaDb);
+        return;
+    }
+    if (target !== 'sdr') return;
     const ctx = activeSpectrumPanel();
     if (!ctx?.panel?.setSpectrumRange || !ctx.panel.getSpectrumRange) return;
     const cur = ctx.panel.getSpectrumRange();
@@ -456,6 +565,13 @@ function nudgeSpectrumRange(deltaDb) {
 }
 
 function resetSpectrumRange() {
+    const target = getDisplayShortcutTarget();
+    if (target === 'scope') {
+        getScopeControl()?.resetLevel();
+        announce('Radio Scope level 0 dB');
+        return;
+    }
+    if (target !== 'sdr') return;
     const ctx = activeSpectrumPanel();
     if (!ctx?.panel?.setSpectrumRange) return;
     ctx.panel.setSpectrumRange(60);
@@ -467,6 +583,12 @@ function resetSpectrumRange() {
 }
 
 function toggleSpectrumHold() {
+    const target = getDisplayShortcutTarget();
+    if (target === 'scope') {
+        getScopeControl()?.toggleHold();
+        return;
+    }
+    if (target !== 'sdr') return;
     const ctx = activeSpectrumPanel();
     if (!ctx) return;
     const btn = document.querySelector(`.spectrum-hold-btn[data-vfo="${ctx.vfo}"]`);
@@ -557,6 +679,7 @@ function ensureHelpDialog() {
         + `Browser chords such as Ctrl/⌘+F are never captured. `
         + `Frequency digit editing (arrows on a focused VFO display) is unchanged.`
         + `</p>`
+        + `<p id="keyboardShortcutsTargetNote" style="font-size:0.8rem;color:#9cf;margin:0.4rem 0 0;"></p>`
         + body
         + `</div>`;
 
@@ -571,6 +694,20 @@ function ensureHelpDialog() {
     return dlg;
 }
 
+function refreshHelpTargetNote() {
+    const note = _helpDialog?.querySelector('#keyboardShortcutsTargetNote');
+    if (!note) return;
+    const target = getDisplayShortcutTarget();
+    if (!target) {
+        note.textContent = '';
+        return;
+    }
+    const both = hasSdrShortcutTarget() && hasRadioScopeShortcutTarget();
+    note.textContent = both
+        ? `z / w / s currently drive ${displayTargetLabel(target)}. Press t (or the top-bar SDR/Scope button) to switch.`
+        : `z / w / s drive ${displayTargetLabel(target)}.`;
+}
+
 function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => (
         { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -579,6 +716,7 @@ function escapeHtml(s) {
 
 export function openHelpDialog() {
     const dlg = ensureHelpDialog();
+    refreshHelpTargetNote();
     _helpPreviousFocus = document.activeElement;
     if (!dlg.open) dlg.showModal();
     dlg.querySelector('#keyboardShortcutsClose')?.focus();
@@ -642,14 +780,20 @@ export function handleKey(e) {
         return true;
     }
 
-    // Space → RX mute only when not configured as TX PTT.
-    if ((key === ' ' || key === 'Spacebar') && !e.altKey && !e.shiftKey) {
-        if (spaceIsTxShortcut()) return false;
+    // Shift+M → RX mute (Space stays free for the optional TX PTT shortcut).
+    if ((key === 'M' || (key === 'm' && e.shiftKey)) && !e.altKey) {
         if (toggleRxMute()) {
             e.preventDefault();
             return true;
         }
         return false;
+    }
+
+    // Toggle z/w/s target between SDR spectrum and Radio Scope.
+    if ((key === 't' || key === 'T') && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        toggleDisplayShortcutTarget();
+        return true;
     }
 
     // Mode letters (before generic letter handling).
@@ -761,31 +905,31 @@ export function handleKey(e) {
         return true;
     }
 
-    // Spectrum zoom / range
-    if ((key === 'z' || key === 'Z') && window.ywcIsWindowsHost) {
+    // Spectrum / Radio Scope zoom / range (target from getDisplayShortcutTarget)
+    if ((key === 'z' || key === 'Z') && getDisplayShortcutTarget()) {
         e.preventDefault();
         // z = zoom in (narrower), Z = zoom out (wider)
         const dir = key === 'z' ? -1 : 1;
         cycleSpan(dir, { extreme: e.altKey });
         return true;
     }
-    if ((key === '<' || key === '>') && window.ywcIsWindowsHost) {
+    if ((key === '<' || key === '>') && getDisplayShortcutTarget()) {
         e.preventDefault();
         cycleSpan(key === '<' ? 1 : -1);
         return true;
     }
-    if ((key === 'w' || key === 'W') && window.ywcIsWindowsHost) {
+    if ((key === 'w' || key === 'W') && getDisplayShortcutTarget()) {
         e.preventDefault();
         const mag = e.altKey ? 10 : 1;
         nudgeSpectrumRange(key === 'W' ? mag : -mag);
         return true;
     }
-    if (key === 's' && !e.altKey && !e.shiftKey && window.ywcIsWindowsHost) {
+    if (key === 's' && !e.altKey && !e.shiftKey && getDisplayShortcutTarget()) {
         e.preventDefault();
         toggleSpectrumHold();
         return true;
     }
-    if (key === 'S' && !e.altKey && window.ywcIsWindowsHost) {
+    if (key === 'S' && !e.altKey && getDisplayShortcutTarget()) {
         e.preventDefault();
         resetSpectrumRange();
         return true;
@@ -836,4 +980,10 @@ export function initKeyboardShortcuts() {
     document.querySelectorAll('[data-open-shortcuts]').forEach(btn => {
         btn.addEventListener('click', () => openHelpDialog());
     });
+
+    document.querySelectorAll('[data-kb-display-target]').forEach(btn => {
+        btn.addEventListener('click', () => toggleDisplayShortcutTarget());
+    });
+    // Spectrum panels / Radio Scope are initialised before this on Index.
+    syncDisplayTargetButton();
 }

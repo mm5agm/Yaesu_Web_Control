@@ -70,7 +70,7 @@
 13. [Keyboard Shortcuts](#13-keyboard-shortcuts)
     - 13.1 [Global navigation shortcuts](#131-global-navigation-shortcuts)
     - 13.2 [Mode and passband](#132-mode-and-passband)
-    - 13.3 [Spectrum and remote audio (conditional)](#133-spectrum-and-remote-audio-conditional)
+    - 13.3 [Spectrum, Radio Scope, and remote audio (conditional)](#133-spectrum-radio-scope-and-remote-audio-conditional)
     - 13.4 [Frequency display — digit editing](#134-frequency-display--digit-editing)
     - 13.5 [Frequency keypad and other existing keys](#135-frequency-keypad-and-other-existing-keys)
     - 13.6 [Browser zoom](#136-browser-zoom)
@@ -2351,23 +2351,24 @@ Shortcuts apply on the **Index** (main control) page. They are **ignored while t
 
 FM uses **q** (not **f**) so full-screen can keep the existing **f** / **F** binding. Modes that are not in the radio's mode list are announced as unavailable.
 
-### 13.3 Spectrum and remote audio (conditional)
+### 13.3 Spectrum, Radio Scope, and remote audio (conditional)
 
-These require the matching feature to be present. On the CAT-only host (macOS / Linux / Docker) there is no SDR spectrum UI — spectrum keys do nothing there.
+**Display target.** The span / range / hold keys (**z**, **w**, **s**, and friends) act on either the **SDR spectrum** panel or the **Radio Scope** CAT controls — whichever is the current target. Press **t** (or the top-bar **SDR** / **Scope** button) to switch. The choice is remembered in the browser. If only one of the two is available, that one is used automatically (for example Radio Scope on a CAT-only host, or SDR when the radio has no CAT scope).
 
 | Key | Action | When |
 |---|---|---|
-| **z** / **Z** | Zoom in / out (narrower / wider span) | SDR configured (Windows) |
-| **Alt+z** / **Alt+Z** | Jump to narrowest / widest span | SDR configured |
-| **<** / **>** | Wider / narrower span | SDR configured |
-| **w** / **W** | Spectrum vertical range −/+ 1 dB | SDR configured |
-| **Alt+w** / **Alt+W** | Range −/+ 10 dB | SDR configured |
-| **s** | Toggle spectrum Hold (freeze / live) | SDR configured |
-| **S** | Reset spectrum vertical range to 60 dB | SDR configured |
+| **t** | Toggle z/w/s target between SDR spectrum and Radio Scope | Both available |
+| **z** / **Z** | Zoom in / out (narrower / wider span) | Active display target |
+| **Alt+z** / **Alt+Z** | Jump to narrowest / widest span | Active display target |
+| **<** / **>** | Wider / narrower span | Active display target |
+| **w** / **W** | SDR vertical range, or Radio Scope level, −/+ 1 dB | Active display target |
+| **Alt+w** / **Alt+W** | Range / level −/+ 10 dB | Active display target |
+| **s** | Toggle Hold (freeze / live) | Active display target |
+| **S** | Reset SDR range to 60 dB, or Radio Scope level to 0 dB | Active display target |
 | **v** / **V** | Remote Audio RX gain −/+ | Remote Audio controls present |
-| **Space** | Mute / unmute Remote Audio RX | Only if Space is **not** configured as the TX shortcut in Settings |
+| **Shift+M** | Mute / unmute Remote Audio RX | Remote Audio controls present |
 
-The optional **TX keyboard shortcut** in Settings (often Space) always wins over the mute binding.
+The optional **TX keyboard shortcut** in Settings (often Space) is unchanged — mute no longer uses Space.
 
 ### 13.4 Frequency display — digit editing
 

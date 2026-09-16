@@ -412,9 +412,50 @@ export class RadioScopeControl {
     }
 
     async cycleSpan() {
+        // Hotspot / soft-button path: always advance one step (wraps).
         if (!await this._ensureState()) return;
         const cur = parseInt(this.state.span ?? '0', 10) || 0;
         this._send('span', String((cur + 1) % 10));
+    }
+
+    /**
+     * Bidirectional span step for keyboard shortcuts.
+     * @param {number} direction negative = narrower, positive = wider
+     * @param {{ extreme?: boolean }} [opts]
+     */
+    async cycleSpanBy(direction, { extreme } = {}) {
+        if (!await this._ensureState()) return;
+        const buttons = Array.from(this.card?.querySelectorAll('.scope-span-btn') || []);
+        const max = buttons.length ? buttons.length - 1 : 9;
+        const cur = parseInt(this.state.span ?? '0', 10) || 0;
+        let next;
+        if (extreme) next = direction < 0 ? 0 : max;
+        else next = Math.max(0, Math.min(max, cur + direction));
+        if (next === cur) return;
+        await this._send('span', String(next));
+    }
+
+    /**
+     * Nudge the radio scope reference level (dB). Step is 0.5 on the slider.
+     * @param {number} deltaDb
+     */
+    async nudgeLevel(deltaDb) {
+        if (!await this._ensureState()) return;
+        const cur = parseFloat(this.state.level ?? this.levelSlider?.value ?? '0');
+        const base = Number.isFinite(cur) ? cur : 0;
+        const next = Math.max(-30, Math.min(30, Math.round((base + deltaDb) * 2) / 2));
+        if (next === base) return;
+        if (this.levelSlider) this.levelSlider.value = String(next);
+        if (this.levelLabel) this.levelLabel.textContent = this._formatLevel(next);
+        await this._send('level', String(next));
+    }
+
+    /** Reset reference level to 0 dB. */
+    async resetLevel() {
+        if (!await this._ensureState()) return;
+        if (this.levelSlider) this.levelSlider.value = '0';
+        if (this.levelLabel) this.levelLabel.textContent = this._formatLevel(0);
+        await this._send('level', '0');
     }
 
     async cycleSpeed() {
