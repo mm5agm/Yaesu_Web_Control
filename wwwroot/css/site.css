@@ -1122,6 +1122,14 @@ fieldset.calibration-card {
     flex: 0 0 auto;
 }
 
+#operatingControlsRow .clarifier-label {
+    flex: 0 0 100%;
+}
+
+#operatingControlsRow .remote-audio-label {
+    flex: 0 0 100%;
+}
+
 #operatingControlsRow .op-clar-offset {
     display: flex;
     align-items: center;
