@@ -59,6 +59,12 @@ export class MeterPanel {
         return this.gauges[key] || null;
     }
 
+    setMarker(key, value) {
+        const gauge = this.gauges[key];
+        if (!gauge || typeof gauge.setMarker !== 'function') return;
+        gauge.setMarker(value);
+    }
+
     /**
      * Set a gauge needle to value and redraw.
      * The caller is responsible for calibrating and clamping the value

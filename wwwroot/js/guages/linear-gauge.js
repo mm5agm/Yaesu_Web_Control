@@ -25,6 +25,8 @@ export class LinearGauge {
             minValue: 0,
             maxValue: 100,
             value: 0,
+            markerValue: null,
+            markerColor: '#ffffff',
             highlights: [],
             majorTicks: [],
             colorBar: '#3a3a3a',
@@ -146,6 +148,23 @@ export class LinearGauge {
             ctx.fillRect(trackLeft, trackTop, fillW, trackHeight);
         }
 
+        // Optional target marker. Draw it after the fill so the configured
+        // TX power remains visible while transmitting.
+        if (this.config.markerValue !== null && this.config.markerValue !== undefined) {
+            const markerValue = Math.max(min, Math.min(max, Number(this.config.markerValue)));
+            if (Number.isFinite(markerValue)) {
+                const markerX = trackLeft + ((markerValue - min) / range) * trackWidth;
+                ctx.fillStyle = this.config.markerColor || '#ffffff';
+                ctx.beginPath();
+                ctx.moveTo(markerX, trackTop - 1);
+                ctx.lineTo(markerX - 4, trackTop - 7);
+                ctx.lineTo(markerX + 4, trackTop - 7);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillRect(Math.max(trackLeft, markerX - 1), trackTop, 2, trackHeight);
+            }
+        }
+
         // Tick marks + numbers — same count/labels as the radial face.
         const ticks = this.config.majorTicks || [];
         if (ticks.length > 1) {
@@ -154,7 +173,6 @@ export class LinearGauge {
             ctx.lineWidth = 1;
             // Slightly smaller than the radial overlay so nine labels fit a narrow bar.
             ctx.font = '8px sans-serif';
-            ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
 
             for (let i = 0; i < ticks.length; i++) {
@@ -164,6 +182,12 @@ export class LinearGauge {
                 ctx.moveTo(x, trackTop);
                 ctx.lineTo(x, trackTop + 3);
                 ctx.stroke();
+                // Keep the endpoint labels inside the canvas. Centering them
+                // at x=trackLeft/trackRight clips half of the text when the
+                // compact meter is narrow.
+                ctx.textAlign = i === 0
+                    ? 'left'
+                    : (i === ticks.length - 1 ? 'right' : 'center');
                 ctx.fillText(ticks[i], x, trackTop - 1);
             }
         }
@@ -172,6 +196,12 @@ export class LinearGauge {
         ctx.strokeStyle = this.config.colorMajorTicks || '#c8c8c8';
         ctx.lineWidth = 1;
         ctx.strokeRect(trackLeft + 0.5, trackTop + 0.5, trackWidth - 1, trackHeight - 1);
+    }
+
+    setMarker(value) {
+        const numericValue = Number(value);
+        this.config.markerValue = Number.isFinite(numericValue) ? numericValue : null;
+        this.draw();
     }
 }
 
