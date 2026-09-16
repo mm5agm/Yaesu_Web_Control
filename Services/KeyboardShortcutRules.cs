@@ -3,22 +3,31 @@ namespace Yaesu_Web_Control.Services;
 /// <summary>
 /// Pure keyboard-shortcut rules mirrored from
 /// <c>wwwroot/js/ui/keyboard-shortcuts.js</c> (<c>resolveTuneStepHz</c> /
-/// <c>resolveModeShortcut</c>). Kept in C# so CI can lock the contract without
-/// a JS test runner. If you change either side, update both.
+/// <c>resolveBracketTuneStepHz</c> / <c>resolveModeShortcut</c>). Kept in C#
+/// so CI can lock the contract without a JS test runner. If you change either
+/// side, update both.
 /// </summary>
 public static class KeyboardShortcutRules
 {
     public const int BaseTuneStepHz = 100;
 
-    public static int ResolveTuneStepHz(bool shiftKey, bool altKey, bool ctrlKey = false)
+    /// <summary>
+    /// j/i/arrow ladder. Fine 1 Hz / 50 Hz use bracket keys separately
+    /// (<see cref="ResolveBracketTuneStepHz"/>); Ctrl is not used.
+    /// </summary>
+    public static int ResolveTuneStepHz(bool shiftKey, bool altKey)
     {
-        if (ctrlKey && shiftKey) return 50;
-        if (ctrlKey) return 1;
         if (shiftKey && altKey) return 0; // reserved for DX-spot hop
         if (altKey) return 10_000;
         if (shiftKey) return 1_000;
         return BaseTuneStepHz;
     }
+
+    /// <summary>
+    /// Physical bracket fine-tune: [ / ] → 1 Hz; Shift+[ / ] → 50 Hz.
+    /// </summary>
+    public static int ResolveBracketTuneStepHz(bool shiftKey)
+        => shiftKey ? 50 : 1;
 
     public static string? ResolveModeShortcut(string key, bool altKey)
     {

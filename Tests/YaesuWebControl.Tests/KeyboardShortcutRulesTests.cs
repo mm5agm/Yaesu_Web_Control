@@ -5,16 +5,18 @@ namespace YaesuWebControl.Tests;
 public class KeyboardShortcutRulesTests
 {
     [Theory]
-    [InlineData(false, false, false, 100)]
-    [InlineData(true, false, false, 1000)]
-    [InlineData(false, true, false, 10000)]
-    [InlineData(true, true, false, 0)]
-    [InlineData(false, false, true, 1)]
-    [InlineData(true, false, true, 50)]
-    [InlineData(false, true, true, 1)]   // Ctrl wins over Alt for fine step
-    [InlineData(true, true, true, 50)]   // Ctrl+Shift wins over Shift+Alt DX hop
-    public void ResolveTuneStepHz_matches_js_contract(bool shift, bool alt, bool ctrl, int expected)
-        => Assert.Equal(expected, KeyboardShortcutRules.ResolveTuneStepHz(shift, alt, ctrl));
+    [InlineData(false, false, 100)]
+    [InlineData(true, false, 1000)]
+    [InlineData(false, true, 10000)]
+    [InlineData(true, true, 0)]
+    public void ResolveTuneStepHz_matches_js_contract(bool shift, bool alt, int expected)
+        => Assert.Equal(expected, KeyboardShortcutRules.ResolveTuneStepHz(shift, alt));
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 50)]
+    public void ResolveBracketTuneStepHz_matches_js_contract(bool shift, int expected)
+        => Assert.Equal(expected, KeyboardShortcutRules.ResolveBracketTuneStepHz(shift));
 
     [Theory]
     [InlineData("l", false, "LSB")]
