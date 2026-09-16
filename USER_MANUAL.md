@@ -2293,7 +2293,7 @@ On touch devices, tap a digit in the frequency display to select it (it highligh
 
 ## 13. Keyboard Shortcuts
 
-Press **?** (or **h**) on the main control panel to open an in-app dialog that lists every live shortcut. The same table is summarised below. A **?** button in the top bar opens that dialog as well.
+Press **?** (or **h**) on the main control panel to open an in-app dialog that lists every live shortcut. The same table is summarised below. A keyboard-icon button in the top bar (tooltip: *Keyboard shortcuts (?)*) opens that dialog as well.
 
 While the help dialog is open, **↑ / ↓** (and Page Up / Page Down) scroll the list — they do not tune or IF-shift. The Spectrum / Scope section shows a two-column table (SDR vs Radio Scope) and highlights which target **z / w / s** currently drive; press **t** there (or the top-bar **SDR** / **Scope** button) to switch.
 
@@ -2363,8 +2363,10 @@ FM uses **q** (not **f**) so full-screen can keep the existing **f** / **F** bin
 | **<** / **>** | Wider / narrower span | Active display target |
 | **w** / **W** | SDR: vertical range −/+ 1 dB. Radio Scope: smaller / larger spectrum pane (L → N → S) | Active display target |
 | **Alt+w** / **Alt+W** | SDR: range −/+ 10 dB. Radio Scope: smallest / largest pane | Active display target |
+| **o** / **O** | Radio Scope reference level −/+ 1 dB | Radio Scope target |
+| **Alt+o** / **Alt+O** | Radio Scope reference level −/+ 10 dB | Radio Scope target |
 | **s** | Toggle Hold (freeze / live) | Active display target |
-| **S** | SDR: reset range to 60 dB. Radio Scope: reset pane size to Normal | Active display target |
+| **S** | SDR: reset range to 60 dB. Radio Scope: reset reference level to 0 dB | Active display target |
 | **v** / **V** | Remote Audio RX gain −/+ | Remote Audio controls present |
 | **Shift+M** | Mute / unmute Remote Audio RX | Remote Audio controls present |
 

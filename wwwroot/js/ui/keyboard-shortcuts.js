@@ -81,8 +81,10 @@ export const SPECTRUM_SCOPE_HELP = [
     { keys: '< / >', sdr: 'Wider / narrower span', scope: 'Wider / narrower Radio Scope span' },
     { keys: 'w / W', sdr: 'Vertical range −/+ 1 dB', scope: 'Smaller / larger spectrum pane (L/N/S)' },
     { keys: 'Alt + w / Alt + W', sdr: 'Range −/+ 10 dB', scope: 'Smallest / largest spectrum pane' },
+    { keys: 'o / O', sdr: '—', scope: 'Reference level −/+ 1 dB' },
+    { keys: 'Alt + o / Alt + O', sdr: '—', scope: 'Reference level −/+ 10 dB' },
     { keys: 's', sdr: 'Toggle spectrum Hold', scope: 'Toggle Radio Scope Hold' },
-    { keys: 'S', sdr: 'Reset vertical range to 60 dB', scope: 'Reset pane size to Normal' },
+    { keys: 'S', sdr: 'Reset vertical range to 60 dB', scope: 'Reset reference level to 0 dB' },
 ];
 
 /**
@@ -664,6 +666,33 @@ function toggleRadioScopeHold() {
     });
 }
 
+function nudgeRadioScopeLevel(deltaDb) {
+    const ctrl = getScopeControl();
+    if (!ctrl?.nudgeLevel) {
+        announce('Radio Scope level unavailable');
+        return;
+    }
+    void (async () => {
+        await ctrl.nudgeLevel(deltaDb);
+        const db = parseFloat(ctrl.state?.level ?? ctrl.levelSlider?.value ?? '');
+        announce(Number.isFinite(db)
+            ? `Radio Scope level ${db >= 0 ? '+' : ''}${db.toFixed(1)} dB`
+            : 'Radio Scope level');
+    })();
+}
+
+function resetRadioScopeLevel() {
+    const ctrl = getScopeControl();
+    if (!ctrl?.resetLevel) {
+        announce('Radio Scope level unavailable');
+        return;
+    }
+    void (async () => {
+        await ctrl.resetLevel();
+        announce('Radio Scope level 0 dB');
+    })();
+}
+
 function nudgeSpectrumRange(deltaDb, { extreme } = {}) {
     const target = getDisplayShortcutTarget();
     if (target === 'scope') {
@@ -688,7 +717,8 @@ function nudgeSpectrumRange(deltaDb, { extreme } = {}) {
 function resetSpectrumRange() {
     const target = getDisplayShortcutTarget();
     if (target === 'scope') {
-        resetRadioScopeSize();
+        // Parallel to SDR "reset range": put reference level back to 0 dB.
+        resetRadioScopeLevel();
         return;
     }
     if (target !== 'sdr') return;
@@ -957,6 +987,32 @@ function handleHelpDialogKeys(e) {
     return true;
 }
 
+/**
+ * Physical key match — needed because Alt/Option on macOS changes e.key
+ * (e.g. Option+Z → "Ω") while e.code stays "KeyZ".
+ * @param {KeyboardEvent} e
+ * @param {string} code  e.g. 'KeyZ'
+ */
+function isCode(e, code) {
+    return e.code === code;
+}
+
+/** Shift held → "uppercase" direction for letter shortcuts matched by code. */
+function shiftedLetter(e) {
+    return !!e.shiftKey;
+}
+
+/**
+ * Ctrl/Cmd + j/i/←/→ fine-tune chords (1 Hz / 50 Hz).
+ * @param {KeyboardEvent} e
+ */
+function isFineTuneChord(e) {
+    if (!(e.ctrlKey || e.metaKey)) return false;
+    return e.code === 'KeyJ' || e.code === 'KeyI'
+        || e.key === 'ArrowLeft' || e.key === 'ArrowRight'
+        || e.code === 'ArrowLeft' || e.code === 'ArrowRight';
+}
+
 // ── Dispatcher ───────────────────────────────────────────────────────────────
 
 /**
@@ -964,8 +1020,9 @@ function handleHelpDialogKeys(e) {
  * @returns {boolean} true if handled
  */
 export function handleKey(e) {
-    if (e.ctrlKey || e.metaKey) return false;
     if (isBrowserFindChord(e)) return false;
+    // Leave other browser chords alone, but allow Ctrl/Cmd fine frequency steps.
+    if ((e.ctrlKey || e.metaKey) && !isFineTuneChord(e)) return false;
 
     // Help: allow ? / h even when a non-text control has focus, but not in text fields.
     const key = e.key;
@@ -1071,16 +1128,18 @@ export function handleKey(e) {
     }
 
     // Tune: j/i and arrows (arrows skipped while frequency digit editor has focus)
-    const isTuneDown = key === 'j' || key === 'ArrowLeft';
-    const isTuneUp = key === 'i' || key === 'ArrowRight';
-    if ((isTuneDown || isTuneUp) && !(isFrequencyDisplayFocused() && (key === 'ArrowLeft' || key === 'ArrowRight'))) {
-        if (e.shiftKey && e.altKey && !e.ctrlKey && !e.metaKey && (key === 'j' || key === 'i')) {
+    // Match by e.code so Ctrl/Alt chords still see KeyJ/KeyI on every layout.
+    const isTuneDown = isCode(e, 'KeyJ') || key === 'ArrowLeft' || e.code === 'ArrowLeft';
+    const isTuneUp = isCode(e, 'KeyI') || key === 'ArrowRight' || e.code === 'ArrowRight';
+    if ((isTuneDown || isTuneUp) && !(isFrequencyDisplayFocused() && (key === 'ArrowLeft' || key === 'ArrowRight' || e.code === 'ArrowLeft' || e.code === 'ArrowRight'))) {
+        if (e.shiftKey && e.altKey && !e.ctrlKey && !e.metaKey && (isCode(e, 'KeyJ') || isCode(e, 'KeyI'))) {
             e.preventDefault();
-            stepDxSpot(key === 'i' ? 1 : -1);
+            stepDxSpot(isCode(e, 'KeyI') ? 1 : -1);
             return true;
         }
-        // Don't steal Left/Right from band radiogroup / other widgets that use them.
-        if ((key === 'ArrowLeft' || key === 'ArrowRight') && document.activeElement) {
+        // Don't steal Left/Right from band radiogroup / other widgets that use them
+        // (unless this is an explicit Ctrl fine-tune chord).
+        if ((key === 'ArrowLeft' || key === 'ArrowRight') && !e.ctrlKey && !e.metaKey && document.activeElement) {
             const role = document.activeElement.getAttribute('role');
             if (role === 'radio' || role === 'slider' || document.activeElement.closest?.('[role="radiogroup"]')) {
                 return false;
@@ -1126,11 +1185,11 @@ export function handleKey(e) {
         return true;
     }
 
-    // Spectrum / Radio Scope zoom / range (target from getDisplayShortcutTarget)
-    if ((key === 'z' || key === 'Z') && getDisplayShortcutTarget()) {
+    // Spectrum / Radio Scope zoom / range (match by e.code — Alt changes e.key on macOS)
+    if (isCode(e, 'KeyZ') && getDisplayShortcutTarget()) {
         e.preventDefault();
-        // z = zoom in (narrower), Z = zoom out (wider)
-        const dir = key === 'z' ? -1 : 1;
+        // z = zoom in (narrower), Z = zoom out (wider); Alt = extreme
+        const dir = shiftedLetter(e) ? 1 : -1;
         cycleSpan(dir, { extreme: e.altKey });
         return true;
     }
@@ -1139,9 +1198,16 @@ export function handleKey(e) {
         cycleSpan(key === '<' ? 1 : -1);
         return true;
     }
-    if ((key === 'w' || key === 'W') && getDisplayShortcutTarget()) {
+    if (isCode(e, 'KeyW') && getDisplayShortcutTarget()) {
         e.preventDefault();
-        nudgeSpectrumRange(key === 'W' ? 1 : -1, { extreme: e.altKey });
+        nudgeSpectrumRange(shiftedLetter(e) ? 1 : -1, { extreme: e.altKey });
+        return true;
+    }
+    // Radio Scope reference level — o/O (not ,/. which are Shift+</> on US layouts)
+    if (isCode(e, 'KeyO') && getDisplayShortcutTarget() === 'scope') {
+        e.preventDefault();
+        const mag = e.altKey ? 10 : 1;
+        nudgeRadioScopeLevel(shiftedLetter(e) ? mag : -mag);
         return true;
     }
     if (key === 's' && !e.altKey && !e.shiftKey && getDisplayShortcutTarget()) {
@@ -1149,7 +1215,7 @@ export function handleKey(e) {
         toggleSpectrumHold();
         return true;
     }
-    if (key === 'S' && !e.altKey && getDisplayShortcutTarget()) {
+    if (isCode(e, 'KeyS') && shiftedLetter(e) && !e.altKey && getDisplayShortcutTarget()) {
         e.preventDefault();
         resetSpectrumRange();
         return true;
@@ -1216,6 +1282,14 @@ export function initKeyboardShortcuts() {
     // Optional toolbar affordance: any [data-open-shortcuts] button.
     document.querySelectorAll('[data-open-shortcuts]').forEach(btn => {
         btn.addEventListener('click', () => openHelpDialog());
+        // Bootstrap tooltip (same pattern as Remote Audio / Radio Scope).
+        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+            bootstrap.Tooltip.getOrCreateInstance(btn, {
+                delay: { show: 200, hide: 50 },
+                trigger: 'hover focus',
+                placement: btn.getAttribute('data-bs-placement') || 'bottom'
+            });
+        }
     });
 
     document.querySelectorAll('[data-kb-display-target]').forEach(btn => {
