@@ -1786,13 +1786,13 @@ connection.on("RadioStateUpdate", function (update) {
     // --- CLARIFIER ---
     if (update.property === "RxClarOn") {
         rxClarOn = update.value === true || update.value === 'true' || update.value === 1;
-        const sel = document.getElementById('clarModeSelect');
-        if (sel) sel.value = rxClarOn && txClarOn ? 'rxtx' : rxClarOn ? 'rx' : txClarOn ? 'tx' : 'off';
+        const mode = rxClarOn && txClarOn ? 'rxtx' : rxClarOn ? 'rx' : txClarOn ? 'tx' : 'off';
+        window.clarModeButton?.setState({ selectedId: mode }, { silent: true });
     }
     if (update.property === "TxClarOn") {
         txClarOn = update.value === true || update.value === 'true' || update.value === 1;
-        const sel = document.getElementById('clarModeSelect');
-        if (sel) sel.value = rxClarOn && txClarOn ? 'rxtx' : rxClarOn ? 'rx' : txClarOn ? 'tx' : 'off';
+        const mode = rxClarOn && txClarOn ? 'rxtx' : rxClarOn ? 'rx' : txClarOn ? 'tx' : 'off';
+        window.clarModeButton?.setState({ selectedId: mode }, { silent: true });
     }
     if (update.property === "ClarifierOffsetA") {
         clarOffsets.A = parseInt(update.value) || 0;
@@ -2313,12 +2313,12 @@ window.addEventListener('DOMContentLoaded', () => {
     // Clarifier: seed JS state from server-rendered HTML values
     const clarSlider = document.getElementById('clarOffsetSlider');
     if (clarSlider) clarOffsets.A = parseInt(clarSlider.value) || 0;
-    const clarSel = document.getElementById('clarModeSelect');
-    if (clarSel) {
-        const initMode = clarSel.value || 'off';
-        rxClarOn = initMode === 'rx' || initMode === 'rxtx';
-        txClarOn = initMode === 'tx' || initMode === 'rxtx';
-    }
+    const clarModeRoot = document.getElementById('clarModeButton');
+    const initMode = window.clarModeButton?.getState()?.selectedId
+        || clarModeRoot?.dataset.selected
+        || 'off';
+    rxClarOn = initMode === 'rx' || initMode === 'rxtx';
+    txClarOn = initMode === 'tx' || initMode === 'rxtx';
 
     // Contour/APF: seed JS state from Yaesu-key widgets (or data attrs before init).
     for (const vfo of ['A', 'B']) {
@@ -2444,8 +2444,7 @@ window.resetIfShift = resetIfShift;
 
 function selectClarVfo(vfo) {
     clarVfo = vfo;
-    document.getElementById('clarVfoABtn')?.classList.toggle('active', vfo === 'A');
-    document.getElementById('clarVfoBBtn')?.classList.toggle('active', vfo === 'B');
+    window.clarVfoButton?.setState({ selectedId: vfo }, { silent: true });
     const offset = clarOffsets[vfo];
     const slider = document.getElementById('clarOffsetSlider');
     const label  = document.getElementById('clarOffsetValue');

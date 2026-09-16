@@ -678,6 +678,73 @@ function initQmbButton() {
 }
 
 /**
+ * Clarifier VFO key — cycle A ↔ B on click (same key face as Apps / Mem).
+ * @returns {ToggleDropdownButton | null}
+ */
+function initClarVfoButton() {
+    const root = document.getElementById("clarVfoButton");
+    if (!root) return null;
+
+    const widget = initCycleDropdown(root, {
+        label: "VFO",
+        options: [
+            { id: "A", label: "A" },
+            { id: "B", label: "B" },
+        ],
+        a11yKey: "controls.clarVfo",
+        onSelect: (id) => window.selectClarVfo?.(id),
+    });
+    root.querySelector(".toggle-dd__btn")?.classList.add("toggle-dd__btn--toolbar");
+    window.clarVfoButton = widget;
+    return widget;
+}
+
+/**
+ * Clarifier mode key — click opens OFF / RX / TX / RX+TX.
+ * LED is on whenever clarifier is not OFF.
+ * @returns {ToggleDropdownButton | null}
+ */
+function initClarModeButton() {
+    const root = document.getElementById("clarModeButton");
+    if (!root) return null;
+
+    const selectedId = root.dataset.selected || "off";
+    let lastId = selectedId;
+
+    const widget = new ToggleDropdownButton(root, {
+        label: "Clar",
+        options: [
+            { id: "off", label: "OFF" },
+            { id: "rx", label: "RX" },
+            { id: "tx", label: "TX" },
+            { id: "rxtx", label: "RX+TX" },
+        ],
+        selectedId,
+        offId: "off",
+        clickAction: "openMenu",
+        contextMenu: false,
+        showLed: true,
+        a11yKey: "controls.clarMode",
+        onChange: (state) => {
+            if (state.selectedId !== lastId) {
+                lastId = state.selectedId;
+                window.setClarifierMode?.(state.selectedId);
+            }
+        },
+    });
+
+    const originalSetState = widget.setState.bind(widget);
+    widget.setState = (partial = {}, opts = {}) => {
+        originalSetState(partial, opts);
+        lastId = widget.getState().selectedId;
+    };
+
+    root.querySelector(".toggle-dd__btn")?.classList.add("toggle-dd__btn--toolbar");
+    window.clarModeButton = widget;
+    return widget;
+}
+
+/**
  * Top-toolbar Apps key: one Yaesu action menu listing only the apps the
  * operator enabled in Application Setup. Hidden entirely when none are on.
  * @returns {ActionMenuButton | null}
@@ -728,6 +795,8 @@ export function initVfoKeyButtons() {
     const result = {};
     result.qmb = initQmbButton();
     result.apps = initAppsButton();
+    result.clarVfo = initClarVfoButton();
+    result.clarMode = initClarModeButton();
     for (const vfo of ["A", "B"]) {
         const band = initBandButton(vfo);
         const segment = initSegmentButton(vfo);
