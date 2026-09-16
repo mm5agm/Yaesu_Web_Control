@@ -181,17 +181,23 @@ export class ToggleDropdownButton {
                     ? "Right-click for options"
                     : this.label;
         const hintHtml =
-            this.clickAction === "openMenu" || this.contextMenuEnabled
-                ? `<span class="toggle-dd__menu-hint" aria-hidden="true"></span>`
-                : "";
+            this.clickAction === "openMenu"
+                ? `<span class="toggle-dd__menu-hint toggle-dd__menu-hint--side" aria-hidden="true"></span>`
+                : this.contextMenuEnabled
+                  ? `<span class="toggle-dd__menu-hint" aria-hidden="true"></span>`
+                  : "";
         const ledHtml = this.showLed
             ? `<span class="toggle-dd__led" aria-hidden="true"></span>`
             : "";
         const a11yAttr = this.a11yKey ? ` data-a11y-key="${this.a11yKey}"` : "";
+        const menuBtnClass =
+            this.clickAction === "openMenu"
+                ? "btn toggle-dd__btn toggle-dd__btn--menu toggle-dd__btn--open-menu"
+                : "btn toggle-dd__btn toggle-dd__btn--menu";
 
         this.root.innerHTML = `
             <button type="button"
-                    class="btn toggle-dd__btn toggle-dd__btn--menu"
+                    class="${menuBtnClass}"
                     title="${title}"
                     aria-haspopup="menu"
                     aria-expanded="false"
@@ -369,6 +375,8 @@ export class ToggleSliderButton {
      *   value?: number,
      *   valueSuffix?: string,
      *   enabled?: boolean,
+     *   showLed?: boolean,
+     *   clickOpensSlider?: boolean,
      *   a11yKey?: string,
      *   onChange?: (state: { enabled: boolean, value: number }) => void
      * }} [config]
@@ -382,10 +390,13 @@ export class ToggleSliderButton {
         this.valueSuffix = config.valueSuffix ?? "";
         this.value = Number(config.value ?? this.min);
         this.enabled = Boolean(config.enabled);
+        this.showLed = config.showLed !== false;
+        this.clickOpensSlider = Boolean(config.clickOpensSlider);
         this.a11yKey = config.a11yKey ?? null;
         this.onChange = config.onChange ?? (() => {});
         this.menuOpen = false;
         this._ignoreNextClick = false;
+        this.disabled = false;
 
         this._onDocPointer = this._onDocPointer.bind(this);
         this._onKeydown = this._onKeydown.bind(this);
@@ -429,15 +440,24 @@ export class ToggleSliderButton {
 
     _render() {
         this.root.classList.add("toggle-dd", "dropdown");
+        if (!this.showLed) this.root.classList.add("toggle-dd--no-led");
+
         const a11yAttr = this.a11yKey ? ` data-a11y-key="${this.a11yKey}"` : "";
+        const title = this.clickOpensSlider
+            ? "Click for level"
+            : "Right-click for level";
+        const ledHtml = this.showLed
+            ? `<span class="toggle-dd__led" aria-hidden="true"></span>`
+            : "";
+        const pressedAttr = this.showLed ? ` aria-pressed="false"` : "";
+
         this.root.innerHTML = `
             <button type="button"
                     class="btn toggle-dd__btn toggle-dd__btn--menu"
-                    title="Right-click for level"
+                    title="${title}"
                     aria-haspopup="dialog"
-                    aria-expanded="false"
-                    aria-pressed="false"${a11yAttr}>
-                <span class="toggle-dd__led" aria-hidden="true"></span>
+                    aria-expanded="false"${pressedAttr}${a11yAttr}>
+                ${ledHtml}
                 <span class="toggle-dd__label"></span>
                 <span class="toggle-dd__menu-hint" aria-hidden="true"></span>
             </button>
@@ -470,8 +490,13 @@ export class ToggleSliderButton {
     _bind() {
         this.button.addEventListener("click", (event) => {
             event.preventDefault();
+            if (this.disabled) return;
             if (this._ignoreNextClick) {
                 this._ignoreNextClick = false;
+                return;
+            }
+            if (this.clickOpensSlider) {
+                this._setMenuOpen(!this.menuOpen);
                 return;
             }
             this._setMenuOpen(false);
@@ -482,6 +507,11 @@ export class ToggleSliderButton {
 
         this.button.addEventListener("contextmenu", (event) => {
             event.preventDefault();
+            if (this.disabled) return;
+            if (this.clickOpensSlider) {
+                // Left-click already opens the slider — swallow right-click.
+                return;
+            }
             this._ignoreNextClick = true;
             this._setMenuOpen(!this.menuOpen);
             window.setTimeout(() => {
@@ -553,9 +583,17 @@ export class ToggleSliderButton {
         );
         if (this.endMinEl) this.endMinEl.textContent = this._formatValue(this.min);
         if (this.endMaxEl) this.endMaxEl.textContent = this._formatValue(this.max);
-        this.button.setAttribute("aria-pressed", this.enabled ? "true" : "false");
-        this.button.setAttribute("aria-label", `${this.label}: ${this.enabled ? "on" : "off"}, ${formatted}`);
-        this.led.classList.toggle("is-on", this.enabled);
+        if (this.showLed) {
+            this.button.setAttribute("aria-pressed", this.enabled ? "true" : "false");
+            this.button.setAttribute(
+                "aria-label",
+                `${this.label}: ${this.enabled ? "on" : "off"}, ${formatted}`
+            );
+            if (this.led) this.led.classList.toggle("is-on", this.enabled);
+        } else {
+            this.button.removeAttribute("aria-pressed");
+            this.button.setAttribute("aria-label", `${this.label}: ${formatted}`);
+        }
     }
 }
 
@@ -1205,14 +1243,14 @@ export class ActionMenuButton {
             .join("");
 
         // Toolbar variant kept for callers that still opt in; default Yaesu
-        // face matches the operating-bar action keys (no LED). Menu hint marks
-        // that left-click opens commands rather than firing one action.
+        // face matches the operating-bar action keys (no LED). Side menu hint
+        // marks that left-click opens commands rather than firing one action.
         const buttonClass = isToolbar
             ? "btn toggle-dd__btn toggle-dd__btn--action"
-            : "btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--menu";
+            : "btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--menu toggle-dd__btn--open-menu";
         const hintHtml = isToolbar
             ? ""
-            : `<span class="toggle-dd__menu-hint" aria-hidden="true"></span>`;
+            : `<span class="toggle-dd__menu-hint toggle-dd__menu-hint--side" aria-hidden="true"></span>`;
         const menuClass = isToolbar
             ? `dropdown-menu qmb-toolbar-key__menu ${this.menuClass}`
             : `dropdown-menu toggle-dd__menu ${this.menuClass}`;

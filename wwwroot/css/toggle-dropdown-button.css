@@ -18,12 +18,21 @@
     --bs-btn-focus-shadow-rgb: 255, 122, 24;
     --bs-btn-focus-box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
 
+    /* LED-slot metrics — keep ::before spacers in sync with .toggle-dd__led */
+    --yaesu-led-w: 0.85rem;
+    --yaesu-led-h: 0.24rem;
+    --yaesu-led-mt: 0.02rem;
+    --yaesu-led-mb: 0.34rem;
+
     position: relative;
     display: inline-flex;
     flex-direction: column;
     align-items: stretch;
+    justify-content: flex-start;
+    box-sizing: border-box;
     min-width: 7.25rem;
     min-height: 2.65rem;
+    height: 2.65rem;
     padding: 0.22rem 0.7rem 0.4rem;
     overflow: visible;
     user-select: none;
@@ -54,9 +63,9 @@
 
 .toggle-dd__led {
     align-self: center;
-    width: 0.85rem;
-    height: 0.24rem;
-    margin: 0.02rem auto 0.34rem;
+    width: var(--yaesu-led-w);
+    height: var(--yaesu-led-h);
+    margin: var(--yaesu-led-mt) auto var(--yaesu-led-mb);
     border-radius: 1px;
     background: var(--yaesu-led-off);
     box-shadow:
@@ -72,6 +81,22 @@
         inset 0 0 2px #ffd39a;
 }
 
+/* No-LED / action keys: keep the same face height and label baseline as LED
+   keys so mixed rows/grids (VFO table, clarifier bar, operating columns) align.
+   Icon-only and compact clarifier nudge keys keep their own sizing. */
+.toggle-dd--no-led .toggle-dd__btn:not(.toggle-dd__btn--icon)::before,
+.toggle-dd__btn--action:not(.toggle-dd__btn--icon):not(.clar-nudge-key):not(.clar-reset-key)::before {
+    content: "";
+    display: block;
+    align-self: center;
+    width: var(--yaesu-led-w);
+    height: var(--yaesu-led-h);
+    margin: var(--yaesu-led-mt) auto var(--yaesu-led-mb);
+    flex-shrink: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
 .toggle-dd__label {
     text-align: center;
     font-size: 0.8rem;
@@ -80,8 +105,8 @@
 
 .toggle-dd__menu-hint {
     position: absolute;
-    right: 0.32rem;
-    bottom: 0.26rem;
+    right: 0.42rem;
+    bottom: 0.34rem;
     width: 0.16rem;
     height: 0.16rem;
     border-radius: 50%;
@@ -91,6 +116,13 @@
         0.26rem 0 0 #8d8d8d;
     pointer-events: none;
     opacity: 0.7;
+}
+
+/* Left-click opens the menu (Band / Mode / Clar / Apps): same horizontal
+   three-dot row, but bottom-left instead of bottom-right. */
+.toggle-dd__menu-hint--side {
+    left: 0.42rem;
+    right: auto;
 }
 
 .toggle-dd__btn--menu:hover .toggle-dd__menu-hint,
@@ -331,9 +363,25 @@
 .vfo-col--band .toggle-dd__btn,
 .vfo-col--tune .toggle-dd__btn,
 .vfo-band-row .toggle-dd__btn {
+    --yaesu-led-w: 0.7rem;
+    --yaesu-led-h: 0.2rem;
+    --yaesu-led-mt: 0.02rem;
+    --yaesu-led-mb: 0.22rem;
     width: 100%;
     min-width: 0;
     min-height: 2.1rem;
+    height: 2.1rem;
+    padding: 0.14rem 0.45rem 0.28rem;
+}
+
+/* Action keys in the VFO columns (e.g. Audio Filter) must beat the global
+   .toggle-dd__btn--action height so they stay aligned with LED neighbours. */
+.vfo-controls-column .toggle-dd__btn--action,
+.vfo-col--band .toggle-dd__btn--action,
+.vfo-col--tune .toggle-dd__btn--action,
+.vfo-band-row .toggle-dd__btn--action {
+    min-height: 2.1rem;
+    height: 2.1rem;
     padding: 0.14rem 0.45rem 0.28rem;
 }
 
@@ -342,15 +390,6 @@
 .vfo-col--tune .toggle-dd__label,
 .vfo-band-row .toggle-dd__label {
     font-size: 0.72rem;
-}
-
-.vfo-controls-column .toggle-dd__led,
-.vfo-col--band .toggle-dd__led,
-.vfo-col--tune .toggle-dd__led,
-.vfo-band-row .toggle-dd__led {
-    width: 0.7rem;
-    height: 0.2rem;
-    margin: 0.02rem auto 0.22rem;
 }
 
 .vfo-controls-column .toggle-dd__menu--slider,
@@ -362,10 +401,6 @@
 
 .vfo-control-item:has(.toggle-dd) {
     overflow: visible;
-}
-
-.toggle-dd--no-led .toggle-dd__btn {
-    padding-top: 0.4rem;
 }
 
 /* Compact icon-only Yaesu key (Save to Mem beside the mode switch). */
@@ -455,12 +490,11 @@
 }
 
 /* Visual-only Yaesu action keys (Tune / FM / VOX / CW / DX / Voice): same face
-   as the LED keys, but no LED row — these open panels or fire an action and
-   must not imply an on/off state. */
+   height as LED keys — LED slot reserved via ::before above. */
 .toggle-dd__btn--action {
-    justify-content: center;
-    min-height: 2.35rem;
-    padding: 0.35rem 0.55rem;
+    min-height: 2.65rem;
+    height: 2.65rem;
+    padding: 0.22rem 0.55rem 0.4rem;
 }
 
 .toggle-dd__btn--action .toggle-dd__label {
@@ -469,19 +503,14 @@
 
 /* Compact Yaesu keys for the top status toolbar (Mem / Gauges / Apps). */
 .toggle-dd__btn--toolbar {
+    --yaesu-led-w: 0.7rem;
+    --yaesu-led-h: 0.18rem;
+    --yaesu-led-mt: 0.02rem;
+    --yaesu-led-mb: 0.18rem;
     min-width: 4.75rem;
     min-height: 1.9rem;
+    height: 1.9rem;
     padding: 0.12rem 0.45rem 0.28rem;
-}
-
-.toggle-dd__btn--toolbar.toggle-dd__btn--action {
-    padding: 0.28rem 0.45rem;
-}
-
-.toggle-dd__btn--toolbar .toggle-dd__led {
-    width: 0.7rem;
-    height: 0.18rem;
-    margin: 0.02rem auto 0.18rem;
 }
 
 .toggle-dd__btn--toolbar .toggle-dd__label {
