@@ -59,7 +59,7 @@ export const SHORTCUT_HELP = [
     { group: 'Panels', keys: 'R', action: 'Show / focus Radio Display panel', when: 'Radio Display configured' },
     { group: 'Panels', keys: 'r', action: 'Start / stop Remote Audio', when: 'Remote Audio available' },
     { group: 'Panels', keys: 'x', action: 'Show / hide VFO B panel' },
-    { group: 'Panels', keys: 'y', action: 'Show / hide S-meter history strip' },
+    { group: 'Panels', keys: 'y', action: 'Show / hide S-meter history strip (keyboard only)' },
     { group: 'Panels', keys: 'f / F', action: 'Enter full-screen mode' },
     // Audio
     { group: 'Remote Audio', keys: 'v / V', action: 'RX gain −/+ one step', when: 'Remote Audio streaming' },
@@ -492,7 +492,7 @@ function toggleVfoB() {
 }
 
 function toggleSMeterHistory() {
-    document.getElementById('sMeterHistoryToggleBtn')?.click();
+    window.toggleSMeterHistory?.();
 }
 
 function focusFrequencyEntry() {

@@ -315,53 +315,7 @@
 </div>
 
 <div class="row mb-1" style="padding-top: 2px; padding-bottom: 2px;">
-        @if (Model.ShowApp1Button)
-        {
-            <div class="col-auto">
-                <button id="wsjtxBtn" class="btn btn-secondary btn-sm" style="padding-top: 1px; padding-bottom: 1px;"
-                        onclick="launchWsjtx()" title="Launch @Model.App1Name" aria-label="Launch @Model.App1Name">
-                    @Model.App1Name
-                    <span id="wsjtxTxBadge" class="badge bg-danger ms-1" style="display:none;">TX</span>
-                </button>
-            </div>
-        }
-        @if (Model.ShowApp3Button)
-        {
-            <div class="col-auto">
-                <button id="log4omBtn" class="btn btn-secondary btn-sm" style="padding-top: 1px; padding-bottom: 1px;"
-                        onclick="launchLog4om()" title="Launch @Model.App3Name" aria-label="Launch @Model.App3Name">
-                    @Model.App3Name
-                </button>
-            </div>
-        }
-        @if (Model.ShowApp2Button)
-        {
-            <div class="col-auto">
-                <button id="jtalertBtn" class="btn btn-secondary btn-sm" style="padding-top: 1px; padding-bottom: 1px;"
-                        onclick="launchJtalert()" title="Launch @Model.App2Name" aria-label="Launch @Model.App2Name">
-                    @Model.App2Name
-                </button>
-            </div>
-        }
-        @if (Model.ShowApp4Button)
-        {
-            <div class="col-auto">
-                <button id="gridtrackerBtn" class="btn btn-secondary btn-sm" style="padding-top: 1px; padding-bottom: 1px;"
-                        onclick="launchGridtracker()" title="Launch @Model.App4Name" aria-label="Launch @Model.App4Name">
-                    @Model.App4Name
-                </button>
-            </div>
-        }
-        @if (Model.ShowApp5Button)
-        {
-            <div class="col-auto">
-                <button id="fldigiBtn" class="btn btn-secondary btn-sm" style="padding-top: 1px; padding-bottom: 1px;"
-                        onclick="launchFldigi()" title="Launch @Model.App5Name" aria-label="Launch @Model.App5Name">
-                    @Model.App5Name
-                </button>
-            </div>
-        }
-        <div class="col-auto ms-auto d-flex gap-2 align-items-center">
+        <div class="col-auto d-flex gap-2 align-items-center">
             <span id="utcClock"
                   class="font-monospace fw-bold px-2"
                   style="font-size:0.95rem; color:#ffe066; background:#222; border:1px solid #444; border-radius:4px; padding-top: 1px; padding-bottom: 1px; cursor:help;"
@@ -374,24 +328,42 @@
                aria-label="Support this project via PayPal — Buy Me a Coffee">
                 <i class="bi bi-cup-hot-fill" aria-hidden="true"></i> Buy Me a Coffee
             </a>
-            <button id="memBtn" class="btn btn-sm btn-outline-info fw-bold"
-                    style="padding-top: 1px; padding-bottom: 1px; color: #000;" title="Open memories panel"
+        </div>
+        <div class="col-auto ms-auto d-flex gap-2 align-items-center flex-wrap justify-content-end">
+        @{
+            var enabledApps = new List<object>();
+            if (Model.ShowApp1Button) enabledApps.Add(new { id = "wsjtx", label = Model.App1Name });
+            if (Model.ShowApp3Button) enabledApps.Add(new { id = "log4om", label = Model.App3Name });
+            if (Model.ShowApp2Button) enabledApps.Add(new { id = "jtalert", label = Model.App2Name });
+            if (Model.ShowApp4Button) enabledApps.Add(new { id = "gridtracker", label = Model.App4Name });
+            if (Model.ShowApp5Button) enabledApps.Add(new { id = "fldigi", label = Model.App5Name });
+            var appsJson = System.Text.Json.JsonSerializer.Serialize(enabledApps);
+        }
+        @if (enabledApps.Count > 0)
+        {
+            <div id="appsLauncher" class="apps-launcher">
+                <div id="appsButton"></div>
+                @if (Model.ShowApp1Button)
+                {
+                    <span id="wsjtxTxBadge" class="badge bg-danger apps-launcher__tx"
+                          style="display:none;" aria-hidden="true">TX</span>
+                }
+            </div>
+            <script type="application/json" id="appsLauncherConfig">@Html.Raw(appsJson)</script>
+        }
+            <button id="memBtn" type="button"
+                    class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
+                    title="Open memories panel"
                     aria-label="Open memories panel">
-                Mem
+                <span class="toggle-dd__label">Mem</span>
             </button>
-            <button id="sMeterHistoryToggleBtn" class="btn btn-sm btn-outline-secondary"
-                    style="padding-top: 1px; padding-bottom: 1px;"
-                    title="Show/hide 30-second S-meter history strip (QSB, noise spikes, noise floor)"
-                    aria-label="Show or hide the S-meter history strip"
-                    aria-pressed="false">
-                S-hist
-            </button>
-            <button id="meterGaugesToggleBtn" class="btn btn-sm btn-outline-secondary"
-                    style="padding-top: 1px; padding-bottom: 1px;"
+            <button id="meterGaugesToggleBtn" type="button"
+                    class="btn toggle-dd__btn toggle-dd__btn--toolbar"
                     title="Show/hide analogue meter gauges"
                     aria-label="Show or hide the meter gauges row"
                     aria-pressed="true">
-                Gauges
+                <span class="toggle-dd__led is-on" aria-hidden="true"></span>
+                <span class="toggle-dd__label">Gauges</span>
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary"
                     data-kb-display-target
@@ -616,52 +588,77 @@
                                starts a tune on press-and-hold, but a long press can't
                                be announced by a screen reader or performed by voice —
                                this gives keyboard/AT/voice users a real control. It
-                               becomes a red "Stop" while a tune cycle is running. *@
+                               becomes a red "Stop" while a tune cycle is running.
+                               Visual-only Yaesu action key (no LED) — panel/action
+                               openers in this column share that treatment. *@
                             <button id="atuTuneBtn"
                                     type="button"
-                                    class="btn btn-sm btn-outline-secondary"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     data-a11y-key="controls.atuTune"
                                     aria-label="Start antenna auto-tune"
                                     title="Start antenna auto-tune"
                                     onclick="atuTuneButtonClick()"
-                                    style="touch-action: manipulation;">Tune</button>
-                            <button class="btn btn-sm btn-outline-secondary"
+                                    style="touch-action: manipulation;">
+                                <span class="toggle-dd__label">Tune</span>
+                            </button>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="FM repeater controls"
                                     title="Open FM repeater controls panel"
-                                    onclick="document.getElementById('fmDialog').show()">FM Rep</button>
+                                    onclick="document.getElementById('fmDialog').show()">
+                                <span class="toggle-dd__label">FM Rep</span>
+                            </button>
                             <button id="voxBtn"
-                                    class="btn btn-sm @(Model.VoxOn ? "btn-warning" : "btn-outline-secondary")"
+                                    type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="VOX controls"
                                     title="Open VOX controls panel"
-                                    onclick="document.getElementById('voxDialog').show()">VOX</button>
+                                    onclick="document.getElementById('voxDialog').show()">
+                                <span class="toggle-dd__label">VOX</span>
+                            </button>
                         </div>
 
                         <!-- Column 3 — CW -->
                         <div class="col-1 op-col op-col--buttons">
-                            <button class="btn btn-sm btn-outline-secondary"
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="CW keyer controls"
                                     title="Open CW keyer controls panel"
-                                    onclick="document.getElementById('cwDialog').show()">CW</button>
-                            <button class="btn btn-sm btn-outline-secondary"
+                                    onclick="document.getElementById('cwDialog').show()">
+                                <span class="toggle-dd__label">CW</span>
+                            </button>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="CW reader - decode received Morse to text"
                                     title="Open the CW reader - decodes the received Morse to text"
-                                    onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">CW Read</button>
-                            <button class="btn btn-sm btn-outline-secondary"
+                                    onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">
+                                <span class="toggle-dd__label">CW Read</span>
+                            </button>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="CW send - type text and send it as Morse"
                                     title="Open CW send - type a line, press Enter, the radio keys it"
-                                    onclick="window.cwSendPanel && window.cwSendPanel.toggle()">CW Send</button>
+                                    onclick="window.cwSendPanel && window.cwSendPanel.toggle()">
+                                <span class="toggle-dd__label">CW Send</span>
+                            </button>
                         </div>
 
                         <!-- Column 4 — remaining -->
                         <div class="col-1 op-col op-col--buttons">
-                            <button class="btn btn-sm btn-outline-secondary"
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="DX spots — list of cluster spots on current band"
                                     title="Open DX spots list — see callsigns spotted on the current band"
-                                    onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">DX Spots</button>
-                            <button class="btn btn-sm btn-outline-secondary"
+                                    onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">
+                                <span class="toggle-dd__label">DX Spots</span>
+                            </button>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="DX watch — alerts for spotted callsigns"
                                     title="Open DX watch list — get alerts when watched callsigns are spotted"
-                                    onclick="document.getElementById('dxWatchDialog').show(); window.refreshDxWatchList && window.refreshDxWatchList();">DX Watch</button>
+                                    onclick="document.getElementById('dxWatchDialog').show(); window.refreshDxWatchList && window.refreshDxWatchList();">
+                                <span class="toggle-dd__label">DX Watch</span>
+                            </button>
                             @if (hasQmb)
                             {
                                 <!-- Quick Memory Bank (QMB) — global radio function, shown once.
@@ -674,10 +671,13 @@
                                 </div>
                             }
                             <button id="voiceBtn"
-                                    class="btn btn-sm btn-outline-secondary"
+                                    type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="Voice announcements settings"
                                     title="Voice announcements for band, mode, TX state etc. — useful for partially sighted operators"
-                                    onclick="document.getElementById('voiceDialog').show();">Voice</button>
+                                    onclick="document.getElementById('voiceDialog').show();">
+                                <span class="toggle-dd__label">Voice</span>
+                            </button>
                         </div>
 
                         <!-- Column 5 — Remote Audio / Clarifier -->
@@ -2557,35 +2557,30 @@
             window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine, @maxPowerWatts);
 
             // ── S-meter history strips ───────────────────────────────────────
-            // Hidden by default. Toggle via the "S-hist" button in the top
-            // toolbar; visibility persists in localStorage so the choice
-            // survives page reloads. Both A and B strips (when B exists)
-            // share the one toggle — independent per-VFO toggles can be
-            // added later if wanted, but one button is the smaller change.
+            // Hidden by default. Toggle with keyboard shortcut "y"; visibility
+            // persists in localStorage. Both A and B strips (when B exists)
+            // share the one toggle.
             window.sMeterHistory  = new SMeterHistoryPanel('sMeterHistoryCanvas');
             window.sMeterHistoryB = new SMeterHistoryPanel('sMeterHistoryCanvasB');
             (function () {
-                const btn  = document.getElementById('sMeterHistoryToggleBtn');
                 const con  = document.getElementById('sMeterHistoryContainer');
                 const conB = document.getElementById('sMeterHistoryContainerB');
-                if (!btn || !con) return;
+                if (!con) return;
 
                 const KEY = 'ywc.sMeterHistoryVisible';
                 const apply = (visible) => {
                     con.style.display = visible ? '' : 'none';
                     if (conB) conB.style.display = visible ? '' : 'none';
-                    btn.classList.toggle('active', visible);
-                    btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
                 };
                 let visible = false;
                 try { visible = localStorage.getItem(KEY) === '1'; } catch {}
                 apply(visible);
 
-                btn.addEventListener('click', () => {
+                window.toggleSMeterHistory = () => {
                     visible = !visible;
                     try { localStorage.setItem(KEY, visible ? '1' : '0'); } catch {}
                     apply(visible);
-                });
+                };
             })();
 
             // ── Analogue gauges row (temporary layout toggle) ───────────────
@@ -2600,8 +2595,9 @@
                 const KEY = 'ywc.meterGaugesVisible';
                 const apply = (visible) => {
                     body.classList.toggle('gauges-hidden', !visible);
-                    btn.classList.toggle('active', visible);
                     btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                    const led = btn.querySelector('.toggle-dd__led');
+                    if (led) led.classList.toggle('is-on', visible);
                     btn.title = visible
                         ? 'Hide analogue meter gauges'
                         : 'Show analogue meter gauges';
@@ -3215,6 +3211,42 @@
                 });
             });
         });
+        // --- External app launchers (Apps Yaesu menu) ----------------------
+        // Status paints the matching menu item title and tracks which apps are
+        // running so the Apps key can show an active ring. No per-app toolbar
+        // buttons remain — the menu is built from Application Setup flags.
+        const _appRunning = Object.create(null);
+
+        function isAppMenuEnabled(appId) {
+            const cfg = document.getElementById('appsLauncherConfig');
+            if (!cfg) return false;
+            try {
+                return JSON.parse(cfg.textContent || '[]').some(a => a.id === appId);
+            } catch { return false; }
+        }
+
+        function setAppMenuItemStatus(appId, { title, running }) {
+            const item = document.querySelector(`#appsButton [data-action-id="${appId}"]`);
+            if (item) {
+                if (title) item.setAttribute('title', title);
+                item.classList.toggle('is-running', !!running);
+            }
+            _appRunning[appId] = !!running;
+            const launcher = document.getElementById('appsLauncher');
+            if (launcher) {
+                const any = Object.values(_appRunning).some(Boolean);
+                launcher.classList.toggle('apps-launcher--active', any);
+            }
+        }
+
+        function flashAppsNotice(msg) {
+            const btn = document.querySelector('#appsButton .toggle-dd__btn');
+            if (!btn) return;
+            const prev = btn.getAttribute('title') || 'Launch enabled applications';
+            btn.setAttribute('title', msg);
+            setTimeout(() => btn.setAttribute('title', prev), 2000);
+        }
+
         async function launchWsjtx() {
             try {
                 const response = await fetch('/api/wsjtx/launch', { method: 'POST' });
@@ -3222,11 +3254,7 @@
                     const data = await response.json();
                     if (data.alreadyRunning) {
                         console.log('WSJT-X is already running, brought window to front');
-                        // Optional: show a brief message to the user
-                        const btn = document.getElementById('wsjtxBtn');
-                        const originalText = btn.innerHTML;
-                        btn.innerHTML = 'WSJT-X Already Running';
-                        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                        flashAppsNotice('WSJT-X already running');
                     }
                 } else {
                     const data = await response.json();
@@ -3238,29 +3266,24 @@
         }
 
         async function updateWsjtxStatus() {
+            if (!isAppMenuEnabled('wsjtx')) return;
             try {
                 const response = await fetch('/api/wsjtx/status');
                 if (response.ok) {
                     const data = await response.json();
-                    const btn = document.getElementById('wsjtxBtn');
                     const txBadge = document.getElementById('wsjtxTxBadge');
-
-                    // Green = UDP connected (WSJT-X talking to us)
-                    // Yellow = process running but no UDP yet
-                    // Grey = not running
-                    btn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
+                    let title = 'Launch WSJT-X';
+                    let running = false;
                     if (data.connected) {
-                        btn.classList.add('btn-success');
-                        btn.title = 'WSJT-X connected' + (data.mode ? ' \u2014 ' + data.mode : '');
+                        title = 'WSJT-X connected' + (data.mode ? ' — ' + data.mode : '');
+                        running = true;
                     } else if (data.running) {
-                        btn.classList.add('btn-warning');
-                        btn.title = 'WSJT-X running \u2014 waiting for UDP data';
+                        title = 'WSJT-X running — waiting for UDP data';
+                        running = true;
                     } else {
-                        btn.classList.add('btn-danger');
-                        btn.title = 'WSJT-X is not running';
+                        title = 'WSJT-X is not running';
                     }
-
-                    // Red TX badge when transmitting
+                    setAppMenuItemStatus('wsjtx', { title, running });
                     if (txBadge) {
                         txBadge.style.display = data.transmitting ? 'inline' : 'none';
                     }
@@ -3268,24 +3291,15 @@
             } catch (e) { /* ignore */ }
         }
 
-        updateWsjtxStatus();
-        setInterval(updateWsjtxStatus, 5000);
-
-        // JTAlert launch and status functions
         async function launchJtalert() {
             try {
                 const response = await fetch('/api/jtalert/launch', { method: 'POST' });
-                const btn = document.getElementById('jtalertBtn');
                 if (response.ok) {
                     const data = await response.json();
-                    btn.classList.remove('btn-secondary');
-                    btn.classList.add('btn-success');
-                    btn.title = 'JTAlert is running';
+                    setAppMenuItemStatus('jtalert', { title: 'JTAlert is running', running: true });
                     if (data.alreadyRunning) {
                         console.log('JTAlert is already running, brought window to front');
-                        const originalText = btn.innerHTML;
-                        btn.innerHTML = 'JTAlert Already Running';
-                        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                        flashAppsNotice('JTAlert already running');
                     }
                 } else {
                     const data = await response.json();
@@ -3297,43 +3311,28 @@
         }
 
         async function updateJtalertStatus() {
+            if (!isAppMenuEnabled('jtalert')) return;
             try {
                 const response = await fetch('/api/jtalert/status');
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('[JTAlert Status Poll]', data); // Debug log
-                    const btn = document.getElementById('jtalertBtn');
-
-                    btn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
-                    if (data.running) {
-                        btn.classList.add('btn-success');
-                        btn.title = 'JTAlert is running';
-                    } else {
-                        btn.classList.add('btn-danger');
-                        btn.title = 'JTAlert is not running';
-                    }
+                    setAppMenuItemStatus('jtalert', {
+                        title: data.running ? 'JTAlert is running' : 'JTAlert is not running',
+                        running: !!data.running,
+                    });
                 }
             } catch (e) { /* ignore */ }
         }
 
-        updateJtalertStatus();
-        setInterval(updateJtalertStatus, 5000);
-
-        // Log4OM launch and status functions
         async function launchLog4om() {
             try {
                 const response = await fetch('/api/log4om/launch', { method: 'POST' });
-                const btn = document.getElementById('log4omBtn');
                 if (response.ok) {
                     const data = await response.json();
-                    btn.classList.remove('btn-secondary');
-                    btn.classList.add('btn-success');
-                    btn.title = 'Log4OM is running';
+                    setAppMenuItemStatus('log4om', { title: 'Log4OM is running', running: true });
                     if (data.alreadyRunning) {
                         console.log('Log4OM is already running, brought window to front');
-                        const originalText = btn.innerHTML;
-                        btn.innerHTML = 'Log4OM Already Running';
-                        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                        flashAppsNotice('Log4OM already running');
                     }
                 } else {
                     const data = await response.json();
@@ -3345,42 +3344,27 @@
         }
 
         async function updateLog4omStatus() {
+            if (!isAppMenuEnabled('log4om')) return;
             try {
                 const response = await fetch('/api/log4om/status');
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('[Log4OM Status Poll]', data); // Debug log
-                    const btn = document.getElementById('log4omBtn');
-
-                    btn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
-                    if (data.running) {
-                        btn.classList.add('btn-success');
-                        btn.title = 'Log4OM is running';
-                    } else {
-                        btn.classList.add('btn-danger');
-                        btn.title = 'Log4OM is not running';
-                    }
+                    setAppMenuItemStatus('log4om', {
+                        title: data.running ? 'Log4OM is running' : 'Log4OM is not running',
+                        running: !!data.running,
+                    });
                 }
             } catch (e) { /* ignore */ }
         }
 
-        updateLog4omStatus();
-        setInterval(updateLog4omStatus, 5000);
-
-        // GridTracker launch and status functions
         async function launchGridtracker() {
             try {
                 const response = await fetch('/api/gridtracker/launch', { method: 'POST' });
-                const btn = document.getElementById('gridtrackerBtn');
                 if (response.ok) {
                     const data = await response.json();
-                    btn.classList.remove('btn-secondary');
-                    btn.classList.add('btn-success');
-                    btn.title = 'GridTracker is running';
+                    setAppMenuItemStatus('gridtracker', { title: 'GridTracker is running', running: true });
                     if (data.alreadyRunning) {
-                        const originalText = btn.innerHTML;
-                        btn.innerHTML = 'GridTracker Already Running';
-                        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                        flashAppsNotice('GridTracker already running');
                     }
                 } else {
                     const data = await response.json();
@@ -3392,41 +3376,27 @@
         }
 
         async function updateGridtrackerStatus() {
+            if (!isAppMenuEnabled('gridtracker')) return;
             try {
                 const response = await fetch('/api/gridtracker/status');
                 if (response.ok) {
                     const data = await response.json();
-                    const btn = document.getElementById('gridtrackerBtn');
-                    if (!btn) return;
-                    btn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
-                    if (data.running) {
-                        btn.classList.add('btn-success');
-                        btn.title = 'GridTracker is running';
-                    } else {
-                        btn.classList.add('btn-danger');
-                        btn.title = 'GridTracker is not running';
-                    }
+                    setAppMenuItemStatus('gridtracker', {
+                        title: data.running ? 'GridTracker is running' : 'GridTracker is not running',
+                        running: !!data.running,
+                    });
                 }
             } catch (e) { /* ignore */ }
         }
 
-        updateGridtrackerStatus();
-        setInterval(updateGridtrackerStatus, 5000);
-
-        // Fldigi launch and status functions
         async function launchFldigi() {
             try {
                 const response = await fetch('/api/fldigi/launch', { method: 'POST' });
-                const btn = document.getElementById('fldigiBtn');
                 if (response.ok) {
                     const data = await response.json();
-                    btn.classList.remove('btn-secondary');
-                    btn.classList.add('btn-success');
-                    btn.title = 'Fldigi is running';
+                    setAppMenuItemStatus('fldigi', { title: 'Fldigi is running', running: true });
                     if (data.alreadyRunning) {
-                        const originalText = btn.innerHTML;
-                        btn.innerHTML = 'Fldigi Already Running';
-                        setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                        flashAppsNotice('Fldigi already running');
                     }
                 } else {
                     const data = await response.json();
@@ -3438,26 +3408,33 @@
         }
 
         async function updateFldigiStatus() {
+            if (!isAppMenuEnabled('fldigi')) return;
             try {
                 const response = await fetch('/api/fldigi/status');
                 if (response.ok) {
                     const data = await response.json();
-                    const btn = document.getElementById('fldigiBtn');
-                    if (!btn) return;
-                    btn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
-                    if (data.running) {
-                        btn.classList.add('btn-success');
-                        btn.title = 'Fldigi is running';
-                    } else {
-                        btn.classList.add('btn-danger');
-                        btn.title = 'Fldigi is not running';
-                    }
+                    setAppMenuItemStatus('fldigi', {
+                        title: data.running ? 'Fldigi is running' : 'Fldigi is not running',
+                        running: !!data.running,
+                    });
                 }
             } catch (e) { /* ignore */ }
         }
 
-        updateFldigiStatus();
-        setInterval(updateFldigiStatus, 5000);
+        // Status polls start after the Apps menu is built (see initVfoKeyButtons below).
+        function startAppStatusPolling() {
+            if (!document.getElementById('appsButton')) return;
+            updateWsjtxStatus();
+            updateJtalertStatus();
+            updateLog4omStatus();
+            updateGridtrackerStatus();
+            updateFldigiStatus();
+            setInterval(updateWsjtxStatus, 5000);
+            setInterval(updateJtalertStatus, 5000);
+            setInterval(updateLog4omStatus, 5000);
+            setInterval(updateGridtrackerStatus, 5000);
+            setInterval(updateFldigiStatus, 5000);
+        }
 
         async function setMicGain(value) {
             console.log('[setMicGain] Called with value:', value);
@@ -3639,19 +3616,18 @@
             // tune cycle rather than being overwritten with a hard-coded string.
             const tuneBtn = document.getElementById('atuTuneBtn');
             if (tuneBtn) {
+                const tuneLabel = tuneBtn.querySelector('.toggle-dd__label');
                 if (tuning) {
                     if (!tuneBtn.dataset.idleLabel)
                         tuneBtn.dataset.idleLabel = tuneBtn.getAttribute('aria-label') || 'Start antenna auto-tune';
-                    tuneBtn.classList.remove('btn-outline-secondary');
-                    tuneBtn.classList.add('btn-danger');
-                    tuneBtn.textContent = 'Stop';
+                    tuneBtn.classList.add('is-tuning');
+                    if (tuneLabel) tuneLabel.textContent = 'Stop';
                     tuneBtn.setAttribute('aria-label', 'Stop antenna tuning');
                     tuneBtn.setAttribute('title', 'Stop antenna tuning');
                 } else {
                     const idle = tuneBtn.dataset.idleLabel || 'Start antenna auto-tune';
-                    tuneBtn.classList.remove('btn-danger');
-                    tuneBtn.classList.add('btn-outline-secondary');
-                    tuneBtn.textContent = 'Tune';
+                    tuneBtn.classList.remove('is-tuning');
+                    if (tuneLabel) tuneLabel.textContent = 'Tune';
                     tuneBtn.setAttribute('aria-label', idle);
                     tuneBtn.setAttribute('title', idle);
                     delete tuneBtn.dataset.idleLabel;
@@ -4433,9 +4409,6 @@
                 enabledChk.addEventListener('change', () => {
                     settings.enabled = enabledChk.checked;
                     persist();
-                    // Subtle visual indicator on the toolbar button
-                    const btn = document.getElementById('voiceBtn');
-                    if (btn) btn.classList.toggle('btn-warning', settings.enabled);
                 });
                 voicePicker.addEventListener('change', () => { settings.voiceName = voicePicker.value; persist(); });
                 rateSlider.addEventListener('input', () => {
@@ -4457,10 +4430,6 @@
 
                 testBtn.addEventListener('click', () => window.voiceAnnounce.test());
                 stopBtn.addEventListener('click', () => window.voiceAnnounce.stop());
-
-                // Apply toolbar button highlight on initial render
-                const btn = document.getElementById('voiceBtn');
-                if (btn && settings.enabled) btn.classList.add('btn-warning');
             });
         })();
 
@@ -4737,10 +4706,10 @@
             } catch (e) { console.error('toggleVox error:', e); }
         }
         function updateVoxButton(on) {
+            // Dialog toggle keeps the on/off highlight; the toolbar VOX key is
+            // a visual-only Yaesu action opener (no LED / warning fill).
             const btn = document.getElementById('voxOnBtn');
-            const mainBtn = document.getElementById('voxBtn');
             if (btn) { btn.classList.toggle('btn-warning', on); btn.classList.toggle('btn-outline-secondary', !on); btn.textContent = on ? 'VOX On' : 'VOX Off'; }
-            if (mainBtn) { mainBtn.classList.toggle('btn-warning', on); mainBtn.classList.toggle('btn-outline-secondary', !on); }
         }
         async function setVoxGain(v) {
             try { await fetch('/api/cat/vox/gain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gain: parseInt(v) }) }); }
@@ -5124,6 +5093,7 @@
         window.setNrLevel      = setNrLevel;
         initNrCycleButtons();
         initVfoKeyButtons();
+        startAppStatusPolling();
         // BandA/B SignalR may have arrived before the Yaesu keys existed;
         // replay from last frequency (or cached band) now that widgets exist.
         if (typeof window.syncBandButtonsFromFrequency === "function") {
