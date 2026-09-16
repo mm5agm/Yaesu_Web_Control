@@ -347,13 +347,6 @@ pre, code { tab-size: 4; }
     font-weight: bold;
 }
 
-/* Antenna select - compact, sits beside mode select */
-.vfo-ant-select {
-    width: 6rem;
-    font-size: 0.85rem;
-    font-weight: bold;
-}
-
 /* Three-column VFO body: tune | band/filter | remaining keys */
 .vfo-body-grid {
     display: grid;
@@ -416,13 +409,35 @@ pre, code { tab-size: 4; }
     width: 100%;
 }
 
-.vfo-band-row > .d-flex {
+.vfo-band-row__band-controls {
+    display: contents;
+}
+
+.vfo-band-row__mode-controls {
     min-width: 0;
 }
 
-.vfo-band-row > .d-flex .toggle-dd {
+.vfo-band-row__mode-controls .toggle-dd {
     flex: 1 1 auto;
     min-width: 0;
+}
+
+.vfo-band-row--ftdx101 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    row-gap: 0.65rem;
+}
+
+.vfo-band-row--ftdx101 .vfo-band-row__band-controls,
+.vfo-band-row--ftdx101 .vfo-band-row__mode-controls {
+    grid-column: 1 / -1;
+}
+
+.vfo-band-row--ftdx101 .vfo-band-row__band-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 0.3rem;
+    align-items: center;
 }
 
 .vfo-band-row .vfo-ant-select,
