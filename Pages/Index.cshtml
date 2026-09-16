@@ -216,6 +216,16 @@
         font-size: 1rem;
         line-height: 1;
     }
+    /* Mic & Gain — compact Yaesu action key in the Remote Audio strip. */
+    #remoteAudioBar #remoteAudioLevelsBtn.toggle-dd__btn {
+        min-width: 5.5rem;
+        min-height: 2rem;
+        padding: 0.28rem 0.5rem;
+        vertical-align: middle;
+    }
+    #remoteAudioBar #remoteAudioLevelsBtn .toggle-dd__label {
+        font-size: 0.75rem;
+    }
 
     /* Voice PTT button — three visually distinct states so the operator can
        always tell whether it's listening:
@@ -734,9 +744,11 @@
                                       data-bs-placement="top"
                                       data-bs-title="Browser microphone and software gain"
                                       aria-label="Browser microphone and software gain">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="remoteAudioLevelsBtn"
+                                    <button type="button"
+                                            class="btn toggle-dd__btn toggle-dd__btn--action"
+                                            id="remoteAudioLevelsBtn"
                                             aria-label="Open mic and gain settings">
-                                        <i class="bi bi-sliders remote-audio-btn-icon" aria-hidden="true"></i>&nbsp;Mic &amp; Gain
+                                        <span class="toggle-dd__label">Mic &amp; Gain</span>
                                     </button>
                                 </span>
                                 <span class="small text-muted" id="remoteAudioStatus">Idle</span>
@@ -754,44 +766,37 @@
 
                             <!-- Clarifier (RIT/XIT) -->
                             <div id="clarifierRow" class="op-extras-block">
-                                <span class="fw-bold text-nowrap">Clarifier</span>
-                                <div class="btn-group btn-group-sm" id="clarVfoGroup" role="group" aria-label="Clarifier VFO selection">
-                                    <button type="button" class="btn btn-outline-primary active" id="clarVfoABtn"
-                                            onclick="selectClarVfo('A')" title="Apply clarifier to VFO A"
-                                            aria-label="Apply clarifier to VFO A">VFO A</button>
-                                    <button type="button" class="btn btn-outline-primary" id="clarVfoBBtn"
-                                            onclick="selectClarVfo('B')" title="Apply clarifier to VFO B"
-                                            aria-label="Apply clarifier to VFO B">VFO B</button>
-                                </div>
-                                <label class="mb-0 fw-bold text-nowrap" id="clarModeLabel">Mode:</label>
-                                <select class="form-select form-select-sm fw-bold flex-shrink-0" id="clarModeSelect"
-                                        style="width:auto;" onchange="setClarifierMode(this.value)"
-                                        aria-labelledby="clarModeLabel" aria-label="Clarifier mode">
-                                    <option value="off"  selected="@(clarModeInit=="off"  ? "selected" : null)">OFF</option>
-                                    <option value="rx"   selected="@(clarModeInit=="rx"   ? "selected" : null)">RX</option>
-                                    <option value="tx"   selected="@(clarModeInit=="tx"   ? "selected" : null)">TX</option>
-                                    <option value="rxtx" selected="@(clarModeInit=="rxtx" ? "selected" : null)">RX+TX</option>
-                                </select>
-                                <label class="mb-0 fw-bold text-nowrap">Offset:
+                                <div id="clarVfoButton" data-selected="A"></div>
+                                <div id="clarModeButton" data-selected="@clarModeInit"></div>
+                                <label class="mb-0 fw-bold text-nowrap clar-offset-label">Offset:
                                     <span id="clarOffsetValue">@Model.RadioState.ClarifierOffsetA</span> Hz
                                 </label>
                                 <div class="op-clar-offset">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0 px-2"
+                                    <button type="button"
+                                            class="btn toggle-dd__btn toggle-dd__btn--action clar-nudge-key"
                                             onclick="nudgeClarifier(-10)" title="−10 Hz"
-                                            aria-label="Decrease clarifier offset by 10 Hz">−</button>
+                                            aria-label="Decrease clarifier offset by 10 Hz">
+                                        <span class="toggle-dd__label">−</span>
+                                    </button>
                                     <input type="range" id="clarOffsetSlider"
                                            min="-9990" max="9990" step="10"
                                            value="@Model.RadioState.ClarifierOffsetA"
                                            oninput="document.getElementById('clarOffsetValue').textContent = this.value"
                                            onchange="setClarifierOffset(parseInt(this.value))"
                                            aria-label="Clarifier offset in Hz" aria-valuemin="-9990" aria-valuemax="9990">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0 px-2"
+                                    <button type="button"
+                                            class="btn toggle-dd__btn toggle-dd__btn--action clar-nudge-key"
                                             onclick="nudgeClarifier(10)" title="+10 Hz"
-                                            aria-label="Increase clarifier offset by 10 Hz">+</button>
-                                    <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
+                                            aria-label="Increase clarifier offset by 10 Hz">
+                                        <span class="toggle-dd__label">+</span>
+                                    </button>
+                                    <button type="button"
+                                            class="btn toggle-dd__btn toggle-dd__btn--action clar-reset-key"
                                             onclick="resetClarifier()"
                                             title="Reset offset to 0 Hz (mode unchanged)"
-                                            aria-label="Reset clarifier offset to zero">Reset</button>
+                                            aria-label="Reset clarifier offset to zero">
+                                        <span class="toggle-dd__label">Reset</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1233,12 +1238,13 @@
                                  data-mode="@Model.RadioState.ModeA"></div>
                             <div id="ifShiftButtonA"
                                  data-value="@Model.RadioState.IfShiftA"></div>
-                            <button type="button" class="btn btn-secondary btn-sm fw-bold w-100"
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     id="audioFilterBtnA"
                                     aria-label="VFO A Audio Filter"
                                     title="Open the Audio Filter dialog for VFO A's current mode (LCUT FREQ, LCUT SLOPE, HCUT FREQ, HCUT SLOPE)"
                                     onclick="window.audioFilter && window.audioFilter.open('A')">
-                                Audio Filter
+                                <span class="toggle-dd__label">Audio Filter</span>
                             </button>
                         </div>
 
@@ -1495,12 +1501,13 @@
                                  data-mode="@Model.RadioState.ModeB"></div>
                             <div id="ifShiftButtonB"
                                  data-value="@Model.RadioState.IfShiftB"></div>
-                            <button type="button" class="btn btn-secondary btn-sm fw-bold w-100"
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
                                     id="audioFilterBtnB"
                                     aria-label="VFO B Audio Filter"
                                     title="Open the Audio Filter dialog for VFO B's current mode (LCUT FREQ, LCUT SLOPE, HCUT FREQ, HCUT SLOPE)"
                                     onclick="window.audioFilter && window.audioFilter.open('B')">
-                                Audio Filter
+                                <span class="toggle-dd__label">Audio Filter</span>
                             </button>
                         </div>
                         <!-- Col 3: remaining keys -->
