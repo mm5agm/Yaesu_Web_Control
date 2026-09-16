@@ -333,3 +333,96 @@ export class LinearSMeterGauge extends LinearGauge {
         super(canvasId, config);
     }
 }
+
+// ------------------------------------------------------------
+// PA TEMPERATURE — same 0–100 °C scale as TempGauge (radial)
+// ------------------------------------------------------------
+
+export class LinearTempGauge extends LinearGauge {
+    constructor(canvasId, options = {}) {
+        const config = Object.assign({
+            renderTo: canvasId,
+            minValue: 0,
+            maxValue: 100,
+            majorTicks: ['0', '13', '25', '38', '50', '63', '75', '88', '100'],
+            highlights: [
+                { from: 0, to: 40, color: 'rgba(0,255,0,.25)' },
+                { from: 40, to: 60, color: 'rgba(255,255,0,.25)' },
+                { from: 60, to: 100, color: 'rgba(255,0,0,.25)' }
+            ],
+            colorBarProgress: '#198754',
+            colorBar: '#3a3a3a',
+            value: 0,
+            gaugeTitle: 'TEMP',
+            gaugeTitleId: 'tempLinearValue',
+            gaugeTitleDefault: '--',
+            gaugeTitleSuffix: '°C',
+            gaugeTitleBg: '#198754',
+            gaugeTitleColor: '#ffffff'
+        }, options);
+
+        super(canvasId, config);
+    }
+}
+
+// ------------------------------------------------------------
+// IDD — same 0–25 A scale as IDDGauge (radial)
+// ------------------------------------------------------------
+
+export class LinearIDDGauge extends LinearGauge {
+    constructor(canvasId, options = {}) {
+        const config = Object.assign({
+            renderTo: canvasId,
+            minValue: 0,
+            maxValue: 25,
+            majorTicks: ['0', '3', '6', '9', '12', '16', '19', '22', '25'],
+            highlights: [
+                { from: 0, to: 10, color: 'rgba(0,255,0,.25)' },
+                { from: 10, to: 20, color: 'rgba(255,255,0,.25)' },
+                { from: 20, to: 25, color: 'rgba(255,0,0,.25)' }
+            ],
+            colorBarProgress: '#198754',
+            colorBar: '#3a3a3a',
+            value: 0,
+            gaugeTitle: 'IDD',
+            gaugeTitleId: 'iddLinearValue',
+            gaugeTitleDefault: '0.0',
+            gaugeTitleSuffix: 'A',
+            gaugeTitleBg: '#0d6efd',
+            gaugeTitleColor: '#ffffff'
+        }, options);
+
+        super(canvasId, config);
+    }
+}
+
+// ------------------------------------------------------------
+// VDD — same 40–55 V scale as VDDGauge (radial)
+// ------------------------------------------------------------
+
+export class LinearVDDGauge extends LinearGauge {
+    constructor(canvasId, options = {}) {
+        const config = Object.assign({
+            renderTo: canvasId,
+            minValue: 40,
+            maxValue: 55,
+            majorTicks: ['40', '42', '44', '46', '48', '50', '52', '54', '55'],
+            highlights: [
+                { from: 40, to: 45, color: 'rgba(255,255,0,.25)' },
+                { from: 45, to: 52, color: 'rgba(0,255,0,.25)' },
+                { from: 52, to: 55, color: 'rgba(255,0,0,.25)' }
+            ],
+            colorBarProgress: '#198754',
+            colorBar: '#3a3a3a',
+            value: 48,
+            gaugeTitle: 'VDD',
+            gaugeTitleId: 'vddLinearValue',
+            gaugeTitleDefault: '48.0',
+            gaugeTitleSuffix: 'V',
+            gaugeTitleBg: '#198754',
+            gaugeTitleColor: '#ffffff'
+        }, options);
+
+        super(canvasId, config);
+    }
+}
