@@ -1222,9 +1222,16 @@ function bindControls() {
   });
 
   document.getElementById('radioDisplayShowBtn')?.addEventListener('click', () => {
-    panel.show();
-    if (isAutoStart()) requestStart();
-    else syncStreamButton();
+    if (panel.isHiddenByUser()) {
+      panel.show();
+      if (isAutoStart()) requestStart();
+      else syncStreamButton();
+      return;
+    }
+
+    closeScopeDialog();
+    requestStop();
+    panel.hide();
   });
 
   document.getElementById('radioDisplayPopoutBtn')?.addEventListener('click', () => {
