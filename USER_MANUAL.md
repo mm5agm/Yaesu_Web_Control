@@ -2404,7 +2404,7 @@ Shortcuts apply on the **Index** (main control) page. They are **ignored while t
 | **Shift** + **[** / **]** | Step 50 Hz |
 | **Shift+Alt** + **j** / **i** | Jump to the previous / next DX spot on the spectrum overlay |
 | **m** | Open / focus the Memories panel |
-| **n** | Toggle active VFO (A ↔ B) |
+| **n** | Swap VFO A ↔ B frequencies |
 | **N** | Copy VFO A → B (A = B) |
 | **b** / **B** | Previous / next amateur band |
 | **x** | Show / hide the VFO B panel |

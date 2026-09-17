@@ -31,7 +31,7 @@ export const SHORTCUT_HELP = [
     { group: 'Frequency & VFO', keys: '[ / ]', action: 'Step 1 Hz' },
     { group: 'Frequency & VFO', keys: 'Shift + [ / ]', action: 'Step 50 Hz' },
     { group: 'Frequency & VFO', keys: 'Shift + Alt + j/i', action: 'Tune to previous / next DX spot' },
-    { group: 'Frequency & VFO', keys: 'n', action: 'Toggle active VFO (A ↔ B)' },
+    { group: 'Frequency & VFO', keys: 'n', action: 'Swap VFO A ↔ B frequencies' },
     { group: 'Frequency & VFO', keys: 'N', action: 'Copy VFO A → B (A = B)' },
     { group: 'Frequency & VFO', keys: 'm', action: 'Open memories panel' },
     { group: 'Frequency & VFO', keys: 'b / B', action: 'Previous / next amateur band' },
@@ -455,18 +455,13 @@ function nudgeIfShift(deltaHz) {
 
 // ── VFO / panels ─────────────────────────────────────────────────────────────
 
-function toggleActiveVfo() {
-    const next = getActiveVfo() === 'A' ? 'B' : 'A';
-    const vfoRow = document.getElementById('vfoRow');
-    const single = vfoRow?.dataset?.singleReceiver === 'true';
-    if (single) {
-        document.getElementById(`rxVfo${next}`)?.click();
-    } else if (typeof window.setActiveVfo === 'function') {
-        window.setActiveVfo(next);
+function swapVfoShortcut() {
+    if (typeof window.swapVfo === 'function') {
+        window.swapVfo();
     } else {
-        document.querySelector(`#vfo${next}Col .card-header`)?.click();
+        document.getElementById('swapVfoBtn')?.click();
     }
-    announce(`VFO ${next}`);
+    announce('VFO A ↔ B swapped');
 }
 
 function copyAtoB() {
@@ -1098,7 +1093,7 @@ export function handleKey(e) {
     }
     if (key === 'n' && !e.altKey && !e.shiftKey) {
         e.preventDefault();
-        toggleActiveVfo();
+        swapVfoShortcut();
         return true;
     }
     if (key === 'N' && !e.altKey) {
