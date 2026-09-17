@@ -1978,6 +1978,16 @@ namespace Yaesu_Web_Control.Controllers
                 else
                     await _catClient.SendCommandAsync($"VS{rx};", "WebUI", CancellationToken.None);
 
+                // Re-assert the selected VFO frequency. Some single-receiver
+                // firmware changes the RX/TX selector but does not refresh the
+                // tuning register until the next TX transition.
+                var rxFrequency = rx == 0
+                    ? _radioStateService.FrequencyA
+                    : _radioStateService.FrequencyB;
+                await _catClient.SendCommandAsync(
+                    rx == 0 ? $"FA{rxFrequency:D9};" : $"FB{rxFrequency:D9};",
+                    "WebUI", CancellationToken.None);
+
                 _radioStateService.ActiveVfo = rx;
 
                 // On single-receiver radios FT often stays at 0 when the operating
@@ -2091,6 +2101,7 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
+                var swapSettings = await _settingsService.GetSettingsAsync();
                 if (_radioStateService.IsSingleReceiver)
                 {
                     // FTdx10 / FT-710 / FTDX3000 do not provide the dual-
@@ -2110,6 +2121,19 @@ namespace Yaesu_Web_Control.Controllers
                     await _catClient.SendCommandAsync($"FB{freqA:D9};", "WebUI", CancellationToken.None);
                     _radioStateService.FrequencyA = freqB;
                     _radioStateService.FrequencyB = freqA;
+
+                    // Re-select and re-assert the operating VFO after the
+                    // exchange. Without this, some radios retain the old
+                    // tuning register until PTT causes a VFO transition.
+                    var active = _radioStateService.ActiveVfo;
+                    if (swapSettings.RadioModel == "FTDX3000")
+                        await _catClient.SendCommandAsync(active == 1 ? "FR4;" : "FR0;", "WebUI", CancellationToken.None);
+                    else
+                        await _catClient.SendCommandAsync($"VS{active};", "WebUI", CancellationToken.None);
+                    var activeFrequency = active == 0 ? freqB : freqA;
+                    await _catClient.SendCommandAsync(
+                        active == 0 ? $"FA{activeFrequency:D9};" : $"FB{activeFrequency:D9};",
+                        "WebUI", CancellationToken.None);
                 }
                 else
                 {
