@@ -943,9 +943,14 @@ fieldset.calibration-card {
     width: 100%;
 }
 
-/* col-auto in the markup: the level keys below are a fixed 10rem, so a col-*
-   basis wider than that just left dead space to the right of the keys. */
+/* The TX level keys and VFO B visibility key form a compact 2-column,
+   3-row control table. */
 #operatingControlsRow .op-col--levels {
+    display: grid;
+    grid-template-columns: repeat(2, 10rem);
+    grid-auto-rows: minmax(2.65rem, auto);
+    align-items: stretch;
+    gap: 0.4rem;
     min-width: 0;
 }
 
@@ -953,7 +958,8 @@ fieldset.calibration-card {
    values, so the default intrinsic button width would make each face resize
    when the value changes (e.g. 5 W versus 100 W). */
 #operatingControlsRow .op-col--levels > .toggle-dd,
-#operatingControlsRow .op-col--levels > .toggle-dd > .toggle-dd__btn {
+#operatingControlsRow .op-col--levels > .toggle-dd > .toggle-dd__btn,
+#operatingControlsRow .op-col--levels > .toggle-dd__btn {
     width: 10rem;
     max-width: 100%;
 }

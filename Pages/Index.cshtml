@@ -401,11 +401,6 @@
                     aria-label="Show keyboard shortcuts">
                 <i class="bi bi-keyboard" aria-hidden="true"></i>
             </button>
-            <button id="vfoBToggleBtn" class="btn btn-sm btn-outline-secondary"
-                    style="padding-top: 1px; padding-bottom: 1px;" title="Show/Hide VFO-B"
-                    aria-label="Show or hide VFO B panel">
-                VFO-B
-            </button>
             @if (isSingleReceiver)
             {
                 <span id="rxTxSplitGroup" class="d-inline-flex align-items-center gap-1 ms-1"
@@ -530,6 +525,15 @@
                             <div id="monitorButton"
                                  data-enabled="@(Model.MonitorOn ? "1" : "0")"
                                  data-value="@Model.MonitorLevelA"></div>
+                            <button id="vfoBToggleBtn" type="button"
+                                    class="btn toggle-dd__btn"
+                                    data-bs-toggle="tooltip" data-bs-placement="top"
+                                    title="VFO B panel visibility — click to hide or show the panel"
+                                    aria-label="Show or hide VFO B panel"
+                                    aria-pressed="true">
+                                <span class="toggle-dd__led is-on" aria-hidden="true"></span>
+                                <span class="toggle-dd__label">VFO B</span>
+                            </button>
                         </div>
 
                         <!-- VFO A/B actions — immediately to the right of TX levels -->
@@ -5150,6 +5154,7 @@
             const aCol  = document.getElementById('vfoACol');
             const bCol  = document.getElementById('vfoBCol');
             const btn   = document.getElementById('vfoBToggleBtn');
+            const led   = btn?.querySelector('.toggle-dd__led');
             const vfoRow = document.getElementById('vfoRow');
             if (bCol) bCol.style.display = visible ? '' : 'none';
             if (aCol) {
@@ -5163,8 +5168,8 @@
             }
             vfoRow?.classList.toggle('vfo-b-hidden', !visible);
             if (btn) {
-                btn.textContent = visible ? 'Hide B' : 'Show B';
-                btn.title = visible ? 'Hide VFO-B panel' : 'Show VFO-B panel';
+                led?.classList.toggle('is-on', visible);
+                btn.setAttribute('aria-pressed', String(visible));
             }
         }
 
