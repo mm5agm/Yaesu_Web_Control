@@ -1,8 +1,49 @@
+using System.Reflection;
+
 namespace Yaesu_Web_Control;
 
 public static class AppVersion
 {
     public const string Current = "2.5.2";
+
+    /// <summary>
+    /// The git tag CI built from ("v2.5.2-pre2", "v2.5.2"), or "" for a local
+    /// build. The workflow passes it as <c>-p:YwcBuildTag=</c> and the csproj
+    /// bakes it in as assembly metadata, so it never has to be edited by hand
+    /// and a full release needs nothing beyond the usual version bump.
+    /// </summary>
+    public static readonly string BuildTag = ReadBuildTag();
+
+    /// <summary>
+    /// The version the operator sees. "2.5.2" for a full release and for a
+    /// local build; "2.5.2-pre2" for a pre-release. Until v2.5.2-pre2 every
+    /// pre-release reported the bare number and nothing in the app could say
+    /// which build was installed; the only check was hashing the installer.
+    /// A tag that does not belong to <see cref="Current"/> at all is shown
+    /// alongside it ("2.5.2 (v2.6.0)") rather than hidden, because that is a
+    /// release-prep mistake worth seeing.
+    /// </summary>
+    public static readonly string Display = ComputeDisplay(Current, BuildTag);
+
+    private static string ReadBuildTag() =>
+        typeof(AppVersion).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "YwcBuildTag")?.Value?.Trim() ?? "";
+
+    internal static string ComputeDisplay(string current, string buildTag)
+    {
+        if (string.IsNullOrWhiteSpace(buildTag))
+            return current;
+
+        string tag = buildTag.Trim();
+        string bare = tag.StartsWith('v') || tag.StartsWith('V') ? tag[1..] : tag;
+
+        if (bare == current)
+            return current;                        // full release: v2.5.2
+        if (bare.StartsWith(current + "-", StringComparison.Ordinal))
+            return bare;                           // pre-release: v2.5.2-pre2
+        return $"{current} ({tag})";               // tag and version disagree
+    }
 
     /// <summary>Date this version was released, ISO format.
     /// Bump on actual release; current value reflects the planned ship date.</summary>

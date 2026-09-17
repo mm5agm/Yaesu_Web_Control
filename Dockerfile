@@ -34,6 +34,8 @@ RUN arch="$TARGETARCH"; \
     dotnet restore Yaesu_Web_Control.csproj -r "linux-$arch"
 
 COPY . .
+# The git tag being built (release.yml passes it); empty for a local build.
+ARG YWC_BUILD_TAG=
 # Publish the CAT-only TFM only (WinForms / voice / SDR worker stay out).
 RUN arch="$TARGETARCH"; \
     if [ "$arch" = "amd64" ]; then arch=x64; fi; \
@@ -45,6 +47,7 @@ RUN arch="$TARGETARCH"; \
       --no-restore \
       -o /app/publish \
       /p:UseAppHost=true \
+      "/p:YwcBuildTag=$YWC_BUILD_TAG" \
     && test -f /app/publish/libOpenCvSharpExtern.so
 
 # ── Runtime ──────────────────────────────────────────────────────────────────

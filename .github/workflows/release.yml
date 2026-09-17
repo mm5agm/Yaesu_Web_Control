@@ -10,6 +10,13 @@ run-name: >-
    || github.event_name == 'release' && format('Release {0} - building and publishing installers', github.event.release.tag_name)
    || 'Manual build' }}
 
+# The tag being built, baked into the app as AppVersion.BuildTag so a
+# pre-release installer says "2.5.2-pre2" on its About page instead of the
+# bare "2.5.2" that v2.5.2-pre2 shipped with. Empty on PR smoke builds and
+# on a dispatch with no tag, which leaves the app reporting AppVersion.Current.
+env:
+  YWC_BUILD_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.tag || '' }}
+
 on:
   release:
     types: [created]
@@ -104,7 +111,8 @@ jobs:
             --configuration Release `
             --runtime win-x64 `
             --self-contained true `
-            --output publish
+            --output publish `
+            "-p:YwcBuildTag=$env:YWC_BUILD_TAG"
         shell: pwsh
 
       - name: List publish output
@@ -329,6 +337,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            YWC_BUILD_TAG=${{ env.YWC_BUILD_TAG }}
 
   # The three build jobs above are independent on purpose — no `needs:` between
   # them, so they run in parallel and a release is not held up by the slowest.

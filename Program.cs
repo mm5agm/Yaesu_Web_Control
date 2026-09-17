@@ -355,7 +355,7 @@ Log.Logger = new LoggerConfiguration()
             outputTemplate: LogOutputTemplate)))
     .CreateLogger();
 
-Log.Information("Yaesu Web Control starting (v{Version})", Yaesu_Web_Control.AppVersion.Current);
+Log.Information("Yaesu Web Control starting (v{Version})", Yaesu_Web_Control.AppVersion.Display);
 
 // Record a hard crash before the process dies. ASP.NET Core catches exceptions
 // thrown inside a request, and BackgroundService failures stop the host with a

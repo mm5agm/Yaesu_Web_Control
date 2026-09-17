@@ -288,6 +288,11 @@
     <Version>2.5.2</Version>
     <FileVersion>2.5.2.0</FileVersion>
     <AssemblyVersion>2.5.2.0</AssemblyVersion>
+    <!-- The git tag CI is building (v2.5.2-pre2), passed as -p:YwcBuildTag=...
+         by release.yml, build-dmg.sh and the Dockerfile. Empty on a local
+         build. AppVersion.Display reads the metadata below so a pre-release
+         names itself; a full-release tag equals Current and collapses to it. -->
+    <YwcBuildTag Condition="'$(YwcBuildTag)' == ''"></YwcBuildTag>
     <AssemblyTitle>Yaesu Web Control</AssemblyTitle>
     <Product>Yaesu Web Control</Product>
     <Description>Browser-based CAT controller for Yaesu HF transceivers</Description>
@@ -296,6 +301,10 @@
     <Company>MM5AGM</Company>
     <Copyright>© 2026 MM5AGM</Copyright>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(YwcBuildTag)' != ''">
+    <AssemblyMetadata Include="YwcBuildTag" Value="$(YwcBuildTag)" />
+  </ItemGroup>
   <!-- Explicitly copy the entire wwwroot folder into the output directory -->
   <ItemGroup>
     <Content Include="wwwroot\**\*">
