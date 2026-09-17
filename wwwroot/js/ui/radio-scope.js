@@ -412,9 +412,50 @@ export class RadioScopeControl {
     }
 
     async cycleSpan() {
+        // Hotspot / soft-button path: always advance one step (wraps).
         if (!await this._ensureState()) return;
         const cur = parseInt(this.state.span ?? '0', 10) || 0;
         this._send('span', String((cur + 1) % 10));
+    }
+
+    /**
+     * Bidirectional span step for keyboard shortcuts.
+     * @param {number} direction negative = narrower, positive = wider
+     * @param {{ extreme?: boolean }} [opts]
+     */
+    async cycleSpanBy(direction, { extreme } = {}) {
+        if (!await this._ensureState()) return;
+        const buttons = Array.from(this.card?.querySelectorAll('.scope-span-btn') || []);
+        const max = buttons.length ? buttons.length - 1 : 9;
+        const cur = parseInt(this.state.span ?? '0', 10) || 0;
+        let next;
+        if (extreme) next = direction < 0 ? 0 : max;
+        else next = Math.max(0, Math.min(max, cur + direction));
+        if (next === cur) return;
+        await this._send('span', String(next));
+    }
+
+    /**
+     * Nudge the radio scope reference level (dB). Step is 0.5 on the slider.
+     * @param {number} deltaDb
+     */
+    async nudgeLevel(deltaDb) {
+        if (!await this._ensureState()) return;
+        const cur = parseFloat(this.state.level ?? this.levelSlider?.value ?? '0');
+        const base = Number.isFinite(cur) ? cur : 0;
+        const next = Math.max(-30, Math.min(30, Math.round((base + deltaDb) * 2) / 2));
+        if (next === base) return;
+        if (this.levelSlider) this.levelSlider.value = String(next);
+        if (this.levelLabel) this.levelLabel.textContent = this._formatLevel(next);
+        await this._send('level', String(next));
+    }
+
+    /** Reset reference level to 0 dB. */
+    async resetLevel() {
+        if (!await this._ensureState()) return;
+        if (this.levelSlider) this.levelSlider.value = '0';
+        if (this.levelLabel) this.levelLabel.textContent = this._formatLevel(0);
+        await this._send('level', '0');
     }
 
     async cycleSpeed() {
@@ -425,9 +466,31 @@ export class RadioScopeControl {
     }
 
     async cycleSize() {
+        // Hotspot path: always advance one step (wraps).
         if (!await this._ensureState()) return;
         if (this.state.is3dss) return;
-        this._sendMode({ size: ((this.state.size | 0) + 1) % 3 });
+        const n = this.card?.querySelectorAll('.scope-size-btn').length || 3;
+        this._sendMode({ size: ((this.state.size | 0) + 1) % n });
+    }
+
+    /**
+     * Bidirectional size step for keyboard shortcuts.
+     * Buttons are L→S (large spectrum → small). direction > 0 = larger pane.
+     * @param {number} direction
+     * @param {{ extreme?: boolean }} [opts]
+     */
+    async cycleSizeBy(direction, { extreme } = {}) {
+        if (!await this._ensureState()) return;
+        if (this.state.is3dss) return;
+        const buttons = Array.from(this.card?.querySelectorAll('.scope-size-btn') || [])
+            .filter(b => !b.disabled);
+        const max = buttons.length ? buttons.length - 1 : 2;
+        const cur = this.state.size | 0;
+        let next;
+        if (extreme) next = direction > 0 ? 0 : max;
+        else next = Math.max(0, Math.min(max, cur - direction));
+        if (next === cur) return;
+        await this._sendMode({ size: next });
     }
 
     async toggle3dss() {
@@ -437,15 +500,15 @@ export class RadioScopeControl {
 
     async toggleHold() {
         if (!await this._ensureState()) return;
-        this._send('hold', this.state.hold === '1' ? '0' : '1');
+        await this._send('hold', this.state.hold === '1' ? '0' : '1');
     }
 
-    _sendMode(change) {
+    async _sendMode(change) {
         const s = this.state || { is3dss: false, placement: 0, size: 0 };
         const is3dss    = change.is3dss    !== undefined ? change.is3dss    : !!s.is3dss;
         const placement = change.placement !== undefined ? change.placement : (s.placement | 0);
         const size      = change.size      !== undefined ? change.size      : (s.size | 0);
-        this._send('mode', composeMode(is3dss, placement, size));
+        await this._send('mode', composeMode(is3dss, placement, size));
     }
 
     _sendAfFft(change) {

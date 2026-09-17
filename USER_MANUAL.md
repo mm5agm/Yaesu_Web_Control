@@ -68,6 +68,12 @@
     - 11.1 [The log file, and sending me one](#111-the-log-file-and-sending-me-one)
 12. [Using the App on a Tablet or Phone](#12-using-the-app-on-a-tablet-or-phone)
 13. [Keyboard Shortcuts](#13-keyboard-shortcuts)
+    - 13.1 [Global navigation shortcuts](#131-global-navigation-shortcuts)
+    - 13.2 [Mode and passband](#132-mode-and-passband)
+    - 13.3 [Spectrum, Radio Scope, and remote audio (conditional)](#133-spectrum-radio-scope-and-remote-audio-conditional)
+    - 13.4 [Frequency display — digit editing](#134-frequency-display--digit-editing)
+    - 13.5 [Frequency keypad and other existing keys](#135-frequency-keypad-and-other-existing-keys)
+    - 13.6 [Browser zoom](#136-browser-zoom)
 14. [Troubleshooting](#14-troubleshooting)
     - 14.1 [Reporting a bug](#141-reporting-a-bug)
     - 14.2 [Common problems](#142-common-problems)
@@ -2287,24 +2293,88 @@ On touch devices, tap a digit in the frequency display to select it (it highligh
 
 ## 13. Keyboard Shortcuts
 
-| Key / Action | Result |
-|---|---|
-| **F** | Enter full-screen mode |
-| **Esc** | Exit full-screen mode |
-| Mouse wheel (on spectrum) | Tune VFO A up or down in 1 kHz steps |
-| Click on spectrum | Tune VFO A to the clicked frequency |
-| **Tab** (in band buttons) | Move focus into the band button group |
-| **← / →** (in band buttons) | Move to the previous/next band and switch immediately |
-| Numeric entry button (**⑁**) next to MHz | Open the on-screen frequency keyboard for that VFO |
-| **0–9** (frequency keyboard open) | Type the digit at the cursor position |
-| **← →** (frequency keyboard open) | Move the cursor left or right |
-| **Backspace** (frequency keyboard open) | Clear the current digit and move cursor back |
-| **Delete** (frequency keyboard open) | Clear all digits |
-| **↵ Enter** (frequency keyboard open) | Send the entered frequency to the radio |
-| **Esc** (frequency keyboard open) | Close the keyboard without changing frequency |
-| **Esc** (Memory panel open) | Close the Memory panel |
+Press **?** (**Shift+/**) or **h** on the main control panel to open an in-app dialog that lists every live shortcut. The same table is summarised below. A keyboard-icon button in the top bar (tooltip: *Keyboard shortcuts (?)*) opens that dialog as well.
 
-**Frequency display — changing the value digit by digit.** Every VFO frequency display is a "digit-pickable" control. You select a digit (it highlights yellow), then step it up or down. Three input methods reach the same set of actions, so pick whichever suits you:
+While the help dialog is open, **↑ / ↓** (and Page Up / Page Down) scroll the list — they do not tune or IF-shift. The Spectrum / Scope section shows a two-column table (SDR vs Radio Scope) and highlights which target **z / w / s** currently drive; press **t** there (or the top-bar **Keys → SDR** / **Keys → Scope** button) to switch — the button flashes briefly so the change is easy to see.
+
+Shortcuts apply on the **Index** (main control) page. They are **ignored while typing** in a text field, select box, the CW Send line, a DX Watch input, memory prompts, or while the on-screen frequency keypad is open. Browser chords such as **Ctrl/⌘+F** (find) are never captured. Some OS or GPU overlays can still steal keys (especially Ctrl chords); YWC therefore avoids Ctrl for primary shortcuts.
+
+**Active VFO.** Most shortcuts act on the active / operating VFO (MAIN/SUB on dual-receiver radios, or the RX selector on single-receiver radios). **g** opens frequency entry for that VFO.
+
+### 13.1 Global navigation shortcuts
+
+| Key | Action |
+|---|---|
+| **?** (**Shift+/**) / **h** | Open / close the keyboard shortcuts help dialog |
+| **Esc** | Close the help dialog; also closes other panels (frequency keypad, Memories, …) and exits full-screen |
+| **g** | Open the on-screen frequency keypad for the active VFO |
+| **j** / **←** | Frequency step down (100 Hz) |
+| **i** / **→** | Frequency step up (100 Hz) |
+| **Shift** + j/i/←/→ | Step ×10 (1 kHz) |
+| **Alt** + j/i/←/→ | Step ×100 (10 kHz) |
+| **[** / **]** | Step 1 Hz |
+| **Shift** + **[** / **]** | Step 50 Hz |
+| **Shift+Alt** + **j** / **i** | Jump to the previous / next DX spot on the spectrum overlay |
+| **m** | Open / focus the Memories panel |
+| **n** | Toggle active VFO (A ↔ B) |
+| **N** | Copy VFO A → B (A = B) |
+| **b** / **B** | Previous / next amateur band |
+| **x** | Show / hide the VFO B panel |
+| **y** | Show / hide the S-meter history strip |
+| **f** / **F** | Enter full-screen mode |
+| **D** | Toggle the DX Spots list |
+| **@** | Open the DX Watch dialog |
+| **R** | Show / scroll to the Radio Display panel (when configured) |
+| **r** | Start / stop Remote Audio |
+
+**Arrow keys and the frequency display.** When a VFO frequency display has keyboard focus, **← → ↑ ↓** and **PageUp/PageDown** keep their digit-editing behaviour (see §13.4). Global tune / IF-shift shortcuts do not override that focused editor. Left/Right also stay with the band button group when that group has focus.
+
+### 13.2 Mode and passband
+
+| Key | Action |
+|---|---|
+| **l** | LSB |
+| **u** | USB |
+| **c** | CW-U |
+| **C** or **Alt+c** | CW-L |
+| **a** | AM |
+| **A** or **Alt+a** | AM-N |
+| **q** | FM |
+| **Q** or **Alt+q** | FM-N |
+| **d** | DATA-U |
+| **Alt+d** | DATA-L |
+| **p** | Narrow IF width (previous step in the dropdown) |
+| **P** | Widen IF width (next step) |
+| **/** (unshifted) | Restore default IF width |
+| **↑** / **↓** | IF Shift ±20 Hz (when the frequency display is not focused) |
+| **Shift** + ↑/↓ | IF Shift ±100 Hz |
+
+FM uses **q** (not **f**) so full-screen can keep the existing **f** / **F** binding. Modes that are not in the radio's mode list are announced as unavailable.
+
+### 13.3 Spectrum, Radio Scope, and remote audio (conditional)
+
+**Display target.** The span / range / hold keys (**z**, **w**, **s**, and friends) act on either the **SDR spectrum** panel or the **Radio Scope** CAT controls — whichever is the current target. Press **t** (or the top-bar **Keys → SDR** / **Keys → Scope** button) to switch. The choice is remembered in the browser. If only one of the two is available, that one is used automatically (for example Radio Scope on a CAT-only host, or SDR when the radio has no CAT scope).
+
+| Key | Action | When |
+|---|---|---|
+| **t** | Toggle z/w/s target between SDR spectrum and Radio Scope | Both available |
+| **z** / **Z** | Zoom in / out (narrower / wider span) | Active display target |
+| **Alt+z** / **Alt+Z** | Jump to narrowest / widest span | Active display target |
+| **<** / **>** (**Shift+,** / **Shift+.**) | Wider / narrower span | Active display target |
+| **w** / **W** | SDR: vertical range −/+ 1 dB. Radio Scope: smaller / larger spectrum pane (L → N → S) | Active display target |
+| **Alt+w** / **Alt+W** | SDR: range −/+ 10 dB. Radio Scope: smallest / largest pane | Active display target |
+| **o** / **O** | Radio Scope reference level −/+ 1 dB | Radio Scope target |
+| **Alt+o** / **Alt+O** | Radio Scope reference level −/+ 10 dB | Radio Scope target |
+| **s** | Toggle Hold (freeze / live) | Active display target |
+| **S** | SDR: reset range to 60 dB. Radio Scope: reset reference level to 0 dB | Active display target |
+| **v** / **V** | Remote Audio RX gain −/+ | Remote Audio controls present |
+| **Shift+M** | Mute / unmute Remote Audio RX | Remote Audio controls present |
+
+The optional **TX keyboard shortcut** in Settings (often Space) is unchanged — mute no longer uses Space. With Caps Lock on, bare **m** still opens Memories; mute stays **Shift+M**.
+
+### 13.4 Frequency display — digit editing
+
+Every VFO frequency display is a "digit-pickable" control. You select a digit (it highlights yellow), then step it up or down. Three input methods reach the same set of actions, so pick whichever suits you:
 
 | Input | Action | What happens |
 |---|---|---|
@@ -2321,11 +2391,30 @@ On touch devices, tap a digit in the frequency display to select it (it highligh
 
 A few extra notes:
 
-- **Click-tuned changes are debounced** — when you stop wheeling / pressing for ~600 ms, the new frequency is sent to the radio. Holding ArrowUp for a sustained step (autorepeat) works fine; it sends one CAT command per ~600 ms of stillness rather than one per keystroke.
+- **Click-tuned changes are throttled** — live CAT updates are sent while you step; a trailing settle send runs after you pause (~250 ms).
 - **Selection persists** across polling cycles — you can press ArrowUp repeatedly and the selection stays on the same digit. The radio's confirmation of one step doesn't blow your selection away.
 - **The selected digit highlights yellow** when an actual digit is selected. The whole display also gains a blue focus ring when it has keyboard focus (e.g. you tabbed into it).
 
-**Browser zoom — make everything bigger or smaller.** YWC is a web page, so it honours your browser's standard zoom keyboard shortcuts. This is the easiest way to make controls more readable on a high-resolution monitor or to fit more on a small tablet screen:
+### 13.5 Frequency keypad and other existing keys
+
+| Key / Action | Result |
+|---|---|
+| Mouse wheel (on spectrum) | Tune that panel's VFO in 1 kHz steps |
+| Click on spectrum | Tune that panel's VFO to the clicked frequency |
+| **Tab** (in band buttons) | Move focus into the band button group |
+| **← / →** (in band buttons) | Move to the previous/next band and switch immediately |
+| Numeric entry button next to MHz | Open the on-screen frequency keyboard for that VFO |
+| **0–9** (frequency keyboard open) | Type the digit at the cursor position |
+| **← →** (frequency keyboard open) | Move the cursor left or right |
+| **Backspace** (frequency keyboard open) | Clear the current digit and move cursor back |
+| **Delete** (frequency keyboard open) | Clear all digits |
+| **↵ Enter** (frequency keyboard open) | Send the entered frequency to the radio and close the keyboard |
+| **Esc** (frequency keyboard open) | Close the keyboard without changing frequency |
+| **Esc** (Memory panel open) | Close the Memory panel |
+
+### 13.6 Browser zoom
+
+YWC is a web page, so it honours your browser's standard zoom keyboard shortcuts. This is the easiest way to make controls more readable on a high-resolution monitor or to fit more on a small tablet screen:
 
 | Key | Result |
 |---|---|
@@ -2336,7 +2425,7 @@ A few extra notes:
 
 The browser remembers your zoom level per site, so once you've set it, every YWC session opens at that size until you change it. Worth setting once if the default text is too small (or too large) for you — and especially worth knowing about for partially-sighted operators who don't otherwise know browsers can do this.
 
----
+**Keeping the dialog and this section aligned.** The in-app **?** dialog is generated from the same shortcut registry as the dispatcher (`wwwroot/js/ui/keyboard-shortcuts.js` → `SHORTCUT_HELP`). When adding or renaming a shortcut, update that registry and this §13 table in the same change.
 
 ## 14. Troubleshooting
 

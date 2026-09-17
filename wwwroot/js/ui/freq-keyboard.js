@@ -89,6 +89,7 @@ async function pressEnter() {
     }
     // Confirm the entry to a voice-announcement user
     if (window.voiceAnnounce) window.voiceAnnounce.sayFrequencyEntered(hz);
+    closeKeyboard();
 }
 
 // ── Physical keyboard handler ─────────────────────────────────────────────────
@@ -123,18 +124,35 @@ function initPhysicalKeyboard() {
             return;
         }
 
-        // Navigation keys only apply when focus is within the dialog.
+        // Enter / Backspace / Delete apply whenever the keypad is open, even if
+        // focus has left the dialog (e.g. after a band-button click, or if a
+        // shortcut briefly focused the main VFO display). Arrow cursor moves
+        // stay dialog-focused so they don't steal from other widgets.
+        if (e.key === 'Enter') {
+            if (document.activeElement?.id === 'freqKbEnter') return;
+            e.preventDefault();
+            e.stopPropagation();
+            pressEnter();
+            return;
+        }
+        if (e.key === 'Backspace') {
+            e.preventDefault();
+            e.stopPropagation();
+            pressBackspace();
+            return;
+        }
+        if (e.key === 'Delete') {
+            e.preventDefault();
+            e.stopPropagation();
+            pressClear();
+            return;
+        }
+
+        // Cursor arrows only when focus is within the dialog.
         if (!_dialog.contains(document.activeElement)) return;
 
         if (e.key === 'ArrowLeft')       { e.preventDefault(); moveCursor(-1); }
         else if (e.key === 'ArrowRight') { e.preventDefault(); moveCursor(1); }
-        else if (e.key === 'Backspace')  { e.preventDefault(); pressBackspace(); }
-        else if (e.key === 'Delete')     { e.preventDefault(); pressClear(); }
-        else if (e.key === 'Enter') {
-            if (document.activeElement?.id === 'freqKbEnter') return;
-            e.preventDefault();
-            pressEnter();
-        }
     }, true); // capture phase — fires before any element handler
 }
 
@@ -326,4 +344,8 @@ export function initFreqKeyboard() {
 
     initPhysicalKeyboard();
     initFrequencyUpdateListener();
+
+    // For keyboard-shortcuts.js (and anything else) that must not re-import this
+    // module under a different URL — same instance, same dialog refs.
+    window.openFreqKeyboard = openKeyboard;
 }
