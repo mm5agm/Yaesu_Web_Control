@@ -1,6 +1,8 @@
 // ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
 import { createAudioSession } from './audio-session.js?v=1';
 import { supportsWebCodecsOpus } from './audio-protocol.js?v=1';
+import { createGauge } from '../guages/gaugeFactory.js?v=1';
+import { updateGaugeValue } from '../guages/update-engine.js?v=1';
 
 const CHANNEL_NAME = 'ywc-remote-audio';
 const POPOUT_STORAGE_KEY = 'ywc.remoteAudio.popout';
@@ -195,6 +197,16 @@ function bindRemoteAudioControls(role) {
   const statusEl = document.getElementById('remoteAudioStatus');
   const rxMeter = document.getElementById('remoteAudioRxMeter');
   const txMeter = document.getElementById('remoteAudioTxMeter');
+  const rxMeterValue = document.getElementById('remoteAudioRxMeterValue');
+  const txMeterValue = document.getElementById('remoteAudioTxMeterValue');
+  const rxGauge = createGauge('audioLinear', 'remoteAudioRxMeter', {
+    colorBarProgress: '#0dcaf0'
+  });
+  const txGauge = createGauge('audioLinear', 'remoteAudioTxMeter', {
+    colorBarProgress: '#ffc107'
+  });
+  rxGauge?.render();
+  txGauge?.render();
   const micSelect = document.getElementById('remoteAudioMicSelect');
   const codecSelect = document.getElementById('remoteAudioCodecSelect');
   const codecHint = document.getElementById('remoteAudioCodecHint');
@@ -434,8 +446,22 @@ function bindRemoteAudioControls(role) {
   }
 
   function setMeters(rx, tx) {
-    if (rxMeter) rxMeter.style.width = `${Math.min(100, Math.round(rx * 100))}%`;
-    if (txMeter) txMeter.style.width = `${Math.min(100, Math.round(tx * 100))}%`;
+    const rxPercent = Math.min(100, Math.max(0, Math.round((Number(rx) || 0) * 100)));
+    const txPercent = Math.min(100, Math.max(0, Math.round((Number(tx) || 0) * 100)));
+    if (rxGauge) {
+      updateGaugeValue(rxGauge, rxPercent, { min: 0, max: 100 });
+      rxGauge.gauge.draw();
+    } else if (rxMeter) {
+      rxMeter.style.width = `${rxPercent}%`;
+    }
+    if (txGauge) {
+      updateGaugeValue(txGauge, txPercent, { min: 0, max: 100 });
+      txGauge.gauge.draw();
+    } else if (txMeter) {
+      txMeter.style.width = `${txPercent}%`;
+    }
+    if (rxMeterValue) rxMeterValue.textContent = `${rxPercent}%`;
+    if (txMeterValue) txMeterValue.textContent = `${txPercent}%`;
   }
 
   function setPopoutHints(reopen) {
