@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model Yaesu_Web_Control.Pages.SettingsModel
 
 <style>
@@ -48,6 +48,20 @@
 </style>
 
 <div class="mt-4">
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h4 class="mb-0"><i class="bi bi-sliders"></i> More Settings</h4>
+        </div>
+        <div class="card-body d-flex flex-wrap gap-2">
+            <a class="btn btn-outline-primary" asp-page="/ApplicationSetup">
+                <i class="bi bi-toggles"></i> Application Setup
+            </a>
+            <a class="btn btn-outline-primary" asp-page="/Labels">
+                <i class="bi bi-universal-access"></i> Accessibility Labels
+            </a>
+        </div>
+    </div>
 
     @* Restart-required banner — shown when a setting like the radio model was
        changed and the running app needs a restart for it to fully take effect.
