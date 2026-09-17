@@ -406,31 +406,6 @@
                     aria-label="Show or hide VFO B panel">
                 VFO-B
             </button>
-            <button id="swapVfoBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
-                    title="Swap VFO A and VFO B frequencies"
-                    aria-label="Swap VFO A and VFO B frequencies">
-                <span class="toggle-dd__label">A&#8596;B</span>
-            </button>
-            <button id="copyBtoABtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
-                    title="Copy VFO B frequency &amp; mode to VFO A. VFO B is left unchanged. Useful for transmitting on VFO B's settings without enabling split."
-                    aria-label="Copy VFO B to VFO A">
-                <span class="toggle-dd__label">B&rarr;A</span>
-            </button>
-            <button id="copyAtoBBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
-                    title="Copy VFO A frequency &amp; mode to VFO B. VFO A is left unchanged. Useful for seeding VFO B from VFO A before adjusting one of them."
-                    aria-label="Copy VFO A to VFO B">
-                <span class="toggle-dd__label">A&rarr;B</span>
-            </button>
-            <button id="splitBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
-                    title="Toggle Split: VFO A = receive, VFO B = transmit"
-                    aria-label="Toggle split mode: VFO A receive, VFO B transmit">
-                <span class="toggle-dd__label">Split</span>
-            </button>
-            <button id="quickSplitBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
-                    title="Quick Split: enable split and set VFO B to VFO A + 5 kHz"
-                    aria-label="Quick split: enable split and set VFO B to VFO A plus 5 kHz">
-                <span class="toggle-dd__label">+5k</span>
-            </button>
             @if (isSingleReceiver)
             {
                 <span id="rxTxSplitGroup" class="d-inline-flex align-items-center gap-1 ms-1"
@@ -479,8 +454,7 @@
                          Resize with Bootstrap col-* on each .op-col. -->
                     <div id="operatingControlsRow" class="row g-2 align-items-start">
                         <!-- Column 0 — Compact linear meters (PoC). Radials in
-                             #meterGaugesRow stay in place. Steal width from the
-                             extras column (was col-6 → col-4). -->
+                             #meterGaugesRow stay in place. -->
                         <div class="col-2 op-col op-col--linear-meters">
                             <div class="linear-meter-row">
                                 <span class="linear-meter-label">SWR</span>
@@ -543,7 +517,7 @@
                             }
                         </div>
                         <!-- Column 1 — TX levels -->
-                        <div class="col-3 op-col op-col--levels">
+                        <div class="col-auto op-col op-col--levels">
                             <div id="powerButton"
                                  data-max-power="@maxPowerWatts"
                                  data-value="@Model.RadioState.Power"></div>
@@ -556,6 +530,35 @@
                             <div id="monitorButton"
                                  data-enabled="@(Model.MonitorOn ? "1" : "0")"
                                  data-value="@Model.MonitorLevelA"></div>
+                        </div>
+
+                        <!-- VFO A/B actions — immediately to the right of TX levels -->
+                        <div class="col-auto op-col op-col--buttons op-col--vfo-actions">
+                            <button id="swapVfoBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
+                                    title="Swap VFO A and VFO B frequencies"
+                                    aria-label="Swap VFO A and VFO B frequencies">
+                                <span class="toggle-dd__label">A&#8596;B</span>
+                            </button>
+                            <button id="copyBtoABtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
+                                    title="Copy VFO B frequency &amp; mode to VFO A. VFO B is left unchanged. Useful for transmitting on VFO B's settings without enabling split."
+                                    aria-label="Copy VFO B to VFO A">
+                                <span class="toggle-dd__label">B&rarr;A</span>
+                            </button>
+                            <button id="copyAtoBBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
+                                    title="Copy VFO A frequency &amp; mode to VFO B. VFO A is left unchanged. Useful for seeding VFO B from VFO A before adjusting one of them."
+                                    aria-label="Copy VFO A to VFO B">
+                                <span class="toggle-dd__label">A&rarr;B</span>
+                            </button>
+                            <button id="splitBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
+                                    title="Toggle Split: VFO A = receive, VFO B = transmit"
+                                    aria-label="Toggle split mode: VFO A receive, VFO B transmit">
+                                <span class="toggle-dd__label">Split</span>
+                            </button>
+                            <button id="quickSplitBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
+                                    title="Quick Split: enable split and set VFO B to VFO A + 5 kHz"
+                                    aria-label="Quick split: enable split and set VFO B to VFO A plus 5 kHz">
+                                <span class="toggle-dd__label">+5k</span>
+                            </button>
                         </div>
 
                         <!-- Column 2 — ATU / Tune / FM / VOX -->
@@ -679,7 +682,7 @@
                         </div>
 
                         <!-- Column 5 — Remote Audio / Clarifier -->
-                        <div class="col-4 op-col op-col--extras">
+                        <div class="col op-col op-col--extras">
                             <!-- Remote Audio — visible when Settings → Remote Audio is enabled -->
                             <div id="remoteAudioBar" class="op-extras-block" style="display:none;">
                                 <strong class="text-nowrap remote-audio-label"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
@@ -1281,8 +1284,9 @@
                          style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;">—</div>
                             </div>
                         </div>
-                    </div>
-                    <!-- VFO B Panel -->
+        </div>
+
+        <!-- VFO B Panel -->
         <div class="col-lg-6 col-12" id="vfoBCol">
             <div class="card border-success h-100 receiver-card">
                 <div class="card-header bg-success text-white py-1">
