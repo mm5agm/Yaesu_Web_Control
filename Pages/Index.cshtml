@@ -534,6 +534,13 @@
                                 <span class="toggle-dd__led is-on" aria-hidden="true"></span>
                                 <span class="toggle-dd__label">VFO B</span>
                             </button>
+                            <button id="txButton"
+                                    class="btn toggle-dd__btn"
+                                    onclick="toggleTx()" aria-label="Toggle transmit"
+                                    title="Click to transmit">
+                                <span class="toggle-dd__led" aria-hidden="true"></span>
+                                <span class="toggle-dd__label"><i class="bi bi-broadcast me-1" aria-hidden="true"></i>TX A</span>
+                            </button>
                         </div>
 
                         <!-- VFO A/B actions — immediately to the right of TX levels -->
@@ -1073,10 +1080,6 @@
                                 <span id="vcTuneWarnA" class="text-warning small" style="display:none; font-size: 0.75rem;"></span>
                             </span>
                             }
-                            <button id="txButtonA" class="btn btn-warning btn-sm" style="display:none;"
-                                    onclick="toggleTx()" title="Toggle Transmit">
-                                <i class="bi bi-broadcast" aria-hidden="true"></i> TX
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -1330,10 +1333,6 @@
                                 <span id="vcTuneWarnB" class="text-warning small" style="display:none; font-size: 0.75rem;"></span>
                             </span>
                             }
-                            <button id="txButtonB" class="btn btn-warning btn-sm" style="display:none;"
-                                    onclick="toggleTx()" title="Toggle Transmit">
-                                <i class="bi bi-broadcast" aria-hidden="true"></i> TX
-                            </button>
                         </div>
                     </div>
                 </div>

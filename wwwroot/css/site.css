@@ -964,6 +964,16 @@ fieldset.calibration-card {
     max-width: 100%;
 }
 
+#operatingControlsRow .op-col--levels > #vfoBToggleBtn {
+    grid-column: 1;
+    grid-row: 3;
+}
+
+#operatingControlsRow .op-col--levels > #txButton {
+    grid-column: 2;
+    grid-row: 3;
+}
+
 /* Compact linear SWR / Power bars (PoC) — leftmost column of the
    operating-controls row. Radials in #meterGaugesRow stay untouched. */
 #operatingControlsRow .op-col--linear-meters {
