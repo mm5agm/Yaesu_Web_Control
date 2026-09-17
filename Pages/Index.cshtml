@@ -752,36 +752,8 @@
                                 <strong class="text-nowrap clarifier-label"><i class="bi bi-sliders" aria-hidden="true"></i> Clarifier</strong>
                                 <div id="clarVfoButton" data-selected="A"></div>
                                 <div id="clarModeButton" data-selected="@clarModeInit"></div>
-                                <label class="mb-0 fw-bold text-nowrap clar-offset-label">Offset:
-                                    <span id="clarOffsetValue">@Model.RadioState.ClarifierOffsetA</span> Hz
-                                </label>
-                                <div class="op-clar-offset">
-                                    <button type="button"
-                                            class="btn toggle-dd__btn toggle-dd__btn--action clar-nudge-key"
-                                            onclick="nudgeClarifier(-10)" title="−10 Hz"
-                                            aria-label="Decrease clarifier offset by 10 Hz">
-                                        <span class="toggle-dd__label">−</span>
-                                    </button>
-                                    <input type="range" id="clarOffsetSlider"
-                                           min="-9990" max="9990" step="10"
-                                           value="@Model.RadioState.ClarifierOffsetA"
-                                           oninput="document.getElementById('clarOffsetValue').textContent = this.value"
-                                           onchange="setClarifierOffset(parseInt(this.value))"
-                                           aria-label="Clarifier offset in Hz" aria-valuemin="-9990" aria-valuemax="9990">
-                                    <button type="button"
-                                            class="btn toggle-dd__btn toggle-dd__btn--action clar-nudge-key"
-                                            onclick="nudgeClarifier(10)" title="+10 Hz"
-                                            aria-label="Increase clarifier offset by 10 Hz">
-                                        <span class="toggle-dd__label">+</span>
-                                    </button>
-                                    <button type="button"
-                                            class="btn toggle-dd__btn toggle-dd__btn--action clar-reset-key"
-                                            onclick="resetClarifier()"
-                                            title="Reset offset to 0 Hz (mode unchanged)"
-                                            aria-label="Reset clarifier offset to zero">
-                                        <span class="toggle-dd__label">Reset</span>
-                                    </button>
-                                </div>
+                                <div id="clarOffsetButton"
+                                     data-value="@Model.RadioState.ClarifierOffsetA"></div>
                             </div>
                         </div>
                     </div>
