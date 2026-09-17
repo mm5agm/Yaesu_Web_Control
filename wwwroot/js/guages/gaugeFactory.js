@@ -16,7 +16,7 @@
 // Once every user is past that upgrade the marker is inert, and bumping it
 // achieves nothing the version-tied parent import has not already done.
 import { SMeterGauge, PowerGauge, SWRGauge, ALCGauge, TempGauge, CompressionGauge, IDDGauge, VDDGauge } from './gauge.js?v=1';
-import { LinearPowerGauge, LinearSWRGauge, LinearALCGauge, LinearCompressionGauge, LinearSMeterGauge, LinearTempGauge, LinearIDDGauge, LinearVDDGauge } from './linear-gauge.js?v=1';
+import { LinearPowerGauge, LinearSWRGauge, LinearALCGauge, LinearCompressionGauge, LinearSMeterGauge, LinearTempGauge, LinearIDDGauge, LinearVDDGauge, LinearAudioGauge } from './linear-gauge.js?v=1';
 
 // Registry of gauge constructors.
 // Add new meter types here as your UI grows.
@@ -37,7 +37,8 @@ const gaugeRegistry = {
     smeterLinear:       LinearSMeterGauge,
     tempLinear:         LinearTempGauge,
     iddLinear:          LinearIDDGauge,
-    vddLinear:          LinearVDDGauge
+    vddLinear:          LinearVDDGauge,
+    audioLinear:        LinearAudioGauge
 };
 
 // High-contrast colour overrides applied when Windows High Contrast mode is active.
@@ -112,3 +113,4 @@ export function createLinearSMeterGauge(canvasId, options = {}) { return createG
 export function createLinearTempGauge(canvasId, options = {}) { return createGauge('tempLinear', canvasId, options); }
 export function createLinearIDDGauge(canvasId, options = {}) { return createGauge('iddLinear', canvasId, options); }
 export function createLinearVDDGauge(canvasId, options = {}) { return createGauge('vddLinear', canvasId, options); }
+export function createLinearAudioGauge(canvasId, options = {}) { return createGauge('audioLinear', canvasId, options); }

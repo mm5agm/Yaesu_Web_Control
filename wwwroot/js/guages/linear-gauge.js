@@ -456,3 +456,28 @@ export class LinearVDDGauge extends LinearGauge {
         super(canvasId, config);
     }
 }
+
+// ------------------------------------------------------------
+// AUDIO LEVEL — compact 0–100% bar for the Remote Audio controls
+// ------------------------------------------------------------
+
+export class LinearAudioGauge extends LinearGauge {
+    constructor(canvasId, options = {}) {
+        const config = Object.assign({
+            renderTo: canvasId,
+            minValue: 0,
+            maxValue: 100,
+            majorTicks: ['0', '25', '50', '75', '100'],
+            highlights: [
+                { from: 0, to: 70, color: 'rgba(0, 255, 0, .25)' },
+                { from: 70, to: 90, color: 'rgba(255, 255, 0, .25)' },
+                { from: 90, to: 100, color: 'rgba(255, 0, 0, .25)' }
+            ],
+            colorBarProgress: '#0dcaf0',
+            colorBar: '#3a3a3a',
+            value: 0
+        }, options);
+
+        super(canvasId, config);
+    }
+}
