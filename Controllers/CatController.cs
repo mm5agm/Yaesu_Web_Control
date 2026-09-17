@@ -2091,21 +2091,40 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                await _catClient.SendCommandAsync("SV;", "WebUI", CancellationToken.None);
-
-                // Read back both frequencies immediately — auto-info will also arrive but this avoids UI flicker
-                var faResponse = await _catClient.SendCommandAsync("FA;", "WebUI", CancellationToken.None);
-                if (!string.IsNullOrWhiteSpace(faResponse) && faResponse.StartsWith("FA") &&
-                    long.TryParse(faResponse.Substring(2).TrimEnd(';'), out long freqA))
+                if (_radioStateService.IsSingleReceiver)
                 {
-                    _radioStateService.FrequencyA = freqA;
+                    // FTdx10 / FT-710 / FTDX3000 do not provide the dual-
+                    // receiver SV; exchange. Read and write both VFOs
+                    // explicitly, so the selected VFO is tuned to the other
+                    // VFO's frequency instead of leaving the radio on the
+                    // previous frequency.
+                    var faResponse = await _catClient.SendCommandAsync("FA;", "WebUI", CancellationToken.None);
+                    var fbResponse = await _catClient.SendCommandAsync("FB;", "WebUI", CancellationToken.None);
+                    if (!TryParseFrequencyResponse(faResponse, "FA", out var freqA) ||
+                        !TryParseFrequencyResponse(fbResponse, "FB", out var freqB))
+                    {
+                        return StatusCode(502, new { error = "Failed to read VFO frequencies" });
+                    }
+
+                    await _catClient.SendCommandAsync($"FA{freqB:D9};", "WebUI", CancellationToken.None);
+                    await _catClient.SendCommandAsync($"FB{freqA:D9};", "WebUI", CancellationToken.None);
+                    _radioStateService.FrequencyA = freqB;
+                    _radioStateService.FrequencyB = freqA;
                 }
-
-                var fbResponse = await _catClient.SendCommandAsync("FB;", "WebUI", CancellationToken.None);
-                if (!string.IsNullOrWhiteSpace(fbResponse) && fbResponse.StartsWith("FB") &&
-                    long.TryParse(fbResponse.Substring(2).TrimEnd(';'), out long freqB))
+                else
                 {
-                    _radioStateService.FrequencyB = freqB;
+                    // Dual-receiver radios support the atomic exchange.
+                    await _catClient.SendCommandAsync("SV;", "WebUI", CancellationToken.None);
+
+                    // Read back both frequencies immediately — auto-info will
+                    // also arrive but this avoids UI flicker.
+                    var faResponse = await _catClient.SendCommandAsync("FA;", "WebUI", CancellationToken.None);
+                    if (TryParseFrequencyResponse(faResponse, "FA", out var freqA))
+                        _radioStateService.FrequencyA = freqA;
+
+                    var fbResponse = await _catClient.SendCommandAsync("FB;", "WebUI", CancellationToken.None);
+                    if (TryParseFrequencyResponse(fbResponse, "FB", out var freqB))
+                        _radioStateService.FrequencyB = freqB;
                 }
 
                 // Re-query ATU state. On single-receiver radios like the
@@ -2141,6 +2160,15 @@ namespace Yaesu_Web_Control.Controllers
                 return StatusCode(500, new { error = "Failed to swap VFO" });
             }
             finally { _requestSemaphore.Release(); }
+        }
+
+        private static bool TryParseFrequencyResponse(string? response, string prefix, out long frequency)
+        {
+            frequency = 0;
+            if (string.IsNullOrWhiteSpace(response) || !response.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+
+            return long.TryParse(response[prefix.Length..].TrimEnd(';'), out frequency);
         }
 
         // POST /api/cat/copy-vfo/{direction}
