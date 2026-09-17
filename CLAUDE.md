@@ -69,6 +69,41 @@ flag it if you think `rules.md` should be extended to cover them explicitly.
 6. Pushing to `origin`, tagging, releasing, and opening PRs all need Colin's
    explicit word, as before.
 
+### Issue triage: minor vs serious, and when an issue closes
+
+Pre-releases are batched — one is cut for something serious, or once four
+or five minor fixes have built up — never one per bug. What happens to an
+issue once its fix is in the code depends on which it is.
+
+A bug is **serious** if any of these holds:
+
+1. **It stops someone operating.** Won't start, won't connect, crashes, or a
+   whole feature the reporter relies on is unusable (#161 RSPduo showing
+   only noise; #143 "localhost refused").
+2. **There is no way round it.** If the reporter can carry on by ignoring a
+   gauge, re-ticking a box or reading the radio's own meter, it is minor.
+   If the only workaround is "don't use YWC", it is serious.
+3. **The fix can't be trusted until the reporter tries it, and being wrong
+   would hurt.** Protocol-level work (CAT, SDR device I/O, meter scaling)
+   that only their hardware can bench-check. A wrong number on one gauge
+   (#155) does not hurt; a radio or SDR that stays unusable does.
+
+Everything else — a wrong scale on one gauge, a setting not persisted,
+layout at extreme zoom, manual typos, a gauge face that recovers on refresh
+— is **minor**.
+
+- **Minor, fixed in code → close it now**, default reason (completed). The
+  comment says what was wrong and what changed, that it will be in the next
+  pre-release or main release (never name a pre-release that doesn't exist),
+  anything the reporter must do when they install it, and "if it isn't fixed
+  for you, reopen it — or just comment if GitHub gives you no button — and
+  I'll reopen it". A reporter without write access can only reopen an issue
+  they closed themselves, hence the fallback.
+- **Serious → stays open** until the reporter confirms the fix on an actual
+  build.
+
+The point is that fixed-but-unreleased minor bugs stop cluttering the list.
+
 ---
 
 ## Shared code lives in Radio_Web_Control_Core. This is a hard rule.
