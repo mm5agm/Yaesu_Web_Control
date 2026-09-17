@@ -90,7 +90,6 @@
                     </span>
                     <span class="badge text-bg-secondary" id="remoteAudioTxVfo"
                           title="VFO that will transmit" aria-live="polite">VFO A</span>
-                    <span class="small text-muted" id="remoteAudioStatus">Idle</span>
                     <div class="remote-audio-popout-meters" aria-label="Remote audio levels">
                         <div class="remote-audio-meter-row">
                             <span class="linear-meter-label" title="Radio → browser level">RX</span>
@@ -106,6 +105,9 @@
                         </div>
                     </div>
                     <button type="button" class="btn btn-sm btn-outline-light" id="remoteAudioCloseBtn" title="Close this window">Close</button>
+                </div>
+                <div class="remote-audio-status-row">
+                    <span class="small text-muted" id="remoteAudioStatus">Idle</span>
                 </div>
                 <div class="remote-audio-gain-row d-flex flex-column gap-2 pt-1 border-top border-secondary">
                     <div class="d-flex align-items-center gap-2 flex-wrap">
