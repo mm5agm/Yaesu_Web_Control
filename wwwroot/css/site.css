@@ -152,6 +152,22 @@ body.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
     margin-bottom: 0 !important;
 }
 
+/* Keep maintenance links visually separate from everyday navigation. */
+.ywc-nav-maintenance {
+    border-top: 1px solid var(--yaesu-edge, #555);
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+}
+
+@media (min-width: 576px) {
+    .ywc-nav-maintenance {
+        border-top: 0;
+        border-left: 1px solid var(--yaesu-edge, #555);
+        margin-top: 0;
+        padding-top: 0;
+    }
+}
+
 /* Ensure first row and columns fill vertical space in fullscreen */
 .fullscreen-mode main[role="main"] > .row:first-of-type {
     height: 100% !important;

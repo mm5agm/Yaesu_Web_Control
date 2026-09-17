@@ -115,9 +115,28 @@ header.ywc-header {
     color: var(--yaesu-ink) !important;
 }
 
+.ywc-navbar .nav-link {
+    border-radius: 0.35rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.ywc-navbar .nav-link i {
+    color: var(--ywc-ink-muted, #9aa3ad);
+    font-size: 0.9em;
+}
+
 .ywc-navbar .nav-link:hover,
 .ywc-navbar .nav-link:focus {
+    background-color: rgba(255, 255, 255, 0.08);
     color: #fff !important;
+}
+
+.ywc-navbar .nav-link:hover i,
+.ywc-navbar .nav-link:focus i {
+    color: inherit;
 }
 
 .ywc-navbar .navbar-toggler {
