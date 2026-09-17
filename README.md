@@ -358,6 +358,13 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-09-17 - v2.5.2-pre3 (pre-release)
+
+*Fix for [#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143) - "localhost refused to connect" the moment the Settings page is left. If that is happening to you, this is the build. Everyone else can stay on v2.5.1; it also carries everything in pre1 and pre2.*
+
+- **The SDR device scan can no longer take the whole app down** ([#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143)). Dave G0CER's Event Viewer entry from pre1 named it: an access violation inside SoapySDR's device enumeration, which the Settings page runs when it opens. SoapySDR probes every SDR driver it can find, and each of those loads its own USB libraries - a clashing copy of one of them somewhere on the PC faults in native code, and a native fault ends a .NET process outright, with nothing any error handler can do about it. You do not need to own an SDR for this to bite; Dave has none. The scan now runs in a separate, throwaway process (the same `Yaesu_Sdr_Worker.exe` that streams an SDR, in a new one-shot mode). If it dies, YWC carries on and the Settings page says so - *"The SoapySDR device scan crashed inside a native driver ... Yaesu Web Control itself is unaffected"* - and the log records which `SoapySDR.dll` was loaded so the clash can be found. Reported by Dave G0CER.
+- The SDR worker now finds the bundled `SoapySDR.dll` by itself. Until now it relied on `SoapySDR.dll` being on the PATH, so a SoapySDR device (RTL-SDR, Airspy, HackRF) opened in the worker only on a PC that happened to have it there. SDRplay devices were never affected.
+
 ## 2026-09-17 - v2.5.2-pre2 (pre-release)
 
 *Pre-release for [#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161) - the SDRplay RSPduo. If you use an RSPduo for the spectrum display, this is the build to try. Everyone else can stay on v2.5.1; it also carries everything in pre1 and the new keyboard shortcuts below.*
