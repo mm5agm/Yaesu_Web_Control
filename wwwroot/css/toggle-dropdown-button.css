@@ -369,8 +369,8 @@
     --yaesu-led-mb: 0.22rem;
     width: 100%;
     min-width: 0;
-    min-height: 2.1rem;
-    height: 2.1rem;
+    min-height: 2.75rem;
+    height: 2.75rem;
     padding: 0.14rem 0.45rem 0.28rem;
 }
 
@@ -380,8 +380,8 @@
 .vfo-col--band .toggle-dd__btn--action,
 .vfo-col--tune .toggle-dd__btn--action,
 .vfo-band-row .toggle-dd__btn--action {
-    min-height: 2.1rem;
-    height: 2.1rem;
+    min-height: 2.75rem;
+    height: 2.75rem;
     padding: 0.14rem 0.45rem 0.28rem;
 }
 
