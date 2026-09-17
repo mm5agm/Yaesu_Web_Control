@@ -867,8 +867,8 @@ async function toggleTx() {
 }
 
 function updateTxButton() {
-    const btnA = document.getElementById('txButtonA');
-    const btnB = document.getElementById('txButtonB');
+    const btn = document.getElementById('txButton');
+    if (!btn) return;
 
     // TX button position rules:
     //
@@ -895,23 +895,28 @@ function updateTxButton() {
         positionVfo = txVfo;
     }
 
-    // Show only on TX VFO
-    if (btnA) btnA.style.display = (positionVfo === 0) ? 'inline-block' : 'none';
-    if (btnB) btnB.style.display = (positionVfo === 1) ? 'inline-block' : 'none';
-
-    // Update button state
-    const activeBtn = (positionVfo === 0) ? btnA : btnB;
-    if (activeBtn) {
-        if (isTransmitting) {
-            activeBtn.className = 'btn btn-danger btn-sm';
-            activeBtn.innerHTML = '<i class="bi bi-broadcast" aria-hidden="true"></i> TX ON';
-            activeBtn.title = 'Click to stop transmitting';
-        } else {
-            activeBtn.className = 'btn btn-warning btn-sm';
-            activeBtn.innerHTML = '<i class="bi bi-broadcast" aria-hidden="true"></i> TX';
-            activeBtn.title = 'Click to transmit';
-        }
-    }
+    const txVfoLabel = positionVfo === 0 ? 'A' : 'B';
+    document.getElementById('receiverAHeading').innerHTML =
+        positionVfo === 0
+            ? 'VFO A - <i class="bi bi-broadcast ms-1" title="Transmit VFO" aria-label="Transmit VFO"></i>'
+            : 'VFO A';
+    document.getElementById('receiverBHeading').innerHTML =
+        positionVfo === 1
+            ? 'VFO B - <i class="bi bi-broadcast ms-1" title="Transmit VFO" aria-label="Transmit VFO"></i>'
+            : 'VFO B';
+    btn.querySelector('.toggle-dd__led')
+        ?.classList.toggle('is-on', isTransmitting);
+    btn.querySelector('.toggle-dd__label').innerHTML =
+        `<i class="bi bi-broadcast me-1" aria-hidden="true"></i>TX ${txVfoLabel}`;
+    btn.title = isTransmitting
+        ? `Click to stop transmitting on VFO ${txVfoLabel}`
+        : `Click to transmit on VFO ${txVfoLabel}`;
+    btn.setAttribute(
+        'aria-label',
+        isTransmitting
+            ? `Stop transmitting on VFO ${txVfoLabel}`
+            : `Start transmitting on VFO ${txVfoLabel}`
+    );
 }
 
 function updateSplitButton() {
