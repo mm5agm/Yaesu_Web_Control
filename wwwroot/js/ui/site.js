@@ -925,10 +925,8 @@ function updateSplitButton() {
     const active     = splitMode > 0;
 
     if (btn) {
-        btn.className = active ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-outline-secondary';
-        btn.style.paddingTop    = '1px';
-        btn.style.paddingBottom = '1px';
-        btn.textContent = active ? 'Split ON' : 'Split';
+        btn.classList.toggle('btn-danger', active);
+        btn.querySelector('.toggle-dd__label').textContent = active ? 'Split ON' : 'Split';
     }
 
     // R8: the SPLIT TX badge belongs on the TX VFO's header. On
@@ -2224,10 +2222,10 @@ window.addEventListener('DOMContentLoaded', () => {
     // flash so the press registers visually, then return to the resting style.
     const quickSplitBtn = document.getElementById('quickSplitBtn');
     quickSplitBtn?.addEventListener('click', () => {
-        quickSplitBtn.classList.replace('btn-outline-secondary', 'btn-danger');
+        quickSplitBtn.classList.add('btn-danger');
         clearTimeout(quickSplitBtn._flashTimer);
         quickSplitBtn._flashTimer = setTimeout(() => {
-            quickSplitBtn.classList.replace('btn-danger', 'btn-outline-secondary');
+            quickSplitBtn.classList.remove('btn-danger');
         }, 250);
         setSplit(2);
     });
