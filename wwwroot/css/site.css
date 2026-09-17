@@ -1209,6 +1209,11 @@ fieldset.calibration-card {
     flex: 0 0 100%;
 }
 
+.remote-audio-status-row {
+    flex: 0 0 100%;
+    line-height: 1;
+}
+
 /* ── VOX / CW / FM Repeater floating panels ─────────────────────────────── */
 /* Non-modal: all three can be open simultaneously, draggable, positioned across the top */
 #voxDialog > div:first-child,
