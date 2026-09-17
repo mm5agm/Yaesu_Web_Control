@@ -762,6 +762,43 @@ function initClarModeButton() {
 }
 
 /**
+ * Clarifier offset key — left-click resets the selected VFO to zero;
+ * right-click opens the offset slider. The key has no on/off LED.
+ */
+function initClarOffsetButton() {
+    const root = document.getElementById("clarOffsetButton");
+    if (!root) return null;
+
+    const value = Math.max(-9990, Math.min(9990, Number(root.dataset.value) || 0));
+    let lastValue = value;
+    const widget = new CycleContextButton(root, {
+        label: "Offset",
+        options: [{ id: "offset", label: "Offset" }],
+        selectedId: "offset",
+        offId: null,
+        clickAction: "reset",
+        resetValue: 0,
+        showLed: false,
+        context: { type: "slider", min: -9990, max: 9990, step: 10, value, valueSuffix: " Hz" },
+        a11yKey: "controls.clarOffset",
+        onChange: (state) => {
+            if (state.value === undefined || state.value === lastValue) return;
+            lastValue = state.value;
+            window.setClarifierOffset?.(state.value);
+        },
+    });
+
+    const originalSetState = widget.setState.bind(widget);
+    widget.setState = (partial = {}, opts = {}) => {
+        originalSetState(partial, opts);
+        lastValue = widget.getState().value;
+    };
+
+    window.clarOffsetButton = widget;
+    return widget;
+}
+
+/**
  * Top-toolbar Apps key: one Yaesu action menu listing only the apps the
  * operator enabled in Application Setup. Hidden entirely when none are on.
  * @returns {ActionMenuButton | null}
@@ -814,6 +851,7 @@ export function initVfoKeyButtons() {
     result.apps = initAppsButton();
     result.clarVfo = initClarVfoButton();
     result.clarMode = initClarModeButton();
+    result.clarOffset = initClarOffsetButton();
     for (const vfo of ["A", "B"]) {
         const band = initBandButton(vfo);
         const segment = initSegmentButton(vfo);
