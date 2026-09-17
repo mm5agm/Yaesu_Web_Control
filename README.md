@@ -358,6 +358,13 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 ## Release Notes
 
+## 2026-09-17 - v2.5.2-pre2 (pre-release)
+
+*Pre-release for [#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161) - the SDRplay RSPduo. If you use an RSPduo for the spectrum display, this is the build to try. Everyone else can stay on v2.5.1; it also carries everything in pre1 and the new keyboard shortcuts below.*
+
+- **RSPduo: pick Tuner 1 or Tuner 2** ([#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161)). An RSPduo streamed happily but showed only a flat noise floor, because I never told the SDRplay service which of its two tuners to use - every other RSP has one, and on the RSPduo the service is left to choose. The RSPduo now appears twice in the SDR device list, **Tuner 1** and **Tuner 2**; pick the entry matching the socket the IF cable is in (Tuner 1 is the 50 ohm SMA socket). An RSPduo already selected in Settings is treated as Tuner 1. I do not own an RSPduo, so this is unverified until an RSPduo owner reports back - please do, on #161, either way. Reported by Bruce VK2RT.
+- **Keyboard shortcuts** ([#150](https://github.com/mm5agm/Yaesu_Web_Control/pull/150) - Fabio Valente, CR7CDC). The main page can now be driven from the keyboard: **?** or **h** opens a dialog listing every shortcut, and there is a keyboard-icon button in the top bar for it. Tuning by 1 Hz / 50 Hz / 100 Hz / 1 kHz / 10 kHz steps, band up/down, VFO swap and copy, mode, IF width and shift, mute, memories, DX cluster, the S-meter history and VFO B panels, and the radio's own scope (span, mode, hold, marker) when **t** points the keys at it. Shortcuts stay quiet while you are typing in a text box. See [USER_MANUAL.md section 13](USER_MANUAL.md#13-keyboard-shortcuts) for the table.
+
 ## 2026-09-15 - v2.5.2-pre1 (pre-release)
 
 *Diagnostic pre-release for [#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143). Logging only - nothing about how the app behaves has changed. Install it if you are seeing "localhost refused to connect" after the first page; otherwise stay on v2.5.1.*
