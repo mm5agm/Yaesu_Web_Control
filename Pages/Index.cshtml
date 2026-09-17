@@ -399,32 +399,30 @@
                     aria-label="Show or hide VFO B panel">
                 VFO-B
             </button>
-            <button id="swapVfoBtn" class="btn btn-sm btn-outline-secondary"
-                    style="padding-top: 1px; padding-bottom: 1px;" title="Swap VFO A and VFO B frequencies"
+            <button id="swapVfoBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
+                    title="Swap VFO A and VFO B frequencies"
                     aria-label="Swap VFO A and VFO B frequencies">
-                A&#8596;B
+                <span class="toggle-dd__label">A&#8596;B</span>
             </button>
-            <button id="copyBtoABtn" class="btn btn-sm btn-outline-secondary"
-                    style="padding-top: 1px; padding-bottom: 1px;"
+            <button id="copyBtoABtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
                     title="Copy VFO B frequency &amp; mode to VFO A. VFO B is left unchanged. Useful for transmitting on VFO B's settings without enabling split."
                     aria-label="Copy VFO B to VFO A">
-                B&rarr;A
+                <span class="toggle-dd__label">B&rarr;A</span>
             </button>
-            <button id="copyAtoBBtn" class="btn btn-sm btn-outline-secondary"
-                    style="padding-top: 1px; padding-bottom: 1px;"
+            <button id="copyAtoBBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
                     title="Copy VFO A frequency &amp; mode to VFO B. VFO A is left unchanged. Useful for seeding VFO B from VFO A before adjusting one of them."
                     aria-label="Copy VFO A to VFO B">
-                A&rarr;B
+                <span class="toggle-dd__label">A&rarr;B</span>
             </button>
-            <button id="splitBtn" class="btn btn-sm btn-outline-secondary"
-                    style="padding-top: 1px; padding-bottom: 1px;" title="Toggle Split: VFO A = receive, VFO B = transmit"
+            <button id="splitBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
+                    title="Toggle Split: VFO A = receive, VFO B = transmit"
                     aria-label="Toggle split mode: VFO A receive, VFO B transmit">
-                Split
+                <span class="toggle-dd__label">Split</span>
             </button>
-            <button id="quickSplitBtn" class="btn btn-sm btn-outline-secondary"
-                    style="padding-top: 1px; padding-bottom: 1px;" title="Quick Split: enable split and set VFO B to VFO A + 5 kHz"
+            <button id="quickSplitBtn" class="btn toggle-dd__btn toggle-dd__btn--action toggle-dd__btn--toolbar"
+                    title="Quick Split: enable split and set VFO B to VFO A + 5 kHz"
                     aria-label="Quick split: enable split and set VFO B to VFO A plus 5 kHz">
-                +5k
+                <span class="toggle-dd__label">+5k</span>
             </button>
             @if (isSingleReceiver)
             {
