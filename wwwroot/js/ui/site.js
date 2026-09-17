@@ -1668,19 +1668,13 @@ connection.on("RadioStateUpdate", function (update) {
     if (update.property === "ClarifierOffsetA") {
         clarOffsets.A = parseInt(update.value) || 0;
         if (clarVfo === 'A') {
-            const slider = document.getElementById('clarOffsetSlider');
-            const label  = document.getElementById('clarOffsetValue');
-            if (slider) slider.value = clarOffsets.A;
-            if (label)  label.textContent = clarOffsets.A;
+            window.clarOffsetButton?.setState({ value: clarOffsets.A }, { silent: true });
         }
     }
     if (update.property === "ClarifierOffsetB") {
         clarOffsets.B = parseInt(update.value) || 0;
         if (clarVfo === 'B') {
-            const slider = document.getElementById('clarOffsetSlider');
-            const label  = document.getElementById('clarOffsetValue');
-            if (slider) slider.value = clarOffsets.B;
-            if (label)  label.textContent = clarOffsets.B;
+            window.clarOffsetButton?.setState({ value: clarOffsets.B }, { silent: true });
         }
     }
 
@@ -2188,8 +2182,8 @@ window.addEventListener('DOMContentLoaded', () => {
     })();
 
     // Clarifier: seed JS state from server-rendered HTML values
-    const clarSlider = document.getElementById('clarOffsetSlider');
-    if (clarSlider) clarOffsets.A = parseInt(clarSlider.value) || 0;
+    const clarOffsetRoot = document.getElementById('clarOffsetButton');
+    if (clarOffsetRoot) clarOffsets.A = parseInt(clarOffsetRoot.dataset.value) || 0;
     const clarModeRoot = document.getElementById('clarModeButton');
     const initMode = window.clarModeButton?.getState()?.selectedId
         || clarModeRoot?.dataset.selected
@@ -2301,10 +2295,7 @@ function selectClarVfo(vfo) {
     clarVfo = vfo;
     window.clarVfoButton?.setState({ selectedId: vfo }, { silent: true });
     const offset = clarOffsets[vfo];
-    const slider = document.getElementById('clarOffsetSlider');
-    const label  = document.getElementById('clarOffsetValue');
-    if (slider) slider.value = offset;
-    if (label)  label.textContent = offset;
+    window.clarOffsetButton?.setState({ value: offset }, { silent: true });
 }
 window.selectClarVfo = selectClarVfo;
 
@@ -2323,10 +2314,7 @@ window.setClarifierOffset = setClarifierOffset;
 
 async function resetClarifier() {
     clarOffsets[clarVfo] = 0;
-    const slider = document.getElementById('clarOffsetSlider');
-    const label  = document.getElementById('clarOffsetValue');
-    if (slider) slider.value = 0;
-    if (label)  label.textContent = '0';
+    window.clarOffsetButton?.setState({ value: 0 }, { silent: true });
     await _setClarifier(clarVfo, rxClarOn, txClarOn, 0);
 }
 
@@ -2335,10 +2323,7 @@ async function nudgeClarifier(deltaHz) {
     let newOffset = Math.round(((clarOffsets[vfo] || 0) + deltaHz) / 10) * 10;
     newOffset = Math.max(-9990, Math.min(9990, newOffset));
     clarOffsets[vfo] = newOffset;
-    const slider = document.getElementById('clarOffsetSlider');
-    const label  = document.getElementById('clarOffsetValue');
-    if (slider) slider.value = newOffset;
-    if (label)  label.textContent = newOffset;
+    window.clarOffsetButton?.setState({ value: newOffset }, { silent: true });
     try {
         await fetch('/api/cat/clarifier/nudge', {
             method: 'POST',

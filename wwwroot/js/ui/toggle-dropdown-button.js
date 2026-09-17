@@ -689,7 +689,8 @@ export class CycleContextButton {
      *   options?: { id: string, label: string }[],
      *   selectedId?: string,
      *   offId?: string | null,
-     *   clickAction?: "cycle" | "select",
+     *   clickAction?: "cycle" | "select" | "reset",
+     *   resetValue?: number,
      *   clickSelectId?: string,
      *   extraLabels?: Record<string, string>,
      *   sliderAlias?: Record<string, string>,
@@ -710,9 +711,13 @@ export class CycleContextButton {
             { id: "0", label: "OFF" },
             { id: "1", label: "ON" },
         ]).map((o) => ({ id: String(o.id), label: String(o.label) }));
-        this.clickAction = config.clickAction === "select" ? "select" : "cycle";
+        this.clickAction =
+            config.clickAction === "select" || config.clickAction === "reset"
+                ? config.clickAction
+                : "cycle";
         this.clickSelectId =
             config.clickSelectId != null ? String(config.clickSelectId) : "0";
+        this.resetValue = Number(config.resetValue ?? 0);
         this.extraLabels = { ...(config.extraLabels ?? {}) };
         this.sliderAlias = { ...(config.sliderAlias ?? {}) };
         this.offIds = config.offIds ? new Set(config.offIds.map(String)) : null;
@@ -987,7 +992,7 @@ export class CycleContextButton {
         this.root.innerHTML = `
             <button type="button"
                     class="btn toggle-dd__btn toggle-dd__btn--menu"
-                    title="Left-click to cycle; right-click for level"
+                    title="${this.clickAction === "reset" ? "Left-click to reset; right-click for level" : "Left-click to cycle; right-click for level"}"
                     aria-haspopup="${popup}"
                     aria-expanded="false"
                     aria-pressed="false"${a11yAttr}>
@@ -1021,7 +1026,9 @@ export class CycleContextButton {
             }
             if (!this.options.length) return;
             this._setMenuOpen(false);
-            if (this.clickAction === "select") {
+            if (this.clickAction === "reset") {
+                if (this.contextType === "slider") this.value = this.resetValue;
+            } else if (this.clickAction === "select") {
                 this.selectedId = this.clickSelectId;
                 if (this.linkSliderToOptions && this.contextType === "slider") {
                     this._applySliderIndex();
