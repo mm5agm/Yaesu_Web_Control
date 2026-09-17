@@ -1100,10 +1100,6 @@
                                         title="Keyboard — enter VFO A frequency">
                                     <strong>123</strong>
                                 </button>
-                                <div class="filter-scope-freq-slot" id="filterScopeContainerA">
-                                    <canvas id="filterScopeCanvasA" role="img" aria-hidden="true"
-                                            aria-label="VFO A filter display" data-a11y-key="filter.scopeA"></canvas>
-                                </div>
                             </div>
                             <!-- Compact linear S-meter between frequency and RF gain.
                                  On single-receiver radios the inactive VFO's meter
@@ -1168,6 +1164,10 @@
 
                         <!-- Col 2: roofing, IF width, IF shift, audio filter -->
                         <div class="vfo-col vfo-col--band">
+                            <div class="filter-scope-vfo-slot" id="filterScopeContainerA">
+                                <canvas id="filterScopeCanvasA" role="img" aria-hidden="true"
+                                        aria-label="VFO A filter display" data-a11y-key="filter.scopeA"></canvas>
+                            </div>
                             @if (!isFt710)
                             {
                                 <div id="roofingButtonA"
@@ -1356,10 +1356,6 @@
                                         title="Keyboard — enter VFO B frequency">
                                     <strong>123</strong>
                                 </button>
-                                <div class="filter-scope-freq-slot" id="filterScopeContainerB">
-                                    <canvas id="filterScopeCanvasB" role="img" aria-hidden="true"
-                                            aria-label="VFO B filter display" data-a11y-key="filter.scopeB"></canvas>
-                                </div>
                             </div>
                             <!-- Compact linear S-meter between frequency and RF gain.
                                  On single-receiver radios the inactive VFO's meter
@@ -1424,6 +1420,10 @@
 
                         <!-- Col 2: roofing, IF width, IF shift, audio filter -->
                         <div class="vfo-col vfo-col--band">
+                            <div class="filter-scope-vfo-slot" id="filterScopeContainerB">
+                                <canvas id="filterScopeCanvasB" role="img" aria-hidden="true"
+                                        aria-label="VFO B filter display" data-a11y-key="filter.scopeB"></canvas>
+                            </div>
                             @if (!isFt710)
                             {
                                 <div id="roofingButtonB"
