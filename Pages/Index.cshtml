@@ -735,14 +735,18 @@
                                     </button>
                                 </span>
                                 <span class="small text-muted" id="remoteAudioStatus">Idle</span>
-                                <div class="op-extras-meters">
-                                    <span class="small" title="Radio → browser level">RX</span>
-                                    <div class="progress flex-grow-1" style="height:8px; width:80px;">
-                                        <div id="remoteAudioRxMeter" class="progress-bar bg-info" style="width:0%"></div>
+                                <div class="op-extras-meters" aria-label="Remote audio levels">
+                                    <div class="remote-audio-meter-row">
+                                        <span class="linear-meter-label" title="Radio → browser level">RX</span>
+                                        <canvas id="remoteAudioRxMeter" class="remote-audio-meter-canvas"
+                                                role="img" aria-label="Received audio level"></canvas>
+                                        <span id="remoteAudioRxMeterValue" class="linear-meter-value remote-audio-meter-value">0%</span>
                                     </div>
-                                    <span class="small" title="Browser mic → radio level">TX</span>
-                                    <div class="progress flex-grow-1" style="height:8px; width:80px;">
-                                        <div id="remoteAudioTxMeter" class="progress-bar bg-warning" style="width:0%"></div>
+                                    <div class="remote-audio-meter-row">
+                                        <span class="linear-meter-label" title="Browser mic → radio level">TX</span>
+                                        <canvas id="remoteAudioTxMeter" class="remote-audio-meter-canvas"
+                                                role="img" aria-label="Transmit audio level"></canvas>
+                                        <span id="remoteAudioTxMeterValue" class="linear-meter-value remote-audio-meter-value remote-audio-meter-value--tx">0%</span>
                                     </div>
                                 </div>
                             </div>
