@@ -12,6 +12,14 @@ namespace Yaesu_Web_Control.Pages.MeterCalibration
         // radio model in the email subject line.
         public string RadioModel { get; private set; } = "";
 
+        // The preview gauges draw the same dials as the main page: the rated
+        // output for Power, and the per-model VDD dial (#155) so a 13.8 V
+        // radio's VDD preview is not a 40–55 V face that never moves.
+        public int    MaxPowerWatts { get; private set; } = 200;
+        public int    VddMin        { get; private set; } = 40;
+        public int    VddMax        { get; private set; } = 55;
+        public string PaSupplyVolts { get; private set; } = "50.0";
+
         // Gates the developer-only "import emailed calibration into the shipped
         // default" button — true only in the dev build (never for installed users).
         public bool IsDevelopmentMode => _calibration.IsDevelopmentMode;
@@ -26,6 +34,10 @@ namespace Yaesu_Web_Control.Pages.MeterCalibration
         {
             var settings = await _settings.GetSettingsAsync();
             RadioModel = settings.RadioModel ?? "";
+            MaxPowerWatts = RadioCapabilities.MaxPowerWatts(RadioModel);
+            (VddMin, VddMax) = RadioCapabilities.VddGaugeRange(RadioModel);
+            PaSupplyVolts = RadioCapabilities.PaSupplyVolts(RadioModel)
+                .ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
         }
     }
 }

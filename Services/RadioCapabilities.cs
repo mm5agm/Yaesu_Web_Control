@@ -121,6 +121,33 @@ public static class RadioCapabilities
     };
 
     /// <summary>
+    /// Nominal PA supply voltage — what the radio's own VDD meter is aligned
+    /// to read. The FTdx101MP runs its 200 W final from an internal 50 V
+    /// supply; the FTdx101D runs from the 13.8 V DC input, and the Technical
+    /// Supplement's "VDD Meter Adjustment" sets the TFT reading to 50.0 V on
+    /// the MP and 13.8 V on the D. The FTDX3000, FTdx10 and FT-710 are 13.8 V
+    /// radios too. The FTDX5000 pair falls through to 13.8 V without a
+    /// source; its VDD gauge is hidden on the main page, so nothing reads
+    /// this for it yet — check the FTDX5000 Technical Supplement before
+    /// showing it.
+    /// </summary>
+    public static double PaSupplyVolts(string radioModel) => radioModel switch
+    {
+        "FTdx101MP" => 50.0,
+        _           => 13.8
+    };
+
+    /// <summary>
+    /// The VDD gauge's dial, in whole volts: 40–55 V around a 50 V supply,
+    /// 10–16 V around 13.8 V. Until #155 every model drew the FTdx101MP's
+    /// 40–55 V dial and the orchestrator dropped any raw reading below 175
+    /// (~41 V on the MP's table) — which is every reading a 13.8 V radio can
+    /// produce — so the FTdx101D's needle sat pinned at 40 V.
+    /// </summary>
+    public static (int Min, int Max) VddGaugeRange(string radioModel) =>
+        PaSupplyVolts(radioModel) >= 40 ? (40, 55) : (10, 16);
+
+    /// <summary>
     /// True when the radio has more than one antenna jack and YWC should
     /// expose a per-VFO antenna selector. Single-antenna radios get the
     /// selector hidden (Jacek SP3L #34, FTdx10 has one ANT jack — showing

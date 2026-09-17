@@ -24,6 +24,12 @@
     // slider and the Power dial are right on first paint, and so the browser
     // agrees with the range check CatController.SetPower applies to the same value.
     int maxPowerWatts = Yaesu_Web_Control.Services.RadioCapabilities.MaxPowerWatts(Model.RadioModel);
+    // VDD dial, per model for the same reason: 40–55 V for the FTdx101MP's 50 V
+    // PA supply, 10–16 V for the 13.8 V radios (#155). Invariant culture so a
+    // German-locale host does not render 13,8 into the JavaScript.
+    var vddDial = Yaesu_Web_Control.Services.RadioCapabilities.VddGaugeRange(Model.RadioModel);
+    string paSupplyVolts = Yaesu_Web_Control.Services.RadioCapabilities.PaSupplyVolts(Model.RadioModel)
+        .ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
     // Quick Memory Bank Store/Recall buttons (Thomas OZ1JTE request) — rendered
     // once, under VFO A's filter/audio scope, since QMB is a radio-global function.
     bool hasQmb = Yaesu_Web_Control.Services.RadioCapabilities.SupportsQmb(Model.RadioModel);
@@ -2890,9 +2896,10 @@
                 alc:         { canvasId: 'alcMeterCanvas' },
                 temp:        { canvasId: 'tempMeterCanvas' },
                 idd:         { canvasId: 'iddMeterCanvas' },
-                vdd:         { canvasId: 'vddMeterCanvas' }
+                vdd:         { canvasId: 'vddMeterCanvas', minValue: @vddDial.Min, maxValue: @vddDial.Max, nominal: @paSupplyVolts }
             });
-            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine, @maxPowerWatts);
+            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine, @maxPowerWatts,
+                { min: @vddDial.Min, max: @vddDial.Max, nominal: @paSupplyVolts });
 
             // ── S-meter history strips ───────────────────────────────────────
             // Hidden by default. Toggle via the "S-hist" button in the top

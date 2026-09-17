@@ -13,11 +13,15 @@ export class FTdx101Meters {
      *                                   per-model PWR tables are still copies of the
      *                                   FTdx101MP's and run to 200 W, so without this
      *                                   a 100 W radio can calibrate past full scale.
+     * @param {object} vdd               The VDD dial, { min, max, nominal } volts, from
+     *                                   RadioCapabilities: 40 / 55 / 50 on the FTdx101MP,
+     *                                   10 / 16 / 13.8 on the 13.8 V radios (#155).
      */
-    constructor(meterPanel, calibrationEngine, maxPowerWatts = 200) {
+    constructor(meterPanel, calibrationEngine, maxPowerWatts = 200, vdd = { min: 40, max: 55, nominal: 50 }) {
         this._meterPanel   = meterPanel;
         this._calibration  = calibrationEngine;
         this._maxPowerWatts = maxPowerWatts;
+        this._vdd           = vdd;
 
         // TX state
         this._isTransmitting = false;
@@ -40,8 +44,7 @@ export class FTdx101Meters {
         this._iddZeroCount = 0;
 
         // VDD filter state
-        this._lastValidVDD = 204;  // ~48 V default
-        this._vddLast      = 48;
+        this._vddLast = vdd.nominal;
 
         // Temperature filter state
         this._paTempLast      = 0;
@@ -206,14 +209,19 @@ export class FTdx101Meters {
     }
 
     _processVDD(raw) {
-        const minRaw = 175;  // ~41.2 V — margin above gauge minimum
-        const maxRaw = 235;  // ~55 V
-        if (raw < minRaw || raw > maxRaw) return { skip: true };
-        this._lastValidVDD = raw;
-        const volts = this._calibration.calibrateNumeric('VPA', this._lastValidVDD);
-        if (Math.abs(volts - this._vddLast) > 3 && this._vddLast !== 0) return { skip: true };
+        // Sanity-check in volts against the model's dial, not in raw counts.
+        // The old 175–235 raw window was the FTdx101MP's ~41–55 V and threw
+        // away every reading a 13.8 V radio produces, which left the
+        // FTdx101D's needle pinned at 40 V (#155). Raw 0 is "no reading" on
+        // any model — a PA supply is never 0 V while the radio is on. The jump
+        // limit is a fifth of the dial: 3 V on 40–55 as before, 1.2 V on 10–16.
+        const { min, max } = this._vdd;
+        if (raw <= 0) return { skip: true };
+        const volts = this._calibration.calibrateNumeric('VPA', raw);
+        if (volts < min || volts > max) return { skip: true };
+        if (Math.abs(volts - this._vddLast) > (max - min) * 0.2 && this._vddLast !== 0) return { skip: true };
         this._vddLast = volts;
-        this._meterPanel.update('vdd', Math.max(40, Math.min(volts, 55)));
+        this._meterPanel.update('vdd', volts);
         return { skip: false, gaugeKey: 'vdd', displayValue: { volts } };
     }
 

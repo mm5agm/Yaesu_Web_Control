@@ -578,18 +578,34 @@ class IDDGauge extends Gauge {
 // ------------------------------------------------------------
 
 class VDDGauge extends Gauge {
+    /**
+     * @param {object} options  minValue / maxValue / nominal select the dial:
+     *   40 / 55 / 50 for the FTdx101MP's 50 V PA supply (the default, and the
+     *   only dial that existed before #155), 10 / 16 / 13.8 for the 13.8 V
+     *   radios. Ticks and the yellow/green/red bands are derived from them so
+     *   both dials read alike: yellow up to 90 % of nominal, red from 104 %
+     *   (45 V and 52 V on the MP, exactly as before).
+     */
     constructor(canvasId, options = {}) {
+        const { minValue = 40, maxValue = 55, nominal = 50, ...rest } = options;
+        const step  = (maxValue - minValue) > 8 ? 2 : 1;
+        const ticks = [];
+        for (let v = minValue; v < maxValue; v += step) ticks.push(String(v));
+        ticks.push(String(maxValue));
+        const low  = Math.round(nominal * 0.9  * 10) / 10;
+        const high = Math.round(nominal * 1.04 * 10) / 10;
+
         const config = Object.assign({
             renderTo: canvasId,
-            minValue: 40,
-            maxValue: 55,
-            majorTicks: ["40", "42", "44", "46", "48", "50", "52", "54", "55"],
+            minValue,
+            maxValue,
+            majorTicks: ticks,
             highlights: [
-                { from: 40, to: 45, color: "rgba(255,255,0,.25)" },
-                { from: 45, to: 52, color: "rgba(0,255,0,.25)" },
-                { from: 52, to: 55, color: "rgba(255,0,0,.25)" }
+                { from: minValue, to: low,      color: "rgba(255,255,0,.25)" },
+                { from: low,      to: high,     color: "rgba(0,255,0,.25)" },
+                { from: high,     to: maxValue, color: "rgba(255,0,0,.25)" }
             ],
-            labels: ["40", "42", "44", "46", "48", "50", "52", "54", "55"],
+            labels: ticks,
             startAngle: 90,
             ticksAngle: 180,
             valueBox: false,
@@ -619,15 +635,15 @@ class VDDGauge extends Gauge {
             colorNeedleCircleInnerEnd: "#dc3545",
             animationDuration: 400,
             animationRule: "linear",
-            value: 48,
+            value: nominal,
             gaugeTitleShow: true,
             gaugeTitle: 'VDD',
             gaugeTitleId: 'vddMeterValue',
-            gaugeTitleDefault: '48.0',
+            gaugeTitleDefault: nominal.toFixed(1),
             gaugeTitleSuffix: 'V',
             gaugeTitleBg: '#198754',
             gaugeTitleColor: '#ffffff'
-        }, options);
+        }, rest);
 
         super(canvasId, config);
     }
