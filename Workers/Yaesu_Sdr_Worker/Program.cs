@@ -20,6 +20,18 @@
 //
 // Listens on localhost:<port>, accepts one client (YWC main), opens the SDR,
 // and streams FFT frames per the wire protocol in WireProtocol.cs.
+//
+// A second, one-shot mode:
+//
+//   Yaesu_Sdr_Worker.exe --enumerate
+//
+// runs the SoapySDR device scan and prints one JSON object to stdout (see
+// EnumerateResult). YWC main uses this instead of calling SoapySDR in its own
+// process because SoapySDRDevice_enumerate loads and probes every backend
+// module it can find, and a bad one takes the whole process down with an
+// access violation that no managed catch can stop. Issue #143: a user with no
+// SDR at all lost YWC every time the Settings page opened. Here the crash
+// costs a throwaway process and the scan reports "crashed" instead.
 
 using Yaesu_Web_Control.Workers.Sdr;
 
@@ -31,6 +43,9 @@ internal static class Program
         // PATH isn't set — same fix the main YWC process applies. See
         // SdrplayDllResolver and issue #53.
         Yaesu_Web_Control.Services.Sdr.SdrplayDllResolver.Register();
+
+        if (args.Length == 1 && args[0].Equals("--enumerate", StringComparison.OrdinalIgnoreCase))
+            return RunEnumerate();
 
         WorkerOptions? opts;
         try { opts = ParseArgs(args); }
@@ -50,6 +65,57 @@ internal static class Program
 
         var host = new WorkerHost(opts);
         return await host.RunAsync(cts.Token).ConfigureAwait(false);
+    }
+
+    // Result of --enumerate, one JSON object on stdout. Field names are the
+    // wire contract with SoapySdrScan in YWC main — change both or neither.
+    private sealed record EnumerateResult(
+        bool Ok,
+        string? Error,
+        string? Message,
+        Yaesu_Web_Control.Services.Sdr.SdrDeviceInfo[] Devices,
+        string? Diagnostics);
+
+    private static int RunEnumerate()
+    {
+        // Say where SoapySDR.dll resolved from *before* enumerating, on
+        // stderr, so that when the scan takes the process down the parent's
+        // log still shows which copy of the DLL did it (#143).
+        try
+        {
+            if (Yaesu_Web_Control.Services.Sdr.SdrplayDllResolver.TryResolveSoapySdr(out string? soapyPath))
+                Console.Error.WriteLine($"SoapySDR.dll <- {soapyPath}");
+            else
+                Console.Error.WriteLine("SoapySDR.dll <- (not found next to the app; default search)");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"SoapySDR.dll preload: {ex.Message}");
+        }
+
+        EnumerateResult result;
+        try
+        {
+            var devices = Yaesu_Web_Control.Services.Sdr.SoapySdrInterop.EnumerateDevices();
+            // The plugin diagnostics are only interesting when nothing was
+            // found, and they cost another round of native calls.
+            string? diag = devices.Count == 0
+                ? Yaesu_Web_Control.Services.Sdr.SoapySdrInterop.GetPluginDiagnostics()
+                : null;
+            result = new EnumerateResult(true, null, null, devices.ToArray(), diag);
+        }
+        catch (DllNotFoundException ex)
+        {
+            result = new EnumerateResult(false, "DllNotFound", ex.Message, [], null);
+        }
+        catch (Exception ex)
+        {
+            result = new EnumerateResult(false, ex.GetType().Name, ex.Message, [], null);
+        }
+
+        Console.Out.Write(System.Text.Json.JsonSerializer.Serialize(result));
+        Console.Out.Flush();
+        return 0;
     }
 
     private static WorkerOptions? ParseArgs(string[] args)
@@ -111,6 +177,11 @@ internal static class Program
             "Usage:\n" +
             "  Yaesu_Sdr_Worker.exe --device-key KEY --vfo A|B --port N \\\n" +
             "                       --if-hz HZ --sample-rate HZ --fft-size N\n" +
+            "  Yaesu_Sdr_Worker.exe --enumerate\n" +
+            "\n" +
+            "--enumerate runs the SoapySDR device scan in this process and prints\n" +
+            "one JSON object to stdout, so a scan that crashes takes down this\n" +
+            "process and not Yaesu Web Control.\n" +
             "\n" +
             "Arguments:\n" +
             "  --device-key   SDR device key (e.g. sdrplay:hw6-2405242660, or a\n" +
