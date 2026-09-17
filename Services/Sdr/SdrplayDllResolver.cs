@@ -35,9 +35,37 @@ namespace Yaesu_Web_Control.Services.Sdr
                 System.Reflection.Assembly.GetExecutingAssembly(),
                 (name, _, _) =>
                 {
+                    if (name == SoapySdrDllName)
+                        return TryResolveSoapySdr(out _, out IntPtr sh) ? sh : IntPtr.Zero;
                     if (name != DllName) return IntPtr.Zero;
                     return TryResolve(out IntPtr h) ? h : IntPtr.Zero;
                 });
+        }
+
+        /// <summary>P/Invoke name SoapySdrInterop uses — matches its DllName const.</summary>
+        public const string SoapySdrDllName = "SoapySDR";
+
+        /// <summary>
+        /// Where the shipped SoapySDR.dll lives: <c>&lt;app&gt;\SoapySDR\bin</c>,
+        /// with the build machine's <c>C:\SoapySDR\bin</c> as the developer
+        /// fallback. The same two places main YWC's resolver in Program.cs
+        /// looks; the worker needs them too, or a SoapySDR device only ever
+        /// opens on a PC that happens to have SoapySDR.dll on the PATH.
+        /// </summary>
+        public static bool TryResolveSoapySdr(out string? path)
+        {
+            path = Path.Combine(AppContext.BaseDirectory, "SoapySDR", "bin", "SoapySDR.dll");
+            if (File.Exists(path)) return true;
+            path = @"C:\SoapySDR\bin\SoapySDR.dll";
+            if (File.Exists(path)) return true;
+            path = null;
+            return false;
+        }
+
+        private static bool TryResolveSoapySdr(out string? path, out IntPtr handle)
+        {
+            handle = IntPtr.Zero;
+            return TryResolveSoapySdr(out path) && NativeLibrary.TryLoad(path!, out handle);
         }
 
         /// <summary>
