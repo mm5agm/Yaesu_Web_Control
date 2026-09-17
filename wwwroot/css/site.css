@@ -1105,10 +1105,64 @@ fieldset.calibration-card {
 
 #operatingControlsRow .op-extras-meters {
     display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 12rem;
+    flex: 1 1 12rem;
+}
+
+.remote-audio-meter-row {
+    display: flex;
     align-items: center;
     gap: 0.35rem;
-    min-width: 10rem;
-    flex: 1 1 10rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.remote-audio-meter-row .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--yaesu-ink, #e6e6e6);
+    line-height: 1;
+}
+
+.remote-audio-meter-canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+.remote-audio-meter-value {
+    flex: 0 0 3.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #0dcaf0;
+    color: #000;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+.remote-audio-meter-value--tx {
+    background: #ffc107;
+}
+
+.remote-audio-popout-meters {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 18rem;
+}
+
+.remote-audio-popout-meters .remote-audio-meter-row {
+    flex: 1 1 9rem;
 }
 
 #operatingControlsRow #clarifierRow {
