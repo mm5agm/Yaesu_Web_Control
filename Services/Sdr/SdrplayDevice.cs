@@ -51,6 +51,18 @@ namespace Yaesu_Web_Control.Services.Sdr
         private const int    HwVerOffset         = 64;
         private const int    DevParamsOffset     = 0;   // within DeviceParamsT
         private const int    RxChannelAOffset    = 8;   // within DeviceParamsT
+        private const int    RxChannelBOffset    = 16;  // within DeviceParamsT (RSPduo only, else null)
+        private const int    TunerOffset         = 68;  // DeviceT.tuner (sdrplay_api_TunerSelectT)
+        private const int    RspDuoModeOffset    = 72;  // DeviceT.rspDuoMode (sdrplay_api_RspDuoModeT)
+        private const byte   HwVerRspDuo         = 3;   // SDRPLAY_RSPduo_ID
+        private const int    Tuner_A             = 1;   // sdrplay_api_Tuner_A  = RSPduo "Tuner 1"
+        private const int    Tuner_B             = 2;   // sdrplay_api_Tuner_B  = RSPduo "Tuner 2"
+        private const int    RspDuoMode_Single   = 1;   // sdrplay_api_RspDuoMode_Single_Tuner
+        // Key suffix selecting the RSPduo's second tuner: "sdrplay:hw3-<serial>-t2".
+        // No suffix (or "-t1") means Tuner 1, so keys saved before the suffix
+        // existed keep working and keep meaning Tuner 1.
+        private const string Tuner2KeySuffix     = "-t2";
+        private const string Tuner1KeySuffix     = "-t1";
         private const int    FsHzOffset          = 8;   // within DevParamsT
         private const int    RfHzOffset          = 40;  // tunerParams.rfFreq.rfHz — gain(24)+pad(4) after loMode offset 12
         private const int    CallbackFnsSize     = 24;  // 3 × IntPtr
@@ -65,7 +77,7 @@ namespace Yaesu_Web_Control.Services.Sdr
         private const int    GrDbOffset          = 12;  // gain.gRdB     (int) — first field
         private const int    LnaStateOffset      = 16;  // gain.LNAstate (int) — second field
 
-        // sdrplay_api_ControlParamsT starts at rxChannelA + 72 (= sizeof TunerParamsT).
+        // sdrplay_api_ControlParamsT starts at rxChannelA (or rxChannelB) + 72 (= sizeof TunerParamsT).
         // sizeof(TunerParamsT) = 72 because RfFreqT (double+uchar) has 7 bytes tail padding
         // → sizeof(RfFreqT)=16, dcOffsetTuner starts at 56, ends at 68, padded to 72.
         //   ctrlParams.dcOffset.DCenable           @ 72
@@ -167,7 +179,7 @@ namespace Yaesu_Web_Control.Services.Sdr
         // so if it rejects or rewrites a value, reading these afterwards shows
         // it — the return code alone does not.
         private IntPtr _devParamsPtr;
-        private IntPtr _rxChannelAPtr;
+        private IntPtr _rxChannelPtr;     // rxChannelA, or rxChannelB for an RSPduo on Tuner 2
         private GCHandle _selfHandle;     // pins 'this' for native callback context
 
         // Delegate fields — kept alive by the instance
@@ -201,13 +213,26 @@ namespace Yaesu_Web_Control.Services.Sdr
         }
 
         /// <summary>
-        /// Parses a device key into hwVer (or null for legacy keys) and serial.
-        /// New: "sdrplay:hw6-2405242660"  → (6, "2405242660")
-        /// Old: "sdrplay:2405242660"      → (null, "2405242660")
+        /// Parses a device key into hwVer (or null for legacy keys), serial and
+        /// the RSPduo tuner (1 or 2; always 1 for anything that is not an RSPduo).
+        /// New: "sdrplay:hw6-2405242660"     -> (6, "2405242660", 1)
+        /// Duo: "sdrplay:hw3-2234077E34-t2"  -> (3, "2234077E34", 2)
+        /// Old: "sdrplay:2405242660"         -> (null, "2405242660", 1)
         /// </summary>
-        private static (byte? hwVer, string serial) ParseKey(string key)
+        private static (byte? hwVer, string serial, int tuner) ParseKey(string key)
         {
             string body = key[KeyPrefix.Length..];
+            int tuner = 1;
+            if (body.EndsWith(Tuner2KeySuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                tuner = 2;
+                body  = body[..^Tuner2KeySuffix.Length];
+            }
+            else if (body.EndsWith(Tuner1KeySuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                body  = body[..^Tuner1KeySuffix.Length];
+            }
+
             // New format: "hw<digits>-<serial>"
             if (body.StartsWith("hw", StringComparison.OrdinalIgnoreCase))
             {
@@ -215,10 +240,10 @@ namespace Yaesu_Web_Control.Services.Sdr
                 if (dash > 2 &&
                     byte.TryParse(body.AsSpan(2, dash - 2), out byte hw))
                 {
-                    return (hw, body[(dash + 1)..]);
+                    return (hw, body[(dash + 1)..], tuner);
                 }
             }
-            return (null, body);
+            return (null, body, tuner);
         }
 
         // ── Public API ────────────────────────────────────────────────────────────
@@ -271,10 +296,12 @@ namespace Yaesu_Web_Control.Services.Sdr
                         {
                             diagnosticNote =
                                 "SDRplay API opened successfully but found 0 devices. " +
-                                "Check the RSP1 is plugged in to a USB port and that the " +
+                                "Check the RSP is plugged in to a USB port and that the " +
                                 "SDRplay USB driver is installed (Device Manager should show " +
-                                "'SDRplay RSP1' under 'Software Defined Radio', not under " +
-                                "'Unknown devices' or with a yellow warning icon).";
+                                "'SDRplay RSP...' under 'Software Defined Radio', not under " +
+                                "'Unknown devices' or with a yellow warning icon). An RSP " +
+                                "already selected by another program - including this " +
+                                "app's own SDR worker while it is streaming - is not listed.";
                         }
                         else
                         {
@@ -420,7 +447,7 @@ namespace Yaesu_Web_Control.Services.Sdr
 
             // Enumerate and find our device. We support both the new
             // "sdrplay:hw<N>-<serial>" key format and the legacy serial-only one.
-            var (wantHwVer, serial) = ParseKey(Key);
+            var (wantHwVer, serial, tuner) = ParseKey(Key);
 
             IntPtr deviceArray = Marshal.AllocHGlobal(DeviceStructSize * MaxDevices);
             try
@@ -437,12 +464,29 @@ namespace Yaesu_Web_Control.Services.Sdr
 
                 // Update Label now that we know the hardware version.
                 byte hwVer = Marshal.ReadByte(matchPtr, HwVerOffset);
-                Label = $"SDRplay {HwVerToModel(hwVer)} ({serial})";
+                Label = LabelFor(hwVer, serial, tuner);
 
                 // Copy the struct to our own buffer before freeing the array.
                 _deviceStructPtr = Marshal.AllocHGlobal(DeviceStructSize);
                 for (int i = 0; i < DeviceStructSize; i++)
                     Marshal.WriteByte(_deviceStructPtr, i, Marshal.ReadByte(matchPtr, i));
+
+                // RSPduo: GetDevices reports tuner = Tuner_Both and rspDuoMode as
+                // a bitmask of the modes on offer, and the API guide (2.1.4 and
+                // its example) says the application must pick one of each before
+                // SelectDevice. Left as returned, which tuner (if either) ends
+                // up feeding the stream is the service's choice, not ours; on
+                // an RSPduo bench-reported 2026-09-16 that gave a device that
+                // streamed happily but showed only noise while the IF sat on
+                // the Tuner 1 socket. We only ever want one tuner, so:
+                // single-tuner mode on the tuner the key names.
+                if (hwVer == HwVerRspDuo)
+                {
+                    Marshal.WriteInt32(_deviceStructPtr, RspDuoModeOffset, RspDuoMode_Single);
+                    Marshal.WriteInt32(_deviceStructPtr, TunerOffset, tuner == 2 ? Tuner_B : Tuner_A);
+                    Console.Error.WriteLine(
+                        $"[SdrplayDevice] RSPduo: selecting single-tuner mode on Tuner {tuner}");
+                }
             }
             finally { Marshal.FreeHGlobal(deviceArray); }
 
@@ -450,13 +494,23 @@ namespace Yaesu_Web_Control.Services.Sdr
             ThrowIfError(sdrplay_api_SelectDevice(_deviceStructPtr), "SelectDevice");
             _devHandle = Marshal.ReadIntPtr(_deviceStructPtr, DevHandleOffset);
 
-            // Retrieve parameter pointers and set frequency + sample rate
+            // Retrieve parameter pointers and set frequency + sample rate.
+            // Tuner parameters live in rxChannelA, or rxChannelB when an RSPduo
+            // is running on Tuner 2 (API guide example: "chParams = (tuner ==
+            // Tuner_B) ? rxChannelB : rxChannelA").
             ThrowIfError(sdrplay_api_GetDeviceParams(_devHandle, out IntPtr deviceParamsPtr), "GetDeviceParams");
 
-            IntPtr devParams  = Marshal.ReadIntPtr(deviceParamsPtr, DevParamsOffset);
-            IntPtr rxChannelA = Marshal.ReadIntPtr(deviceParamsPtr, RxChannelAOffset);
-            _devParamsPtr   = devParams;
-            _rxChannelAPtr  = rxChannelA;
+            IntPtr devParams = Marshal.ReadIntPtr(deviceParamsPtr, DevParamsOffset);
+            IntPtr rxChannel = Marshal.ReadIntPtr(deviceParamsPtr, RxChannelAOffset);
+            if (tuner == 2)
+            {
+                rxChannel = Marshal.ReadIntPtr(deviceParamsPtr, RxChannelBOffset);
+                if (rxChannel == IntPtr.Zero)
+                    throw new InvalidOperationException(
+                        "Tuner 2 was requested but the API returned no second channel - is this really an RSPduo?");
+            }
+            _devParamsPtr  = devParams;
+            _rxChannelPtr  = rxChannel;
 
             // Sample rate, decimation, analogue bandwidth and IF mode — one
             // decision, because the API only enables low-IF down-conversion for
@@ -480,22 +534,22 @@ namespace Yaesu_Web_Control.Services.Sdr
 
             WriteDouble(devParams, FsHzOffset, plan.HardwareRateHz);
 
-            Marshal.WriteByte(rxChannelA, DecimationEnableOffset,
+            Marshal.WriteByte(rxChannel, DecimationEnableOffset,
                               (byte)(plan.DecimationFactor > 1 ? 1 : 0));
-            Marshal.WriteByte(rxChannelA, DecimationFactorOffset,
+            Marshal.WriteByte(rxChannel, DecimationFactorOffset,
                               (byte)plan.DecimationFactor);
 
             // Centre frequency
-            WriteDouble(rxChannelA, RfHzOffset, (double)centreFrequencyHz);
+            WriteDouble(rxChannel, RfHzOffset, (double)centreFrequencyHz);
 
             // Analog bandwidth — must be set to match the sample rate.
             // Default after GetDeviceParams is 200 kHz, which rejects almost all of
             // the displayed span and leaves the spectrum showing only noise floor.
-            Marshal.WriteInt32(rxChannelA, BwTypeOffset, plan.BwType);
+            Marshal.WriteInt32(rxChannel, BwTypeOffset, plan.BwType);
 
             // IF mode. Left unwritten this defaults to sdrplay_api_IF_Zero, which
             // is what put a permanent trace down the centre of the display.
-            Marshal.WriteInt32(rxChannelA, IfTypeOffset, plan.IfType);
+            Marshal.WriteInt32(rxChannel, IfTypeOffset, plan.IfType);
 
             // An unmatched fsHz/bwType/ifType triple is not an error — the API
             // simply reverts to zero-IF and says nothing, and the only visible
@@ -511,8 +565,8 @@ namespace Yaesu_Web_Control.Services.Sdr
             // Gain — gRdB 40 (moderate IF gain reduction, safe for strong IF inputs),
             // LNAstate 0 (minimum LNA attenuation = maximum LNA sensitivity).
             // RSP1 valid ranges: gRdB 20–59, LNAstate 0–3.
-            Marshal.WriteInt32(rxChannelA, GrDbOffset,     40);
-            Marshal.WriteInt32(rxChannelA, LnaStateOffset,  0);
+            Marshal.WriteInt32(rxChannel, GrDbOffset,     40);
+            Marshal.WriteInt32(rxChannel, LnaStateOffset,  0);
         }
 
         /// <inheritdoc/>
@@ -553,14 +607,14 @@ namespace Yaesu_Web_Control.Services.Sdr
             Console.Error.WriteLine(
                 "[SdrplayDevice] after Init: " +
                 $"fsHz={ReadDouble(_devParamsPtr, FsHzOffset):0}  " +
-                $"bwType={Marshal.ReadInt32(_rxChannelAPtr, BwTypeOffset)}  " +
-                $"ifType={Marshal.ReadInt32(_rxChannelAPtr, IfTypeOffset)}  " +
-                $"loMode={Marshal.ReadInt32(_rxChannelAPtr, LoModeOffset)}  " +
-                $"rfHz={ReadDouble(_rxChannelAPtr, RfHzOffset):0}  " +
-                $"decEnable={Marshal.ReadByte(_rxChannelAPtr, DecimationEnableOffset)}  " +
-                $"decFactor={Marshal.ReadByte(_rxChannelAPtr, DecimationFactorOffset)}  " +
-                $"DCenable={Marshal.ReadByte(_rxChannelAPtr, DcEnableOffset)}  " +
-                $"IQenable={Marshal.ReadByte(_rxChannelAPtr, IqEnableOffset)}");
+                $"bwType={Marshal.ReadInt32(_rxChannelPtr, BwTypeOffset)}  " +
+                $"ifType={Marshal.ReadInt32(_rxChannelPtr, IfTypeOffset)}  " +
+                $"loMode={Marshal.ReadInt32(_rxChannelPtr, LoModeOffset)}  " +
+                $"rfHz={ReadDouble(_rxChannelPtr, RfHzOffset):0}  " +
+                $"decEnable={Marshal.ReadByte(_rxChannelPtr, DecimationEnableOffset)}  " +
+                $"decFactor={Marshal.ReadByte(_rxChannelPtr, DecimationFactorOffset)}  " +
+                $"DCenable={Marshal.ReadByte(_rxChannelPtr, DcEnableOffset)}  " +
+                $"IQenable={Marshal.ReadByte(_rxChannelPtr, IqEnableOffset)}");
 
             _streaming = true;
         }
@@ -696,17 +750,28 @@ namespace Yaesu_Web_Control.Services.Sdr
                 IntPtr ptr    = deviceArray + (int)(i * DeviceStructSize);
                 string serial = Marshal.PtrToStringAnsi(ptr) ?? $"device{i}";
                 byte   hwVer  = Marshal.ReadByte(ptr, HwVerOffset);
-                string model  = HwVerToModel(hwVer);
-                string label  = $"SDRplay {model} ({serial})";
 
                 // Key format includes hwVer so two devices that happen to share a
                 // serial (notably an RSP1 with the factory-default "0000000001"
                 // placeholder, alongside an RSP1B with a real serial) remain
                 // distinguishable. See USER_MANUAL FAQ "Why does my RSP1 show
                 // serial 0000000001?" for the background.
+                string baseKey = $"{KeyPrefix}hw{hwVer}-{serial}";
+
+                // An RSPduo is one box with two antenna sockets, so it is listed
+                // twice - once per tuner - and the operator picks the socket the
+                // IF is plugged into. Tuner 1 keeps the plain key so a setting
+                // saved before this existed still means Tuner 1.
+                if (hwVer == HwVerRspDuo)
+                {
+                    list.Add(new SdrDeviceInfo(baseKey,                   LabelFor(hwVer, serial, 1), "sdrplay"));
+                    list.Add(new SdrDeviceInfo(baseKey + Tuner2KeySuffix, LabelFor(hwVer, serial, 2), "sdrplay"));
+                    continue;
+                }
+
                 list.Add(new SdrDeviceInfo(
-                    Key:    $"{KeyPrefix}hw{hwVer}-{serial}",
-                    Label:  label,
+                    Key:    baseKey,
+                    Label:  LabelFor(hwVer, serial, 1),
                     Driver: "sdrplay"));
             }
         }
@@ -756,6 +821,16 @@ namespace Yaesu_Web_Control.Services.Sdr
         // The previous table was shifted by one slot at codes 3-5 and was
         // missing 255, so RSPdx devices were labelled "RSPduo" (Issue #10)
         // and RSP1A devices showed as "RSP (hwVer=255)".
+        /// <summary>
+        /// "SDRplay RSP1B (2405242660)", or for an RSPduo
+        /// "SDRplay RSPduo (2234077E34) - Tuner 1" / "- Tuner 2".
+        /// </summary>
+        private static string LabelFor(byte hwVer, string serial, int tuner)
+        {
+            string label = $"SDRplay {HwVerToModel(hwVer)} ({serial})";
+            return hwVer == HwVerRspDuo ? $"{label} \u2014 Tuner {tuner}" : label;
+        }
+
         private static string HwVerToModel(byte hwVer) => hwVer switch
         {
             1   => "RSP1",
@@ -780,22 +855,11 @@ namespace Yaesu_Web_Control.Services.Sdr
         {
             if (string.IsNullOrEmpty(key) || !key.StartsWith(KeyPrefix, StringComparison.OrdinalIgnoreCase))
                 return key;
-            string suffix = key.Substring(KeyPrefix.Length);
-            // New format: "hw<N>-<serial>"
-            if (suffix.StartsWith("hw", StringComparison.OrdinalIgnoreCase))
-            {
-                int dash = suffix.IndexOf('-');
-                if (dash > 2)
-                {
-                    if (byte.TryParse(suffix.AsSpan(2, dash - 2), out byte hw))
-                    {
-                        string serial = suffix.Substring(dash + 1);
-                        return $"SDRplay {HwVerToModel(hw)} ({serial})";
-                    }
-                }
-            }
-            // Legacy format: "sdrplay:<serial>" — model unknown without enumeration.
-            return $"SDRplay ({suffix})";
+            var (hw, serial, tuner) = ParseKey(key);
+            if (hw.HasValue)
+                return LabelFor(hw.Value, serial, tuner);
+            // Legacy format: "sdrplay:<serial>" - model unknown without enumeration.
+            return $"SDRplay ({serial})";
         }
 
         private static void WriteDouble(IntPtr ptr, int offset, double value)

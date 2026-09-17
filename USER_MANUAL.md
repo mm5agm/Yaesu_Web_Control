@@ -1372,7 +1372,7 @@ You might assume an SDRplay **RSPduo** (two tuners in one box) would be the natu
 2. **Cost.** Two RSP1Bs at typical retail prices are only marginally more expensive than one RSPduo.
 3. **Independence.** If one RSP misbehaves, YWC's worker for that side restarts independently. With an RSPduo a glitch can take both tuners out at once.
 
-If you already own an RSPduo, you can still use it — just set it as the VFO A SDR and leave the VFO B slot empty (the second tuner remains available for other software). The dual-tuner mode that lets one RSPduo serve both VFOs is not yet implemented.
+If you already own an RSPduo, you can still use it. It appears twice in the SDR device list — **Tuner 1** and **Tuner 2** — and you pick the entry matching the socket the IF cable is plugged into (Tuner 1 is the 50 Ω SMA socket; Tuner 2 is the other SMA socket, not the Hi-Z port). Set that entry as the VFO A SDR and leave the VFO B slot empty; the other tuner remains available for other software. The dual-tuner mode that lets one RSPduo serve both VFOs is not yet implemented.
 
 #### Why an SDRplay RSP, not a cheap RTL-SDR dongle?
 
@@ -2601,7 +2601,9 @@ The dual-SDR support in YWC (v2.3.0+) is designed for two completely separate re
 2. **Cost.** At UK retail prices (mid-2026): RSPduo around **£240**, RSP1B around **£125**. Two RSP1Bs come in at roughly the same total cost as one RSPduo, with double the bandwidth and full independence.
 3. **My own setup was "I had an old RSP1 sitting unused".** Adding a second SDR meant buying just one new RSP1B (£125) rather than a £240 RSPduo. That happens to be a common situation for hams who've upgraded their SDRplay receivers over the years — chances are there's an RSP1 or RSP2 in a drawer that can serve VFO B perfectly well.
 
-If you already own an RSPduo it will still work — set it as the VFO A SDR and leave VFO B as *(none)*. The dual-tuner mode that lets one RSPduo serve both VFOs is not yet implemented.
+If you already own an RSPduo it will still work. It is listed twice in the SDR device list — **SDRplay RSPduo (serial) — Tuner 1** and **— Tuner 2** — because the RSPduo has two separate antenna sockets, and I have to tell the SDRplay service which one to stream from before it will hand the device over. Pick the entry matching the socket the IF cable is plugged into: **Tuner 1** is the 50 Ω SMA socket, **Tuner 2** the second SMA socket (the Hi-Z port is not used). Set that entry as the VFO A SDR and leave VFO B as *(none)*. The dual-tuner mode that lets one RSPduo serve both VFOs is not yet implemented.
+
+If the spectrum shows a flat ripple of noise that never follows the radio, the wrong tuner is selected — swap to the other entry.
 
 ---
 
