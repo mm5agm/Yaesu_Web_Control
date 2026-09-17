@@ -943,6 +943,8 @@ fieldset.calibration-card {
     width: 100%;
 }
 
+/* col-auto in the markup: the level keys below are a fixed 10rem, so a col-*
+   basis wider than that just left dead space to the right of the keys. */
 #operatingControlsRow .op-col--levels {
     min-width: 0;
 }
@@ -1086,7 +1088,26 @@ fieldset.calibration-card {
     width: 100%;
 }
 
+/* col-auto in the markup, like the level column it sits beside. The keys keep
+   their own width here instead of filling the column as elsewhere in this row.
+   The auto margins take whatever width the row has left once the extras column
+   hits its cap, as equal space either side of these keys — without them that
+   slack collects at the end of the row instead. */
+#operatingControlsRow .op-col--vfo-actions {
+    align-items: center;
+    margin-inline: auto;
+}
+
+#operatingControlsRow .op-col--vfo-actions > .btn {
+    width: auto;
+}
+
+/* .col in the markup, capped: the Remote Audio and Clarifier blocks stay on the
+   same number of lines as the key columns beside them down to about 32rem, and
+   wrap into a taller block below that. Letting the column grow past the cap only
+   spreads the same controls over more width. */
 #operatingControlsRow .op-col--extras {
+    max-width: 34rem;
     min-width: 0;
 }
 
