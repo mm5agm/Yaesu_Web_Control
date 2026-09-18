@@ -272,11 +272,13 @@ namespace Yaesu_Web_Control.Pages
                 }
                 else if (Settings.RadioModel == "FTdx10")
                 {
-                    // Standard filters (1=15kHz, 2=6kHz, 3=3kHz) are always available.
-                    // Optional: 4=1.2kHz (YF-130CN), 5=300Hz (YF-130CW).
+                    // Keyed on the RF *read* codes, the same as Index.cshtml and
+                    // CatController: 6=12kHz, 7=3kHz, 9=500Hz standard; A=300Hz
+                    // (YF-130CW) optional. This used to keep only "4"/"5" — the
+                    // FTDX3000's codes — so the checkbox posted "A" and lost it.
                     var optionalSelected = Settings.InstalledRoofingFilters ?? new List<string>();
-                    current.InstalledRoofingFilters = new List<string> { "1", "2", "3" }
-                        .Concat(optionalSelected.Where(f => f is "4" or "5"))
+                    current.InstalledRoofingFilters = new List<string> { "6", "7", "9" }
+                        .Concat(optionalSelected.Where(f => f is "A"))
                         .Distinct().ToList();
                 }
                 else if (Settings.RadioModel == "FT-710")
