@@ -320,7 +320,12 @@ pre, code { tab-size: 4; }
     min-width: 160px;
 }
 
-/* Right-hand controls column — 2-column grid of label+select pairs */
+/* Right-hand controls column — 2-column grid of label+select pairs.
+   Its row (.receiver-controls-group) wraps: none of the three columns can
+   shrink, so between 150 % and 175 % browser zoom — narrower than the
+   sum of their minimums but not yet narrow enough for the two VFO cards
+   to stack — this column used to run out of the card and under VFO B
+   (#157). Wrapping puts it below the band buttons instead. */
 .vfo-controls-column {
     flex-shrink: 0;
     display: grid;
