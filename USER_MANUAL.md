@@ -1399,6 +1399,8 @@ YWC keeps the previous spectrum frame visible during the pause rather than blank
 
 Select which optional roofing filters are fitted to your radio. The app uses this list to show only the installed filters in the Roofing Filter dropdown on the main page. FTdx101MP comes fully loaded; FTdx101D, FTdx10, and FTDX3000 allow optional filter selection.
 
+Only the boxes for the radio model chosen above are live — the other models' boxes are greyed out and ignored when you save. Before v2.5.2-pre4 a box belonging to a hidden model could still be submitted, which is why unticking 300 Hz on an FTdx101D did not stick ([#156](https://github.com/mm5agm/Yaesu_Web_Control/issues/156)), and an FTdx10's 300 Hz tick was never saved at all.
+
 ---
 
 ### 6.5 CW Memory Messages (M1–M5)
@@ -2425,6 +2427,8 @@ YWC is a web page, so it honours your browser's standard zoom keyboard shortcuts
 
 The browser remembers your zoom level per site, so once you've set it, every YWC session opens at that size until you change it. Worth setting once if the default text is too small (or too large) for you — and especially worth knowing about for partially-sighted operators who don't otherwise know browsers can do this.
 
+As the page gets narrower the VFO panels rearrange themselves rather than overflow: around 150–175 % the AGC / IPO / NR / NB / Notch column moves down beneath the band buttons, and at 200 % and beyond VFO B stacks below VFO A. Everything stays inside its own panel at every zoom level (fixed in v2.5.2-pre4, [#157](https://github.com/mm5agm/Yaesu_Web_Control/issues/157)).
+
 **Keeping the dialog and this section aligned.** The in-app **?** dialog is generated from the same shortcut registry as the dispatcher (`wwwroot/js/ui/keyboard-shortcuts.js` → `SHORTCUT_HELP`). When adding or renaming a shortcut, update that registry and this §13 table in the same change.
 
 ## 14. Troubleshooting
@@ -2532,6 +2536,13 @@ Up to and including v2.4.2 — and in the v2.4.3 pre-releases up to pre3 — the
 **Meters appear to show incorrect values**
 
 - The meters use a default calibration that may not exactly match every individual radio. See Section 10 to adjust the calibration.
+- If the PA temperature on the main page disagrees with the one on the Calibration page, you are on a build older than v2.5.2-pre4: the main page held on to the first reading it saw after loading ([#151](https://github.com/mm5agm/Yaesu_Web_Control/issues/151)).
+
+**Settings says "The SoapySDR device scan crashed inside a native driver"**
+
+- YWC itself is fine — the scan runs in a separate throwaway process precisely so that a faulty SDR driver on the PC cannot take the app down ([#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143), [#164](https://github.com/mm5agm/Yaesu_Web_Control/issues/164)). If you do not use an RTL-SDR, Airspy or HackRF with YWC, ignore it; SDRplay devices are not involved in this scan.
+- The scan is not repeated automatically once it has crashed in a session; click **Scan** to run it again.
+- If you do use one of those SDRs, the log (Diagnostics page) lists the SoapySDR folders and driver modules that were loaded, and Windows Event Viewer (Windows Logs → Application, source "Application Error", faulting application `Yaesu_Sdr_Worker.exe`) names the DLL that faulted. Please attach both to an issue.
 
 **App will not start — "Already Running"**
 
@@ -2658,6 +2669,26 @@ Why this happens in practice:
 
 If you must use a virtual port sharer (e.g. you've already built a working setup around one), the easiest test is to point YWC at the real physical COM port directly while everything else stays on the sharer's virtual ports — and only re-add the sharer to YWC's path if a specific need forces it.
 
+### 15.7 What is the TX button for? When I press it the radio goes into TX mode but there's no audio from my microphone.
+
+The TX button in YWC sends the `TX1;` CAT command, which puts the radio into transmit mode (PTT engaged) but **by itself does not create microphone audio**. With nothing modulating the carrier, what actually goes on-air depends on the current mode and how audio is fed:
+
+- **CW** — an unmodulated carrier (a steady tone). Useful for tune-up, SWR measurement, or driving an external tuner / amplifier into its tune cycle.
+- **SSB / AM / FM** — the TX path is open; you need audio into the radio (front mic, or USB/REAR audio from the PC).
+- **DATA / digital modes** — typically USB audio from WSJT-X (or similar) into the rear DATA/USB path.
+
+**Local mic:** press the PTT on the hand mic / footswitch / VOX as usual.
+
+**Remote browser mic:** enable [Remote Audio](#18-remote-audio), pick the radio’s USB devices in Settings, use HTTPS for non-localhost browsers, click **Start audio** on the Index page, then use the TX button (or TX toggle key) for PTT. On the radio, set **MOD SOURCE** to USB / REAR (USB).
+
+What people use the TX button for without remote audio:
+
+1. **Tune-up.** Switch to CW, click TX, watch your SWR or let your ATU find a match.
+2. **Driving an external amplifier or antenna tuner** into its auto-tune cycle.
+3. **Digital-mode keying tests.** When WSJT-X is feeding audio into USB, the TX button verifies CAT keying.
+
+---
+
 ### 15.8 Why was Alexa voice control dropped in favour of the built-in microphone method?
 
 Earlier development branches explored using Amazon Alexa to control YWC — you'd say "Alexa, set frequency to fourteen point zero seven four" to your Echo device and the command would route through Amazon's cloud, hit a custom skill, and arrive at YWC over a Cloudflare tunnel. That work reached a fully-working end-to-end prototype, but **the setup overhead made it impractical for anyone who isn't already comfortable with Cloudflare tunnels and the Amazon Developer Console**.
@@ -2679,26 +2710,6 @@ The current voice control uses **Windows' built-in speech recognition (SAPI 5)**
 | Typical setup time | ~30–60 minutes | ~2 minutes |
 
 The Alexa code **isn't deleted** — it lives on a parked branch and can be revived if Amazon ever simplifies the developer experience, or if a contributor wants to package the cloud side as a one-click installer. For now, the built-in microphone method gives most of the same usefulness at a small fraction of the setup complexity, and it works equally well for users on a restricted home network where opening a Cloudflare tunnel isn't viable.
-
----
-
-### 15.7 What is the TX button for? When I press it the radio goes into TX mode but there's no audio from my microphone.
-
-The TX button in YWC sends the `TX1;` CAT command, which puts the radio into transmit mode (PTT engaged) but **by itself does not create microphone audio**. With nothing modulating the carrier, what actually goes on-air depends on the current mode and how audio is fed:
-
-- **CW** — an unmodulated carrier (a steady tone). Useful for tune-up, SWR measurement, or driving an external tuner / amplifier into its tune cycle.
-- **SSB / AM / FM** — the TX path is open; you need audio into the radio (front mic, or USB/REAR audio from the PC).
-- **DATA / digital modes** — typically USB audio from WSJT-X (or similar) into the rear DATA/USB path.
-
-**Local mic:** press the PTT on the hand mic / footswitch / VOX as usual.
-
-**Remote browser mic:** enable [Remote Audio](#18-remote-audio), pick the radio’s USB devices in Settings, use HTTPS for non-localhost browsers, click **Start audio** on the Index page, then use the TX button (or TX toggle key) for PTT. On the radio, set **MOD SOURCE** to USB / REAR (USB).
-
-What people use the TX button for without remote audio:
-
-1. **Tune-up.** Switch to CW, click TX, watch your SWR or let your ATU find a match.
-2. **Driving an external amplifier or antenna tuner** into its auto-tune cycle.
-3. **Digital-mode keying tests.** When WSJT-X is feeding audio into USB, the TX button verifies CAT keying.
 
 ---
 
