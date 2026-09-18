@@ -46,8 +46,9 @@ export class FTdx101Meters {
         // VDD filter state
         this._vddLast = vdd.nominal;
 
-        // Temperature filter state
+        // Temperature filter state (raw RM9 units, not degrees)
         this._paTempLast      = 0;
+        this._paTempPending   = null;   // a rejected jump, waiting for a second reading to agree
         this._paTempZeroCount = 0;
     }
 
@@ -225,16 +226,32 @@ export class FTdx101Meters {
         return { skip: false, gaugeKey: 'vdd', displayValue: { volts } };
     }
 
-    _processTemp(tempC) {
-        if (tempC === 0) {
+    // `raw` is the RM9 reading, 0-255; the calibration table turns it into
+    // degrees at the end. The spike filter below predates that table — when
+    // it was written the raw value WAS the displayed temperature, so "more
+    // than 10" meant 10 degrees; through the table it is about 4 degrees.
+    _processTemp(raw) {
+        if (raw === 0) {
             this._paTempZeroCount++;
             if (this._paTempZeroCount < 2) return { skip: true };
         } else {
             this._paTempZeroCount = 0;
         }
-        if (Math.abs(tempC - this._paTempLast) > 10 && this._paTempLast !== 0) return { skip: true };
-        this._paTempLast = tempC;
-        const calibrated = this._calibration.calibrateNumeric('TPA', tempC);
+        // A single reading far from the last one is dropped as a glitch, but
+        // only once: if the next reading agrees with it, that is where the
+        // temperature now is. Rejecting every reading that disagreed with the
+        // first one seen after page load left the gauge stuck on that first
+        // value — 35 °C on the main page against 18 °C on the calibration page,
+        // which has no filter (#151).
+        if (Math.abs(raw - this._paTempLast) > 10 && this._paTempLast !== 0) {
+            const confirmed = this._paTempPending !== null && Math.abs(raw - this._paTempPending) <= 10;
+            this._paTempPending = confirmed ? null : raw;
+            if (!confirmed) return { skip: true };
+        } else {
+            this._paTempPending = null;
+        }
+        this._paTempLast = raw;
+        const calibrated = this._calibration.calibrateNumeric('TPA', raw);
         this._meterPanel.update('temp', calibrated);
         return { skip: false, gaugeKey: 'temp', displayValue: { tempC: calibrated } };
     }
