@@ -93,6 +93,19 @@ internal static class Program
             Console.Error.WriteLine($"SoapySDR.dll preload: {ex.Message}");
         }
 
+        // Load the shipped libusb/librtlsdr/airspy/hackrf by full path now, so
+        // that when the enumerate loads each plugin, the plugin's imports bind
+        // to our copies rather than to whatever System32 or PATH holds (#164).
+        try
+        {
+            foreach (var line in Yaesu_Web_Control.Services.Sdr.SdrplayDllResolver.PreloadSoapySdrRuntime())
+                Console.Error.WriteLine($"preload {line}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"SoapySDR runtime preload: {ex.Message}");
+        }
+
         // Likewise the plugin search paths and the module files in them,
         // *before* the enumerate — that is the call that loads each plugin,
         // and when one faults the process dies inside it, so nothing written

@@ -256,12 +256,16 @@ internal sealed class WorkerHost
         return exit;
     }
 
-    private static ISdrDevice CreateDevice(string key)
+    private ISdrDevice CreateDevice(string key)
     {
         if (key.StartsWith(SdrplayDevice.KeyPrefix, StringComparison.OrdinalIgnoreCase))
             return new SdrplayDevice(key);
 
-        // Everything else is treated as a SoapySDR kwargs string.
+        // Everything else is treated as a SoapySDR kwargs string. Opening it
+        // makes SoapySDR load the plugin for its driver, so the shipped
+        // runtime DLLs go in first — see PreloadSoapySdrRuntime (#164).
+        foreach (var line in SdrplayDllResolver.PreloadSoapySdrRuntime())
+            Log($"preload {line}");
         return new SoapySdrDevice(key);
     }
 
