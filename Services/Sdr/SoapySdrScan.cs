@@ -46,7 +46,40 @@ internal static class SoapySdrScan
 
     private static readonly System.Text.RegularExpressions.Regex AnsiEscape = new("\u001b\\[[0-9;]*m");
 
-    public static Result Run(ILogger logger)
+    // A scan that crashed is not re-run on its own for the rest of this
+    // process. The Settings page scans on every open, and on a PC where the
+    // scan faults that is a three-second crash and an [ERR] in the log per
+    // visit, for a result that cannot change until something on the PC
+    // does (#164 — six crashes in one log, no SDR on the machine at all).
+    // The Scan button passes retry=true and always runs a fresh scan, so the
+    // operator can still ask; only the automatic one is suppressed.
+    private static readonly object CrashLock = new();
+    private static Result? _crashed;
+
+    /// <param name="retry">True when the operator asked for the scan (the Scan
+    /// button); false for the automatic scan on page open, which does not
+    /// repeat a scan that already crashed this session.</param>
+    public static Result Run(ILogger logger, bool retry = false)
+    {
+        Result? earlier;
+        lock (CrashLock) earlier = _crashed;
+        if (earlier != null && !retry)
+        {
+            logger.LogInformation("SDR: SoapySDR scan not repeated — it crashed earlier this session; " +
+                                  "the Scan button on the Settings page runs it again");
+            return earlier with
+            {
+                Message = "The SoapySDR device scan crashed earlier in this session and was not run again. " +
+                          "Click Scan to try again. If you do not use an SDR with this program you can ignore this.",
+            };
+        }
+
+        var result = RunOnce(logger, Stopwatch.StartNew());
+        lock (CrashLock) _crashed = result.Error == "Crashed" ? result : null;
+        return result;
+    }
+
+    private static Result RunOnce(ILogger logger, Stopwatch sw)
     {
         string? exePath = WorkerProcess.LocateWorkerExe();
         if (exePath == null)
@@ -72,7 +105,6 @@ internal static class SoapySdrScan
         var stderr = new List<string>();
         string stdout;
         int exitCode;
-        var sw = Stopwatch.StartNew();
         try
         {
             using var process = new Process { StartInfo = psi };
@@ -104,9 +136,10 @@ internal static class SoapySdrScan
             return new Result([], null, ex.GetType().Name, $"Could not start the SoapySDR device scan: {ex.Message}");
         }
 
-        // Whatever the child said about where SoapySDR.dll came from goes in
-        // the log every time — it is the one line that matters when the exit
-        // code below is an access violation.
+        // Whatever the child said before enumerating — where SoapySDR.dll
+        // came from, the plugin search paths, the module files found — goes
+        // in the log every time. Those are the only lines that survive when
+        // the exit code below is an access violation.
         foreach (var line in stderr)
             logger.LogInformation("SDR: [scan] {Line}", line);
 
@@ -119,8 +152,9 @@ internal static class SoapySdrScan
             return new Result([], null, "Crashed",
                 "The SoapySDR device scan crashed inside a native driver (" + how + "). " +
                 "Yaesu Web Control itself is unaffected. If you do not use an SDR with this program you can ignore this; " +
-                "otherwise another SDR driver installed on this PC is probably clashing with the ones bundled here — " +
-                "the log names the SoapySDR.dll that was loaded.");
+                "otherwise the log names the SoapySDR.dll and plugin folders that were loaded, " +
+                "and the Windows Event Viewer (Application log, source \"Application Error\", " +
+                "Yaesu_Sdr_Worker.exe) names the file that faulted.");
         }
 
         WorkerReply? reply;

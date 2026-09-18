@@ -93,12 +93,30 @@ internal static class Program
             Console.Error.WriteLine($"SoapySDR.dll preload: {ex.Message}");
         }
 
+        // Likewise the plugin search paths and the module files in them,
+        // *before* the enumerate — that is the call that loads each plugin,
+        // and when one faults the process dies inside it, so nothing written
+        // afterwards survives (#164). These three calls only list
+        // directories. Console.Error is unbuffered, so the lines are on the
+        // parent's pipe before the enumerate starts.
+        try
+        {
+            foreach (var line in Yaesu_Web_Control.Services.Sdr.SoapySdrInterop.DescribePluginSearch())
+                Console.Error.WriteLine(line);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"SoapySDR plugin search: {ex.Message}");
+        }
+
         EnumerateResult result;
         try
         {
             var devices = Yaesu_Web_Control.Services.Sdr.SoapySdrInterop.EnumerateDevices();
             // The plugin diagnostics are only interesting when nothing was
-            // found, and they cost another round of native calls.
+            // found, and they cost another round of native calls. They repeat
+            // the search-path lines above and add which native DLLs the
+            // enumerate actually loaded, which only exists after it returns.
             string? diag = devices.Count == 0
                 ? Yaesu_Web_Control.Services.Sdr.SoapySdrInterop.GetPluginDiagnostics()
                 : null;

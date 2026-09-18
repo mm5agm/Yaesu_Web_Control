@@ -269,32 +269,45 @@ namespace Yaesu_Web_Control.Services.Sdr
             try
             {
                 var sb = new System.Text.StringBuilder();
-
-                string root = Marshal.PtrToStringAnsi(NativeGetRootPath()) ?? "(unknown)";
-                sb.AppendLine($"SoapySDR root: {root}");
-
-                IntPtr searchPtr = NativeListSearchPaths(out nuint searchCount);
-                var searchPaths  = ReadStringArray(searchPtr, searchCount);
-                NativeStringsClear(ref searchPtr, searchCount);
-                sb.AppendLine(searchPaths.Length == 0
-                    ? "Plugin search paths: (none)"
-                    : $"Plugin search paths: {string.Join(", ", searchPaths)}");
-
-                IntPtr modPtr = NativeListModules(out nuint modCount);
-                var modules   = ReadStringArray(modPtr, modCount);
-                NativeStringsClear(ref modPtr, modCount);
-                sb.AppendLine(modules.Length == 0
-                    ? "Modules found: (none — copy SoapySDRPlay3.dll into one of the search paths above)"
-                    : $"Modules found: {string.Join(", ", modules.Select(System.IO.Path.GetFileName))}");
-
+                foreach (var line in DescribePluginSearch())
+                    sb.AppendLine(line);
                 sb.AppendLine(DescribeLoadedNativeModules());
-
                 return sb.ToString().Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd();
             }
             catch (Exception ex)
             {
                 return $"Diagnostic error: {ex.Message}";
             }
+        }
+
+        /// <summary>
+        /// The SoapySDR root, the plugin search paths, and the module files
+        /// found in them — one line each, full paths. Safe to call
+        /// <b>before</b> <see cref="EnumerateDevices"/>: these three calls
+        /// only read directory listings, they load nothing. That is the point
+        /// of them (#164): it is the enumerate that loads each plugin, and
+        /// when one of them faults the process dies inside that call, so
+        /// anything written afterwards is never written. Logged ahead of the
+        /// enumerate, this names the candidates the crash was among.
+        /// </summary>
+        public static IEnumerable<string> DescribePluginSearch()
+        {
+            string root = Marshal.PtrToStringAnsi(NativeGetRootPath()) ?? "(unknown)";
+            yield return $"SoapySDR root: {root}";
+
+            IntPtr searchPtr = NativeListSearchPaths(out nuint searchCount);
+            var searchPaths  = ReadStringArray(searchPtr, searchCount);
+            NativeStringsClear(ref searchPtr, searchCount);
+            yield return searchPaths.Length == 0
+                ? "Plugin search paths: (none)"
+                : $"Plugin search paths: {string.Join(", ", searchPaths)}";
+
+            IntPtr modPtr = NativeListModules(out nuint modCount);
+            var modules   = ReadStringArray(modPtr, modCount);
+            NativeStringsClear(ref modPtr, modCount);
+            yield return modules.Length == 0
+                ? "Modules found: (none — copy SoapySDRPlay3.dll into one of the search paths above)"
+                : $"Modules found: {string.Join(", ", modules)}";
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────────

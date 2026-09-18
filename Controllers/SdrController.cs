@@ -34,9 +34,12 @@ namespace Yaesu_Web_Control.Controllers
         /// from subsequent GetDevices calls, so this controller can't see
         /// them through normal enumeration.
         /// Always responds 200.
+        /// <paramref name="retry"/> is true from the Scan button and false
+        /// from the automatic scan on page open; only the former re-runs a
+        /// SoapySDR scan that already crashed this session (#164).
         /// </summary>
         [HttpGet("devices")]
-        public IActionResult GetDevices()
+        public IActionResult GetDevices([FromQuery] bool retry = false)
         {
             var all   = new List<SdrDeviceInfo>();
             // Notes are collected separately as deferred-add candidates and only
@@ -69,7 +72,7 @@ namespace Yaesu_Web_Control.Controllers
             // an access violation that kills whichever process called it —
             // #143 lost the whole app on every Settings page load. Now the
             // child dies and this reports it. See SoapySdrScan.
-            var scan = SoapySdrScan.Run(_logger);
+            var scan = SoapySdrScan.Run(_logger, retry);
             if (scan.Error == null)
             {
                 var soapy = scan.Devices;

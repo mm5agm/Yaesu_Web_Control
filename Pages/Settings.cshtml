@@ -2230,7 +2230,7 @@
                         <div class="d-flex justify-content-between align-items-end mb-2">
                             <label class="form-label fw-bold mb-0">SDR Devices</label>
                             <button type="button" class="btn btn-outline-secondary btn-sm" id="sdrScanBtn"
-                                    onclick="scanSdrDevices()">
+                                    onclick="scanSdrDevices(true)">
                                 <i class="bi bi-search"></i> Scan
                             </button>
                         </div>
@@ -3219,7 +3219,10 @@
         // Populate BOTH SDR dropdowns from one /api/sdr/devices call. Each
         // dropdown preserves its own selection across re-scans (matched by
         // exact key, or by sdrplayKeysMatch for the legacy→new format jump).
-        window.scanSdrDevices = async function () {
+        // `retry` is true from the Scan button only: a SoapySDR scan that
+        // crashed earlier in the session is not re-run by the automatic
+        // page-open scan, but the operator can always ask again (#164).
+        window.scanSdrDevices = async function (retry) {
             const btn      = document.getElementById('sdrScanBtn');
             const notesDiv = document.getElementById('sdrScanNotes');
 
@@ -3228,7 +3231,7 @@
             notesDiv.innerHTML = '';
 
             try {
-                const resp               = await fetch('/api/sdr/devices');
+                const resp               = await fetch(retry ? '/api/sdr/devices?retry=true' : '/api/sdr/devices');
                 const { devices, notes } = await resp.json();
 
                 for (const slot of ['A', 'B']) {
