@@ -93,7 +93,9 @@ namespace Yaesu_Web_Control.Pages
                 var tag    = m.Groups["tag"].Value;
                 var attrs  = StripIdAttr.Replace(m.Groups["attrs"].Value, "");
                 var inner  = m.Groups["inner"].Value;
-                var text   = StripTags.Replace(inner, "");
+                // Decode entities before slugging: "Backup & Restore" arrives as
+                // "&amp;", and GitHub slugs the ampersand away, not "amp".
+                var text   = System.Net.WebUtility.HtmlDecode(StripTags.Replace(inner, ""));
                 var id     = GitHubSlug(text);
                 return $"<{tag} id=\"{id}\"{attrs}>{inner}</{tag}>";
             });
@@ -104,7 +106,11 @@ namespace Yaesu_Web_Control.Pages
         ///   - Lowercase
         ///   - Strip every character that isn't a letter, digit, hyphen or
         ///     space (dots, commas, brackets etc. are removed, NOT replaced)
-        ///   - Replace runs of spaces with single hyphens
+        ///   - Replace every space with a hyphen — each one, not each run.
+        ///     "Scope — the" loses its em-dash and keeps both spaces, so
+        ///     GitHub makes "scope--the"; collapsing the run to one hyphen
+        ///     broke nine TOC links in the app (#158) while GitHub's own
+        ///     rendering of the same file was fine
         ///   - Trim leading / trailing hyphens
         /// </summary>
         public static string GitHubSlug(string text)
@@ -114,12 +120,11 @@ namespace Yaesu_Web_Control.Pages
             foreach (var ch in text)
             {
                 if (char.IsLetterOrDigit(ch)) sb.Append(char.ToLowerInvariant(ch));
-                else if (ch == '-' || ch == ' ') sb.Append(ch);
+                else if (ch == '-') sb.Append(ch);
+                else if (ch == ' ') sb.Append('-');
                 // everything else — punctuation, dots, etc. — is dropped
             }
-            // Collapse spaces into single hyphens
-            var slug = Regex.Replace(sb.ToString(), @"\s+", "-");
-            return slug.Trim('-');
+            return sb.ToString().Trim('-');
         }
     }
 }
