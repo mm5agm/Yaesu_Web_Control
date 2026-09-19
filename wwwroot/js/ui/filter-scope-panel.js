@@ -202,7 +202,12 @@ export class FilterScopePanel {
 
         if (AXIS_MODE === 'radio') {
             // Fixed span, as on the radio (see AXIS_MODE). Only stretched
-            // when the passband would otherwise run off an edge.
+            // when the passband would otherwise run off an edge -- and never
+            // in AM / FM, where no outline is drawn and the radio's own box
+            // simply fills with audio.
+            if (this._isCarrierCentred(this._state.mode)) {
+                return { lo: 0, hi: RADIO_SPAN_HZ };
+            }
             return {
                 lo: Math.min(0, pbLo - margin),
                 hi: Math.max(RADIO_SPAN_HZ, pbHi + margin),
@@ -266,6 +271,17 @@ export class FilterScopePanel {
 
     // The DSP (IF WIDTH) bandwidth in Hz, before any roofing-filter clamp.
     _dspWidthHz() {
+        // AM and FM have no WIDTH control: the FTdx101 operating manual
+        // fixes AM at 9000 Hz, AM-N at 6000, FM and DATA-FM at 16000 and the
+        // narrow FM variants at 9000. The SH code the radio still reports in
+        // these modes is whatever the last mode left behind, and it used to
+        // fall through to the SSB table -- so AM after CW drew a 400 Hz
+        // sliver (seen on the '101MP, 2026-09-19, #166).
+        const mode = (this._state.mode || '').toUpperCase();
+        if (mode === 'AM') return 9000;
+        if (mode === 'AM-N') return 6000;
+        if (mode === 'FM' || mode === 'DATA-FM') return 16000;
+        if (mode === 'FM-N' || mode === 'DATA-FM-N') return 9000;
         // Prefer the mode-aware lookup so the passband matches what the radio
         // is actually doing in the current mode (CW code 8 = 400 Hz, SSB
         // code 8 = 1650 Hz on the FTdx101 etc.). Falls back to the static
@@ -283,6 +299,14 @@ export class FilterScopePanel {
     _cwPitchHz() {
         const v = Number(this._state.cwPitchHz);
         return Number.isFinite(v) && v > 0 ? v : 700;
+    }
+
+    // AM and FM: fixed-width filters about the carrier. The radio's own
+    // filter function display draws nothing but the audio bars in these
+    // modes -- no trapezium, no shift arrow (FTdx101MP screen, 2026-09-19).
+    _isCarrierCentred(mode) {
+        const m = (mode || '').toUpperCase();
+        return m === 'AM' || m === 'AM-N' || m.includes('FM');
     }
 
     _roofingHz() {
@@ -311,11 +335,14 @@ export class FilterScopePanel {
             // radio's own display).
             const lo = Math.max(250, this._cwPitchHz() - ifWidthHz / 2) + shift;
             return { lo, hi: lo + ifWidthHz };
-        } else if (mode === 'AM' || mode === 'AM-N') {
-            // AM is double-sideband, so the audio passband runs from the
-            // carrier out to half the IF width. IF SHIFT still slides it
-            // like every other mode -- this branch used to drop the shift
-            // and drew AM at zero whatever the radio was set to (#161).
+        } else if (this._isCarrierCentred(mode)) {
+            // AM and FM are detected about the carrier, so the audio
+            // passband runs from the carrier out to half the IF width. IF
+            // SHIFT still slides it like every other mode -- this branch
+            // used to drop the shift and drew AM at zero whatever the radio
+            // was set to (#166). The SDR spectrum panel mirrors these edges
+            // about dial + shift for its overlay; this panel itself draws
+            // no outline in these modes (see _draw).
             return { lo: shift, hi: shift + ifWidthHz / 2 };
         } else {
             // SSB / DATA. Measured on an FTdx101MP on 2026-09-19 by sweeping
@@ -366,9 +393,18 @@ export class FilterScopePanel {
         const pbBot   = scopeH;
         const slopeW  = Math.max(6, Math.round((pxHi - pxLo) * 0.08));
 
+        // AM / FM: the filter is fixed and wider than the box, and the
+        // radio's own display shows only the audio bars, edge to edge. Match
+        // it: no trapezium, no shift arrow, bars across the whole span.
+        const carrierCentred = this._isCarrierCentred(this._state.mode);
+
         // Trapezoid path: wider at bottom, narrower at top (filter roll-off shape)
         const trapPath = () => {
             ctx.beginPath();
+            if (carrierCentred) {
+                ctx.rect(0, pbTop, W, pbBot - pbTop);
+                return;
+            }
             ctx.moveTo(pxLo,           pbBot);
             ctx.lineTo(pxHi,           pbBot);
             ctx.lineTo(pxHi - slopeW,  pbTop);
@@ -377,9 +413,11 @@ export class FilterScopePanel {
         };
 
         // Subtle fill inside the trapezoid
-        trapPath();
-        ctx.fillStyle = 'rgba(74,138,191,0.10)';
-        ctx.fill();
+        if (!carrierCentred) {
+            trapPath();
+            ctx.fillStyle = 'rgba(74,138,191,0.10)';
+            ctx.fill();
+        }
 
         // Signal bars, clipped to the trapezoid -- drawn only when Remote
         // Audio is attached and actually delivering RX spectrum. There is no
@@ -399,7 +437,9 @@ export class FilterScopePanel {
             const barBase  = pbBot - 1;
             const hzPerBin = spectrum.sampleRate / spectrum.fftSize;
 
-            for (let bx = pxLo; bx <= pxHi; bx += barW) {
+            const barLo = carrierCentred ? 0 : pxLo;
+            const barHi = carrierCentred ? W : pxHi;
+            for (let bx = barLo; bx <= barHi; bx += barW) {
                 const hz = rangeLo + ((bx + barW * 0.5) / W) * rangeHz;
                 const bin = Math.max(0, Math.min(binCount - 1, Math.round(hz / hzPerBin)));
                 const nh = spectrum.data[bin] / 255;
@@ -412,10 +452,12 @@ export class FilterScopePanel {
         }
 
         // Red trapezoid border — all sides
-        trapPath();
-        ctx.strokeStyle = '#e83535';
-        ctx.lineWidth   = 1.5;
-        ctx.stroke();
+        if (!carrierCentred) {
+            trapPath();
+            ctx.strokeStyle = '#e83535';
+            ctx.lineWidth   = 1.5;
+            ctx.stroke();
+        }
 
         // --- Manual notch ---
         if (this._state.manualNotchOn) {
@@ -469,7 +511,7 @@ export class FilterScopePanel {
 
         // --- IF shift arrow at top ---
         const shift = this._state.ifShiftHz || 0;
-        if (Math.abs(shift) > 50) {
+        if (!carrierCentred && Math.abs(shift) > 50) {
             const arrowX = x(1500 + shift);
             const dir    = shift > 0 ? 1 : -1;
             const aSize  = 5;
