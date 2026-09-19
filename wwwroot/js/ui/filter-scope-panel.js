@@ -301,9 +301,10 @@ export class FilterScopePanel {
         return Number.isFinite(v) && v > 0 ? v : 700;
     }
 
-    // AM and FM: fixed-width filters about the carrier. The radio's own
-    // filter function display draws nothing but the audio bars in these
-    // modes -- no trapezium, no shift arrow (FTdx101MP screen, 2026-09-19).
+    // AM and FM: fixed-width filters about the carrier, which IF SHIFT does
+    // not move. The radio's own filter function display draws nothing but
+    // the audio bars in these modes -- no trapezium, no shift arrow
+    // (FTdx101MP screen, 2026-09-19).
     _isCarrierCentred(mode) {
         const m = (mode || '').toUpperCase();
         return m === 'AM' || m === 'AM-N' || m.includes('FM');
@@ -338,12 +339,14 @@ export class FilterScopePanel {
         } else if (this._isCarrierCentred(mode)) {
             // AM and FM are detected about the carrier, so the audio
             // passband runs from the carrier out to half the IF width. IF
-            // SHIFT still slides it like every other mode -- this branch
-            // used to drop the shift and drew AM at zero whatever the radio
-            // was set to (#166). The SDR spectrum panel mirrors these edges
-            // about dial + shift for its overlay; this panel itself draws
-            // no outline in these modes (see _draw).
-            return { lo: shift, hi: shift + ifWidthHz / 2 };
+            // SHIFT is deliberately NOT applied: measured on an FTdx101MP on
+            // 2026-09-19 (#166) -- parked 5 kHz off a broadcast carrier,
+            // +1000 and -1000 sound identical, and the radio's own display
+            // shows no shift in AM. The knob still turns and CAT still
+            // reports a value, but the filter does not move. The SDR
+            // spectrum panel mirrors these edges about the dial for its
+            // overlay; this panel draws no outline in these modes (_draw).
+            return { lo: 0, hi: ifWidthHz / 2 };
         } else {
             // SSB / DATA. Measured on an FTdx101MP on 2026-09-19 by sweeping
             // every SH width code and reading the receiver's audio spectrum

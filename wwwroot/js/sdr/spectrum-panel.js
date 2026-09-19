@@ -1382,12 +1382,10 @@ export class SpectrumPanel {
 
         // AM and FM are detected around the carrier, so the passband straddles
         // the dial. The filter scope plots one half of it on the audio axis,
-        // from the IF SHIFT out to half the IF width ({ lo: shift, hi: shift
-        // + w/2 }), so the shift is its low edge and the half-width is its
-        // extent. Mirror that about dial + shift. Taking max(|lo|, |hi|) as
-        // the half-width, as this used to, read a -720 Hz shift as a 720 Hz
-        // half-width and dropped the shift entirely (seen on the '101MP,
-        // 2026-09-19, #166).
+        // { lo: 0, hi: w/2 } -- IF SHIFT does not move the filter in these
+        // modes on the FTdx101MP (measured 2026-09-19, #166) -- so mirror
+        // that half-width about the dial. Kept general in lo so a provider
+        // that does offset the low edge is honoured.
         if (this._isCarrierCentred(mode)) {
             const half = pb.hi - pb.lo;
             if (half <= 0) return null;
