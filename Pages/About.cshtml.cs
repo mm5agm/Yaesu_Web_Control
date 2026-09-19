@@ -17,7 +17,7 @@ namespace Yaesu_Web_Control.Pages
         }
 
         // Surfaced to the view for the Diagnostics block.
-        public string Version           { get; private set; } = AppVersion.Current;
+        public string Version           { get; private set; } = AppVersion.Display;
         public string ReleaseDate       { get; private set; } = AppVersion.ReleaseDate;
         public string RadioModel        { get; private set; } = "—";
         public string BandPlan          { get; private set; } = "—";

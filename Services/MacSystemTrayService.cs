@@ -72,7 +72,7 @@ public sealed class MacSystemTrayService : IDisposable
 
             menu.Add(new NativeMenuItemSeparator());
 
-            var aboutItem = new NativeMenuItem("About — version " + AppVersion.Current);
+            var aboutItem = new NativeMenuItem("About — version " + AppVersion.Display);
             aboutItem.Click += (_, _) => OpenAbout();
             menu.Add(aboutItem);
 
@@ -88,7 +88,7 @@ public sealed class MacSystemTrayService : IDisposable
 
             _trayIcon = new TrayIcon
             {
-                ToolTipText = $"Yaesu Web Control v{AppVersion.Current} — {_portInfo.RootUrl}",
+                ToolTipText = $"Yaesu Web Control v{AppVersion.Display} — {_portInfo.RootUrl}",
                 Icon = LoadTrayIcon(),
                 Menu = menu,
                 IsVisible = true,

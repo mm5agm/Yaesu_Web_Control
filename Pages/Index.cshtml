@@ -24,6 +24,12 @@
     // slider and the Power dial are right on first paint, and so the browser
     // agrees with the range check CatController.SetPower applies to the same value.
     int maxPowerWatts = Yaesu_Web_Control.Services.RadioCapabilities.MaxPowerWatts(Model.RadioModel);
+    // VDD dial, per model for the same reason: 40–55 V for the FTdx101MP's 50 V
+    // PA supply, 10–16 V for the 13.8 V radios (#155). Invariant culture so a
+    // German-locale host does not render 13,8 into the JavaScript.
+    var vddDial = Yaesu_Web_Control.Services.RadioCapabilities.VddGaugeRange(Model.RadioModel);
+    string paSupplyVolts = Yaesu_Web_Control.Services.RadioCapabilities.PaSupplyVolts(Model.RadioModel)
+        .ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
     // Quick Memory Bank Store/Recall buttons (Thomas OZ1JTE request) — rendered
     // once, under VFO A's filter/audio scope, since QMB is a radio-global function.
     bool hasQmb = Yaesu_Web_Control.Services.RadioCapabilities.SupportsQmb(Model.RadioModel);
@@ -373,6 +379,24 @@
                     aria-label="Show or hide the S-meter history strip"
                     aria-pressed="false">
                 S-hist
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    data-kb-display-target
+                    style="padding-top: 1px; padding-bottom: 1px;"
+                    title="Keyboard z/w/s target: SDR spectrum or Radio Scope (t)"
+                    aria-label="Toggle keyboard shortcuts between SDR spectrum and Radio Scope"
+                    aria-pressed="false"
+                    hidden>
+                Keys → SDR
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    data-open-shortcuts
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="bottom"
+                    data-bs-title="Keyboard shortcuts (?)"
+                    style="padding-top: 1px; padding-bottom: 1px;"
+                    aria-label="Show keyboard shortcuts">
+                <i class="bi bi-keyboard" aria-hidden="true"></i>
             </button>
             <button id="vfoBToggleBtn" class="btn btn-sm btn-outline-secondary"
                     style="padding-top: 1px; padding-bottom: 1px;" title="Show/Hide VFO-B"
@@ -1077,7 +1101,7 @@
                          in v2.3.9 (Jacek SP3L #34, Colin's design call) -- the radio
                          has only one calibrated S-meter, so showing it once at the
                          top is honest. -->
-                    <div class="receiver-controls-group d-flex flex-nowrap mb-0 gap-2 align-items-start">
+                    <div class="receiver-controls-group d-flex flex-wrap mb-0 gap-2 align-items-start">
                         <!-- Band buttons + Mode/Antenna (sized to content so the
                              scope column can sit in the leftover middle gap) -->
                         <div class="flex-shrink-0 d-flex flex-column gap-1">
@@ -1242,28 +1266,23 @@
                                 </select>
                             </div>
                             <div class="vfo-control-item">
-                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR" : "NR")</label>
+                                @* DNR is ON/OFF on every supported radio (NR P2 is 0/1 in the FTdx101,
+                                   FTdx10, FT-710, FTDX3000 and FTDX5000 CAT manuals). There is no NR1/NR2;
+                                   the 1-15 DNR level below is the only depth control. Kees ON9KVE, #144. *@
+                                <label class="vfo-control-label">DNR</label>
                                 <select class="form-select form-select-sm" id="nrSelectA"
-                                        aria-label="VFO A @(isFtdx10 || isFt710 ? "digital noise reduction" : "noise reduction")"
-                                        title="VFO A @(isFtdx10 || isFt710 ? "digital noise reduction" : "noise reduction")"
+                                        aria-label="VFO A digital noise reduction"
+                                        title="VFO A digital noise reduction"
                                         onchange="window.radioControl.setNr('A', this.value)">
                                     <option value="0" selected="@(Model.RadioState.NrA == "0" ? "selected" : null)">OFF</option>
-                                    @if (isFtdx10 || isFt710)
-                                    {
-                                        <option value="1" selected="@(Model.RadioState.NrA == "1" ? "selected" : null)">ON</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="1" selected="@(Model.RadioState.NrA == "1" ? "selected" : null)">NR1</option>
-                                        <option value="2" selected="@(Model.RadioState.NrA == "2" ? "selected" : null)">NR2</option>
-                                    }
+                                    <option value="1" selected="@(Model.RadioState.NrA == "1" ? "selected" : null)">ON</option>
                                 </select>
                             </div>
                             <div class="vfo-control-item">
-                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR No." : "NR Lvl")</label>
+                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR No." : "DNR Lvl")</label>
                                 <select class="form-select form-select-sm" id="nrLevelSelectA"
-                                        aria-label="VFO A @(isFtdx10 || isFt710 ? "DNR algorithm" : "NR level") (1-15)"
-                                        title="VFO A @(isFtdx10 || isFt710 ? "DNR algorithm (1=lightest, 15=heaviest)" : "NR depth (1=light, 15=heavy)")"
+                                        aria-label="VFO A @(isFtdx10 || isFt710 ? "DNR algorithm" : "DNR level") (1-15)"
+                                        title="VFO A @(isFtdx10 || isFt710 ? "DNR algorithm (1=lightest, 15=heaviest)" : "DNR level (1=light, 15=heavy)")"
                                         onchange="setNrLevel('A', this.value)">
                                     @for (int i = 1; i <= 15; i++) {
                                         <option value="@i" selected="@(Model.RadioState.NrLevelA == i ? "selected" : null)">@i</option>
@@ -1529,7 +1548,7 @@
                     <!-- Receiver Controls Group: Band buttons, Mode, filter/audio
                          scope column (canvas + Save-to-Mem), AGC column.
                          S-meter moved to top meter row in v2.3.9 (see VFO A panel). -->
-                    <div class="receiver-controls-group d-flex flex-nowrap mb-0 gap-2 align-items-start">
+                    <div class="receiver-controls-group d-flex flex-wrap mb-0 gap-2 align-items-start">
                         <!-- Band buttons + Mode/Antenna (sized to content so the
                              scope column can sit in the leftover middle gap) -->
                         <div class="flex-shrink-0 d-flex flex-column gap-1">
@@ -1659,28 +1678,23 @@
                                 </select>
                             </div>
                             <div class="vfo-control-item">
-                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR" : "NR")</label>
+                                @* DNR is ON/OFF on every supported radio (NR P2 is 0/1 in the FTdx101,
+                                   FTdx10, FT-710, FTDX3000 and FTDX5000 CAT manuals). There is no NR1/NR2;
+                                   the 1-15 DNR level below is the only depth control. Kees ON9KVE, #144. *@
+                                <label class="vfo-control-label">DNR</label>
                                 <select class="form-select form-select-sm" id="nrSelectB"
-                                        aria-label="VFO B @(isFtdx10 || isFt710 ? "digital noise reduction" : "noise reduction")"
-                                        title="VFO B @(isFtdx10 || isFt710 ? "digital noise reduction" : "noise reduction")"
+                                        aria-label="VFO B digital noise reduction"
+                                        title="VFO B digital noise reduction"
                                         onchange="window.radioControl.setNr('B', this.value)">
                                     <option value="0" selected="@(Model.RadioState.NrB == "0" ? "selected" : null)">OFF</option>
-                                    @if (isFtdx10 || isFt710)
-                                    {
-                                        <option value="1" selected="@(Model.RadioState.NrB == "1" ? "selected" : null)">ON</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="1" selected="@(Model.RadioState.NrB == "1" ? "selected" : null)">NR1</option>
-                                        <option value="2" selected="@(Model.RadioState.NrB == "2" ? "selected" : null)">NR2</option>
-                                    }
+                                    <option value="1" selected="@(Model.RadioState.NrB == "1" ? "selected" : null)">ON</option>
                                 </select>
                             </div>
                             <div class="vfo-control-item">
-                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR No." : "NR Lvl")</label>
+                                <label class="vfo-control-label">@(isFtdx10 || isFt710 ? "DNR No." : "DNR Lvl")</label>
                                 <select class="form-select form-select-sm" id="nrLevelSelectB"
-                                        aria-label="VFO B @(isFtdx10 || isFt710 ? "DNR algorithm" : "NR level") (1-15)"
-                                        title="VFO B @(isFtdx10 || isFt710 ? "DNR algorithm (1=lightest, 15=heaviest)" : "NR depth (1=light, 15=heavy)")"
+                                        aria-label="VFO B @(isFtdx10 || isFt710 ? "DNR algorithm" : "DNR level") (1-15)"
+                                        title="VFO B @(isFtdx10 || isFt710 ? "DNR algorithm (1=lightest, 15=heaviest)" : "DNR level (1=light, 15=heavy)")"
                                         onchange="setNrLevel('B', this.value)">
                                     @for (int i = 1; i <= 15; i++) {
                                         <option value="@i" selected="@(Model.RadioState.NrLevelB == i ? "selected" : null)">@i</option>
@@ -2806,6 +2820,7 @@
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initKeyboardShortcuts, syncDisplayTargetButton } from "/js/ui/keyboard-shortcuts.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
@@ -2881,9 +2896,10 @@
                 alc:         { canvasId: 'alcMeterCanvas' },
                 temp:        { canvasId: 'tempMeterCanvas' },
                 idd:         { canvasId: 'iddMeterCanvas' },
-                vdd:         { canvasId: 'vddMeterCanvas' }
+                vdd:         { canvasId: 'vddMeterCanvas', minValue: @vddDial.Min, maxValue: @vddDial.Max, nominal: @paSupplyVolts }
             });
-            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine, @maxPowerWatts);
+            window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine, @maxPowerWatts,
+                { min: @vddDial.Min, max: @vddDial.Max, nominal: @paSupplyVolts });
 
             // ── S-meter history strips ───────────────────────────────────────
             // Hidden by default. Toggle via the "S-hist" button in the top
@@ -2927,6 +2943,11 @@
             const spectrumPanelB = window.ywcIsWindowsHost
                 ? new SpectrumPanel('spectrumCanvasB', 'spectrumContainerB', @Model.RadioState.FrequencyB, 'B')
                 : null;
+            window.spectrumPanelA = spectrumPanelA;
+            window.spectrumPanelB = spectrumPanelB;
+
+            // After Radio Scope + spectrum panels exist so z/w/s target detection works.
+            initKeyboardShortcuts();
 
             // Region-specific band plan for FT8/CW/SSB markers on both panels.
             const _ywcRegion = '@Model.BandPlan';
@@ -2995,6 +3016,7 @@
                 if (!window.ywcIsWindowsHost) {
                     const c = document.getElementById('spectrumContainer');
                     if (c) c.style.display = 'none';
+                    syncDisplayTargetButton();
                     return;
                 }
                 const aConfigured = sdrState.A !== 'unconfigured';
@@ -3043,6 +3065,8 @@
                     // Both configured — honour the active mode.
                     applyMode(currentMode);
                 }
+                // Keyboard z/w/s target button may enable once an SDR panel appears.
+                syncDisplayTargetButton();
             }
 
             // Promote a VFO to "streaming" the moment its first frame arrives, so

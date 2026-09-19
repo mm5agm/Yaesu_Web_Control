@@ -69,6 +69,42 @@ flag it if you think `rules.md` should be extended to cover them explicitly.
 6. Pushing to `origin`, tagging, releasing, and opening PRs all need Colin's
    explicit word, as before.
 
+### Issue triage: minor vs serious, and who closes an issue
+
+Pre-releases are batched — one is cut for something serious, or once four
+or five minor fixes have built up — never one per bug. Minor vs serious
+decides whether a bug on its own justifies cutting a build; it does **not**
+decide who closes the issue.
+
+A bug is **serious** if any of these holds:
+
+1. **It stops someone operating.** Won't start, won't connect, crashes, or a
+   whole feature the reporter relies on is unusable (#161 RSPduo showing
+   only noise; #143 "localhost refused").
+2. **There is no way round it.** If the reporter can carry on by ignoring a
+   gauge, re-ticking a box or reading the radio's own meter, it is minor.
+   If the only workaround is "don't use YWC", it is serious.
+3. **The fix can't be trusted until the reporter tries it, and being wrong
+   would hurt.** Protocol-level work (CAT, SDR device I/O, meter scaling)
+   that only their hardware can bench-check. A wrong number on one gauge
+   (#155) does not hurt; a radio or SDR that stays unusable does.
+
+Everything else — a wrong scale on one gauge, a setting not persisted,
+layout at extreme zoom, manual typos, a gauge face that recovers on refresh
+— is **minor**.
+
+**The reporter closes the issue, never Claude and not Colin either**
+(policy set 2026-09-18, reversing a one-day experiment with closing minor
+bugs on fix). Once the fix is in a build they can download, the comment
+says what was wrong and what changed, names the tag that has it, lists
+anything they must do when they install it, and asks them to try it and
+close the issue themselves if it is right for them — or say so in the
+thread if it isn't. If the fix is in code but not yet in any build, say it
+will be in the next pre-release or main release (never name a pre-release
+that doesn't exist) and leave the issue open. Don't chase reporters who
+go quiet: how quickly people respond is information Colin wants, and an
+issue sitting open is the price of collecting it.
+
 ---
 
 ## Shared code lives in Radio_Web_Control_Core. This is a hard rule.

@@ -39,88 +39,59 @@
     min-height: 120px;
     position: relative;
 }
-/* Stronger fullscreen override: target body.fullscreen-mode and descendants */
-body.fullscreen-mode,
-body.fullscreen-mode html,
-body.fullscreen-mode > main[role="main"],
-body.fullscreen-mode main[role="main"],
-body.fullscreen-mode main[role="main"] > .row:first-of-type,
-body.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
-body.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
+/* --- Fullscreen mode (#163) -------------------------------------------
+   The fullscreen element is <body>: site.js calls body.requestFullscreen().
+   That makes body a screen-sized box in the top layer, so body must be the
+   scroll container itself -- whatever it clips is unreachable, because
+   there is no outer scrollbar left to fall back on. body is also the
+   containing block the sticky header tracks (see _Layout.cshtml), so the
+   scrolling has to stay here; moving it to <main> would make the header
+   scroll away exactly as it did in v2.2.1.
+
+   #163 was `overflow: hidden` on this rule. Measured on Index at 1280x720:
+   793px of page below the fold with no way to reach it -- the VFO A/B row
+   started at y=1006 and the clarifier row at y=1460.
+
+   The old block also carried a pile of `main[role="main"]` rules meant to
+   size main and stretch the first row. Index sets ViewData["BodyRole"] =
+   "application" for screen readers, so <main> is role="application" there
+   and NOT ONE of those rules has ever matched on the control panel page --
+   including the `overflow-y: auto` that was itself trying to fix this bug.
+   Hence the plain `main` selector below: do not reintroduce a role-based
+   one, it silently stops matching the moment a page sets its own role. */
+body.fullscreen-mode {
     height: 100vh !important;
-    min-height: 100vh !important;
-    width: 98vw !important;
-    max-width: 98vw !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
     margin: 0 !important;
     padding: 0 !important;
-    overflow: hidden !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
     box-sizing: border-box !important;
 }
 
-body.fullscreen-mode main[role="main"] {
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: stretch !important;
-    align-items: stretch !important;
-}
-body.fullscreen-mode main[role="main"] > .row:first-of-type {
-    flex: 1 1 auto !important;
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: stretch !important;
-}
-body.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
-body.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
-    flex: 1 1 0 !important;
-    display: flex !important;
-    flex-direction: column !important;
-}
-/* Ensure fullscreen fills viewport vertically */
-.fullscreen-mode,
-.fullscreen-mode html,
-.fullscreen-mode body {
-    height: 100vh !important;
-    min-height: 100vh !important;
-    width: 100vw !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
+/* Main flows naturally and is free to grow past the fold; body scrolls it.
+   Deliberately no height and no overflow of its own -- a nested scroller
+   here would both double-clip and break the sticky header. */
+body.fullscreen-mode main {
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 auto !important;
+    padding-bottom: 0 !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
 }
 
-/* Flex layout for main and first row in fullscreen */
-.fullscreen-mode main[role="main"] {
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: stretch !important;
-    align-items: stretch !important;
-}
-.fullscreen-mode main[role="main"] > .row:first-of-type {
-    flex: 1 1 auto !important;
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: stretch !important;
-    height: 100% !important;
-    min-height: 100% !important;
-}
-.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
-.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
-    flex: 1 1 0 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    height: 100% !important;
-    min-height: 100% !important;
-}
-.fullscreen-mode main[role="main"] > .row:first-of-type {
-    height: 100% !important;
-    min-height: 100% !important;
-}
-.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
-.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
-    height: 100% !important;
-    min-height: 100% !important;
+body.fullscreen-mode .navbar {
+    margin-bottom: 0 !important;
 }
 
-/* Meter Calibration fullscreen fix */
+body.fullscreen-mode footer {
+    display: none !important;
+}
+
+/* Meter Calibration fullscreen fix -- separate page, its own container,
+   genuinely wants to fill the viewport. */
 .fullscreen-mode .meter-calibration-container {
     width: 100vw !important;
     height: 100vh !important;
@@ -132,43 +103,6 @@ body.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
     flex-direction: column !important;
     align-items: stretch !important;
     justify-content: flex-start !important;
-}
-/* --- Fullscreen mode overrides --- */
-
-.fullscreen-mode footer {
-    display: none !important;
-}
-
-
-/* Fullscreen main area: fill viewport vertically, restrict width to avoid horizontal scrollbar */
-.fullscreen-mode main[role="main"] {
-    height: 100vh !important;
-    min-height: 100vh !important;
-    width: 98vw !important;
-    max-width: 98vw !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    margin: 0 auto !important;
-    padding-bottom: 0 !important;
-    box-sizing: border-box;
-}
-
-.fullscreen-mode .navbar {
-    margin-bottom: 0 !important;
-}
-
-/* Ensure first row and columns fill vertical space in fullscreen */
-.fullscreen-mode main[role="main"] > .row:first-of-type {
-    height: 100% !important;
-    min-height: 100% !important;
-}
-.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
-.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
-    height: 100% !important;
-    min-height: 100% !important;
-}
-.fullscreen-mode main[role="main"].pb-3 {
-    padding-bottom: 0 !important;
 }
 html {
     font-size: 14px;
@@ -386,7 +320,12 @@ pre, code { tab-size: 4; }
     min-width: 160px;
 }
 
-/* Right-hand controls column — 2-column grid of label+select pairs */
+/* Right-hand controls column — 2-column grid of label+select pairs.
+   Its row (.receiver-controls-group) wraps: none of the three columns can
+   shrink, so between 150 % and 175 % browser zoom — narrower than the
+   sum of their minimums but not yet narrow enough for the two VFO cards
+   to stack — this column used to run out of the card and under VFO B
+   (#157). Wrapping puts it below the band buttons instead. */
 .vfo-controls-column {
     flex-shrink: 0;
     display: grid;

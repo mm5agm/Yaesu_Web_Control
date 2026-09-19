@@ -176,10 +176,16 @@ If this project has helped you, please consider sponsoring it. Even small contri
 
 ## ⚠️ Windows Security Warnings on First Install
 
-Because the installer is not code-signed, Windows and third-party antivirus tools will warn you before it runs. This is expected — the file is not malware. Follow these steps if you hit a block:
+The installer is not code-signed (a signing certificate is a recurring cost I haven't taken on for a free program), so Windows and antivirus tools treat it as an unknown, newly downloaded executable and may warn about it or block it. This is expected — the installer is built by GitHub Actions directly from the source in this repository, and GitHub shows a SHA-256 digest beside each file on the release page — run `Get-FileHash Yaesu_Web_Control_Setup.exe` in PowerShell and the two should match. Follow whichever of these matches what you see:
+
+**Microsoft Defender quarantines the download, or the installed program on first launch, and says "This program is dangerous and executes commands from an attacker"**
+This is Defender's cloud/machine-learning classifier (the detection name ends in `!ml` — with v2.5.1 it was `Trojan:Win32/Wacatac.C!ml` on the installed `Yaesu_Web_Control.dll`, and it arrived with a definition update the day after release). It is a false positive that hits many unsigned .NET applications, it can appear on a build that scanned clean the day before, and the installer itself usually scans clean because the file it objects to is inside. To recover: open **Windows Security → Virus & threat protection → Protection history**, click the entry, choose **Actions → Allow on device**, then either download the installer again or simply start YWC again if it was the installed program that was taken. Choose *Allow*, not just *Restore* — Restore puts the file back but Defender may take it again at the next scan. Don't switch Defender off — allowing this one file is enough. If this happens to you, please post the detection name shown in Protection history in a Discussion; I report each one to Microsoft as a false positive, and that is what makes it stop happening for the next person.
 
 **Norton (or other antivirus) flags the file as malware**
-This is a false positive caused by the executable being unsigned and newly downloaded. In Norton, go to **Security → History**, find the quarantined file, and choose **Restore & Exclude** (or the equivalent Allow option in your antivirus).
+This is the same false positive, caused by the executable being unsigned and newly downloaded. In Norton, go to **Security → History**, find the quarantined file, and choose **Restore & Exclude** (or the equivalent Allow option in your antivirus).
+
+**"Windows protected your PC" (SmartScreen) or an Unknown Publisher prompt when you run the installer**
+Click **More info → Run anyway**.
 
 **Right-click → Properties → Unblock**
 Windows marks files downloaded from the internet as untrusted. Before running the installer, right-click the file, choose **Properties**, and if you see an **Unblock** checkbox at the bottom of the General tab, tick it and click OK.
@@ -351,6 +357,39 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 ---
 
 ## Release Notes
+
+## 2026-09-18 - v2.5.2-pre4 (pre-release)
+
+*A batch of fixes, most of them from Kees ON9KVE's reports on the FTdx101D, plus the follow-up to pre3's SDR scan work. Nothing here is a reason to upgrade if v2.5.1 is behaving for you; it carries everything in pre1 to pre3.*
+
+- **Full-screen mode could not scroll** ([#163](https://github.com/mm5agm/Yaesu_Web_Control/issues/163)). Press **f** and everything below the meters was unreachable. One `overflow: hidden` on the page body, now gone.
+- **300 Hz roofing filter tick did not save on the FTdx101D** ([#156](https://github.com/mm5agm/Yaesu_Web_Control/issues/156)). The Settings page has a set of filter boxes for every model and only shows the one for yours - but a hidden box that was ticked still got submitted, and the FTdx10's 300 Hz box carries the same filter code as the FTdx101D's, so unticking yours changed nothing. Hidden models' boxes are now disabled. The same look found that on an FTdx10 the 300 Hz tick was never saved at all - the save code was checking for the FTDX3000's filter codes - so that is fixed too. Reported by Kees ON9KVE.
+- **PA temperature on the main page did not match the Calibration page** ([#151](https://github.com/mm5agm/Yaesu_Web_Control/issues/151)). The main page's glitch filter, written before the temperature was calibrated, treated anything more than about 4 degrees from the first reading after page load as a glitch - forever - so the gauge showed whatever it happened to see first. A change is now accepted once two readings in a row agree. Reported by Kees ON9KVE.
+- **VFO controls spilled out of their panel at 150-175 % browser zoom** ([#157](https://github.com/mm5agm/Yaesu_Web_Control/issues/157)). The AGC / IPO / NR / NB column now drops beneath the band buttons when the panel gets too narrow for it, instead of running under VFO B. Reported by Kees ON9KVE.
+- **User manual: ten table-of-contents links did nothing in the app** ([#158](https://github.com/mm5agm/Yaesu_Web_Control/issues/158)) - every heading with a dash, slash or ampersand in it, including 5.20 Radio Scope. The in-app manual built its heading anchors slightly differently from GitHub, which is what the links are written for. Sections 15.7 and 15.8 were also in the wrong order. Reported by Kees ON9KVE.
+- **SoapySDR drivers now load from the copy YWC ships** ([#164](https://github.com/mm5agm/Yaesu_Web_Control/issues/164)). Windows was resolving the RTL-SDR / Airspy / HackRF drivers' USB libraries by name from `System32` or the PATH before ever looking in YWC's own `SoapySDR` folder, so a stray copy anywhere on the PC won the toss - which is the likeliest reason Dave G0CER's scan still faulted in pre3, and quite possibly why an RTL-SDR has never worked for some people from the installer. The scan worker now loads the shipped libraries by full path first. The scan also no longer repeats on every Settings visit once it has crashed in a session (the **Scan** button still runs it), and the log lists the SoapySDR folders and modules it found before the scan starts, so there is something to read even when the scan does not survive. Bench-checked only on my own PC - if you have an RTL-SDR, Airspy or HackRF, please say on #164 whether it now appears in the scan.
+
+## 2026-09-17 - v2.5.2-pre3 (pre-release)
+
+*Fix for [#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143) - "localhost refused to connect" the moment the Settings page is left. If that is happening to you, this is the build. Everyone else can stay on v2.5.1; it also carries everything in pre1 and pre2.*
+
+- **The SDR device scan can no longer take the whole app down** ([#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143)). Dave G0CER's Event Viewer entry from pre1 named it: an access violation inside SoapySDR's device enumeration, which the Settings page runs when it opens. SoapySDR probes every SDR driver it can find, and each of those loads its own USB libraries - a clashing copy of one of them somewhere on the PC faults in native code, and a native fault ends a .NET process outright, with nothing any error handler can do about it. You do not need to own an SDR for this to bite; Dave has none. The scan now runs in a separate, throwaway process (the same `Yaesu_Sdr_Worker.exe` that streams an SDR, in a new one-shot mode). If it dies, YWC carries on and the Settings page says so - *"The SoapySDR device scan crashed inside a native driver ... Yaesu Web Control itself is unaffected"* - and the log records which `SoapySDR.dll` was loaded so the clash can be found. Reported by Dave G0CER.
+- The SDR worker now finds the bundled `SoapySDR.dll` by itself. Until now it relied on `SoapySDR.dll` being on the PATH, so a SoapySDR device (RTL-SDR, Airspy, HackRF) opened in the worker only on a PC that happened to have it there. SDRplay devices were never affected.
+
+## 2026-09-17 - v2.5.2-pre2 (pre-release)
+
+*Pre-release for [#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161) - the SDRplay RSPduo. If you use an RSPduo for the spectrum display, this is the build to try. Everyone else can stay on v2.5.1; it also carries everything in pre1 and the new keyboard shortcuts below.*
+
+- **RSPduo: pick Tuner 1 or Tuner 2** ([#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161)). An RSPduo streamed happily but showed only a flat noise floor, because I never told the SDRplay service which of its two tuners to use - every other RSP has one, and on the RSPduo the service is left to choose. The RSPduo now appears twice in the SDR device list, **Tuner 1** and **Tuner 2**; pick the entry matching the socket the IF cable is in (Tuner 1 is the 50 ohm SMA socket). An RSPduo already selected in Settings is treated as Tuner 1. I do not own an RSPduo, so this is unverified until an RSPduo owner reports back - please do, on #161, either way. Reported by Bruce VK2RT.
+- **Keyboard shortcuts** ([#150](https://github.com/mm5agm/Yaesu_Web_Control/pull/150) - Fabio Valente, CR7CDC). The main page can now be driven from the keyboard: **?** or **h** opens a dialog listing every shortcut, and there is a keyboard-icon button in the top bar for it. Tuning by 1 Hz / 50 Hz / 100 Hz / 1 kHz / 10 kHz steps, band up/down, VFO swap and copy, mode, IF width and shift, mute, memories, DX cluster, the S-meter history and VFO B panels, and the radio's own scope (span, mode, hold, marker) when **t** points the keys at it. Shortcuts stay quiet while you are typing in a text box. See [USER_MANUAL.md section 13](USER_MANUAL.md#13-keyboard-shortcuts) for the table.
+
+## 2026-09-15 - v2.5.2-pre1 (pre-release)
+
+*Diagnostic pre-release for [#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143). Logging only - nothing about how the app behaves has changed. Install it if you are seeing "localhost refused to connect" after the first page; otherwise stay on v2.5.1.*
+
+- **A hard crash is now written to the log before the process dies.** Until now an exception on a background thread (a timer, the serial port's receive handler, a Windows message handler) took the whole process down with nothing in `ywc-<date>.log` - the log just stopped. Dave G0CER's report in #143 was exactly that shape, and the log could not say whether YWC had crashed or been killed by something else. The exception type and stack now go into the log first.
+- **The idle-shutdown countdown logs when it is cancelled**, not only when it starts, so "a page change cancelled it within a second" and "it ran out and the app quit" no longer look the same. The start line is also reworded: it used to say *All browser tabs closed. Shutting down in 30s* on every page change, which reads like the app deciding to quit when it is routine.
+- The log's first lines now record the exe path, process ID, OS and .NET runtime, so a Task Manager check or an Event Viewer entry can be matched to a log.
 
 ## 2026-09-15 - v2.5.1
 

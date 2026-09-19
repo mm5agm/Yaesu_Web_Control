@@ -20,7 +20,7 @@ namespace Yaesu_Web_Control.Services
         public string? RoofingCode { get; set; }    // "6","7","8","9","A" on FTdx101; "0"-"5" on FTDX3000
         public bool? NbOn { get; set; }
         public int? NbLevel { get; set; }           // 1..20
-        public string? NrLevel { get; set; }        // "0" off, "1" NR1, "2" NR2
+        public string? NrLevel { get; set; }        // "0" off, "1" on (DNR on/off; the name predates #144)
         public string? AgcMode { get; set; }        // "0" off, "1" fast, "2" mid, "3" slow, "4" auto
         public int? PowerWatts { get; set; }        // 5..200 (radio dependent max)
         public string? Notes { get; set; }

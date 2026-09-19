@@ -10,6 +10,7 @@
 # Env overrides:
 #   CONFIG=Release          build configuration
 #   VERSION=2.4.3           bundle / filename version (default: Models/AppVersion.cs)
+#   YWC_BUILD_TAG=v2.4.3-pre1  git tag baked into the app (AppVersion.Display); CI sets it
 #   OUT_DIR=publish/dmg     where finished .dmg files land
 #   STAGING_DIR=…           intermediate publish / .app staging (default under OUT_DIR)
 #
@@ -153,7 +154,8 @@ build_one() {
     --self-contained true \
     -o "$publish_dir" \
     /p:UseAppHost=true \
-    /p:UseSharedCompilation=false
+    /p:UseSharedCompilation=false \
+    "/p:YwcBuildTag=${YWC_BUILD_TAG:-}"
 
   if [[ ! -x "$publish_dir/$EXEC_NAME" && ! -f "$publish_dir/$EXEC_NAME" ]]; then
     echo "error: apphost missing after publish: $publish_dir/$EXEC_NAME" >&2

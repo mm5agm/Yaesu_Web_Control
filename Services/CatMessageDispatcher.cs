@@ -279,7 +279,7 @@
                         }
                         break;
                     case "NR":
-                        // NR{vfo}{code}; — vfo: 0=Main 1=Sub; code: 0=OFF 1=NR1 2=NR2
+                        // NR{vfo}{code}; — vfo: 0=Main 1=Sub; code: 0=OFF 1=ON (DNR; no NR1/NR2 on any supported radio, #144)
                         if (message.Length >= 4)
                         {
                             var code = message[3].ToString();

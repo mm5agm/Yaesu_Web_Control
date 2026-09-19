@@ -13,11 +13,15 @@ export class FTdx101Meters {
      *                                   per-model PWR tables are still copies of the
      *                                   FTdx101MP's and run to 200 W, so without this
      *                                   a 100 W radio can calibrate past full scale.
+     * @param {object} vdd               The VDD dial, { min, max, nominal } volts, from
+     *                                   RadioCapabilities: 40 / 55 / 50 on the FTdx101MP,
+     *                                   10 / 16 / 13.8 on the 13.8 V radios (#155).
      */
-    constructor(meterPanel, calibrationEngine, maxPowerWatts = 200) {
+    constructor(meterPanel, calibrationEngine, maxPowerWatts = 200, vdd = { min: 40, max: 55, nominal: 50 }) {
         this._meterPanel   = meterPanel;
         this._calibration  = calibrationEngine;
         this._maxPowerWatts = maxPowerWatts;
+        this._vdd           = vdd;
 
         // TX state
         this._isTransmitting = false;
@@ -40,11 +44,11 @@ export class FTdx101Meters {
         this._iddZeroCount = 0;
 
         // VDD filter state
-        this._lastValidVDD = 204;  // ~48 V default
-        this._vddLast      = 48;
+        this._vddLast = vdd.nominal;
 
-        // Temperature filter state
+        // Temperature filter state (raw RM9 units, not degrees)
         this._paTempLast      = 0;
+        this._paTempPending   = null;   // a rejected jump, waiting for a second reading to agree
         this._paTempZeroCount = 0;
     }
 
@@ -206,27 +210,48 @@ export class FTdx101Meters {
     }
 
     _processVDD(raw) {
-        const minRaw = 175;  // ~41.2 V — margin above gauge minimum
-        const maxRaw = 235;  // ~55 V
-        if (raw < minRaw || raw > maxRaw) return { skip: true };
-        this._lastValidVDD = raw;
-        const volts = this._calibration.calibrateNumeric('VPA', this._lastValidVDD);
-        if (Math.abs(volts - this._vddLast) > 3 && this._vddLast !== 0) return { skip: true };
+        // Sanity-check in volts against the model's dial, not in raw counts.
+        // The old 175–235 raw window was the FTdx101MP's ~41–55 V and threw
+        // away every reading a 13.8 V radio produces, which left the
+        // FTdx101D's needle pinned at 40 V (#155). Raw 0 is "no reading" on
+        // any model — a PA supply is never 0 V while the radio is on. The jump
+        // limit is a fifth of the dial: 3 V on 40–55 as before, 1.2 V on 10–16.
+        const { min, max } = this._vdd;
+        if (raw <= 0) return { skip: true };
+        const volts = this._calibration.calibrateNumeric('VPA', raw);
+        if (volts < min || volts > max) return { skip: true };
+        if (Math.abs(volts - this._vddLast) > (max - min) * 0.2 && this._vddLast !== 0) return { skip: true };
         this._vddLast = volts;
-        this._meterPanel.update('vdd', Math.max(40, Math.min(volts, 55)));
+        this._meterPanel.update('vdd', volts);
         return { skip: false, gaugeKey: 'vdd', displayValue: { volts } };
     }
 
-    _processTemp(tempC) {
-        if (tempC === 0) {
+    // `raw` is the RM9 reading, 0-255; the calibration table turns it into
+    // degrees at the end. The spike filter below predates that table — when
+    // it was written the raw value WAS the displayed temperature, so "more
+    // than 10" meant 10 degrees; through the table it is about 4 degrees.
+    _processTemp(raw) {
+        if (raw === 0) {
             this._paTempZeroCount++;
             if (this._paTempZeroCount < 2) return { skip: true };
         } else {
             this._paTempZeroCount = 0;
         }
-        if (Math.abs(tempC - this._paTempLast) > 10 && this._paTempLast !== 0) return { skip: true };
-        this._paTempLast = tempC;
-        const calibrated = this._calibration.calibrateNumeric('TPA', tempC);
+        // A single reading far from the last one is dropped as a glitch, but
+        // only once: if the next reading agrees with it, that is where the
+        // temperature now is. Rejecting every reading that disagreed with the
+        // first one seen after page load left the gauge stuck on that first
+        // value — 35 °C on the main page against 18 °C on the calibration page,
+        // which has no filter (#151).
+        if (Math.abs(raw - this._paTempLast) > 10 && this._paTempLast !== 0) {
+            const confirmed = this._paTempPending !== null && Math.abs(raw - this._paTempPending) <= 10;
+            this._paTempPending = confirmed ? null : raw;
+            if (!confirmed) return { skip: true };
+        } else {
+            this._paTempPending = null;
+        }
+        this._paTempLast = raw;
+        const calibrated = this._calibration.calibrateNumeric('TPA', raw);
         this._meterPanel.update('temp', calibrated);
         return { skip: false, gaugeKey: 'temp', displayValue: { tempC: calibrated } };
     }

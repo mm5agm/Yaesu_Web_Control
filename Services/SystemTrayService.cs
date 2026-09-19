@@ -108,7 +108,7 @@ namespace Yaesu_Web_Control.Services
                 var menu = new ContextMenuStrip();
                 menu.Items.Add(new ToolStripMenuItem("Open Yaesu Web Control", null, OnOpenBrowser));
                 menu.Items.Add(new ToolStripSeparator());
-                menu.Items.Add(new ToolStripMenuItem("About — version " + AppVersion.Current, null, OnAbout));
+                menu.Items.Add(new ToolStripMenuItem("About — version " + AppVersion.Display, null, OnAbout));
                 menu.Items.Add(new ToolStripMenuItem("Open user data folder", null, OnOpenAppDataFolder));
                 menu.Items.Add(new ToolStripSeparator());
                 menu.Items.Add(new ToolStripMenuItem("Exit Yaesu Web Control", null, OnExit));
@@ -117,7 +117,7 @@ namespace Yaesu_Web_Control.Services
                 {
                     Icon = icon,
                     Visible = true,
-                    Text = $"Yaesu Web Control v{AppVersion.Current} — running on {_portInfo.RootUrl}",
+                    Text = $"Yaesu Web Control v{AppVersion.Display} — running on {_portInfo.RootUrl}",
                     ContextMenuStrip = menu,
                 };
                 // Double-click the tray icon -> open the browser. Most
@@ -173,7 +173,7 @@ namespace Yaesu_Web_Control.Services
         private void OnAbout(object? sender, EventArgs e)
         {
             MessageBox.Show(
-                $"Yaesu Web Control v{AppVersion.Current}\n" +
+                $"Yaesu Web Control v{AppVersion.Display}\n" +
                 $"Released {AppVersion.ReleaseDate}\n\n" +
                 "Copyright Colin Campbell (MM5AGM)\n" +
                 "Released under the GNU General Public License v3.0.\n\n" +

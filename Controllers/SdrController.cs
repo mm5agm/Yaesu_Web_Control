@@ -34,9 +34,12 @@ namespace Yaesu_Web_Control.Controllers
         /// from subsequent GetDevices calls, so this controller can't see
         /// them through normal enumeration.
         /// Always responds 200.
+        /// <paramref name="retry"/> is true from the Scan button and false
+        /// from the automatic scan on page open; only the former re-runs a
+        /// SoapySDR scan that already crashed this session (#164).
         /// </summary>
         [HttpGet("devices")]
-        public IActionResult GetDevices()
+        public IActionResult GetDevices([FromQuery] bool retry = false)
         {
             var all   = new List<SdrDeviceInfo>();
             // Notes are collected separately as deferred-add candidates and only
@@ -64,9 +67,15 @@ namespace Yaesu_Web_Control.Controllers
             }
 
             // ── SoapySDR (SoapySDR.dll) ──────────────────────────────────────────
-            try
+            // Runs in a child process. SoapySDRDevice_enumerate probes every
+            // backend module and its dependencies, and a bad one faults with
+            // an access violation that kills whichever process called it —
+            // #143 lost the whole app on every Settings page load. Now the
+            // child dies and this reports it. See SoapySdrScan.
+            var scan = SoapySdrScan.Run(_logger, retry);
+            if (scan.Error == null)
             {
-                var soapy = SoapySdrInterop.EnumerateDevices();
+                var soapy = scan.Devices;
 
                 // Always record the raw enumerate result — a plain device count plus
                 // the driver of each hit. When a user reports "my RTL-SDR works in
@@ -95,15 +104,15 @@ namespace Yaesu_Web_Control.Controllers
                 {
                     // No devices found via any path — diag deferred to the
                     // post-worker-merge gate below.
-                    string diag = SoapySdrInterop.GetPluginDiagnostics();
+                    string diag = scan.Diagnostics ?? "(none)";
                     pendingNotes.Add("No SDR devices detected. " +
                                      "Plugin details: | " + diag.Replace("\n", " | "));
                     _logger.LogWarning("SDR: SoapySDR no devices. {Diag}", diag);
                 }
             }
-            catch (DllNotFoundException ex)
+            else if (scan.Error == "DllNotFound")
             {
-                bool missingDependency = ex.Message.Contains("dependencies",
+                bool missingDependency = (scan.Message ?? "").Contains("dependencies",
                     StringComparison.OrdinalIgnoreCase);
 
                 // SoapySDR.dll itself is missing — a different problem from
@@ -115,12 +124,14 @@ namespace Yaesu_Web_Control.Controllers
                       "Try re-installing the application — the installer bundles all required DLLs."
                     : "SoapySDR.dll not found. Try re-installing the application — the installer " +
                       "should have placed SoapySDR\\bin\\SoapySDR.dll in the application folder.");
-                _logger.LogWarning("SDR: SoapySDR DllNotFoundException — {Msg}", ex.Message);
+                _logger.LogWarning("SDR: SoapySDR DllNotFoundException — {Msg}", scan.Message);
             }
-            catch (Exception ex)
+            else
             {
-                notes.Add($"SoapySDR error: {ex.Message}");
-                _logger.LogWarning(ex, "SDR: SoapySDR enumeration failed");
+                // Crashed, timed out, no worker, or an exception inside the
+                // child — SoapySdrScan has already logged the detail and
+                // worded the note for the operator.
+                notes.Add(scan.Message ?? $"SoapySDR scan failed ({scan.Error}).");
             }
 
             // Merge in devices currently held by running workers. The SDRplay

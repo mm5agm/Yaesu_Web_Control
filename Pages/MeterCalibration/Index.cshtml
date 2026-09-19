@@ -51,15 +51,19 @@
             createVDDGauge
         } from "/js/guages/gaugeFactory.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
+        // Same per-model dials as the main page (see RadioCapabilities).
+        const maxPowerWatts = @Model.MaxPowerWatts;
+        const vddDial = { min: @Model.VddMin, max: @Model.VddMax, nominal: @Model.PaSupplyVolts };
+
         const meterUiConfig = [
             { name: "S-Meter", title: "S-Meter", type: "s_meter", statusPath: ["vfoA", "sMeter"], creator: createSMeterGauge },
-            { name: "PWR", title: "Power", type: "numeric", statusPath: ["powerMeter"], creator: createPowerGauge },
+            { name: "PWR", title: "Power", type: "numeric", statusPath: ["powerMeter"], creator: id => createPowerGauge(id, { maxValue: maxPowerWatts }) },
             { name: "SWR", title: "SWR", type: "numeric", statusPath: ["swrMeter"], creator: createSWRGauge },
             { name: "Compression", title: "Compression", type: "numeric", statusPath: ["compressionMeter"], creator: createCompressionGauge },
             { name: "ALC", title: "ALC", type: "numeric", statusPath: ["alcMeter"], creator: createALCGauge },
             { name: "TPA", title: "PA Temperature", type: "numeric", statusPath: ["temperature"], creator: createTempGauge },
             { name: "IDD", title: "IDD", type: "numeric", statusPath: ["iddMeter"], creator: createIDDGauge },
-            { name: "VPA", title: "VDD", type: "numeric", statusPath: ["vddMeter"], creator: createVDDGauge }
+            { name: "VPA", title: "VDD", type: "numeric", statusPath: ["vddMeter"], creator: id => createVDDGauge(id, { minValue: vddDial.min, maxValue: vddDial.max, nominal: vddDial.nominal }) }
         ];
 
         let calibrationFile = { meters: [] };
@@ -264,18 +268,17 @@
             refreshCard(key);
         }
 
-        // VDD filter state — mirrors the orchestrator to keep calibration page stable
-        let _vddLastValid = 204;
-        let _vddLastVolts = 48;
+        // VDD filter state — mirrors FTdx101Meters._processVDD so the preview
+        // gauge behaves like the main page: window in volts against the model's
+        // dial (a raw window was the #155 bug), jump limit a fifth of the dial.
+        let _vddLastVolts = vddDial.nominal;
 
         function filterVDD(raw, meter) {
-            const minRaw = 175;  // ~41.2V — margin above gauge minimum
-            const maxRaw = 235;  // ~55V
-            if (raw < minRaw || raw > maxRaw) return null;  // out of range — discard
-            _vddLastValid = raw;
+            if (raw <= 0) return null;  // no reading
             const points = meter ? meter.points : [];
             const volts = points.length > 0 ? toNumber(interpolate(points, raw)) : raw;
-            if (Math.abs(volts - _vddLastVolts) > 3 && _vddLastVolts !== 0) return null;  // sudden jump — discard
+            if (volts < vddDial.min || volts > vddDial.max) return null;  // off the dial — discard
+            if (Math.abs(volts - _vddLastVolts) > (vddDial.max - vddDial.min) * 0.2 && _vddLastVolts !== 0) return null;  // sudden jump — discard
             _vddLastVolts = volts;
             return raw;
         }

@@ -68,6 +68,12 @@
     - 11.1 [The log file, and sending me one](#111-the-log-file-and-sending-me-one)
 12. [Using the App on a Tablet or Phone](#12-using-the-app-on-a-tablet-or-phone)
 13. [Keyboard Shortcuts](#13-keyboard-shortcuts)
+    - 13.1 [Global navigation shortcuts](#131-global-navigation-shortcuts)
+    - 13.2 [Mode and passband](#132-mode-and-passband)
+    - 13.3 [Spectrum, Radio Scope, and remote audio (conditional)](#133-spectrum-radio-scope-and-remote-audio-conditional)
+    - 13.4 [Frequency display — digit editing](#134-frequency-display--digit-editing)
+    - 13.5 [Frequency keypad and other existing keys](#135-frequency-keypad-and-other-existing-keys)
+    - 13.6 [Browser zoom](#136-browser-zoom)
 14. [Troubleshooting](#14-troubleshooting)
     - 14.1 [Reporting a bug](#141-reporting-a-bug)
     - 14.2 [Common problems](#142-common-problems)
@@ -114,18 +120,23 @@
     - 19.5 [Raspberry Pi and Docker](#195-raspberry-pi-and-docker)
     - 19.6 [Troubleshooting](#196-troubleshooting)
 20. [CW Reader](#20-cw-reader)
-    - 20.1 [What to expect from a machine reading Morse](#201-what-to-expect-from-a-machine-reading-morse)
-    - 20.2 [Starting it](#202-starting-it)
-    - 20.3 [Reader Mode](#203-reader-mode)
-    - 20.4 [Transcripts](#204-transcripts)
-    - 20.5 [Logging a QSO](#205-logging-a-qso)
-    - 20.6 [Troubleshooting](#206-troubleshooting)
+    - 20.1 [If CW is new to you](#201-if-cw-is-new-to-you)
+    - 20.2 [What to expect from a machine reading Morse](#202-what-to-expect-from-a-machine-reading-morse)
+    - 20.3 [Your first session, step by step](#203-your-first-session-step-by-step)
+    - 20.4 [The panel controls](#204-the-panel-controls)
+    - 20.5 [The Tune display](#205-the-tune-display)
+    - 20.6 [Reader Mode](#206-reader-mode)
+    - 20.7 [Transcripts](#207-transcripts)
+    - 20.8 [Logging a QSO](#208-logging-a-qso)
+    - 20.9 [Troubleshooting](#209-troubleshooting)
 21. [CW Send](#21-cw-send)
     - 21.1 [Sending a line](#211-sending-a-line)
-    - 21.2 [What the radio is actually doing](#212-what-the-radio-is-actually-doing)
-    - 21.3 [Stopping](#213-stopping)
-    - 21.4 [The panel](#214-the-panel)
-    - 21.5 [Troubleshooting](#215-troubleshooting)
+    - 21.2 [Practising without transmitting](#212-practising-without-transmitting)
+    - 21.3 [What to actually send](#213-what-to-actually-send)
+    - 21.4 [What the radio is actually doing](#214-what-the-radio-is-actually-doing)
+    - 21.5 [Stopping](#215-stopping)
+    - 21.6 [The panel](#216-the-panel)
+    - 21.7 [Troubleshooting](#217-troubleshooting)
 
 ---
 
@@ -401,7 +412,7 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 ### 5.1 Top Bar
 
-The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.1**) are shown in the top-left corner.
+The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.2**) are shown in the top-left corner.
 
 **Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the latest version or if the internet is not available.
 
@@ -463,7 +474,7 @@ A scrollable row of meters is displayed above the VFO panels. The leftmost slots
 | ALC | Automatic Level Control voltage — only active during transmit |
 | Temp | PA temperature in °C |
 | IDD | PA drain current in amps |
-| VDD | PA supply voltage in volts |
+| VDD | PA supply voltage in volts. The dial is 40–55 V on the FTdx101MP, whose 200 W final runs from an internal 50 V supply, and 10–16 V on the FTdx101D and FTDX3000, which run from 13.8 V |
 
 > **Why the radio's own front-panel meter is stuck on COMP/SWR while YWC is running.** On the FTdx101MP and FTdx101D, the radio's documented CAT command for reading SWR directly returns stale or wrong values, so YWC works around it by repeatedly telling the radio to display Compression and SWR on its own meter and reading both at once — about twice a second, for as long as YWC is connected. This is what YWC needs to show you an accurate SWR reading, but it also means you can't pick a different meter pair from the radio's own front panel while YWC is running; whatever you select gets overridden within half a second. This is expected behaviour, not a fault — there's no radio-side setting that avoids it.
 
@@ -675,7 +686,7 @@ Existing installs auto-populate empty slots on the next startup with whatever th
 | AGC | OFF, FAST, MID, SLOW, AUTO |
 | IPO/AMP | IPO, AMP1, AMP2 |
 | ATT | OFF, 6 dB, 12 dB, 18 dB |
-| NR | OFF, NR1, NR2 |
+| DNR | OFF, ON |
 | NB | OFF, ON |
 | NB Level | 1–20 (noise blanker depth; only relevant when NB is ON) |
 | Auto Notch | OFF, ON |
@@ -875,6 +886,8 @@ Click **M1**–**M5** and that message is sent. Four things about it are worth k
 Close the panel by clicking the **×** button in its title bar. Drag the title bar to reposition the panel anywhere on screen. Its position is remembered between sessions.
 
 To read incoming Morse rather than send it, use the **CW Read** button on the main toolbar — see [§20 CW Reader](#20-cw-reader). To send from the keyboard rather than from five fixed memories, use **CW Send** — see [§21 CW Send](#21-cw-send). Be aware that CW Send borrows **M5** as its scratch memory while a line goes out and puts your text back afterwards.
+
+**New to CW?** The controls above assume words — pitch, break-in, zero beat, APF — that are explained in [§20.1](#201-if-cw-is-new-to-you), along with which ones you set once and then leave alone. Setting **Break-in** to **Off** here turns the whole CW side of YWC into a practice rig that transmits nothing at all; [§21.2](#212-practising-without-transmitting) is what to do with that.
 
 ---
 
@@ -1366,7 +1379,7 @@ You might assume an SDRplay **RSPduo** (two tuners in one box) would be the natu
 2. **Cost.** Two RSP1Bs at typical retail prices are only marginally more expensive than one RSPduo.
 3. **Independence.** If one RSP misbehaves, YWC's worker for that side restarts independently. With an RSPduo a glitch can take both tuners out at once.
 
-If you already own an RSPduo, you can still use it — just set it as the VFO A SDR and leave the VFO B slot empty (the second tuner remains available for other software). The dual-tuner mode that lets one RSPduo serve both VFOs is not yet implemented.
+If you already own an RSPduo, you can still use it. It appears twice in the SDR device list — **Tuner 1** and **Tuner 2** — and you pick the entry matching the socket the IF cable is plugged into (Tuner 1 is the 50 Ω SMA socket; Tuner 2 is the other SMA socket, not the Hi-Z port). Set that entry as the VFO A SDR and leave the VFO B slot empty; the other tuner remains available for other software. The dual-tuner mode that lets one RSPduo serve both VFOs is not yet implemented.
 
 #### Why an SDRplay RSP, not a cheap RTL-SDR dongle?
 
@@ -1393,6 +1406,8 @@ YWC keeps the previous spectrum frame visible during the pause rather than blank
 
 Select which optional roofing filters are fitted to your radio. The app uses this list to show only the installed filters in the Roofing Filter dropdown on the main page. FTdx101MP comes fully loaded; FTdx101D, FTdx10, and FTDX3000 allow optional filter selection.
 
+Only the boxes for the radio model chosen above are live — the other models' boxes are greyed out and ignored when you save. Before v2.5.2-pre4 a box belonging to a hidden model could still be submitted, which is why unticking 300 Hz on an FTdx101D did not stick ([#156](https://github.com/mm5agm/Yaesu_Web_Control/issues/156)), and an FTdx10's 300 Hz tick was never saved at all.
+
 ---
 
 ### 6.5 CW Memory Messages (M1–M5)
@@ -1418,6 +1433,8 @@ Enter up to five CW message memories. These are available from the CW Keyer pane
 | M5 | DE {CALL} |
 
 Note: `{CALL}` is a reminder placeholder — the radio's KY command does not perform variable substitution. Replace `{CALL}` with your actual callsign.
+
+Those five defaults are close to a complete CW contact between them: M1 calls, M3 asks who is calling, M4 gives the report, M2 closes. Fill in your own callsign and you can work someone with four buttons and one typed line — see [§21.3](#213-what-to-actually-send) for how a QSO fits together.
 
 ---
 
@@ -1664,12 +1681,12 @@ The editor shows all your saved memories in a table. For each memory you can edi
 | Roofing | Roofing filter code (e.g. 7 = 3 kHz on FTdx101). Ignored on FTdx10/FT-710 |
 | NB | Noise blanker on/off |
 | NB Lvl | Noise blanker level, 1–20 |
-| NR | Noise reduction (Off / NR1 / NR2) |
+| NR | Digital noise reduction (Off / On) |
 | AGC | AGC mode (Off / Fast / Mid / Slow / Auto) |
 | Power | Transmit power in watts |
 | Notes | Free-text notes, up to 100 characters |
 
-**Each advanced field is applied on recall only if you have set a value.** Leave any field blank and the radio's current value for that setting is left alone. This means you can save a memory that only changes frequency and mode (the simple use case), or one that fully configures the radio (e.g. "20m FT8" with antenna 2, IF Width 8, NR2, 50 W, AGC Auto).
+**Each advanced field is applied on recall only if you have set a value.** Leave any field blank and the radio's current value for that setting is left alone. This means you can save a memory that only changes frequency and mode (the simple use case), or one that fully configures the radio (e.g. "20m FT8" with antenna 2, IF Width 8, DNR on, 50 W, AGC Auto).
 
 > **Important:** Advanced fields are **app-side only**. They are stored in `memories.json` on your PC but the radio's own memory channels (used by the Import/Export buttons) cannot hold these fields. Exporting to the radio writes only label, frequency, mode, and clarifier values.
 
@@ -2287,24 +2304,88 @@ On touch devices, tap a digit in the frequency display to select it (it highligh
 
 ## 13. Keyboard Shortcuts
 
-| Key / Action | Result |
-|---|---|
-| **F** | Enter full-screen mode |
-| **Esc** | Exit full-screen mode |
-| Mouse wheel (on spectrum) | Tune VFO A up or down in 1 kHz steps |
-| Click on spectrum | Tune VFO A to the clicked frequency |
-| **Tab** (in band buttons) | Move focus into the band button group |
-| **← / →** (in band buttons) | Move to the previous/next band and switch immediately |
-| Numeric entry button (**⑁**) next to MHz | Open the on-screen frequency keyboard for that VFO |
-| **0–9** (frequency keyboard open) | Type the digit at the cursor position |
-| **← →** (frequency keyboard open) | Move the cursor left or right |
-| **Backspace** (frequency keyboard open) | Clear the current digit and move cursor back |
-| **Delete** (frequency keyboard open) | Clear all digits |
-| **↵ Enter** (frequency keyboard open) | Send the entered frequency to the radio |
-| **Esc** (frequency keyboard open) | Close the keyboard without changing frequency |
-| **Esc** (Memory panel open) | Close the Memory panel |
+Press **?** (**Shift+/**) or **h** on the main control panel to open an in-app dialog that lists every live shortcut. The same table is summarised below. A keyboard-icon button in the top bar (tooltip: *Keyboard shortcuts (?)*) opens that dialog as well.
 
-**Frequency display — changing the value digit by digit.** Every VFO frequency display is a "digit-pickable" control. You select a digit (it highlights yellow), then step it up or down. Three input methods reach the same set of actions, so pick whichever suits you:
+While the help dialog is open, **↑ / ↓** (and Page Up / Page Down) scroll the list — they do not tune or IF-shift. The Spectrum / Scope section shows a two-column table (SDR vs Radio Scope) and highlights which target **z / w / s** currently drive; press **t** there (or the top-bar **Keys → SDR** / **Keys → Scope** button) to switch — the button flashes briefly so the change is easy to see.
+
+Shortcuts apply on the **Index** (main control) page. They are **ignored while typing** in a text field, select box, the CW Send line, a DX Watch input, memory prompts, or while the on-screen frequency keypad is open. Browser chords such as **Ctrl/⌘+F** (find) are never captured. Some OS or GPU overlays can still steal keys (especially Ctrl chords); YWC therefore avoids Ctrl for primary shortcuts.
+
+**Active VFO.** Most shortcuts act on the active / operating VFO (MAIN/SUB on dual-receiver radios, or the RX selector on single-receiver radios). **g** opens frequency entry for that VFO.
+
+### 13.1 Global navigation shortcuts
+
+| Key | Action |
+|---|---|
+| **?** (**Shift+/**) / **h** | Open / close the keyboard shortcuts help dialog |
+| **Esc** | Close the help dialog; also closes other panels (frequency keypad, Memories, …) and exits full-screen |
+| **g** | Open the on-screen frequency keypad for the active VFO |
+| **j** / **←** | Frequency step down (100 Hz) |
+| **i** / **→** | Frequency step up (100 Hz) |
+| **Shift** + j/i/←/→ | Step ×10 (1 kHz) |
+| **Alt** + j/i/←/→ | Step ×100 (10 kHz) |
+| **[** / **]** | Step 1 Hz |
+| **Shift** + **[** / **]** | Step 50 Hz |
+| **Shift+Alt** + **j** / **i** | Jump to the previous / next DX spot on the spectrum overlay |
+| **m** | Open / focus the Memories panel |
+| **n** | Toggle active VFO (A ↔ B) |
+| **N** | Copy VFO A → B (A = B) |
+| **b** / **B** | Previous / next amateur band |
+| **x** | Show / hide the VFO B panel |
+| **y** | Show / hide the S-meter history strip |
+| **f** / **F** | Enter full-screen mode |
+| **D** | Toggle the DX Spots list |
+| **@** | Open the DX Watch dialog |
+| **R** | Show / scroll to the Radio Display panel (when configured) |
+| **r** | Start / stop Remote Audio |
+
+**Arrow keys and the frequency display.** When a VFO frequency display has keyboard focus, **← → ↑ ↓** and **PageUp/PageDown** keep their digit-editing behaviour (see §13.4). Global tune / IF-shift shortcuts do not override that focused editor. Left/Right also stay with the band button group when that group has focus.
+
+### 13.2 Mode and passband
+
+| Key | Action |
+|---|---|
+| **l** | LSB |
+| **u** | USB |
+| **c** | CW-U |
+| **C** or **Alt+c** | CW-L |
+| **a** | AM |
+| **A** or **Alt+a** | AM-N |
+| **q** | FM |
+| **Q** or **Alt+q** | FM-N |
+| **d** | DATA-U |
+| **Alt+d** | DATA-L |
+| **p** | Narrow IF width (previous step in the dropdown) |
+| **P** | Widen IF width (next step) |
+| **/** (unshifted) | Restore default IF width |
+| **↑** / **↓** | IF Shift ±20 Hz (when the frequency display is not focused) |
+| **Shift** + ↑/↓ | IF Shift ±100 Hz |
+
+FM uses **q** (not **f**) so full-screen can keep the existing **f** / **F** binding. Modes that are not in the radio's mode list are announced as unavailable.
+
+### 13.3 Spectrum, Radio Scope, and remote audio (conditional)
+
+**Display target.** The span / range / hold keys (**z**, **w**, **s**, and friends) act on either the **SDR spectrum** panel or the **Radio Scope** CAT controls — whichever is the current target. Press **t** (or the top-bar **Keys → SDR** / **Keys → Scope** button) to switch. The choice is remembered in the browser. If only one of the two is available, that one is used automatically (for example Radio Scope on a CAT-only host, or SDR when the radio has no CAT scope).
+
+| Key | Action | When |
+|---|---|---|
+| **t** | Toggle z/w/s target between SDR spectrum and Radio Scope | Both available |
+| **z** / **Z** | Zoom in / out (narrower / wider span) | Active display target |
+| **Alt+z** / **Alt+Z** | Jump to narrowest / widest span | Active display target |
+| **<** / **>** (**Shift+,** / **Shift+.**) | Wider / narrower span | Active display target |
+| **w** / **W** | SDR: vertical range −/+ 1 dB. Radio Scope: smaller / larger spectrum pane (L → N → S) | Active display target |
+| **Alt+w** / **Alt+W** | SDR: range −/+ 10 dB. Radio Scope: smallest / largest pane | Active display target |
+| **o** / **O** | Radio Scope reference level −/+ 1 dB | Radio Scope target |
+| **Alt+o** / **Alt+O** | Radio Scope reference level −/+ 10 dB | Radio Scope target |
+| **s** | Toggle Hold (freeze / live) | Active display target |
+| **S** | SDR: reset range to 60 dB. Radio Scope: reset reference level to 0 dB | Active display target |
+| **v** / **V** | Remote Audio RX gain −/+ | Remote Audio controls present |
+| **Shift+M** | Mute / unmute Remote Audio RX | Remote Audio controls present |
+
+The optional **TX keyboard shortcut** in Settings (often Space) is unchanged — mute no longer uses Space. With Caps Lock on, bare **m** still opens Memories; mute stays **Shift+M**.
+
+### 13.4 Frequency display — digit editing
+
+Every VFO frequency display is a "digit-pickable" control. You select a digit (it highlights yellow), then step it up or down. Three input methods reach the same set of actions, so pick whichever suits you:
 
 | Input | Action | What happens |
 |---|---|---|
@@ -2321,11 +2402,30 @@ On touch devices, tap a digit in the frequency display to select it (it highligh
 
 A few extra notes:
 
-- **Click-tuned changes are debounced** — when you stop wheeling / pressing for ~600 ms, the new frequency is sent to the radio. Holding ArrowUp for a sustained step (autorepeat) works fine; it sends one CAT command per ~600 ms of stillness rather than one per keystroke.
+- **Click-tuned changes are throttled** — live CAT updates are sent while you step; a trailing settle send runs after you pause (~250 ms).
 - **Selection persists** across polling cycles — you can press ArrowUp repeatedly and the selection stays on the same digit. The radio's confirmation of one step doesn't blow your selection away.
 - **The selected digit highlights yellow** when an actual digit is selected. The whole display also gains a blue focus ring when it has keyboard focus (e.g. you tabbed into it).
 
-**Browser zoom — make everything bigger or smaller.** YWC is a web page, so it honours your browser's standard zoom keyboard shortcuts. This is the easiest way to make controls more readable on a high-resolution monitor or to fit more on a small tablet screen:
+### 13.5 Frequency keypad and other existing keys
+
+| Key / Action | Result |
+|---|---|
+| Mouse wheel (on spectrum) | Tune that panel's VFO in 1 kHz steps |
+| Click on spectrum | Tune that panel's VFO to the clicked frequency |
+| **Tab** (in band buttons) | Move focus into the band button group |
+| **← / →** (in band buttons) | Move to the previous/next band and switch immediately |
+| Numeric entry button next to MHz | Open the on-screen frequency keyboard for that VFO |
+| **0–9** (frequency keyboard open) | Type the digit at the cursor position |
+| **← →** (frequency keyboard open) | Move the cursor left or right |
+| **Backspace** (frequency keyboard open) | Clear the current digit and move cursor back |
+| **Delete** (frequency keyboard open) | Clear all digits |
+| **↵ Enter** (frequency keyboard open) | Send the entered frequency to the radio and close the keyboard |
+| **Esc** (frequency keyboard open) | Close the keyboard without changing frequency |
+| **Esc** (Memory panel open) | Close the Memory panel |
+
+### 13.6 Browser zoom
+
+YWC is a web page, so it honours your browser's standard zoom keyboard shortcuts. This is the easiest way to make controls more readable on a high-resolution monitor or to fit more on a small tablet screen:
 
 | Key | Result |
 |---|---|
@@ -2336,7 +2436,9 @@ A few extra notes:
 
 The browser remembers your zoom level per site, so once you've set it, every YWC session opens at that size until you change it. Worth setting once if the default text is too small (or too large) for you — and especially worth knowing about for partially-sighted operators who don't otherwise know browsers can do this.
 
----
+As the page gets narrower the VFO panels rearrange themselves rather than overflow: around 150–175 % the AGC / IPO / NR / NB / Notch column moves down beneath the band buttons, and at 200 % and beyond VFO B stacks below VFO A. Everything stays inside its own panel at every zoom level (fixed in v2.5.2-pre4, [#157](https://github.com/mm5agm/Yaesu_Web_Control/issues/157)).
+
+**Keeping the dialog and this section aligned.** The in-app **?** dialog is generated from the same shortcut registry as the dispatcher (`wwwroot/js/ui/keyboard-shortcuts.js` → `SHORTCUT_HELP`). When adding or renaming a shortcut, update that registry and this §13 table in the same change.
 
 ## 14. Troubleshooting
 
@@ -2443,6 +2545,13 @@ Up to and including v2.4.2 — and in the v2.4.3 pre-releases up to pre3 — the
 **Meters appear to show incorrect values**
 
 - The meters use a default calibration that may not exactly match every individual radio. See Section 10 to adjust the calibration.
+- If the PA temperature on the main page disagrees with the one on the Calibration page, you are on a build older than v2.5.2-pre4: the main page held on to the first reading it saw after loading ([#151](https://github.com/mm5agm/Yaesu_Web_Control/issues/151)).
+
+**Settings says "The SoapySDR device scan crashed inside a native driver"**
+
+- YWC itself is fine — the scan runs in a separate throwaway process precisely so that a faulty SDR driver on the PC cannot take the app down ([#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143), [#164](https://github.com/mm5agm/Yaesu_Web_Control/issues/164)). If you do not use an RTL-SDR, Airspy or HackRF with YWC, ignore it; SDRplay devices are not involved in this scan.
+- The scan is not repeated automatically once it has crashed in a session; click **Scan** to run it again.
+- If you do use one of those SDRs, the log (Diagnostics page) lists the SoapySDR folders and driver modules that were loaded, and Windows Event Viewer (Windows Logs → Application, source "Application Error", faulting application `Yaesu_Sdr_Worker.exe`) names the DLL that faulted. Please attach both to an issue.
 
 **App will not start — "Already Running"**
 
@@ -2512,7 +2621,9 @@ The dual-SDR support in YWC (v2.3.0+) is designed for two completely separate re
 2. **Cost.** At UK retail prices (mid-2026): RSPduo around **£240**, RSP1B around **£125**. Two RSP1Bs come in at roughly the same total cost as one RSPduo, with double the bandwidth and full independence.
 3. **My own setup was "I had an old RSP1 sitting unused".** Adding a second SDR meant buying just one new RSP1B (£125) rather than a £240 RSPduo. That happens to be a common situation for hams who've upgraded their SDRplay receivers over the years — chances are there's an RSP1 or RSP2 in a drawer that can serve VFO B perfectly well.
 
-If you already own an RSPduo it will still work — set it as the VFO A SDR and leave VFO B as *(none)*. The dual-tuner mode that lets one RSPduo serve both VFOs is not yet implemented.
+If you already own an RSPduo it will still work. It is listed twice in the SDR device list — **SDRplay RSPduo (serial) — Tuner 1** and **— Tuner 2** — because the RSPduo has two separate antenna sockets, and I have to tell the SDRplay service which one to stream from before it will hand the device over. Pick the entry matching the socket the IF cable is plugged into: **Tuner 1** is the 50 Ω SMA socket, **Tuner 2** the second SMA socket (the Hi-Z port is not used). Set that entry as the VFO A SDR and leave VFO B as *(none)*. The dual-tuner mode that lets one RSPduo serve both VFOs is not yet implemented.
+
+If the spectrum shows a flat ripple of noise that never follows the radio, the wrong tuner is selected — swap to the other entry.
 
 ---
 
@@ -2567,6 +2678,26 @@ Why this happens in practice:
 
 If you must use a virtual port sharer (e.g. you've already built a working setup around one), the easiest test is to point YWC at the real physical COM port directly while everything else stays on the sharer's virtual ports — and only re-add the sharer to YWC's path if a specific need forces it.
 
+### 15.7 What is the TX button for? When I press it the radio goes into TX mode but there's no audio from my microphone.
+
+The TX button in YWC sends the `TX1;` CAT command, which puts the radio into transmit mode (PTT engaged) but **by itself does not create microphone audio**. With nothing modulating the carrier, what actually goes on-air depends on the current mode and how audio is fed:
+
+- **CW** — an unmodulated carrier (a steady tone). Useful for tune-up, SWR measurement, or driving an external tuner / amplifier into its tune cycle.
+- **SSB / AM / FM** — the TX path is open; you need audio into the radio (front mic, or USB/REAR audio from the PC).
+- **DATA / digital modes** — typically USB audio from WSJT-X (or similar) into the rear DATA/USB path.
+
+**Local mic:** press the PTT on the hand mic / footswitch / VOX as usual.
+
+**Remote browser mic:** enable [Remote Audio](#18-remote-audio), pick the radio’s USB devices in Settings, use HTTPS for non-localhost browsers, click **Start audio** on the Index page, then use the TX button (or TX toggle key) for PTT. On the radio, set **MOD SOURCE** to USB / REAR (USB).
+
+What people use the TX button for without remote audio:
+
+1. **Tune-up.** Switch to CW, click TX, watch your SWR or let your ATU find a match.
+2. **Driving an external amplifier or antenna tuner** into its auto-tune cycle.
+3. **Digital-mode keying tests.** When WSJT-X is feeding audio into USB, the TX button verifies CAT keying.
+
+---
+
 ### 15.8 Why was Alexa voice control dropped in favour of the built-in microphone method?
 
 Earlier development branches explored using Amazon Alexa to control YWC — you'd say "Alexa, set frequency to fourteen point zero seven four" to your Echo device and the command would route through Amazon's cloud, hit a custom skill, and arrive at YWC over a Cloudflare tunnel. That work reached a fully-working end-to-end prototype, but **the setup overhead made it impractical for anyone who isn't already comfortable with Cloudflare tunnels and the Amazon Developer Console**.
@@ -2588,26 +2719,6 @@ The current voice control uses **Windows' built-in speech recognition (SAPI 5)**
 | Typical setup time | ~30–60 minutes | ~2 minutes |
 
 The Alexa code **isn't deleted** — it lives on a parked branch and can be revived if Amazon ever simplifies the developer experience, or if a contributor wants to package the cloud side as a one-click installer. For now, the built-in microphone method gives most of the same usefulness at a small fraction of the setup complexity, and it works equally well for users on a restricted home network where opening a Cloudflare tunnel isn't viable.
-
----
-
-### 15.7 What is the TX button for? When I press it the radio goes into TX mode but there's no audio from my microphone.
-
-The TX button in YWC sends the `TX1;` CAT command, which puts the radio into transmit mode (PTT engaged) but **by itself does not create microphone audio**. With nothing modulating the carrier, what actually goes on-air depends on the current mode and how audio is fed:
-
-- **CW** — an unmodulated carrier (a steady tone). Useful for tune-up, SWR measurement, or driving an external tuner / amplifier into its tune cycle.
-- **SSB / AM / FM** — the TX path is open; you need audio into the radio (front mic, or USB/REAR audio from the PC).
-- **DATA / digital modes** — typically USB audio from WSJT-X (or similar) into the rear DATA/USB path.
-
-**Local mic:** press the PTT on the hand mic / footswitch / VOX as usual.
-
-**Remote browser mic:** enable [Remote Audio](#18-remote-audio), pick the radio’s USB devices in Settings, use HTTPS for non-localhost browsers, click **Start audio** on the Index page, then use the TX button (or TX toggle key) for PTT. On the radio, set **MOD SOURCE** to USB / REAR (USB).
-
-What people use the TX button for without remote audio:
-
-1. **Tune-up.** Switch to CW, click TX, watch your SWR or let your ATU find a match.
-2. **Driving an external amplifier or antenna tuner** into its auto-tune cycle.
-3. **Digital-mode keying tests.** When WSJT-X is feeding audio into USB, the TX button verifies CAT keying.
 
 ---
 
@@ -3363,15 +3474,47 @@ OCR, capture-device audio, and WebRTC are **not** in this version. Clicks on the
 
 The **CW Read** button on the main control panel opens a reader that listens to the radio's receive audio and prints the Morse it hears as text. It also offers a **Reader Mode** button that sets the radio up for decoding and puts your settings back afterwards, keeps a transcript of everything it decoded, and can turn a contact into a line in an ADIF log.
 
-Nothing here transmits. The reader only listens.
+Nothing here transmits. The reader only listens. To answer the station you are reading, use **CW Send** ([§21](#21-cw-send)).
 
 ![The CW Reader panel — decoded text at the top, the status line beneath it, and the Reader Mode, transcript and log controls](pictures/CW-Reader.png)
 
-### 20.1 What to expect from a machine reading Morse
+If CW is new to you, read [§20.1](#201-if-cw-is-new-to-you) and [§20.2](#202-what-to-expect-from-a-machine-reading-morse) first. They are short, and between them they save most of the disappointment people have with machine copy.
+
+### 20.1 If CW is new to you
+
+The panel uses a handful of words that are second nature on the CW bands and mean nothing off them. None of it is hard, but the controls make a great deal more sense once you know what they refer to.
+
+| Word | What it means here |
+|---|---|
+| **Pitch** | The note a CW signal comes out as. A receiver does not reproduce a Morse carrier — it beats against it to make an audible tone, and the tone you get depends on exactly where you tune. Pitch is the note you have asked for, set in the CW Keyer panel ([§5.12](#512-cw-keyer-panel)), 300–1050 Hz. Pick one, learn it, and leave it alone: 600–700 Hz suits most ears, and a lower pitch tires you less over a long session. It is also the note the reader listens for — so every station you want to copy has to be tuned onto it. |
+| **Zero beat / on pitch** | Tuned so the station sings at exactly your pitch. **ZIN** does it in one click ([§5.12](#512-cw-keyer-panel)); so does clicking the signal on the spectrum display ([§5.4](#54-spectrum-display)). |
+| **WPM** | Words per minute — the sending speed. As a rule of thumb, 12–18 is learner speed, 20–25 ordinary QSO speed, 30 and up contest speed. The reader reports the speed it has locked onto, which is a useful check on whether you are ready to answer. |
+| **Break-in** | Whether the keyer actually puts you on the air. **Off** means the radio keys its own sidetone and transmits nothing — the practice setting. **Semi** transmits and drops back to receive after the Delay time. **Full** (also called QSK) lets you hear the band in the gaps between your own dots. |
+| **CW-U / CW-L** | Which side of the signal the tone is taken from. Both copy the same station equally well and the reader is happy with either; the difference is which way the dial reads, and which side interference falls on. Stay on **CW-U** until you have a reason not to. Keyboard shortcut **c** ([§13.2](#132-mode-and-passband)). |
+| **IF width** | How wide a slice of the band reaches the audio. SSB uses about 2.4 kHz; CW wants 250–500 Hz. A wide filter on a busy CW band puts half a dozen stations into the decoder at once, and it will read none of them. |
+| **Roofing filter** | A second, earlier filter, in the radio's hardware rather than its DSP — 12 kHz, 3 kHz, 1.2 kHz, 600 Hz or 300 Hz, whichever of those you have fitted ([§6.4](#64-roofing-filters)). The **narrower of the roofing filter and the IF width is the one doing the work**, so a 250 Hz IF width behind a 12 kHz roofing filter is still a 250 Hz passband as far as the decoder is concerned. Where it earns its keep is a crowded band: it throws the strong neighbours away before they ever reach the receiver's later stages, so a loud station a kilohertz away stops pumping the AGC on the weak one you are reading. **Reader Mode does not change it** — set 600 Hz or 300 Hz by hand when the band is busy. This is a Yaesu feature; my Icom app has no equivalent because the IC-7300 is a direct-sampling SDR with no roofing filters at all. |
+| **APF** | Audio Peak Filter — a sharp resonance at the CW note, on top of the IF filter. It is exactly what the decoder wants. Some operators find the ringing tiring, so it can be switched off ([§6.10](#610-cw-reader-mode)). |
+| **RST, 599, 5NN** | The signal report: readability 1–5, strength 1–9, tone 1–9. On CW almost everyone sends **599** regardless, and often abbreviates it to **5NN**, because `N` is a shortened `9`. The reader recognises both. |
+| **DE, CQ, K, TU, 73, QRZ?** | The standard shorthand. `CQ` is a general call, `DE` means "from" and is followed by the caller's own callsign, `K` invites the other station to transmit, `TU` is thank you, `73` is best wishes and ends the contact, `QRZ?` asks who is calling. The reader tints these in the decoded text, so you can find the shape of a QSO at a glance. |
+
+**The five things the reader needs, in the order they are usually the problem:**
+
+1. **YWC can hear the radio.** The reader uses the same capture device as Remote Audio — set the **RX device** to the radio's USB codec in Settings ([§6.8](#68-remote-audio)). If it cannot open it, the status line says so in words.
+2. **The radio is in CW.** Press **c**, or use the Mode dropdown.
+3. **The station is on your pitch.** Not merely audible — on your pitch. This is the most common reason a perfectly readable signal prints nothing.
+4. **The filter is narrow.** **Reader Mode** ([§20.6](#206-reader-mode)) does this for you in one click.
+5. **Your expectations are calibrated.** [§20.2](#202-what-to-expect-from-a-machine-reading-morse) covers that, and it matters more than the other four.
+
+### 20.2 What to expect from a machine reading Morse
 
 I want to be straight about this before describing the controls, because it is the thing that surprises people.
 
 On a strong, clean, machine-sent signal the reader is close to perfect. On a marginal one it prints plausible-looking rubbish that looks exactly the same as good copy — the same confident letters, the same spacing. It has no way of knowing the difference, and neither has the screen. My own measurements have had it report full confidence on nearly six hundred characters of complete junk.
+
+Two consequences are worth taking on board early:
+
+- **The reader is an aid to your ears, not a replacement for them.** Operators who copy by ear use it to catch the callsign they missed. It is not a route to working CW without learning it, and if you try to run a QSO purely from the screen you will eventually send `TU 73` to a station that was calling somebody else.
+- **Hand-sent Morse is much harder for it than machine-sent.** A good fist reads well; a poor one may not read at all even when a human copies it comfortably. That is the decoder's limit, not your receiver's.
 
 That is why the **status line** under the text matters as much as the text. It tells you which of the two you are looking at:
 
@@ -3389,11 +3532,26 @@ That is why the **status line** under the text matters as much as the text. It t
 
 Colour in the decoded text marks what *looks like* QSO traffic — procedural signals (`CQ`, `DE`, `73`), signal reports, and callsigns, with a callsign heard more than once shown brighter than one heard only once. Nothing is hidden and nothing is corrected: the colour is a hint about what the reader thinks it saw, laid over exactly what it decoded.
 
-### 20.2 Starting it
+A reading that says `signal`, carries a `wpm` figure, shows an SNR in double figures and prints text you can make words out of is copy you can act on. Anything else, treat the text as a guess.
 
-1. Open the panel with **CW Read**.
-2. Put the radio in CW and tune the station in — or press **Reader Mode** and let YWC do the filter part (see below).
-3. Press **Start**.
+### 20.3 Your first session, step by step
+
+This is the whole thing from cold, on a band you have never listened to in CW. It takes a couple of minutes.
+
+1. **Set the capture device — once.** Settings → Remote Audio ([§6.8](#68-remote-audio)) → **RX device** → the radio's USB codec. You only ever do this once; the reader and Remote Audio share it.
+2. **Set your pitch — once.** Open the CW Keyer panel with the **CW** button and set **Pitch** to 600 or 700 Hz. This is a decision, not a per-station adjustment — leave it there from now on.
+3. **Go to a CW segment.** 7.020 or 14.020 MHz will nearly always have something on a weekday evening. Press **c** for CW-U.
+4. **Open the reader** with **CW Read**.
+5. **Press Reader Mode.** The radio goes to a 250 Hz filter with APF on. Everything it changes is put back when you stop ([§20.6](#206-reader-mode)).
+6. **Find a station.** With an SDR spectrum panel, click the peak — that tunes it onto your pitch in one action. Without one, tune until you hear a signal and press **ZIN**; the radio nudges itself so the tone sits exactly on your pitch.
+7. **Press Start.** Watch the status line before you watch the text. You want `signal`, a tone within a few Hz of your pitch, and after a few seconds a `wpm` figure.
+8. **If nothing prints**, read the status line and do what it says. `off pitch - tune +120 Hz` means press **ZIN** again, or nudge the dial. `nothing readable - more than one signal` means you are sitting on top of two stations, so move. `no signal` means you are not on a station at all.
+
+Once it is reading, turn **Tune** on for a minute ([§20.5](#205-the-tune-display)) even if you do not need it. It is the quickest way to get a feel for what "on pitch" actually looks like, and after a few stations you will be tuning by eye without thinking about it.
+
+**Start it before you understand the band, not after.** The reader costs nothing to leave running and it writes a transcript, so if a callsign goes past while you were reaching for the mouse it is still on disk ([§20.7](#207-transcripts)).
+
+Some practical notes on what it needs:
 
 The reader opens the radio's USB audio codec for listening on its own. You do **not** need a Remote Audio session running first. If the capture device is not chosen or has gone away, the status line says so in words rather than sitting there blank.
 
@@ -3401,18 +3559,54 @@ The reader opens the radio's USB audio codec for listening on its own. You do **
 
 **The reader is not Windows-only.** Unlike the SDR spectrum and Voice Control, it runs on the macOS and Linux hosts and in Docker as well. What it needs is a capture device it can open — on Linux and in Docker that means the sound devices have to be passed through, which is the same requirement Remote Audio has ([§18](#18-remote-audio)).
 
-Set your CW pitch in the CW Keyer panel (§5.12) and tune the station onto it — on an FTdx101 with an SDR, clicking the station's peak on the spectrum does that in one go. The reader decodes at the pitch you are using, because that is the tone you have tuned the signal to — hunting for a note you are not listening to is not much use to either of you.
+The reader decodes at the pitch you are using, because that is the tone you have tuned the signal to — hunting for a note you are not listening to is not much use to either of you.
+
+### 20.4 The panel controls
+
+Along the top of the panel are four buttons and two switches. The switches — **Follow** and **Tune** — are easy to miss because they do not look like the buttons beside them, and both are worth knowing about.
 
 | Control | What it does |
 |---|---|
 | **Start / Stop** | Runs the decoder. Stop also restores your radio settings if Reader Mode is on. |
-| **Clear** | Empties the on-screen text. The transcript file on disk is not touched. |
-| **Reader Mode** | Sets the radio up for decoding — see §20.3. |
-| **Log QSO** | Opens the log form — see §20.5. |
-| **Follow** | Keeps the newest text in view. Turn it off to scroll back through an over without being dragged to the bottom. |
-| **Tune** | Shows a tuning display beside the text: a passband spectrum with a marker at your pitch, and an X-Y figure that stops turning when you are exactly zero-beat. Handy if you would rather tune by eye than by ear. |
+| **Clear** | Empties the on-screen text. The transcript file on disk is not touched, so this is safe to press when you move to a new station. |
+| **Reader Mode** | Sets the radio up for decoding, and puts your settings back afterwards — see [§20.6](#206-reader-mode). |
+| **Log QSO** | Opens the log form — see [§20.8](#208-logging-a-qso). |
+| **Follow** *(switch, on by default)* | Keeps the newest text in view. See below. |
+| **Tune** *(switch, off by default)* | Shows the tuning display beside the text — see [§20.5](#205-the-tune-display). |
+| **×** | Closes the panel. It does **not** stop the reader — see [§20.6](#206-reader-mode). |
 
-### 20.3 Reader Mode
+**Follow** is the one to understand first, because the situation it exists for comes up in your first hour.
+
+Leave it **on** and the text pane scrolls itself, so the character arriving right now is always the one at the bottom of the box. That is what you want nearly all the time, which is why it starts on.
+
+Turn it **off** when you want to read back without being dragged forward. The moment that matters: the other station is part way through a long over and you want to check the callsign he sent thirty seconds ago before you answer. With Follow on, every new character yanks you back to the bottom and you never get to read it. With Follow off, the text stays exactly where you put it while decoding carries on underneath — nothing is lost, and turning Follow back on jumps you to the newest text again.
+
+So the habit is: Follow off to read back, Follow on to carry on. The setting is remembered in that browser between sessions, so if you find you prefer it off, it stays off.
+
+### 20.5 The Tune display
+
+Turn **Tune** on and two small displays appear to the right of the decoded text. Between them they answer the two questions a beginner actually has: *is there anything there?* and *am I on it?*
+
+**The passband spectrum** (the upper one) draws the slice of audio the reader is searching, with a fixed marker at your pitch. A signal shows as a peak. The tuning error is simply the horizontal gap between the peak and the marker — no number to interpret, no beat note to judge. A second marker shows where the reader believes the tone is, so if it has locked onto the wrong thing you can see that rather than guess at it. The axis deliberately does not move as you tune, because a scale that slides under you while you are turning the dial is worse than no display at all.
+
+The caption beneath says the same thing in words: `On pitch (600 Hz)`, `Tone 140 Hz above the marker`, or `No signal. Marker at 600 Hz - a peak away from it means the dial is off.`
+
+**The X-Y figure** (the lower one) is the zero-beat display, an idea borrowed from RTTY tuning indicators. It resolves the received audio against the pitch you asked for:
+
+| What the figure does | What it means |
+|---|---|
+| Holds still | You are on pitch. This is what you are tuning for. |
+| Walks anticlockwise | The station is high — one turn per second for every Hz off. |
+| Walks clockwise | The station is low. |
+| Smears into a ring | A long way off. Use the spectrum above it to see which way to go. |
+
+Its caption gives the same thing numerically — `12 Hz high - turning anticlockwise, 12 turns a second`.
+
+The two are complementary, which is why both are on screen. The figure is precise but blind: it only ever looks at the one frequency the reader is watching, so when it says nothing you cannot tell whether the band is empty or your dial is simply in the wrong place. The spectrum sees the whole search window and answers exactly that.
+
+You do not need the Tune display to use the reader — **ZIN** and click-to-tune both get you on pitch without it. It is there for tuning by eye instead of by ear, which some operators much prefer, and it is the fastest way to learn what "on pitch" sounds like: leave it on for an evening and you will start hearing the difference you have been watching.
+
+### 20.6 Reader Mode
 
 **Reader Mode** is one button that sets the radio the way the decoder wants it, and remembers what you had so it can put it back:
 
@@ -3424,6 +3618,8 @@ Press it again, or press **Stop**, and your mode, filter width and APF go back e
 
 The button's tooltip names what it is holding for you, so you can see before you press it a second time what is about to come back.
 
+If you are new to CW, use it. Narrowing the filter is the single biggest improvement you can make to machine copy, and this is one button instead of three controls you have not learned yet. The one thing it may surprise you with is how much quieter the band suddenly gets — that is the filter doing its job, not a fault.
+
 Two details worth knowing:
 
 - **It restores on Stop, not when you close the panel.** Closing the reader deliberately leaves it running — you can put the panel away and come back to it. Stop is when you have actually finished reading, so that is when the radio goes back to how you had it. A filter that quietly re-opened to 2.4 kHz in the middle of a QSO would be the worse surprise.
@@ -3431,7 +3627,7 @@ Two details worth knowing:
 
 Reader Mode only touches VFO A.
 
-### 20.4 Transcripts
+### 20.7 Transcripts
 
 Every session writes a plain-text transcript, so nothing you decoded is lost because you did not think to save it at the time.
 
@@ -3442,9 +3638,11 @@ Files are named for when the session started — `cw-20260901-143000.txt` — wi
 
 The text is written as it arrives rather than held until you close the reader, because the thing a transcript most needs to survive is a crash, and a crash happens while something is arriving. You can open a transcript in a text editor while the reader is still running.
 
+If you are learning to copy by ear, the transcript is the most useful part of the whole panel. Run the reader while you practise, and afterwards you have both your copy and the machine's to compare. The machine's is not ground truth — see [§20.2](#202-what-to-expect-from-a-machine-reading-morse) — but where the two agree you can be reasonably confident, and where they disagree is exactly where to listen again.
+
 Transcripts are never deleted automatically. They are small — a long session is a few kilobytes — but they are yours to tidy up.
 
-### 20.5 Logging a QSO
+### 20.8 Logging a QSO
 
 **Log QSO** opens a short form under the decoded text and appends a confirmed contact to an ADIF file:
 
@@ -3453,7 +3651,7 @@ Transcripts are never deleted automatically. They are small — a long session i
 
 Log4OM and GridTracker both watch ADIF files, so this reaches those programs with nothing else to set up (see §9.3 and §9.4).
 
-One rule shapes the whole form, and it follows directly from §20.1:
+One rule shapes the whole form, and it follows directly from [§20.2](#202-what-to-expect-from-a-machine-reading-morse):
 
 > **A field the radio or the clock knows is filled in. A field the *decoder* thinks it knows is offered, and left empty until you pick it.**
 
@@ -3476,16 +3674,18 @@ After a save the QSO fields clear but **RST sent** and the facts line stay, read
 
 If a suggestion box says *nothing in the copy*, that is a result rather than a failure: the reader found no candidate it was willing to put its name to, and you should type the field yourself.
 
-### 20.6 Troubleshooting
+### 20.9 Troubleshooting
 
 | Symptom | What to try |
 |---|---|
 | Status says the radio audio could not be opened | Set the Remote Audio **RX device** to the radio's USB codec in Settings (§6.8). The reader uses the same device. |
 | Nothing prints, but the status line looks healthy | Read the status line properly — `nothing readable` means the reader is deliberately refusing to guess. `no signal` means there is no keyed tone in the passband. |
-| Status shows `off pitch - tune ±N Hz` | The station is not on your CW pitch. Tune, or press **ZIN** (§5.12). |
+| Status shows `off pitch - tune ±N Hz` | The station is not on your CW pitch. Tune, or press **ZIN** (§5.12). This is the commonest cause of a strong signal that will not read. |
 | Text is confident but wrong | That is the normal failure mode on a marginal signal. Narrow the filter (**Reader Mode**), and check the SNR and `wpm` readings before trusting a callsign. |
+| A human copies it easily and the reader cannot | Almost always a hand-sent fist the decoder cannot follow. Nothing to fix — see [§20.2](#202-what-to-expect-from-a-machine-reading-morse). |
+| The text keeps jumping to the bottom while I am reading back | Turn **Follow** off ([§20.4](#204-the-panel-controls)). |
 | `filter unknown` | The radio is in a mode with no IF width table — AM or FM. Go to CW. |
-| Widening the filter did not widen the search | It is clamped to ±500 Hz. See the `search` row in §20.1. |
+| Widening the filter did not widen the search | It is clamped to ±500 Hz. See the `search` row in [§20.2](#202-what-to-expect-from-a-machine-reading-morse). |
 | `N frames dropped` | The host could not keep up with the audio. On a Pi-class machine, close other panels — particularly the spectrum display and Radio Display. |
 | Reader Mode did not restore my filter | Press it again, or press **Stop**; if a command failed part way it will retry. Reader Mode only touches VFO A. |
 | The log file is not where I expected | The exact path is shown in the form's status line after a save. |
@@ -3500,6 +3700,8 @@ The **CW Send** button on the main control panel opens the other half of the CW 
 
 ![The CW Send panel part way through a long line — the character being keyed is highlighted, the tag on the right says which piece of the line is going out, and the speed slider and status line sit beneath the box](pictures/CW-Send.png)
 
+If you have never sent CW, start at [§21.2](#212-practising-without-transmitting) and [§21.3](#213-what-to-actually-send). You can get everything wrong there with the radio on your bench and nobody else hearing a thing.
+
 ### 21.1 Sending a line
 
 Type into the box and press **Enter**. Nothing leaves the radio until you press Enter, so you can type ahead, correct yourself, and paste. Each line you send appears in the log above the box with the time, and a tag on the right that follows it through: **queued**, **sending part 2 of 3**, then **sent** — or **monitor only** if break-in was off (see below).
@@ -3508,9 +3710,47 @@ You can press Enter again while a line is still going out; the next line is queu
 
 The keyer takes **A–Z, 0–9, space, and `? / . ,`**. Anything else is dropped before sending, and lower case is sent as upper. A line with nothing sendable in it is refused with a message rather than silently keying nothing. The **Speed** slider sets the radio’s keyer speed (4–60 wpm) and is the same setting as the one on the CW Keyer panel.
 
-**Break-in decides whether it goes out**, exactly as it does for M1–M5 ([§5.12](#512-cw-keyer-panel)). With Break-in **Semi** or **Full** the line is transmitted. With Break-in **Off** the radio plays it to the sidetone monitor and no RF leaves the set — a yellow banner across the top of the panel says so while that is the case, and each line is tagged **monitor only** rather than **sent**. That is the practice mode: turn the monitor up, and hear your own sending without transmitting a thing.
+**Break-in decides whether it goes out**, exactly as it does for M1–M5 ([§5.12](#512-cw-keyer-panel)). With Break-in **Semi** or **Full** the line is transmitted. With Break-in **Off** the radio plays it to the sidetone monitor and no RF leaves the set — a yellow banner across the top of the panel says so while that is the case, and each line is tagged **monitor only** rather than **sent**.
 
-### 21.2 What the radio is actually doing
+### 21.2 Practising without transmitting
+
+That last paragraph is the beginner's whole first evening, so it deserves saying plainly:
+
+**Set Break-in to Off on the CW Keyer panel, turn the radio's MONI level up, and everything you type is keyed to your own ears and nowhere else.** The yellow banner on the panel tells you that is the state you are in, and every line in the log is tagged **monitor only** rather than **sent**, so there is no way to be transmitting and think you are not.
+
+That is worth an hour before you call anybody:
+
+- Type a call — `CQ CQ DE MM5AGM MM5AGM K` — and listen to what it sounds like at 15 wpm, then at 22, then at 30. Pick the speed you can actually copy back at, not the one that sounds impressive; whoever answers will reply at roughly the speed you called at.
+- Send your own callsign a dozen times until you know its rhythm. You will be hearing it in noise soon enough, and the one thing you must never miss is your own call.
+- Leave **CW Read** ([§20](#20-cw-reader)) running alongside with its Tune display on, and you have a closed loop: type it, hear it, watch it decode.
+
+When you are ready to be heard, set Break-in to **Semi** and the banner disappears. Nothing else changes.
+
+### 21.3 What to actually send
+
+A CW contact is shorter and more formulaic than it looks from outside. Most of what goes past on a busy band is these two exchanges, and nothing else.
+
+**Answering someone calling CQ.** Say you hear `CQ CQ DE DL1ABC DL1ABC K`:
+
+| You type | What it means |
+|---|---|
+| `DL1ABC DE MM5AGM MM5AGM K` | Calling them, twice, so they can catch it through a fade. |
+| `DL1ABC DE MM5AGM GM TNX FER CALL UR RST 599 599 NAME COLIN COLIN QTH SCOTLAND SCOTLAND HW? DL1ABC DE MM5AGM K` | The exchange: report, name, location. Important things go twice. `HW?` asks how you are copying. |
+| `DL1ABC DE MM5AGM TNX FER QSO 73 ES GL DL1ABC DE MM5AGM SK` | The close. `ES` is "and", `GL` good luck, `SK` end of contact. |
+
+**Calling CQ yourself:** `CQ CQ CQ DE MM5AGM MM5AGM MM5AGM K`, then listen. Someone answering sends their call; reply as in the second row above with their call in place of yours.
+
+Substitute your own callsign, name and QTH throughout. Three points of etiquette that matter more than the exact words:
+
+- **Send at a speed you can receive at.** The reply comes back at about the speed you called.
+- **If they send `PSE QRS`, slow down.** `QRQ` means speed up. Both are polite requests, not complaints.
+- **`?` on its own means "say again".** It is normal and nobody minds sending it or receiving it.
+
+Anything you send more than occasionally belongs in a memory instead of your fingers. Put `CQ CQ DE {CALL}` in M1 and your `TU 73` in M2 ([§6.5](#65-cw-memory-messages-m1m5)) and a whole QSO becomes two buttons and one typed line.
+
+**Keep lines to a sentence or two.** Not style advice — [§21.4](#214-what-the-radio-is-actually-doing) explains why the radio makes long lines slightly worse than short ones, and [§21.5](#215-stopping) why a short line is easier to abandon.
+
+### 21.4 What the radio is actually doing
 
 There is no “send this text” command on any Yaesu. What the radio has is five keyer memories of up to 50 characters each, and a command that plays one of them whole. So CW Send cuts your line into pieces of up to 50 characters at word boundaries, writes each piece into **keyer memory 5**, plays it, waits for it to finish, and writes the next. When the last piece has gone, your own **M5** text is written back.
 
@@ -3522,26 +3762,27 @@ Three things follow from that, and all are worth knowing:
 
 **The highlight follows the keying.** As a piece plays, the character being sent is lit in the log and the ones already gone turn white. The radio does not report where it is in the text, so the highlight is the standard Morse timing — a dot is one unit, a dash three, three between letters, seven between words, and a unit is 1200 ÷ wpm milliseconds — run from the moment playback started. On my FTdx101MP it keeps pace with the sidetone across a full line, which is also how I know the radio’s own keyer runs to that timing. The log scrolls itself so the character under the key stays in view.
 
-### 21.3 Stopping
+### 21.5 Stopping
 
 **Stop** (or **Escape** with the cursor in the box) drops everything that has not started: queued lines are tagged **not sent**, and a line part way through is tagged **stopped after part 2 of 3**. The piece already playing has to finish — the radio has no command to stop a memory playback, and I measured every candidate on the air before writing that ([§5.12](#512-cw-keyer-panel)). This is precisely why the line is sent in pieces rather than as one long memory: the most you can ever be committed to is one piece, and a piece is at most 50 characters.
 
 **Escape** with nothing sending simply empties the box (as does the **Clear** button beside it) — handy after a paste that was never meant for the keyer. **Clear log** empties the sent-lines log.
 
-### 21.4 The panel
+### 21.6 The panel
 
-The panel is non-modal: it can stay open while you work the rest of the page, and the CW Reader can be open beside it. Drag the title bar to move it; drag the bottom-right corner to resize it, and the log grows to fill whatever height you give it. Both are remembered between sessions. Close it with **×**; a line already going out finishes on its own.
+The panel is non-modal: it can stay open while you work the rest of the page, and the CW Reader can be open beside it. That pairing is the normal way to use it — read in one, answer in the other, with nothing to switch between. Drag the title bar to move it; drag the bottom-right corner to resize it, and the log grows to fill whatever height you give it. Both are remembered between sessions. Close it with **×**; a line already going out finishes on its own.
 
-### 21.5 Troubleshooting
+### 21.7 Troubleshooting
 
 | Symptom | What to try |
 |---|---|
-| Lines are tagged **monitor only** and nothing is transmitted | Break-in is **Off**. Set it to **Semi** or **Full** on the CW Keyer panel ([§5.12](#512-cw-keyer-panel)). The yellow banner on the panel says the same. |
+| Lines are tagged **monitor only** and nothing is transmitted | Break-in is **Off**. Set it to **Semi** or **Full** on the CW Keyer panel ([§5.12](#512-cw-keyer-panel)). The yellow banner on the panel says the same. If you meant to practise, that is the setting you want ([§21.2](#212-practising-without-transmitting)). |
 | I can’t hear the sending | With break-in off the radio plays to the monitor, so turn the radio’s **MONI** level up. |
 | “Radio is still sending – waiting for it to finish” | Something else is playing — an M button, or a piece from the previous line. It resumes on its own. |
 | The gap between pieces is long | The wait between pieces is worked out from the keyer speed, so a slider that disagrees with the radio makes it wait too long. Nudge the **Speed** slider and it is written to the radio. |
 | M5 has the wrong text after sending | The write-back failed, and the status line will have said so. The next line you send from CW Send puts M5 back again; or press **M5** on the CW Keyer panel, which rewrites the slot from YWC’s own text before playing it. |
 | Characters missing from what was sent | Only A–Z, 0–9, space and `? / . ,` are keyed. The rest are dropped before the line is stored. |
+| Nobody comes back to my CQ | Check you are actually transmitting — the banner and the **sent** tag both tell you. Then check the radio: power, antenna, and whether the ATU has tuned on that band. |
 
 ---
 

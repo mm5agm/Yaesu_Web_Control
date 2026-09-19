@@ -175,27 +175,27 @@
       "type": "numeric",
       "points": [
         {
-          "Radio": "40",
+          "Radio": "11.0",
           "raw": 170
         },
         {
-          "Radio": "44",
+          "Radio": "12.1",
           "raw": 182
         },
         {
-          "Radio": "48",
+          "Radio": "13.2",
           "raw": 194
         },
         {
-          "Radio": "51",
+          "Radio": "14.1",
           "raw": 206
         },
         {
-          "Radio": "54",
+          "Radio": "14.9",
           "raw": 218
         },
         {
-          "Radio": "55",
+          "Radio": "15.2",
           "raw": 235
         }
       ],

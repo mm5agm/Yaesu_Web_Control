@@ -148,7 +148,7 @@ internal sealed class WorkerProcess : IDisposable
 
     // ── Locating the worker exe ──────────────────────────────────────────────
 
-    private static string? LocateWorkerExe()
+    internal static string? LocateWorkerExe()
     {
         // 1. Adjacent to YWC's own exe — the case for installed builds and for
         //    dev builds where a post-build step copies the worker into the

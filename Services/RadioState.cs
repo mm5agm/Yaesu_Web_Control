@@ -105,7 +105,7 @@
         public string AttB { get; set; } = "00";
 
         /// <summary>
-        /// Noise Reduction per VFO: "0"=OFF "1"=NR1 "2"=NR2
+        /// Digital Noise Reduction (NR command) per VFO: "0"=OFF "1"=ON
         /// </summary>
         public string NrA { get; set; } = "0";
         public string NrB { get; set; } = "0";

@@ -461,7 +461,7 @@ export class CwReaderPanel {
                 this._dialog.style.position = 'fixed';
                 this._dialog.style.margin   = '0';
                 this._dialog.style.left   = `${s.left}px`;
-                this._dialog.style.top    = `${s.top}px`;
+                this._dialog.style.top    = `${this._clampTop(s.top)}px`;
             }
         } catch {
             // Corrupt or unavailable storage is not worth failing the panel for.
@@ -483,6 +483,18 @@ export class CwReaderPanel {
     }
 
     // ── Drag ─────────────────────────────────────────────────────────────────────
+
+    // The whole header bar stays on screen: below the host page's sticky
+    // navbar (a show() dialog is not in the top layer, so the navbar paints
+    // over it) and above the bottom edge, with a little to spare. Left and
+    // right are looser - 40 px of grip is enough there.
+    _clampTop(t) {
+        const margin = 12;
+        const head   = this._dialog.querySelector('.cwr-header')?.offsetHeight || 44;
+        const nav    = document.querySelector('header.sticky-top, header.fixed-top');
+        const topMin = (nav ? Math.max(0, nav.getBoundingClientRect().bottom) : 0) + margin;
+        return Math.max(topMin, Math.min(Math.max(topMin, window.innerHeight - head - margin), t));
+    }
 
     // Same behaviour as the DX Spots panel: a non-modal dialog that cannot be
     // moved will eventually sit over whatever the operator needs to see.
@@ -510,7 +522,7 @@ export class CwReaderPanel {
                 let l = baseL + (ev.clientX - origX);
                 let t = baseT + (ev.clientY - origY);
                 l = Math.max(-rect.width + 40, Math.min(window.innerWidth - 40, l));
-                t = Math.max(0,                 Math.min(window.innerHeight - 40, t));
+                t = this._clampTop(t);
                 this._dialog.style.left = `${l}px`;
                 this._dialog.style.top  = `${t}px`;
             };

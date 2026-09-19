@@ -1808,6 +1808,11 @@
                         <div class="mb-3" id="optionalFiltersSection">
                             <!-- Forces the form to always post this key, even with every filter unchecked — otherwise the binder leaves the list at its default instead of empty. -->
                             <input type="hidden" name="Settings.InstalledRoofingFilters" value="" />
+                            <!-- Every model's section shares this one field name, and a section hidden with
+                                 display:none still posts its ticked boxes: the FTdx10's 300 Hz box is also
+                                 value="A", so on an FTdx101D it silently re-posted the "A" the operator had
+                                 just unticked (#156). Boxes outside the current model's section are
+                                 disabled instead — a disabled input is not submitted. -->
                             <label class="form-label fw-bold">Roofing Filters Installed</label>
                             <div id="filtersMpNote" style="display:@(Model.Settings.RadioModel == "FTdx101MP" ? "block" : "none")">
                                 <div class="alert alert-info py-2 mb-0">
@@ -1820,12 +1825,12 @@
                                     Tick any optional filters you have installed so the app only shows filters that are actually available.
                                 </div>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="filter8" name="Settings.InstalledRoofingFilters" value="8"
+                                    <input class="form-check-input" type="checkbox" id="filter8" name="Settings.InstalledRoofingFilters" @(Model.Settings.RadioModel == "FTdx101D" ? "" : "disabled") value="8"
                                            @(Model.Settings.InstalledRoofingFilters.Contains("8") ? "checked" : "") />
                                     <label class="form-check-label" for="filter8">1.2 kHz (optional)</label>
                                 </div>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="filterA" name="Settings.InstalledRoofingFilters" value="A"
+                                    <input class="form-check-input" type="checkbox" id="filterA" name="Settings.InstalledRoofingFilters" @(Model.Settings.RadioModel == "FTdx101D" ? "" : "disabled") value="A"
                                            @(Model.Settings.InstalledRoofingFilters.Contains("A") ? "checked" : "") />
                                     <label class="form-check-label" for="filterA">300 Hz (optional)</label>
                                 </div>
@@ -1839,7 +1844,7 @@
                                     are fitted as standard. Tick the optional filter if you have it installed.
                                 </div>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="filterFtdx10A" name="Settings.InstalledRoofingFilters" value="A"
+                                    <input class="form-check-input" type="checkbox" id="filterFtdx10A" name="Settings.InstalledRoofingFilters" @(Model.Settings.RadioModel == "FTdx10" ? "" : "disabled") value="A"
                                            @(Model.Settings.InstalledRoofingFilters.Contains("A") ? "checked" : "") />
                                     <label class="form-check-label" for="filterFtdx10A">300 Hz (optional — YF-130CW)</label>
                                 </div>
@@ -1857,12 +1862,12 @@
                                     are fitted as standard. Tick any optional filters you have installed.
                                 </div>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="filter3k4" name="Settings.InstalledRoofingFilters" value="4"
+                                    <input class="form-check-input" type="checkbox" id="filter3k4" name="Settings.InstalledRoofingFilters" @(Model.Settings.RadioModel == "FTDX3000" ? "" : "disabled") value="4"
                                            @(Model.Settings.InstalledRoofingFilters.Contains("4") ? "checked" : "") />
                                     <label class="form-check-label" for="filter3k4">600 Hz (optional — YH-77SDE)</label>
                                 </div>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="filter3k5" name="Settings.InstalledRoofingFilters" value="5"
+                                    <input class="form-check-input" type="checkbox" id="filter3k5" name="Settings.InstalledRoofingFilters" @(Model.Settings.RadioModel == "FTDX3000" ? "" : "disabled") value="5"
                                            @(Model.Settings.InstalledRoofingFilters.Contains("5") ? "checked" : "") />
                                     <label class="form-check-label" for="filter3k5">300 Hz (optional — YH-77SDE narrow)</label>
                                 </div>
@@ -2230,7 +2235,7 @@
                         <div class="d-flex justify-content-between align-items-end mb-2">
                             <label class="form-label fw-bold mb-0">SDR Devices</label>
                             <button type="button" class="btn btn-outline-secondary btn-sm" id="sdrScanBtn"
-                                    onclick="scanSdrDevices()">
+                                    onclick="scanSdrDevices(true)">
                                 <i class="bi bi-search"></i> Scan
                             </button>
                         </div>
@@ -3219,7 +3224,10 @@
         // Populate BOTH SDR dropdowns from one /api/sdr/devices call. Each
         // dropdown preserves its own selection across re-scans (matched by
         // exact key, or by sdrplayKeysMatch for the legacy→new format jump).
-        window.scanSdrDevices = async function () {
+        // `retry` is true from the Scan button only: a SoapySDR scan that
+        // crashed earlier in the session is not re-run by the automatic
+        // page-open scan, but the operator can always ask again (#164).
+        window.scanSdrDevices = async function (retry) {
             const btn      = document.getElementById('sdrScanBtn');
             const notesDiv = document.getElementById('sdrScanNotes');
 
@@ -3228,7 +3236,7 @@
             notesDiv.innerHTML = '';
 
             try {
-                const resp               = await fetch('/api/sdr/devices');
+                const resp               = await fetch(retry ? '/api/sdr/devices?retry=true' : '/api/sdr/devices');
                 const { devices, notes } = await resp.json();
 
                 for (const slot of ['A', 'B']) {
@@ -3453,13 +3461,20 @@
             const ft710Section    = document.getElementById('filtersFt710Section');
             const ftdx3000Section = document.getElementById('filtersFtdx3000Section');
             if (!modelSelect) return;
+            // Only the shown section's checkboxes may post — they all share one
+            // field name, and a hidden ticked box would still be submitted (#156).
+            function show(section, visible) {
+                if (!section) return;
+                section.style.display = visible ? 'block' : 'none';
+                section.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.disabled = !visible; });
+            }
             modelSelect.addEventListener('change', function () {
                 const v = this.value;
-                if (mpNote)          mpNote.style.display          = v === 'FTdx101MP' ? 'block' : 'none';
-                if (dSection)        dSection.style.display        = v === 'FTdx101D'  ? 'block' : 'none';
-                if (ftdx10Section)   ftdx10Section.style.display   = v === 'FTdx10'    ? 'block' : 'none';
-                if (ft710Section)    ft710Section.style.display    = v === 'FT-710'    ? 'block' : 'none';
-                if (ftdx3000Section) ftdx3000Section.style.display = v === 'FTDX3000'  ? 'block' : 'none';
+                show(mpNote,          v === 'FTdx101MP');
+                show(dSection,        v === 'FTdx101D');
+                show(ftdx10Section,   v === 'FTdx10');
+                show(ft710Section,    v === 'FT-710');
+                show(ftdx3000Section, v === 'FTDX3000');
             });
         })();
     </script>
