@@ -697,14 +697,19 @@ Existing installs auto-populate empty slots on the next startup with whatever th
 
 All of these settings are read from the radio when the app connects.
 
-**Filter Function Display** — A compact real-time display positioned alongside the band buttons, between the band button column and the receiver controls column. It shows the shape of the active DSP filter passband, matching the style of the filter scope on the FTdx101MP front panel.
+**Filter Function Display** — A compact display positioned alongside the band buttons, between the band button column and the receiver controls column. It draws the shape of the active DSP filter passband from the radio's current IF Width, IF Shift, roofing filter and notch/contour settings.
+
+It is a diagram of the filter, not a copy of the radio's own filter scope, and the two are not meant to match picture for picture. The radio draws its display across a fixed audio span, so a narrow filter appears as a narrow sliver in the middle of it. This one rescales its frequency axis to fit whatever passband is currently set, with a small margin each side, so that a 50 Hz CW filter is as readable as a 3 kHz SSB one — which means the trapezium always fills a good part of the panel and the shape alone will not tell you how wide the filter is. **Read the frequency labels along the bottom edge**: those are what change when you change IF Width.
+
+One consequence worth knowing: above the roofing filter's width the trapezium stops growing. If the roofing filter is at 3 kHz, IF Width settings of 3.0, 3.2, 3.5 and 4.0 kHz all draw the same picture, because 3 kHz is genuinely what is reaching the DSP. That is the display being right, not stuck.
 
 - The **red-bordered trapezoid** represents the active **DSP filter passband** (the IF Width setting). The sloped sides reflect the filter roll-off characteristic at the passband edges.
-- **Green animated bars** inside the trapezoid represent signals passing through the filter. No signals are shown outside the passband, making it immediately clear which audio frequencies are being received.
+- **Green bars** inside the trapezoid are live received audio spectrum, and are drawn only while Remote Audio is running and receiving (see §18). With no audio session attached — which is the normal case, and the case on every installation that has never set Remote Audio up — the trapezoid is drawn empty. Earlier versions filled it with a moving pattern that was not derived from any signal at all; that has been removed, because it looked exactly like received signal and it was described here as if it were.
 - A **"Roof Nk" label** in the top-right corner shows the currently selected roofing filter (e.g. "Roof 3k", "Roof 12k", "Roof 600"). This is useful because the DSP filter is the *active* limit when the roofing filter is wider than the DSP setting — in that case the trapezium looks identical for several roofing choices (12k and 3k both produce the same shape if the DSP filter is set to 3 kHz, since both roofing filters are at least as wide as 3 kHz). The label is the only way to see which roofing is actually in circuit when this happens.
 - **Passband width** reflects the current IF Width setting, automatically constrained by the selected Roofing Filter if it is narrower than the DSP setting. If the roofing filter is wider, the DSP filter is what you see.
 - **Passband position** shifts left or right as the IF Shift slider is adjusted — the display updates live while dragging the slider.
 - A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as the contour frequency slider is adjusted.
+- A **dark vertical bar** marks the Manual Notch frequency while Man Notch is on, and a **cyan wedge** marks the APF peak while APF is on (CW). Both sit at the frequency the radio is set to, so they move with the IF Shift slider along with the rest of the passband.
 - The display updates automatically whenever any filter parameter changes, whether adjusted from the browser or from the radio's front panel.
 
 ---

@@ -1,7 +1,8 @@
 // filter-scope-panel.js — Filter Function Display canvas renderer
 // Shows DSP filter passband shape, roofing filter outline, notch, contour, and APF markers.
 // Passband geometry is computed from CAT state. Green bars inside the passband are
-// decorative (random) unless a live RX spectrum provider is attached (remote audio).
+// real RX spectrum, drawn only while Remote Audio is running; with no audio
+// attached the trapezium is empty. See setSpectrumProvider for why (#161).
 
 // IF Width code → Hz per radio model (mirrors ifWidthOptions in Index.cshtml)
 const IF_WIDTH_TABLES = {
@@ -74,12 +75,19 @@ export class FilterScopePanel {
     }
 
     /**
-     * Attach or clear a live RX spectrum source. When the provider returns null
-     * (no session / muted), bars fall back to the decorative random animation.
+     * Attach or clear a live RX spectrum source (Remote Audio's RX analyser).
+     * With no provider attached -- which is every page with Remote Audio not
+     * running, i.e. most of them -- the trapezium is drawn empty. It used to
+     * fill with Math.random() bars, which looked exactly like received signal
+     * and was described as signal in the manual; Bruce VK2RT compared it with
+     * the radio's own scope on #161 and quite reasonably asked why they
+     * disagreed. They disagreed because ours was noise. The shape, the
+     * markers and the axis are the real content of this panel.
      * @param {(() => ({ data: Uint8Array, sampleRate: number, fftSize: number } | null)) | null} provider
      */
     setSpectrumProvider(provider) {
         this._spectrumProvider = typeof provider === 'function' ? provider : null;
+        this._render();
     }
 
     _init() {
@@ -88,6 +96,10 @@ export class FilterScopePanel {
         this._sizeCanvas(canvas);
         this._resizeObserver = new ResizeObserver(() => {
             this._sizeCanvas(canvas);
+            // Assigning canvas.width clears the canvas, and the loop below
+            // only repaints when live audio is attached -- so repaint here
+            // or a resize leaves the panel blank until the next setState.
+            this._render();
         });
         this._resizeObserver.observe(canvas.parentElement ?? canvas);
         this._startAnimation();
@@ -97,6 +109,11 @@ export class FilterScopePanel {
         let frameCount = 0;
         const loop = () => {
             this._animFrame = requestAnimationFrame(loop);
+            // Only the bars move, and only when Remote Audio is feeding them.
+            // Everything else here repaints from setState. Without this the
+            // panel redrew 20 times a second, on every open tab, for ever,
+            // to show a new set of random numbers.
+            if (!this._spectrumProvider) return;
             if (++frameCount % 3 === 0) this._render();  // ~20 fps
         };
         this._animFrame = requestAnimationFrame(loop);
@@ -273,35 +290,34 @@ export class FilterScopePanel {
         ctx.fillStyle = 'rgba(74,138,191,0.10)';
         ctx.fill();
 
-        // Clip to trapezoid, then draw signal bars inside it (live FFT or random)
-        ctx.save();
-        trapPath();
-        ctx.clip();
-
-        const barW    = 2;
-        const maxBarH = Math.floor((pbBot - pbTop) * 0.85);
-        const barBase = pbBot - 1;
+        // Signal bars, clipped to the trapezoid -- drawn only when Remote
+        // Audio is attached and actually delivering RX spectrum. There is no
+        // decorative fallback: this panel is beside a real receiver, and
+        // anything drawn in here is read as what the receiver is hearing.
         const spectrum = this._spectrumProvider ? this._spectrumProvider() : null;
-        const hzPerBin = spectrum
-            ? spectrum.sampleRate / spectrum.fftSize
-            : 0;
         const binCount = spectrum ? spectrum.data.length : 0;
 
-        for (let bx = pxLo; bx <= pxHi; bx += barW) {
-            let nh;
-            if (spectrum && binCount > 0) {
+        if (spectrum && binCount > 0) {
+            ctx.save();
+            trapPath();
+            ctx.clip();
+
+            const barW     = 2;
+            const maxBarH  = Math.floor((pbBot - pbTop) * 0.85);
+            const barBase  = pbBot - 1;
+            const hzPerBin = spectrum.sampleRate / spectrum.fftSize;
+
+            for (let bx = pxLo; bx <= pxHi; bx += barW) {
                 const hz = rangeLo + ((bx + barW * 0.5) / W) * rangeHz;
                 const bin = Math.max(0, Math.min(binCount - 1, Math.round(hz / hzPerBin)));
-                nh = spectrum.data[bin] / 255;
-            } else {
-                nh = Math.random();
+                const nh = spectrum.data[bin] / 255;
+                const bh = Math.max(2, Math.round(nh * maxBarH));
+                ctx.fillStyle = `rgba(80,210,80,${(0.4 + nh * 0.5).toFixed(2)})`;
+                ctx.fillRect(bx, barBase - bh, barW - 1, bh);
             }
-            const bh = Math.max(2, Math.round(nh * maxBarH));
-            ctx.fillStyle = `rgba(80,210,80,${(0.4 + nh * 0.5).toFixed(2)})`;
-            ctx.fillRect(bx, barBase - bh, barW - 1, bh);
-        }
 
-        ctx.restore();
+            ctx.restore();
+        }
 
         // Red trapezoid border — all sides
         trapPath();
