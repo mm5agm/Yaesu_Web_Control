@@ -25,6 +25,16 @@
 #   git config core.hooksPath .githooks
 #
 # Every other branch is left alone -- this says nothing about develop.
+#
+# scripts/core-sync.ps1 pushes the core/ subtree from inside this working
+# copy, so this hook runs for it too -- and the target there is
+# Radio_Web_Control_Core, whose main IS the trunk: a plain commit landing on
+# it is the normal case, not the accident. Let that push through untouched.
+# (Caught on 2026-09-19, the day this hook went in: the first core push
+# after it was refused for not being a release merge.)
+case "$2" in
+    *Radio_Web_Control_Core*) exit 0 ;;
+esac
 
 PROTECTED_BRANCH='main'
 ZERO='0000000000000000000000000000000000000000'
