@@ -1,4 +1,4 @@
-﻿// Full-page "server has stopped" overlay. Shown when the SystemTrayService
+// Full-page "server has stopped" overlay. Shown when the SystemTrayService
 // broadcasts ServerShutdown right before stopping the host, so the browser
 // tab doesn't sit on stale data with a frozen meter needle. The page can't
 // reliably close its own tab (browsers only allow window.close() for tabs
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- SignalR connection setup and disconnect on page unload ---
     if (window.signalRConnection === undefined) {
-        window.signalRConnection = new signalR.HubConnectionBuilder().withUrl("/radioHub").withAutomaticReconnect().build();
+        window.signalRConnection = window.ywcHubConnection("/radioHub");
         window.signalRConnection.start().then(function () {
             window.signalRConnection.invoke("Heartbeat").catch(function () { });
         }).catch(function (err) { });
@@ -1044,10 +1044,7 @@ async function checkTxStatus() {
 // SignalR connection - shared by both the outer handler below and the
 // second handler at the bottom of the file (after the IIFE).
 // ---------------------------------------------------------------------------
-const connection = new signalR.HubConnectionBuilder()
-    .withUrl("/radioHub")
-    .withAutomaticReconnect()
-    .build();
+const connection = window.ywcHubConnection("/radioHub");
 
 // Redirect to Settings page if the backend signals an init failure
 connection.on("ShowSettingsPage", function () {

@@ -1,4 +1,4 @@
-﻿@page "/Diagnostics"
+@page "/Diagnostics"
 @model Yaesu_Web_Control.Pages.DiagnosticsModel
 @{
     ViewData["Title"] = "Diagnostics";
@@ -407,10 +407,7 @@
     // ── SignalR connection ────────────────────────────────────────────────────
     const statusBadge = document.getElementById('diag-status');
 
-    const conn = new signalR.HubConnectionBuilder()
-        .withUrl('/radioHub')
-        .withAutomaticReconnect()
-        .build();
+    const conn = window.ywcHubConnection('/radioHub');
 
     conn.on('RadioStateUpdate', function (data) {
         let { property, value } = data;

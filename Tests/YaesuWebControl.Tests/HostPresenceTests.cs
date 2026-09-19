@@ -46,12 +46,23 @@ namespace YaesuWebControl.Tests
                 // test looked for "/radioHub" anywhere, and a comment
                 // explaining why the page needed one was enough to pass it.
                 bool connectsItself = System.Text.RegularExpressions.Regex.IsMatch(
-                    text, @"withUrl\s*\(\s*[""']/radioHub[""']");
+                    text, @"(withUrl|ywcHubConnection)\s*\(\s*[""']/radioHub[""']");
                 bool usesHelper = System.Text.RegularExpressions.Regex.IsMatch(
                     text, @"keepHostAlive\s*\(");
 
                 if (!connectsItself && !usesHelper)
                     offenders.Add(name);
+
+                // Calling window.ywcHubConnection() without loading the script
+                // that defines it fails at runtime and nowhere else: the page
+                // renders, logs a warning to a console nobody has open, and
+                // quietly stops holding the host up. _Layout supplies it for
+                // every other page; these have no _Layout.
+                if (text.Contains("ywcHubConnection", StringComparison.Ordinal)
+                    && !text.Contains("js/ui/hub-connection.js", StringComparison.Ordinal))
+                {
+                    offenders.Add(name + " (calls ywcHubConnection but never loads hub-connection.js)");
+                }
             }
 
             // If this ever finds nothing, the detection above has drifted —
@@ -71,6 +82,81 @@ namespace YaesuWebControl.Tests
                 "Fix by loading signalr.min.js and calling keepHostAlive() from " +
                 "/js/ui/host-presence.js, or by opening a /radioHub connection the page needs " +
                 "anyway. Pages checked: " + string.Join(", ", checkedPages));
+        }
+
+        /// <summary>
+        /// Every /radioHub connection is built by wwwroot/js/ui/hub-connection.js
+        /// and nowhere else.
+        ///
+        /// This is not tidiness. A connection built by hand gets
+        /// withAutomaticReconnect()'s default policy, which retries at 0s, 2s,
+        /// 10s and 30s and then gives up permanently — so one lost connection
+        /// leaves that page dead until it is reloaded. On 2026-09-19 an idle
+        /// About page was dropped after 24 minutes, never came back, and the
+        /// host exited 30 seconds later while the page was still on screen.
+        /// The shared builder retries forever and raises the timeouts to match
+        /// the server's; a hand-rolled one silently opts out of both.
+        /// </summary>
+        [Fact]
+        public void EveryHubConnectionUsesTheSharedBuilder()
+        {
+            string repo = Path.GetDirectoryName(LocateRepoPath("Pages"))!;
+            string helper = Path.Combine(repo, "wwwroot", "js", "ui", "hub-connection.js");
+
+            // wwwroot/js/<area> mirroring core/js/<area> is a build-time copy of
+            // shared code, which cannot depend on this app's globals. Derived
+            // from core/ rather than listed, so a new shared area needs no edit.
+            var generated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string coreJs = Path.Combine(repo, "core", "js");
+            if (Directory.Exists(coreJs))
+            {
+                foreach (string d in Directory.EnumerateDirectories(coreJs))
+                    generated.Add(Path.GetFileName(d));
+            }
+
+            var sources = new List<string>();
+            string wwwJs = Path.Combine(repo, "wwwroot", "js");
+            foreach (string file in Directory.EnumerateFiles(wwwJs, "*.js", SearchOption.AllDirectories))
+            {
+                string area = Path.GetRelativePath(wwwJs, file).Split(Path.DirectorySeparatorChar)[0];
+                if (generated.Contains(area)) continue;
+                sources.Add(file);
+            }
+            sources.AddRange(Directory.EnumerateFiles(LocateRepoPath("Pages"), "*.cshtml", SearchOption.AllDirectories));
+
+            var offenders = sources
+                .Where(f => !string.Equals(Path.GetFullPath(f), Path.GetFullPath(helper), StringComparison.OrdinalIgnoreCase))
+                .Where(f => System.Text.RegularExpressions.Regex.IsMatch(
+                    File.ReadAllText(f), @"HubConnectionBuilder\s*\(\s*\)"))
+                .Select(f => Path.GetRelativePath(repo, f).Replace(Path.DirectorySeparatorChar, '/'))
+                .OrderBy(f => f)
+                .ToList();
+
+            Assert.True(offenders.Count == 0,
+                "These build a SignalR connection directly instead of calling " +
+                "window.ywcHubConnection(\"/radioHub\") from wwwroot/js/ui/hub-connection.js. " +
+                "A hand-built connection takes withAutomaticReconnect()'s default policy, which " +
+                "stops retrying after about 42 seconds and leaves the page dead:" + Environment.NewLine +
+                string.Join(Environment.NewLine, offenders.Select(o => "    " + o)));
+        }
+
+        /// <summary>
+        /// The shared builder still does the two things everything else trusts
+        /// it for: a retry policy of its own, and a raised server timeout.
+        /// </summary>
+        [Fact]
+        public void SharedBuilderRetriesForeverAndRaisesTimeouts()
+        {
+            string js = File.ReadAllText(LocateRepoPath("wwwroot/js/ui/hub-connection.js"));
+
+            Assert.Contains("window.ywcHubConnection", js, StringComparison.Ordinal);
+            Assert.Contains("nextRetryDelayInMilliseconds", js, StringComparison.Ordinal);
+            Assert.Contains("serverTimeoutInMilliseconds", js, StringComparison.Ordinal);
+
+            // Assert the policy is passed rather than the absence of the
+            // argument-less form: this file explains that default in its own
+            // header, and the first version of this line matched the comment.
+            Assert.Matches(@"withAutomaticReconnect\s*\(\s*retryPolicy\s*\)", js);
         }
 
         /// <summary>

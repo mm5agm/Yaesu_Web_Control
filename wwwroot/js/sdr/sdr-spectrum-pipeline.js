@@ -58,11 +58,7 @@ export class SdrSpectrumPipeline {
     connect() {
         if (this._connection) return;
 
-        const conn = new window.signalR
-            .HubConnectionBuilder()
-            .withUrl('/radioHub')
-            .withAutomaticReconnect()
-            .build();
+        const conn = window.ywcHubConnection('/radioHub');
 
         conn.on('RadioStateUpdate', (msg) => {
             // ServerShutdown: tear down our connection so Kestrel has nothing

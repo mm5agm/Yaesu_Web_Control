@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Hosting;
 using Yaesu_Web_Control.Services;
@@ -63,6 +63,21 @@ namespace Yaesu_Web_Control.Hubs
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
             _connections.TryRemove(Context.ConnectionId, out _);
+
+            // A navigation or a closed tab arrives with no exception. A
+            // connection the server gave up on -- one that sent nothing
+            // within ClientTimeoutInterval -- arrives with one. On 2026-09-19
+            // that distinction was the whole question and the log could not
+            // answer it: an idle About page was dropped after 24 minutes and
+            // the host exited 30 seconds later, with nothing recorded to say
+            // which end let go first. Logged now so the next one explains
+            // itself.
+            if (exception is not null)
+            {
+                _logger.LogWarning(exception,
+                    "Browser connection {ConnectionId} ended with an error rather than a clean close.",
+                    Context.ConnectionId);
+            }
 
             await base.OnDisconnectedAsync(exception);
 

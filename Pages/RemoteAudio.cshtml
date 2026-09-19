@@ -160,6 +160,9 @@
        host knows a browser is still here. Without it, listening on this page
        alone let the host exit 30s later, mid-transmission. *@
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    @* Builds the hub connection with a retry policy that never gives up.
+       This page has no _Layout, so it must load it itself. *@
+    <script src="~/js/ui/hub-connection.js" asp-append-version="true"></script>
     <script>
         window.ywcTxToggleKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.TxToggleKey));
     </script>

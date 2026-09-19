@@ -11,9 +11,10 @@
 // connection — Radio Display does, for scope and VFO state — or call this,
 // which opens one for no reason but to be counted.
 //
-// Requires signalr.min.js to have been loaded already:
+// Requires signalr.min.js and hub-connection.js to have been loaded already:
 //
 //   <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+//   <script src="~/js/ui/hub-connection.js"></script>
 //   <script type="module">
 //       import { keepHostAlive } from "/js/ui/host-presence.js";
 //       keepHostAlive();
@@ -35,17 +36,15 @@ let connection = null;
 export function keepHostAlive() {
     if (connection) return connection;
 
-    if (typeof signalR === "undefined") {
+    if (typeof window.ywcHubConnection !== "function") {
         console.warn(
-            "host-presence: signalr.min.js is not loaded, so this page will " +
-            "not hold the host open. Add the script tag before this module.");
+            "host-presence: signalr.min.js and /js/ui/hub-connection.js must both " +
+            "be loaded before this module, so this page will not hold the host " +
+            "open. Add the script tags.");
         return null;
     }
 
-    connection = new signalR.HubConnectionBuilder()
-        .withUrl("/radioHub")
-        .withAutomaticReconnect()
-        .build();
+    connection = window.ywcHubConnection("/radioHub");
 
     // The hub replays a state snapshot to every client on connect. Nothing
     // here wants it, but ignoring it costs nothing and registering no handler

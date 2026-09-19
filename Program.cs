@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -448,7 +448,29 @@ builder.Services.AddSingleton<CalibrationStorage>();
 builder.Services.AddSingleton<ICalibrationService, CalibrationService>();
 
 // ADD SIGNALR EARLY (before services that depend on IHubContext):
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+    // The default ClientTimeoutInterval is 30 seconds: a client that has sent
+    // nothing in that time is considered gone, which arms RadioHub's shutdown
+    // countdown. Everything that makes a browser "send something" -- SignalR's
+    // own ping, and site.js's 5-second Heartbeat -- is a JS timer, and browsers
+    // throttle and freeze timers in tabs they judge to be in the background.
+    //
+    // On 2026-09-19 the About page sat open and visible for 24 minutes, went
+    // quiet, was dropped, and the host exited 30 seconds later while the page
+    // was still on screen. Two minutes is longer than any throttling interval a
+    // browser applies, so an idle tab stays counted.
+    //
+    // This does not delay the ordinary case. Closing a tab closes the socket,
+    // which the server sees immediately -- the timeout only governs connections
+    // that go silent without closing.
+    options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
+
+    // Server -> client ping. Kept well under the client's own serverTimeout
+    // (100s, set in wwwroot/js/ui/hub-connection.js) so the browser does not
+    // decide the server has gone while the server is perfectly happy.
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+});
 
 // Register the persistence service (no hub dependency)
 builder.Services.AddSingleton<RadioStatePersistenceService>();
