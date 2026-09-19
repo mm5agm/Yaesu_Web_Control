@@ -69,11 +69,11 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
-| The filter display shows the receiver's audio spectrum — the same picture as the radio's own filter display — from the radio's USB audio, with no Remote Audio session needed. It used to fill with a random pattern that looked like signal. | [#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161) | *Not yet in a build* |
-| The filter display drew the passband in the wrong place at every SSB width but 3 kHz (it started every width at 300 Hz), and sent wide CW widths off the left of the display (it centred every width on the pitch). Both positions are now the measured ones from an FTdx101MP. | [#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161) | *Not yet in a build* |
-| The filter display now uses a fixed 0–4 kHz span like the radio's own, is half as big again, and no longer clamps the passband to the roofing filter — a narrow roofing filter shows as a hump in the bars, as on the radio. | — | *Not yet in a build* |
-| The filter display ignored IF SHIFT in AM. | [#166](https://github.com/mm5agm/Yaesu_Web_Control/issues/166) | *Not yet in a build* |
-| An idle tab lost its connection after ~25 minutes and took the host down with it ("localhost refused to connect" on the next click); pages now reconnect for ever, and the host counts every open page, including Remote Audio and Radio Display. | — | *Not yet in a build* |
+| The filter display shows the receiver's audio spectrum — the same picture as the radio's own filter display — from the radio's USB audio, with no Remote Audio session needed. It used to fill with a random pattern that looked like signal. | [#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161) | v2.5.2-pre5 |
+| The filter display drew the passband in the wrong place at every SSB width but 3 kHz (it started every width at 300 Hz), and sent wide CW widths off the left of the display (it centred every width on the pitch). Both positions are now the measured ones from an FTdx101MP. | [#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161) | v2.5.2-pre5 |
+| The filter display now uses a fixed 0–4 kHz span like the radio's own, is half as big again, and no longer clamps the passband to the roofing filter — a narrow roofing filter shows as a hump in the bars, as on the radio. | — | v2.5.2-pre5 |
+| The filter display ignored IF SHIFT in AM. | [#166](https://github.com/mm5agm/Yaesu_Web_Control/issues/166) | v2.5.2-pre5 |
+| An idle tab lost its connection after ~25 minutes and took the host down with it ("localhost refused to connect" on the next click); pages now reconnect for ever, and the host counts every open page, including Remote Audio and Radio Display. | — | v2.5.2-pre5 |
 | Full-screen mode could not scroll. | [#163](https://github.com/mm5agm/Yaesu_Web_Control/issues/163) | v2.5.2-pre4 |
 | 300 Hz roofing filter tick did not save on the FTdx101D (and never saved on the FTdx10). | [#156](https://github.com/mm5agm/Yaesu_Web_Control/issues/156) | v2.5.2-pre4 |
 | Main-page PA temperature stuck on the first reading after load. | [#151](https://github.com/mm5agm/Yaesu_Web_Control/issues/151) | v2.5.2-pre4 |
@@ -379,6 +379,16 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 ---
 
 ## Release Notes
+
+## 2026-09-19 - v2.5.2-pre5 (pre-release)
+
+*Two things: the app no longer quits underneath an idle tab, and the Filter Function Display is now a real picture of the filter. If you have seen "localhost refused to connect" after leaving a page open a while, this is the build. It carries everything in pre1 to pre4.*
+
+- **An idle tab could lose its connection and take the host down with it.** Leave the About page open and untouched for about 25 minutes, click Home, "localhost refused to connect". Browsers throttle the timers in a tab they think is in the background, the server gave up on a browser that had been silent for 30 seconds, and the page's own reconnect gave up for good after four tries. The server now waits two minutes, pages retry for ever, and a tab retries the moment it becomes visible again. Closing a tab still shuts the host down promptly. Separately, the Remote Audio page never counted as a browser at all - it is not built on the main layout - so listening on it with no other tab open had the app exit mid-QSO. Every open page counts now.
+- **The Filter Function Display shows the receiver's real audio** ([#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161)). The green bars were random numbers unless Remote Audio was running - Bruce VK2RT's earthed-antenna pictures made that plain. They are now the spectrum of the radio's RX audio, taken from the radio's USB audio by the app itself, no Remote Audio session needed; only the **Radio RX device** in Settings > Remote Audio has to be set. With nothing coming in the box shows a low floor, as the radio's does.
+- **... and draws the passband where it really is.** Measured on my FTdx101MP at every IF Width in SSB and CW: the old drawing was right only at the 3 kHz SSB default, and sent wide CW filters off the left of the display. The display now uses the same fixed 0-4 kHz span as the radio's own, is half as big again, and no longer clamps the shape to the roofing filter - a narrow roofing filter shows as a hump in the bars instead, as on the radio.
+- **AM ignored IF SHIFT in the filter display** ([#166](https://github.com/mm5agm/Yaesu_Web_Control/issues/166)).
+- **The CW sections of the manual are rewritten for a beginner.**
 
 ## 2026-09-18 - v2.5.2-pre4 (pre-release)
 
