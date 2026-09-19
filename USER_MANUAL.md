@@ -701,6 +701,8 @@ All of these settings are read from the radio when the app connects.
 
 **Filter Function Display** — A compact display positioned alongside the band buttons, between the band button column and the receiver controls column. It draws the shape of the active DSP filter passband from the radio's current IF Width, IF Shift and notch/contour settings, labels the roofing filter, and fills the passband with the receiver's audio spectrum.
 
+![The Filter Function Display in DATA-U at a 3 kHz IF Width on 20 m, with the FT8 stations filling the passband from edge to edge and the roofing filter named in the corner](pictures/Filter_Function_Display.png)
+
 It is drawn the way the radio draws its own: across a fixed audio span of 0–4 kHz, with the passband where it really sits, so a 600 Hz SSB filter is a narrow slot a third of the way across and a 3 kHz one nearly fills the box — put the two side by side and they match. The difference is that this one has frequency labels along the bottom edge, which the radio's does not. (Versions up to 2.5.2 zoomed the axis to fit the passband instead, so the trapezium always filled the panel whatever the width; that mode is still in the code should it ever be wanted back.) The span only stretches when a passband would run past it — AM at 9 kHz, or a wide CW filter about a low pitch.
 
 The trapezium is the DSP filter — the IF Width setting — and it grows and shrinks with that setting alone, as on the radio. The roofing filter is a separate, earlier filter, and where it is narrower than the IF Width you see it in the bars instead: a 300 Hz roofing filter behind a 2.9 kHz IF Width draws as a narrow hump of band noise in the middle of a wide trapezium, with a much lower floor either side, which is exactly what the radio's own display shows. Earlier versions clamped the trapezium to the roofing width, which was reasonable while the bars were not real; now that they are, it hid that hump.
@@ -975,7 +977,7 @@ The panel is non-modal — it stays open while you use the rest of the app. Drag
 
 **Save to Mem button** — A **Save to Mem** button sits directly below the Filter Function Display on both the VFO A and VFO B panels. Click it to save the current VFO frequency, mode and all advanced settings as a new memory. A label input box appears — type a name (up to 12 characters) and press Enter or click Save. The new memory appears immediately in the floating panel.
 
-![The Save to Mem button on a VFO panel, directly below the Filter Function Display](pictures/Memories_Save_To_Mem_Button.png)
+![The Save to Mem button on a VFO panel, directly below the Filter Function Display and above the QMB row](pictures/QMB_Button_Placement.png)
 
 **Banks dropdown** — a **Banks** dropdown sits in the floating panel's toolbar alongside the Save to Rig buttons. The first entry is always **📥 YWC Starter Bank (built-in)** — the bundled set of common watering-hole memories shipped with the app (§8.5). Below that, any banks you've saved yourself appear (§8.4). Select any entry to switch — the memory list is replaced with that bank's contents and the tiles refresh automatically. The dropdown resets to its placeholder after loading.
 
