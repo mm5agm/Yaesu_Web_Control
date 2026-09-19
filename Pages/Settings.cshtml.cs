@@ -327,6 +327,7 @@ namespace Yaesu_Web_Control.Pages
                 current.AudioStreamingEnabled = Settings.AudioStreamingEnabled;
                 current.AudioRadioRxDevice = Settings.AudioRadioRxDevice ?? "";
                 current.AudioRadioTxDevice = Settings.AudioRadioTxDevice ?? "";
+                current.FilterScopeAudioEnabled = Settings.FilterScopeAudioEnabled;
                 // AudioRxGain / AudioTxGain are live-only (Mic & Gain / pop-out → /api/audio/gain).
                 // Do not overwrite them from this form — the inputs were removed from Settings.
 

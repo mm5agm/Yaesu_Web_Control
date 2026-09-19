@@ -317,7 +317,7 @@ pre, code { tab-size: 4; }
     flex: 1 1 auto;
     display: flex;
     justify-content: center;
-    min-width: 160px;
+    min-width: 240px;
 }
 
 /* Right-hand controls column — 2-column grid of label+select pairs.

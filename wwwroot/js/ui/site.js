@@ -1183,9 +1183,68 @@ function updateMicGainLabel(mode) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Filter Function Display: host-side spectrum of the radio's RX audio.
+//
+// The host runs an FFT over the radio's USB RX audio and pushes ~12 frames a
+// second to pages that asked for them (SubscribeFilterSpectrum). The frame is
+// shaped like the browser AnalyserNode output Remote Audio hands the panel,
+// so the panel draws either through the same code; this one is the fallback
+// for when Remote Audio is not playing, which on most pages is always. Bins
+// arrive base64-encoded because the JSON hub protocol sends byte[] that way.
+// ---------------------------------------------------------------------------
+const filterSpectrumFeed = {
+    latest: null,          // { data: Uint8Array, sampleRate, fftSize, at }
+    reasonLogged: false,
+    provider() {
+        const f = filterSpectrumFeed.latest;
+        // A stale frame means the capture stopped (device unplugged, host
+        // busy); better an empty passband than a frozen one.
+        if (!f || Date.now() - f.at > 1000) return null;
+        return f;
+    },
+    subscribe(attempt) {
+        // The panel is built by Index.cshtml's module script on
+        // DOMContentLoaded; the hub can be up before that. Give it a moment
+        // rather than assume an order. Pages without the panel give up.
+        if (!window.filterScopePanelA) {
+            attempt = attempt || 0;
+            if (attempt < 20) setTimeout(function () { filterSpectrumFeed.subscribe(attempt + 1); }, 250);
+            return;
+        }
+        connection.invoke("SubscribeFilterSpectrum").then(function (reason) {
+            if (reason) {
+                filterSpectrumFeed.latest = null;
+                if (!filterSpectrumFeed.reasonLogged) {
+                    console.info("Filter display: no host audio spectrum - " + reason);
+                    filterSpectrumFeed.reasonLogged = true;
+                }
+                return;
+            }
+            window.filterScopePanelA.setHostSpectrumProvider(filterSpectrumFeed.provider);
+        }).catch(function () { /* older host without the hub method */ });
+    },
+    receive(value) {
+        if (!value || typeof value.bins !== 'string') return;
+        const raw = atob(value.bins);
+        const data = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) data[i] = raw.charCodeAt(i);
+        filterSpectrumFeed.latest = {
+            data, sampleRate: value.sampleRate, fftSize: value.fftSize, at: Date.now()
+        };
+    }
+};
+// Group membership dies with the connection, so ask again after a reconnect.
+connection.onreconnected(function () { filterSpectrumFeed.subscribe(); });
+
 // First SignalR RadioStateUpdate handler (outer scope).
 // Handles ModeA/B, FrequencyA/B, PowerA/B updates pushed from the backend.
 connection.on("RadioStateUpdate", function (update) {
+
+    if (update.property === "FilterSpectrum") {
+        filterSpectrumFeed.receive(update.value);
+        return;
+    }
 
     // --- SERVER SHUTDOWN ---
     // Sent by SystemTrayService just before the host stops, so the browser
@@ -3601,7 +3660,9 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 
 
-connection.start().catch(function (err) {
+connection.start().then(function () {
+    filterSpectrumFeed.subscribe();
+}).catch(function (err) {
     return;
 });
 

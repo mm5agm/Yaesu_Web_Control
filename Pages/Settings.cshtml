@@ -2111,6 +2111,15 @@
                 <input class="form-check-input" type="checkbox" asp-for="Settings.AudioStreamingEnabled" id="audioStreamingEnabled" />
                 <label class="form-check-label" asp-for="Settings.AudioStreamingEnabled">Enable remote audio</label>
             </div>
+            <div class="mb-3 form-check form-switch">
+                <input class="form-check-input" type="checkbox" asp-for="Settings.FilterScopeAudioEnabled" id="filterScopeAudioEnabled" />
+                <label class="form-check-label" asp-for="Settings.FilterScopeAudioEnabled">Show the radio's RX audio in the Filter Function Display</label>
+                <div class="form-text">
+                    Fills the green bars in the filter display on the main page with the spectrum of what the receiver is passing,
+                    like the radio's own filter display. Needs only the <strong>Radio RX device</strong> below &mdash; remote audio itself
+                    can stay off. Takes effect the next time the main page is opened.
+                </div>
+            </div>
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label" for="audioRadioRxDevice">Radio RX device (capture)</label>

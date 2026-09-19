@@ -679,6 +679,8 @@ Existing installs auto-populate empty slots on the next startup with whatever th
 
 **Roofing Filter** — Select the roofing filter bandwidth: 12 kHz, 3 kHz, 1.2 kHz, 600 Hz, 300 Hz
 
+Selecting a narrower roofing filter can change the IF Width as well. If IF Width is at 4.0 kHz and you drop the roofing filter from 12 kHz to 3 kHz, the radio itself pulls IF Width down to 3.0 kHz at that moment, and the IF Width dropdown and the Filter Function Display follow — the radio's own screen shows the same change. That is the radio's doing, not the app's: the app only sends the roofing filter command and reads the result back. It is a one-off adjustment, not a limit: you can widen IF Width again afterwards (3.5 kHz behind a 3 kHz roofing filter is allowed, and the roofing filter then does the real narrowing — see the Filter Function Display below), and going back to 12 kHz does not restore the width the narrower filter took away.
+
 **Control column** (the two-column grid of dropdowns to the right):
 
 | Control | Options |
@@ -697,17 +699,17 @@ Existing installs auto-populate empty slots on the next startup with whatever th
 
 All of these settings are read from the radio when the app connects.
 
-**Filter Function Display** — A compact display positioned alongside the band buttons, between the band button column and the receiver controls column. It draws the shape of the active DSP filter passband from the radio's current IF Width, IF Shift, roofing filter and notch/contour settings.
+**Filter Function Display** — A compact display positioned alongside the band buttons, between the band button column and the receiver controls column. It draws the shape of the active DSP filter passband from the radio's current IF Width, IF Shift and notch/contour settings, labels the roofing filter, and fills the passband with the receiver's audio spectrum.
 
-It is a diagram of the filter, not a copy of the radio's own filter scope, and the two are not meant to match picture for picture. The radio draws its display across a fixed audio span, so a narrow filter appears as a narrow sliver in the middle of it. This one rescales its frequency axis to fit whatever passband is currently set, with a small margin each side, so that a 50 Hz CW filter is as readable as a 3 kHz SSB one — which means the trapezium always fills a good part of the panel and the shape alone will not tell you how wide the filter is. **Read the frequency labels along the bottom edge**: those are what change when you change IF Width.
+It is drawn the way the radio draws its own: across a fixed audio span of 0–4 kHz, with the passband where it really sits, so a 600 Hz SSB filter is a narrow slot a third of the way across and a 3 kHz one nearly fills the box — put the two side by side and they match. The difference is that this one has frequency labels along the bottom edge, which the radio's does not. (Versions up to 2.5.2 zoomed the axis to fit the passband instead, so the trapezium always filled the panel whatever the width; that mode is still in the code should it ever be wanted back.) The span only stretches when a passband would run past it — AM at 9 kHz, or a wide CW filter about a low pitch.
 
-One consequence worth knowing: above the roofing filter's width the trapezium stops growing. If the roofing filter is at 3 kHz, IF Width settings of 3.0, 3.2, 3.5 and 4.0 kHz all draw the same picture, because 3 kHz is genuinely what is reaching the DSP. That is the display being right, not stuck.
+The trapezium is the DSP filter — the IF Width setting — and it grows and shrinks with that setting alone, as on the radio. The roofing filter is a separate, earlier filter, and where it is narrower than the IF Width you see it in the bars instead: a 300 Hz roofing filter behind a 2.9 kHz IF Width draws as a narrow hump of band noise in the middle of a wide trapezium, with a much lower floor either side, which is exactly what the radio's own display shows. Earlier versions clamped the trapezium to the roofing width, which was reasonable while the bars were not real; now that they are, it hid that hump.
 
 - The **red-bordered trapezoid** represents the active **DSP filter passband** (the IF Width setting). The sloped sides reflect the filter roll-off characteristic at the passband edges.
-- **Green bars** inside the trapezoid are live received audio spectrum, and are drawn only while Remote Audio is running and receiving (see §18). With no audio session attached — which is the normal case, and the case on every installation that has never set Remote Audio up — the trapezoid is drawn empty. Earlier versions filled it with a moving pattern that was not derived from any signal at all; that has been removed, because it looked exactly like received signal and it was described here as if it were.
-- A **"Roof Nk" label** in the top-right corner shows the currently selected roofing filter (e.g. "Roof 3k", "Roof 12k", "Roof 600"). This is useful because the DSP filter is the *active* limit when the roofing filter is wider than the DSP setting — in that case the trapezium looks identical for several roofing choices (12k and 3k both produce the same shape if the DSP filter is set to 3 kHz, since both roofing filters are at least as wide as 3 kHz). The label is the only way to see which roofing is actually in circuit when this happens.
-- **Passband width** reflects the current IF Width setting, automatically constrained by the selected Roofing Filter if it is narrower than the DSP setting. If the roofing filter is wider, the DSP filter is what you see.
-- **Passband position** shifts left or right as the IF Shift slider is adjusted — the display updates live while dragging the slider.
+- **Green bars** inside the trapezoid are the spectrum of the receiver's audio — what the filter is actually passing, the same thing the radio's own filter display draws. YWC gets that audio from the radio's USB sound device: set **Radio RX device** under **Settings → Remote Audio** (§18.2) and the bars appear; remote audio itself does not need to be switched on, and nothing is played anywhere. The host analyses the audio and sends the result to every open main page about twelve times a second; the USB device is opened only while a main page is showing and released when the last one closes. If Remote Audio *is* playing in the browser, the bars come from that instead, with slightly less delay. A switch on the same Settings card, **Show the radio's RX audio in the Filter Function Display**, turns the feed off if you would rather not have the device open. With no RX device set the trapezoid is drawn empty. Earlier versions filled it with a moving pattern that was not derived from any signal at all; that has been removed, because it looked exactly like received signal and it was described here as if it were.
+- A **"Roof Nk" label** in the top-right corner shows the currently selected roofing filter (e.g. "Roof 3k", "Roof 12k", "Roof 600"). The trapezium does not change with it, so the label is how you see which roofing filter is in circuit — and, when it is narrower than the IF Width, the bars show its effect as described above.
+- **Passband width** reflects the current IF Width setting.
+- **Passband position** shifts left or right as the IF Shift slider is adjusted — the display updates live while dragging the slider. Where the passband sits in SSB was measured on my FTdx101MP with the audio feed above, one width at a time: widths of 850 Hz and below are centred on 1500 Hz, the IF centre (300 Hz is roughly 1350–1650 Hz), and the wider settings narrow in from the 3 kHz default with about a third taken off the low side and two-thirds off the high (2.4 kHz is roughly 300–2700 Hz). Earlier versions drew every SSB width starting at 300 Hz and growing upward, which put the trapezium in the wrong place at everything but 3 kHz — and, once the bars were real, put the signal outside it. In CW the passband is centred on your CW pitch for the narrow widths, measured the same way; once a width is too wide to sit centred on the pitch (from about 800 Hz with a 700 Hz pitch) its low edge stops at about 250 Hz and it grows upward from there, so a 3.5 kHz CW filter fills the display much as the radio's own draws it. Earlier versions centred every CW width on the pitch, which sent the wide ones off the left of the display.
 - A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as the contour frequency slider is adjusted.
 - A **dark vertical bar** marks the Manual Notch frequency while Man Notch is on, and a **cyan wedge** marks the APF peak while APF is on (CW). Both sit at the frequency the radio is set to, so they move with the IF Shift slider along with the rest of the passband.
 - The display updates automatically whenever any filter parameter changes, whether adjusted from the browser or from the radio's front panel.
@@ -725,6 +727,8 @@ The IF Width dropdown is **mode-aware**: the SH command code sent to the radio i
 - **AM and FM modes** hide the IF Width dropdown — the SH command does not apply in those modes (the radio uses fixed filters, or a separate narrow/wide mode toggle).
 
 The first entry in the dropdown ("Default") is the radio's mode-dependent default, which varies by the selected roofing filter. The current width is read from the radio on connect; selecting a new value sends it immediately.
+
+Selecting a roofing filter narrower than the current IF Width makes the radio reduce the IF Width to match, and the dropdown updates to show the new value — see the Roofing Filter note in [§5.7](#57-receiver-controls).
 
 **Audio Filter button** — Opens the **Audio Filter** popout dialog for this VFO, where you can adjust the per-mode LCUT FREQ, LCUT SLOPE, HCUT FREQ and HCUT SLOPE. See [§5.18](#518-audio-filter-popout) for the full description. Replaces the IF Low Cut dropdown that was in this row in v2.3.9 and earlier — that control was sending a CAT command no current Yaesu HF radio actually supports, so it was a no-op. The new Audio Filter popout uses EX menu commands that the radio honours.
 
@@ -784,7 +788,7 @@ The last segment you used on each band is remembered, so when you return to a ba
 - **Recall** steps into the QMB and moves to a stored slot; the radio's display shows **QMB**. Pressing Recall again steps to the next stored slot, exactly like short-pressing the front-panel **[QMB]** key.
 - **V/M** leaves QMB mode and returns to normal VFO tuning (the front-panel **[V/M]** key).
 
-![The QMB row on the main control panel — the three buttons Store, Recall and V/M sit on their own row labelled QMB, directly below the band buttons and above the Mode and antenna selectors](pictures/QMB_Button_Placement.png)
+![The QMB row on the main control panel — the three buttons Store, Recall and V/M sit on their own row labelled QMB, directly below the Filter Function Display and its Save to Mem button](pictures/QMB_Button_Placement.png)
 
 Recall is *modal* — once the radio is in QMB mode it stays there until you press **V/M**, so the V/M button is how you get back out without touching the rig. This matters most if you operate entirely from the browser. The radio sends no confirmation back over CAT for these three actions, so the radio's own display (showing **QMB** or not) is the thing to watch. The QMB buttons only appear for radio models that support it.
 
@@ -969,9 +973,9 @@ The panel is non-modal — it stays open while you use the rest of the app. Drag
 
 ![Right-click context menu on a memory tile showing Recall, Rename, Change Mode and Delete options](pictures/Memories_Tile_Closeup.png)
 
-**Save to Mem button** — A **Save to Mem** button appears below the S-meter on both the VFO A and VFO B panels. Click it to save the current VFO frequency, mode and all advanced settings as a new memory. A label input box appears — type a name (up to 12 characters) and press Enter or click Save. The new memory appears immediately in the floating panel.
+**Save to Mem button** — A **Save to Mem** button sits directly below the Filter Function Display on both the VFO A and VFO B panels. Click it to save the current VFO frequency, mode and all advanced settings as a new memory. A label input box appears — type a name (up to 12 characters) and press Enter or click Save. The new memory appears immediately in the floating panel.
 
-![The Save to Mem button on a VFO panel, sitting next to the Segment dropdown](pictures/Memories_Save_To_Mem_Button.png)
+![The Save to Mem button on a VFO panel, directly below the Filter Function Display](pictures/Memories_Save_To_Mem_Button.png)
 
 **Banks dropdown** — a **Banks** dropdown sits in the floating panel's toolbar alongside the Save to Rig buttons. The first entry is always **📥 YWC Starter Bank (built-in)** — the bundled set of common watering-hole memories shipped with the app (§8.5). Below that, any banks you've saved yourself appear (§8.4). Select any entry to switch — the memory list is replaced with that bank's contents and the tiles refresh automatically. The dropdown resets to its placeholder after loading.
 
@@ -3217,6 +3221,8 @@ Remote Audio streams **radio RX → browser speakers** and **browser microphone 
 2. Enable **remote audio**.
 3. Pick **Radio RX device** (capture / what you hear) and **Radio TX device** (playback / where mic audio goes). Both are **required** when the feature is on — YWC will not fall back to the PC’s default mic/speakers (blank TX previously caused browser-mic feedback into the room). Use **Refresh device list** after plugging the radio in. On Windows only **WASAPI** devices are shown. Entries that look like a USB codec are sorted first and marked with a radio icon (📻); renamed devices stay in the full list without the icon.
 4. **Save Settings**. RX/TX software gain is adjusted later via **Mic & Gain** on Home (or the pop-out), not on this page.
+
+Setting **Radio RX device** on its own — with remote audio left off — is enough for the Filter Function Display on the main page to show the receiver's audio spectrum (§5.7); the **Show the radio's RX audio in the Filter Function Display** switch on this card turns that off.
 
 ### 18.3 HTTPS for remote browsers
 

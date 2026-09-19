@@ -347,6 +347,15 @@
         /// </summary>
         public string? AudioRadioTxDevice { get; set; } = "";
 
+        /// <summary>
+        /// Let the Filter Function Display on the main page show the spectrum
+        /// of the radio's RX audio, analysed on the host. Needs only
+        /// <see cref="AudioRadioRxDevice"/>; Remote Audio itself need not be
+        /// on. The capture is held open only while a page is showing the
+        /// display, and released when the last one closes.
+        /// </summary>
+        public bool FilterScopeAudioEnabled { get; set; } = true;
+
         public float AudioRxGain { get; set; } = 1.0f;
         public float AudioTxGain { get; set; } = 1.0f;
 
