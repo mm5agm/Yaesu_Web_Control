@@ -63,6 +63,26 @@ It is built on the radio's own keyer memories: the line is cut into pieces of up
 
 Every one of these is written up in full in the [release notes](#2026-09-14---v250) at the foot of this page.
 
+## 🔧 Fixed since the last release
+
+One line per fix, newest first, with the build that has it. A pre-release installs exactly like a release and carries everything before it; each one is written up under [Release Notes](#release-notes). *Not yet in a build* means the fix is in the code and will be in the next pre-release or release.
+
+| Fixed | Issue | In build |
+|---|---|---|
+| The filter display shows the receiver's audio spectrum — the same picture as the radio's own filter display — from the radio's USB audio, with no Remote Audio session needed. It used to fill with a random pattern that looked like signal. | [#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161) | *Not yet in a build* |
+| The filter display ignored IF SHIFT in AM. | [#166](https://github.com/mm5agm/Yaesu_Web_Control/issues/166) | *Not yet in a build* |
+| An idle tab lost its connection after ~25 minutes and took the host down with it ("localhost refused to connect" on the next click); pages now reconnect for ever, and the host counts every open page, including Remote Audio and Radio Display. | — | *Not yet in a build* |
+| Full-screen mode could not scroll. | [#163](https://github.com/mm5agm/Yaesu_Web_Control/issues/163) | v2.5.2-pre4 |
+| 300 Hz roofing filter tick did not save on the FTdx101D (and never saved on the FTdx10). | [#156](https://github.com/mm5agm/Yaesu_Web_Control/issues/156) | v2.5.2-pre4 |
+| Main-page PA temperature stuck on the first reading after load. | [#151](https://github.com/mm5agm/Yaesu_Web_Control/issues/151) | v2.5.2-pre4 |
+| VFO controls spilled out of their panel at 150–175 % browser zoom. | [#157](https://github.com/mm5agm/Yaesu_Web_Control/issues/157) | v2.5.2-pre4 |
+| Ten user-manual table-of-contents links did nothing in the app. | [#158](https://github.com/mm5agm/Yaesu_Web_Control/issues/158) | v2.5.2-pre4 |
+| SoapySDR drivers (RTL-SDR, Airspy, HackRF) now load from the copy YWC ships, not whatever is on the PATH. | [#164](https://github.com/mm5agm/Yaesu_Web_Control/issues/164) | v2.5.2-pre4 |
+| The SDR device scan can no longer crash the whole app when a driver faults — it runs in a throwaway process. | [#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143) | v2.5.2-pre3 |
+| RSPduo: pick Tuner 1 or Tuner 2 — it streamed only a flat noise floor before. | [#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161) | v2.5.2-pre2 |
+| The NR dropdown offered NR1 / NR2; no supported radio has two, and picking NR2 sent a command the radio could not act on. It is now ON / OFF with the DNR level beside it. | [#144](https://github.com/mm5agm/Yaesu_Web_Control/issues/144) | v2.5.2-pre2 |
+| Hard crashes are written to the log before the process dies, and the idle-shutdown countdown logs when it is cancelled. | [#143](https://github.com/mm5agm/Yaesu_Web_Control/issues/143) | v2.5.2-pre1 |
+
 **Supported transceivers:**
 
 | Transceiver | Power | Receivers | Notes |
