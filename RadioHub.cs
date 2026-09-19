@@ -12,13 +12,18 @@ namespace Yaesu_Web_Control.Hubs
         private readonly RadioStateService _radioState;
         private readonly ISettingsService _settings;
 
-        // All currently open SignalR connections
+        // Every currently open SignalR connection, and the whole of what the
+        // host means by "a browser is watching". Presence used to mean a
+        // connection that had called Heartbeat(), which only the pages using
+        // _Layout do -- site.js is what starts that timer. Remote Audio and
+        // Radio Display set Layout = null, so neither heartbeated, and a
+        // listener sitting on one of them with no other tab open had the host
+        // exit underneath them 30s later. Counting the connection itself asks
+        // nothing of a new page beyond connecting to this hub, which any page
+        // wanting live state does anyway.
         private static readonly ConcurrentDictionary<string, byte> _connections = new();
 
-        // Connections that have sent at least one heartbeat (i.e. the main page tab)
-        private static readonly ConcurrentDictionary<string, DateTime> _heartbeats = new();
-
-        // Grace-period shutdown: starts when all heartbeating clients disconnect,
+        // Grace-period shutdown: starts when the last connection drops,
         // cancelled if any client reconnects within the window.
         private static readonly TimeSpan ShutdownGrace = TimeSpan.FromSeconds(30);
         private static CancellationTokenSource? _shutdownCts;
@@ -58,14 +63,13 @@ namespace Yaesu_Web_Control.Hubs
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
             _connections.TryRemove(Context.ConnectionId, out _);
-            bool wasHeartbeating = _heartbeats.TryRemove(Context.ConnectionId, out _);
 
             await base.OnDisconnectedAsync(exception);
 
-            // Only trigger shutdown countdown when a heartbeating client (main page tab)
-            // disconnects and no other heartbeating clients remain — and only when the
-            // AutoShutdownWhenNoBrowsers setting is enabled (default true).
-            if (wasHeartbeating && _heartbeats.IsEmpty)
+            // Only trigger the shutdown countdown when the last connection of
+            // any kind has gone — and only when the AutoShutdownWhenNoBrowsers
+            // setting is enabled (default true).
+            if (_connections.IsEmpty)
             {
                 var settings = await _settings.GetSettingsAsync();
                 // Containers must stay up as a headless CAT controller even if
@@ -89,14 +93,14 @@ namespace Yaesu_Web_Control.Hubs
             }
         }
 
-        // Called by the main page every 5 seconds (and once immediately on connect).
+        // Called by site.js every 5 seconds (and once immediately on connect).
+        // Presence is the connection itself now, so this no longer decides
+        // whether the host lives — but it is kept, and kept cancelling,
+        // because a page that connects before the previous tab's
+        // OnDisconnectedAsync runs would otherwise miss the cancel in
+        // OnConnectedAsync and let that disconnect arm the timer.
         public Task Heartbeat()
         {
-            _heartbeats[Context.ConnectionId] = DateTime.UtcNow;
-            // OnConnectedAsync already cancels, but a page that connects before
-            // the previous tab's OnDisconnectedAsync can miss that cancel —
-            // the disconnect then schedules shutdown because this connection
-            // has not heartbeated yet. Count a heartbeat as "a browser is here".
             CancelShutdown("browser heartbeat");
             return Task.CompletedTask;
         }
@@ -114,7 +118,7 @@ namespace Yaesu_Web_Control.Hubs
 
                 Task.Delay(ShutdownGrace, token).ContinueWith(t =>
                 {
-                    if (!t.IsCanceled && _heartbeats.IsEmpty)
+                    if (!t.IsCanceled && _connections.IsEmpty)
                     {
                         _logger.LogInformation("No clients reconnected — stopping application.");
                         _lifetime.StopApplication();

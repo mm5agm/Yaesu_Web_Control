@@ -289,6 +289,12 @@
         // One hub connection for the pop-out: scope settings changed at the
         // rig, the active band, and the VFO / front-end state the hotspot
         // overlay needs to label and cycle what is on the TFT.
+        //
+        // It is also what stops the host shutting down while this page is the
+        // only one open. The page sets Layout = null, so there is no site.js
+        // and no heartbeat; the hub counts open connections, and this is the
+        // one. Do not remove it without adding /js/ui/host-presence.js in its
+        // place -- HostPresenceTests fails the build if neither is here.
         const conn = new signalR.HubConnectionBuilder()
             .withUrl('/radioHub')
             .withAutomaticReconnect()

@@ -2563,7 +2563,9 @@ Up to and including v2.4.2 — and in the v2.4.3 pre-releases up to pre3 — the
 
 **App shuts down unexpectedly after closing the browser**
 
-- This is normal behaviour. When the last browser tab is closed, the app waits 30 seconds for a reconnection before exiting. If you want to keep the app running (for example while WSJT-X is using it via rigctld), leave a browser tab open on the main page. If you need to force-quit immediately without waiting, open Windows Task Manager (**Ctrl+Shift+Esc**), find **Yaesu_Web_Control.exe**, and click **End Task**.
+- This is normal behaviour. When the last browser tab is closed, the app waits 30 seconds for a reconnection before exiting. **Any** page counts as an open tab, including the Remote Audio and Radio Display pop-out windows, so listening on Remote Audio alone will not let the app quit underneath you.
+- If you want the app to keep running with no browser open at all — while WSJT-X is using it via rigctld, say — turn off **Automatically exit when no browser is connected** in **Settings**, and quit it from the system tray on Windows or with Ctrl+C in the console on macOS and Linux. (In Docker the app ignores the setting and always stays up.) Otherwise, just leave any one tab open.
+- If you need to force-quit immediately without waiting, open Windows Task Manager (**Ctrl+Shift+Esc**), find **Yaesu_Web_Control.exe**, and click **End Task**.
 
 **Cannot access the app from a tablet**
 

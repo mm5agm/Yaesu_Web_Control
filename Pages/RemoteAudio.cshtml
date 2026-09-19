@@ -155,11 +155,18 @@
         </div>
     </div>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
+    @* This page sets Layout = null, so it gets neither site.js nor the
+       /radioHub connection site.js opens -- and that connection is how the
+       host knows a browser is still here. Without it, listening on this page
+       alone let the host exit 30s later, mid-transmission. *@
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     <script>
         window.ywcTxToggleKey = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.TxToggleKey));
     </script>
     <script type="module">
         import { initRemoteAudioPopout } from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { keepHostAlive } from "/js/ui/host-presence.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        keepHostAlive();
         initRemoteAudioPopout();
     </script>
 </body>
