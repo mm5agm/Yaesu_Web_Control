@@ -242,7 +242,11 @@ export class FilterScopePanel {
             const centre = this._cwPitchHz() + shift;
             return { lo: centre - ifWidthHz / 2, hi: centre + ifWidthHz / 2 };
         } else if (mode === 'AM' || mode === 'AM-N') {
-            return { lo: 0, hi: ifWidthHz / 2 };
+            // AM is double-sideband, so the audio passband runs from the
+            // carrier out to half the IF width. IF SHIFT still slides it
+            // like every other mode -- this branch used to drop the shift
+            // and drew AM at zero whatever the radio was set to (#161).
+            return { lo: shift, hi: shift + ifWidthHz / 2 };
         } else {
             // SSB/Data: audio lower cutoff is ~300 Hz; IF Width extends upward from there
             return { lo: 300 + shift, hi: 300 + shift + ifWidthHz };
