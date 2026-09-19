@@ -338,6 +338,23 @@ which is how the sibling repo (IWC) shipped v1.0.0's code as v1.0.3.
 **Do not use `.\scripts\create-release.ps1`.** It is an older route to the same
 place, it has none of those checks, and it generates release notes from git log.
 
+**Install the hooks in every clone.** `.githooks/pre-push` refuses to push
+`main` anything that is neither a release merge (a commit whose subject is
+`Release vX.Y.Z`, which is what `finish-release.ps1` makes) nor a
+documentation-only change (`README.md`, `USER_MANUAL.md`, `docs/`,
+`pictures/`, which is how README corrections have always reached `main`
+between releases). That guard was missing on 2026-09-19, when a mistyped `cd`
+ran IWC's docs merge in this repo and pushed 31 unreleased commits to `main` --
+branch protection permitted it, because the push was a fast-forward, and then
+refused the force-push that would have undone it. Hooks are not cloned, so
+each working copy needs it switched on once:
+
+```powershell
+git config core.hooksPath .githooks
+```
+
+Override with `git push --no-verify` when you genuinely mean it.
+
 User settings persist to `%APPDATA%\MM5AGM\Yaesu Web Control\appsettings.user.json` on Windows, or `~/.config/MM5AGM/Yaesu Web Control/appsettings.user.json` on macOS/Linux (Docker: under the `/data` volume).
 Radio state persists to the same folder as `radio_state.json`.
 
