@@ -136,21 +136,46 @@ function ifWidthOptionsFor(model, mode) {
         .sort((a, b) => parseInt(a.code) - parseInt(b.code));
 }
 
+// Tooltip for the IF Width select while it does not apply. The widths are
+// the FTdx101's (operating manual, WIDTH table); other models are not far
+// off, but the point of the message is "fixed", not the number.
+const FIXED_WIDTH_TITLE =
+    'IF Width does not apply in AM or FM - the radio uses a fixed filter ' +
+    '(FTdx101: 9 kHz AM, 6 kHz AM-N, 16 kHz FM, 9 kHz FM-N).';
+
 // Rebuild a <select> element with the options for the current mode.
 // Preserves the currently selected code if it still exists in the new options.
+//
+// In AM / FM the select is disabled and shows a single "Fixed" entry. This
+// used to try to hide the whole row instead, and never managed it:
+// Bootstrap's .d-flex is display:flex !important, so the inline
+// display:none lost every time -- which was as well, because the same row
+// holds the Audio Filter button and IF Shift. The stale code from the
+// previous mode ("400 Hz" after CW) was left showing instead.
 function rebuildIfWidthSelect(selectEl, model, mode) {
     if (!selectEl) return;
     const options = ifWidthOptionsFor(model, mode);
-    // Hide the entire row when the dropdown does not apply (AM/FM modes).
-    // The row contains both the label and the select — walk up to find it.
-    const row = selectEl.closest('.d-flex');
     if (!options) {
-        if (row) row.style.display = 'none';
+        if (!selectEl.dataset.ifwTitle) selectEl.dataset.ifwTitle = selectEl.title || '';
+        if (!selectEl.dataset.ifwCode)  selectEl.dataset.ifwCode  = selectEl.value || '';
+        selectEl.innerHTML = '';
+        const optEl = document.createElement('option');
+        optEl.value = '';
+        optEl.textContent = 'Fixed';
+        selectEl.appendChild(optEl);
+        selectEl.disabled = true;
+        selectEl.title = FIXED_WIDTH_TITLE;
         return;
     }
-    if (row) row.style.display = '';
+    if (selectEl.disabled) {
+        selectEl.disabled = false;
+        selectEl.title = selectEl.dataset.ifwTitle || '';
+    }
 
-    const previousCode = selectEl.value;
+    // The code from before a spell in AM / FM, if we have one, otherwise
+    // whatever is selected now.
+    const previousCode = selectEl.dataset.ifwCode || selectEl.value;
+    delete selectEl.dataset.ifwCode;
     selectEl.innerHTML = '';
     for (const opt of options) {
         const optEl = document.createElement('option');

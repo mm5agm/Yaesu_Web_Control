@@ -1294,6 +1294,7 @@ connection.on("RadioStateUpdate", function (update) {
             window.IfWidth.rebuildIfWidthSelect(
                 document.getElementById('ifWidthSelectA'), window._radioModel, update.value);
         }
+        updateIfShiftForMode('A', update.value);
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeA', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('A', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('A', update.value);
@@ -1308,6 +1309,7 @@ connection.on("RadioStateUpdate", function (update) {
             window.IfWidth.rebuildIfWidthSelect(
                 document.getElementById('ifWidthSelectB'), window._radioModel, update.value);
         }
+        updateIfShiftForMode('B', update.value);
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeB', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('B', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('B', update.value);
@@ -2323,6 +2325,33 @@ function setupIfShiftSlider(receiver) {
     slider.addEventListener('change', sendShift);
 }
 
+// IF SHIFT has no effect in AM or FM: measured on an FTdx101MP on
+// 2026-09-19 (#166) -- parked 5 kHz off a broadcast carrier, +1000 and
+// -1000 sound identical, and the radio's own filter display shows no
+// shift. The knob still turns and CAT still reports a value, so grey the
+// control out rather than let it look as if it does something.
+const IF_SHIFT_FIXED_TITLE =
+    'IF Shift has no effect in AM or FM on this radio - the filter is fixed about the carrier.';
+
+function updateIfShiftForMode(receiver, mode) {
+    const m = (mode || '').toUpperCase();
+    const fixed = m === 'AM' || m === 'AM-N' || m.includes('FM');
+    const slider = document.getElementById(`ifShiftSlider${receiver}`);
+    const zero   = document.getElementById(`ifShiftZero${receiver}`);
+    for (const el of [slider, zero]) {
+        if (!el) continue;
+        if (fixed) {
+            if (!el.dataset.ifsTitle) el.dataset.ifsTitle = el.title || '';
+            el.title = IF_SHIFT_FIXED_TITLE;
+            el.disabled = true;
+        } else if (el.disabled) {
+            el.disabled = false;
+            el.title = el.dataset.ifsTitle || '';
+        }
+    }
+}
+window.updateIfShiftForMode = updateIfShiftForMode;
+
 function resetIfShift(receiver) {
     const slider = document.getElementById(`ifShiftSlider${receiver}`);
     const label  = document.getElementById(`ifShiftValue${receiver}`);
@@ -2441,7 +2470,7 @@ async function _setClarifier(vfo, rxOn, txOn, offsetHz) {
 
 function resetIfWidth(receiver) {
     const select = document.getElementById(`ifWidthSelect${receiver}`);
-    if (!select) return;
+    if (!select || select.disabled) return;   // AM / FM: width is fixed, nothing to reset
     // Default is the last option (widest bandwidth — 3.0 kHz for FTdx101, 3.4 kHz for FTdx10)
     const defaultOpt = select.options[select.options.length - 1];
     if (!defaultOpt) return;

@@ -1479,6 +1479,7 @@
                                style="width: clamp(70px, 8vw, 120px); height: 18px;"
                                oninput="document.getElementById('ifShiftValueA').textContent = this.value; if(window.filterScopePanelA) window.filterScopePanelA.setState({ifShiftHz: parseInt(this.value)||0})">
                         <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
+                                id="ifShiftZeroA"
                                 onclick="resetIfShift('A')" title="Zero IF Shift">Zero</button>
                     </div>
 
@@ -1891,6 +1892,7 @@
                                style="width: clamp(70px, 8vw, 120px); height: 18px;"
                                oninput="document.getElementById('ifShiftValueB').textContent = this.value; if(window.filterScopePanelB) window.filterScopePanelB.setState({ifShiftHz: parseInt(this.value)||0})">
                         <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
+                                id="ifShiftZeroB"
                                 onclick="resetIfShift('B')" title="Zero IF Shift">Zero</button>
                     </div>
 
@@ -3369,6 +3371,11 @@
                     window._radioModel,
                     '@Model.RadioState.ModeB'
                 );
+            }
+            // IF Shift is greyed out in AM / FM, where the radio ignores it.
+            if (window.updateIfShiftForMode) {
+                window.updateIfShiftForMode('A', '@Model.RadioState.ModeA');
+                window.updateIfShiftForMode('B', '@Model.RadioState.ModeB');
             }
 
             // Hold button — toggles whether the panel updates from incoming

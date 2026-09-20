@@ -409,6 +409,11 @@ function cycleIfWidth(direction) {
 
 function restoreDefaultIfWidth() {
     const vfo = getActiveVfo();
+    const fixed = document.getElementById(`ifWidthSelect${vfo}`);
+    if (fixed && fixed.disabled) {
+        announce('IF Width not available in this mode');
+        return;
+    }
     if (typeof window.resetIfWidth === 'function') {
         window.resetIfWidth(vfo);
         announce('IF Width default');
@@ -428,6 +433,10 @@ function nudgeIfShift(deltaHz) {
     const vfo = getActiveVfo();
     const slider = document.getElementById(`ifShiftSlider${vfo}`);
     if (!slider) return;
+    if (slider.disabled) {
+        announce('IF Shift has no effect in this mode');
+        return;
+    }
     const min = Number(slider.min);
     const max = Number(slider.max);
     const cur = Number(slider.value) || 0;
