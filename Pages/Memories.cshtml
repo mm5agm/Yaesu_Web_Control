@@ -127,14 +127,35 @@
                 applied on recall only if set. Not exported to the radio's own memory channels.
             </span>
         </div>
+        <p class="text-muted small mb-2">
+            The order here is the order of the Mem panel tiles and the order memories go to the radio
+            (Export writes the first 99). Click <strong>Label</strong>, <strong>Frequency</strong> or
+            <strong>Mode</strong> to sort, or use the row buttons to move one memory.
+            <span id="orderHint" class="fw-bold text-warning-emphasis" role="status" aria-live="polite"></span>
+        </p>
         <div class="table-responsive">
             <table class="table table-sm table-striped table-hover mb-3" id="memoriesTable">
                 <thead class="table-dark">
                     <tr>
                         <th style="width:40px">#</th>
-                        <th style="min-width:140px">Label</th>
-                        <th style="min-width:130px">Frequency (MHz)</th>
-                        <th style="min-width:100px">Mode</th>
+                        <th style="min-width:140px" aria-sort="none" data-sort-key="label">
+                            <button type="button" class="btn btn-link btn-sm p-0 text-reset text-decoration-none fw-bold sort-btn"
+                                    onclick="sortRows('label', this)" title="Sort by label">
+                                Label <span class="sort-arrow" aria-hidden="true"></span>
+                            </button>
+                        </th>
+                        <th style="min-width:130px" aria-sort="none" data-sort-key="freq">
+                            <button type="button" class="btn btn-link btn-sm p-0 text-reset text-decoration-none fw-bold sort-btn"
+                                    onclick="sortRows('freq', this)" title="Sort by frequency">
+                                Frequency (MHz) <span class="sort-arrow" aria-hidden="true"></span>
+                            </button>
+                        </th>
+                        <th style="min-width:100px" aria-sort="none" data-sort-key="mode">
+                            <button type="button" class="btn btn-link btn-sm p-0 text-reset text-decoration-none fw-bold sort-btn"
+                                    onclick="sortRows('mode', this)" title="Sort by mode, then frequency">
+                                Mode <span class="sort-arrow" aria-hidden="true"></span>
+                            </button>
+                        </th>
                         <th style="min-width:100px">Clarifier (Hz)</th>
                         <th style="width:70px">RX Clar</th>
                         <th style="width:70px">TX Clar</th>
@@ -148,7 +169,7 @@
                         <th class="advanced-col" style="min-width:80px; display:none">AGC</th>
                         <th class="advanced-col" style="width:80px; display:none">Power</th>
                         <th class="advanced-col" style="min-width:140px; display:none">Notes</th>
-                        <th style="width:60px"></th>
+                        <th style="width:150px"><span class="visually-hidden">Move or delete</span></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -156,10 +177,10 @@
                     {
                         var m = Model.Memories[i];
                         <tr>
-                            <td class="align-middle text-muted small">@(i + 1)</td>
+                            <td class="align-middle text-muted small row-num">@(i + 1)</td>
                             <td>
                                 <input type="hidden" name="Memories[@i].Id" value="@m.Id" />
-                                <input type="hidden" name="Memories[@i].SortOrder" value="@m.SortOrder" />
+                                <input type="hidden" class="sort-order" name="Memories[@i].SortOrder" value="@m.SortOrder" />
                                 <input class="form-control form-control-sm"
                                        name="Memories[@i].Label"
                                        value="@m.Label"
@@ -287,7 +308,25 @@
                                        maxlength="100"
                                        placeholder="(notes)" />
                             </td>
-                            <td>
+                            <td class="text-nowrap">
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        aria-label="Move memory @(i + 1) to the top"
+                                        title="Move to top"
+                                        onclick="moveRow(this, 'top')">
+                                    <i class="bi bi-chevron-double-up" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        aria-label="Move memory @(i + 1) up one"
+                                        title="Move up"
+                                        onclick="moveRow(this, 'up')">
+                                    <i class="bi bi-chevron-up" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        aria-label="Move memory @(i + 1) down one"
+                                        title="Move down"
+                                        onclick="moveRow(this, 'down')">
+                                    <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                                </button>
                                 <button type="submit" asp-page-handler="Delete"
                                         asp-route-id="@m.Id"
                                         class="btn btn-sm btn-outline-danger"
@@ -338,6 +377,87 @@
         const mhz = parseFloat(input.value);
         const hidden = document.getElementById('freqHz_' + index);
         if (hidden) hidden.value = isNaN(mhz) ? '' : Math.round(mhz * 1_000_000);
+    }
+
+    // ── Row order ─────────────────────────────────────────────────────────────
+    // The form binds each row by its Memories[i] index, which never changes:
+    // moving a <tr> in the DOM moves nothing on the server. What the server
+    // sorts on is the hidden SortOrder field, so every reorder here rewrites
+    // that field to the row's new position and renumbers the # column. The
+    // order is only kept once Save is pressed, and the hint says so.
+
+    function _rows() {
+        return Array.from(document.querySelectorAll('#memoriesTable tbody tr'));
+    }
+
+    function _rowValue(tr, key) {
+        if (key === 'label') return (tr.querySelector('input[name$=".Label"]')?.value || '').trim().toLowerCase();
+        if (key === 'freq')  return parseInt(tr.querySelector('input[name$=".FrequencyHz"]')?.value, 10) || 0;
+        if (key === 'mode')  return tr.querySelector('select[name$=".Mode"]')?.value || '';
+        return '';
+    }
+
+    function _renumber(announcement) {
+        _rows().forEach((tr, i) => {
+            tr.querySelector('.row-num').textContent = i + 1;
+            tr.querySelector('.sort-order').value = i + 1;
+            const n = i + 1;
+            tr.querySelectorAll('td:last-child button').forEach(b => {
+                const label = b.getAttribute('aria-label') || '';
+                b.setAttribute('aria-label', label.replace(/memory \d+/, 'memory ' + n));
+            });
+        });
+        const hint = document.getElementById('orderHint');
+        if (hint) hint.textContent = announcement + ' Press Save to keep this order.';
+    }
+
+    function sortRows(key, btn) {
+        const th = btn.closest('th');
+        const dir = th.getAttribute('aria-sort') === 'ascending' ? 'descending' : 'ascending';
+        document.querySelectorAll('#memoriesTable th[data-sort-key]').forEach(h => {
+            h.setAttribute('aria-sort', 'none');
+            h.querySelector('.sort-arrow').textContent = '';
+        });
+        th.setAttribute('aria-sort', dir);
+        th.querySelector('.sort-arrow').textContent = dir === 'ascending' ? '\u25B2' : '\u25BC';
+
+        const sign = dir === 'ascending' ? 1 : -1;
+        const rows = _rows().map((tr, i) => ({ tr, i, v: _rowValue(tr, key), f: _rowValue(tr, 'freq') }));
+        rows.sort((a, b) => {
+            let c = a.v < b.v ? -1 : a.v > b.v ? 1 : 0;
+            if (c === 0 && key === 'mode') c = a.f < b.f ? -1 : a.f > b.f ? 1 : 0;
+            if (c === 0) c = a.i - b.i;   // stable: ties keep their existing order
+            return c * sign;
+        });
+        const tbody = document.querySelector('#memoriesTable tbody');
+        rows.forEach(r => tbody.appendChild(r.tr));
+        const name = key === 'freq' ? 'frequency' : key;
+        _renumber(`Sorted by ${name}, ${dir}.`);
+    }
+
+    function moveRow(btn, where) {
+        const tr = btn.closest('tr');
+        const tbody = tr.parentElement;
+        const label = (tr.querySelector('input[name$=".Label"]')?.value || '').trim() || 'memory';
+        if (where === 'top') {
+            if (tr === tbody.firstElementChild) return;
+            tbody.insertBefore(tr, tbody.firstElementChild);
+        } else if (where === 'up') {
+            const prev = tr.previousElementSibling;
+            if (!prev) return;
+            tbody.insertBefore(tr, prev);
+        } else if (where === 'down') {
+            const next = tr.nextElementSibling;
+            if (!next) return;
+            tbody.insertBefore(next, tr);
+        }
+        document.querySelectorAll('#memoriesTable th[data-sort-key]').forEach(h => {
+            h.setAttribute('aria-sort', 'none');
+            h.querySelector('.sort-arrow').textContent = '';
+        });
+        const pos = _rows().indexOf(tr) + 1;
+        _renumber(`${label} is now number ${pos}.`);
+        btn.focus();
     }
 
     function pageConfirm(message) {

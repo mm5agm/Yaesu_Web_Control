@@ -1718,6 +1718,13 @@ The editor shows all your saved memories in a table. For each memory you can edi
 
 Click **Save** to save all changes. Click **Add Memory** to append a blank row. Click the **trash** icon on any row to delete that memory.
 
+**Putting the list in order.** The order of the rows in the editor is the order everywhere else: the Mem panel tiles on the main page, and the order memories go to the radio (§8.4 - **Export to Radio** writes the first 99 in list order, so if your list is longer than the radio this is how you choose which 99 it gets). Two ways to change it:
+
+- Click the **Label**, **Frequency** or **Mode** column heading to sort the whole list by that column; click it again to reverse the sort. Sorting by Mode keeps each mode's memories in frequency order.
+- The three buttons at the right of each row move that memory **to the top**, **up one** or **down one**.
+
+Either way the row numbers change as you go and the message above the table says what you did - and reminds you that the new order is only kept when you press **Save**. Reload without saving and the list goes back to how it was.
+
 > **If Save gave you a blank page reading `HTTP ERROR 400`** on a version before the fix for [discussion #167](https://github.com/mm5agm/Yaesu_Web_Control/discussions/167): that was a limit in the web framework, not anything you did. The page sends every memory in one form, twenty fields per row, and the framework refused any form with more than 1,024 fields - which worked out at 52 memories, so anyone who had imported a reasonably full radio could not save a single label change. The limit now allows 1,000 memories. If you still see it on a current version, reload the page and press Save again: a page left open for a very long time can show the same error for a different reason, and a reload cures that one.
 
 The **Pop Out** button opens the Memories page in a new browser tab — useful if you want to edit memories on a second monitor while the main control panel is open in the first.
@@ -1778,7 +1785,7 @@ If a record has no frequency it's skipped silently — most loggers always inclu
 
 > **Warning:** Export to Radio (Replace) overwrites all 99 radio memory channels. Make sure you have imported or backed up anything you want to keep first.
 
-The radio has only 99 channels and YWC can hold 1,000 memories, so if your list is longer than the radio, **Export to Radio** writes the first 99 in list order and stops; **Export to Radio (Add)** fills whatever empty channels it found and reports how many memories had no room.
+The radio has only 99 channels and YWC can hold 1,000 memories, so if your list is longer than the radio, **Export to Radio** writes the first 99 in list order and stops; **Export to Radio (Add)** fills whatever empty channels it found and reports how many memories had no room. To choose which 99 go, put them at the top of the list first - sort by a column heading or use the row buttons (§8.1) - and press **Save** before you export.
 
 ---
 
