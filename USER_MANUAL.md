@@ -1673,7 +1673,12 @@ These must match WSJT-X's **Settings → Reporting → UDP Server** settings. Se
 
 ## 8. Radio Memories
 
-The app maintains its own list of memory channels, independent of the radio's built-in memories. You can store up to **1,000** of them, organised with labels, and recall any of them at a click from the floating Mem panel (see Section 5.15). That is ten full radios' worth, so in practice the limit is the radio's, not the app's.
+There are two separate sets of memories, and it helps to keep them apart:
+
+- **The radio's own memory channels** — the ones you see on the front panel. The radios YWC supports have **99** of them (channels 001–099). YWC only touches these when you press Import or Export (§8.2, §8.4).
+- **YWC's memories** — a list the app keeps on your PC in `memories.json`, independent of the radio. It holds up to **1,000** memories, each with a label and, if you want, the full receiver setup (§8.1). Recall any of them at a click from the floating Mem panel (see Section 5.15).
+
+So a full import from the radio fills 99 of YWC's 1,000, and you can keep adding your own beside them. This section is about YWC's list.
 
 ### 8.1 Memories Editor
 
@@ -1772,6 +1777,8 @@ If a record has no frequency it's skipped silently — most loggers always inclu
 | **Export to Radio (Add)** | Scans the radio for empty channels and writes your app memories into those slots only. Existing radio channels are not touched. |
 
 > **Warning:** Export to Radio (Replace) overwrites all 99 radio memory channels. Make sure you have imported or backed up anything you want to keep first.
+
+The radio has only 99 channels and YWC can hold 1,000 memories, so if your list is longer than the radio, **Export to Radio** writes the first 99 in list order and stops; **Export to Radio (Add)** fills whatever empty channels it found and reports how many memories had no room.
 
 ---
 
