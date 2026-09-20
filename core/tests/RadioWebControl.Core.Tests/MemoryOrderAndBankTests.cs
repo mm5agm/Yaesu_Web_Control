@@ -4,9 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
-using Yaesu_Web_Control.Services;
+using RadioWebControl.Core.Models;
+using RadioWebControl.Core.Services;
 
-namespace YaesuWebControl.Tests
+namespace RadioWebControl.Core.Tests
 {
     /// <summary>
     /// Two silent faults in the memory store, both found while adding row
@@ -19,12 +20,14 @@ namespace YaesuWebControl.Tests
     /// deletes by id -- pointed at the wrong memory after a delete or a
     /// reorder until it happened to reload.
     ///
-    /// Both services take a scratch path here; the app's own constructors use
-    /// the real files under AppData, which these tests must never touch.
+    /// Both services take a file path; these tests give them a scratch one
+    /// and must never touch an app's real files under its user-data folder.
+    /// The editor-page half of the same fix (sorting posted rows by their
+    /// SortOrder) is app wiring and stays with each app's own tests.
     /// </summary>
     public class MemoryOrderAndBankTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "ywc-tests-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = Path.Combine(Path.GetTempPath(), "rwc-core-tests-" + Guid.NewGuid().ToString("N"));
 
         private MemoryService NewMemoryService() =>
             new MemoryService(Path.Combine(_dir, "memories.json"));
@@ -136,56 +139,6 @@ namespace YaesuWebControl.Tests
             // And the next Add carries on above all of them.
             var added = await memories.AddAsync(new AppMemory { Label = "later", FrequencyHz = 4 });
             Assert.Equal(after.Max(m => m.Id) + 1, added.Id);
-        }
-
-        /// <summary>
-        /// The editor's form binds rows by their Memories[i] index, which is
-        /// fixed at render time, so a row moved on the page still arrives at
-        /// its original index. The page's script writes the new position into
-        /// the hidden SortOrder field; this is the server half honouring it.
-        /// </summary>
-        [Fact]
-        public async Task EditorSaveOrdersRowsBySortOrderNotByIndex()
-        {
-            var memories = NewMemoryService();
-            var page = new Yaesu_Web_Control.Pages.MemoriesModel(memories)
-            {
-                Memories = new List<AppMemory>
-                {
-                    new() { Id = 1, Label = "was first",  FrequencyHz = 1, SortOrder = 3 },
-                    new() { Id = 2, Label = "was second", FrequencyHz = 2, SortOrder = 1 },
-                    new() { Id = 3, Label = "",           FrequencyHz = 0, SortOrder = 0 }, // empty row, dropped
-                    new() { Id = 4, Label = "was fourth", FrequencyHz = 4, SortOrder = 2 },
-                }
-            };
-
-            await page.OnPostAsync();
-
-            var after = memories.GetAll();
-            Assert.Equal(new[] { "was second", "was fourth", "was first" }, after.Select(m => m.Label));
-            Assert.Equal(new[] { 2, 4, 1 }, after.Select(m => m.Id));
-            Assert.Equal(new[] { 1, 2, 3 }, after.Select(m => m.SortOrder));
-        }
-
-        [Fact]
-        public async Task EditorSaveKeepsIndexOrderWhenNothingWasMoved()
-        {
-            // An old memories.json can have SortOrder 0 on every row; an
-            // untouched page posts 1..n. Either way the rows must not shuffle.
-            var memories = NewMemoryService();
-            var page = new Yaesu_Web_Control.Pages.MemoriesModel(memories)
-            {
-                Memories = new List<AppMemory>
-                {
-                    new() { Id = 1, Label = "a", FrequencyHz = 1, SortOrder = 0 },
-                    new() { Id = 2, Label = "b", FrequencyHz = 2, SortOrder = 0 },
-                    new() { Id = 3, Label = "c", FrequencyHz = 3, SortOrder = 0 },
-                }
-            };
-
-            await page.OnPostAsync();
-
-            Assert.Equal(new[] { "a", "b", "c" }, memories.GetAll().Select(m => m.Label));
         }
 
         [Fact]

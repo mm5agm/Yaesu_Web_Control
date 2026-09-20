@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Yaesu_Web_Control.Services;
-using RadioWebControl.Core.Services; // AdifParser now lives in the shared core
+using RadioWebControl.Core.Models;
+using RadioWebControl.Core.Services;
 
 namespace Yaesu_Web_Control.Controllers
 {

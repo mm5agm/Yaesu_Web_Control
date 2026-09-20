@@ -1,13 +1,15 @@
 using System.Text.Json;
+using RadioWebControl.Core.Models;
 
-namespace Yaesu_Web_Control.Services
+namespace RadioWebControl.Core.Services
 {
+    /// <summary>
+    /// Named snapshots of the whole memory list, kept in one JSON file beside
+    /// memories.json. Radio-agnostic, like <see cref="MemoryService"/>; the
+    /// app passes the file path in.
+    /// </summary>
     public class MemoryBankService
     {
-        private static readonly string BanksPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MM5AGM", "Yaesu Web Control", "memory-banks.json");
-
         private static readonly JsonSerializerOptions _opts = new()
         {
             WriteIndented = true,
@@ -19,10 +21,9 @@ namespace Yaesu_Web_Control.Services
         private readonly string _path;
         private Dictionary<string, List<AppMemory>> _banks = new();
 
-        public MemoryBankService(MemoryService memoryService) : this(memoryService, BanksPath) { }
-
-        /// <summary>Tests point this at a scratch file; the app uses <see cref="BanksPath"/>.</summary>
-        internal MemoryBankService(MemoryService memoryService, string path)
+        /// <param name="path">Full path of memory-banks.json. The app passes its
+        /// user-data location; tests pass a scratch file.</param>
+        public MemoryBankService(MemoryService memoryService, string path)
         {
             _memoryService = memoryService;
             _path = path;

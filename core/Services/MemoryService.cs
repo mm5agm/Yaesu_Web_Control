@@ -1,22 +1,24 @@
-﻿using System.Text.Json;
+using System.Text.Json;
+using RadioWebControl.Core.Models;
 
-namespace Yaesu_Web_Control.Services
+namespace RadioWebControl.Core.Services
 {
+    /// <summary>
+    /// The working list of application memories, kept in one JSON file.
+    /// Radio-agnostic: nothing in here talks to a radio, it only stores what
+    /// the app captured. The app decides where the file lives (its own
+    /// user-data folder) and passes the full path in.
+    /// </summary>
     public class MemoryService
     {
-        public static readonly string MemoriesPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MM5AGM", "Yaesu Web Control", "memories.json");
-
         private readonly SemaphoreSlim _lock = new(1, 1);
         private readonly string _path;
         private List<AppMemory> _memories = new();
         private int _nextId = 1;
 
-        public MemoryService() : this(MemoriesPath) { }
-
-        /// <summary>Tests point this at a scratch file; the app uses <see cref="MemoriesPath"/>.</summary>
-        internal MemoryService(string path)
+        /// <param name="path">Full path of memories.json. The app passes its
+        /// user-data location; tests pass a scratch file.</param>
+        public MemoryService(string path)
         {
             _path = path;
             LoadFromDisk();

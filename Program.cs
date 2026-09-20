@@ -673,9 +673,17 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<WsjtxUdpService>()
 // Register process status cache service for efficient process lookups
 builder.Services.AddSingleton<ProcessStatusCacheService>();
 
-// Register radio memories service
-builder.Services.AddSingleton<Yaesu_Web_Control.Services.MemoryService>();
-builder.Services.AddSingleton<Yaesu_Web_Control.Services.MemoryBankService>();
+// Register radio memories services. Both live in core (shared with Icom
+// Web Control) and know nothing about where this app keeps its files, so the
+// paths are handed in here.
+var memoriesFolder = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+    "MM5AGM", "Yaesu Web Control");
+builder.Services.AddSingleton(new RadioWebControl.Core.Services.MemoryService(
+    Path.Combine(memoriesFolder, "memories.json")));
+builder.Services.AddSingleton(sp => new RadioWebControl.Core.Services.MemoryBankService(
+    sp.GetRequiredService<RadioWebControl.Core.Services.MemoryService>(),
+    Path.Combine(memoriesFolder, "memory-banks.json")));
 
 // Register DX cluster service — single instance shared between controllers and
 // the background hosted service so the API can read the spot buffer.

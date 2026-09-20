@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using Microsoft.AspNetCore.Mvc;
 using Yaesu_Web_Control.Services;
+using RadioWebControl.Core.Models;
+using RadioWebControl.Core.Services;
 
 namespace Yaesu_Web_Control.Controllers
 {
