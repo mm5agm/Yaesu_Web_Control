@@ -2802,6 +2802,21 @@ document.addEventListener('DOMContentLoaded', function() {
         // without first picking a digit. Defaults to "4th from the right"
         // so the first action moves something audible rather than a 1 Hz
         // tick the user can't hear.
+        // Picking a digit also sets that VFO's tuning step, so one mouse-wheel
+        // notch on the spectrum moves the dial by the digit the operator just
+        // pointed at (Bruce VK2RT, discussion #168). `idx` is the position among
+        // the eight rendered digits, most significant first, so the last digit is
+        // 1 Hz. The reverse — moving the selected digit when the step is changed
+        // elsewhere — is deliberately NOT done: the selection is cleared whenever
+        // the user clicks anywhere else on the page, so it cannot be a reliable
+        // display of a value that persists.
+        function latchTuningStepFromDigit(idx, digitCount) {
+            if (idx === null || idx === undefined || idx < 0) return;
+            const store = window.ywcTuningStep;   // set by the tuning-step module
+            if (!store) return;
+            store.set(receiver, Math.pow(10, digitCount - 1 - idx));
+        }
+
         function ensureSelection() {
             const digits = Array.from(display.querySelectorAll('.digit')).filter(d => d.textContent !== '.');
             if (digits.length === 0) return;
@@ -2823,6 +2838,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 digits[state.selectedIdx[receiver]].classList.add('selected');
                 state.editing[receiver] = true;
                 state.localFreq[receiver] = parseInt(digits.map(d => d.textContent).join(''));
+                latchTuningStepFromDigit(state.selectedIdx[receiver], digits.length);
             }
             // Explicitly focus the display so the very next ArrowUp/Down
             // press is delivered here instead of bubbling to body. The
@@ -2840,6 +2856,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     digits.forEach(d => d.classList.remove('selected'));
                     digits[hovered].classList.add('selected');
                     state.selectedIdx[receiver] = hovered;
+                    latchTuningStepFromDigit(hovered, digits.length);
                 }
             }
             ensureSelection();

@@ -278,7 +278,9 @@ namespace Yaesu_Web_Control.Controllers
         /// Patterns matched: lines containing "[Voice]" or "[IntentDispatcher]".
         /// Lines are returned newest-last to read like a normal log file.
         /// </summary>
-        private static readonly long[] _validNudgeSteps = [10, 100, 1_000, 10_000, 100_000];
+        // 1 Hz added 2026-09-20 (#168): the FTdx101MP was measured honouring
+        // single-hertz CAT writes exactly, even though its own dial stops at 10 Hz.
+        private static readonly long[] _validNudgeSteps = [1, 10, 100, 1_000, 10_000, 100_000];
 
         /// <summary>
         /// Updates the voice nudge step size without a full Settings round-trip.

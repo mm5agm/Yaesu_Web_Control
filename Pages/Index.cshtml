@@ -981,6 +981,18 @@
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
                         <input type="range" class="form-range spectrum-smooth-slider" data-vfo="A" min="0" max="8" step="1" value="2" aria-label="VFO A spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="A" style="min-width:3.5em; text-align:right;">2</span>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumStepSelectA" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO A. Also set by clicking a digit on the VFO A frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz.">Step</label>
+                        <select class="form-select form-select-sm spectrum-step-select" data-vfo="A" id="spectrumStepSelectA"
+                                style="width:auto;" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO A. Also set by clicking a digit on the VFO A frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz."
+                                aria-label="VFO A tuning step - how far one mouse-wheel notch on the spectrum moves the dial">
+                            <option value="1">1 Hz</option>
+                            <option value="10">10 Hz</option>
+                            <option value="100">100 Hz</option>
+                            <option value="1000">1 kHz</option>
+                            <option value="10000">10 kHz</option>
+                            <option value="100000">100 kHz</option>
+                            <option value="1000000">1 MHz</option>
+                        </select>
                         <div class="form-check form-check-inline mb-0 ms-2 text-nowrap" title="Shades the slice of RF the receiver is actually listening to, from the current IF Width, IF Shift and roofing filter. The dial is at the edge of that band, not in the middle of it, so this shows where a signal has to sit to be heard - and in CW and RTTY, why click-to-tune lands beside the signal rather than on it.">
                             <input class="form-check-input spectrum-passband-toggle" type="checkbox" data-vfo="A" id="spectrumPassbandToggleA" checked
                                    aria-label="Show the VFO A receiver passband as a shaded band on the spectrum">
@@ -1029,6 +1041,18 @@
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
                         <input type="range" class="form-range spectrum-smooth-slider" data-vfo="B" min="0" max="8" step="1" value="2" aria-label="VFO B spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="B" style="min-width:3.5em; text-align:right;">2</span>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumStepSelectB" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO B. Also set by clicking a digit on the VFO B frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz.">Step</label>
+                        <select class="form-select form-select-sm spectrum-step-select" data-vfo="B" id="spectrumStepSelectB"
+                                style="width:auto;" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO B. Also set by clicking a digit on the VFO B frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz."
+                                aria-label="VFO B tuning step - how far one mouse-wheel notch on the spectrum moves the dial">
+                            <option value="1">1 Hz</option>
+                            <option value="10">10 Hz</option>
+                            <option value="100">100 Hz</option>
+                            <option value="1000">1 kHz</option>
+                            <option value="10000">10 kHz</option>
+                            <option value="100000">100 kHz</option>
+                            <option value="1000000">1 MHz</option>
+                        </select>
                         <div class="form-check form-check-inline mb-0 ms-2 text-nowrap" title="Shades the slice of RF the receiver is actually listening to, from the current IF Width, IF Shift and roofing filter. The dial is at the edge of that band, not in the middle of it, so this shows where a signal has to sit to be heard - and in CW and RTTY, why click-to-tune lands beside the signal rather than on it.">
                             <input class="form-check-input spectrum-passband-toggle" type="checkbox" data-vfo="B" id="spectrumPassbandToggleB" checked
                                    aria-label="Show the VFO B receiver passband as a shaded band on the spectrum">
@@ -1153,6 +1177,7 @@
                                         style="width:auto; font-size:1.4rem; font-weight:600; padding:0.4rem 2.4rem 0.4rem 0.6rem;"
                                         title="Voice nudge step size — how far 'tune up'/'tune down' moves VFO A"
                                         aria-label="VFO A voice nudge step size">
+                                    <option value="1">1 Hz</option>
                                     <option value="10">10 Hz</option>
                                     <option value="100">100 Hz</option>
                                     <option value="1000">1 kHz</option>
@@ -1607,6 +1632,7 @@
                                             style="width:auto; font-size:1.4rem; font-weight:600; padding:0.4rem 2.4rem 0.4rem 0.6rem;"
                                             title="Voice nudge step size — how far 'tune up'/'tune down' moves VFO B"
                                             aria-label="VFO B voice nudge step size">
+                                        <option value="1">1 Hz</option>
                                         <option value="10">10 Hz</option>
                                         <option value="100">100 Hz</option>
                                         <option value="1000">1 kHz</option>
@@ -2812,6 +2838,8 @@
         import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { tuningStep }           from "/js/ui/tuning-step.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { formatTuningStep }     from "/js/tuning/tuning-step-store.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { axisOffsetHz }         from "/js/sdr/if-out-offset.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import "/js/ui/if-width-tables.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -3522,6 +3550,30 @@
                     label.textContent = formatSmooth(r);
                     panel.setSpectrumSmooth(r);
                 });
+            });
+
+            // Tuning step — how far one mouse-wheel notch on the spectrum moves
+            // the dial (Bruce VK2RT, discussion #168: the old 1 kHz was hard-coded,
+            // and RTTY needs 1 Hz). The select is one of four views of the same
+            // per-VFO number; the others are the frequency display's selected
+            // digit, the spectrum's right-click menu, and the voice nudge step.
+            // The store owns the value and persists it, so the select is
+            // initialised FROM the store rather than from the markup's first
+            // <option> — otherwise a reload would silently reset it to 1 Hz.
+            ['A', 'B'].forEach(vfo => {
+                const select = document.querySelector(`.spectrum-step-select[data-vfo="${vfo}"]`);
+                if (!select) return;
+
+                select.value = String(tuningStep.get(vfo));
+                select.addEventListener('change', () => {
+                    tuningStep.set(vfo, parseInt(select.value, 10));
+                });
+            });
+
+            // Keep every view in step with the store, whichever one changed it.
+            tuningStep.subscribe((vfo, stepHz) => {
+                const select = document.querySelector(`.spectrum-step-select[data-vfo="${vfo}"]`);
+                if (select && select.value !== String(stepHz)) select.value = String(stepHz);
             });
 
             // Passband overlay toggle. On by default and persisted per VFO by

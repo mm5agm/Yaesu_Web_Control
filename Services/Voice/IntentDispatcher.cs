@@ -256,7 +256,7 @@ namespace Yaesu_Web_Control.Services.Voice
 
         // -- SetNudgeStep --------------------------------------------------
 
-        private static readonly long[] _validNudgeSteps = [10, 100, 1_000, 10_000, 100_000];
+        private static readonly long[] _validNudgeSteps = [1, 10, 100, 1_000, 10_000, 100_000];
 
         private async Task<DispatchResult> SetNudgeStepAsync(
             IReadOnlyDictionary<string, object> args, CancellationToken ct)
@@ -273,6 +273,7 @@ namespace Yaesu_Web_Control.Services.Voice
 
             var label = step switch
             {
+                1       => "one hertz",
                 10      => "ten hertz",
                 100     => "one hundred hertz",
                 1_000   => "one kilohertz",

@@ -9,6 +9,8 @@
 
 // ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
 import { modeForHz } from '../ui/band-plan.js?v=1';
+import { tuningStep } from '../ui/tuning-step.js?v=1';
+import { formatTuningStep } from '../tuning/tuning-step-store.js?v=1';
 
 export class SpectrumPanel {
 
@@ -961,9 +963,14 @@ export class SpectrumPanel {
         // Tune VFO A to the clicked frequency.
         canvas.addEventListener('click', (e) => this._onCanvasClick(e));
 
-        // Mouse-wheel tunes VFO A up/down in 1 kHz steps.
+        // Mouse-wheel tunes this VFO up/down by the current tuning step.
         // { passive: false } required so preventDefault() suppresses page scroll.
         canvas.addEventListener('wheel', (e) => this._onCanvasWheel(e), { passive: false });
+
+        // Right-click picks the step size. The browser's own context menu is
+        // no use over a canvas, and this is the only place the wheel step is
+        // discoverable without hunting the DSP bar.
+        canvas.addEventListener('contextmenu', (e) => this._onCanvasContextMenu(e));
 
         // Splitter drag — mousedown on the handle starts a drag; subsequent
         // mousemove updates while the button is held are tracked on window
@@ -1141,9 +1148,12 @@ export class SpectrumPanel {
         e.preventDefault();   // stop the page from scrolling
         if (!this._lastBins || this._vfoHz <= 0) return;
 
-        // 1 kHz per notch — accumulate on _wheelTargetHz so rapid scrolling
-        // compounds correctly before the radio confirms the new frequency.
-        const step = 1000;
+        // One tuning step per notch — accumulate on _wheelTargetHz so rapid
+        // scrolling compounds correctly before the radio confirms the new
+        // frequency. The step is whatever this VFO is currently set to (1 kHz
+        // until the operator changes it), shared with the frequency display's
+        // selected digit and the voice nudge step — see ui/tuning-step.js.
+        const step = tuningStep.get(this._vfo);
         const direction = e.deltaY > 0 ? -1 : 1;   // scroll up = higher freq
         this._wheelTargetHz = Math.max(30_000, Math.min(75_000_000,
             (this._wheelTargetHz ?? this._vfoHz) + direction * step));
@@ -1159,6 +1169,95 @@ export class SpectrumPanel {
                 body:    JSON.stringify({ frequencyHz: hz }),
             }).catch(() => {});
         }, 60);
+    }
+
+    // ── Step-size context menu ───────────────────────────────────────────────
+
+    // Right-click anywhere on the spectrum to pick how far one wheel notch
+    // moves the dial. Built on demand rather than rendered into the page: two
+    // panels would otherwise mean two hidden menus in the DOM for a control
+    // most sessions never open.
+    _onCanvasContextMenu(e) {
+        e.preventDefault();
+        this._closeStepMenu();
+
+        const current = tuningStep.get(this._vfo);
+
+        const menu = document.createElement('div');
+        menu.className = 'spectrum-step-menu';
+        menu.setAttribute('role', 'menu');
+        menu.setAttribute('aria-label', `VFO ${this._vfo} tuning step`);
+
+        const heading = document.createElement('div');
+        heading.className = 'spectrum-step-menu-title';
+        heading.textContent = `VFO ${this._vfo} step`;
+        menu.appendChild(heading);
+
+        const items = [];
+        for (const hz of tuningStep.steps) {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'spectrum-step-menu-item' + (hz === current ? ' active' : '');
+            item.setAttribute('role', 'menuitemradio');
+            item.setAttribute('aria-checked', hz === current ? 'true' : 'false');
+            item.textContent = formatTuningStep(hz);
+            item.addEventListener('click', () => {
+                tuningStep.set(this._vfo, hz);
+                this._closeStepMenu();
+            });
+            menu.appendChild(item);
+            items.push(item);
+        }
+
+        // Positioned against the viewport, then nudged back inside it once the
+        // real size is known — a right-click near the bottom of a short window
+        // would otherwise open a menu that runs off the screen.
+        menu.style.left = `${e.clientX}px`;
+        menu.style.top  = `${e.clientY}px`;
+        document.body.appendChild(menu);
+
+        const rect = menu.getBoundingClientRect();
+        if (rect.right  > window.innerWidth)  menu.style.left = `${Math.max(0, window.innerWidth  - rect.width  - 4)}px`;
+        if (rect.bottom > window.innerHeight) menu.style.top  = `${Math.max(0, window.innerHeight - rect.height - 4)}px`;
+
+        // Keyboard: the menu takes focus so Up/Down/Escape work for anyone who
+        // opened it with the context-menu key rather than a mouse.
+        const focusIndex = Math.max(0, tuningStep.steps.indexOf(current));
+        items[focusIndex]?.focus();
+
+        menu.addEventListener('keydown', (ev) => {
+            const here = items.indexOf(document.activeElement);
+            if (ev.key === 'Escape') { ev.preventDefault(); this._closeStepMenu(); this._focusCanvas(); }
+            else if (ev.key === 'ArrowDown') { ev.preventDefault(); items[(here + 1 + items.length) % items.length]?.focus(); }
+            else if (ev.key === 'ArrowUp')   { ev.preventDefault(); items[(here - 1 + items.length) % items.length]?.focus(); }
+            else if (ev.key === 'Home')      { ev.preventDefault(); items[0]?.focus(); }
+            else if (ev.key === 'End')       { ev.preventDefault(); items[items.length - 1]?.focus(); }
+        });
+
+        // Dismiss on the next click anywhere else. Registered on the next tick
+        // so the click that opened the menu doesn't immediately close it.
+        this._stepMenu = menu;
+        this._stepMenuDismiss = (ev) => {
+            if (!menu.contains(ev.target)) this._closeStepMenu();
+        };
+        setTimeout(() => {
+            document.addEventListener('mousedown', this._stepMenuDismiss);
+            document.addEventListener('contextmenu', this._stepMenuDismiss);
+        }, 0);
+    }
+
+    _closeStepMenu() {
+        if (this._stepMenuDismiss) {
+            document.removeEventListener('mousedown', this._stepMenuDismiss);
+            document.removeEventListener('contextmenu', this._stepMenuDismiss);
+            this._stepMenuDismiss = null;
+        }
+        this._stepMenu?.remove();
+        this._stepMenu = null;
+    }
+
+    _focusCanvas() {
+        document.getElementById(this._canvasId)?.focus?.();
     }
 
     _sizeCanvas(canvas) {
