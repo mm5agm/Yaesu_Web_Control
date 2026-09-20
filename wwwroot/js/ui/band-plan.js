@@ -365,6 +365,51 @@ export const BAND_EDGES = {
 BAND_EDGES.UK  = BAND_EDGES.Region1;
 BAND_EDGES.USA = BAND_EDGES.Region2;
 
+// ── The operator's JSON overlay, across duplicate copies of this module ─────
+//
+// A module's identity is its full URL, query string included, and this file is
+// imported under three of them: `?v=<AppVersion>` from Index.cshtml, `?v=1`
+// from spectrum-panel.js and dx-spots-panel.js, and bare from
+// keyboard-shortcuts.js. The browser therefore evaluates it three times and
+// each copy owns its own BAND_PLANS / BAND_EDGES.
+//
+// Today that is harmless -- the other copies are imported only for modeForHz,
+// which is hard-coded and reads neither table. It stops being harmless the
+// moment a module imports segmentForHz, BAND_EDGES or getSegments, because
+// loadBandPlanFromServer() would overlay the operator's bandplan.default.json
+// onto Index's copy alone and the others would silently go on using the shipped
+// defaults. That is a bug with no symptom at the point it is written, so it is
+// closed here rather than waited for. The same shape did bite the tuning step
+// on 2026-09-20 -- see ui/tuning-step.js.
+//
+// Each copy keeps its OWN shipped tables and registers them. Adopting another
+// copy's objects would be simpler, but it lets a stale cached copy win on
+// upgrade: `?v=1` is the same URL release after release, so it can come from
+// the browser cache while the versioned URL is fresh.
+const bandPlanCopies = (globalThis.__ywcBandPlanCopies ??= []);
+const thisBandPlanCopy = { plans: BAND_PLANS, edges: BAND_EDGES };
+bandPlanCopies.push(thisBandPlanCopy);
+
+function applyBandPlanOverlay(data, copy) {
+    if (data?.bandPlans && typeof data.bandPlans === 'object') {
+        for (const key of Object.keys(copy.plans)) delete copy.plans[key];
+        Object.assign(copy.plans, data.bandPlans);
+        copy.plans.UK  = copy.plans.Region1;
+        copy.plans.USA = copy.plans.Region2;
+    }
+    if (data?.bandEdges && typeof data.bandEdges === 'object') {
+        for (const key of Object.keys(copy.edges)) delete copy.edges[key];
+        Object.assign(copy.edges, data.bandEdges);
+        copy.edges.UK  = copy.edges.Region1;
+        copy.edges.USA = copy.edges.Region2;
+    }
+}
+
+// A copy evaluated after the fetch has already finished still needs the data.
+if (globalThis.__ywcBandPlanOverlay) {
+    applyBandPlanOverlay(globalThis.__ywcBandPlanOverlay, thisBandPlanCopy);
+}
+
 // ── Nearest band ────────────────────────────────────────────────────────────
 //
 // Answers a different question to the tables above: not "may I transmit here"
@@ -415,7 +460,8 @@ export function nearestBandForHz(hz, edges) {
 //
 // We mutate BAND_PLANS / BAND_EDGES in place rather than re-exporting so
 // existing consumers (Index.cshtml's `BAND_PLANS[region]` access pattern,
-// segmentForHz, getSegments, etc.) pick up the new values automatically.
+// segmentForHz, getSegments, etc.) pick up the new values automatically -- in
+// every copy of this module the page has loaded, not just the one that fetched.
 export async function loadBandPlanFromServer() {
     try {
         // Cache-bust on the URL so users dropping in an updated JSON see it
@@ -423,18 +469,11 @@ export async function loadBandPlanFromServer() {
         const res = await fetch('/bandplan.default.json?t=' + Date.now());
         if (!res.ok) return false;
         const data = await res.json();
-        if (data?.bandPlans && typeof data.bandPlans === 'object') {
-            for (const key of Object.keys(BAND_PLANS)) delete BAND_PLANS[key];
-            Object.assign(BAND_PLANS, data.bandPlans);
-            BAND_PLANS.UK  = BAND_PLANS.Region1;
-            BAND_PLANS.USA = BAND_PLANS.Region2;
-        }
-        if (data?.bandEdges && typeof data.bandEdges === 'object') {
-            for (const key of Object.keys(BAND_EDGES)) delete BAND_EDGES[key];
-            Object.assign(BAND_EDGES, data.bandEdges);
-            BAND_EDGES.UK  = BAND_EDGES.Region1;
-            BAND_EDGES.USA = BAND_EDGES.Region2;
-        }
+
+        // Remembered, then applied to every copy of this module the page has
+        // loaded -- and to any copy evaluated later. See the note by BAND_EDGES.
+        globalThis.__ywcBandPlanOverlay = data;
+        for (const copy of bandPlanCopies) applyBandPlanOverlay(data, copy);
         return true;
     } catch {
         // Network failure / bad JSON — keep the hardcoded defaults.
