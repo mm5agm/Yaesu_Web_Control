@@ -16,8 +16,16 @@
 // the step is per-session rather than remembered.
 
 /** Steps offered in the UI, ascending. 1 Hz is the point of the exercise —
- *  RTTY and CW operators zero-beat in single hertz. */
-export const TUNING_STEPS = [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000];
+ *  RTTY and CW operators zero-beat in single hertz.
+ *
+ *  The list runs to 10 MHz because it has to cover every digit of the frequency
+ *  display: eight digits are rendered, so the most significant one an operator
+ *  can click is the tens of megahertz. Stopping at 1 MHz meant clicking that
+ *  digit snapped back down to 1 MHz and the wheel moved by the wrong amount —
+ *  reported by Colin on 2026-09-20. One entry per clickable digit, no more. */
+export const TUNING_STEPS = [
+    1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000,
+];
 
 export const DEFAULT_TUNING_STEP_HZ = 1_000;
 
@@ -45,10 +53,10 @@ function trimNumber(n) {
 
 /**
  * Snaps an arbitrary hertz value onto the nearest offered step. Callers derive
- * steps from things that don't line up with the list — a clicked frequency digit
- * gives 10 MHz, a stored setting from an older version may give 50 — and a
- * silently-out-of-list value would make the UI show a step the dropdown can't
- * display.
+ * steps from things that don't line up with the list — a stored setting from an
+ * older version may give 50, a caller passing a narrowed `steps` list may be
+ * handed a value outside it — and a silently-out-of-list value would make the UI
+ * show a step the dropdown can't display.
  */
 export function clampTuningStep(hz, steps = TUNING_STEPS) {
     const n = Number(hz);
