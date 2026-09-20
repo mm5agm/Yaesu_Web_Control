@@ -564,6 +564,16 @@ builder.Services.AddHostedService(provider => provider.GetRequiredService<RadioI
 // ADD THIS LINE for Razor Pages support:
 builder.Services.AddRazorPages();
 
+// The Memories page posts every memory row in one form, so the framework's
+// default 1024-field ceiling is really a limit on how many memories the
+// operator may own -- 52 of them, and then Save fails with a bare HTTP 400 and
+// no explanation (#167). See WebFormLimits for what that looks like and why it
+// is so hard to read.
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(
+    o => o.ValueCountLimit = Yaesu_Web_Control.WebFormLimits.ValueCountLimit);
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(
+    o => o.MaxModelBindingCollectionSize = Yaesu_Web_Control.WebFormLimits.ModelBindingCollectionSize);
+
 // ── HTTP port resolution ────────────────────────────────────────────────────
 // Pick the port BEFORE Kestrel binds, so we can fall back gracefully if the
 // user's configured port (default 8080) is held by another program. We try
