@@ -1452,6 +1452,7 @@
                     <!-- IF Width and IF Shift -->
                     <div class="d-flex align-items-center gap-2 mb-0" style="flex-wrap: wrap;">
                         <label class="mb-0 text-nowrap fw-bold">IF Width:</label>
+                        <span class="ctl-tip-wrap d-inline-block flex-shrink-0" id="ifWidthWrapA">
                         <select class="form-select form-select-sm fw-bold flex-shrink-0" id="ifWidthSelectA"
                                 aria-label="VFO A IF width"
                                 title="VFO A IF width"
@@ -1463,6 +1464,7 @@
                                 <option value="@opt.Value" selected="@(Model.RadioState.IfWidthA==opt.Value||isDefault ? "selected" : null)">@opt.Label</option>
                             }
                         </select>
+                        </span>
                         <button type="button" class="btn btn-secondary btn-sm fw-bold flex-shrink-0 ms-2"
                                 id="audioFilterBtnA"
                                 aria-label="VFO A Audio Filter"
@@ -1471,6 +1473,7 @@
                             Audio Filter
                         </button>
                         <label class="mb-0 text-nowrap ms-1 fw-bold">IF Shift: <span id="ifShiftValueA" class="fw-bold">@Model.RadioState.IfShiftA</span></label>
+                        <span class="ctl-tip-wrap d-flex align-items-center gap-2 flex-shrink-0" id="ifShiftWrapA">
                         <input type="range" class="form-range ifshift-slider flex-shrink-0"
                                id="ifShiftSliderA"
                                aria-label="VFO A IF shift"
@@ -1481,6 +1484,7 @@
                         <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
                                 id="ifShiftZeroA"
                                 onclick="resetIfShift('A')" title="Zero IF Shift">Zero</button>
+                        </span>
                     </div>
 
                     <!-- VFO A status line — live band/mode/freq/power summary, banner-coloured -->
@@ -1865,6 +1869,7 @@
                     <!-- IF Width and IF Shift -->
                     <div class="d-flex align-items-center gap-2 mb-0" style="flex-wrap: wrap;">
                         <label class="mb-0 text-nowrap fw-bold">IF Width:</label>
+                        <span class="ctl-tip-wrap d-inline-block flex-shrink-0" id="ifWidthWrapB">
                         <select class="form-select form-select-sm fw-bold flex-shrink-0" id="ifWidthSelectB"
                                 aria-label="VFO B IF width"
                                 title="VFO B IF width"
@@ -1876,6 +1881,7 @@
                                 <option value="@opt.Value" selected="@(Model.RadioState.IfWidthB==opt.Value||isDefault ? "selected" : null)">@opt.Label</option>
                             }
                         </select>
+                        </span>
                         <button type="button" class="btn btn-secondary btn-sm fw-bold flex-shrink-0 ms-2"
                                 id="audioFilterBtnB"
                                 aria-label="VFO B Audio Filter"
@@ -1884,6 +1890,7 @@
                             Audio Filter
                         </button>
                         <label class="mb-0 text-nowrap ms-1 fw-bold">IF Shift: <span id="ifShiftValueB" class="fw-bold">@Model.RadioState.IfShiftB</span></label>
+                        <span class="ctl-tip-wrap d-flex align-items-center gap-2 flex-shrink-0" id="ifShiftWrapB">
                         <input type="range" class="form-range ifshift-slider flex-shrink-0"
                                id="ifShiftSliderB"
                                aria-label="VFO B IF shift"
@@ -1894,6 +1901,7 @@
                         <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
                                 id="ifShiftZeroB"
                                 onclick="resetIfShift('B')" title="Zero IF Shift">Zero</button>
+                        </span>
                     </div>
 
                     <!-- VFO B status line — live band/mode/freq summary, banner-coloured -->

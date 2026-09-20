@@ -1638,3 +1638,13 @@ fieldset.calibration-card {
     color: #fff;
     border-color: #ff6b5a;
 }
+
+/* Controls the radio ignores in the current mode (IF Width and IF Shift in
+   AM / FM). A disabled form control dispatches no mouse events at all, so its
+   own title attribute never produces a tooltip -- the hover simply never
+   happens. The fix is Bootstrap's documented one: hang the tooltip on a
+   wrapper and switch pointer events off on the dead control inside it, so the
+   pointer falls through to the wrapper and the title appears.
+   Reported 2026-09-20: the tooltips were there in markup and invisible. */
+.ctl-tip-wrap.is-inert { cursor: not-allowed; }
+.ctl-tip-wrap.is-inert :disabled { pointer-events: none; }

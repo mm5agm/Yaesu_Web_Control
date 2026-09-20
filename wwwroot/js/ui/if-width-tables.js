@@ -155,8 +155,9 @@ const FIXED_WIDTH_TITLE =
 function rebuildIfWidthSelect(selectEl, model, mode) {
     if (!selectEl) return;
     const options = ifWidthOptionsFor(model, mode);
+    const wrap = selectEl.closest('.ctl-tip-wrap');
     if (!options) {
-        if (!selectEl.dataset.ifwTitle) selectEl.dataset.ifwTitle = selectEl.title || '';
+        if (!selectEl.dataset.ifwLabel) selectEl.dataset.ifwLabel = selectEl.getAttribute('aria-label') || '';
         if (!selectEl.dataset.ifwCode)  selectEl.dataset.ifwCode  = selectEl.value || '';
         selectEl.innerHTML = '';
         const optEl = document.createElement('option');
@@ -164,12 +165,28 @@ function rebuildIfWidthSelect(selectEl, model, mode) {
         optEl.textContent = 'Fixed';
         selectEl.appendChild(optEl);
         selectEl.disabled = true;
-        selectEl.title = FIXED_WIDTH_TITLE;
+        // The tooltip goes on the wrapper: a disabled control never fires the
+        // hover that would show its own title.
+        selectEl.removeAttribute('title');
+        selectEl.setAttribute('aria-label',
+            `${selectEl.dataset.ifwLabel || 'IF width'} - ${FIXED_WIDTH_TITLE}`);
+        if (wrap) {
+            wrap.title = FIXED_WIDTH_TITLE;
+            wrap.classList.add('is-inert');
+        }
         return;
     }
     if (selectEl.disabled) {
         selectEl.disabled = false;
-        selectEl.title = selectEl.dataset.ifwTitle || '';
+        const label = selectEl.dataset.ifwLabel || '';
+        if (label) {
+            selectEl.setAttribute('aria-label', label);
+            selectEl.title = label;
+        }
+        if (wrap) {
+            wrap.removeAttribute('title');
+            wrap.classList.remove('is-inert');
+        }
     }
 
     // The code from before a spell in AM / FM, if we have one, otherwise

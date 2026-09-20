@@ -2338,15 +2338,32 @@ function updateIfShiftForMode(receiver, mode) {
     const fixed = m === 'AM' || m === 'AM-N' || m.includes('FM');
     const slider = document.getElementById(`ifShiftSlider${receiver}`);
     const zero   = document.getElementById(`ifShiftZero${receiver}`);
+    // The tooltip has to live on the wrapper: a disabled control dispatches no
+    // mouse events, so a title on the slider itself never shows (2026-09-20).
+    const wrap = document.getElementById(`ifShiftWrap${receiver}`);
     for (const el of [slider, zero]) {
         if (!el) continue;
         if (fixed) {
             if (!el.dataset.ifsTitle) el.dataset.ifsTitle = el.title || '';
-            el.title = IF_SHIFT_FIXED_TITLE;
+            if (!el.dataset.ifsLabel) el.dataset.ifsLabel = el.getAttribute('aria-label') || '';
+            el.removeAttribute('title');
+            if (el.dataset.ifsLabel) {
+                el.setAttribute('aria-label', `${el.dataset.ifsLabel} - ${IF_SHIFT_FIXED_TITLE}`);
+            }
             el.disabled = true;
         } else if (el.disabled) {
             el.disabled = false;
             el.title = el.dataset.ifsTitle || '';
+            if (el.dataset.ifsLabel) el.setAttribute('aria-label', el.dataset.ifsLabel);
+        }
+    }
+    if (wrap) {
+        if (fixed) {
+            wrap.title = IF_SHIFT_FIXED_TITLE;
+            wrap.classList.add('is-inert');
+        } else {
+            wrap.removeAttribute('title');
+            wrap.classList.remove('is-inert');
         }
     }
 }
