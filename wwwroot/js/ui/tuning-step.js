@@ -15,7 +15,30 @@
 import { TuningStepStore, TUNING_STEPS, formatTuningStep }
     from '../tuning/tuning-step-store.js?v=1';
 
-export const tuningStep = new TuningStepStore({
+// The instance lives on `window`, not in this module, and that is deliberate.
+//
+// A module's identity is its full URL, query string included. Index.cshtml
+// imports this file as `?v=<AppVersion>`, spectrum-panel.js imports it as
+// `?v=1`, so the browser evaluates it TWICE and each copy would own a separate
+// store. The frequency display would then set one store and the spectrum wheel
+// would read the other, so clicking a digit changed the Step box but not the
+// wheel -- which is exactly what happened on 2026-09-20. Anything stateful
+// reached from both a Razor page and another module has this problem; an import
+// map is the general cure, this is the local one.
+function existingStore() {
+    // Duck-typed rather than `instanceof`: a second copy of the store module
+    // has its own class object, so `instanceof` would reject a perfectly good
+    // store created by the other copy.
+    const candidate = globalThis.window ? window.ywcTuningStep : null;
+    return (candidate
+        && typeof candidate.get       === 'function'
+        && typeof candidate.set       === 'function'
+        && typeof candidate.subscribe === 'function')
+        ? candidate
+        : null;
+}
+
+export const tuningStep = existingStore() ?? new TuningStepStore({
     storageKeyPrefix: 'ywc.tuningStep.',
 });
 
@@ -62,11 +85,17 @@ async function syncVoiceNudgeStep(vfo, stepHz) {
     } catch { /* voice not present on this host */ }
 }
 
-tuningStep.subscribe((vfo, stepHz, meta) => {
-    if (meta.silent !== true) {
-        announce(`VFO ${vfo} tuning step ${formatTuningStep(stepHz)}`);
-    }
-    // `fromVoice` marks a change that came FROM the voice dropdown, which has
-    // already told the server. Echoing it back would be a redundant POST.
-    if (meta.fromVoice !== true) syncVoiceNudgeStep(vfo, stepHz);
-});
+// Guarded for the same reason the store is: a second copy of this module must
+// not add a second announcement and a second voice POST for every change.
+if (!window.ywcTuningStepWired) {
+    window.ywcTuningStepWired = true;
+
+    tuningStep.subscribe((vfo, stepHz, meta) => {
+        if (meta.silent !== true) {
+            announce(`VFO ${vfo} tuning step ${formatTuningStep(stepHz)}`);
+        }
+        // `fromVoice` marks a change that came FROM the voice dropdown, which
+        // has already told the server. Echoing it back would be a redundant POST.
+        if (meta.fromVoice !== true) syncVoiceNudgeStep(vfo, stepHz);
+    });
+}
