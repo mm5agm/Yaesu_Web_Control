@@ -1812,6 +1812,8 @@ Deleting a bank does not affect your current working memories.
 
 Banks are stored in `%APPDATA%\MM5AGM\Yaesu Web Control\memory-banks.json` and are not affected by importing from or exporting to the radio.
 
+A bank holds every field of every memory, advanced fields included. Before the fix on 2026-09-20 loading a bank kept only label, frequency, mode and the clarifier settings, so the antenna, IF width and shift, roofing, NB, NR, AGC, power and notes captured by **Save to Mem** were quietly dropped every time a bank was loaded. A bank saved with an older version still has those fields in the file - they were saved, just not loaded - so loading it again with the current version brings them back.
+
 ---
 
 ### 8.6 YWC Starter Bank

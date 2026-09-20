@@ -9,11 +9,16 @@ namespace Yaesu_Web_Control.Services
             "MM5AGM", "Yaesu Web Control", "memories.json");
 
         private readonly SemaphoreSlim _lock = new(1, 1);
+        private readonly string _path;
         private List<AppMemory> _memories = new();
         private int _nextId = 1;
 
-        public MemoryService()
+        public MemoryService() : this(MemoriesPath) { }
+
+        /// <summary>Tests point this at a scratch file; the app uses <see cref="MemoriesPath"/>.</summary>
+        internal MemoryService(string path)
         {
+            _path = path;
             LoadFromDisk();
         }
 
@@ -25,12 +30,12 @@ namespace Yaesu_Web_Control.Services
         {
             try
             {
-                if (!File.Exists(MemoriesPath))
+                if (!File.Exists(_path))
                 {
                     _memories = new List<AppMemory>();
                     return;
                 }
-                var json = File.ReadAllText(MemoriesPath);
+                var json = File.ReadAllText(_path);
                 _memories = JsonSerializer.Deserialize<List<AppMemory>>(json,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                     ?? new List<AppMemory>();
@@ -45,8 +50,8 @@ namespace Yaesu_Web_Control.Services
 
         private void SaveToDisk()
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(MemoriesPath)!);
-            File.WriteAllText(MemoriesPath,
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            File.WriteAllText(_path,
                 JsonSerializer.Serialize(_memories, new JsonSerializerOptions { WriteIndented = true }));
         }
 
@@ -97,18 +102,32 @@ namespace Yaesu_Web_Control.Services
             finally { _lock.Release(); }
         }
 
+        /// <summary>
+        /// Replace the whole list, in the order given. Ids are kept where the
+        /// caller supplied them: the Mem panel recalls and deletes by id, and
+        /// renumbering on every Save (which this did until 2026-09-20) meant
+        /// that deleting or reordering a row in the editor silently pointed
+        /// every tile below it at a different memory until the panel reloaded.
+        /// An id of 0, or one that repeats, gets a fresh number.
+        /// </summary>
         public async Task ReplaceAllAsync(List<AppMemory> memories)
         {
             await _lock.WaitAsync();
             try
             {
+                var used = new HashSet<int>();
+                int next = memories.Where(m => m.Id > 0).Select(m => m.Id).DefaultIfEmpty(0).Max() + 1;
                 for (int i = 0; i < memories.Count; i++)
                 {
-                    memories[i].Id = i + 1;
+                    if (memories[i].Id <= 0 || !used.Add(memories[i].Id))
+                    {
+                        memories[i].Id = next++;
+                        used.Add(memories[i].Id);
+                    }
                     memories[i].SortOrder = i + 1;
                 }
                 _memories = memories;
-                _nextId = memories.Count > 0 ? memories.Max(m => m.Id) + 1 : 1;
+                _nextId = next;
                 SaveToDisk();
             }
             finally { _lock.Release(); }

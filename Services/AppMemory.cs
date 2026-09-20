@@ -24,5 +24,15 @@ namespace Yaesu_Web_Control.Services
         public string? AgcMode { get; set; }        // "0" off, "1" fast, "2" mid, "3" slow, "4" auto
         public int? PowerWatts { get; set; }        // 5..200 (radio dependent max)
         public string? Notes { get; set; }
+
+        /// <summary>
+        /// A field-for-field copy. Memory banks hold copies, never the live
+        /// objects, and the copy must carry every field: until 2026-09-20
+        /// the bank loader copied only the six basic ones, so the receiver
+        /// setup saved with "Save to Mem" was silently lost on every bank
+        /// load. A new property added here is copied by MemberwiseClone
+        /// without being listed, which is the point of using it.
+        /// </summary>
+        public AppMemory Clone() => (AppMemory)MemberwiseClone();
     }
 }

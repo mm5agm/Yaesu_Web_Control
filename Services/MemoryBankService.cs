@@ -16,11 +16,16 @@ namespace Yaesu_Web_Control.Services
 
         private readonly SemaphoreSlim _lock = new(1, 1);
         private readonly MemoryService _memoryService;
+        private readonly string _path;
         private Dictionary<string, List<AppMemory>> _banks = new();
 
-        public MemoryBankService(MemoryService memoryService)
+        public MemoryBankService(MemoryService memoryService) : this(memoryService, BanksPath) { }
+
+        /// <summary>Tests point this at a scratch file; the app uses <see cref="BanksPath"/>.</summary>
+        internal MemoryBankService(MemoryService memoryService, string path)
         {
             _memoryService = memoryService;
+            _path = path;
             LoadFromDisk();
         }
 
@@ -28,8 +33,8 @@ namespace Yaesu_Web_Control.Services
         {
             try
             {
-                if (!File.Exists(BanksPath)) return;
-                var json = File.ReadAllText(BanksPath);
+                if (!File.Exists(_path)) return;
+                var json = File.ReadAllText(_path);
                 _banks = JsonSerializer.Deserialize<Dictionary<string, List<AppMemory>>>(json, _opts)
                     ?? new Dictionary<string, List<AppMemory>>();
             }
@@ -41,8 +46,8 @@ namespace Yaesu_Web_Control.Services
 
         private void SaveToDisk()
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(BanksPath)!);
-            File.WriteAllText(BanksPath, JsonSerializer.Serialize(_banks, _opts));
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            File.WriteAllText(_path, JsonSerializer.Serialize(_banks, _opts));
         }
 
         public IReadOnlyList<string> GetBankNames() =>
@@ -50,7 +55,9 @@ namespace Yaesu_Web_Control.Services
 
         public async Task SaveBankAsync(string name)
         {
-            var memories = _memoryService.GetAll().ToList();
+            // Copies, not the live objects: a bank is a snapshot, and must
+            // not change when the working list is edited afterwards.
+            var memories = _memoryService.GetAll().Select(m => m.Clone()).ToList();
             await _lock.WaitAsync();
             try
             {
@@ -91,16 +98,11 @@ namespace Yaesu_Web_Control.Services
             }
             finally { _lock.Release(); }
 
-            // Clone entries so bank contents are not mutated by MemoryService
-            var copies = bank.Select(m => new AppMemory
-            {
-                Label             = m.Label,
-                FrequencyHz       = m.FrequencyHz,
-                Mode              = m.Mode,
-                ClarifierOffsetHz = m.ClarifierOffsetHz,
-                RxClarOn          = m.RxClarOn,
-                TxClarOn          = m.TxClarOn
-            }).ToList();
+            // Clone entries so bank contents are not mutated by MemoryService.
+            // Every field, including the advanced ones (antenna, IF width and
+            // shift, roofing, NB, NR, AGC, power, notes) -- listing six of them
+            // here is what lost the rest on every bank load before 2026-09-20.
+            var copies = bank.Select(m => m.Clone()).ToList();
 
             await _memoryService.ReplaceAllAsync(copies);
             return true;
