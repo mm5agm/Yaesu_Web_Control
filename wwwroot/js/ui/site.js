@@ -1237,6 +1237,43 @@ const filterSpectrumFeed = {
 // Group membership dies with the connection, so ask again after a reconnect.
 connection.onreconnected(function () { filterSpectrumFeed.subscribe(); });
 
+// While a VFO is "editing", the frequency display shows the operator's
+// in-progress value instead of what the radio reports, so a poll arriving
+// mid-edit can't yank the digits back. Something has to end that, and there
+// are two ways it ends, not one:
+//
+//   1. The radio echoes back the frequency this display sent. The edit landed.
+//   2. The radio goes somewhere this display never sent it — the spectrum
+//      mouse wheel, the front-panel knob, or another CAT program.
+//
+// Only (1) existed, so (2) left the display frozen while the rig tuned away
+// under it, until the operator happened to click somewhere else on the page.
+// Colin hit this on 2026-09-20 bench-testing #168: the radio's own display
+// followed the wheel and YWC's did not.
+//
+// Called before the display update so a change takes effect on the very
+// broadcast that revealed it, not the next one.
+function reconcileFrequencyEditing(receiver, valueHz) {
+    const s = window.radioControl && window.radioControl._state;
+    if (!s || !s.editing[receiver]) return;
+
+    // Mid-edit: localFreq is only non-null between a digit step and the
+    // settling send, and the operator's value wins for that moment.
+    if (s.localFreq[receiver] !== null && s.localFreq[receiver] !== undefined) return;
+
+    if (valueHz === s.lastSentFreq[receiver]) { s.editing[receiver] = false; return; }
+
+    // Somebody else moved the radio. Wait out our own write first: a broadcast
+    // already in flight when we sent carries the OLD frequency, and acting on
+    // it would show the pre-edit value for a moment before the echo settles —
+    // the flip-back this editing flag exists to prevent.
+    const SETTLE_MS = 1500;
+    if (Date.now() - (s._lastFreqSend[receiver] || 0) > SETTLE_MS) {
+        s.editing[receiver]      = false;
+        s.lastSentFreq[receiver] = null;
+    }
+}
+
 // First SignalR RadioStateUpdate handler (outer scope).
 // Handles ModeA/B, FrequencyA/B, PowerA/B updates pushed from the backend.
 connection.on("RadioStateUpdate", function (update) {
@@ -1363,15 +1400,8 @@ connection.on("RadioStateUpdate", function (update) {
         // updateBandButton alone. Re-apply it whenever the frequency moves.
         lastVfoHz.A = update.value;
         try { applyBandOutOfBand('A'); } catch (e) { console.error('applyBandOutOfBand A error:', e); }
+        try { reconcileFrequencyEditing('A', update.value); } catch (e) { console.error('reconcileFrequencyEditing A error:', e); }
         try { window.updateFrequencyDisplay('A', update.value); } catch (e) { console.error('updateFrequencyDisplay A error:', e); }
-        // Clear editing mode once the radio echoes back our sent frequency.
-        if (window.radioControl && window.radioControl._state) {
-            const s = window.radioControl._state;
-            if (s.editing.A && s.lastSentFreq.A !== null && s.localFreq.A === null
-                && update.value === s.lastSentFreq.A) {
-                s.editing.A = false;
-            }
-        }
         try { window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'A', hz: update.value } })); }
         catch (e) { console.error('radioFrequencyUpdate dispatch error:', e); }
         try { if (window.syncSegmentSelectToFrequency) window.syncSegmentSelectToFrequency('A', update.value); }
@@ -1384,15 +1414,8 @@ connection.on("RadioStateUpdate", function (update) {
         }
         lastVfoHz.B = update.value;
         try { applyBandOutOfBand('B'); } catch (e) { console.error('applyBandOutOfBand B error:', e); }
+        try { reconcileFrequencyEditing('B', update.value); } catch (e) { console.error('reconcileFrequencyEditing B error:', e); }
         try { window.updateFrequencyDisplay('B', update.value); } catch (e) { console.error('updateFrequencyDisplay B error:', e); }
-        // Clear editing mode once the radio echoes back our sent frequency.
-        if (window.radioControl && window.radioControl._state) {
-            const s = window.radioControl._state;
-            if (s.editing.B && s.lastSentFreq.B !== null && s.localFreq.B === null
-                && update.value === s.lastSentFreq.B) {
-                s.editing.B = false;
-            }
-        }
         try { window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'B', hz: update.value } })); }
         catch (e) { console.error('radioFrequencyUpdate dispatch error:', e); }
         try { if (window.syncSegmentSelectToFrequency) window.syncSegmentSelectToFrequency('B', update.value); }
@@ -2786,9 +2809,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Only the trailing (settle) send releases localFreq, so the poll
                 // can take over once the radio confirms lastSentFreq. Intermediate
                 // sends keep localFreq set so the display keeps showing the live
-                // in-progress value. state.editing stays true either way — the
-                // fetchRadioStatus reset block clears it once the radio echoes
-                // lastSentFreq back, avoiding the "flip back then settle" race.
+                // in-progress value. state.editing stays true either way —
+                // reconcileFrequencyEditing (by the SignalR handler) clears it
+                // once the radio echoes lastSentFreq back, avoiding the "flip
+                // back then settle" race, or once the radio moves somewhere we
+                // did not send it.
                 if (settle) state.localFreq[receiver] = null;
             };
             if (Date.now() - (state._lastFreqSend[receiver] || 0) >= SEND_THROTTLE_MS) {
@@ -2836,8 +2861,16 @@ document.addEventListener('DOMContentLoaded', function() {
             state.selectedIdx[receiver] = digits.indexOf(e.target);
             if (state.selectedIdx[receiver] !== -1) {
                 digits[state.selectedIdx[receiver]].classList.add('selected');
-                state.editing[receiver] = true;
-                state.localFreq[receiver] = parseInt(digits.map(d => d.textContent).join(''));
+                // Selecting a digit is NOT an edit. It used to set editing +
+                // localFreq here, which froze the display on the value as it
+                // was at the moment of the click: `updateFrequencyDisplay`
+                // shows localFreq while editing, and editing only cleared when
+                // the radio echoed a frequency THIS display had sent. So after
+                // clicking a digit to set the wheel step (#168), wheeling the
+                // spectrum moved the radio while YWC sat still -- reported by
+                // Colin on 2026-09-20. `stepSelectedDigit` sets both the moment
+                // the operator actually changes the value, which is the point
+                // at which the display must stop following the poll.
                 latchTuningStepFromDigit(state.selectedIdx[receiver], digits.length);
             }
             // Explicitly focus the display so the very next ArrowUp/Down
