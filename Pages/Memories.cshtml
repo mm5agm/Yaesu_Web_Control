@@ -9,6 +9,13 @@
     };
 }
 
+<style>
+    /* Sortable headings: the whole cell is the click target, and it looks like one. */
+    #memoriesTable th.sort-th { cursor: pointer; }
+    #memoriesTable th.sort-th:hover .sort-btn { text-decoration: underline !important; }
+    #memoriesTable .sort-arrow { display: inline-block; min-width: 1em; }
+</style>
+
 <div class="mt-4">
 
     <div class="d-flex align-items-baseline gap-3 mb-2 flex-wrap">
@@ -138,20 +145,20 @@
                 <thead class="table-dark">
                     <tr>
                         <th style="width:40px">#</th>
-                        <th style="min-width:140px" aria-sort="none" data-sort-key="label">
-                            <button type="button" class="btn btn-link btn-sm p-0 text-reset text-decoration-none fw-bold sort-btn"
+                        <th style="min-width:140px" aria-sort="none" data-sort-key="label" class="sort-th" onclick="if (event.target === this) this.querySelector('button').click()">
+                            <button type="button" class="btn btn-link btn-sm p-0 text-reset text-decoration-none fw-bold sort-btn d-block w-100 text-start"
                                     onclick="sortRows('label', this)" title="Sort by label">
                                 Label <span class="sort-arrow" aria-hidden="true"></span>
                             </button>
                         </th>
-                        <th style="min-width:130px" aria-sort="none" data-sort-key="freq">
-                            <button type="button" class="btn btn-link btn-sm p-0 text-reset text-decoration-none fw-bold sort-btn"
+                        <th style="min-width:130px" aria-sort="none" data-sort-key="freq" class="sort-th" onclick="if (event.target === this) this.querySelector('button').click()">
+                            <button type="button" class="btn btn-link btn-sm p-0 text-reset text-decoration-none fw-bold sort-btn d-block w-100 text-start"
                                     onclick="sortRows('freq', this)" title="Sort by frequency">
                                 Frequency (MHz) <span class="sort-arrow" aria-hidden="true"></span>
                             </button>
                         </th>
-                        <th style="min-width:100px" aria-sort="none" data-sort-key="mode">
-                            <button type="button" class="btn btn-link btn-sm p-0 text-reset text-decoration-none fw-bold sort-btn"
+                        <th style="min-width:100px" aria-sort="none" data-sort-key="mode" class="sort-th" onclick="if (event.target === this) this.querySelector('button').click()">
+                            <button type="button" class="btn btn-link btn-sm p-0 text-reset text-decoration-none fw-bold sort-btn d-block w-100 text-start"
                                     onclick="sortRows('mode', this)" title="Sort by mode, then frequency">
                                 Mode <span class="sort-arrow" aria-hidden="true"></span>
                             </button>
