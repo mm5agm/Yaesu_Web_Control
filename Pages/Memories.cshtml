@@ -14,6 +14,10 @@
     #memoriesTable th.sort-th { cursor: pointer; }
     #memoriesTable th.sort-th:hover .sort-btn { text-decoration: underline !important; }
     #memoriesTable .sort-arrow { display: inline-block; min-width: 1em; }
+    /* A column that can be sorted but is not the current sort shows a dimmed
+       up-down glyph, so the headings look sortable before anyone clicks one. */
+    #memoriesTable th.sort-th[aria-sort="none"] .sort-arrow::after { content: "⇅"; opacity: .45; }
+    #memoriesTable th.sort-th[aria-sort="none"]:hover .sort-arrow::after { opacity: 1; }
 </style>
 
 <div class="mt-4">
