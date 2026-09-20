@@ -13,11 +13,10 @@
     /* Sortable headings: the whole cell is the click target, and it looks like one. */
     #memoriesTable th.sort-th { cursor: pointer; }
     #memoriesTable th.sort-th:hover .sort-btn { text-decoration: underline !important; }
-    #memoriesTable .sort-arrow { display: inline-block; min-width: 1em; }
-    /* A column that can be sorted but is not the current sort shows a dimmed
+    #memoriesTable .sort-arrow { display: inline-block; min-width: 1.2em; font-size: 1.35em; line-height: 1; vertical-align: -0.1em; color: #fff; }
+    /* A column that can be sorted but is not the current sort shows an
        up-down glyph, so the headings look sortable before anyone clicks one. */
-    #memoriesTable th.sort-th[aria-sort="none"] .sort-arrow::after { content: "⇅"; opacity: .45; }
-    #memoriesTable th.sort-th[aria-sort="none"]:hover .sort-arrow::after { opacity: 1; }
+    #memoriesTable th.sort-th[aria-sort="none"] .sort-arrow::after { content: "⇅"; }
 </style>
 
 <div class="mt-4">
