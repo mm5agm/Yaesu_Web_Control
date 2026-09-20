@@ -89,6 +89,7 @@
     - 15.9 [WSJT-X is very slow to key the radio (long PTT / Tune delay)](#159-wsjt-x-is-very-slow-to-key-the-radio-1020-second-delay-on-ptt--tune)
     - 15.10 [What's different on macOS / Linux vs Windows?](#1510-whats-different-on-macos--linux-vs-windows)
     - 15.11 [Test Connection fails / CAT does not respond over USB](#1511-test-connection-fails--cat-does-not-respond-over-usb)
+    - 15.12 [The Memories page shows a blank HTTP ERROR 400 when I press Save](#1512-the-memories-page-shows-a-blank-http-error-400-when-i-press-save)
 16. [Accessibility and Screen Readers](#16-accessibility-and-screen-readers)
     - 16.1 [Making Everything Bigger](#161-making-everything-bigger)
     - 16.2 [Windows High Contrast Mode](#162-windows-high-contrast-mode)
@@ -639,7 +640,7 @@ The frequency display shows the current VFO frequency in MHz to 1 Hz resolution 
 4. The radio tunes **live as you scroll** — the frequency is sent several times a second so the rig tracks the display in real time, and the final position is always sent when you stop.
 5. Click anywhere outside the frequency display to deselect.
 
-**Clicking a digit also sets the spectrum wheel step.** Whichever digit you select becomes the step the mouse wheel uses over that VFO's spectrum panel — click the 10 Hz digit and the spectrum tunes in 10 Hz. The step is latched when you click, so it survives deselecting. See §6 for the other three ways to set it.
+**Clicking a digit also sets the spectrum wheel step.** Whichever digit you select becomes the step the mouse wheel uses over that VFO's spectrum panel — click the 10 Hz digit and the spectrum tunes in 10 Hz. The step is latched when you click, so it survives deselecting. See §5.4 for the other three ways to set it.
 
 **▲ / ▼ step buttons** — small up/down buttons appear below the frequency display (always on a tablet or phone, and on any device when *Show frequency arrow buttons* is enabled in Settings for accessibility). Tap a digit to select it, then press **▲** / **▼** to step it. **Press and hold to repeat**, and the radio tunes live as it steps — it now tracks each step in real time rather than only jumping to the final value when you release.
 
@@ -1672,7 +1673,7 @@ These must match WSJT-X's **Settings → Reporting → UDP Server** settings. Se
 
 ## 8. Radio Memories
 
-The app maintains its own list of memory channels, independent of the radio's built-in memories. You can store as many channels as you like, organised with labels, and recall any of them at a click from the floating Mem panel (see Section 5.15).
+The app maintains its own list of memory channels, independent of the radio's built-in memories. You can store up to **1,000** of them, organised with labels, and recall any of them at a click from the floating Mem panel (see Section 5.15). That is ten full radios' worth, so in practice the limit is the radio's, not the app's.
 
 ### 8.1 Memories Editor
 
@@ -1712,6 +1713,8 @@ The editor shows all your saved memories in a table. For each memory you can edi
 
 Click **Save** to save all changes. Click **Add Memory** to append a blank row. Click the **trash** icon on any row to delete that memory.
 
+> **If Save gave you a blank page reading `HTTP ERROR 400`** on a version before the fix for [discussion #167](https://github.com/mm5agm/Yaesu_Web_Control/discussions/167): that was a limit in the web framework, not anything you did. The page sends every memory in one form, twenty fields per row, and the framework refused any form with more than 1,024 fields - which worked out at 52 memories, so anyone who had imported a reasonably full radio could not save a single label change. The limit now allows 1,000 memories. If you still see it on a current version, reload the page and press Save again: a page left open for a very long time can show the same error for a different reason, and a reload cures that one.
+
 The **Pop Out** button opens the Memories page in a new browser tab — useful if you want to edit memories on a second monitor while the main control panel is open in the first.
 
 **Save to Mem button** — When you click "Save to Mem" on a VFO panel, the app captures the **full live state** of that VFO at the moment you clicked it: frequency, mode, antenna, IF width and shift, roofing, NB/NR/AGC, and power. The memory is added with all advanced fields populated. Edit the label later from the Memories page.
@@ -1727,7 +1730,7 @@ The radio's built-in memory channels can be read into the app using the **Import
 | **Import (Replace)** | Reads channels 001–099 from the radio and replaces ALL app memories with what is found. Your existing app memories are lost. |
 | **Import (Add)** | Reads channels 001–099 from the radio and adds them to your existing app memories without deleting anything. |
 
-Import reads up to 99 channels and takes up to 30 seconds. A progress indicator is shown while it runs. Channels that are empty on the radio are skipped automatically.
+Import reads up to 99 channels and takes up to 30 seconds. A progress indicator is shown while it runs. Channels that are empty on the radio are skipped automatically. Once it has finished, reload the page to see the imported channels in the table; you can then edit their labels and save as normal (before the fix for [discussion #167](https://github.com/mm5agm/Yaesu_Web_Control/discussions/167), Save failed outright once the table held more than about fifty memories - see §8.1).
 
 > **Note:** Importing does not affect the radio — it only reads from it.
 
@@ -2409,7 +2412,7 @@ Every VFO frequency display is a "digit-pickable" control. You select a digit (i
 
 | Input | Action | What happens |
 |---|---|---|
-| **Click** a digit | Select | That digit highlights yellow. The next step / arrow / button action acts on it, and that digit also becomes the spectrum mouse-wheel tuning step for this VFO (§6). |
+| **Click** a digit | Select | That digit highlights yellow. The next step / arrow / button action acts on it, and that digit also becomes the spectrum mouse-wheel tuning step for this VFO (§5.4). |
 | **Mouse wheel** over a digit | Select + step | Wheels up = +1, wheels down = −1 on the digit under the cursor. |
 | **Tab** into the freq display | Focus the display | A blue outline appears around the whole display. Now the keyboard keys below act on it. |
 | **ArrowUp** / **ArrowDown** | Step selected digit by ±1 | If no digit is currently highlighted, the first press just highlights the kHz digit (4th from the right) — a second press then steps it. This avoids accidentally changing a digit you can't see is selected. |
@@ -2430,7 +2433,7 @@ A few extra notes:
 
 | Key / Action | Result |
 |---|---|
-| Mouse wheel (on spectrum) | Tune that panel's VFO by the current tuning step (1 kHz until you change it — see §6) |
+| Mouse wheel (on spectrum) | Tune that panel's VFO by the current tuning step (1 kHz until you change it — see §5.4) |
 | Right-click (on spectrum) | Open the tuning-step menu, 1 Hz to 10 MHz, current step ticked |
 | Click on spectrum | Tune that panel's VFO to the clicked frequency |
 | **Tab** (in band buttons) | Move focus into the band button group |
@@ -2803,6 +2806,16 @@ See also [§2.4](#24-usb-serial-driver-windows--macos--linux) and [§3](#3-first
 
 ---
 
+### 15.12 The Memories page shows a blank `HTTP ERROR 400` when I press Save
+
+Two different things produce that identical blank page, and they are told apart by what happens on a reload.
+
+**It fails every time, on a freshly loaded page, and you have more than about fifty memories.** This is the form-size limit fixed under [discussion #167](https://github.com/mm5agm/Yaesu_Web_Control/discussions/167): the web framework accepted at most 1,024 form fields, and the Memories page sends twenty per memory, so the page died at 52 memories - exactly the number a full import from the radio produces. Install a version that has the fix (see the *Fixed since the last release* table in the README for which build) and it will take up to 1,000 memories. Nothing was lost: `memories.json` on disk was never touched by the failed save.
+
+**It fails once, after the page has sat open for a long time, and works after a reload.** That is the page's security token expiring - every form in YWC carries one, and it is only good for the life of the page. Reload, make your change again, and Save. Your edits from before the reload are gone, so if you have changed a lot of rows, save as you go rather than at the end.
+
+---
+
 ## 16. Accessibility and Screen Readers
 
 ### 16.1 Making Everything Bigger
@@ -3062,7 +3075,7 @@ If you can't use a mouse wheel — head-tracking input, on-screen keyboard users
 - Click the ▲ / ▼ buttons to step the selected digit by ±1 (one button click = one ArrowUp / ArrowDown). Press and hold to repeat that step every 500 ms until released.
 - Clicking outside the display deselects.
 
-**The spectrum's tuning step is keyboard-reachable too.** The mouse wheel over a spectrum panel tunes by a settable step (§6), and while right-clicking the spectrum is one way to pick that step, it is not the only one: the **Step** box on the spectrum's control bar, beside Smooth, is an ordinary dropdown you can Tab to and change from the keyboard. Selecting a digit in the frequency display sets the same step, so if you tune by ArrowUp / ArrowDown you are setting it as you go.
+**The spectrum's tuning step is keyboard-reachable too.** The mouse wheel over a spectrum panel tunes by a settable step (§5.4), and while right-clicking the spectrum is one way to pick that step, it is not the only one: the **Step** box on the spectrum's control bar, beside Smooth, is an ordinary dropdown you can Tab to and change from the keyboard. Selecting a digit in the frequency display sets the same step, so if you tune by ArrowUp / ArrowDown you are setting it as you go.
 
 Originally requested by Yuri W4YSW. Shipped in v2.3.9.
 
@@ -3087,7 +3100,7 @@ Every command below targets whichever VFO's mic button you're holding down — a
 | Set frequency | "tune to fourteen point zero seven four megahertz", "set frequency to fourteen megahertz" | Held VFO tunes to that frequency. Whole MHz, one decimal, or three decimals; "megahertz" is optional |
 | Change band | "forty metres", "go to twenty metres", "switch to eighty metres"; or the digit form "two zero metres", "eight zero metres" | Held VFO jumps to that band's default (usually FT8) frequency. The lead-in word ("go to" / "switch to") is optional. Bands: 160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6 and 4 metres. "top band" also works for 160 m |
 | Step up / down | "tune up" / "step up" / "nudge up"; "tune down" / "step down" / "nudge down" | Held VFO moves by that VFO's configured step size (see below; default 10 kHz) |
-| Set step size | "set step to ten kilohertz", "step size one kilohertz", or just "ten kilohertz" | Changes the held VFO's step size: 1 Hz, 10 Hz, 100 Hz, 1 kHz, 10 kHz, or 100 kHz — the wheel also offers 1 MHz and 10 MHz, which have no voice phrase. The lead-in word is optional here too. Same value as the dropdown next to that VFO's mic button — either one updates the other, and it is the same step the spectrum mouse wheel uses (§6) |
+| Set step size | "set step to ten kilohertz", "step size one kilohertz", or just "ten kilohertz" | Changes the held VFO's step size: 1 Hz, 10 Hz, 100 Hz, 1 kHz, 10 kHz, or 100 kHz — the wheel also offers 1 MHz and 10 MHz, which have no voice phrase. The lead-in word is optional here too. Same value as the dropdown next to that VFO's mic button — either one updates the other, and it is the same step the spectrum mouse wheel uses (§5.4) |
 | Band up / down | "band up" / "band down" | Held VFO jumps to the next/previous ham band |
 | Set mode | "mode U S B", "set mode L S B" (also C W, A M, F M, data, data l, r t t y — spell mode letters out one at a time) | Held VFO switches to that mode |
 | Swap VFOs | "swap V F O", "swap A and B" | VFO A and B contents swap (radio-wide, not VFO-specific) |
@@ -3178,7 +3191,7 @@ The Settings page → Voice Control section has a **Diagnostics** block that sho
 
 **"Tune up" doesn't seem to do much.**
 - Check you're watching the VFO panel whose mic button you actually pressed — each VFO steps independently, so "tune up" spoken into VFO B's button moves VFO B, not VFO A.
-- Each VFO's step size is shown (and changeable) in the dropdown next to that VFO's mic button, default **10 kHz**. If it's set small (e.g. 1 Hz or 10 Hz) the movement can be easy to miss. Change it with the dropdown or by voice: "set step to ten kilohertz". This is the same per-VFO step the spectrum mouse wheel uses (§6), so setting it here changes the wheel too.
+- Each VFO's step size is shown (and changeable) in the dropdown next to that VFO's mic button, default **10 kHz**. If it's set small (e.g. 1 Hz or 10 Hz) the movement can be easy to miss. Change it with the dropdown or by voice: "set step to ten kilohertz". This is the same per-VFO step the spectrum mouse wheel uses (§5.4), so setting it here changes the wheel too.
 - If you need bigger jumps use "set frequency to …" or "go to … metres" instead.
 
 **Speech engine works for a while then stops responding.**
