@@ -42,9 +42,9 @@ export const tuningStep = existingStore() ?? new TuningStepStore({
     storageKeyPrefix: 'ywc.tuningStep.',
 });
 
-// Steps the voice nudge API will accept. 1 MHz is offered on the wheel but has
-// no voice phrase and is rejected by the controller, so a wheel step of 1 MHz
-// simply doesn't propagate to the voice setting.
+// Steps the voice nudge API will accept. 1 MHz and 10 MHz are offered on the
+// wheel but have no voice phrase and are rejected by the controller, so a wheel
+// step that large simply doesn't propagate to the voice setting.
 const VOICE_VALID_STEPS = [1, 10, 100, 1_000, 10_000, 100_000];
 
 // Classic scripts (site.js) can't import, so expose the bits they need.

@@ -536,10 +536,10 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 
 **Mouse wheel to tune** — Scroll the mouse wheel over the spectrum to tune that panel's VFO up or down by one **tuning step**. The step starts at 1 kHz and is remembered per VFO across browser reloads. Four things set it, and they all set the same thing:
 
-- **The Step box** on the spectrum's control bar, beside Smooth — anything from 1 Hz to 1 MHz.
+- **The Step box** on the spectrum's control bar, beside Smooth — anything from 1 Hz to 10 MHz.
 - **Right-click on the spectrum** for the same list as a pop-up menu, with the current step ticked. Escape or a click elsewhere closes it, and the arrow keys, Home and End move through it.
-- **Click a digit in the frequency display** — the digit you pick becomes the wheel step, so clicking the 100 Hz digit gives you a 100 Hz wheel. This is usually the quickest route, because you are already pointing at the digit you want to work in.
-- **The Voice Nudge Step Size** for that VFO, from its dropdown or by voice. The wheel and the voice nudge share one step per VFO, so changing either moves the other.
+- **Click a digit in the frequency display** — the digit you pick becomes the wheel step, so clicking the 100 Hz digit gives you a 100 Hz wheel. This is usually the quickest route, because you are already pointing at the digit you want to work in. Every digit works, including the leftmost one: the display shows eight digits, so the coarsest step you can click is 10 MHz.
+- **The Voice Nudge Step Size** for that VFO, from its dropdown or by voice. The wheel and the voice nudge share one step per VFO, so changing either moves the other — except at the top of the range: voice has no phrase for 1 MHz or 10 MHz, so picking either of those for the wheel leaves the voice nudge step where it was.
 
 Every change is announced to screen readers. 1 Hz is now offered everywhere, including the voice nudge — Bruce VK2RT asked for it in [discussion #168](https://github.com/mm5agm/Yaesu_Web_Control/discussions/168), because 1 kHz is far too coarse for chasing RTTY. I have measured the FTdx101MP honouring a 1 Hz step set over CAT exactly, on both receivers; I have not measured the other models. Note that AM and FM bottom out at 10 Hz on the radio's own dial on every model, so a 1 Hz wheel step may not be honoured in those modes.
 
@@ -2431,7 +2431,7 @@ A few extra notes:
 | Key / Action | Result |
 |---|---|
 | Mouse wheel (on spectrum) | Tune that panel's VFO by the current tuning step (1 kHz until you change it — see §6) |
-| Right-click (on spectrum) | Open the tuning-step menu, 1 Hz to 1 MHz, current step ticked |
+| Right-click (on spectrum) | Open the tuning-step menu, 1 Hz to 10 MHz, current step ticked |
 | Click on spectrum | Tune that panel's VFO to the clicked frequency |
 | **Tab** (in band buttons) | Move focus into the band button group |
 | **← / →** (in band buttons) | Move to the previous/next band and switch immediately |
@@ -3087,7 +3087,7 @@ Every command below targets whichever VFO's mic button you're holding down — a
 | Set frequency | "tune to fourteen point zero seven four megahertz", "set frequency to fourteen megahertz" | Held VFO tunes to that frequency. Whole MHz, one decimal, or three decimals; "megahertz" is optional |
 | Change band | "forty metres", "go to twenty metres", "switch to eighty metres"; or the digit form "two zero metres", "eight zero metres" | Held VFO jumps to that band's default (usually FT8) frequency. The lead-in word ("go to" / "switch to") is optional. Bands: 160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6 and 4 metres. "top band" also works for 160 m |
 | Step up / down | "tune up" / "step up" / "nudge up"; "tune down" / "step down" / "nudge down" | Held VFO moves by that VFO's configured step size (see below; default 10 kHz) |
-| Set step size | "set step to ten kilohertz", "step size one kilohertz", or just "ten kilohertz" | Changes the held VFO's step size: 1 Hz, 10 Hz, 100 Hz, 1 kHz, 10 kHz, or 100 kHz. The lead-in word is optional here too. Same value as the dropdown next to that VFO's mic button — either one updates the other, and it is the same step the spectrum mouse wheel uses (§6) |
+| Set step size | "set step to ten kilohertz", "step size one kilohertz", or just "ten kilohertz" | Changes the held VFO's step size: 1 Hz, 10 Hz, 100 Hz, 1 kHz, 10 kHz, or 100 kHz — the wheel also offers 1 MHz and 10 MHz, which have no voice phrase. The lead-in word is optional here too. Same value as the dropdown next to that VFO's mic button — either one updates the other, and it is the same step the spectrum mouse wheel uses (§6) |
 | Band up / down | "band up" / "band down" | Held VFO jumps to the next/previous ham band |
 | Set mode | "mode U S B", "set mode L S B" (also C W, A M, F M, data, data l, r t t y — spell mode letters out one at a time) | Held VFO switches to that mode |
 | Swap VFOs | "swap V F O", "swap A and B" | VFO A and B contents swap (radio-wide, not VFO-specific) |
