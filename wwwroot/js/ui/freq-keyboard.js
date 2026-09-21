@@ -170,6 +170,26 @@ function initFrequencyUpdateListener() {
 
 // ── Open / close ──────────────────────────────────────────────────────────────
 
+/** True when a non-body element is fullscreen and the keypad is not inside it. */
+function needsTopLayerForFullscreen() {
+    const fs = document.fullscreenElement;
+    if (!fs || fs === document.documentElement || fs === document.body) return false;
+    return !_dialog || !fs.contains(_dialog);
+}
+
+function showKeyboardDialog() {
+    if (!_dialog || _dialog.open) return;
+    // Radio Display fullscreens its card (often with docked scope). A modeless
+    // show() then opens the keypad on the document, outside that top layer, so
+    // g looks like a no-op. showModal() puts the keypad on the top layer.
+    try {
+        if (needsTopLayerForFullscreen()) _dialog.showModal();
+        else _dialog.show();
+    } catch {
+        // Already open, or the UA rejected the other mode — leave as-is.
+    }
+}
+
 export function openKeyboard(receiver) {
     _receiver = receiver;
     _title.textContent = `VFO ${receiver} Frequency`;
@@ -181,7 +201,13 @@ export function openKeyboard(receiver) {
     renderDisplay();
 
     applySavedLayout();
-    _dialog.show();
+    // Drop leftover focus (Radio Display <select>, scope slider) so a native
+    // drop-down cannot stay open over the keypad or eat the next digits.
+    if (document.activeElement && typeof document.activeElement.blur === 'function'
+        && document.activeElement !== document.body && !_dialog.contains(document.activeElement)) {
+        document.activeElement.blur();
+    }
+    showKeyboardDialog();
     _dialog.querySelector('.fkb-num')?.focus();
 }
 
@@ -344,6 +370,18 @@ export function initFreqKeyboard() {
 
     initPhysicalKeyboard();
     initFrequencyUpdateListener();
+
+    // If Radio Display (or anything else) enters/leaves card-fullscreen while
+    // the keypad is open, switch show() ↔ showModal() so it stays visible.
+    document.addEventListener('fullscreenchange', () => {
+        if (!_dialog?.open) return;
+        const wantModal = needsTopLayerForFullscreen();
+        const isModal = typeof _dialog.matches === 'function' && _dialog.matches(':modal');
+        if (wantModal === isModal) return;
+        try { _dialog.close(); } catch { /* ignore */ }
+        showKeyboardDialog();
+        _dialog.querySelector('.fkb-num')?.focus();
+    });
 
     // For keyboard-shortcuts.js (and anything else) that must not re-import this
     // module under a different URL — same instance, same dialog refs.

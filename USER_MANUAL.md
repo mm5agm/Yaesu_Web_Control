@@ -2385,7 +2385,7 @@ Press **?** (**Shift+/**) or **h** on the main control panel to open an in-app d
 
 While the help dialog is open, **↑ / ↓** (and Page Up / Page Down) scroll the list — they do not tune or IF-shift. The Spectrum / Scope section shows a two-column table (SDR vs Radio Scope) and highlights which target **z / w / s** currently drive; press **t** there (or the top-bar **Keys → SDR** / **Keys → Scope** button) to switch — the button flashes briefly so the change is easy to see.
 
-Shortcuts apply on the **Index** (main control) page. They are **ignored while typing** in a text field, select box, the CW Send line, a DX Watch input, memory prompts, or while the on-screen frequency keypad is open. Browser chords such as **Ctrl/⌘+F** (find) are never captured. Some OS or GPU overlays can still steal keys (especially Ctrl chords); YWC therefore avoids Ctrl for primary shortcuts.
+Shortcuts apply on the **Index** (main control) page. They are **ignored while typing** in a text field, the CW Send line, a DX Watch input, memory prompts, or while the on-screen frequency keypad is open. Leftover focus on a drop-down (Radio Display device / fps / quality, next to the scope Controls button) does **not** block **g** or the other letter shortcuts; arrow keys still stay with that drop-down. Browser chords such as **Ctrl/⌘+F** (find) are never captured. Some OS or GPU overlays can still steal keys (especially Ctrl chords); YWC therefore avoids Ctrl for primary shortcuts.
 
 **Active VFO.** Most shortcuts act on the active / operating VFO (MAIN/SUB on dual-receiver radios, or the RX selector on single-receiver radios). **g** opens frequency entry for that VFO.
 
@@ -2458,7 +2458,7 @@ FM uses **q** (not **f**) so full-screen can keep the existing **f** / **F** bin
 | **v** / **V** | Remote Audio RX gain −/+ | Remote Audio controls present |
 | **Shift+M** | Mute / unmute Remote Audio RX | Remote Audio controls present |
 
-The optional **TX keyboard shortcut** in Settings (often Space) is unchanged — mute no longer uses Space. With Caps Lock on, bare **m** still opens Memories; mute stays **Shift+M**.
+The optional **TX keyboard shortcut** in Settings (often Space) is unchanged — mute no longer uses Space. With Caps Lock on, bare **m** still opens Memories and bare **g** still opens the frequency keypad; mute stays **Shift+M**.
 
 ### 13.4 Frequency display — digit editing
 
