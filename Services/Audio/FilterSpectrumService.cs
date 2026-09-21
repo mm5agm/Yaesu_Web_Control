@@ -59,6 +59,13 @@ namespace Yaesu_Web_Control.Services.Audio
         private int  _frameCounter;
         private int  _sendInFlight;
         private string? _lastError;
+        private CancellationTokenSource? _releaseCts;
+
+        // Burst-refreshing Index drops the hub connection and opens a new one
+        // within a few hundred milliseconds. Releasing the capture on each
+        // last-subscriber gap churns PortAudio on the radio's USB codec, which
+        // native-crashes the host (no managed exception). Hold across that gap.
+        private static readonly TimeSpan ReleaseDebounce = TimeSpan.FromSeconds(2);
 
         public FilterSpectrumService(
             RadioAudioBridgeService bridge,
@@ -87,7 +94,8 @@ namespace Yaesu_Web_Control.Services.Audio
             bool first;
             lock (_gate)
             {
-                first = _subscribers.Count == 0;
+                CancelReleaseLocked();
+                first = _subscribers.Count == 0 && !_holdingCapture;
                 _subscribers.Add(connectionId);
             }
 
@@ -127,24 +135,65 @@ namespace Yaesu_Web_Control.Services.Audio
         /// <summary>A page has gone. Releases the capture when it was the last.</summary>
         public void Unsubscribe(string connectionId)
         {
-            bool last;
             lock (_gate)
             {
                 if (!_subscribers.Remove(connectionId))
                     return;
-                last = _subscribers.Count == 0;
-                if (last && _listening)
+                if (_subscribers.Count > 0)
+                    return;
+                if (!_holdingCapture && !_listening)
+                    return;
+                ScheduleReleaseLocked();
+            }
+        }
+
+        private void ScheduleReleaseLocked()
+        {
+            CancelReleaseLocked();
+            var cts = new CancellationTokenSource();
+            _releaseCts = cts;
+            _ = ReleaseAfterDebounceAsync(cts.Token);
+        }
+
+        private void CancelReleaseLocked()
+        {
+            if (_releaseCts is null)
+                return;
+            try { _releaseCts.Cancel(); } catch { /* ignore */ }
+            _releaseCts.Dispose();
+            _releaseCts = null;
+        }
+
+        private async Task ReleaseAfterDebounceAsync(CancellationToken token)
+        {
+            try
+            {
+                await Task.Delay(ReleaseDebounce, token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            lock (_gate)
+            {
+                if (token.IsCancellationRequested || _subscribers.Count > 0)
+                    return;
+                if (_listening)
                 {
                     _bridge.RxFrameCaptured -= OnFrame;
                     _listening = false;
                 }
+                if (!_holdingCapture)
+                    return;
+                _holdingCapture = false;
+                // Release under the lock so a Subscribe that arrives in this
+                // gap sees !_holdingCapture and takes a fresh Acquire, rather
+                // than racing our ReleaseCapture against its Increment.
+                _bridge.ReleaseCapture();
+                CancelReleaseLocked();
             }
 
-            if (!last || !_holdingCapture)
-                return;
-
-            _holdingCapture = false;
-            _bridge.ReleaseCapture();
             _logger.LogInformation("Filter display audio stopped (last page left)");
         }
 
@@ -191,6 +240,7 @@ namespace Yaesu_Web_Control.Services.Audio
         {
             lock (_gate)
             {
+                CancelReleaseLocked();
                 if (_listening)
                 {
                     _bridge.RxFrameCaptured -= OnFrame;
