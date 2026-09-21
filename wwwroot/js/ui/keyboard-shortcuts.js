@@ -142,7 +142,13 @@ function isTypingIntoEditable() {
     const active = document.activeElement;
     if (active) {
         if (active.isContentEditable) return true;
-        if (active.tagName === 'TEXTAREA' || active.tagName === 'SELECT') return true;
+        if (active.tagName === 'TEXTAREA') return true;
+        // Native <select> is not text entry. Treating it as "typing" swallowed
+        // g (and every other letter shortcut) whenever leftover focus sat on
+        // Radio Display's device / size / fps / quality dropdowns — the same
+        // toolbar as the scope Controls button, so it only showed up with
+        // Radio Display + scope open. Arrow keys still stay with the select
+        // (see handleKey). Scope chrome itself is buttons + a range slider.
         if (active.tagName === 'INPUT') {
             const type = (active.getAttribute('type') || 'text').toLowerCase();
             if (['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'color', 'hidden'].includes(type))
@@ -1078,8 +1084,9 @@ export function handleKey(e) {
         return true;
     }
 
-    // Frequency entry
-    if (key === 'g' && !e.altKey && !e.shiftKey) {
+    // Frequency entry — match the physical G key so Caps Lock / layout glyphs
+    // cannot silently miss (same pattern as m / t / z / w / s).
+    if (isCode(e, 'KeyG') && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         focusFrequencyEntry();
         return true;
