@@ -1212,6 +1212,67 @@ function updateMicGainLabel(mode) {
 }
 
 // ---------------------------------------------------------------------------
+// CW-only controls — ZIN and APF are meaningful only in CW modes on Yaesu
+// hardware. Per-VFO header buttons follow that VFO's mode; the CW Keyer
+// popout ZIN follows whichever VFO is currently active (VS).
+// ---------------------------------------------------------------------------
+const _vfoModeCache = { A: null, B: null };
+
+const _CW_ONLY_DISABLED_TITLE = 'Available in CW mode only';
+const _ZIN_TITLES = {
+    A: 'CW Auto Zero In on VFO A — nudges the VFO so the received CW signal sits at your configured CW pitch',
+    B: 'CW Auto Zero In on VFO B — nudges the VFO so the received CW signal sits at your configured CW pitch',
+    active: 'CW Auto Zero In — nudges the active VFO so the received CW signal sits at your preferred pitch',
+};
+
+function isCwMode(mode) {
+    return mode === 'CW-U' || mode === 'CW-L';
+}
+
+function updateCwKeyerZinButton() {
+    const btn = document.getElementById('zinBtnActive');
+    if (!btn) return;
+
+    const vfoLetter = typeof window.getActiveVfoLetter === 'function'
+        ? window.getActiveVfoLetter()
+        : 'A';
+    const mode = _vfoModeCache[vfoLetter]
+        ?? window[`modeButton${vfoLetter}`]?.getState?.()?.selectedId
+        ?? null;
+    const enabled = isCwMode(mode);
+
+    btn.disabled = !enabled;
+    btn.title = enabled ? _ZIN_TITLES.active : _CW_ONLY_DISABLED_TITLE;
+}
+
+function updateCwOnlyControls(vfo, mode) {
+    const letter = vfo === 'B' ? 'B' : 'A';
+    if (mode != null) _vfoModeCache[letter] = mode;
+
+    const enabled = isCwMode(mode);
+
+    const zinBtn = document.getElementById(`zinBtn${letter}`);
+    if (zinBtn) {
+        zinBtn.disabled = !enabled;
+        zinBtn.title = enabled ? _ZIN_TITLES[letter] : _CW_ONLY_DISABLED_TITLE;
+    }
+
+    const apfWidget = window[`apfButton${letter}`];
+    if (apfWidget?.setDisabled) {
+        apfWidget.setDisabled(!enabled);
+        if (apfWidget.button) {
+            apfWidget.button.title = enabled
+                ? 'Right-click for frequency'
+                : _CW_ONLY_DISABLED_TITLE;
+        }
+    }
+
+    updateCwKeyerZinButton();
+}
+window.updateCwOnlyControls = updateCwOnlyControls;
+window.isCwMode = isCwMode;
+
+// ---------------------------------------------------------------------------
 // Filter Function Display: host-side spectrum of the radio's RX audio.
 //
 // The host runs an FFT over the radio's USB RX audio and pushes ~12 frames a
@@ -1355,6 +1416,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (window.filterScopePanelA) window.filterScopePanelA.setState({ mode: update.value });
         updateContourSliderBounds('A');
         if (typeof window._updateSquelchVisibility === 'function') window._updateSquelchVisibility('A', update.value);
+        updateCwOnlyControls('A', update.value);
         if (window.IfWidth && window._radioModel) {
             window.IfWidth.rebuildIfWidthSelect(
                 window.ifWidthButtonA, window._radioModel, update.value);
@@ -1370,6 +1432,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (window.filterScopePanelB) window.filterScopePanelB.setState({ mode: update.value });
         updateContourSliderBounds('B');
         if (typeof window._updateSquelchVisibility === 'function') window._updateSquelchVisibility('B', update.value);
+        updateCwOnlyControls('B', update.value);
         if (window.IfWidth && window._radioModel) {
             window.IfWidth.rebuildIfWidthSelect(
                 window.ifWidthButtonB, window._radioModel, update.value);
@@ -1534,6 +1597,7 @@ connection.on("RadioStateUpdate", function (update) {
     }
     if (update.property === "ActiveVfo") {
         activeVfo = update.value;
+        updateCwKeyerZinButton();
         applyVfoActiveStyling();
         updateRxTxSelectors();
         // In normal mode on a single-receiver radio, the TX button position
