@@ -1699,7 +1699,7 @@
                    oninput="document.getElementById('cwSpeedValue').textContent = this.value"
                    onchange="setCwSpeed(this.value)"
                    aria-label="CW keyer speed" title="CW keyer speed in WPM">
-            <button type="button" class="btn btn-sm btn-outline-light flex-shrink-0"
+            <button type="button" id="zinBtnActive" class="btn btn-sm btn-outline-light flex-shrink-0"
                     onclick="cwZeroIn()"
                     title="CW Auto Zero In — nudges the active VFO so the received CW signal sits at your preferred pitch"
                     aria-label="CW Auto Zero In">ZIN</button>
@@ -2426,7 +2426,6 @@
         import { initPowerCycleButton } from "/js/ui/power-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMicGainCycleButton } from "/js/ui/mic-gain-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initVfoKeyButtons }    from "/js/ui/vfo-key-buttons.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { initKeyboardShortcuts, syncDisplayTargetButton } from "/js/ui/keyboard-shortcuts.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
         window.bandPlanData = BAND_PLANS;
         window.getBandSegments = getSegments;
@@ -2962,9 +2961,6 @@
             window.spectrumPanelA = spectrumPanelA;
             window.spectrumPanelB = spectrumPanelB;
             window.spectrumPanel  = spectrumPanelA;
-
-            // After Radio Scope + spectrum panels exist so z/w/s target detection works.
-            initKeyboardShortcuts();
 
             // ── Filter scope panels ──────────────────────────────────────────
             window.filterScopePanelA = new FilterScopePanel('filterScopeCanvasA', '@Model.RadioModel', {
@@ -5122,6 +5118,10 @@
         // Apply squelch visibility for initial mode on page load
         _updateSquelchVisibility('A', '@Model.RadioState.ModeA');
         _updateSquelchVisibility('B', '@Model.RadioState.ModeB');
+        if (typeof window.updateCwOnlyControls === 'function') {
+            window.updateCwOnlyControls('A', '@Model.RadioState.ModeA');
+            window.updateCwOnlyControls('B', '@Model.RadioState.ModeB');
+        }
         window.toggleCatConnection = toggleCatConnection;
         window.toggleVox       = toggleVox;
         window.setVoxGain      = setVoxGain;

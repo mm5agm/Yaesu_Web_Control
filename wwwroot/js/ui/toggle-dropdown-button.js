@@ -411,6 +411,15 @@ export class ToggleSliderButton {
     }
 
     /**
+     * @param {boolean} disabled
+     */
+    setDisabled(disabled) {
+        this.disabled = Boolean(disabled);
+        if (this.button) this.button.disabled = this.disabled;
+        if (this.disabled) this._setMenuOpen(false);
+    }
+
+    /**
      * @param {{ enabled?: boolean, value?: number, min?: number, max?: number }} partial
      * @param {{ silent?: boolean }} [opts]
      */
