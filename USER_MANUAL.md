@@ -415,7 +415,14 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.2**) are shown in the top-left corner.
 
-**Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the latest version or if the internet is not available.
+**Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner listing what has changed, with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the newest version or if the internet is not available.
+
+**What it offers you depends on which build you are running, and on nothing else.**
+
+- **On a full release** — for example **v2.5.1** — the banner only ever tells you about another **full release**. Pre-releases are deliberately left out: if you want to try one you go and fetch it yourself from the [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases), rather than being nudged towards a less-tested build while you're operating. There is no setting that changes this.
+- **On a pre-release** — anything with a `-pre` in its name, such as **v2.5.2-pre6** — the banner also tells you about newer pre-releases, and marks them **Pre-release** so you can see what you are being offered. You chose to test, so leaving you on an old test build helps nobody; if you report something that three pre-releases ago fixed, neither of us finds out. When the finished version arrives you are offered that instead.
+
+Either way the banner never offers you a nightly `unstable-` build, and dismissing it is remembered for that version.
 
 **External app buttons** (WSJT-X, JTAlert, Log4OM, GridTracker, Fldigi) appear if they are enabled in Application Setup. The colour of each button indicates status:
 
