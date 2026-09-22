@@ -2,8 +2,14 @@
 //
 // Shared by Icom Web Control and Yaesu Web Control. There is nothing radio-
 // specific in here: it reads three meta tags for the product name, the repo
-// and the running version, asks GitHub what the newest full release is, and
-// puts a banner up if that is newer than what is running.
+// and the running version, asks GitHub what the newest release is, and puts a
+// banner up if that is newer than what is running.
+//
+// What counts as "newest" depends on what the operator is running. On a full
+// release it means full releases only. On a pre-release it includes newer
+// pre-releases, because someone running one is a tester by definition and the
+// next pre-release is the thing they signed up to be told about. See
+// _checkForUpdate.
 //
 // It lived inline in each app's site.js, in two copies that had already
 // drifted — IWC's knew about pre-release version suffixes and YWC's did not,
@@ -35,30 +41,68 @@
         return v || fallback;
     }
 
-    function _isNewer(latest, current) {
-        // Versions may carry a pre-release suffix ("1.0.6-pre4"). Split it off
-        // before comparing: parseInt reads "6-pre4" as plain 6, which would make
-        // a pre-release compare EQUAL to the full release of the same number, so
-        // a tester sitting on 1.0.6-pre4 would never be told that 1.0.6 itself
-        // had shipped — the one group of users who most need to be moved on.
-        const split = v => {
-            const s = String(v);
-            const i = s.indexOf('-');
-            return {
-                n:   (i < 0 ? s : s.slice(0, i)).split('.').map(x => parseInt(x, 10) || 0),
-                pre: i < 0 ? '' : s.slice(i + 1)
-            };
-        };
-        const a = split(latest);
-        const b = split(current);
-        for (let i = 0; i < Math.max(a.n.length, b.n.length); i++) {
-            const diff = (a.n[i] || 0) - (b.n[i] || 0);
-            if (diff > 0) return true;
-            if (diff < 0) return false;
+    // "v1.0.6-pre4" → { n: [1, 0, 6], pre: "pre4" }. Anything that is not a
+    // three-part version number returns null and is then ignored everywhere.
+    // That filter is load-bearing: Yaesu Web Control publishes a nightly
+    // `unstable-20260920` tag as a GitHub *pre-release*, and without this a
+    // tester would be offered last night's build as though it were the next
+    // pre-release. Only vX.Y.Z and vX.Y.Z-suffix are ever offered.
+    function _parseVersion(tag) {
+        const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/.exec(String(tag || '').trim());
+        return m ? { n: [+m[1], +m[2], +m[3]], pre: m[4] || '' } : null;
+    }
+
+    // Compare a chunk at a time, digits numerically, so pre10 beats pre2 —
+    // which a plain string compare gets backwards.
+    function _naturalCmp(a, b) {
+        const chunks = v => String(v).match(/\d+|\D+/g) || [];
+        const x = chunks(a), y = chunks(b);
+        for (let i = 0; i < Math.max(x.length, y.length); i++) {
+            if (x[i] === undefined) return -1;
+            if (y[i] === undefined) return 1;
+            const xn = /^\d+$/.test(x[i]), yn = /^\d+$/.test(y[i]);
+            if (xn && yn) {
+                const d = parseInt(x[i], 10) - parseInt(y[i], 10);
+                if (d !== 0) return d < 0 ? -1 : 1;
+            } else if (x[i] !== y[i]) {
+                return x[i] < y[i] ? -1 : 1;
+            }
         }
-        // Identical numbers: semver's rule — a pre-release sorts below the
-        // release it leads to, so 1.0.6 is an upgrade from 1.0.6-pre4.
-        return a.pre === '' && b.pre !== '';
+        return 0;
+    }
+
+    function _isNewer(latest, current) {
+        const a = _parseVersion(latest);
+        const b = _parseVersion(current);
+        if (!a || !b) return false;
+        for (let i = 0; i < 3; i++) {
+            if (a.n[i] !== b.n[i]) return a.n[i] > b.n[i];
+        }
+        // Identical numbers. Semver's rule — a pre-release sorts below the
+        // release it leads to — so 1.0.6 is an upgrade from 1.0.6-pre4, and a
+        // tester sitting on a pre-release is told when the real thing ships.
+        if (a.pre === b.pre) return false;
+        if (a.pre === '') return true;
+        if (b.pre === '') return false;
+        // Both pre-releases: pre4 → pre5 is an upgrade too.
+        return _naturalCmp(a.pre, b.pre) > 0;
+    }
+
+    // Pick the newest thing worth offering. `data` is either the single
+    // release object from /releases/latest or the array from /releases.
+    function _pickRelease(data, current, includePrereleases) {
+        const list = Array.isArray(data) ? data : [data];
+        let best = null;
+        for (const r of list) {
+            if (!r || r.draft) continue;
+            if (r.prerelease && !includePrereleases) continue;
+            const tag = r.tag_name || '';
+            if (!_parseVersion(tag)) continue;
+            if (!_isNewer(tag, current)) continue;
+            if (best && !_isNewer(tag, best.tag_name || '')) continue;
+            best = r;
+        }
+        return best;
     }
 
     // ── Release-notes rendering ───────────────────────────────────────────
@@ -124,7 +168,7 @@
         if (el) el.remove();
     }
 
-    function _showUpdateBanner(version, releaseUrl, notesBody, productName) {
+    function _showUpdateBanner(version, releaseUrl, notesBody, productName, isPrerelease) {
         if (document.getElementById('updateBanner')) return;
         try { if (localStorage.getItem(_dismissKey(version))) return; } catch { /* private browsing */ }
         const banner = document.createElement('div');
@@ -137,8 +181,17 @@
         ].join(';');
         banner.innerHTML =
             `<div style="display:flex;align-items:flex-start;gap:8px">` +
-            `<div style="flex:1"><strong>Update available — v${_escHtml(version)}</strong><br>` +
-            `<span style="color:#aab;font-size:0.78rem">A newer version of ${_escHtml(productName)} is available.</span></div>` +
+            `<div style="flex:1"><strong>Update available — v${_escHtml(version)}</strong>` +
+            (isPrerelease
+                ? `<span style="margin-left:6px;background:#4a3a1a;border:1px solid #8a6a2a;color:#e0c070;` +
+                  `border-radius:3px;padding:0 5px;font-size:0.66rem;text-transform:uppercase;letter-spacing:0.05em">Pre-release</span>`
+                : '') +
+            `<br>` +
+            `<span style="color:#aab;font-size:0.78rem">` +
+            (isPrerelease
+                ? `A newer pre-release of ${_escHtml(productName)} is ready for testing.`
+                : `A newer version of ${_escHtml(productName)} is available.`) +
+            `</span></div>` +
             `<button id="updateBannerDismissX" ` +
             `style="background:none;border:none;color:#aaa;cursor:pointer;font-size:1rem;line-height:1;padding:0" aria-label="Dismiss">✕</button>` +
             `</div>` +
@@ -157,35 +210,45 @@
     async function _checkForUpdate() {
         const current = _meta('x-app-version', '');
         if (!current) return;
+        const running = _parseVersion(current);
+        if (!running) return;           // unrecognisable version: say nothing
         const repo = _meta('x-app-repo', '');
         if (!repo) return;
         const productName = _meta('x-app-name', document.title || 'this app');
+
+        // Which endpoint depends on what is running, and NOT on any setting.
+        //
+        // On a full release: /releases/latest — NOT /releases. GitHub defines
+        // "latest" as the newest release that is neither a draft nor a
+        // pre-release, which is exactly the policy we want. A banner is an
+        // interruption, and interrupting someone mid-QSO to offer them a
+        // less-tested build is the wrong trade. There is deliberately no
+        // "include pre-releases" option for these operators to find.
+        //
+        // On a pre-release: the list, pre-releases included. That is not a
+        // reversal of the rule above, it is the same rule read properly —
+        // someone running 1.2.0-pre1 has already opted into a less-tested
+        // build, and leaving them stranded on it is how a tester ends up
+        // reporting a bug that was fixed three pre-releases ago. They are the
+        // one group for whom the next pre-release IS the thing to tell them
+        // about. _pickRelease drops nightly `unstable-*` tags, which are
+        // published as pre-releases but are not offers.
+        const testing = running.pre !== '';
+        const endpoint = testing
+            ? `https://api.github.com/repos/${repo}/releases?per_page=30`
+            : `https://api.github.com/repos/${repo}/releases/latest`;
         try {
-            // /releases/latest — NOT /releases. GitHub defines "latest" as the
-            // newest release that is neither a draft nor a pre-release, which is
-            // exactly the policy we want: operators are told about full releases
-            // only. Pre-releases are opt-in — someone who wants to test one goes
-            // to the releases page and picks it deliberately. Never switch this
-            // to the list endpoint or add a "include pre-releases" option; a
-            // banner is an interruption, and interrupting someone mid-QSO to
-            // offer them a less-tested build is the wrong trade. (The notes on
-            // a pre-release's own GitHub page are a different matter, and the
-            // release script fills those in too.)
-            const resp = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+            const resp = await fetch(endpoint, {
                 headers: { Accept: 'application/vnd.github+json' }
             });
             if (!resp.ok) return;
-            const data = await resp.json();
-            // Belt and braces: if GitHub ever hands back a pre-release or draft
-            // here, stay quiet rather than trusting the endpoint's contract.
-            if (data.prerelease || data.draft) return;
-            const latest = (data.tag_name || '').replace(/^v/i, '');
-            if (latest && _isNewer(latest, current)) {
-                _showUpdateBanner(latest,
-                    data.html_url || `https://github.com/${repo}/releases`,
-                    data.body || '',
-                    productName);
-            }
+            const best = _pickRelease(await resp.json(), current, testing);
+            if (!best) return;
+            _showUpdateBanner((best.tag_name || '').replace(/^v/i, ''),
+                best.html_url || `https://github.com/${repo}/releases`,
+                best.body || '',
+                productName,
+                !!best.prerelease);
         } catch { /* network unavailable or rate limited — silently skip */ }
     }
 
