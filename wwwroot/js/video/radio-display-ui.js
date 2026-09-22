@@ -415,11 +415,14 @@ function truncateLabel(text, maxLen) {
   return s.slice(0, Math.max(0, maxLen - 1)) + '…';
 }
 
-async function loadDeviceSelect(selectedKey) {
+async function loadDeviceSelect(selectedKey, { probe = false } = {}) {
   const sel = document.getElementById('radioDisplayDeviceSelect');
   if (!sel) return;
   try {
-    const res = await fetch('/api/video/devices');
+    // probe=1 Open()s each camera. Only the Refresh button may do that —
+    // Index calls this on every load, and a burst of those Opens is what
+    // native-crashes HDMI capture dongles.
+    const res = await fetch(probe ? '/api/video/devices?probe=1' : '/api/video/devices');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const want = selectedKey || currentDeviceKey || '';
@@ -1247,7 +1250,7 @@ function bindControls() {
       setDeviceKey(ev.target.value || '');
     });
     document.getElementById('radioDisplayRefreshDevicesBtn')?.addEventListener('click', () => {
-      loadDeviceSelect(currentDeviceKey);
+      loadDeviceSelect(currentDeviceKey, { probe: true });
     });
     document.getElementById('radioDisplayFpsSelect')?.addEventListener('change', (ev) => {
       setTargetFps(ev.target.value);
