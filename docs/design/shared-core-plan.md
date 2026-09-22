@@ -81,11 +81,11 @@ themselves. **✅ = moved · ☐ = still local, move on next touch.**
 
 **Services/**
 - [x] `AdifParser` — Phase 2
-- [ ] `AppMemory`
+- [x] `AppMemory` — 2026-09-20, as `core/Models/AppMemory.cs`; the field comments no longer name a radio
 - [ ] `AppStatus`
 - [ ] `DxClusterService`
-- [ ] `MemoryService`
-- [ ] `MemoryBankService`
+- [x] `MemoryService` — 2026-09-20, from YWC (stable ids on Save); the app passes the file path in, core has no AppData folder of its own
+- [x] `MemoryBankService` — 2026-09-20, from YWC (banks hold every field, via `AppMemory.Clone()`); path injected the same way
 - [ ] `ProcessStatusCacheService`
 - [ ] `RadioStatePersistenceService`
 - [ ] `SystemTrayService`
