@@ -258,6 +258,7 @@ namespace Yaesu_Web_Control.Pages
                 current.SdrSampleRateHz   = 0;             // legacy field — kept zero in v2.3.0+ files
                 current.SdrFftSize        = Settings.SdrFftSize;
                 current.BandPlan          = Settings.BandPlan;
+                current.AutoModeChangeOnTune = Settings.AutoModeChangeOnTune;
                 // MP comes fully loaded; D has 600Hz standard plus 1.2kHz/300Hz optional.
                 if (Settings.RadioModel == "FTdx101MP")
                 {

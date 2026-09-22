@@ -96,6 +96,24 @@
         // Band Plan
         public string BandPlan { get; set; } = "Region1";
 
+        // When true (default, and the behaviour since the spectrum display
+        // arrived), tuning by clicking the spectrum or a DX spot also sets
+        // the mode from the band plan. Bruce VK2RT asked for the off switch
+        // for RTTY contest work (discussion #169): operators do not follow
+        // the band plan, so a click at 7.050 meaning LSB was answered with
+        // DATA-U, and a click on RTTY above 14.100 with USB.
+        //
+        // This is not cosmetic. SSB MOD SOURCE defaults to MIC and DATA MOD
+        // SOURCE to REAR on both the FTdx101MP/D and the FTdx10, so a mode
+        // change the operator did not ask for moves the transmit audio input
+        // from the rear/USB port to the front-panel microphone. Receive goes
+        // on decoding perfectly, which is why it only shows up on transmit.
+        //
+        // Off does NOT disable the mode a named band-plan segment carries
+        // when it is picked from the segment dropdown: that is an explicit
+        // choice of a segment, not a mode inferred from a frequency.
+        public bool AutoModeChangeOnTune { get; set; } = true;
+
         // SDR Spectrum Display — per-VFO device assignment (v2.3.0+).
         //
         // SdrDeviceKeyA / SdrDeviceKeyB identify which physical SDR is wired

@@ -1950,6 +1950,28 @@
                             </div>
                             <span asp-validation-for="Settings.BandPlan" class="text-danger"></span>
                         </div>
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" asp-for="Settings.AutoModeChangeOnTune" />
+                            <label class="form-check-label" asp-for="Settings.AutoModeChangeOnTune">
+                                Change mode automatically when tuning from the band plan
+                            </label>
+                            <div class="form-text">
+                                When enabled (default), clicking the spectrum or a DX spot also sets the mode to
+                                whatever the band plan says that frequency is for &mdash; so jumping from 14.074 to
+                                14.284 flips DATA-U to USB rather than leaving the radio in the wrong mode.
+                                <br />
+                                Turn it off if you work outside the band plan, which most contesters do: RTTY runs
+                                well above 14.100 and 40m SSB is used around 7.050, and in both cases the automatic
+                                change fights you on every click. It matters more than it looks &mdash; the radio
+                                takes transmit audio from the microphone in SSB but from the rear/USB port in DATA,
+                                so an unwanted mode change can quietly cut your data software out of the transmit
+                                path while receive carries on working normally.
+                                <br />
+                                Picking a named segment (CW, FT8, SSB, RTTY) from a VFO&apos;s band dropdown still
+                                sets that segment&apos;s mode either way &mdash; that is a choice you made, not a guess
+                                from the frequency.
+                            </div>
+                        </div>
             <!-- Inline Save Settings so this section can be saved in place. -->
             <div class="mt-2 pt-3 border-top">
                 <button type="submit" class="btn btn-primary">

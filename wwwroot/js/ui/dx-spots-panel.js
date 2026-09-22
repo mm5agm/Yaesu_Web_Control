@@ -1,4 +1,4 @@
-// Yaesu Web Control – DX Spots List Panel
+﻿// Yaesu Web Control – DX Spots List Panel
 //
 // Popup list of DX cluster spots. Sortable columns, click-to-QSY, filtered
 // to the operator's current band (with an "All bands" override). Works
@@ -6,7 +6,7 @@
 // DxSpot event stream, which flows unconditionally.
 
 // ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
-import { modeForHz } from './band-plan.js?v=1';
+import { autoModeForHz } from './band-plan.js?v=1';
 
 const LS_KEY     = 'dxSpotsPanel';
 const AGE_MAX_MS = 15 * 60 * 1000;   // matches DxSpotAgeMinutes default
@@ -277,8 +277,10 @@ export class DxSpotsPanel {
                     // Match the spectrum-panel click behaviour — follow the
                     // QSY with a band-plan-aware mode change so clicking
                     // an FT8 spot from a phone spot also flips USB→DATA-U.
-                    // modeForHz returns the mode name window.setMode accepts.
-                    const targetMode = modeForHz(hz);
+                    // autoModeForHz returns the mode name window.setMode
+                    // accepts, or null when the operator has turned the
+                    // automatic change off in Settings (discussion #169).
+                    const targetMode = autoModeForHz(hz);
                     if (targetMode && typeof window.setMode === 'function') {
                         try { window.setMode('A', targetMode); } catch { /* ignore */ }
                     }

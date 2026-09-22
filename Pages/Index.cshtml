@@ -2827,6 +2827,7 @@
         window.ywcVoiceNudgeStepHzA = @Model.VoiceNudgeStepHzA;
         window.ywcVoiceNudgeStepHzB = @Model.VoiceNudgeStepHzB;
         window.ywcIsWindowsHost = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IsWindowsHost));
+        window.ywcAutoModeChangeOnTune = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AutoModeChangeOnTune));
     </script>
     @* Every import below is tied to the app version, so a release invalidates
        all of them at once. They used to carry hand-kept numbers (?v=1 … ?v=22)

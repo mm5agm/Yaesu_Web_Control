@@ -1,4 +1,4 @@
-// Band segment data for IARU Region 1, Region 2, Region 3, and Japan.
+﻿// Band segment data for IARU Region 1, Region 2, Region 3, and Japan.
 // Frequencies in Hz. Each entry gives the representative dial frequency and
 // the mode string used by this app (matches CatMessageDispatcher mode names).
 //
@@ -373,7 +373,8 @@ BAND_EDGES.USA = BAND_EDGES.Region2;
 // keyboard-shortcuts.js. The browser therefore evaluates it three times and
 // each copy owns its own BAND_PLANS / BAND_EDGES.
 //
-// Today that is harmless -- the other copies are imported only for modeForHz,
+// Today that is harmless -- the other copies are imported only for modeForHz
+// and autoModeForHz (which just wraps it),
 // which is hard-coded and reads neither table. It stops being harmless the
 // moment a module imports segmentForHz, BAND_EDGES or getSegments, because
 // loadBandPlanFromServer() would overlay the operator's bandplan.default.json
@@ -604,4 +605,32 @@ export function modeForHz(hz) {
     if (khz >= 144500 && khz < 148000) return 'FM';
 
     return null;
+}
+
+/**
+ * modeForHz, but obeying the operator's "change mode automatically when
+ * tuning from the band plan" setting (Settings > Band Plan). Returns null
+ * when that setting is off, which every caller already treats as "leave the
+ * mode alone" because modeForHz returns null out of band too.
+ *
+ * Use this, not modeForHz, for any mode change the operator did not ask for
+ * by name: clicking the spectrum, clicking a DX spot, stepping through spots
+ * from the keyboard. Picking a named segment from a VFO band dropdown is an
+ * explicit choice and keeps using the segment's own mode.
+ *
+ * Why it matters more than a wrong label: SSB MOD SOURCE defaults to MIC and
+ * DATA MOD SOURCE to REAR on the FTdx101MP/D and FTdx10, so a mode change
+ * nobody asked for moves the transmit audio input from the rear/USB port to
+ * the front-panel microphone. Receive goes on decoding, so it stays invisible
+ * until the operator transmits. Discussion #169 (Bruce VK2RT, RTTY contest).
+ *
+ * Safe to import from any copy of this module despite the note above about
+ * bandPlanCopies: like modeForHz it reads no table, only the flag, and it
+ * reads it at call time so a late Razor assignment still wins.
+ */
+export function autoModeForHz(hz) {
+    // Undefined on pages that never render the flag (and in unit tests), so
+    // default to on — the behaviour everyone had before this setting existed.
+    if (globalThis.ywcAutoModeChangeOnTune === false) return null;
+    return modeForHz(hz);
 }

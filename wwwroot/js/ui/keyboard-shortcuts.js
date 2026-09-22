@@ -1,4 +1,4 @@
-// Yaesu Web Control – keyboard shortcut dispatcher (Index page).
+﻿// Yaesu Web Control – keyboard shortcut dispatcher (Index page).
 //
 // Single registry drives both dispatch and the "?" help dialog so the table
 // cannot drift from what the keys actually do.
@@ -6,8 +6,9 @@
 // Do not import freq-keyboard.js / memories.js here: Index already loads those
 // with a ?v= cache-buster, and a second unversioned import would create a
 // separate module instance with its own closed-over DOM refs.
-// band-plan.js is safe to import: modeForHz is a pure function with no page state.
-import { modeForHz } from './band-plan.js';
+// band-plan.js is safe to import: autoModeForHz is a pure function with no page
+// state -- it reads only the Settings flag, at call time.
+import { autoModeForHz } from './band-plan.js';
 
 /** @typedef {{ keys: string, action: string, group: string, when?: string, reserved?: boolean }} ShortcutHelpRow */
 
@@ -758,7 +759,7 @@ function stepDxSpot(direction) {
     }
     if (!target || !window.radioControl?.setFrequency) return;
     window.radioControl.setFrequency(vfo, target.frequencyHz);
-    const mode = modeForHz(target.frequencyHz);
+    const mode = autoModeForHz(target.frequencyHz);
     if (mode && typeof window.setMode === 'function') {
         try { window.setMode(vfo, mode); } catch { /* ignore */ }
     }

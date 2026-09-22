@@ -1,4 +1,4 @@
-# Yaesu Web Control — User Manual
+﻿# Yaesu Web Control — User Manual
 
 > 🔍 **Searching this manual:** press **Ctrl + F** (Windows / Linux) or **⌘ + F** (Mac) to open your browser's find-in-page box. Type any term — a band name like "60m", a control like "Speech Processor", an error message you've hit — to jump straight to the relevant section.
 
@@ -540,7 +540,31 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 
 ![Spectrum panel at a narrow span on the CW end of 20 m — the receiver's passband is shaded around the amber dial marker, and each CW station is a separate line](pictures/Spectrum_Passband.png)
 
-**Click to tune** — Click anywhere on the spectrum **or the waterfall** to tune VFO A to that frequency. A click on a signal trail in the waterfall QSYs to the frequency of that column, which is the natural way to chase an interesting signal you can see slowly drifting down the screen. **The mode also changes automatically** to match the segment of the band you clicked into — CW below the digital sub-band, DATA-U around the FT8/FT4/RTTY watering holes, USB/LSB in the phone segment, FM at the top of 10m and on 2m/4m. If you click somewhere outside the recognised amateur bands the mode is left as-is. In CW the click puts the station on your CW pitch, ready for the CW reader (§20) — see the note on where signals are drawn in §6.3.
+**Click to tune** — Click anywhere on the spectrum **or the waterfall** to tune VFO A to that frequency. A click on a signal trail in the waterfall QSYs to the frequency of that column, which is the natural way to chase an interesting signal you can see slowly drifting down the screen. **The mode also changes automatically** to match the segment of the band you clicked into — CW below the digital sub-band, DATA-U around the FT8/FT4/RTTY watering holes, USB/LSB in the phone segment, FM at the top of 10m and on 2m/4m. If you click somewhere outside the recognised amateur bands the mode is left as-is. **You can turn the automatic mode change off** in **Settings → §6.1** (*Change mode automatically when tuning from the band plan*) — see the note below. In CW the click puts the station on your CW pitch, ready for the CW reader (§20) — see the note on where signals are drawn in §6.3.
+
+> **Contest and off-band-plan operating — turning the mode change off.**
+> The band plan is a convention, not a rule, and operators routinely work outside it:
+> RTTY contests run well above 14.100, which the plan calls USB, and 40m SSB is used
+> around 7.050, which the plan calls DATA-U. With the automatic change on, every click
+> on the spectrum puts you back into the "right" mode, so selecting the mode you actually
+> want only lasts until your next click.
+>
+> This is worth more than the annoyance it looks like. Your radio takes transmit audio
+> from the **microphone** in SSB (`SSB MOD SOURCE` defaults to `MIC`) but from the
+> **rear/USB port** in DATA (`DATA MOD SOURCE` defaults to `REAR`). So a mode change you
+> did not ask for can quietly cut your data software out of the transmit path — and
+> because receive audio is produced in every mode, you will not notice until you
+> transmit and nothing goes out.
+>
+> Untick **Change mode automatically when tuning from the band plan** in
+> **Settings → §6.1** and YWC leaves the mode entirely to you. Clicking the spectrum,
+> clicking a DX spot row, and stepping through spots from the keyboard then tune only.
+> Tuning offsets still follow the mode the radio is *actually* in, so a click on a RTTY
+> signal keeps your RTTY offset instead of tuning zero-beat onto it.
+>
+> Choosing a named segment (CW, FT8, SSB, RTTY) from a VFO’s band dropdown still sets
+> that segment’s mode either way. That is a choice you made by name, not a mode guessed
+> from a frequency.
 
 **Mouse wheel to tune** — Scroll the mouse wheel over the spectrum to tune that panel's VFO up or down by one **tuning step**. The step starts at 1 kHz and is remembered per VFO across browser reloads. Four things set it, and they all set the same thing:
 
@@ -1058,7 +1082,7 @@ Click the **DX Spots** button on the toolbar to open a list of DX cluster spots 
 | Spotter | The station that reported the spot |
 | Comment | Free-text comment from the spotter |
 
-**Click any row** to QSY VFO A to that spot's frequency **and switch mode** to match the band-plan segment the frequency falls into (FT8 → DATA-U, CW → CW-U, phone segments → USB or LSB as appropriate, etc.). This matches the click-to-tune behaviour on the spectrum panel — so clicking an FT8 spot from a phone segment flips the radio to DATA-U in one step rather than leaving you on the wrong mode.
+**Click any row** to QSY VFO A to that spot's frequency **and switch mode** to match the band-plan segment the frequency falls into (FT8 → DATA-U, CW → CW-U, phone segments → USB or LSB as appropriate, etc.). This matches the click-to-tune behaviour on the spectrum panel — so clicking an FT8 spot from a phone segment flips the radio to DATA-U in one step rather than leaving you on the wrong mode. It also obeys the same **Settings → §6.1** switch: with *Change mode automatically when tuning from the band plan* unticked, clicking a spot tunes without touching the mode (§5.4).
 
 **Click any column header** to sort by that column; click again to reverse the sort direction. The current sort is shown by a ▲ or ▼ next to the column name.
 
@@ -1236,6 +1260,7 @@ Clicking **Restart Now** stops YWC and (when running as the installed exe) autom
 | Baud Rate | Must match the radio's CAT Rate setting. Default: 38400 |
 | Meter Poll Interval (ms) | Minimum cycle period for CAT meter polls (delay between cycle starts). Default: **200** ms. Valid range: 50–1000. The next cycle starts after this interval minus the time the previous cycle took, so the setting is a target period rather than a raw wait after each poll. Lower values give a faster S-meter update rate but increase CAT bus traffic — if you share the port with WSJT-X or rigctld, reducing this below ~100 ms raises the chance of collisions where both programs try to read the bus at the same time. Raise it (e.g. to 500) if you see erratic readings or CAT timeouts when running digital modes. |
 | Band Plan | **IARU Region 1** (Europe, Africa, Middle East — includes 4m), **IARU Region 2** (Americas), **IARU Region 3** (Asia-Pacific), or **Japan** (JARL). Affects which bands and segment frequencies are shown. UK is Region 1; USA, Canada, and South America are Region 2; Australia, New Zealand, and most of Asia (except Japan) are Region 3. |
+| Change mode automatically when tuning from the band plan | On by default. Clicking the spectrum or a DX spot also sets the mode the band plan gives for that frequency. Turn it **off** for contest or off-band-plan work — RTTY above 14.100 and 40m SSB around 7.050 both fight the automatic change, and an unwanted change can move transmit audio from your data software to the microphone. Picking a named segment from a VFO band dropdown still sets that segment's mode either way. See §5.4. |
 
 After changing the serial port or baud rate, click **Test Connection** to verify the radio responds. A green tick confirms success.
 

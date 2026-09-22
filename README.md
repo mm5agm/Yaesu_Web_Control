@@ -1,4 +1,4 @@
-
+﻿
 # Yaesu Web Control
 
 ![Latest release](https://img.shields.io/badge/Latest%20release-v2.5.1-blue?style=flat-square)
@@ -75,6 +75,7 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
+| Clicking the spectrum, or a DX spot, always set the mode the band plan gives for that frequency, and there was no way to stop it. Operators do not follow the band plan - RTTY contests run well above 14.100, which the plan calls USB, and 40m SSB is used around 7.050, which it calls DATA-U - so picking the mode you wanted only lasted until your next click. It matters more than a wrong label: the radio takes transmit audio from the microphone in SSB but from the rear/USB port in DATA, so an unwanted change can cut your data software out of the transmit path while receive carries on normally. A new **Settings -> Band Plan** switch turns it off ([§5.4](USER_MANUAL.md#54-spectrum-display)); named segments picked from a VFO band dropdown still set their own mode. | [#169](https://github.com/mm5agm/Yaesu_Web_Control/discussions/169) | *Not yet in a build* |
 | Loading a memory bank dropped the advanced fields - antenna, IF width and shift, roofing, NB, NR, AGC, power and notes - from every memory in it, silently, so anything captured with **Save to Mem** came back as bare frequency-and-mode after a bank load. The fields were in the bank file all along; only the loader lost them, so old banks recover on the next load ([§8.5](USER_MANUAL.md#85-memory-banks)). | — | v2.5.2-pre6 |
 | Pressing **Save** on the Memories page renumbered every memory from 1, so after deleting or reordering a row the Mem panel on the main page - which recalls and deletes by number - pointed each tile below it at a different memory until the panel happened to reload. Numbers now stay with their memory. | — | v2.5.2-pre6 |
 | Saving the Memories page failed with a bare **HTTP ERROR 400** and no message for anyone holding more than about fifty memories - which is anyone who has imported a full radio. The page posts every memory in one form and ASP.NET Core accepts 1024 form fields by default, which worked out at 52 memories; it now takes a thousand of them ([§15.12](USER_MANUAL.md#1512-the-memories-page-shows-a-blank-http-error-400-when-i-press-save) tells the two causes of that blank page apart). | [#167](https://github.com/mm5agm/Yaesu_Web_Control/discussions/167) | v2.5.2-pre6 |

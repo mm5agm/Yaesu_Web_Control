@@ -1,4 +1,4 @@
-// Yaesu Web Control – Spectrum Panel
+﻿// Yaesu Web Control – Spectrum Panel
 // UI module — DOM access is intentional and correct here.
 // Owns a single <canvas> element that is divided into two rendering zones:
 //   Top 45%  — spectrum trace (line graph of dBFS vs frequency)
@@ -8,7 +8,7 @@
 // SdrSpectrumPipeline so the display is always centred on the current band.
 
 // ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
-import { modeForHz } from '../ui/band-plan.js?v=1';
+import { autoModeForHz } from '../ui/band-plan.js?v=1';
 import { tuningStep } from '../ui/tuning-step.js?v=1';
 import { formatTuningStep } from '../tuning/tuning-step-store.js?v=1';
 
@@ -1111,7 +1111,15 @@ export class SpectrumPanel {
         // jumping from 14.074 (FT8) to 14.284 (SSB) to also flip the radio to
         // USB rather than leave it stuck in DATA-U. window.setMode is defined
         // by site.js and uses the same CAT path the mode buttons use.
-        const targetMode = modeForHz(targetHz);
+        //
+        // autoModeForHz returns null when the operator has turned that
+        // off (Settings > Band Plan, discussion #169). Everything below
+        // already handles null, because it is also what an out-of-band
+        // click returns: no setMode call, and the tune offset falls back
+        // to the radio's current mode -- which is the point. Off, a click
+        // on a RTTY signal above 14.100 keeps his RTTY tone offset instead
+        // of taking the band plan's USB and tuning zero-offset onto it.
+        const targetMode = autoModeForHz(targetHz);
 
         // In CW and RTTY, tune the tone offset away from the signal instead of
         // onto it. The mode this click is about to select wins over the mode
