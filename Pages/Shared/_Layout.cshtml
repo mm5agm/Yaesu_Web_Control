@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Language" content="en">
     <meta name="language" content="en">
-    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Display">
+    @* Read by core/js/update/update-banner.js, which is shared with Icom Web
+       Control and so cannot know either app's repo or name. *@
+    <meta name="x-app-repo" content="mm5agm/Yaesu_Web_Control">
+    <meta name="x-app-name" content="Yaesu Web Control">
     <title>@(ViewData["Title"]?.ToString() == "Yaesu Web Control" ? "Yaesu Web Control" : ViewData["Title"] + " - Yaesu Web Control")</title>
     <script type="importmap">{}</script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
@@ -120,6 +124,9 @@
        and one set of timeouts govern the lot. Must precede site.js. *@
     <script src="~/js/ui/hub-connection.js" asp-append-version="true"></script>
     <script src="~/js/ui/site.js" asp-append-version="true"></script>
+    <!-- Update banner — shared with IWC; lives in core/js/update/ and is copied
+         into wwwroot by the shared-core-js copy target. Independent of site.js. -->
+    <script src="~/js/update/update-banner.js" asp-append-version="true"></script>
     @{
         // Voice Control: server-render the enable flag so voice-control.js
         // can decide whether to show the per-VFO mic buttons before any user
