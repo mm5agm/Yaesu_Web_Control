@@ -21,9 +21,11 @@
 # A pre-release differs in three ways:
 #   1. develop is NOT merged into main (pre-releases live on the develop line only).
 #   2. The tag is created on develop, not main.
-#   3. The GitHub release is created with --prerelease (not --latest), so YWC's
-#      auto-updater -- which polls /releases/latest -- ignores it. Only users
-#      who follow the direct link see the build.
+#   3. The GitHub release is created with --prerelease (not --latest), so it is
+#      invisible to anyone running a full release: their update banner polls
+#      /releases/latest and never sees it. Since v2.5.2-pre7 a tester already
+#      ON a pre-release IS offered it -- that is the whole of #174 -- so the
+#      boilerplate below must not claim nobody is told.
 #
 # ---------------------------------------------------------------------------
 # Why this script checks exit codes on every git call
@@ -482,7 +484,9 @@ if ($PreRelease) {
     $notesBody = @"
 **Pre-release for testing -- not a public build.**
 
-Do not install unless you're prepared for bugs and will report them on GitHub. YWC's in-app auto-updater ignores pre-releases, so existing users will not be prompted to upgrade to this build.
+Do not install unless you're prepared for bugs and will report them on GitHub.
+
+If you are running a **full release**, nothing in YWC will ever offer you this build or mention that it exists -- you would have to come to this page for it, which is the point. If you are **already testing a pre-release**, YWC will offer you this one and say what is in it.
 
 Please send feedback via GitHub Issues (or mm5agm@outlook.com). Mention the ``$Version`` tag when reporting.
 "@
