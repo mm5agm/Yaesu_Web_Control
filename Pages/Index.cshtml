@@ -294,6 +294,22 @@
         min-height: 40px;
         max-height: 1000px;
         overflow: hidden;
+
+        /* This element is also Bootstrap's .card-body, which is flex:1 1 auto,
+           and the card is a flex column — so the body GROWS past the height set
+           above to fill whatever the card is. Side by side that card is
+           stretched to match the other VFO's, so every height below the other
+           panel's rendered identically and only Tall and above got through.
+           flex:0 0 auto makes the height above the one that decides. */
+        flex: 0 0 auto;
+    }
+
+    /* Side by side, the flex row stretches both cards to the taller of the two
+       (align-items defaults to stretch), which would leave the shorter panel's
+       card padded out with dead space below its grip. Each card takes its own
+       height instead. Column layout is untouched: there, this axis is width. */
+    #spectrumPanels.flex-row {
+        align-items: flex-start;
     }
 
     /* The panel's resize grip. This started as CSS `resize: vertical` on the
