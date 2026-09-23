@@ -990,8 +990,8 @@ fieldset.calibration-card {
     grid-row: 3;
 }
 
-/* Compact linear SWR / Power bars (PoC) — leftmost column of the
-   operating-controls row. Radials in #meterGaugesRow stay untouched. */
+/* Compact linear SWR / Power bars — leftmost column of the
+   operating-controls row. */
 #operatingControlsRow .op-col--linear-meters {
     min-width: 0;
     gap: 0.35rem;

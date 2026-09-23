@@ -18,9 +18,7 @@
 
   "meters": {
     "smeterA":        "S meter A",
-    "smeterHistoryA": "S meter A 30-second history",
     "smeterB":        "S meter B",
-    "smeterHistoryB": "S meter B 30-second history",
     "power":        "Power output meter",
     "swr":          "SWR meter",
     "linearPower":  "Power output meter (linear)",

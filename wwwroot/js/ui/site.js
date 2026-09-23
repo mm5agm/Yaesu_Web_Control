@@ -49,8 +49,6 @@ function showServerStoppedOverlay() {
     // page (e.g. spectrum is only present when an SDR is configured).
     try { window.filterScopePanelA?.stop?.(); } catch { /* ignore */ }
     try { window.filterScopePanelB?.stop?.(); } catch { /* ignore */ }
-    try { window.sMeterHistory?.stop?.();    } catch { /* ignore */ }
-    try { window.sMeterHistoryB?.stop?.();   } catch { /* ignore */ }
 }
 
 function isTypingIntoEditable() {
@@ -452,9 +450,6 @@ function updateTxIndicators(isTransmitting) {
     // and SM1 at key-down and holds them until release (measured — see the
     // .meters-tx-dim comment in Index.cshtml), so they are not readings.
     sMetersFrozenByTx = !!isTransmitting;
-    document.getElementById('meterGaugesRow')
-        ?.classList.toggle('meters-tx-dim', sMetersFrozenByTx);
-    // VFO linear S-meters live outside #meterGaugesRow — dim them the same way.
     document.querySelectorAll('[data-linear-smeter]')
         .forEach(el => el.classList.toggle('meters-tx-dim', sMetersFrozenByTx));
     if (window.ftdx101Meters) {
@@ -3337,32 +3332,22 @@ window.setApfFreq = setApfFreq;
     }
 
     function updateSMeter(receiver, value) {
-        // v2.4.0: restored as a real per-VFO pair (dual-receiver radios have
-        // an independently calibrated S-meter per receiver, SM0;/SM1;).
-        // On single-receiver radios receiver 'B' is a no-op below since
-        // window.meterPanel has no 'smeterB' gauge (canvas doesn't exist —
-        // MeterPanel._createGauges skipped it) and sMeterHistoryB.push() is
-        // a no-op (canvas doesn't exist).
+        // Dual-receiver radios have an independently calibrated S-meter per
+        // receiver (SM0;/SM1;). On single-receiver radios receiver 'B' is a
+        // no-op below — the linear B canvas does not exist, so MeterPanel
+        // skipped that gauge.
         // The radio stops measuring received signal at key-down: it latches
         // SM0/SM1 and holds them for the whole over, then resumes within
         // ~200 ms of release (measured — see the .meters-tx-dim comment in
         // Index.cshtml). So the value arriving here during transmit is a
-        // snapshot of the instant you keyed, not a reading, and until now it
-        // was drawn as though it were live.
+        // snapshot of the instant you keyed, not a reading.
         //
         // Show zero instead. Safe only because updateTxIndicators() greys the
-        // gauges at the same time: a zeroed needle on its own would claim "no
+        // bars at the same time: a zeroed bar on its own would claim "no
         // signal", but greyed-and-zero reads as "not measuring".
-        //
-        // Deliberately placed before everything below so the gauge, the S-unit
-        // label, the raw readout and the 30-second history strip all agree.
-        // In particular the strip now records a floor across each over rather
-        // than a flat line at the frozen value, which was the same untruth
-        // drawn sideways.
         if (sMetersFrozenByTx) value = 0;
 
         const gaugeKey   = receiver === 'B' ? 'smeterB' : 'smeter';
-        const history     = receiver === 'B' ? window.sMeterHistoryB : window.sMeterHistory;
         const canvasId    = receiver === 'B' ? 'sMeterCanvasB' : 'sMeterCanvas';
         const labelId     = receiver === 'B' ? 'sMeterValueB' : 'sMeterValue';
         const linearLabelId = receiver === 'B' ? 'sMeterLinearValueB' : 'sMeterLinearValueA';
@@ -3373,8 +3358,8 @@ window.setApfFreq = setApfFreq;
         // calibration actually affect where the needle sits, translate the raw
         // ADC value into the gauge position where the calibrated S-unit lives
         // on the static dial. calibrateSMeterForGauge does the two-step:
-        // raw → user-calibrated S-unit → static gauge position. The history,
-        // raw display, and snap-label keep using the un-translated raw value.
+        // raw → user-calibrated S-unit → static gauge position. The raw
+        // display and snap-label keep using the un-translated raw value.
         // Reported by Jacek SP3L on #29; confirmed broken by Colin on bench
         // 2026-06-12 and traced to gauge.js:137 hardcoded majorTicks.
         // Both VFOs share the single calibration table -- there's no
@@ -3384,7 +3369,6 @@ window.setApfFreq = setApfFreq;
             ? window.calibrationEngine.calibrateSMeterForGauge(value)
             : value;
         if (window.meterPanel) window.meterPanel.update(gaugeKey, gaugePos);
-        if (history) history.push(value);
         if (receiver === 'A' && typeof updateRawSMeterValueA === 'function') updateRawSMeterValueA(value);
         const canvas = document.getElementById(canvasId);
         const sUnit = sMeterLabel(value);
@@ -3771,8 +3755,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // TX-only meter canvases have no reading until the radio transmits.
     // Pre-fill with '—' so hover always announces something (name + dash rather than name only).
     document.addEventListener('DOMContentLoaded', function () {
-        ['vddMeterCanvas', 'vddLinearCanvas', 'iddMeterCanvas', 'iddLinearCanvas',
-         'tempMeterCanvas', 'tempLinearCanvas', 'compressionMeterCanvas'].forEach(id => {
+        ['vddLinearCanvas', 'iddLinearCanvas', 'tempLinearCanvas',
+         'compressionLinearCanvas'].forEach(id => {
             const c = document.getElementById(id);
             if (c && !c.dataset.reading) c.dataset.reading = '—';
         });

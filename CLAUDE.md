@@ -692,7 +692,6 @@ guages/                   — (sic: folder name is misspelt; leave it alone
                             — ONLY place RadialGauge instances are created
   meter-gauge.js
   meter-panel.js           — owns all meter DOM and canvas rendering
-  smeter-history-panel.js
   update-engine.js         — performs gauge updates
 
 orchestrators/
