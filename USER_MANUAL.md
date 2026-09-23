@@ -532,7 +532,7 @@ The slider snaps to 5 W steps for ease of dragging, but the numerical label show
 
 The spectrum display is only visible if an SDR device has been configured in Settings (**Windows host only** — see §6.3). It shows a real-time spectrum and scrolling waterfall of the band around the current VFO A frequency.
 
-This panel is drawn by YWC from your SDR. It is not the radio's own scope, and nothing here changes what the radio is displaying. To drive the radio's screen instead — its span, waterfall or 3DSS, reference level — see §5.20, which needs no SDR at all.
+This panel is drawn by YWC from your SDR. It is not the radio's own scope, and nothing here changes what the radio is displaying. To drive the radio's screen instead — its span, waterfall or 3DSS, reference level — see §5.20. That needs no SDR at all, though seeing the radio's screen in the browser rather than looking at the rig needs the Radio Display capture hardware (§19).
 
 **Span buttons** — Click **1k**, **2k**, **5k**, **10k**, **20k**, **50k**, **100k**, **200k**, **500k**, **1M** or **2M** to change the visible bandwidth. These are the FTdx101's own scope spans plus 2 MHz, so the browser and the front panel speak the same language. The display recentres on the VFO. From **100k** down the change is instant — the SDR keeps running and only the slice it sends changes (see §6.3 for how); from **200k** up the SDR is retuned, which pauses that panel for a few seconds. For CW, **20k** shows a whole sub-band with each station a few pixels wide and easy to click; **1k** and **2k** show one station as a broad hump, which is what the radio's own scope shows at those spans too — a keyed carrier is not a needle at 7.6 Hz per bin.
 
@@ -1186,7 +1186,7 @@ All changes are confirmed by reading the radio's state back after each command, 
 | What you see | A spectrum YWC draws in the browser | The radio's own screen, unchanged |
 | Where the data comes from | An SDR on the rear-panel IF output | The radio's internal scope |
 | What the controls change | What YWC draws | What the **radio** displays |
-| Extra hardware | SDR required | None |
+| Extra hardware | SDR required | See [§19](#19-radio-display) |
 
 The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It appears when Radio Display is **off** on radios that support CAT scope control — **FTdx101MP/D** and **FTdx10**. See [§19.4](#194-cat-scope-controls) when Radio Display is on (the same controls dock beside the video by default, or float when the column is hidden). On the **FTdx101MP/D** and **FTdx10**, the captured Radio Display picture itself is also clickable in MONO W/F (tune, and cycle the on-screen readouts and soft-buttons over CAT). The **FT-710** is not.
 
