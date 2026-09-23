@@ -484,6 +484,17 @@ namespace Yaesu_Web_Control.Services
             _logger.LogInformation("[Meters] Operator front-panel meter selection is MS{Digits}", digits);
         }
 
+        // The operator picked meters in YWC (the Radio Display meter pop-up).
+        // Unlike ReportMeterSelection this records even during a borrow: the
+        // choice is the operator's by definition, and the TX-idle restore in
+        // MeterPollingService is what puts it on the panel.
+        public void SetOperatorMeterSelection(string digits)
+        {
+            if (string.IsNullOrEmpty(digits) || RadioMeterSelection == digits) return;
+            RadioMeterSelection = digits;
+            _logger.LogInformation("[Meters] Operator chose front-panel meters MS{Digits} in YWC", digits);
+        }
+
         private int? _compressionMeter;
         public int? CompressionMeter
         {

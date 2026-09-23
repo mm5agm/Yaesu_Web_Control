@@ -2384,6 +2384,95 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
+        // --- FRONT-PANEL TX METERS (MS) ---
+        // Backs the Radio Display meter pop-up: the choices come from
+        // FrontPanelMeters, so the browser never carries its own copy of the
+        // per-model MS table.
+        //
+        // The FTdx101's meters are borrowed (MS13) while transmitting so RM0 can
+        // read COMP + SWR. A choice made during a borrow is recorded and NOT sent:
+        // writing MS then would break the TX meter read, and the TX-idle restore
+        // in MeterPollingService puts the recorded choice on the panel anyway.
+        public class MeterSelectionRequest { public List<string> Codes { get; set; } = new(); }
+
+        [HttpGet("meters")]
+        public async Task<IActionResult> GetMeterSelection()
+        {
+            var model = (await _settingsService.GetSettingsAsync()).RadioModel;
+            var layout = FrontPanelMeters.For(model);
+            if (layout is null)
+                return Ok(new { supported = false, radioModel = model });
+
+            if (!_radioStateService.MetersBorrowed && await _requestSemaphore.WaitAsync(2000))
+            {
+                // Read it fresh: the cache only moves on the radio's own MS
+                // auto-info, and a reply read here never reaches the dispatcher.
+                try
+                {
+                    await EnsureConnectedAsync();
+                    var reply = await _catClient.SendCommandAsync("MS;", "WebUI", CancellationToken.None);
+                    var digits = reply?.TrimEnd(';');
+                    if (digits is { Length: >= 3 } && digits.StartsWith("MS") && !_radioStateService.MetersBorrowed)
+                        _radioStateService.ReportMeterSelection(digits.Substring(2));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "MS read failed; answering from the cached meter selection");
+                }
+                finally { _requestSemaphore.Release(); }
+            }
+
+            return Ok(MeterSelectionResponse(model, layout));
+        }
+
+        [HttpPost("meters")]
+        public async Task<IActionResult> SetMeterSelection([FromBody] MeterSelectionRequest request)
+        {
+            var model = (await _settingsService.GetSettingsAsync()).RadioModel;
+            var layout = FrontPanelMeters.For(model);
+            if (layout is null)
+                return BadRequest(new { error = $"No meter selection for {model}" });
+
+            var digits = FrontPanelMeters.BuildDigits(model, request.Codes);
+            if (digits is null)
+                return BadRequest(new { error = "Invalid meter selection" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                bool deferred = _radioStateService.MetersBorrowed;
+                if (!deferred)
+                {
+                    await EnsureConnectedAsync();
+                    await _catClient.SendCommandAsync($"MS{digits};", "WebUI", CancellationToken.None);
+                }
+                _radioStateService.SetOperatorMeterSelection(digits);
+                return Ok(MeterSelectionResponse(model, layout, deferred));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting front-panel meters");
+                return StatusCode(500, new { error = "Failed to set meters" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        private object MeterSelectionResponse(string model, FrontPanelMeters.Layout layout, bool deferred = false) => new
+        {
+            supported = true,
+            radioModel = model,
+            borrowed = _radioStateService.MetersBorrowed,
+            deferred,
+            slots = layout.Slots.Select(s => new
+            {
+                id = s.Id,
+                label = s.Label,
+                options = s.Options.Select(o => new { code = o.Code, label = o.Label })
+            }),
+            selected = FrontPanelMeters.ParseDigits(model, _radioStateService.RadioMeterSelection)
+        };
+
         // --- NB LEVEL ---
         public class NbLevelRequest { public int Level { get; set; } = 10; }
 

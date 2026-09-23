@@ -111,6 +111,7 @@ zone's `action` string, looked up in `ACTIONS`:
 | `scope.size` | next scope size (L/N/S or EXPAND/NORMAL — the radio's own ring) | `RadioScopeControl.cycleSize()` |
 | `scope.3dss` | W/F ↔ 3DSS | `RadioScopeControl.toggle3dss()` |
 | `scope.hold` | toggle HOLD | `RadioScopeControl.toggleHold()` |
+| `meter.select` | open the TX meter pop-up (below) | `GET` / `POST /api/cat/meters` |
 | `none` | nothing — the `hint` flashes red ("… has no CAT command — press it on the radio") | — |
 
 `hint` is the hover text; an action supplies a default, a zone can
@@ -132,6 +133,35 @@ value cycles to the first entry of the ring rather than doing nothing.
 
 Adding a radio is a new entry in `LAYOUTS` and nothing else. Adding a
 kind of control is a new `ACTIONS` entry.
+
+## The meter pop-up
+
+Touching the meter on the radio's TFT opens the radio's own meter chooser.
+No CAT command opens it: `MS` sets the meters but nothing touches the
+screen. So the `meter` zone (`meter.select`) makes YWC draw its own chooser
+inside the overlay, under the zone, and the radio's picture changes once
+`MS` lands.
+
+- **The table is server-side**, in `Services/FrontPanelMeters.cs`, and the
+  browser carries no copy. The FTdx101MP/D has two slots (left PO / COMP /
+  TEMP, right ALC / VDD / ID / SWR, sent as `MS P1 P2`). The FTdx10 and
+  FT-710 have one slot of six, with P2 fixed at 0. `GET /api/cat/meters`
+  returns the slots, the options and the current choice (a fresh `MS;`
+  read when the meters are not borrowed). `POST` takes one code per slot,
+  checks it against the table, sends `MS`, and replies in the same shape.
+- **TX borrow.** `MeterPollingService` sets `MS13` while transmitting on the
+  FTdx101 and restores `RadioMeterSelection` after 10 s of TX idle. A pick
+  made during the borrow is recorded (`SetOperatorMeterSelection`) and
+  **not** sent. The restore then applies it, and the reply carries
+  `deferred: true` so the pop-up can say so. There is a small race if TX
+  starts between the borrow check and the send; the restore covers it.
+- **Styles** are injected by the module (`ensureMeterPopupStyle`) and do
+  not live in `site.css`, which the theme work is changing.
+- **Zone rect** on the FTdx101 is estimated from
+  `Radio_Display_Docked.png` and has not been bench-measured. Use
+  `measure(['zones.meter'])`. The right half of that strip is the filter
+  display, so keep the box to the meter. The FTdx10 gets no meter zone until
+  a screenshot with its chooser open has been measured.
 
 ## The layout table
 

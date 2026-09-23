@@ -10,7 +10,11 @@
 //   * the ANT / ATT / IPO / R.FIL / AGC readouts cycle their setting on click,
 //     over the same /api/cat endpoints the toolbar selects already use;
 //   * the scope soft-buttons drive the CAT scope control; the ones with no
-//     CAT equivalent say so instead of pretending.
+//     CAT equivalent say so instead of pretending;
+//   * the meter opens a pop-up for choosing the TX meters. The radio's own
+//     selection screen cannot be opened over CAT - nothing touches the TFT -
+//     so YWC draws its own, from /api/cat/meters, and the choice goes to the
+//     radio as MS. The captured picture then shows the new meter.
 //
 // A zone is WHERE something is drawn AND WHAT clicking it should do, because
 // the same soft-key means different things on different radios. EXPAND is the
@@ -106,6 +110,7 @@ const ACTIONS = {
     'scope.size':      { hint: 'Next scope size',       call: sc => sc.cycleSize?.() },
     'scope.3dss':      { hint: 'W/F ↔ 3DSS',            call: sc => sc.toggle3dss?.() },
     'scope.hold':      { hint: 'HOLD',                  call: sc => sc.toggleHold?.() },
+    'meter.select':    { hint: 'Choose the TX meters',  popup: 'meters' },
     'none':            { hint: 'No CAT command — press it on the radio' },
 };
 
@@ -142,6 +147,10 @@ const LAYOUTS = {
             marker: [0.003, 0.540, 0.986, 0.720],
         },
         zones: {
+            // Estimated from the same picture (the S/PO/COMP/TEMP arc, top
+            // left); not yet bench-measured. The right half is the filter
+            // function display, which the radio uses for its own magnify touch.
+            meter:  { rect: [0.000, 0.095, 0.499, 0.300], action: 'meter.select' },
             ant:    { rect: [0.003, 0.416, 0.196, 0.476], action: 'readout.ant' },
             att:    { rect: [0.199, 0.416, 0.392, 0.476], action: 'readout.att' },
             ipo:    { rect: [0.395, 0.416, 0.591, 0.476], action: 'readout.ipo' },
@@ -297,6 +306,44 @@ function setPath(obj, path, value) {
 function formatHz(hz) {
     const s = String(Math.round(hz)).padStart(7, '0');
     return `${s.slice(0, -6)}.${s.slice(-6, -3)}.${s.slice(-3)}`;
+}
+
+// The pop-up's styles travel with the module rather than going in site.css:
+// the overlay is hosted on two pages, and site.css is where the theme work is.
+function ensureMeterPopupStyle() {
+    if (document.getElementById('rdh-meters-style')) return;
+    const st = document.createElement('style');
+    st.id = 'rdh-meters-style';
+    st.textContent = `
+.radio-display-hotspots .rdh-meters {
+    position: absolute; z-index: 3; margin-top: 2px;
+    min-width: 11em; padding: 6px 8px 8px;
+    background: rgba(12, 16, 28, 0.94); color: #fff;
+    border: 1px solid #5b6b8c; border-radius: 4px;
+    font: 13px/1.3 system-ui, sans-serif;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+}
+.radio-display-hotspots .rdh-meters-head {
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 600; margin-bottom: 6px;
+}
+.radio-display-hotspots .rdh-meters-close {
+    background: none; border: 0; color: #ccc; font-size: 18px; line-height: 1;
+    padding: 0 2px; cursor: pointer;
+}
+.radio-display-hotspots .rdh-meters-body { display: flex; gap: 10px; }
+.radio-display-hotspots .rdh-meters-col { display: flex; flex-direction: column; gap: 4px; }
+.radio-display-hotspots .rdh-meters-label { font-size: 11px; color: #aab; }
+.radio-display-hotspots .rdh-meters-col button {
+    min-width: 5em; padding: 3px 8px; cursor: pointer;
+    background: #1d2536; color: #fff; border: 1px solid #45526e; border-radius: 3px;
+}
+.radio-display-hotspots .rdh-meters-col button:hover { border-color: #9fb3dd; }
+.radio-display-hotspots .rdh-meters-col button.rdh-on { background: #0d6efd; border-color: #0d6efd; }
+.radio-display-hotspots .rdh-meters-note { margin-top: 6px; font-size: 11px; color: #f5c46b; max-width: 16em; }
+.radio-display-hotspots .rdh-meters-note:empty { display: none; }
+`;
+    document.head.appendChild(st);
 }
 
 export class RadioDisplayHotspots {
@@ -609,6 +656,9 @@ export class RadioDisplayHotspots {
 
     _onClick(e) {
         if (this._measureQueue.length) { e.preventDefault(); e.stopPropagation(); return; }
+        // A click anywhere else on the picture dismisses the meter pop-up and
+        // does nothing more, so closing it cannot also retune the radio.
+        if (this._meterPopup) { this._closeMeterPopup(); return; }
         const f = this._frac(e);
         if (!f || this._busy) return;
         const hit = this._hit(f.fx, f.fy);
@@ -625,6 +675,7 @@ export class RadioDisplayHotspots {
     _activate(zone) {
         const action = ACTIONS[zone.action] || ACTIONS.none;
         if (action.key) return this._cycleReadout(action.key);
+        if (action.popup === 'meters') return this._openMeterPopup(zone);
         if (action.call) {
             const sc = this.getScopeControl();
             return sc ? action.call(sc) : undefined;
@@ -817,6 +868,118 @@ export class RadioDisplayHotspots {
             const reply = await this._post(`/api/cat/roofingfilter/${v}`, { filter: want });
             if (!reply || !reply.warning) return;
             cur = want;   // refused; try the one after it
+        }
+    }
+
+    // ── meter pop-up ─────────────────────────────────────────────────────────
+
+    // Drawn inside the overlay, under the meter zone, so it moves and scales
+    // with the picture. Everything it offers comes from the server's
+    // FrontPanelMeters table; nothing about MS digits lives in the browser.
+    async _openMeterPopup(zone) {
+        this._closeMeterPopup();
+        ensureMeterPopupStyle();
+        const pop = document.createElement('div');
+        pop.className = 'rdh-meters';
+        pop.setAttribute('role', 'dialog');
+        pop.setAttribute('aria-label', 'TX meter selection');
+        pop.innerHTML = '<div class="rdh-meters-head"><span>TX meters</span>' +
+            '<button type="button" class="rdh-meters-close" aria-label="Close">×</button></div>' +
+            '<div class="rdh-meters-body">Reading the radio…</div>' +
+            '<div class="rdh-meters-note"></div>';
+        // Keep the overlay's own hover / click / measure handling off the pop-up.
+        for (const t of ['pointerdown', 'pointermove', 'pointerup', 'click'])
+            pop.addEventListener(t, e => e.stopPropagation());
+        pop.querySelector('.rdh-meters-close').addEventListener('click', () => this._closeMeterPopup());
+
+        const { nw, nh } = this._nat();
+        const r = normalizeZone(zone.rect, nw, nh) || [0, 0, 0.5, 0.3];
+        pop.style.left = `${r[0] * 100}%`;
+        pop.style.top = `${r[3] * 100}%`;
+        this.overlay.appendChild(pop);
+        this._meterPopup = pop;
+        this._hideCursor();
+
+        this._onMeterKey = e => { if (e.key === 'Escape') this._closeMeterPopup(); };
+        document.addEventListener('keydown', this._onMeterKey);
+
+        try {
+            const res = await fetch('/api/cat/meters');
+            const data = await res.json();
+            if (this._meterPopup === pop) this._renderMeterPopup(data);
+        } catch (err) {
+            console.error('[radio-display-hotspots] meters', err);
+            if (this._meterPopup === pop)
+                pop.querySelector('.rdh-meters-body').textContent = 'Could not read the meters.';
+        }
+    }
+
+    _closeMeterPopup() {
+        this._meterPopup?.remove();
+        this._meterPopup = null;
+        if (this._onMeterKey) document.removeEventListener('keydown', this._onMeterKey);
+        this._onMeterKey = null;
+    }
+
+    _renderMeterPopup(data) {
+        const pop = this._meterPopup;
+        const body = pop.querySelector('.rdh-meters-body');
+        const note = pop.querySelector('.rdh-meters-note');
+        if (!data || !data.supported) {
+            body.textContent = `No meter selection for ${data?.radioModel || 'this radio'}.`;
+            return;
+        }
+        const selected = data.selected || [];
+        body.textContent = '';
+        data.slots.forEach((slot, i) => {
+            const col = document.createElement('div');
+            col.className = 'rdh-meters-col';
+            col.setAttribute('role', 'group');
+            col.setAttribute('aria-label', slot.label);
+            if (data.slots.length > 1) {
+                const h = document.createElement('div');
+                h.className = 'rdh-meters-label';
+                h.textContent = slot.label;
+                col.appendChild(h);
+            }
+            for (const opt of slot.options) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.textContent = opt.label;
+                const on = selected[i] === opt.code;
+                b.classList.toggle('rdh-on', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+                b.addEventListener('click', () => this._chooseMeter(data, i, opt.code));
+                col.appendChild(b);
+            }
+            body.appendChild(col);
+        });
+        note.textContent = data.deferred || data.borrowed
+            ? 'Transmitting: YWC is using the meters. Your choice goes to the radio when TX ends.'
+            : '';
+    }
+
+    async _chooseMeter(data, slotIndex, code) {
+        // MS sets every meter at once. A slot not known yet (the radio never
+        // answered MS) takes its first option, which is the radio's default.
+        const codes = data.slots.map((s, i) =>
+            i === slotIndex ? code : (data.selected?.[i] ?? s.options[0].code));
+        try {
+            const res = await fetch('/api/cat/meters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codes }),
+            });
+            const reply = await res.json().catch(() => null);
+            if (!this._meterPopup) return;
+            if (!res.ok || !reply) {
+                this._meterPopup.querySelector('.rdh-meters-note').textContent =
+                    reply?.error || 'The radio did not take that.';
+                return;
+            }
+            this._renderMeterPopup(reply);
+        } catch (err) {
+            console.error('[radio-display-hotspots] set meters', err);
         }
     }
 
