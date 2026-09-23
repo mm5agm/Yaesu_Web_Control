@@ -579,9 +579,9 @@ Every change is announced to screen readers. 1 Hz is now offered everywhere, inc
 
 **Panel height** — the whole spectrum panel can be made taller. There are two ways, and they set the same thing:
 
-- **The Height box** on the control bar, beside Passband — **Shortest**, **Shorter**, **Short**, **Normal**, **Tall**, **Taller** or **Tallest**. This is the one to use if you just want it bigger without fiddling, and it is always on screen however tall the panel has become.
-- **The grip along the bottom of the panel** — a full-width strip with a dotted marker in the middle. Drag it down for more, up for less. Anything between 40 and 1000 pixels is allowed, so you are not limited to the seven presets — when you drag to a size that is not one of them the Height box reads **Custom**. **Double-click the grip** to go straight back to the default height.
-- **At the short end the frequency scale drops out.** Below about 80 pixels there is no room for both the labels and the trace, so the labels go and the trace keeps the space — which is the point of a short panel. **Shortest** leaves the whole card about 135 pixels tall, most of which is the title bar and the control bar above the trace.
+- **The Height box** on the control bar, beside Passband — **Shorter**, **Short**, **Normal**, **Tall**, **Taller** or **Tallest**. This is the one to use if you just want it bigger without fiddling, and it is always on screen however tall the panel has become.
+- **The grip along the bottom of the panel** — a full-width strip with a dotted marker in the middle. Drag it down for more, up for less. Anything between 40 and 1000 pixels is allowed, so you are not limited to the six presets — when you drag to a size that is not one of them the Height box reads **Custom**. **Double-click the grip** to go straight back to the default height.
+- **At the short end the frequency scale drops out.** Below about 80 pixels there is no room for both the labels and the trace, so the labels go and the trace keeps the space — which is the point of a short panel. The Height box does not go that low; dragging the grip does, and at the 40-pixel floor the whole card is about 135 pixels tall, most of which is the title bar and the control bar above the trace.
 
   The grip also takes the keyboard. Tab to it (or click it once) and use **up and down arrows** to change the height 10 pixels at a time, **Shift** with them for 50, **Page Up / Page Down** for 100, and **Home** / **End** for the smallest and largest sizes. It works with a finger on a tablet too.
 
