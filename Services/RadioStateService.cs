@@ -485,13 +485,20 @@ namespace Yaesu_Web_Control.Services
             BroadcastUpdate("MeterSelection", digits);
         }
 
-        // The operator picked meters in YWC (the Radio Display meter pop-up).
-        // Unlike ReportMeterSelection this records even during a borrow: the
-        // choice is the operator's by definition, and the TX-idle restore in
-        // MeterPollingService is what puts it on the panel.
+        // True once the operator has picked meters in YWC (the Radio Display
+        // meter pop-up), for the rest of the session. MeterPollingService then
+        // leaves the FTdx101's meters alone during TX instead of borrowing them
+        // for COMP + SWR: a pick made to watch VDD on the radio has to survive
+        // keying up, or it never shows a live needle at all.
+        public bool MetersPinnedByOperator { get; private set; }
+
+        // The operator picked meters in YWC. Records even during a borrow: the
+        // choice is the operator's by definition.
         public void SetOperatorMeterSelection(string digits)
         {
-            if (string.IsNullOrEmpty(digits) || RadioMeterSelection == digits) return;
+            if (string.IsNullOrEmpty(digits)) return;
+            MetersPinnedByOperator = true;
+            if (RadioMeterSelection == digits) return;
             RadioMeterSelection = digits;
             _logger.LogInformation("[Meters] Operator chose front-panel meters MS{Digits} in YWC", digits);
             BroadcastUpdate("MeterSelection", digits);

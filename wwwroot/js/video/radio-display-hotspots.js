@@ -974,8 +974,12 @@ export class RadioDisplayHotspots {
             }
             body.appendChild(col);
         });
-        note.textContent = data.deferred || data.borrowed
-            ? 'Transmitting: YWC is using the meters. Your choice goes to the radio when TX ends.'
+        // The radio only drives these needles in TX, and a pick keeps YWC off
+        // them while you transmit - which costs YWC whichever of its own COMP /
+        // SWR gauges the panel is no longer showing.
+        const lost = data.txGaugesLost || [];
+        note.textContent = data.pinned && lost.length
+            ? `In TX the radio shows your choice; YWC's ${lost.join(' and ')} gauge${lost.length > 1 ? 's stay' : ' stays'} blank.`
             : '';
     }
 
@@ -999,13 +1003,13 @@ export class RadioDisplayHotspots {
             }
             // Close once every meter has had a pick, so on the FTdx101 both
             // sides can be changed in one visit; × / Esc for just one side.
-            // A pick held for the end of TX stays up long enough to read why.
+            // A warning about YWC's own gauges stays up long enough to read.
             const pop = this._meterPopup;
             this._renderMeterPopup(reply);
             pop._picked = (pop._picked || new Set()).add(slotIndex);
             if (pop._picked.size < data.slots.length) return;
-            if (!reply.deferred) this._closeMeterPopup();
-            else setTimeout(() => { if (this._meterPopup === pop) this._closeMeterPopup(); }, 3000);
+            if (!(reply.txGaugesLost || []).length) this._closeMeterPopup();
+            else setTimeout(() => { if (this._meterPopup === pop) this._closeMeterPopup(); }, 4000);
         } catch (err) {
             console.error('[radio-display-hotspots] set meters', err);
         }
