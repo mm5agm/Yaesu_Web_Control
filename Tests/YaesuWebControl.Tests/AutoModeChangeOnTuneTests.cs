@@ -122,6 +122,23 @@ namespace YaesuWebControl.Tests
         }
 
         [Fact]
+        public void RttyModesTuneTheDialOntoTheSignalNotAMarkFrequencyAway()
+        {
+            // Measured on the FTdx101MP 2026-09-23: in RTTY-L the dial is the
+            // mark tone (a carrier at 810.000 whistles with the dial at
+            // 810.000, not at 812.210). The old +2210 Hz offset put every
+            // clicked RTTY signal outside the 500 Hz filter. Only half the
+            // shift is allowed between the click and the dial.
+            string js = StripComments(File.ReadAllText(LocateRepoPath("wwwroot/js/sdr/spectrum-panel.js")));
+            var branch = Regex.Match(js, @"if \(mode === 'RTTY-L' \|\| mode === 'RTTY-U'\) \{(?<body>.*?)\n        \}", RegexOptions.Singleline);
+
+            Assert.True(branch.Success, "RTTY branch of _tuneOffsetHz not found");
+            Assert.DoesNotContain("_rttyMarkHz", branch.Groups["body"].Value, StringComparison.Ordinal);
+            Assert.DoesNotContain("_rttyAnchorAudioHz", branch.Groups["body"].Value, StringComparison.Ordinal);
+            Assert.Contains("_rttyShiftHz / 2", branch.Groups["body"].Value, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void PickingANamedSegmentStillCarriesThatSegmentsMode()
         {
             // The setting is about modes inferred from a frequency. Choosing

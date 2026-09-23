@@ -40,9 +40,10 @@ export class SpectrumPanel {
         this._cwPitchHz   = 700;
         this._modeName    = '';
 
-        // RTTY tone settings, for the same job the pitch does in CW: they say
-        // what audio frequency the operator's decoder is listening for, so
-        // click-to-tune can put the signal there instead of on the dial.
+        // RTTY tone settings. In RTTY-L / RTTY-U the dial is on mark, so only
+        // the shift and polarity matter (mark sits half a shift off the
+        // midpoint the operator clicks); in DATA-L (AFSK) the mark frequency
+        // says where in the audio the software's tones should land.
         // Seeded from the radio's own extended menu via setRttyTones()
         // (GET /api/cat/rtty); these are Yaesu's defaults until that arrives.
         this._rttyMarkHz      = 2125;
@@ -868,33 +869,38 @@ export class SpectrumPanel {
      * the dial 700 Hz further and the peak 700 Hz off the notch, and left the
      * signal just as inaudible; it was never confirmed by ear.
      *
-     * RTTY. The FTdx101 operating manual's RTTY Decode procedure says to
-     * "align the peak of the received signal with the mark frequency and shift
-     * frequency marker of the TFT screen" -- i.e. the radio draws the tone
-     * markers offset from the dial, which is only necessary because the dial
-     * is the suppressed carrier and not the mark tone. So the offset here is
-     * the mark frequency (2125 Hz by default, from the radio's own MARK
-     * FREQUENCY menu), nudged by half the shift so that the MIDPOINT of the
-     * two tones lands on the click -- the midpoint being what the eye picks
-     * out of a two-tone RTTY blob. See _rttyAnchorAudioHz. Derived from the
-     * manual, not from a signal, and not re-checked since the axis correction.
+     * RTTY-L / RTTY-U: like CW, the dial IS the signal -- the mark tone.
+     * Measured on the FTdx101MP on 2026-09-23 against Radio Scotland's 810 kHz
+     * carrier: in RTTY-L a dial of 810.000 gives a steady tone and 812.210
+     * gives nothing. This used to add the whole mark frequency (+2210 Hz),
+     * read from the manual's "align the peak with the mark and shift markers"
+     * as if the dial were the suppressed carrier; that put every clicked RTTY
+     * signal 2.2 kHz outside the 500 Hz RTTY filter, in silence. All that is
+     * left is half the shift: the eye clicks the MIDPOINT of the two-tone
+     * blob, and the dial belongs on mark, which POLARITY-RX NOR puts above
+     * space in RF (REV below). That half-shift is the convention, not a
+     * measurement, and RTTY-U has not been checked on the rig at all.
      *
-     * DATA-L gets the same offset as RTTY-L. On HF, DATA-L is AFSK RTTY: the
-     * software makes the tones and the radio is a plain lower-sideband
-     * transceiver, so the dial has to sit the same distance above the signal
-     * as in RTTY-L (discussion #169: Bruce VK2RT runs all his RTTY this way).
-     * The tones are then the software's, not the radio's RTTY menu's; the
-     * radio's values stand in for them, and 2125 Hz mark / 170 Hz shift is the
-     * usual default on both. DATA-U stays at zero -- that is FT8 and friends,
+     * DATA-L is different: it is plain lower sideband with the dial on the
+     * suppressed carrier, and on HF it is how AFSK RTTY is run -- the software
+     * makes the tones (discussion #169: Bruce VK2RT runs all his RTTY this
+     * way). So there the dial does go a whole mark frequency above the signal,
+     * putting the tones either side of 2210 Hz with the radio's 2125 / 170
+     * defaults standing in for the software's (the usual default on both). See
+     * _rttyAnchorAudioHz. DATA-U stays at zero -- that is FT8 and friends,
      * where tuning the dial onto the click is the convention.
      *
      * @param {string} mode
      * @returns {number} Hz to add to the clicked frequency.
      */
     _tuneOffsetHz(mode) {
-        if (mode === 'RTTY-L' || mode === 'RTTY-U' || mode === 'DATA-L') {
-            const anchor = this._rttyAnchorAudioHz(mode);
-            return this._isLowerSideband(mode) ? anchor : -anchor;
+        if (mode === 'RTTY-L' || mode === 'RTTY-U') {
+            // Dial on mark; the click was on the midpoint (see above).
+            const half = this._rttyShiftHz / 2;
+            return this._rttyPolarityRev ? -half : half;
+        }
+        if (mode === 'DATA-L') {
+            return this._rttyAnchorAudioHz(mode);
         }
 
         // CW needs none (see above). SSB, the DATA modes, AM and FM are left
@@ -908,8 +914,9 @@ export class SpectrumPanel {
     }
 
     /**
-     * Where in the audio passband the midpoint of the two RTTY tones should
-     * land, in Hz.
+     * Where in the audio passband the midpoint of the two AFSK RTTY tones
+     * should land, in Hz -- for DATA-L, where the dial is the suppressed
+     * carrier. (In RTTY-L / RTTY-U the dial is on mark; see _tuneOffsetHz.)
      *
      * Mark and space sit `shift` apart. Which side of mark the space tone
      * falls on, in AUDIO, depends on both the sideband and the radio's
