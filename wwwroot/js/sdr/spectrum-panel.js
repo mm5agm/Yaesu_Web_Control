@@ -341,18 +341,37 @@ export class SpectrumPanel {
         grip.addEventListener('pointerdown', (e) => {
             if (e.pointerType === 'mouse' && e.button !== 0) return;
             activeId = e.pointerId;
-            startY   = e.clientY;
+            // pageY, not clientY. Shrinking the panel makes the document
+            // shorter, which makes the browser clamp the scroll position,
+            // which slides the whole page down under a stationary pointer.
+            // Measured in viewport coordinates each drag pixel is then partly
+            // cancelled by that slide, so the panel crawls downward and feels
+            // stuck — and only ever when shrinking, because growing the page
+            // never clamps. pageY includes the scroll offset, so it stays
+            // true no matter what the scroll position does mid-drag.
+            startY   = e.pageY;
             startH   = this.getPanelHeight();
             try { grip.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
             grip.classList.add('dragging');
             // Stops the drag selecting the page text it passes over.
             document.body.classList.add('spectrum-resizing');
+            // preventDefault below suppresses the browser's default
+            // mousedown behaviour, and giving this element the focus is part
+            // of that behaviour — so without this line the grip can never be
+            // focused by clicking it, and every key press goes to the page
+            // instead. That is what made the arrow keys look dead and
+            // PageUp/PageDown scroll the whole window.
+            // preventScroll matters: focusing a partly-visible grip would
+            // otherwise scroll it into view, and the drag maths is now tied to
+            // the scroll position, so the panel would jump the moment it was
+            // grabbed.
+            grip.focus({ preventScroll: true });
             e.preventDefault();
         });
 
         grip.addEventListener('pointermove', (e) => {
             if (e.pointerId !== activeId) return;
-            this.setPanelHeight(startH + (e.clientY - startY));
+            this.setPanelHeight(startH + (e.pageY - startY));
             this._syncGripAria();
         });
 
