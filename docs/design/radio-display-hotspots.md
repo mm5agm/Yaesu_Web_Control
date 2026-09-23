@@ -162,7 +162,7 @@ inside the overlay, under the zone, and the radio's picture changes once
   re-reads `/api/cat/meters` when that arrives. Without this, a meter changed
   on the radio's own touchscreen left the pop-up showing the old choice
   (seen on the bench, 2026-09-23).
-- **It closes on a pick**, as the radio's pop-up does. It stays open when the
+- **It closes once every slot has had a pick** (one on the FTdx10/FT-710, both on the FTdx101; closing after the first pick made changing both a two-visit job). It stays open when the
   radio refuses the pick (showing the error), and for 3 s when the pick is
   deferred, so the note can be read.
 - **Zone rect** on the FTdx101 covers both meters,
