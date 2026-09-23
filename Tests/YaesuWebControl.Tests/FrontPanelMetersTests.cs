@@ -51,6 +51,25 @@ public sealed class FrontPanelMetersTests
         Assert.Empty(FrontPanelMeters.ParseDigits(model, "00"));
     }
 
+    [Theory]
+    [InlineData("13", true,  true)]    // YWC's own borrow: both readings
+    [InlineData("10", true,  false)]   // COMP + ALC
+    [InlineData("03", false, true)]    // PO + SWR
+    [InlineData("21", false, false)]   // TEMP + VDD
+    [InlineData(null, false, false)]
+    public void Rm0_CarriesCompOnlyOnTheLeftAndSwrOnlyOnTheRight(string? digits, bool comp, bool swr)
+        => Assert.Equal((comp, swr), FrontPanelMeters.Rm0Carries(digits));
+
+    [Fact]
+    public void TxGaugesLost_NamesWhatThePanelNoLongerShows()
+    {
+        Assert.Equal(["COMP", "SWR"], FrontPanelMeters.TxGaugesLost("FTdx101MP", "21"));
+        Assert.Equal(["SWR"], FrontPanelMeters.TxGaugesLost("FTdx101D", "10"));
+        Assert.Empty(FrontPanelMeters.TxGaugesLost("FTdx101MP", "13"));
+        // The single-meter radios read COMP (RM3) and SWR (RM6) directly.
+        Assert.Empty(FrontPanelMeters.TxGaugesLost("FTdx10", "30"));
+    }
+
     [Fact]
     public void Parse_ReadsBackWhatBuildWrote()
         => Assert.Equal(["1", "3"], FrontPanelMeters.ParseDigits("FTdx101MP", "13"));

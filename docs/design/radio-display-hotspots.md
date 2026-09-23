@@ -149,12 +149,24 @@ inside the overlay, under the zone, and the radio's picture changes once
   returns the slots, the options and the current choice (a fresh `MS;`
   read when the meters are not borrowed). `POST` takes one code per slot,
   checks it against the table, sends `MS`, and replies in the same shape.
-- **TX borrow.** `MeterPollingService` sets `MS13` while transmitting on the
-  FTdx101 and restores `RadioMeterSelection` after 10 s of TX idle. A pick
-  made during the borrow is recorded (`SetOperatorMeterSelection`) and
-  **not** sent. The restore then applies it, and the reply carries
-  `deferred: true` so the pop-up can say so. There is a small race if TX
-  starts between the borrow check and the send; the restore covers it.
+- **A pick overrides the TX borrow.** The radio only drives these needles
+  in TX (OM p20, "Meter Operations during Transmission"). `MeterPollingService`
+  normally sets `MS13` in TX on the FTdx101, so a pick would never have shown
+  a live needle. The first design deferred a TX-time pick to the 10 s idle
+  restore, and on the bench it did nothing useful. So a pick now sets
+  `RadioStateService.MetersPinnedByOperator` for the session:
+  - The poller stops borrowing, and stands down at once if a borrow is running.
+  - It gives a changed pick the same 500 ms settle window.
+  - It publishes COMP / SWR from RM0 only when the pick shows them
+    (`FrontPanelMeters.Rm0Carries`: P1 = 1, P2 = 3). Otherwise it publishes 0,
+    so a TEMP reading can never land on the SWR gauge.
+  - The reply's `txGaugesLost` names what that costs, for the pop-up's note.
+  - PO, ALC and ID come from RM5 / RM4 / RM7 and are unaffected.
+  - The FTdx10 and FT-710 read COMP and SWR directly and never borrow, so
+    nothing is lost there.
+  - Bench-checked on the FTdx101MP on 2026-09-23 at 15 W CW into a dummy load:
+    TEMP + VDD showed on the radio in TX and stayed after TX, and YWC's COMP
+    and SWR read 0 while power and ALC read normally.
 - **Styles** are injected by the module (`ensureMeterPopupStyle`) and do
   not live in `site.css`, which the theme work is changing.
 - **It follows the radio.** `ReportMeterSelection` and

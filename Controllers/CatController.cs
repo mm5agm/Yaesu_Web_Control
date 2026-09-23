@@ -2441,14 +2441,13 @@ namespace Yaesu_Web_Control.Controllers
                 return StatusCode(503, new { error = "Radio busy" });
             try
             {
-                bool deferred = _radioStateService.MetersBorrowed;
-                if (!deferred)
-                {
-                    await EnsureConnectedAsync();
-                    await _catClient.SendCommandAsync($"MS{digits};", "WebUI", CancellationToken.None);
-                }
+                // Record (and pin) first, then send: the pin tells the meter
+                // poller to stop borrowing, even mid-over, and to treat the next
+                // RM0 read as belonging to these meters.
                 _radioStateService.SetOperatorMeterSelection(digits);
-                return Ok(MeterSelectionResponse(model, layout, deferred));
+                await EnsureConnectedAsync();
+                await _catClient.SendCommandAsync($"MS{digits};", "WebUI", CancellationToken.None);
+                return Ok(MeterSelectionResponse(model, layout));
             }
             catch (Exception ex)
             {
@@ -2458,12 +2457,13 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
-        private object MeterSelectionResponse(string model, FrontPanelMeters.Layout layout, bool deferred = false) => new
+        private object MeterSelectionResponse(string model, FrontPanelMeters.Layout layout) => new
         {
             supported = true,
             radioModel = model,
             borrowed = _radioStateService.MetersBorrowed,
-            deferred,
+            pinned = _radioStateService.MetersPinnedByOperator,
+            txGaugesLost = FrontPanelMeters.TxGaugesLost(model, _radioStateService.RadioMeterSelection),
             slots = layout.Slots.Select(s => new
             {
                 id = s.Id,

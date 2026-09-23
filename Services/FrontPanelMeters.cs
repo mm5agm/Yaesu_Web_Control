@@ -82,6 +82,31 @@ public static class FrontPanelMeters
     }
 
     /// <summary>
+    /// Which of YWC's two borrowed TX readings RM0 still carries when the
+    /// FTdx101's meters are left on the operator's choice: RM0 reports whatever
+    /// the left and right meters show, so compression needs COMP on the left
+    /// (P1 = 1) and SWR needs SWR on the right (P2 = 3).
+    /// </summary>
+    public static (bool Comp, bool Swr) Rm0Carries(string? digits) =>
+        (digits is { Length: >= 1 } && digits[0] == '1',
+         digits is { Length: >= 2 } && digits[1] == '3');
+
+    /// <summary>
+    /// The YWC gauges that stay blank during TX with these meters on the panel.
+    /// Only the FTdx101 reads anything through the panel meters; the single-meter
+    /// radios read COMP and SWR directly, so nothing is lost there.
+    /// </summary>
+    public static IReadOnlyList<string> TxGaugesLost(string? radioModel, string? digits)
+    {
+        if (radioModel is not ("FTdx101MP" or "FTdx101D")) return [];
+        var (comp, swr) = Rm0Carries(digits);
+        var lost = new List<string>();
+        if (!comp) lost.Add("COMP");
+        if (!swr) lost.Add("SWR");
+        return lost;
+    }
+
+    /// <summary>
     /// One code per slot read back out of MS digits (as the radio reports them),
     /// or null for a slot whose digit is missing or not an option there.
     /// </summary>
