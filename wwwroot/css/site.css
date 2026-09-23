@@ -363,6 +363,30 @@ pre, code { tab-size: 4; }
     font-weight: bold;
 }
 
+/* Right column shared by VFO B and Radio Display (see vfo-slot.js). */
+#vfoBSlot {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+#vfoBSlot > .vfo-slot-panel {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+}
+#vfoBSlot #radioDisplayContainer .card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+#vfoBSlot #radioDisplayContainer .radio-display-body {
+    flex: 1 1 auto;
+    min-height: 200px;
+}
+#vfoBSlot #radioDisplayContainer .card-header {
+    row-gap: 0.35rem;
+}
+
 /* Three-column VFO body: tune | band/filter | remaining keys */
 .vfo-body-grid {
     display: grid;

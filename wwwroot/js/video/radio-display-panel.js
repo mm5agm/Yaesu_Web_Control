@@ -72,18 +72,27 @@ export class RadioDisplayPanel {
 
     const hiddenByUser = this.isHiddenByUser();
     const showRow = document.getElementById('radioDisplayShowRow');
+    const slot = window.vfoSlot;
 
     if (status === 'unconfigured') {
       this._container.style.display = 'none';
       if (showRow) showRow.style.display = 'none';
+      slot?.setDisplayAvailable?.(false);
+      this._syncVisibilityToggle(false);
+    } else if (slot) {
+      // Shared VFO B / Radio Scope column owns container visibility.
+      if (showRow) showRow.style.display = '';
+      slot.setDisplayAvailable(true);
+      slot.apply();
     } else if (hiddenByUser) {
       this._container.style.display = 'none';
       if (showRow) showRow.style.display = '';
+      this._syncVisibilityToggle(false);
     } else {
       this._container.style.display = '';
       if (showRow) showRow.style.display = '';
+      this._syncVisibilityToggle(true);
     }
-    this._syncVisibilityToggle(status !== 'unconfigured' && !hiddenByUser);
 
     if (this._badge) {
       const labels = {
@@ -138,6 +147,9 @@ export class RadioDisplayPanel {
     }
     this._syncVisibilityToggle(this._status !== 'unconfigured');
     this.applyFit();
+    if (!this._suppressSlotNotify) {
+      window.vfoSlot?.onRadioDisplayShow?.();
+    }
   }
 
   hide() {
@@ -147,6 +159,9 @@ export class RadioDisplayPanel {
     const showRow = document.getElementById('radioDisplayShowRow');
     if (showRow && this._status !== 'unconfigured') showRow.style.display = '';
     this._syncVisibilityToggle(false);
+    if (!this._suppressSlotNotify) {
+      window.vfoSlot?.onRadioDisplayHide?.();
+    }
   }
 
   isHiddenByUser() {

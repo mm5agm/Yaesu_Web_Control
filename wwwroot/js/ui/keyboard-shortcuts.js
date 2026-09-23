@@ -59,7 +59,7 @@ export const SHORTCUT_HELP = [
     { group: 'Panels', keys: '@', action: 'Open DX Watch dialog' },
     { group: 'Panels', keys: 'R', action: 'Show / focus Radio Display panel', when: 'Radio Display configured' },
     { group: 'Panels', keys: 'r', action: 'Start / stop Remote Audio', when: 'Remote Audio available' },
-    { group: 'Panels', keys: 'x', action: 'Show / hide VFO B panel' },
+    { group: 'Panels', keys: 'x', action: 'Switch right column between VFO B and Radio Scope', when: 'Radio Display configured; otherwise show / hide VFO B' },
     { group: 'Panels', keys: 'f / F', action: 'Enter full-screen mode' },
     // Audio
     { group: 'Remote Audio', keys: 'v / V', action: 'RX gain −/+ one step', when: 'Remote Audio streaming' },

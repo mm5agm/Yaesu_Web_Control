@@ -1,8 +1,13 @@
 /**
  * Radio Display UI wiring: status poll + MJPEG img stream + controls.
  */
-import { RadioDisplayPanel } from './radio-display-panel.js?v=11';
+import { RadioDisplayPanel } from './radio-display-panel.js?v=12';
 import { RadioDisplayHotspots } from './radio-display-hotspots.js?v=6';
+
+/** Shared with Index via window.vfoSlot (bound before initRadioDisplayUi). */
+function slot() {
+  return window.vfoSlot;
+}
 
 const STATUS_POLL_MS = 4000;
 const RECONNECT_MS = 2500;
@@ -372,7 +377,9 @@ function reattachToIndex() {
 
 function onReattachFromPopout(stream) {
   if (uiMode !== 'index' || !panel) return;
-  panel.show();
+  slot()?.onReattached();
+  panel._suppressSlotNotify = true;
+  try { panel.show(); } finally { panel._suppressSlotNotify = false; }
   applyControlsLayout({ refreshIfDocked: true });
   panel.applyFit();
   if (holdDisconnected) {
@@ -700,7 +707,11 @@ function ensureRadioDisplayTooltips() {
 function onPopoutReady() {
   if (uiMode !== 'index') return;
   stopStream();
-  panel?.hide();
+  slot()?.onPopoutStarted();
+  if (panel) {
+    panel._suppressSlotNotify = true;
+    try { panel.hide(); } finally { panel._suppressSlotNotify = false; }
+  }
 }
 
 function bindChannel() {
@@ -711,6 +722,7 @@ function bindChannel() {
       if (!msg || typeof msg !== 'object') return;
       if (msg.type === 'reattach') onReattachFromPopout(!!msg.stream);
       if (msg.type === 'popout-ready') onPopoutReady();
+      if (msg.type === 'popout-closed') onPopoutClosedFromChild();
     };
   }
 
@@ -720,7 +732,13 @@ function bindChannel() {
       onReattachFromPopout(!!ev.data.stream);
     }
     if (ev.data?.type === 'ywc-radio-display-popout-ready') onPopoutReady();
+    if (ev.data?.type === 'ywc-radio-display-popout-closed') onPopoutClosedFromChild();
   });
+}
+
+function onPopoutClosedFromChild() {
+  if (uiMode !== 'index') return;
+  slot()?.onPopoutClosed();
 }
 
 function closeScopeDialog() {
@@ -1239,9 +1257,11 @@ function bindControls() {
     const w = window.open('/RadioDisplay' + qs, 'ywc-radio-display', 'width=900,height=600');
     if (w) w.focus();
     closeScopeDialog();
-    // Hide the Index card immediately but keep the MJPEG viewer attached
-    // until the pop-out acquires, so the USB device is never released.
-    panel.hide();
+    // Free the Index column for VFO B; keep MJPEG attached until the pop-out
+    // acquires so the USB device is never released.
+    slot()?.onPopoutStarted();
+    panel._suppressSlotNotify = true;
+    try { panel.hide(); } finally { panel._suppressSlotNotify = false; }
     setTimeout(() => {
       if (uiMode === 'index' && panel?.isHiddenByUser()) stopStream();
     }, 4000);
@@ -1307,6 +1327,27 @@ export async function initRadioDisplayUi(mode = 'index') {
   bindChannel();
   bindControls();
 
+  if (uiMode === 'index') {
+    window.__vfoSlotApplyPanel = (show) => {
+      if (!panel) return;
+      panel._suppressSlotNotify = true;
+      try {
+        if (show) {
+          panel.show();
+          if (isAutoStart() && enabled && currentDeviceKey) requestStart();
+          else syncStreamButton();
+        } else {
+          closeScopeDialog();
+          requestStop();
+          panel.hide();
+        }
+      } finally {
+        panel._suppressSlotNotify = false;
+      }
+      slot()?.apply();
+    };
+  }
+
   // Prototype: click-to-tune and clickable readouts / soft-buttons drawn over
   // the captured TFT. Needs the scope control for span and band, so the
   // pages construct that first. Exposed on window for the debug helpers.
@@ -1325,6 +1366,20 @@ export async function initRadioDisplayUi(mode = 'index') {
   // Probe status before attaching MJPEG so server halt blocks Auto/reload reopen.
   await pollStatus({ attachStream: false });
   syncDisconnectedControls();
+
+  if (uiMode === 'index') {
+    // Prefer the shared-slot preference over a stale Hide flag.
+    const wantScope = slot()?.getMode() === 'scope';
+    panel._suppressSlotNotify = true;
+    try {
+      if (wantScope) panel.show();
+      else panel.hide();
+    } finally {
+      panel._suppressSlotNotify = false;
+    }
+    slot()?.apply();
+  }
+
   wantStream = !holdDisconnected && autoWanted;
 
   // Probe the device list before attaching MJPEG so enumeration never
@@ -1337,5 +1392,17 @@ export async function initRadioDisplayUi(mode = 'index') {
   if (statusTimer) clearInterval(statusTimer);
   statusTimer = setInterval(pollStatus, STATUS_POLL_MS);
 
-  window.addEventListener('beforeunload', () => stopStream());
+  window.addEventListener('beforeunload', () => {
+    stopStream();
+    if (uiMode === 'popout') {
+      postChannel({ type: 'popout-closed' });
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(
+            { type: 'ywc-radio-display-popout-closed' },
+            window.location.origin);
+        }
+      } catch { /* ignore */ }
+    }
+  });
 }

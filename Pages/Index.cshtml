@@ -501,8 +501,8 @@
                             <button id="vfoBToggleBtn" type="button"
                                     class="btn toggle-dd__btn"
                                     data-bs-toggle="tooltip" data-bs-placement="top"
-                                    title="VFO B panel visibility — click to hide or show the panel"
-                                    aria-label="Show or hide VFO B panel"
+                                    title="Switch the right column between VFO B and Radio Scope"
+                                    aria-label="Switch the right column between VFO B and Radio Scope"
                                     aria-pressed="true">
                                 <span class="toggle-dd__led is-on" aria-hidden="true"></span>
                                 <span class="toggle-dd__label">VFO B</span>
@@ -765,129 +765,6 @@
         <partial name="_RadioScopePartial" model="@Model.RadioModel" />
     }
 
-    <!-- Radio Display — USB UVC / HDMI capture MJPEG; visible when Settings enable it -->
-    <div id="radioDisplayContainer" class="row mt-3" style="display:none;"
-         data-radio-model="@Model.RadioModel" data-dual-receiver="@(isSingleReceiver ? "false" : "true")">
-        <div class="col-12">
-            <div class="card border-dark">
-                <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center gap-2 py-2">
-                    <strong class="me-1"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
-                    <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
-                    <select id="radioDisplayDeviceSelect" class="form-select form-select-sm"
-                            style="width:14rem; max-width:min(14rem, 40vw); min-width:0;"
-                            aria-label="Capture device">
-                        <option value="">(None)</option>
-                    </select>
-                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Refresh capture device list" aria-label="Refresh capture device list">
-                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayRefreshDevicesBtn"
-                                aria-label="Refresh capture device list">
-                            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span class="d-inline-block radio-display-tip" id="radioDisplaySizeWrap"
-                          data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Capture size. Auto picks the best mode for this dongle. Larger modes are usually the dongle upscaling the same picture — no more detail, softer, and about twice the bandwidth."
-                          aria-label="Capture size" hidden>
-                        <select id="radioDisplaySizeSelect" class="form-select form-select-sm"
-                                style="width:7.5rem; max-width:7.5rem;" aria-label="Capture size">
-                            <option value="">Auto size</option>
-                        </select>
-                    </span>
-                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="How fast the picture updates" aria-label="Stream frame rate">
-                        <select id="radioDisplayFpsSelect" class="form-select form-select-sm"
-                                style="width:5.5rem; max-width:5.5rem;" aria-label="Stream frame rate">
-                            <option value="15">15 fps</option>
-                            <option value="30">30 fps</option>
-                            <option value="60">60 fps</option>
-                        </select>
-                    </span>
-                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Max keeps the image as captured. Low and Medium recompress — smaller stream (saves bandwidth), more CPU."
-                          aria-label="Image quality">
-                        <select id="radioDisplayQualitySelect" class="form-select form-select-sm"
-                                style="width:6.5rem; max-width:6.5rem;" aria-label="Image quality">
-                            <option value="40">Low</option>
-                            <option value="65">Medium</option>
-                            <option value="85" selected>Max</option>
-                        </select>
-                    </span>
-                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Start or stop the video stream" aria-label="Start or stop the video stream">
-                        <button type="button" class="btn btn-sm btn-outline-success" id="radioDisplayStreamBtn"
-                                aria-label="Start stream">
-                            <i class="bi bi-play-fill" aria-hidden="true"></i>
-                        </button>
-                    </span>
-                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Start the stream automatically when the panel opens"
-                          aria-label="Auto-start stream">
-                        <label class="form-check-label small d-flex align-items-center gap-1 mb-0 user-select-none">
-                            <input class="form-check-input mt-0" type="checkbox" id="radioDisplayAutoStart" />
-                            Auto
-                        </label>
-                    </span>
-                    @if (Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(Model.RadioModel))
-                    {
-                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                              data-bs-title="Change what the radio's own screen is showing (span, 3DSS, speed)"
-                              aria-label="Open radio scope controls">
-                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayScopeBtn"
-                                    aria-haspopup="dialog" aria-expanded="false" aria-controls="radioDisplayScopeDialog"
-                                    aria-label="Open radio scope controls">
-                                <i class="bi bi-sliders" aria-hidden="true"></i>&nbsp;Controls
-                            </button>
-                        </span>
-                    }
-                    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
-                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                              data-bs-title="Fit shows the whole TFT. Fill covers the pane and may crop edges."
-                              aria-label="Video scaling: Fit or Fill">
-                            <div class="btn-group btn-group-sm" role="group" aria-label="Video scaling mode">
-                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitContain"
-                                       value="contain" autocomplete="off" checked>
-                                <label class="btn btn-outline-light" for="radioDisplayFitContain">Fit</label>
-                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitCover"
-                                       value="cover" autocomplete="off">
-                                <label class="btn btn-outline-light" for="radioDisplayFitCover">Fill</label>
-                            </div>
-                        </span>
-                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                              data-bs-title="Fullscreen" aria-label="Fullscreen">
-                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFullscreenBtn"
-                                    aria-label="Fullscreen">
-                                <i class="bi bi-fullscreen" aria-hidden="true"></i>
-                            </button>
-                        </span>
-                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                              data-bs-title="Pop out Radio Display into a separate window"
-                              aria-label="Pop out Radio Display into a separate window">
-                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayPopoutBtn"
-                                    aria-label="Pop out Radio Display into a separate window">
-                                <i class="bi bi-window-plus" aria-hidden="true"></i>
-                            </button>
-                        </span>
-                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                              data-bs-title="Close Radio Display panel" aria-label="Close Radio Display panel">
-                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayCloseBtn"
-                                    aria-label="Close Radio Display panel">Close</button>
-                        </span>
-                    </div>
-                </div>
-                <div class="card-body p-0 bg-black radio-display-body" style="overflow:hidden; min-height:240px;">
-                    <div class="radio-display-video-pane">
-                        <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
-                            <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
-                        </div>
-                        <img id="radioDisplayImg" alt="Radio display" decoding="async"
-                             style="display:none; background:#000;" />
-                    </div>
-                    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
-                </div>
-            </div>
-        </div>
-    </div>
     <!-- Spectrum Display — dual-VFO layout (v2.3.0+).
          Each panel has its own canvas. Mono A / Mono B / Multi toggle below
          hides/shows individual panels. Outer container hides itself when no
@@ -1266,8 +1143,9 @@
                         </div>
         </div>
 
-        <!-- VFO B Panel -->
-        <div class="col-lg-6 col-12" id="vfoBCol">
+        <!-- Right column: VFO B or Radio Display (shared slot) -->
+        <div class="col-lg-6 col-12" id="vfoBSlot">
+            <div id="vfoBCol" class="vfo-slot-panel">
             <div class="card border-success h-100 receiver-card">
                 <div class="card-header bg-success text-white py-1">
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-1">
@@ -1512,10 +1390,133 @@
                     <div id="vfoBStatusLine"
                          class="bg-success text-white px-2 py-1 mt-1 font-monospace rounded"
                          style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;">—</div>
-                                </div>
                             </div>
                         </div>
+        </div><!-- /vfoBCol -->
+
+        <!-- Radio Display — shares the VFO B column when visible -->
+        <div id="radioDisplayContainer" class="vfo-slot-panel" style="display:none;"
+             data-radio-model="@Model.RadioModel" data-dual-receiver="@(isSingleReceiver ? "false" : "true")">
+            <div class="card border-dark h-100">
+                <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center gap-2 py-2">
+                    <strong class="me-1"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
+                    <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
+                    <select id="radioDisplayDeviceSelect" class="form-select form-select-sm"
+                            style="width:14rem; max-width:min(14rem, 40vw); min-width:0;"
+                            aria-label="Capture device">
+                        <option value="">(None)</option>
+                    </select>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Refresh capture device list" aria-label="Refresh capture device list">
+                        <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayRefreshDevicesBtn"
+                                aria-label="Refresh capture device list">
+                            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" id="radioDisplaySizeWrap"
+                          data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Capture size. Auto picks the best mode for this dongle. Larger modes are usually the dongle upscaling the same picture — no more detail, softer, and about twice the bandwidth."
+                          aria-label="Capture size" hidden>
+                        <select id="radioDisplaySizeSelect" class="form-select form-select-sm"
+                                style="width:7.5rem; max-width:7.5rem;" aria-label="Capture size">
+                            <option value="">Auto size</option>
+                        </select>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="How fast the picture updates" aria-label="Stream frame rate">
+                        <select id="radioDisplayFpsSelect" class="form-select form-select-sm"
+                                style="width:5.5rem; max-width:5.5rem;" aria-label="Stream frame rate">
+                            <option value="15">15 fps</option>
+                            <option value="30">30 fps</option>
+                            <option value="60">60 fps</option>
+                        </select>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Max keeps the image as captured. Low and Medium recompress — smaller stream (saves bandwidth), more CPU."
+                          aria-label="Image quality">
+                        <select id="radioDisplayQualitySelect" class="form-select form-select-sm"
+                                style="width:6.5rem; max-width:6.5rem;" aria-label="Image quality">
+                            <option value="40">Low</option>
+                            <option value="65">Medium</option>
+                            <option value="85" selected>Max</option>
+                        </select>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Start or stop the video stream" aria-label="Start or stop the video stream">
+                        <button type="button" class="btn btn-sm btn-outline-success" id="radioDisplayStreamBtn"
+                                aria-label="Start stream">
+                            <i class="bi bi-play-fill" aria-hidden="true"></i>
+                        </button>
+                    </span>
+                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Start the stream automatically when the panel opens"
+                          aria-label="Auto-start stream">
+                        <label class="form-check-label small d-flex align-items-center gap-1 mb-0 user-select-none">
+                            <input class="form-check-input mt-0" type="checkbox" id="radioDisplayAutoStart" />
+                            Auto
+                        </label>
+                    </span>
+                    @if (Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(Model.RadioModel))
+                    {
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Change what the radio's own screen is showing (span, 3DSS, speed)"
+                              aria-label="Open radio scope controls">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayScopeBtn"
+                                    aria-haspopup="dialog" aria-expanded="false" aria-controls="radioDisplayScopeDialog"
+                                    aria-label="Open radio scope controls">
+                                <i class="bi bi-sliders" aria-hidden="true"></i>&nbsp;Controls
+                            </button>
+                        </span>
+                    }
+                    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Fit shows the whole TFT. Fill covers the pane and may crop edges."
+                              aria-label="Video scaling: Fit or Fill">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Video scaling mode">
+                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitContain"
+                                       value="contain" autocomplete="off" checked>
+                                <label class="btn btn-outline-light" for="radioDisplayFitContain">Fit</label>
+                                <input type="radio" class="btn-check" name="radioDisplayFitMode" id="radioDisplayFitCover"
+                                       value="cover" autocomplete="off">
+                                <label class="btn btn-outline-light" for="radioDisplayFitCover">Fill</label>
+                            </div>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Fullscreen" aria-label="Fullscreen">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayFullscreenBtn"
+                                    aria-label="Fullscreen">
+                                <i class="bi bi-fullscreen" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Pop out Radio Display into a separate window"
+                              aria-label="Pop out Radio Display into a separate window">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayPopoutBtn"
+                                    aria-label="Pop out Radio Display into a separate window">
+                                <i class="bi bi-window-plus" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                        <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Close Radio Display panel" aria-label="Close Radio Display panel">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="radioDisplayCloseBtn"
+                                    aria-label="Close Radio Display panel">Close</button>
+                        </span>
                     </div>
+                </div>
+                <div class="card-body p-0 bg-black radio-display-body" style="overflow:hidden; min-height:240px;">
+                    <div class="radio-display-video-pane">
+                        <div id="radioDisplayPlaceholder" class="radio-display-placeholder">
+                            <span>Click <i class="bi bi-play-fill" aria-hidden="true"></i> to show the radio display</span>
+                        </div>
+                        <img id="radioDisplayImg" alt="Radio display" decoding="async"
+                             style="display:none; background:#000;" />
+                    </div>
+                    <partial name="_RadioDisplayScopeToolbarPartial" model="@Model.RadioModel" />
+                </div>
+            </div>
+        </div>
+        </div><!-- /vfoBSlot -->
+    </div><!-- /vfoRow -->
 
 <!-- Memories Panel Dialog -->
 <dialog id="memoriesDialog" class="mem-dialog" aria-labelledby="memoriesTitle" aria-label="Radio memories panel">
@@ -2392,6 +2393,7 @@
         import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initKeyboardShortcuts, syncDisplayTargetButton } from "/js/ui/keyboard-shortcuts.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import vfoSlot from "/js/ui/vfo-slot.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initNrCycleButtons }   from "/js/ui/nr-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initProcCycleButton } from "/js/ui/proc-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMonitorCycleButton } from "/js/ui/monitor-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -2426,6 +2428,7 @@
 
         loadLabels();
         initRemoteAudioUi();
+        vfoSlot.bind();
         initRadioDisplayUi('index');
         // loadLabels() rewrites every title from labels.json on each focus,
         // wiping the "out of band" title suffix; restore it once that has run.
@@ -5042,44 +5045,5 @@
         window.cwMemButtonsBusy = cwMemButtonsBusy;
         window.saveCwMessages  = saveCwMessages;
     </script>
-    <script>
-    (function () {
-        const STORAGE_KEY = 'vfoBVisible';
-        function getVisible() {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            return stored !== null ? stored === 'true' : true;
-        }
-
-        function applyVisibility(visible) {
-            const aCol  = document.getElementById('vfoACol');
-            const bCol  = document.getElementById('vfoBCol');
-            const btn   = document.getElementById('vfoBToggleBtn');
-            const led   = btn?.querySelector('.toggle-dd__led');
-            const vfoRow = document.getElementById('vfoRow');
-            if (bCol) bCol.style.display = visible ? '' : 'none';
-            if (aCol) {
-                if (visible) {
-                    aCol.classList.remove('col-12');
-                    aCol.classList.add('col-lg-6');
-                } else {
-                    aCol.classList.remove('col-lg-6');
-                    aCol.classList.add('col-12');
-                }
-            }
-            vfoRow?.classList.toggle('vfo-b-hidden', !visible);
-            if (btn) {
-                led?.classList.toggle('is-on', visible);
-                btn.setAttribute('aria-pressed', String(visible));
-            }
-        }
-
-        document.getElementById('vfoBToggleBtn')?.addEventListener('click', function () {
-            const newVisible = !getVisible();
-            localStorage.setItem(STORAGE_KEY, String(newVisible));
-            applyVisibility(newVisible);
-        });
-
-        applyVisibility(getVisible());
-    })();
     </script>
 }
