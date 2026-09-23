@@ -270,6 +270,32 @@
         color: #fff;
         border-color: #ff6b5a;
     }
+
+    /* Spectrum panel height — Bruce VK2RT, discussion #171, who wanted more
+       vertical room for the spectrum.
+
+       `resize: vertical` gives a browser-drawn drag handle in the bottom-right
+       corner and writes the dragged height back as an inline style, which is
+       what SpectrumPanel persists. The same technique the CW Send and CW
+       Reader dialogs already use (see makeResizable further down this page).
+
+       `overflow: hidden` is not cosmetic: `resize` is ignored outright on an
+       element whose overflow is `visible`, which a Bootstrap .card-body
+       otherwise is. The canvas is sized to exactly this box by _sizeCanvas,
+       so there is nothing to clip in normal use.
+
+       The height here is the starting value only. SpectrumPanel puts the
+       operator's saved height back on load, and min/max are enforced in both
+       places so neither route can produce a panel the other would refuse.
+       Keep these three numbers in step with MIN_PANEL_H / MAX_PANEL_H /
+       DEFAULT_PANEL_H in wwwroot/js/sdr/spectrum-panel.js. */
+    .spectrum-canvas-wrap {
+        height: 280px;
+        min-height: 160px;
+        max-height: 1000px;
+        overflow: hidden;
+        resize: vertical;
+    }
 </style>
 
 <!-- Message Box Modal (Windows-style) -->
@@ -999,8 +1025,19 @@
                                    aria-label="Show the VFO A receiver passband as a shaded band on the spectrum">
                             <label class="form-check-label" for="spectrumPassbandToggleA">Passband</label>
                         </div>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectA" title="How tall the VFO A spectrum panel is. You can also drag the bottom-right corner of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
+                        <select class="form-select form-select-sm spectrum-height-select" data-vfo="A" id="spectrumHeightSelectA"
+                                style="width:auto;" title="How tall the VFO A spectrum panel is. You can also drag the bottom-right corner of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
+                                aria-label="VFO A spectrum panel height">
+                            <option value="">Custom</option>
+                            <option value="200">Short</option>
+                            <option value="280">Normal</option>
+                            <option value="400">Tall</option>
+                            <option value="560">Taller</option>
+                            <option value="760">Tallest</option>
+                        </select>
                     </div>
-                    <div class="card-body p-0">
+                    <div class="card-body p-0 spectrum-canvas-wrap">
                         <canvas id="spectrumCanvasA" role="img" aria-hidden="true" aria-label="RF spectrum display VFO A" style="display:block; width:100%;"></canvas>
                     </div>
                 </div>
@@ -1060,8 +1097,19 @@
                                    aria-label="Show the VFO B receiver passband as a shaded band on the spectrum">
                             <label class="form-check-label" for="spectrumPassbandToggleB">Passband</label>
                         </div>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectB" title="How tall the VFO B spectrum panel is. You can also drag the bottom-right corner of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
+                        <select class="form-select form-select-sm spectrum-height-select" data-vfo="B" id="spectrumHeightSelectB"
+                                style="width:auto;" title="How tall the VFO B spectrum panel is. You can also drag the bottom-right corner of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
+                                aria-label="VFO B spectrum panel height">
+                            <option value="">Custom</option>
+                            <option value="200">Short</option>
+                            <option value="280">Normal</option>
+                            <option value="400">Tall</option>
+                            <option value="560">Taller</option>
+                            <option value="760">Tallest</option>
+                        </select>
                     </div>
-                    <div class="card-body p-0">
+                    <div class="card-body p-0 spectrum-canvas-wrap">
                         <canvas id="spectrumCanvasB" role="img" aria-hidden="true" aria-label="RF spectrum display VFO B" style="display:block; width:100%;"></canvas>
                     </div>
                 </div>
@@ -3591,6 +3639,37 @@
 
                 box.checked = panel.getShowPassband();
                 box.addEventListener('change', () => panel.setShowPassband(box.checked));
+            });
+
+            // Panel height — Bruce VK2RT asked for a bigger spectrum
+            // (discussion #171). There are two routes to the same number:
+            // drag the panel's bottom-right corner, or pick a preset here.
+            // The drag handle alone would not do, because it is mouse-only —
+            // no keyboard and no touch. The panel owns the height and
+            // persists it per VFO, so the select is initialised FROM the
+            // panel rather than from the markup's first <option>, the same
+            // trap the Smooth slider and the Passband checkbox both have.
+            ['A', 'B'].forEach(vfo => {
+                const select = document.querySelector(`.spectrum-height-select[data-vfo="${vfo}"]`);
+                const panel  = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+                if (!select || !panel) return;
+
+                // "Custom" is what dragging produces, and it is not a height
+                // anyone can pick from the list — choosing it must not resize
+                // anything. Everything else is a straight match on the value.
+                const syncSelect = (h) => {
+                    const listed = [...select.options].some(o => o.value === String(h));
+                    select.value = listed ? String(h) : '';
+                };
+
+                panel.enableHeightControl();                // applies the saved height
+                syncSelect(panel.getPanelHeight());
+                panel.setHeightChangeHandler(syncSelect);   // keeps the select honest during a drag
+
+                select.addEventListener('change', () => {
+                    if (!select.value) return;
+                    panel.setPanelHeight(parseInt(select.value, 10));
+                });
             });
 
             // Span selector — POST new sample rate for this VFO and restart

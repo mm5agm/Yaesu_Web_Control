@@ -129,6 +129,21 @@ export class SpectrumPanel {
 
         this._resizeObserver = null;
 
+        // Panel height. Off until enableHeightControl() is called, so a host
+        // that sizes the container itself is left alone. See the panel-height
+        // section below.
+        this._heightPersist   = false;
+        this._heightSaveTimer = null;
+        this._onHeightChange  = null;
+
+        // The height we last asked for, which is NOT always the height the
+        // container measures: the whole panel is display:none until the SDR
+        // streams (see setStatus), and a hidden element measures 0. Without
+        // this, a saved height would read back as the default on every page
+        // load, and the preset control would say "Normal" while the panel was
+        // in fact set to 560.
+        this._panelH = null;
+
         // Spectrum/waterfall split ratio — fraction of canvas height given to
         // the spectrum trace (top zone); remainder goes to the waterfall.
         // Persisted per-VFO in localStorage so the operator can give the
@@ -197,6 +212,95 @@ export class SpectrumPanel {
         } catch (e) { /* localStorage may be unavailable */ }
     }
 
+    // ── Panel height ─────────────────────────────────────────────────────────
+    //
+    // The canvas takes its height from its container (see _sizeCanvas), so
+    // "resize the panel" means "set the container's height and let the
+    // ResizeObserver do the rest". The container is given CSS `resize:
+    // vertical` by the page, which makes the browser draw a drag handle and
+    // write the dragged height as an inline style — the same technique the CW
+    // dialogs already use, via makeResizable in Index.cshtml.
+    //
+    // Persistence is opt-in through enableHeightControl() rather than
+    // automatic, because not every host wants it: a container sized to fill
+    // its window has a height of its own already, and putting a saved pixel
+    // height back would fight it.
+
+    _clampPanelHeight(px) {
+        const v = Math.round(Number(px));
+        if (!isFinite(v)) return SpectrumPanel.DEFAULT_PANEL_H;
+        return Math.max(SpectrumPanel.MIN_PANEL_H,
+               Math.min(SpectrumPanel.MAX_PANEL_H, v));
+    }
+
+    _loadPanelHeight() {
+        try {
+            const v = parseInt(localStorage.getItem('ywc.spectrumHeight.' + this._vfo), 10);
+            if (isFinite(v) && v >= SpectrumPanel.MIN_PANEL_H && v <= SpectrumPanel.MAX_PANEL_H) return v;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return SpectrumPanel.DEFAULT_PANEL_H;
+    }
+
+    _savePanelHeight(px) {
+        try {
+            localStorage.setItem('ywc.spectrumHeight.' + this._vfo, String(this._clampPanelHeight(px)));
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    /** The canvas's container — the element whose height this panel occupies. */
+    _panelWrap() {
+        return document.getElementById(this._canvasId)?.parentElement ?? null;
+    }
+
+    // Debounced so a drag writes once when it settles rather than on every
+    // frame of the drag. 250 ms matches makeResizable in Index.cshtml.
+    _queueHeightSave() {
+        if (!this._heightPersist) return;
+        clearTimeout(this._heightSaveTimer);
+        this._heightSaveTimer = setTimeout(() => {
+            const h = this.getPanelHeight();
+            this._savePanelHeight(h);
+            try { this._onHeightChange?.(h); } catch { /* handler's problem, not ours */ }
+        }, 250);
+    }
+
+    /**
+     * Put the operator's saved height back and start persisting changes to it.
+     * Call once per panel, from the page that owns the resizable container.
+     */
+    enableHeightControl() {
+        this._heightPersist = true;
+        this.setPanelHeight(this._loadPanelHeight());
+    }
+
+    /**
+     * Notified with the new height (px) shortly after the operator changes it,
+     * however they changed it. Lets a page keep a preset control in step with
+     * a height that was reached by dragging the corner instead.
+     */
+    setHeightChangeHandler(fn) { this._onHeightChange = fn; }
+
+    /** Current panel height in px, clamped; the default if there is no container. */
+    getPanelHeight() {
+        const wrap = this._panelWrap();
+        const h = wrap ? wrap.clientHeight : 0;
+        if (h > 0) return this._clampPanelHeight(h);
+        return this._panelH ?? SpectrumPanel.DEFAULT_PANEL_H;
+    }
+
+    /**
+     * Set the panel height in px. The ResizeObserver installed in _init picks
+     * the change up and does the canvas resize, waterfall rebuild, repaint and
+     * save, so this deliberately does none of those itself.
+     */
+    setPanelHeight(px) {
+        const h = this._clampPanelHeight(px);
+        this._panelH = h;
+        const wrap = this._panelWrap();
+        if (!wrap) return;
+        wrap.style.height = h + 'px';
+    }
+
     // Valid waterfall speed divisors — 1 (full speed) through 128 (1/128
     // speed). Index into this array (not the divisor itself) is what the
     // UI slider in Index.cshtml drags across, since the divisors themselves
@@ -259,6 +363,24 @@ export class SpectrumPanel {
     // axis labels. The trace maps into the area above this; _drawFrequencyAxis
     // paints its strip into it. One constant so the two never disagree.
     static AXIS_H = 20;
+
+    // Panel height limits, in CSS pixels of canvas — the whole panel, trace and
+    // waterfall together, which _splitRatio then divides between them.
+    //
+    // DEFAULT_PANEL_H is the height this panel was fixed at before it became
+    // adjustable, so an operator who never touches the control sees exactly
+    // what they saw before. MIN keeps the frequency-axis strip (AXIS_H) from
+    // crowding out the trace above it.
+    //
+    // MAX is a guard rather than a measured limit. Both waterfall costs per
+    // frame — the copyWithin row shift and the putImageData — are linear in
+    // W x wfH, so dragging the panel to four times the height is four times
+    // the per-frame pixel work. That is nothing on a desktop and may well be
+    // something on the Pi/Docker rig, which is why there is a ceiling at all.
+    // Requested by Bruce VK2RT, discussion #171.
+    static MIN_PANEL_H     = 160;
+    static MAX_PANEL_H     = 1000;
+    static DEFAULT_PANEL_H = 280;   // 126px spectrum + 154px waterfall at the default split
 
     // Load the persisted Range (dB headroom) for this VFO, clamped to the valid
     // slider band so a corrupt value can't produce an unusable scale.
@@ -952,11 +1074,15 @@ export class SpectrumPanel {
         // Size the canvas to match its CSS layout width.
         this._sizeCanvas(canvas);
 
-        // Rebuild waterfall buffer whenever the canvas is resized.
+        // Rebuild waterfall buffer whenever the canvas is resized. This fires
+        // for height changes as readily as width ones, which is the whole
+        // mechanism behind the resizable panel — dragging the container's
+        // corner lands here and everything downstream follows.
         this._resizeObserver = new ResizeObserver(() => {
             this._sizeCanvas(canvas);
             this._waterfallData = null;  // force rebuild on next frame
             if (this._lastBins) this._render();
+            this._queueHeightSave();
         });
         this._resizeObserver.observe(canvas.parentElement ?? canvas);
 
@@ -1269,11 +1395,20 @@ export class SpectrumPanel {
     }
 
     _sizeCanvas(canvas) {
-        const w = canvas.parentElement
-            ? canvas.parentElement.clientWidth || 800
-            : 800;
+        const parent = canvas.parentElement;
+        const w = parent ? parent.clientWidth || 800 : 800;
+
+        // Height follows the container, the same way the width always has, so
+        // the operator can make the panel taller by dragging it or by picking
+        // a size. A container with no height of its own falls back to the
+        // height this panel was fixed at before, so nothing that does not opt
+        // in changes at all.
+        const h = (parent && parent.clientHeight)
+                  || this._panelH
+                  || SpectrumPanel.DEFAULT_PANEL_H;
+
         canvas.width  = w;
-        canvas.height = 280;   // 126px spectrum + 154px waterfall
+        canvas.height = h;
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────

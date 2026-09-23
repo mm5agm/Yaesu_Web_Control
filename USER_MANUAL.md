@@ -577,6 +577,15 @@ Every change is announced to screen readers. 1 Hz is now offered everywhere, inc
 
 **Frequency crosshair** — Move the mouse over the spectrum to see the exact RF frequency at the cursor position displayed above the waterfall.
 
+**Panel height** — the whole spectrum panel can be made taller. There are two ways, and they set the same thing:
+
+- **The Height box** on the control bar, beside Passband — **Short**, **Normal**, **Tall**, **Taller** or **Tallest**. This is the keyboard-and-touch route, and the one to use if you just want it bigger without fiddling.
+- **Drag the bottom-right corner of the panel.** Hover the very corner of the spectrum's box and the cursor becomes a resize arrow; drag down for more, up for less. Anything between 160 and 1000 pixels is allowed, so you are not limited to the five presets — when you drag to a size that is not one of them the Height box reads **Custom**.
+
+The height is remembered per VFO across browser reloads, and A and B are independent, so you can run a tall VFO A and a short VFO B if that suits how you operate. The split between the trace and the waterfall (below) is kept as a proportion, so both grow together when you make the panel taller. Bruce VK2RT asked for this in [discussion #171](https://github.com/mm5agm/Yaesu_Web_Control/discussions/171).
+
+> A very tall panel is more work for your browser to draw, because the waterfall has to be redrawn in full on every frame and there is simply more of it. On a desktop PC you will not notice. On a Raspberry Pi, or any low-powered machine, come down a size or two if the waterfall starts to stutter.
+
 **Resize spectrum vs waterfall** — Hover the horizontal boundary between the spectrum trace (top) and the waterfall (bottom); the cursor becomes a vertical-resize arrow. Drag up to give the spectrum more vertical room — useful when you're hunting weak signals close to the noise floor. Drag down to give the waterfall more history. The ratio is remembered per VFO across browser reloads, so the next time you open YWC the panel is back the way you left it. Two short grey grip-bars at the centre of the boundary mark the handle; they turn cyan while you're dragging.
 
 **Automatic noise floor** — you no longer set a floor level by hand. YWC tracks your band noise continuously and pins it near the bottom of the panel automatically, so the trace stays framed the same way whether the band is quiet or busy and whichever SDR you use. As conditions change the floor re-tracks on its own; there is no floor slider to chase.
