@@ -879,11 +879,20 @@ export class SpectrumPanel {
      * out of a two-tone RTTY blob. See _rttyAnchorAudioHz. Derived from the
      * manual, not from a signal, and not re-checked since the axis correction.
      *
+     * DATA-L gets the same offset as RTTY-L. On HF, DATA-L is AFSK RTTY: the
+     * software makes the tones and the radio is a plain lower-sideband
+     * transceiver, so the dial has to sit the same distance above the signal
+     * as in RTTY-L (discussion #169: Bruce VK2RT runs all his RTTY this way).
+     * The tones are then the software's, not the radio's RTTY menu's; the
+     * radio's values stand in for them, and 2125 Hz mark / 170 Hz shift is the
+     * usual default on both. DATA-U stays at zero -- that is FT8 and friends,
+     * where tuning the dial onto the click is the convention.
+     *
      * @param {string} mode
      * @returns {number} Hz to add to the clicked frequency.
      */
     _tuneOffsetHz(mode) {
-        if (mode === 'RTTY-L' || mode === 'RTTY-U') {
+        if (mode === 'RTTY-L' || mode === 'RTTY-U' || mode === 'DATA-L') {
             const anchor = this._rttyAnchorAudioHz(mode);
             return this._isLowerSideband(mode) ? anchor : -anchor;
         }

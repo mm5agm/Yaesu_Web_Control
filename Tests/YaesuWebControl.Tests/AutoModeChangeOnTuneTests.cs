@@ -106,6 +106,22 @@ namespace YaesuWebControl.Tests
         }
 
         [Fact]
+        public void AfskRttyInDataLGetsTheRttyTuneOffset()
+        {
+            // Bruce runs RTTY as AFSK in DATA-L. With the switch off the tune
+            // offset comes from the radio's own mode, and DATA-L used to get
+            // zero: every click put the dial on the signal and the tones near
+            // 0 Hz audio, where no decoder can copy them.
+            string js = StripComments(File.ReadAllText(LocateRepoPath("wwwroot/js/sdr/spectrum-panel.js")));
+            var offset = Regex.Match(js, @"_tuneOffsetHz\s*\(\s*mode\s*\)\s*\{(?<body>.*?)\n    \}", RegexOptions.Singleline);
+
+            Assert.True(offset.Success, "_tuneOffsetHz not found");
+            Assert.Contains("'DATA-L'", offset.Groups["body"].Value, StringComparison.Ordinal);
+            // DATA-U is FT8 and the other digital modes: dial onto the click.
+            Assert.DoesNotContain("'DATA-U'", offset.Groups["body"].Value, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void PickingANamedSegmentStillCarriesThatSegmentsMode()
         {
             // The setting is about modes inferred from a frequency. Choosing

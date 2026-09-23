@@ -560,7 +560,11 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 > **Settings → §6.1** and YWC leaves the mode entirely to you. Clicking the spectrum,
 > clicking a DX spot row, and stepping through spots from the keyboard then tune only.
 > Tuning offsets still follow the mode the radio is *actually* in, so a click on a RTTY
-> signal keeps your RTTY offset instead of tuning zero-beat onto it.
+> signal keeps your RTTY offset instead of tuning zero-beat onto it. That includes AFSK
+> RTTY in **DATA-L**, where your software makes the tones: a click puts the signal's two
+> tones either side of 2210 Hz, the same as in RTTY-L. YWC takes the tone frequencies from
+> the radio's RTTY MARK and SHIFT menus (2125 Hz and 170 Hz by default), which is also the
+> usual default in RTTY software. If yours is set differently, the click lands a little off.
 >
 > Choosing a named segment (CW, FT8, SSB, RTTY) from a VFO’s band dropdown still sets
 > that segment’s mode either way. That is a choice you made by name, not a mode guessed
