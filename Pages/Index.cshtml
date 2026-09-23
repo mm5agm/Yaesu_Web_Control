@@ -688,6 +688,10 @@
                                 title="Open the CW reader - decodes the received Morse to text"
                                 onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">CW Read</button>
                         <button class="btn btn-sm ms-1 btn-outline-secondary"
+                                aria-label="RTTY tuner - crossed-ellipse tuning scope"
+                                title="Open the RTTY tuner - mark and space filters on an X-Y scope; tune for the cross"
+                                onclick="window.rttyTuner && window.rttyTuner.toggle()">RTTY Tune</button>
+                        <button class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="CW send - type text and send it as Morse"
                                 title="Open CW send - type a line, press Enter, the radio keys it"
                                 onclick="window.cwSendPanel && window.cwSendPanel.toggle()">CW Send</button>
@@ -2793,6 +2797,50 @@
     </div>
 </dialog>
 
+<!-- RTTY tuner: the mark filter on X, the space filter on Y, as a terminal unit
+     used to drive an oscilloscope. Non-modal so the VFO stays in reach. -->
+<dialog id="rttyTunerDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; width:340px; max-width:95vw;" aria-labelledby="rttyTunerTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
+        <strong id="rttyTunerTitle">RTTY Tuner</strong>
+        <button class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('rttyTunerDialog').close()"
+                aria-label="Close RTTY tuner">&#10005;</button>
+    </div>
+    <div class="p-2">
+        <div class="d-flex align-items-center gap-2 mb-2 small flex-wrap">
+            <label for="rttyTunerMark">Mark</label>
+            <input id="rttyTunerMark" type="number" min="300" max="3000" step="5" value="2125"
+                   class="form-control form-control-sm" style="width:5.5rem;"
+                   title="Mark tone in the receive audio, Hz. 2125 unless your RTTY setup says otherwise.">
+            <label for="rttyTunerShift">Shift</label>
+            <select id="rttyTunerShift" class="form-select form-select-sm" style="width:auto;">
+                <option value="170">170</option>
+                <option value="200">200</option>
+                <option value="425">425</option>
+                <option value="450">450</option>
+                <option value="850">850</option>
+            </select>
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" id="rttyTunerReverse">
+                <label class="form-check-label" for="rttyTunerReverse"
+                       title="Space on the other side of mark: reversed tones, or REV on the radio">Rev</label>
+            </div>
+        </div>
+        <canvas id="rttyTunerCanvas" width="320" height="320"
+                style="width:100%; display:block; border:1px solid #444; border-radius:6px;"
+                aria-label="RTTY crossed-ellipse tuning scope"></canvas>
+        <div id="rttyTunerInfo" class="mt-1"
+             style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
+            Waiting.
+        </div>
+        <div id="rttyTunerStatus" class="mt-1 small" role="status" aria-live="polite">Stopped.</div>
+        <div class="small mt-1" style="color:#9ab;">
+            Tune for a clean cross: mark draws the line across, space the line up.
+            Arms leaning and opening means off tune.
+        </div>
+    </div>
+</dialog>
+
 <!-- DX Watch alert toast container — populated by site.js when a watched spot arrives.
      Position is user-draggable; saved in localStorage as dxAlertPos. Defaults to
      bottom-right of the viewport on first run. -->
@@ -2856,6 +2904,7 @@
         // the panels that offer it so the global is there when they render.
         import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -3202,6 +3251,11 @@
             // second stream on the radio's codec.
             window.cwReaderPanel = new CwReaderPanel();
             window.cwReaderPanel.init();
+
+            // The RTTY tuner taps the same audio bridge, with its own hold, so
+            // it runs with or without the CW reader.
+            window.rttyTuner = new RttyTuner();
+            window.rttyTuner.init();
 
             // Typed CW goes out through the keyer memories the M1-M5 buttons
             // use; the panel only sequences the writes and plays.
@@ -4292,7 +4346,7 @@
             if (dlg) makeResizable(dlg);
         });
 
-        ['voxDialog', 'cwDialog', 'cwSendDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog'].forEach(id => {
+        ['voxDialog', 'cwDialog', 'cwSendDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog', 'rttyTunerDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
             makeDraggable(dlg, dlg.querySelector('div:not(.radio-display-scope-splitter)'));

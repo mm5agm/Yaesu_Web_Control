@@ -521,6 +521,8 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.BridgeCwAudioSource>
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwQsoLogService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderModeService>();
+// RTTY tuning scope: takes its own capture hold on the bridge while its dialog is open.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyTunerService>();
 // Radio Display (USB UVC / HDMI capture → MJPEG) — opt-in; capture opens while viewers connect.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoCaptureService>();

@@ -106,6 +106,47 @@ namespace YaesuWebControl.Tests
         }
 
         [Fact]
+        public void AfskRttyInDataLGetsTheRttyTuneOffset()
+        {
+            // Bruce runs RTTY as AFSK in DATA-L. With the switch off the tune
+            // offset comes from the radio's own mode, and DATA-L used to get
+            // zero: every click put the dial on the signal and the tones near
+            // 0 Hz audio, where no decoder can copy them.
+            string js = StripComments(File.ReadAllText(LocateRepoPath("wwwroot/js/sdr/spectrum-panel.js")));
+            var offset = Regex.Match(js, @"_tuneOffsetHz\s*\(\s*mode\s*\)\s*\{(?<body>.*?)\n    \}", RegexOptions.Singleline);
+
+            Assert.True(offset.Success, "_tuneOffsetHz not found");
+            Assert.Contains("'DATA-L'", offset.Groups["body"].Value, StringComparison.Ordinal);
+            // DATA-U is FT8 and the other digital modes: dial onto the click.
+            Assert.DoesNotContain("'DATA-U'", offset.Groups["body"].Value, StringComparison.Ordinal);
+
+            // In AFSK the software makes the tones, so the radio's RTTY MARK
+            // menu plays no part. (YWC also misread that menu as 1275 Hz on a
+            // radio set to 2125 until the codes were found to be 0-based;
+            // tying DATA-L to it would have landed clicks 850 Hz off.)
+            Assert.Contains("return AFSK_RTTY_MIDPOINT_AUDIO_HZ;", offset.Groups["body"].Value, StringComparison.Ordinal);
+            Assert.Matches(@"const AFSK_RTTY_MIDPOINT_AUDIO_HZ = 2210;", js);
+            Assert.DoesNotContain("_rttyMarkHz", js, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void RttyModesTuneTheDialOntoTheSignalNotAMarkFrequencyAway()
+        {
+            // Measured on the FTdx101MP 2026-09-23: in RTTY-L the dial is the
+            // mark tone (a carrier at 810.000 whistles with the dial at
+            // 810.000, not at 812.210). The old +2210 Hz offset put every
+            // clicked RTTY signal outside the 500 Hz filter. Only half the
+            // shift is allowed between the click and the dial.
+            string js = StripComments(File.ReadAllText(LocateRepoPath("wwwroot/js/sdr/spectrum-panel.js")));
+            var branch = Regex.Match(js, @"if \(mode === 'RTTY-L' \|\| mode === 'RTTY-U'\) \{(?<body>.*?)\n        \}", RegexOptions.Singleline);
+
+            Assert.True(branch.Success, "RTTY branch of _tuneOffsetHz not found");
+            Assert.DoesNotContain("_rttyMarkHz", branch.Groups["body"].Value, StringComparison.Ordinal);
+            Assert.DoesNotContain("_rttyAnchorAudioHz", branch.Groups["body"].Value, StringComparison.Ordinal);
+            Assert.Contains("_rttyShiftHz / 2", branch.Groups["body"].Value, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void PickingANamedSegmentStillCarriesThatSegmentsMode()
         {
             // The setting is about modes inferred from a frequency. Choosing

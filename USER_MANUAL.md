@@ -138,6 +138,10 @@
     - 21.5 [Stopping](#215-stopping)
     - 21.6 [The panel](#216-the-panel)
     - 21.7 [Troubleshooting](#217-troubleshooting)
+22. [RTTY Tuner](#22-rtty-tuner)
+    - 22.1 [Reading the figure](#221-reading-the-figure)
+    - 22.2 [Mark, Shift and Rev](#222-mark-shift-and-rev)
+    - 22.3 [Troubleshooting](#223-troubleshooting)
 
 ---
 
@@ -164,6 +168,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | CW Reader ([§20](#20-cw-reader)) | Yes | Yes | Yes |
 | CW Send ([§21](#21-cw-send)) | Yes | Yes | Yes |
+| RTTY Tuner ([§22](#22-rtty-tuner)) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
 | USB serial driver | **Windows / macOS:** if the radio's COM / `/dev/cu.*` ports are missing or CAT never answers, install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** usually skip — the kernel already includes CP210x support. |
@@ -560,7 +565,14 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 > **Settings → §6.1** and YWC leaves the mode entirely to you. Clicking the spectrum,
 > clicking a DX spot row, and stepping through spots from the keyboard then tune only.
 > Tuning offsets still follow the mode the radio is *actually* in, so a click on a RTTY
-> signal keeps your RTTY offset instead of tuning zero-beat onto it.
+> signal lands where that mode needs it. In the radio's own **RTTY-L** the dial sits on the
+> signal's mark tone, just as it sits on the signal in CW, so click the middle of the two
+> tones and the dial goes to mark, ready for the radio's RTTY decoder. In **DATA-L**, the
+> usual mode for AFSK RTTY where your software makes the tones, the dial is the suppressed
+> carrier, so a click puts it above the signal and the two tones on 2125 Hz and 2295 Hz,
+> the default in RTTY software. The radio's RTTY MARK menu plays no part in DATA-L, since
+> your software makes the tones; if you have moved your software's tones away from 2125 Hz,
+> the click lands off by the same amount.
 >
 > Choosing a named segment (CW, FT8, SSB, RTTY) from a VFO’s band dropdown still sets
 > that segment’s mode either way. That is a choice you made by name, not a mode guessed
@@ -3873,6 +3885,53 @@ The panel is non-modal: it can stay open while you work the rest of the page, an
 | M5 has the wrong text after sending | The write-back failed, and the status line will have said so. The next line you send from CW Send puts M5 back again; or press **M5** on the CW Keyer panel, which rewrites the slot from YWC’s own text before playing it. |
 | Characters missing from what was sent | Only A–Z, 0–9, space and `? / . ,` are keyed. The rest are dropped before the line is stored. |
 | Nobody comes back to my CQ | Check you are actually transmitting — the banner and the **sent** tag both tell you. Then check the radio: power, antenna, and whether the ATU has tuned on that band. |
+
+---
+
+## 22. RTTY Tuner
+
+The **RTTY Tune** button on the main control panel opens a tuning scope for RTTY, the kind that sat beside every RTTY terminal unit before anything had a waterfall. The receive audio goes through two narrow filters, one on the mark tone and one on the space tone. The mark filter drives the scope sideways and the space filter drives it up and down, so a signal shifting between the two tones draws a cross. You tune for the cross.
+
+It does not decode anything; the radio's own RTTY decoder, or your RTTY software, does that. It only shows you when the signal is sitting where the decoder expects it.
+
+Nothing here transmits. The tuner only listens.
+
+It uses the same capture device as the CW Reader: set the **RX device** to the radio's USB codec under Settings → Remote Audio ([§6.8](#68-remote-audio)). Remote Audio itself does not need to be switched on. The device is held open only while the tuner is open, and let go a couple of seconds after you close it. The CW Reader and the tuner can run together.
+
+### 22.1 Reading the figure
+
+| What you see | What it means |
+|---|---|
+| A clean cross, each arm a thin ellipse | On tune. Mark draws the line across, space the line up. |
+| The arms lean towards each other and open into fat ellipses | Off tune. Each tone is getting into both filters. Tune until they close up. |
+| One arm right, the other a blob or missing | The shift is wrong, **Rev** is wrong, or the station is idling on one tone. |
+| A dim, fuzzy ball in the middle | Noise. Nothing is landing in the tone filters. |
+
+The figure grows to fill the face whatever the signal level. So that plain noise does not look as solid as a signal, the trace is drawn dim whenever little of the audio is landing in the two filters.
+
+Under the scope, a line gives the two filter frequencies and three levels in dBFS: mark filter (**M**), space filter (**S**) and everything the receiver is passing (**in**). The line under that says in words which of the cases above you are looking at.
+
+### 22.2 Mark, Shift and Rev
+
+- **Mark** is the mark tone in the receive audio. Leave it at **2125 Hz** unless you know your setup uses something else.
+- **Shift** is the station's shift. Amateur RTTY is **170 Hz**; 200, 425, 450 and 850 are there for everything else. 450 is the shift of the German weather service broadcasts (DDK9 on 10.1008 MHz, among others), which run all day and are the easiest real RTTY to find when the amateur bands are quiet.
+- **Rev** puts the space filter on the other side of mark. Tick it if the station is sending reversed, or if you have **REV** set on the radio.
+
+Which side of mark the space filter goes on depends on the mode on VFO A:
+
+- **RTTY-L:** space above mark, 2125 and 2295 Hz. I measured this on my FTdx101MP. In RTTY-L the dial sits on the mark tone, and a signal below the dial comes out higher in the audio.
+- **RTTY-U:** space below mark, 2125 and 1955 Hz. This is what upper sideband should do, but I have not measured it. If the figure looks wrong in RTTY-U, try **Rev** and let me know.
+- **DATA-L, DATA-U and anything else:** space above mark, 2125 and 2295 Hz. That is AFSK, where your RTTY software makes the tones, and it is the usual default in RTTY software.
+
+These settings are remembered in the browser.
+
+### 22.3 Troubleshooting
+
+| Symptom | What to try |
+|---|---|
+| Status says the radio audio could not be opened | Set the Remote Audio **RX device** to the radio's USB codec in Settings ([§6.8](#68-remote-audio)). The tuner uses the same device as the CW Reader. |
+| Only ever a fuzzy ball, even on a strong signal | Check that **Mark** and **Shift** match the signal and that the mode is right. A 3 kHz SSB filter passes plenty of noise; a narrower RTTY filter on the radio gives a cleaner cross. |
+| Both arms there but they swap over | That is harmless: the picture is the same either way round. Tick **Rev** if your decoder is printing rubbish. |
 
 ---
 
