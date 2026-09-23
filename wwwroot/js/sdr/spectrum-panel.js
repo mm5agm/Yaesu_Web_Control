@@ -12,6 +12,10 @@ import { autoModeForHz } from '../ui/band-plan.js?v=1';
 import { tuningStep } from '../ui/tuning-step.js?v=1';
 import { formatTuningStep } from '../tuning/tuning-step-store.js?v=1';
 
+// AFSK RTTY in DATA-L: the software's 2125 Hz mark and 2295 Hz space, the
+// default in RTTY software, straddle 2210 Hz. See _tuneOffsetHz.
+const AFSK_RTTY_MIDPOINT_AUDIO_HZ = 2210;
+
 export class SpectrumPanel {
 
     /**
@@ -40,13 +44,11 @@ export class SpectrumPanel {
         this._cwPitchHz   = 700;
         this._modeName    = '';
 
-        // RTTY tone settings. In RTTY-L / RTTY-U the dial is on mark, so only
-        // the shift and polarity matter (mark sits half a shift off the
-        // midpoint the operator clicks); in DATA-L (AFSK) the mark frequency
-        // says where in the audio the software's tones should land.
-        // Seeded from the radio's own extended menu via setRttyTones()
-        // (GET /api/cat/rtty); these are Yaesu's defaults until that arrives.
-        this._rttyMarkHz      = 2125;
+        // RTTY tone settings for the radio's own RTTY-L / RTTY-U, where the
+        // dial is on mark: mark sits half a shift off the midpoint the
+        // operator clicks, on the side the polarity says. The mark frequency
+        // itself is not needed. Seeded from the radio's own extended menu via
+        // setRttyTones() (GET /api/cat/rtty); Yaesu's defaults until then.
         this._rttyShiftHz     = 170;
         this._rttyPolarityRev = false;
 
@@ -758,14 +760,14 @@ export class SpectrumPanel {
     /**
      * The radio's RTTY tone settings, read from its extended menu by
      * GET /api/cat/rtty. Only the values actually supplied are taken, so a
-     * partial answer leaves the rest at the Yaesu defaults.
+     * partial answer leaves the rest at the Yaesu defaults. markHz is ignored:
+     * in RTTY-L / RTTY-U the dial is on mark, and in DATA-L the tones are the
+     * software's, not the radio's (see _tuneOffsetHz).
      * @param {{markHz?: number, shiftHz?: number, polarityRev?: boolean}} tones
      */
     setRttyTones(tones) {
         if (!tones) return;
-        const mark  = Number(tones.markHz);
         const shift = Number(tones.shiftHz);
-        if (Number.isFinite(mark)  && mark  > 0) this._rttyMarkHz  = mark;
         if (Number.isFinite(shift) && shift > 0) this._rttyShiftHz = shift;
         if (typeof tones.polarityRev === 'boolean') this._rttyPolarityRev = tones.polarityRev;
     }
@@ -878,17 +880,22 @@ export class SpectrumPanel {
      * signal 2.2 kHz outside the 500 Hz RTTY filter, in silence. All that is
      * left is half the shift: the eye clicks the MIDPOINT of the two-tone
      * blob, and the dial belongs on mark, which POLARITY-RX NOR puts above
-     * space in RF (REV below). That half-shift is the convention, not a
-     * measurement, and RTTY-U has not been checked on the rig at all.
+     * space in RF (REV below). Stepping the RTTY-L dial across the same
+     * carrier showed it is lower sideband about mark: the carrier at the dial
+     * comes out at 2125 Hz audio and 50 Hz lower in RF comes out 50 Hz higher,
+     * so a 2295 Hz space tone is 170 Hz below mark in RF. No real RTTY signal
+     * was on the air to confirm the decoder prints, and RTTY-U has not been
+     * checked on the rig at all.
      *
      * DATA-L is different: it is plain lower sideband with the dial on the
      * suppressed carrier, and on HF it is how AFSK RTTY is run -- the software
      * makes the tones (discussion #169: Bruce VK2RT runs all his RTTY this
-     * way). So there the dial does go a whole mark frequency above the signal,
-     * putting the tones either side of 2210 Hz with the radio's 2125 / 170
-     * defaults standing in for the software's (the usual default on both). See
-     * _rttyAnchorAudioHz. DATA-U stays at zero -- that is FT8 and friends,
-     * where tuning the dial onto the click is the convention.
+     * way). So there the dial goes 2210 Hz above the clicked midpoint, putting
+     * the tones on 2125 / 2295 Hz audio -- the AFSK convention RTTY software
+     * defaults to. That is deliberately NOT the radio's RTTY MARK / SHIFT /
+     * POLARITY menus: in DATA-L the software makes the tones and those menus
+     * play no part. DATA-U stays at zero -- that is FT8 and friends, where
+     * tuning the dial onto the click is the convention.
      *
      * @param {string} mode
      * @returns {number} Hz to add to the clicked frequency.
@@ -900,7 +907,7 @@ export class SpectrumPanel {
             return this._rttyPolarityRev ? -half : half;
         }
         if (mode === 'DATA-L') {
-            return this._rttyAnchorAudioHz(mode);
+            return AFSK_RTTY_MIDPOINT_AUDIO_HZ;
         }
 
         // CW needs none (see above). SSB, the DATA modes, AM and FM are left
@@ -911,29 +918,6 @@ export class SpectrumPanel {
         // convention rather than fix a bug. AM and FM genuinely need no
         // offset: the carrier is centred.
         return 0;
-    }
-
-    /**
-     * Where in the audio passband the midpoint of the two AFSK RTTY tones
-     * should land, in Hz -- for DATA-L, where the dial is the suppressed
-     * carrier. (In RTTY-L / RTTY-U the dial is on mark; see _tuneOffsetHz.)
-     *
-     * Mark and space sit `shift` apart. Which side of mark the space tone
-     * falls on, in AUDIO, depends on both the sideband and the radio's
-     * POLARITY-RX menu: POLARITY-RX = NOR means space is below mark in RF, and
-     * a lower-sideband mode inverts RF against audio, so under NOR the space
-     * tone is ABOVE mark in audio on RTTY-L and BELOW it on RTTY-U. REV swaps
-     * that. With the defaults (2125 Hz mark, 170 Hz shift, NOR) this gives
-     * 2210 Hz on RTTY-L -- the mode amateurs actually use -- and 2040 Hz on
-     * RTTY-U.
-     *
-     * @param {string} mode
-     * @returns {number} Audio Hz.
-     */
-    _rttyAnchorAudioHz(mode) {
-        const lower = this._isLowerSideband(mode);
-        const spaceAboveMarkInAudio = this._rttyPolarityRev ? !lower : lower;
-        return this._rttyMarkHz + (spaceAboveMarkInAudio ? 1 : -1) * this._rttyShiftHz / 2;
     }
 
     /**

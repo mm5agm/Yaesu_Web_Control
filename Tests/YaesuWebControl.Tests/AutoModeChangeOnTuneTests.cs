@@ -119,6 +119,14 @@ namespace YaesuWebControl.Tests
             Assert.Contains("'DATA-L'", offset.Groups["body"].Value, StringComparison.Ordinal);
             // DATA-U is FT8 and the other digital modes: dial onto the click.
             Assert.DoesNotContain("'DATA-U'", offset.Groups["body"].Value, StringComparison.Ordinal);
+
+            // In AFSK the software makes the tones, so the radio's RTTY MARK
+            // menu plays no part. Colin's FTdx101MP answers that menu with a
+            // code YWC reads as 1275 Hz while its RTTY-L audio puts mark on
+            // 2125 Hz; tying DATA-L to it would have landed clicks 850 Hz off.
+            Assert.Contains("return AFSK_RTTY_MIDPOINT_AUDIO_HZ;", offset.Groups["body"].Value, StringComparison.Ordinal);
+            Assert.Matches(@"const AFSK_RTTY_MIDPOINT_AUDIO_HZ = 2210;", js);
+            Assert.DoesNotContain("_rttyMarkHz", js, StringComparison.Ordinal);
         }
 
         [Fact]
