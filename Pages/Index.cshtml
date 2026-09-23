@@ -291,10 +291,57 @@
        DEFAULT_PANEL_H in wwwroot/js/sdr/spectrum-panel.js. */
     .spectrum-canvas-wrap {
         height: 280px;
-        min-height: 160px;
+        min-height: 80px;
         max-height: 1000px;
         overflow: hidden;
-        resize: vertical;
+    }
+
+    /* The panel's resize grip. This started as CSS `resize: vertical` on the
+       wrapper above, letting the browser draw the handle, and that failed on
+       the bench: the browser's handle is a small triangle in the bottom-right
+       CORNER, which sits below the fold at the default height and moves
+       further off-screen every time the panel is made taller. Growing the
+       panel pushed its own control out of reach. This strip runs the full
+       width instead, is visible on a dark card, and takes the keyboard. */
+    .spectrum-resize-grip {
+        height: 14px;
+        cursor: row-resize;
+        background: #212529;
+        border-top: 1px solid #495057;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        touch-action: none;   /* or a touch drag scrolls the page instead */
+    }
+
+    .spectrum-resize-grip::before {
+        content: "";
+        width: 44px;
+        height: 4px;
+        border-top: 2px dotted #adb5bd;
+        border-bottom: 2px dotted #adb5bd;
+    }
+
+    .spectrum-resize-grip:hover,
+    .spectrum-resize-grip.dragging {
+        background: #2c3237;
+    }
+
+    .spectrum-resize-grip:hover::before,
+    .spectrum-resize-grip.dragging::before {
+        border-color: #dee2e6;
+    }
+
+    .spectrum-resize-grip:focus-visible {
+        outline: 2px solid #0d6efd;
+        outline-offset: -2px;
+    }
+
+    /* While a grip drag is in progress, stop the pointer selecting the text it
+       sweeps across and keep the resize cursor even off the strip. */
+    body.spectrum-resizing {
+        user-select: none;
+        cursor: row-resize;
     }
 </style>
 
@@ -1025,11 +1072,12 @@
                                    aria-label="Show the VFO A receiver passband as a shaded band on the spectrum">
                             <label class="form-check-label" for="spectrumPassbandToggleA">Passband</label>
                         </div>
-                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectA" title="How tall the VFO A spectrum panel is. You can also drag the bottom-right corner of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectA" title="How tall the VFO A spectrum panel is. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
                         <select class="form-select form-select-sm spectrum-height-select" data-vfo="A" id="spectrumHeightSelectA"
-                                style="width:auto;" title="How tall the VFO A spectrum panel is. You can also drag the bottom-right corner of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
+                                style="width:auto;" title="How tall the VFO A spectrum panel is. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
                                 aria-label="VFO A spectrum panel height">
                             <option value="">Custom</option>
+                            <option value="120">Shortest</option>
                             <option value="200">Short</option>
                             <option value="280">Normal</option>
                             <option value="400">Tall</option>
@@ -1040,6 +1088,10 @@
                     <div class="card-body p-0 spectrum-canvas-wrap">
                         <canvas id="spectrumCanvasA" role="img" aria-hidden="true" aria-label="RF spectrum display VFO A" style="display:block; width:100%;"></canvas>
                     </div>
+                    <div class="spectrum-resize-grip" id="spectrumResizeGripA" data-vfo="A"
+                         role="separator" aria-orientation="horizontal" tabindex="0"
+                         aria-label="Resize VFO A spectrum panel"
+                         title="Drag to make the VFO A spectrum taller or shorter. Arrow keys when focused (Shift for bigger steps); double-click to go back to the default height."></div>
                 </div>
 
                 <!-- VFO B spectrum panel — hidden by default; shown when SdrDeviceKeyB is configured.
@@ -1097,11 +1149,12 @@
                                    aria-label="Show the VFO B receiver passband as a shaded band on the spectrum">
                             <label class="form-check-label" for="spectrumPassbandToggleB">Passband</label>
                         </div>
-                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectB" title="How tall the VFO B spectrum panel is. You can also drag the bottom-right corner of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectB" title="How tall the VFO B spectrum panel is. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
                         <select class="form-select form-select-sm spectrum-height-select" data-vfo="B" id="spectrumHeightSelectB"
-                                style="width:auto;" title="How tall the VFO B spectrum panel is. You can also drag the bottom-right corner of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
+                                style="width:auto;" title="How tall the VFO B spectrum panel is. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
                                 aria-label="VFO B spectrum panel height">
                             <option value="">Custom</option>
+                            <option value="120">Shortest</option>
                             <option value="200">Short</option>
                             <option value="280">Normal</option>
                             <option value="400">Tall</option>
@@ -1112,6 +1165,10 @@
                     <div class="card-body p-0 spectrum-canvas-wrap">
                         <canvas id="spectrumCanvasB" role="img" aria-hidden="true" aria-label="RF spectrum display VFO B" style="display:block; width:100%;"></canvas>
                     </div>
+                    <div class="spectrum-resize-grip" id="spectrumResizeGripB" data-vfo="B"
+                         role="separator" aria-orientation="horizontal" tabindex="0"
+                         aria-label="Resize VFO B spectrum panel"
+                         title="Drag to make the VFO B spectrum taller or shorter. Arrow keys when focused (Shift for bigger steps); double-click to go back to the default height."></div>
                 </div>
             </div>
         </div>
@@ -3643,16 +3700,22 @@
 
             // Panel height — Bruce VK2RT asked for a bigger spectrum
             // (discussion #171). There are two routes to the same number:
-            // drag the panel's bottom-right corner, or pick a preset here.
-            // The drag handle alone would not do, because it is mouse-only —
-            // no keyboard and no touch. The panel owns the height and
-            // persists it per VFO, so the select is initialised FROM the
+            // drag the grip along the bottom of the panel, or pick a preset
+            // here. Both are needed. The preset box is the only route that is
+            // always on screen, and the grip is the only one that gives an
+            // arbitrary height — and the grip is what made the first version
+            // unusable on the bench, when it was the browser's own corner
+            // handle and ended up below the fold. The panel owns the height
+            // and persists it per VFO, so the select is initialised FROM the
             // panel rather than from the markup's first <option>, the same
             // trap the Smooth slider and the Passband checkbox both have.
             ['A', 'B'].forEach(vfo => {
                 const select = document.querySelector(`.spectrum-height-select[data-vfo="${vfo}"]`);
+                const grip   = document.getElementById(`spectrumResizeGrip${vfo}`);
                 const panel  = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
-                if (!select || !panel) return;
+                if (!panel) return;
+                panel.attachResizeGrip(grip);
+                if (!select) return;
 
                 // "Custom" is what dragging produces, and it is not a height
                 // anyone can pick from the list — choosing it must not resize
@@ -3669,6 +3732,9 @@
                 select.addEventListener('change', () => {
                     if (!select.value) return;
                     panel.setPanelHeight(parseInt(select.value, 10));
+                    // A taller panel can push the grip below the fold, which
+                    // is exactly what made the first version hard to undo.
+                    panel.ensureGripVisible();
                 });
             });
 

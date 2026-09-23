@@ -144,6 +144,9 @@ export class SpectrumPanel {
         // in fact set to 560.
         this._panelH = null;
 
+        // The resize grip, once a page attaches one (attachResizeGrip).
+        this._grip = null;
+
         // Spectrum/waterfall split ratio — fraction of canvas height given to
         // the spectrum trace (top zone); remainder goes to the waterfall.
         // Persisted per-VFO in localStorage so the operator can give the
@@ -216,10 +219,21 @@ export class SpectrumPanel {
     //
     // The canvas takes its height from its container (see _sizeCanvas), so
     // "resize the panel" means "set the container's height and let the
-    // ResizeObserver do the rest". The container is given CSS `resize:
-    // vertical` by the page, which makes the browser draw a drag handle and
-    // write the dragged height as an inline style — the same technique the CW
-    // dialogs already use, via makeResizable in Index.cshtml.
+    // ResizeObserver do the rest".
+    //
+    // This used CSS `resize: vertical` at first, letting the browser draw the
+    // handle. That shipped to the bench and failed there: the browser puts its
+    // handle in the bottom-right CORNER, which on a 1920x1080 window sits
+    // below the fold at the default height and moves further off-screen every
+    // time the panel is made taller — so growing the panel pushed its own
+    // control out of reach, and shrinking it again meant hunting for an almost
+    // invisible 16px triangle on a dark card. Miss it and you hit the canvas,
+    // which is click-to-tune, so a missed grab moved the radio.
+    //
+    // attachResizeGrip replaces it with a grip we draw ourselves, the full
+    // width of the panel, which can also take the keyboard. Note the verified
+    // behaviour was never the resize itself — that always worked in both
+    // directions; it was only ever reachability.
     //
     // Persistence is opt-in through enableHeightControl() rather than
     // automatic, because not every host wants it: a container sized to fill
@@ -301,6 +315,112 @@ export class SpectrumPanel {
         wrap.style.height = h + 'px';
     }
 
+    /**
+     * Make `grip` resize this panel: press and drag it, or focus it and use
+     * the arrow keys. The element is expected to be a full-width strip under
+     * the canvas, so there is nothing to hunt for and nothing to miss.
+     *
+     * Pointer events rather than mouse events, so a finger on a tablet works
+     * the same as a mouse; pointer capture so the drag survives the pointer
+     * leaving the strip, which it does immediately in practice.
+     */
+    attachResizeGrip(grip) {
+        if (!grip) return;
+        this._grip = grip;
+
+        let activeId = null, startY = 0, startH = 0;
+
+        const end = () => {
+            if (activeId === null) return;
+            try { grip.releasePointerCapture(activeId); } catch { /* already gone */ }
+            activeId = null;
+            grip.classList.remove('dragging');
+            document.body.classList.remove('spectrum-resizing');
+        };
+
+        grip.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            activeId = e.pointerId;
+            startY   = e.clientY;
+            startH   = this.getPanelHeight();
+            try { grip.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+            grip.classList.add('dragging');
+            // Stops the drag selecting the page text it passes over.
+            document.body.classList.add('spectrum-resizing');
+            e.preventDefault();
+        });
+
+        grip.addEventListener('pointermove', (e) => {
+            if (e.pointerId !== activeId) return;
+            this.setPanelHeight(startH + (e.clientY - startY));
+            this._syncGripAria();
+        });
+
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
+        grip.addEventListener('lostpointercapture', end);
+
+        // Keyboard, which the browser's own handle never offered. Voice and
+        // screen-reader operators are a real part of this audience, so a
+        // mouse-only control is not good enough on its own.
+        grip.addEventListener('keydown', (e) => {
+            const step = e.shiftKey ? 50 : 10;
+            let h = null;
+            switch (e.key) {
+                case 'ArrowDown': h = this.getPanelHeight() + step; break;
+                case 'ArrowUp':   h = this.getPanelHeight() - step; break;
+                case 'PageDown':  h = this.getPanelHeight() + 100;  break;
+                case 'PageUp':    h = this.getPanelHeight() - 100;  break;
+                case 'Home':      h = SpectrumPanel.MIN_PANEL_H;    break;
+                case 'End':       h = SpectrumPanel.MAX_PANEL_H;    break;
+                default: return;
+            }
+            e.preventDefault();
+            this.setPanelHeight(h);
+            this._syncGripAria();
+            this.ensureGripVisible();
+        });
+
+        // Double-click the grip to go back to the default height — the quick
+        // way out of a size that turned out to be wrong.
+        grip.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            this.setPanelHeight(SpectrumPanel.DEFAULT_PANEL_H);
+            this._syncGripAria();
+        });
+
+        grip.setAttribute('aria-valuemin', String(SpectrumPanel.MIN_PANEL_H));
+        grip.setAttribute('aria-valuemax', String(SpectrumPanel.MAX_PANEL_H));
+        this._syncGripAria();
+    }
+
+    /**
+     * Bring the grip back into view if a height change has pushed it off the
+     * bottom of the window. A full-width grip is easy to see and easy to hit,
+     * but it still lives at the bottom EDGE of the panel, so making the panel
+     * taller moves it down — the same trap that made the browser's corner
+     * handle unusable. Only for changes the operator made from somewhere else
+     * (the preset box, the arrow keys): during a drag the pointer is already
+     * on the grip, and scrolling under a live drag would be horrible.
+     */
+    ensureGripVisible() {
+        const grip = this._grip;
+        if (!grip) return;
+        const r = grip.getBoundingClientRect();
+        const margin = 8;
+        if (r.bottom > window.innerHeight - margin || r.top < margin) {
+            grip.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+
+    /** Keep the grip's reported value in step with the height it controls. */
+    _syncGripAria() {
+        if (!this._grip) return;
+        const h = this.getPanelHeight();
+        this._grip.setAttribute('aria-valuenow', String(h));
+        this._grip.setAttribute('aria-valuetext', h + ' pixels tall');
+    }
+
     // Valid waterfall speed divisors — 1 (full speed) through 128 (1/128
     // speed). Index into this array (not the divisor itself) is what the
     // UI slider in Index.cshtml drags across, since the divisors themselves
@@ -378,7 +498,12 @@ export class SpectrumPanel {
     // the per-frame pixel work. That is nothing on a desktop and may well be
     // something on the Pi/Docker rig, which is why there is a ceiling at all.
     // Requested by Bruce VK2RT, discussion #171.
-    static MIN_PANEL_H     = 160;
+    // The floor started at 160 and was lowered to 80 on Colin's bench request:
+    // a short panel is a legitimate thing to want when the waterfall is only
+    // there to be glanced at, and there is no technical reason to stop it.
+    // Below about 80 the axis labels (AXIS_H alone is 20) leave too little for
+    // the trace and the waterfall to say anything, so that is where it stops.
+    static MIN_PANEL_H     = 80;
     static MAX_PANEL_H     = 1000;
     static DEFAULT_PANEL_H = 280;   // 126px spectrum + 154px waterfall at the default split
 
@@ -1076,13 +1201,15 @@ export class SpectrumPanel {
 
         // Rebuild waterfall buffer whenever the canvas is resized. This fires
         // for height changes as readily as width ones, which is the whole
-        // mechanism behind the resizable panel — dragging the container's
-        // corner lands here and everything downstream follows.
+        // mechanism behind the resizable panel — every route to a new height
+        // (the grip, the arrow keys, the preset box, the window getting
+        // wider) lands here and everything downstream follows.
         this._resizeObserver = new ResizeObserver(() => {
             this._sizeCanvas(canvas);
             this._waterfallData = null;  // force rebuild on next frame
             if (this._lastBins) this._render();
             this._queueHeightSave();
+            this._syncGripAria();
         });
         this._resizeObserver.observe(canvas.parentElement ?? canvas);
 
