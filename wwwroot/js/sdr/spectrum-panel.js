@@ -503,6 +503,20 @@ export class SpectrumPanel {
     // paints its strip into it. One constant so the two never disagree.
     static AXIS_H = 20;
 
+    /**
+     * How much of a spectrum zone `specH` px tall to give the frequency axis.
+     *
+     * Zero once the zone is too short to spare it. The axis is a fixed 20px,
+     * so on a very short panel it would take most of the spectrum zone and
+     * leave the trace a sliver — labels nobody asked for, crowding out the
+     * one thing the panel is for. Below twice its own height it steps aside
+     * and the trace uses the whole zone; the axis is a convenience, the trace
+     * is the point.
+     */
+    static axisHeightFor(specH) {
+        return specH < SpectrumPanel.AXIS_H * 2 ? 0 : SpectrumPanel.AXIS_H;
+    }
+
     // Panel height limits, in CSS pixels of canvas — the whole panel, trace and
     // waterfall together, which _splitRatio then divides between them.
     //
@@ -517,12 +531,14 @@ export class SpectrumPanel {
     // the per-frame pixel work. That is nothing on a desktop and may well be
     // something on the Pi/Docker rig, which is why there is a ceiling at all.
     // Requested by Bruce VK2RT, discussion #171.
-    // The floor started at 160 and was lowered to 80 on Colin's bench request:
-    // a short panel is a legitimate thing to want when the waterfall is only
-    // there to be glanced at, and there is no technical reason to stop it.
-    // Below about 80 the axis labels (AXIS_H alone is 20) leave too little for
-    // the trace and the waterfall to say anything, so that is where it stops.
-    static MIN_PANEL_H     = 80;
+    // The floor was 160, then 80, and is now 40: each time because the bench
+    // found the panel would not go as short as an operator wanted, and a short
+    // panel is a legitimate thing to want when the waterfall is only there to
+    // be glanced at. What used to stop it was the frequency-axis strip — a
+    // fixed 20px out of the spectrum zone, which at a short panel is most of
+    // it. axisHeightFor now drops the axis when the zone is too small to spare
+    // it, so the trace keeps its room and the panel can keep going down.
+    static MIN_PANEL_H     = 40;
     static MAX_PANEL_H     = 1000;
     static DEFAULT_PANEL_H = 280;   // 126px spectrum + 154px waterfall at the default split
 
@@ -1622,8 +1638,10 @@ export class SpectrumPanel {
         if (this._pinnedCursorHz < leftHz || this._pinnedCursorHz > rightHz) return;
 
         const x = ((this._pinnedCursorHz - leftHz) / this._lastSpanHz) * W;
-        const axisH = 20;
-        const specTop = specH - axisH;
+        // Through the helper, not a hardcoded 20: on a short panel the axis
+        // strip is not drawn at all, and the cursor has to reach the bottom
+        // of the zone rather than stopping 20px short of it.
+        const specTop = specH - SpectrumPanel.axisHeightFor(specH);
 
         ctx.save();
 
@@ -2026,7 +2044,7 @@ export class SpectrumPanel {
         // scale into the area *above* that strip so the noise floor can sit right on
         // top of the labels instead of hiding behind them — that's what removes the
         // dead space between the floor and the waterfall.
-        const H = Math.max(1, specH - SpectrumPanel.AXIS_H);
+        const H = Math.max(1, specH - SpectrumPanel.axisHeightFor(specH));
 
         // Background — fill the whole zone (incl. the axis strip's backing) so no
         // gap shows; the axis strip repaints its own darker band over the bottom.
@@ -2144,7 +2162,8 @@ export class SpectrumPanel {
     // ── Frequency axis ───────────────────────────────────────────────────────
 
     _drawFrequencyAxis(ctx, bins, W, specH, centreHz, spanHz) {
-        const axisH  = SpectrumPanel.AXIS_H;
+        const axisH  = SpectrumPanel.axisHeightFor(specH);
+        if (!axisH) return;                 // too short to spare the strip
         const tickY0 = specH - axisH;       // top of axis strip
         const labelY = specH - 4;           // baseline for text
 
@@ -2239,9 +2258,9 @@ export class SpectrumPanel {
         const x = this._crosshairX;
         const y = this._crosshairY;
 
-        // Only draw inside the spectrum area (above the axis strip).
-        const axisH = 20;
-        const specTop = specH - axisH;
+        // Only draw inside the spectrum area (above the axis strip), and
+        // through the helper because on a short panel there is no strip.
+        const specTop = specH - SpectrumPanel.axisHeightFor(specH);
         if (y < 0 || y > specTop) return;
 
         // Vertical line
