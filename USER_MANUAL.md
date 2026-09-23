@@ -1018,7 +1018,7 @@ The panel is non-modal — it stays open while you use the rest of the app. Drag
 
 **Banks dropdown** — a **Banks** dropdown sits in the floating panel's toolbar alongside the Save to Rig buttons. The first entry is always **📥 YWC Starter Bank (built-in)** — the bundled set of common watering-hole memories shipped with the app (§8.5). Below that, any banks you've saved yourself appear (§8.4). Select any entry to switch — the memory list is replaced with that bank's contents and the tiles refresh automatically. The dropdown resets to its placeholder after loading.
 
-For full memory management — editing labels and frequencies, reordering, importing from and exporting to the radio, and memory banks — see Section 8.
+For full memory management — editing labels and frequencies, reordering, importing from and exporting to the radio, and memory banks — open the editor from the panel's **Edit** link, or from **Settings → Manage Memories**. See Section 8.
 
 ---
 
@@ -1232,6 +1232,8 @@ Every button and the level slider carry labels that screen readers announce, and
 ## 6. Settings Page
 
 Access Settings from the navigation bar or by clicking the settings icon. Changes take effect only after clicking **Save Settings**.
+
+The **More Settings** card at the top of the page links to **Application Setup**, **Accessibility Labels**, and **Manage Memories** (the full memories editor — see §8.1).
 
 At the top of the page, the **Network Access URLs** card lists the addresses you can use to reach YWC from this PC and from other devices on the LAN; the **Current Configuration** card on the right shows a one-line summary of what YWC is using right now (radio model, serial port, baud rate, network interface, web port, SDR device). The web port shown here is whichever port YWC actually managed to bind — usually 8080 but possibly 8081–8089 if 8080 was already in use on your PC.
 
@@ -1645,7 +1647,7 @@ I have set the default to 250 Hz because that is what fixed it on my own bench. 
 
 ## 7. Application Setup
 
-Access Application Setup from the navigation bar. This page configures the external application buttons and the WSJT-X UDP connection.
+Access Application Setup from **Settings → Application Setup**. This page configures the external application buttons and the WSJT-X UDP connection.
 
 > **Windows-oriented.** The launch buttons run executables on the machine hosting YWC. On macOS/Linux the defaults are Windows paths — either leave the buttons hidden or point them at apps installed on that host. You can still run WSJT-X (etc.) on another PC and connect via YWC's **rigctld** server over the LAN.
 
@@ -1712,7 +1714,7 @@ So a full import from the radio fills 99 of YWC's 1,000, and you can keep adding
 
 ### 8.1 Memories Editor
 
-Access the full memories editor from **Memories** in the navigation bar.
+Access the full memories editor from **Settings → Manage Memories**, or from the **Edit** link in the floating Mem panel (§5.15). The **Mem** toolbar button opens that panel; it does not open the editor.
 
 ![The full Memories editor page — Memory Banks bar at the top, Radio Channels bar, ADIF import card, advanced-fields toggle, and the editable memory table](pictures/Memories_Editor_Page.png)
 
@@ -2958,7 +2960,7 @@ Every control in the app — Band/Mode keys, meters, VFO controls, the on-screen
 
 **Editing labels:**
 
-1. Click **Accessibility Labels** in the navigation bar.
+1. Open **Settings** and click **Accessibility Labels**.
 2. The page shows all labels grouped by section. Edit the text in any **Label** field.
 3. Click **Save Labels**.
 4. Switch back to the main page — the new labels take effect automatically without needing to reload.
