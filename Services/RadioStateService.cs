@@ -482,6 +482,7 @@ namespace Yaesu_Web_Control.Services
             if (RadioMeterSelection == digits) return;
             RadioMeterSelection = digits;
             _logger.LogInformation("[Meters] Operator front-panel meter selection is MS{Digits}", digits);
+            BroadcastUpdate("MeterSelection", digits);
         }
 
         // The operator picked meters in YWC (the Radio Display meter pop-up).
@@ -493,6 +494,7 @@ namespace Yaesu_Web_Control.Services
             if (string.IsNullOrEmpty(digits) || RadioMeterSelection == digits) return;
             RadioMeterSelection = digits;
             _logger.LogInformation("[Meters] Operator chose front-panel meters MS{Digits} in YWC", digits);
+            BroadcastUpdate("MeterSelection", digits);
         }
 
         private int? _compressionMeter;

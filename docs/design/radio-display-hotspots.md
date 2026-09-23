@@ -157,11 +157,19 @@ inside the overlay, under the zone, and the radio's picture changes once
   starts between the borrow check and the send; the restore covers it.
 - **Styles** are injected by the module (`ensureMeterPopupStyle`) and do
   not live in `site.css`, which the theme work is changing.
-- **Zone rect** on the FTdx101 is estimated from
-  `Radio_Display_Docked.png` and has not been bench-measured. Use
-  `measure(['zones.meter'])`. The right half of that strip is the filter
-  display, so keep the box to the meter. The FTdx10 gets no meter zone until
-  a screenshot with its chooser open has been measured.
+- **It follows the radio.** `ReportMeterSelection` and
+  `SetOperatorMeterSelection` broadcast `MeterSelection`, and an open pop-up
+  re-reads `/api/cat/meters` when that arrives. Without this, a meter changed
+  on the radio's own touchscreen left the pop-up showing the old choice
+  (seen on the bench, 2026-09-23).
+- **It closes on a pick**, as the radio's pop-up does. It stays open when the
+  radio refuses the pick (showing the error), and for 3 s when the pick is
+  deferred, so the note can be read.
+- **Zone rect** on the FTdx101 covers both meters,
+  `[0.000, 0.095, 0.700, 0.300]`, and was bench-checked on the FTdx101MP on
+  2026-09-23. The first estimate stopped at 0.499 and cut the SWR meter in
+  half. The filter display sits to the right of it. The FTdx10 gets no meter
+  zone until a screenshot with its chooser open has been measured.
 
 ## The layout table
 
