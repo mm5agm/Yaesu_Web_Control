@@ -468,7 +468,9 @@ The line shows the current band, mode and frequency, with transmit power appende
 
 ### 5.2 Meters
 
-A scrollable row of meters is displayed above the VFO panels. The leftmost slots are the S-meter(s) (and their optional history strips — see below). To the right of the S-meter(s) come the transmit-related meters, which depend on your radio model:
+Meters on the main window are compact linear bars. Each VFO panel has its own S-meter, between the frequency display and the RF gain control. The transmit-related meters sit in the leftmost column of the operating-controls row, above the VFO panels. Analogue needle gauges are still used on the Meter Calibration page (§10).
+
+The meters shown depend on your radio model:
 
 **FTdx101MP, FTdx101D** — two S-meters (VFO A / MAIN and VFO B / SUB, each an independent physical receiver chain) plus seven TX meters:
 
@@ -482,7 +484,7 @@ A scrollable row of meters is displayed above the VFO panels. The leftmost slots
 | ALC | Automatic Level Control voltage — only active during transmit |
 | Temp | PA temperature in °C |
 | IDD | PA drain current in amps |
-| VDD | PA supply voltage in volts. The dial is 40–55 V on the FTdx101MP, whose 200 W final runs from an internal 50 V supply, and 10–16 V on the FTdx101D and FTDX3000, which run from 13.8 V |
+| VDD | PA supply voltage in volts. The scale is 40–55 V on the FTdx101MP, whose 200 W final runs from an internal 50 V supply, and 10–16 V on the FTdx101D and FTDX3000, which run from 13.8 V |
 
 > **Why the radio's own front-panel meter is stuck on COMP/SWR while YWC is running.** On the FTdx101MP and FTdx101D, the radio's documented CAT command for reading SWR directly returns stale or wrong values, so YWC works around it by repeatedly telling the radio to display Compression and SWR on its own meter and reading both at once — about twice a second, for as long as YWC is connected. This is what YWC needs to show you an accurate SWR reading, but it also means you can't pick a different meter pair from the radio's own front panel while YWC is running; whatever you select gets overridden within half a second. This is expected behaviour, not a fault — there's no radio-side setting that avoids it.
 
@@ -492,23 +494,15 @@ A scrollable row of meters is displayed above the VFO panels. The leftmost slots
 
 All meters update in real time — about five times a second at the default 200 ms **Meter Poll Interval** (Settings → Radio Connection). Not everything is read on every cycle: the S-meter(s) and transmit state are, while PA temperature, IDD, VDD and the antenna selection are read every two seconds, because they change slowly and reading them costs bus time the meters need. Meters that only apply to transmit automatically read zero when the radio is receiving. The S-meter(s) are always live.
 
-> **Reading the SWR meter above 3:1.** The SWR dial is marked 1.0 to 3.0, so the
-> needle stops climbing once the SWR passes 3:1 — a 3:1 match and a 10:1 match
-> park it in exactly the same place. When that happens the readout under the dial
+> **Reading the SWR meter above 3:1.** The SWR bar is marked 1.0 to 3.0, so the
+> fill stops climbing once the SWR passes 3:1 — a 3:1 match and a 10:1 match
+> park it in exactly the same place. When that happens the readout next to the bar
 > turns amber, shows the true ratio, and adds a **▲** marker: for example
-> **SWR 5.4:1 ▲** means the needle is against the stop and the real figure is
-> 5.4:1. Trust the number, not the needle position, whenever the marker is showing.
+> **SWR 5.4:1 ▲** means the bar is against the stop and the real figure is
+> 5.4:1. Trust the number, not the bar position, whenever the marker is showing.
 > A screen reader announces the same reading as "5.4:1 - off scale".
 
-The meter scales are calibrated to show meaningful units rather than raw ADC values. See Section 10 (Meter Calibration) if you want to adjust the calibration for your specific radio. Both S-meter gauges share the same calibration table — there's no separate MAIN/SUB calibration.
-
-**S-meter history strip.** A small 30-second strip-chart can be shown to the left of each S-meter gauge in the top meter row (one per VFO on dual-receiver radios). Click the **S-hist** button in the top toolbar to toggle both on or off together (off by default; the choice is remembered between sessions). Each strip shows three things at once:
-
-- **Green line** — the actual S-meter trace over the last 30 seconds. Lets you see QSB fading patterns and brief interference spikes that the analog needle barely registered.
-- **Yellow dashed line** — the peak hold for the window, useful for noting a station's actual peak signal during an over without staring at the needle.
-- **Red dashed line** — the noise-floor reference (the 10th-percentile reading in the window). When the line jumps up suddenly, a noise source has switched on — often a useful diagnostic when QRM appears.
-
-The vertical axis is calibrated in S-units (S1, S5, S9, S9+30, S9+60) using the same calibration table as the analog gauge. The horizontal axis runs from **-30s** on the left to **now** on the right. The strip is purely a visual aid — none of the information is sent to the radio.
+The meter scales are calibrated to show meaningful units rather than raw ADC values. See Section 10 (Meter Calibration) if you want to adjust the calibration for your specific radio. Both S-meters share the same calibration table — there's no separate MAIN/SUB calibration.
 
 ---
 
@@ -624,9 +618,7 @@ There are two VFO panels side by side:
 
 Both VFO panels stay full colour and fully editable on every supported radio — including single-receiver models (FTdx10, FT-710, FTDX3000, FT-991A). On those radios the toolbar **RX** / **TX** selectors show which VFO is receiving and transmitting; you can still set the other VFO's frequency, mode, and controls without swapping first. On **dual-receiver radios** (FTdx101MP / FTdx101D) an amber ring marks which band (MAIN / SUB) the main tuning knob currently controls.
 
-**S-meter location — not in the VFO panels.** From v2.3.9 the S-meter(s) and their 30-second history strips live in the **top meter row** (just below the toolbar), not inside the VFO A / VFO B panels.
-
-On **dual-receiver radios** (FTdx101MP / FTdx101D) there are **two** S-meter gauges side by side — VFO A / MAIN first, then VFO B / SUB — each with its own history strip, since MAIN and SUB are independent physical receiver chains with their own calibrated S-meter (`SM0;` and `SM1;` respectively). On **single-receiver radios** (FTdx10 / FT-710 / FTDX3000 / FT-991A) there is only **one** S-meter gauge, since there's only one physical receiver.
+**S-meter.** Each VFO panel has a compact linear S-meter between the frequency display and the RF gain control. On **dual-receiver radios** (FTdx101MP / FTdx101D) both are live independent receivers (`SM0;` and `SM1;` respectively). On **single-receiver radios** (FTdx10 / FT-710 / FTDX3000 / FT-991A) there is only one physical receiver, so the inactive VFO's S-meter is greyed.
 
 **Antenna selector visibility:** the per-VFO antenna dropdown is hidden on radios with a single antenna jack (**FTdx10, FT-991A**) since there is nothing to select between. Radios with multiple antenna jacks (FTdx101MP, FTdx101D, FT-710, FTDX3000) keep the selector.
 
@@ -2408,7 +2400,6 @@ Shortcuts apply on the **Index** (main control) page. They are **ignored while t
 | **N** | Copy VFO A → B (A = B) |
 | **b** / **B** | Previous / next amateur band |
 | **x** | Show / hide the VFO B panel |
-| **y** | Show / hide the S-meter history strip |
 | **f** / **F** | Enter full-screen mode |
 | **D** | Toggle the DX Spots list |
 | **@** | Open the DX Watch dialog |

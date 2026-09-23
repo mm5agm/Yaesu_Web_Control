@@ -838,7 +838,7 @@ function initAppsButton() {
         onAction: (id) => launchers[id]?.(),
     });
 
-    // Compact face to match Mem / Gauges in the top toolbar.
+    // Compact face to match Mem in the top toolbar.
     root.querySelector(".toggle-dd__btn")?.classList.add("toggle-dd__btn--toolbar");
 
     window.appsButton = widget;

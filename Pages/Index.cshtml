@@ -173,23 +173,14 @@
        both resumed within ~200 ms of release. So every reading drawn during
        an over was a snapshot of the instant you keyed, presented as live.
 
-       Greyed, not hidden: the S-meters are leftmost, so removing them would
-       shift the whole row sideways on every over. site.js also substitutes 0
-       for the frozen value — see updateSMeter(). The two go together: a
-       zeroed needle on its own would claim "no signal", but greyed-and-zero
-       reads as "not measuring", which is what is actually happening. */
+       Greyed, not hidden. site.js also substitutes 0 for the frozen value —
+       see updateSMeter(). The two go together: a zeroed bar on its own would
+       claim "no signal", but greyed-and-zero reads as "not measuring", which
+       is what is actually happening. */
     .meters-tx-dim [data-meter-scope="rx"] {
         filter: grayscale(1);
         opacity: 0.3;
         transition: opacity 0.25s ease, filter 0.25s ease;
-    }
-
-    /* Temporary gauges-row hide: keep the operating controls visible. */
-    #metersCardBody.gauges-hidden #meterGaugesRow {
-        display: none !important;
-    }
-    #metersCardBody.gauges-hidden #operatingControlsRow {
-        margin-top: 0 !important;
     }
 
     /* Voice command help popup (right-click a mic button). */
@@ -319,7 +310,7 @@
 <!-- Viewport too-narrow warning (shown once, dismissible) -->
 <div id="viewportWarning" class="alert alert-warning alert-dismissible mb-1 py-1 px-3" role="alert" style="display:none; font-size:0.85rem;">
     <strong>Display settings may need attention.</strong>
-    Your browser viewport appears narrow — meter gauges may wrap to a second row.
+    Your browser viewport appears narrow — some controls may wrap to a second row.
     Check <strong>Windows Display Settings</strong>: ensure resolution is set to native and scaling is correct for your monitor
     (recommended: <strong>150%</strong> for 4K, <strong>125%</strong> for 1440p, <strong>100%</strong> for 1080p).
     <button type="button" class="btn-close btn-sm py-2" onclick="dismissViewportWarning()" aria-label="Dismiss"></button>
@@ -367,21 +358,6 @@
                     title="Open memories panel"
                     aria-label="Open memories panel">
                 <span class="toggle-dd__label">Mem</span>
-            </button>
-            <button id="sMeterHistoryToggleBtn" class="btn btn-sm btn-outline-secondary"
-                    style="padding-top: 1px; padding-bottom: 1px;"
-                    title="Show/hide 30-second S-meter history strip (QSB, noise spikes, noise floor)"
-                    aria-label="Show or hide the S-meter history strip"
-                    aria-pressed="false">
-                S-hist
-            </button>
-            <button id="meterGaugesToggleBtn" type="button"
-                    class="btn toggle-dd__btn toggle-dd__btn--toolbar"
-                    title="Show/hide analogue meter gauges"
-                    aria-label="Show or hide the meter gauges row"
-                    aria-pressed="true">
-                <span class="toggle-dd__led is-on" aria-hidden="true"></span>
-                <span class="toggle-dd__label">Gauges</span>
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary"
                     data-kb-display-target
@@ -444,12 +420,9 @@
         <div class="col-12">
             <div class="card border-secondary">
                 <div id="metersCardBody" class="card-body py-2">
-                    <partial name="_MeterGaugesPartial" model="Model.RadioModel" />
-                    <!-- Operating controls — independent of the gauges strip layout.
-                         Resize with Bootstrap col-* on each .op-col. -->
+                    <!-- Operating controls. Resize with Bootstrap col-* on each .op-col. -->
                     <div id="operatingControlsRow" class="row g-2 align-items-start">
-                        <!-- Column 0 — Compact linear meters (PoC). Radials in
-                             #meterGaugesRow stay in place. -->
+                        <!-- Column 0 — Compact linear meters. -->
                         <div class="col-2 op-col op-col--linear-meters">
                             <div class="linear-meter-row">
                                 <span class="linear-meter-label">SWR</span>
@@ -2397,7 +2370,6 @@
        hand-kept number here -- if a module changes, the release bumps it. *@
     <script type="module">
         import { MeterPanel }           from "/js/guages/meter-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { SMeterHistoryPanel }   from "/js/guages/smeter-history-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -2488,19 +2460,10 @@
                 setInterval(tick, 1000);
             }
             window.meterPanel = new MeterPanel({
-                // v2.3.9 dropped SMeterB to a single shared gauge; v2.4.0
-                // restored it as a real VFO A / VFO B pair on dual-receiver
-                // radios (FTdx101MP/D each have an independently calibrated
-                // S-meter, SM0;/SM1;). smeterB's canvas doesn't exist on
-                // single-receiver radios, so MeterPanel._createGauges skips
-                // it automatically (config entries for missing canvases are
-                // no-ops) — no isSingleReceiver check needed here.
-                smeter:      { type: 'smeter', canvasId: 'sMeterCanvas' },
-                smeterB:     { type: 'smeter', canvasId: 'sMeterCanvasB', gaugeTitleId: 'sMeterValueB' },
-                power:       { canvasId: 'powerMeterCanvas', maxValue: @maxPowerWatts },
-                swr:         { canvasId: 'swrMeterCanvas' },
-                // Compact horizontal bar siblings (PoC). Same display scale as
-                // the radials; MeterPanel.update mirrors automatically.
+                // Compact linear meters on the main window. Analogue needle
+                // gauges live on the Meter Calibration page only.
+                // MeterPanel.update('power'|…) still mirrors to these
+                // siblings, so the orchestrator is unchanged.
                 powerLinear:       { type: 'powerLinear',       canvasId: 'powerLinearCanvas', maxValue: @maxPowerWatts, markerValue: @Model.RadioState.Power },
                 swrLinear:         { type: 'swrLinear',         canvasId: 'swrLinearCanvas' },
                 compressionLinear: { type: 'compressionLinear', canvasId: 'compressionLinearCanvas' },
@@ -2512,71 +2475,9 @@
                 // on both single- and dual-receiver layouts — inactive greying for
                 // single-receiver is CSS via applyVfoActiveStyling.
                 smeterLinearA:     { type: 'smeterLinear', canvasId: 'sMeterLinearCanvasA', gaugeTitleId: 'sMeterLinearValueA' },
-                smeterLinearB:     { type: 'smeterLinear', canvasId: 'sMeterLinearCanvasB', gaugeTitleId: 'sMeterLinearValueB' },
-                compression: { canvasId: 'compressionMeterCanvas' },
-                alc:         { canvasId: 'alcMeterCanvas' },
-                temp:        { canvasId: 'tempMeterCanvas' },
-                idd:         { canvasId: 'iddMeterCanvas' },
-                vdd:         { canvasId: 'vddMeterCanvas' }
+                smeterLinearB:     { type: 'smeterLinear', canvasId: 'sMeterLinearCanvasB', gaugeTitleId: 'sMeterLinearValueB' }
             });
             window.ftdx101Meters = new FTdx101Meters(window.meterPanel, window.calibrationEngine, @maxPowerWatts);
-
-            // ── S-meter history strips ───────────────────────────────────────
-            // Hidden by default. Toggle with keyboard shortcut "y"; visibility
-            // persists in localStorage. Both A and B strips (when B exists)
-            // share the one toggle.
-            window.sMeterHistory  = new SMeterHistoryPanel('sMeterHistoryCanvas');
-            window.sMeterHistoryB = new SMeterHistoryPanel('sMeterHistoryCanvasB');
-            (function () {
-                const con  = document.getElementById('sMeterHistoryContainer');
-                const conB = document.getElementById('sMeterHistoryContainerB');
-                if (!con) return;
-
-                const KEY = 'ywc.sMeterHistoryVisible';
-                const apply = (visible) => {
-                    con.style.display = visible ? '' : 'none';
-                    if (conB) conB.style.display = visible ? '' : 'none';
-                };
-                let visible = false;
-                try { visible = localStorage.getItem(KEY) === '1'; } catch {}
-                apply(visible);
-
-                window.toggleSMeterHistory = () => {
-                    visible = !visible;
-                    try { localStorage.setItem(KEY, visible ? '1' : '0'); } catch {}
-                    apply(visible);
-                };
-            })();
-
-            // ── Analogue gauges row (temporary layout toggle) ───────────────
-            // Hides #meterGaugesRow (rendered by _MeterGaugesPartial) so the
-            // operating controls stay reachable while the dials are off.
-            // Choice persists in localStorage. Default is shown.
-            (function () {
-                const btn  = document.getElementById('meterGaugesToggleBtn');
-                const body = document.getElementById('metersCardBody');
-                if (!btn || !body) return;
-
-                const KEY = 'ywc.meterGaugesVisible';
-                const apply = (visible) => {
-                    body.classList.toggle('gauges-hidden', !visible);
-                    btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
-                    const led = btn.querySelector('.toggle-dd__led');
-                    if (led) led.classList.toggle('is-on', visible);
-                    btn.title = visible
-                        ? 'Hide analogue meter gauges'
-                        : 'Show analogue meter gauges';
-                };
-                let visible = true;
-                try { visible = localStorage.getItem(KEY) !== '0'; } catch {}
-                apply(visible);
-
-                btn.addEventListener('click', () => {
-                    visible = !visible;
-                    try { localStorage.setItem(KEY, visible ? '1' : '0'); } catch {}
-                    apply(visible);
-                });
-            })();
 
             // ── Spectrum display (dual-VFO, v2.3.0+) ─────────────────────────
             // One SpectrumPanel per VFO. SdrSpectrumPipeline routes by sdrId.
