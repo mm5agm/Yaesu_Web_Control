@@ -147,10 +147,11 @@ const LAYOUTS = {
             marker: [0.003, 0.540, 0.986, 0.720],
         },
         zones: {
-            // Estimated from the same picture (the S/PO/COMP/TEMP arc, top
-            // left); not yet bench-measured. The right half is the filter
-            // function display, which the radio uses for its own magnify touch.
-            meter:  { rect: [0.000, 0.095, 0.499, 0.300], action: 'meter.select' },
+            // Both meters, top left: the S/PO/COMP/TEMP arc and the
+            // ALC/VDD/ID/SWR arc. Bench-checked on the FTdx101MP 2026-09-23
+            // (0.499 had cut the SWR meter in half). Right of it is the
+            // filter display.
+            meter:  { rect: [0.000, 0.095, 0.700, 0.300], action: 'meter.select' },
             ant:    { rect: [0.003, 0.416, 0.196, 0.476], action: 'readout.ant' },
             att:    { rect: [0.199, 0.416, 0.392, 0.476], action: 'readout.att' },
             ipo:    { rect: [0.395, 0.416, 0.591, 0.476], action: 'readout.ipo' },
@@ -328,9 +329,13 @@ function ensureMeterPopupStyle() {
     font-weight: 600; margin-bottom: 6px;
 }
 .radio-display-hotspots .rdh-meters-close {
-    background: none; border: 0; color: #ccc; font-size: 18px; line-height: 1;
-    padding: 0 2px; cursor: pointer;
+    width: 26px; height: 26px; margin-left: 12px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #2a3450; color: #fff; font-size: 20px; font-weight: 700; line-height: 1;
+    border: 1px solid #8fa2cc; border-radius: 4px; cursor: pointer;
 }
+.radio-display-hotspots .rdh-meters-close:hover { background: #c0392b; border-color: #e06050; }
+.radio-display-hotspots .rdh-meters-hint { margin-top: 6px; font-size: 11px; color: #aab; }
 .radio-display-hotspots .rdh-meters-body { display: flex; gap: 10px; }
 .radio-display-hotspots .rdh-meters-col { display: flex; flex-direction: column; gap: 4px; }
 .radio-display-hotspots .rdh-meters-label { font-size: 11px; color: #aab; }
@@ -408,6 +413,10 @@ export class RadioDisplayHotspots {
             return;
         }
         if (p === 'ActiveVfo') this.state.activeVfo = Number(v) || 0;
+        // Someone changed the meters (on the radio's own panel, or from
+        // another tab) while the pop-up is open: re-read, so it never shows
+        // a stale choice. The server does the digit parsing.
+        if (p === 'MeterSelection' && this._meterPopup) this._refreshMeterPopup();
     }
 
     debug(on) {
@@ -884,9 +893,10 @@ export class RadioDisplayHotspots {
         pop.setAttribute('role', 'dialog');
         pop.setAttribute('aria-label', 'TX meter selection');
         pop.innerHTML = '<div class="rdh-meters-head"><span>TX meters</span>' +
-            '<button type="button" class="rdh-meters-close" aria-label="Close">×</button></div>' +
+            '<button type="button" class="rdh-meters-close" aria-label="Close" title="Close">×</button></div>' +
             '<div class="rdh-meters-body">Reading the radio…</div>' +
-            '<div class="rdh-meters-note"></div>';
+            '<div class="rdh-meters-note"></div>' +
+            '<div class="rdh-meters-hint">Click a meter to choose it, or press Esc.</div>';
         // Keep the overlay's own hover / click / measure handling off the pop-up.
         for (const t of ['pointerdown', 'pointermove', 'pointerup', 'click'])
             pop.addEventListener(t, e => e.stopPropagation());
@@ -911,6 +921,16 @@ export class RadioDisplayHotspots {
             console.error('[radio-display-hotspots] meters', err);
             if (this._meterPopup === pop)
                 pop.querySelector('.rdh-meters-body').textContent = 'Could not read the meters.';
+        }
+    }
+
+    async _refreshMeterPopup() {
+        const pop = this._meterPopup;
+        try {
+            const data = await (await fetch('/api/cat/meters')).json();
+            if (this._meterPopup === pop) this._renderMeterPopup(data);
+        } catch (err) {
+            console.error('[radio-display-hotspots] meters', err);
         }
     }
 
@@ -977,7 +997,12 @@ export class RadioDisplayHotspots {
                     reply?.error || 'The radio did not take that.';
                 return;
             }
+            // Done, as the radio's own pop-up is: one click, box gone. A pick
+            // held for the end of TX stays up long enough to read why.
+            const pop = this._meterPopup;
             this._renderMeterPopup(reply);
+            if (!reply.deferred) this._closeMeterPopup();
+            else setTimeout(() => { if (this._meterPopup === pop) this._closeMeterPopup(); }, 3000);
         } catch (err) {
             console.error('[radio-display-hotspots] set meters', err);
         }
