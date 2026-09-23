@@ -896,7 +896,7 @@ export class RadioDisplayHotspots {
             '<button type="button" class="rdh-meters-close" aria-label="Close" title="Close">×</button></div>' +
             '<div class="rdh-meters-body">Reading the radio…</div>' +
             '<div class="rdh-meters-note"></div>' +
-            '<div class="rdh-meters-hint">Click a meter to choose it, or press Esc.</div>';
+            '<div class="rdh-meters-hint">Pick a meter on each side, or × / Esc when done.</div>';
         // Keep the overlay's own hover / click / measure handling off the pop-up.
         for (const t of ['pointerdown', 'pointermove', 'pointerup', 'click'])
             pop.addEventListener(t, e => e.stopPropagation());
@@ -997,10 +997,13 @@ export class RadioDisplayHotspots {
                     reply?.error || 'The radio did not take that.';
                 return;
             }
-            // Done, as the radio's own pop-up is: one click, box gone. A pick
-            // held for the end of TX stays up long enough to read why.
+            // Close once every meter has had a pick, so on the FTdx101 both
+            // sides can be changed in one visit; × / Esc for just one side.
+            // A pick held for the end of TX stays up long enough to read why.
             const pop = this._meterPopup;
             this._renderMeterPopup(reply);
+            pop._picked = (pop._picked || new Set()).add(slotIndex);
+            if (pop._picked.size < data.slots.length) return;
             if (!reply.deferred) this._closeMeterPopup();
             else setTimeout(() => { if (this._meterPopup === pop) this._closeMeterPopup(); }, 3000);
         } catch (err) {
