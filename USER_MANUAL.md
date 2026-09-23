@@ -3907,7 +3907,7 @@ Under the scope, a line gives the two filter frequencies and three levels in dBF
 ### 22.2 Mark, Shift and Rev
 
 - **Mark** is the mark tone in the receive audio. Leave it at **2125 Hz** unless you know your setup uses something else.
-- **Shift** is the station's shift. Amateur RTTY is **170 Hz**; 200, 425 and 850 are there for everything else.
+- **Shift** is the station's shift. Amateur RTTY is **170 Hz**; 200, 425, 450 and 850 are there for everything else. 450 is the shift of the German weather service broadcasts (DDK9 on 10.1008 MHz, among others), which run all day and are the easiest real RTTY to find when the amateur bands are quiet.
 - **Rev** puts the space filter on the other side of mark. Tick it if the station is sending reversed, or if you have **REV** set on the radio.
 
 Which side of mark the space filter goes on depends on the mode on VFO A:

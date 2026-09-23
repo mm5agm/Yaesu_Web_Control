@@ -21,7 +21,7 @@
 const POLL_MS    = 50;     // 20 redraws a second
 const POINTS     = 500;    // about 21 ms at 24,000 points a second: one sweep
 const PERSIST    = 6;      // sweeps kept on screen, oldest dimmest
-const SHIFTS     = [170, 200, 425, 850];
+const SHIFTS     = [170, 200, 425, 450, 850];
 const LS_KEY     = 'rttyTuner';
 const QUIET_DB   = -80;    // below this in both filters there is nothing to draw
 

@@ -91,7 +91,7 @@ namespace Yaesu_Web_Control.Services.Rtty
         public async Task<string?> StartAsync(double markHz, int shiftHz, bool reverse)
         {
             if (markHz < 300 || markHz > 3000) return "Mark must be between 300 and 3000 Hz.";
-            if (shiftHz is not (170 or 200 or 425 or 850)) return "Shift must be 170, 200, 425 or 850 Hz.";
+            if (shiftHz is not (170 or 200 or 425 or 450 or 850)) return "Shift must be 170, 200, 425, 450 or 850 Hz.";
             // Checked both ways round, so a later mode change cannot move space out of range.
             if (markHz + shiftHz > 3500 || markHz - shiftHz < 150)
                 return "That mark and shift put the space tone outside the audio passband.";
