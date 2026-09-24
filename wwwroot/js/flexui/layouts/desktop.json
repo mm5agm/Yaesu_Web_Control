@@ -48,7 +48,14 @@
             "type": "tabset",
             "weight": 22,
             "children": [
-              { "type": "tab", "id": "extras", "name": "Extras", "component": "extras" }
+              { "type": "tab", "id": "remoteAudio", "name": "Remote Audio", "component": "remoteAudio" }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 14,
+            "children": [
+              { "type": "tab", "id": "clarifier", "name": "Clarifier", "component": "clarifier" }
             ]
           }
         ]
