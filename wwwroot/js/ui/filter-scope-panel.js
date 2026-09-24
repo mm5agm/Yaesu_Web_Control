@@ -61,6 +61,10 @@ const ROOFING_HZ_FTDX10 = { '6':12000,'7':3000,'9':500,'A':300,'a':300 };
 // so it falls through to null and no roofing outline is drawn.
 const ROOFING_HZ_3000 = { '1':15000,'2':6000,'3':3000,'4':600,'5':300 };
 
+// Top of the audio passband in the radio's RTTY modes: wide RTTY filters stop
+// here however wide they are set (FTdx101MP, 2026-09-24, #178).
+const RTTY_AUDIO_TOP_HZ = 2750;
+
 export class FilterScopePanel {
     constructor(canvasId, radioModel, initialState = {}) {
         this._canvasId  = canvasId;
@@ -85,6 +89,11 @@ export class FilterScopePanel {
             // APF marker derived from it were off by the same amount. Seeded
             // and kept current from the radio's own KP setting.
             cwPitchHz:        700,
+            // The radio's RTTY MARK FREQUENCY and SHIFT (extended menu), which
+            // place the RTTY-L / RTTY-U filter. Yaesu's defaults until the
+            // host reads the real ones from GET /api/cat/rtty.
+            rttyMarkHz:       2125,
+            rttyShiftHz:      170,
             ...initialState
         };
 
@@ -310,6 +319,15 @@ export class FilterScopePanel {
         return m === 'AM' || m === 'AM-N' || m.includes('FM');
     }
 
+    // Audio frequency the RTTY filter is centred on at zero IF SHIFT: the
+    // midpoint of mark and space, both of which are above mark in audio.
+    _rttyAudioCentreHz() {
+        const mark  = Number(this._state.rttyMarkHz);
+        const shift = Number(this._state.rttyShiftHz);
+        return (Number.isFinite(mark) && mark > 0 ? mark : 2125)
+             + (Number.isFinite(shift) && shift > 0 ? shift : 170) / 2;
+    }
+
     _roofingHz() {
         if (this._model === 'FTDX3000') {
             return ROOFING_HZ_3000[String(this._state.roofingCode)] || null;
@@ -347,6 +365,22 @@ export class FilterScopePanel {
             // spectrum panel mirrors these edges about the dial for its
             // overlay; this panel draws no outline in these modes (_draw).
             return { lo: 0, hi: ifWidthHz / 2 };
+        } else if (mode.startsWith('RTTY')) {
+            // The radio's own RTTY-L / RTTY-U. Measured on an FTdx101MP on
+            // 2026-09-24 (#178) from band noise at MARK 2125 / SHIFT 170: the
+            // filter sits on the midpoint of the two tones, 2210 Hz, not on
+            // the 1500 Hz IF centre the SSB branch below uses -- 300 ->
+            // 2062..2350, 500 -> 1969..2438, 800 -> 1811..2578, the same in
+            // both modes. From 1200 Hz up the top stops near 2750 Hz while the
+            // bottom keeps going down (1200 -> 1617..2725, 2000 ->
+            // 1219..2777, 3000 -> 721..2754). IF SHIFT moves it one for one
+            // (+/-300 -> centre 2499 / 1907). The centre is taken as mark +
+            // shift/2 for other MARK / SHIFT settings; only the default was
+            // measured, and so was only POLARITY-RX NOR.
+            const centre = this._rttyAudioCentreHz() + shift;
+            const lo = centre - ifWidthHz / 2;
+            const hi = Math.max(lo + 50, Math.min(centre + ifWidthHz / 2, RTTY_AUDIO_TOP_HZ));
+            return { lo, hi };
         } else {
             // SSB / DATA. Measured on an FTdx101MP on 2026-09-19 by sweeping
             // every SH width code and reading the receiver's audio spectrum
@@ -515,7 +549,9 @@ export class FilterScopePanel {
         // --- IF shift arrow at top ---
         const shift = this._state.ifShiftHz || 0;
         if (!carrierCentred && Math.abs(shift) > 50) {
-            const arrowX = x(1500 + shift);
+            const zeroShiftHz = (this._state.mode || '').toUpperCase().startsWith('RTTY')
+                ? this._rttyAudioCentreHz() : 1500;
+            const arrowX = x(zeroShiftHz + shift);
             const dir    = shift > 0 ? 1 : -1;
             const aSize  = 5;
             ctx.fillStyle = 'rgba(200,220,255,0.8)';
