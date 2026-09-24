@@ -37,6 +37,10 @@
     <template id="tpl-spectrum-a">@await Html.PartialAsync("FlexPartials/_SpectrumA", Model)</template>
     <template id="tpl-spectrum-b">@await Html.PartialAsync("FlexPartials/_SpectrumB", Model)</template>
     <template id="tpl-radio-display">@await Html.PartialAsync("FlexPartials/_RadioDisplay", Model)</template>
+    @* Standalone CAT scope controls. The same controls also dock inside the
+       Radio Display panel's dialog — this is a second host for them, not a
+       replacement. See Pages/FlexPartials/_RadioScope.cshtml. *@
+    <template id="tpl-radio-scope">@await Html.PartialAsync("FlexPartials/_RadioScope", Model.RadioModel)</template>
     <template id="tpl-empty"><div></div></template>
 </div>
 
@@ -50,7 +54,10 @@ window.ywcFlexFlags = {
     spectrumA: @Model.View.IsWindowsHost.ToString().ToLower(),
     spectrumB: @Model.View.IsWindowsHost.ToString().ToLower(),
     vfoB: true,
-    radioDisplay: @Model.View.VideoDisplayEnabled.ToString().ToLower()
+    radioDisplay: @Model.View.VideoDisplayEnabled.ToString().ToLower(),
+    // Available independently of Radio Display: the Radio Display dialog keeps
+    // its own copy of the same controls, and this panel is a second host.
+    radioScope: @Model.View.SupportsSpectrumScopeCat.ToString().ToLower()
 };
 </script>
 @await Html.PartialAsync("FlexPartials/_FlexScripts", Model)

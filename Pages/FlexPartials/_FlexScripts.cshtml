@@ -283,13 +283,19 @@
             initFreqKeyboard();
             initMemoriesPanel();
 
-            // Radio-scope CAT controls for the Radio Display panel. Bind its
-            // Controls dialog so SignalR updates reach the instance. The dialog
-            // is not in the default flex layout, so binding is deferred until the
-            // Radio Display template is first mounted (i.e. opened).
+            // Radio-scope CAT controls. Two hosts exist: the standalone Radio
+            // Scope panel, and the Radio Display panel's Controls dialog. Bind
+            // every host that is present so SignalR updates reach both
+            // instances. The Radio Display dialog is only in the layout when
+            // that tab is loaded, so binding is repeated as templates mount.
             window.radioScopeControls = [];
             const _boundScopeRoots = new Set();
             function bindRadioScopeHosts() {
+                const scopeCard = document.getElementById('radioScopeCard');
+                if (scopeCard && !_boundScopeRoots.has(scopeCard)) {
+                    _boundScopeRoots.add(scopeCard);
+                    window.radioScopeControls.push(new RadioScopeControl(scopeCard));
+                }
                 const scopeDlg = document.getElementById('radioDisplayScopeDialog');
                 if (scopeDlg && !_boundScopeRoots.has(scopeDlg)) {
                     _boundScopeRoots.add(scopeDlg);
@@ -299,7 +305,8 @@
             }
             bindRadioScopeHosts();
             window.addEventListener('ywc-flex-template-mounted', (e) => {
-                if (e.detail?.component === 'radioDisplay') {
+                const component = e.detail?.component;
+                if (component === 'radioDisplay' || component === 'radioScope') {
                     bindRadioScopeHosts();
                 }
             });

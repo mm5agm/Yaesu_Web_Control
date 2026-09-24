@@ -154,6 +154,15 @@
     background: #000;
 }
 
+/* Standalone Radio Scope panel. Its markup is rendered flat (no collapsible
+   card header), so just keep it inside the docked panel; the controls use the
+   shared .radio-scope-controls rules in site.css. The same controls also dock
+   inside the Radio Display panel — this is a second host. */
+.ywc-panel-body[data-ywc-component="radioScope"] #radioScopeCard {
+    margin: 0;
+    max-width: 100%;
+}
+
 /* Buttons and level key grids reflow with width — see the responsive rules
    after the .op-col base rule below. */
 
