@@ -845,63 +845,84 @@ function initAppsButton() {
     return widget;
 }
 
-export function initVfoKeyButtons() {
+/**
+ * Create the VFO-specific Yaesu keys for one receiver. Split out from
+ * initVfoKeyButtons so the Flex UI can initialise a VFO panel the first
+ * time its tab is mounted, rather than assuming both VFOs exist at ready.
+ * Missing roots yield nulls, so calling it before a panel is mounted is a
+ * safe no-op for that VFO.
+ * @param {'A'|'B'} vfo
+ */
+export function initVfoKeyButtonsFor(vfo) {
+    const band = initBandButton(vfo);
+    const segment = initSegmentButton(vfo);
+    const mode = initModeButton(vfo);
+    const antenna = initAntennaButton(vfo);
+    const roofing = initRoofingButton(vfo);
+    const ifWidth = initIfWidthButton(vfo);
+    const ifShift = initIfShiftButton(vfo);
+    const agc = initAgcButton(vfo);
+    const ipo = initIpoButton(vfo);
+    const att = initAttButton(vfo);
+    const nb = initNbButton(vfo);
+    const autoNotch = initAutoNotchButton(vfo);
+    const manNotch = initManNotchButton(vfo);
+    const contour = initContourButton(vfo);
+    const apf = initApfButton(vfo);
+
+    if (band) window[`bandButton${vfo}`] = band;
+    if (segment) window[`segmentButton${vfo}`] = segment;
+    if (mode) window[`modeButton${vfo}`] = mode;
+    if (antenna) window[`antennaButton${vfo}`] = antenna;
+    if (roofing) window[`roofingButton${vfo}`] = roofing;
+    if (ifWidth) window[`ifWidthButton${vfo}`] = ifWidth;
+    if (ifShift) window[`ifShiftButton${vfo}`] = ifShift;
+    if (agc) window[`agcButton${vfo}`] = agc;
+    if (ipo) window[`ipoButton${vfo}`] = ipo;
+    if (att) window[`attButton${vfo}`] = att;
+    if (nb) window[`nbButton${vfo}`] = nb;
+    if (autoNotch) window[`autoNotchButton${vfo}`] = autoNotch;
+    if (manNotch) window[`manNotchButton${vfo}`] = manNotch;
+    if (contour) window[`contourButton${vfo}`] = contour;
+    if (apf) window[`apfButton${vfo}`] = apf;
+
+    return {
+        band,
+        segment,
+        mode,
+        antenna,
+        roofing,
+        ifWidth,
+        ifShift,
+        agc,
+        ipo,
+        att,
+        nb,
+        autoNotch,
+        manNotch,
+        contour,
+        apf,
+    };
+}
+
+/**
+ * The VFO-agnostic keys (QMB, Apps, Clarifier), which live outside the VFO
+ * panels and are initialised once at workspace ready.
+ */
+export function initSharedVfoKeyButtons() {
     const result = {};
     result.qmb = initQmbButton();
     result.apps = initAppsButton();
     result.clarVfo = initClarVfoButton();
     result.clarMode = initClarModeButton();
     result.clarOffset = initClarOffsetButton();
+    return result;
+}
+
+export function initVfoKeyButtons() {
+    const result = initSharedVfoKeyButtons();
     for (const vfo of ["A", "B"]) {
-        const band = initBandButton(vfo);
-        const segment = initSegmentButton(vfo);
-        const mode = initModeButton(vfo);
-        const antenna = initAntennaButton(vfo);
-        const roofing = initRoofingButton(vfo);
-        const ifWidth = initIfWidthButton(vfo);
-        const ifShift = initIfShiftButton(vfo);
-        const agc = initAgcButton(vfo);
-        const ipo = initIpoButton(vfo);
-        const att = initAttButton(vfo);
-        const nb = initNbButton(vfo);
-        const autoNotch = initAutoNotchButton(vfo);
-        const manNotch = initManNotchButton(vfo);
-        const contour = initContourButton(vfo);
-        const apf = initApfButton(vfo);
-
-        if (band) window[`bandButton${vfo}`] = band;
-        if (segment) window[`segmentButton${vfo}`] = segment;
-        if (mode) window[`modeButton${vfo}`] = mode;
-        if (antenna) window[`antennaButton${vfo}`] = antenna;
-        if (roofing) window[`roofingButton${vfo}`] = roofing;
-        if (ifWidth) window[`ifWidthButton${vfo}`] = ifWidth;
-        if (ifShift) window[`ifShiftButton${vfo}`] = ifShift;
-        if (agc) window[`agcButton${vfo}`] = agc;
-        if (ipo) window[`ipoButton${vfo}`] = ipo;
-        if (att) window[`attButton${vfo}`] = att;
-        if (nb) window[`nbButton${vfo}`] = nb;
-        if (autoNotch) window[`autoNotchButton${vfo}`] = autoNotch;
-        if (manNotch) window[`manNotchButton${vfo}`] = manNotch;
-        if (contour) window[`contourButton${vfo}`] = contour;
-        if (apf) window[`apfButton${vfo}`] = apf;
-
-        result[vfo] = {
-            band,
-            segment,
-            mode,
-            antenna,
-            roofing,
-            ifWidth,
-            ifShift,
-            agc,
-            ipo,
-            att,
-            nb,
-            autoNotch,
-            manNotch,
-            contour,
-            apf,
-        };
+        result[vfo] = initVfoKeyButtonsFor(vfo);
     }
     return result;
 }

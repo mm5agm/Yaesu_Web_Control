@@ -80,6 +80,23 @@ function setActiveScale(scale) {
     try { localStorage.setItem(SCALE_KEY, scale); } catch { /* ignore */ }
 }
 
+/**
+ * VFO panels must be mounted even when their tab is not the selected one,
+ * or the inactive VFO is never initialised: `ywc-flex-ready` (and every
+ * element-dependent init hung off it) runs before the tab is first opened,
+ * and there is nothing to re-run when it later is. FlexLayout defaults
+ * `tabEnableRenderOnDemand` to true, which is what leaves the unselected
+ * VFO blank. Spectrum and Radio Display keep the default — only the VFO
+ * panels are needed on screen from load.
+ */
+const VFO_COMPONENT_IDS = new Set(['vfoA', 'vfoB']);
+
+function forceVfoRenderOnDemand(tabJson) {
+    const id = tabJson?.id ?? tabJson?.component;
+    if (VFO_COMPONENT_IDS.has(id)) tabJson.enableRenderOnDemand = false;
+    return tabJson;
+}
+
 /** Drop panels the host cannot currently show (no SDR, video off, ...). */
 function filterLayoutJson(json, flags) {
     const drop = new Set();
@@ -98,7 +115,8 @@ function filterLayoutJson(json, flags) {
     const filterChildren = (node) => {
         if (!node) return null;
         if (node.type === 'tab') {
-            return drop.has(node.id) || drop.has(node.component) ? null : node;
+            if (drop.has(node.id) || drop.has(node.component)) return null;
+            return forceVfoRenderOnDemand(node);
         }
         if (Array.isArray(node.children)) {
             node.children = node.children.map(filterChildren).filter(Boolean);
@@ -118,7 +136,7 @@ function filterLayoutJson(json, flags) {
             children: [{
                 type: 'tabset',
                 weight: 100,
-                children: [{ type: 'tab', id: 'vfoA', name: 'VFO A', component: 'vfoA' }],
+                children: [forceVfoRenderOnDemand({ type: 'tab', id: 'vfoA', name: 'VFO A', component: 'vfoA' })],
             }],
         };
     }
@@ -405,7 +423,7 @@ export function initFlexWorkspace(host, flags) {
             state.model.doAction(FL.Actions.selectTab(id));
             return;
         }
-        const json = { type: 'tab', id, name: meta.name, component: meta.component };
+        const json = forceVfoRenderOnDemand({ type: 'tab', id, name: meta.name, component: meta.component });
         const toNode = state.model.getActiveTabset?.() || state.model.getFirstTabSet?.();
         if (toNode) {
             try {

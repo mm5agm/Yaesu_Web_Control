@@ -69,12 +69,28 @@ namespace Yaesu_Web_Control.Hubs
             // frontend JS defaults for everything not server-rendered in the
             // Razor page — most visibly ActiveVfo/TxVfo/SplitMode, which made
             // VFO A always appear active on late-joining clients.
+            await SendStateSnapshotAsync();
+
+            await base.OnConnectedAsync();
+        }
+
+        /// <summary>
+        /// Re-send the full state snapshot to the calling client on demand.
+        /// The snapshot is otherwise sent once, at connect, and broadcasts
+        /// fire only on change — so a panel that mounts after that moment (a
+        /// Flex UI VFO tab that was not selected on load, or one reopened
+        /// from the Panels menu) would otherwise hold its page-load values
+        /// until each property next changed. The frontend asks for this the
+        /// first time such a panel mounts.
+        /// </summary>
+        public Task RequestState() => SendStateSnapshotAsync();
+
+        private async Task SendStateSnapshotAsync()
+        {
             foreach (var (property, value) in _radioState.GetClientStateSnapshot())
             {
                 await Clients.Caller.SendAsync("RadioStateUpdate", new { property, value });
             }
-
-            await base.OnConnectedAsync();
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
