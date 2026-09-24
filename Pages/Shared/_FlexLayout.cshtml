@@ -16,8 +16,10 @@
     <link rel="stylesheet" href="~/css/closer-to-raw-power.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/toggle-dropdown-button.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/flex-widgets.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/lib/flexlayout/style/dark.css" asp-append-version="true" />
+    @* flex-widgets last so its overrides (squared corners, layout background)
+       win over both Bootstrap and the FlexLayout dark theme. *@
+    <link rel="stylesheet" href="~/css/flex-widgets.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
 
     <script src="~/lib/canvas-gauges/gauge.min.js"></script>

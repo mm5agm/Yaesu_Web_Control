@@ -22,12 +22,12 @@
 }
 
         <div class="col-12 h-100" id="vfoACol">
-            <div class="card border-primary h-100 receiver-card">
-                <div class="card-header bg-primary text-white py-1">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-1">
-                        <h5 class="mb-0">
-                            <span id="receiverAHeading">VFO A</span>
-                        </h5>
+            <div class="card border-0 h-100 receiver-card">
+                <div class="card-header bg-transparent border-0 text-white py-0">
+                    <div class="d-flex justify-content-end align-items-center flex-wrap gap-1">
+                        @* Heading kept for site.js (updateTxButton writes to it) but
+                           not shown — the FlexLayout tab carries the VFO name. *@
+                        <span id="receiverAHeading" class="visually-hidden">VFO A</span>
                         <div class="d-flex align-items-center gap-1 flex-wrap">
                             <span id="splitTxBadgeA" class="badge bg-danger" style="display:none;" aria-live="polite">SPLIT TX</span>
                             @if (hasVcTune) {

@@ -224,6 +224,65 @@ export function dispatchPanelResize() {
     window.dispatchEvent(new Event('ywc-flex-panel-resize'));
 }
 
+// ── VFO tab titles ──────────────────────────────────────────────────────────
+// The VFO card header is gone on Flex UI, so the tab carries the state the
+// header used to show: which VFO is the active (MAIN/SUB or RX) one, and which
+// is transmitting. site.js already paints those into the (now visually-hidden)
+// #receiverAHeading/#receiverBHeading and the .vfo-active class, so we mirror
+// that state onto the FlexLayout tab name instead of duplicating the logic.
+const _lastTabTitles = {};
+
+function setTabTitle(id, name) {
+    const model = window.ywcFlex?.model;
+    if (!model?.getNodeById(id)) return;
+    if (_lastTabTitles[id] === name) return;
+    try {
+        model.doAction(window.FlexLayout.Actions.renameTab(id, name));
+        _lastTabTitles[id] = name;
+    } catch { /* ignore */ }
+}
+
+function vfoTitleFor(vfo) {
+    const heading = document.getElementById(`receiver${vfo}Heading`);
+    const col = document.getElementById(`vfo${vfo}Col`);
+    const isTx = !!heading?.querySelector('.bi-broadcast');
+    let isActive = !!col?.classList.contains('vfo-active');
+    if (!isActive) {
+        // Single-receiver radios have no .vfo-active; read the RX selector.
+        const rxBtn = document.getElementById(`rxVfo${vfo}`);
+        isActive = !!rxBtn && (rxBtn.classList.contains('btn-success') || rxBtn.classList.contains('btn-danger'));
+    }
+    return `VFO ${vfo}${isActive ? ' ●' : ''}${isTx ? ' TX' : ''}`;
+}
+
+function updateVfoTitle(vfo) {
+    setTabTitle(`vfo${vfo}`, vfoTitleFor(vfo));
+}
+
+function wireVfoTitles() {
+    for (const vfo of ['A', 'B']) {
+        updateVfoTitle(vfo);
+        const col = document.getElementById(`vfo${vfo}Col`);
+        const heading = document.getElementById(`receiver${vfo}Heading`);
+        if (col && col.dataset.ywcTitleWired !== '1') {
+            col.dataset.ywcTitleWired = '1';
+            new MutationObserver(() => updateVfoTitle(vfo))
+                .observe(col, { attributes: true, attributeFilter: ['class'] });
+        }
+        if (heading && heading.dataset.ywcTitleWired !== '1') {
+            heading.dataset.ywcTitleWired = '1';
+            new MutationObserver(() => updateVfoTitle(vfo))
+                .observe(heading, { childList: true, subtree: true, characterData: true });
+        }
+    }
+    const rxGroup = document.getElementById('rxTxSplitGroup');
+    if (rxGroup && rxGroup.dataset.ywcTitleWired !== '1') {
+        rxGroup.dataset.ywcTitleWired = '1';
+        new MutationObserver(() => { updateVfoTitle('A'); updateVfoTitle('B'); })
+            .observe(rxGroup, { subtree: true, attributes: true, childList: true });
+    }
+}
+
 export function initFlexWorkspace(host, flags) {
     const FL = window.FlexLayout;
     const React = window.React;
@@ -387,6 +446,20 @@ export function initFlexWorkspace(host, flags) {
     };
 
     wireToolbar();
+    // VFO tab titles: set on ready, and re-applied whenever a VFO tab mounts
+    // (a closed tab is recreated with its default name, so forget the cached
+    // title first).
+    window.addEventListener('ywc-flex-ready', wireVfoTitles);
+    window.addEventListener('ywc-flex-template-mounted', (e) => {
+        if (/^vfo[AB]$/.test(e.detail?.component || '')) wireVfoTitles();
+    });
+    window.addEventListener('ywc-flex-panel-attached', (e) => {
+        const component = e.detail?.component;
+        if (component === 'vfoA' || component === 'vfoB') {
+            _lastTabTitles[component] = null;
+            updateVfoTitle(component === 'vfoA' ? 'A' : 'B');
+        }
+    });
     loadModel().then(() => {
         // Wait until React has committed the initial panels before telling the
         // page its element-dependent init (meters, spectrum, VFO keys, ...)
