@@ -36,7 +36,6 @@
     <template id="tpl-spectrum-a">@await Html.PartialAsync("FlexPartials/_SpectrumA", Model)</template>
     <template id="tpl-spectrum-b">@await Html.PartialAsync("FlexPartials/_SpectrumB", Model)</template>
     <template id="tpl-radio-display">@await Html.PartialAsync("FlexPartials/_RadioDisplay", Model)</template>
-    <template id="tpl-radio-scope">@await Html.PartialAsync("Shared/_RadioScopePartial", Model.RadioModel)</template>
     <template id="tpl-empty"><div></div></template>
 </div>
 
@@ -50,8 +49,7 @@ window.ywcFlexFlags = {
     spectrumA: @Model.View.IsWindowsHost.ToString().ToLower(),
     spectrumB: @Model.View.IsWindowsHost.ToString().ToLower(),
     vfoB: true,
-    radioDisplay: @Model.View.VideoDisplayEnabled.ToString().ToLower(),
-    radioScope: @((Model.View.SupportsSpectrumScopeCat && !Model.View.VideoDisplayEnabled).ToString().ToLower())
+    radioDisplay: @Model.View.VideoDisplayEnabled.ToString().ToLower()
 };
 </script>
 @await Html.PartialAsync("FlexPartials/_FlexScripts", Model)

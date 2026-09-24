@@ -1013,8 +1013,19 @@ function showScopeControls({ refresh = true, persist = true } = {}) {
   }
 
   if (!dlg.open) {
+    // HTMLDialogElement.show() focuses the first focusable descendant and the
+    // browser scrolls the nearest scrollable ancestor to reveal it — which
+    // yanks the Flex UI panel body down and hides the card header above the
+    // dialog. Remember those offsets, then put them back.
+    const scrollers = [];
+    for (let el = dlg.parentElement; el; el = el.parentElement) {
+      if (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) {
+        scrollers.push([el, el.scrollTop, el.scrollLeft]);
+      }
+    }
     if (typeof dlg.show === 'function') dlg.show();
     else dlg.setAttribute('open', '');
+    for (const [el, top, left] of scrollers) { el.scrollTop = top; el.scrollLeft = left; }
   }
 
   if (persist) setControlsVisiblePreference(true);
@@ -1287,21 +1298,26 @@ function bindControls() {
 }
 
 /**
- * Index / pop-out entry point.
- * @param {'index'|'popout'} [mode]
+ * Index / pop-out / Flex UI panel entry point.
+ * @param {'index'|'popout'|'flex'} [mode]
  */
 export async function initRadioDisplayUi(mode = 'index') {
   const container = document.getElementById('radioDisplayContainer');
   if (!container) return;
 
+  // Flex UI panels are opened/closed through their dock tab, so the Index
+  // hide preference is meaningless there. They also size the video to the
+  // panel (like the pop-out), not to Index's natural-size cap, so Fit/Fill
+  // actually differ and the picture fills the tab when maximised.
+  const flexPanel = mode === 'flex';
   uiMode = mode === 'popout' ? 'popout' : 'index';
   panel = new RadioDisplayPanel(
     'radioDisplayImg',
     'radioDisplayContainer',
     'radioDisplayBadge',
     {
-      ignoreHidePreference: uiMode === 'popout',
-      naturalSize: uiMode === 'index'
+      ignoreHidePreference: uiMode === 'popout' || flexPanel,
+      naturalSize: uiMode === 'index' && !flexPanel
     }
   );
   bindChannel();
