@@ -982,6 +982,11 @@ function bindRemoteAudioControls(role) {
 export async function initRemoteAudioUi() {
   const bar = document.getElementById('remoteAudioBar');
   if (!bar) return;
+  // Idempotent: the Flex UI calls this at workspace ready and again if the
+  // Remote Audio panel is first mounted later (Panels menu / layout switch).
+  // bindRemoteAudioControls attaches listeners, so it must only run once.
+  if (bar.dataset.ywcBound === '1') return;
+  bar.dataset.ywcBound = '1';
 
   let enabled = false;
   let rxGain = 1;

@@ -91,19 +91,31 @@ function setActiveScale(scale) {
 }
 
 /**
- * VFO panels must be mounted even when their tab is not the selected one,
- * or the inactive VFO is never initialised: `ywc-flex-ready` (and every
- * element-dependent init hung off it) runs before the tab is first opened,
- * and there is nothing to re-run when it later is. FlexLayout defaults
- * `tabEnableRenderOnDemand` to true, which is what leaves the unselected
- * VFO blank. Spectrum and Radio Display keep the default — only the VFO
- * panels are needed on screen from load.
+ * Panels whose content is deliberately rendered only once their tab is
+ * selected. Radio Display is the only one: mounting it runs
+ * initRadioDisplayUi, which probes the capture device and (with Auto on)
+ * starts the MJPEG stream, so it must not happen just because the page
+ * loaded with that tab present but not selected.
  */
-const VFO_COMPONENT_IDS = new Set(['vfoA', 'vfoB']);
+const LAZY_COMPONENT_IDS = new Set(['radioDisplay']);
 
-function forceVfoRenderOnDemand(tabJson) {
+/**
+ * Per-tab render policy, applied to every tab in the layout.
+ *
+ * FlexLayout defaults `tabEnableRenderOnDemand` to true (render a tab's
+ * component only once it is visible), but this workspace turns that off
+ * globally (see applyGlobals) so that **every** panel present in a layout is
+ * mounted at load. The page runs its element-dependent init exactly once, at
+ * `ywc-flex-ready`, and nothing re-runs it when a tab is selected later — so
+ * a panel that is merely a non-selected tab (VFO A and VFO B stacked in one
+ * tabset, Linear Meters stacked with anything) would never be initialised,
+ * leaving it blank for the rest of the session. Mounting everything up front
+ * removes that whole class of bug. Radio Display opts back out; its own
+ * first-mount handler initialises it when the operator opens the tab.
+ */
+function applyTabRenderPolicy(tabJson) {
     const id = tabJson?.id ?? tabJson?.component;
-    if (VFO_COMPONENT_IDS.has(id)) tabJson.enableRenderOnDemand = false;
+    if (LAZY_COMPONENT_IDS.has(id)) tabJson.enableRenderOnDemand = true;
     return tabJson;
 }
 
@@ -154,7 +166,7 @@ function filterLayoutJson(json, flags, retained) {
                 return null;
             }
             if (!known) return null;
-            return forceVfoRenderOnDemand(node);
+            return applyTabRenderPolicy(node);
         }
         if (Array.isArray(node.children)) {
             const childAnchors = node.type === 'tabset'
@@ -179,7 +191,7 @@ function filterLayoutJson(json, flags, retained) {
             children: [{
                 type: 'tabset',
                 weight: 100,
-                children: [forceVfoRenderOnDemand({ type: 'tab', id: 'vfoA', name: 'VFO A', component: 'vfoA' })],
+                children: [applyTabRenderPolicy({ type: 'tab', id: 'vfoA', name: 'VFO A', component: 'vfoA' })],
             }],
         };
     }
@@ -525,6 +537,10 @@ export function initFlexWorkspace(host, flags) {
         json.global.tabSetEnableMaximize = true;
         json.global.tabEnablePopout = true;
         json.global.tabEnablePopoutFloatIcon = true;
+        // Mount every panel in the layout, not just the selected tab of each
+        // tabset — see applyTabRenderPolicy. Per-tab overrides (Radio Display)
+        // still win over this.
+        json.global.tabEnableRenderOnDemand = false;
         return json;
     }
 
@@ -769,7 +785,7 @@ export function initFlexWorkspace(host, flags) {
             state.model.doAction(FL.Actions.selectTab(id));
             return;
         }
-        const json = forceVfoRenderOnDemand({ type: 'tab', id, name: meta.name, component: meta.component });
+        const json = applyTabRenderPolicy({ type: 'tab', id, name: meta.name, component: meta.component });
         const toNode = state.model.getActiveTabset?.() || state.model.getFirstTabSet?.();
         if (toNode) {
             try {
@@ -918,14 +934,20 @@ export function initFlexWorkspace(host, flags) {
         mountJson(await loadActiveJson());
         buildLayoutsMenu();
     })().then(() => {
-        // Wait until React has committed the initial panels before telling the
-        // page its element-dependent init (meters, spectrum, VFO keys, ...)
-        // can run. Waiting on a real panel host — not just one frame — avoids
-        // the occasional race where site.js populated the segment key while
-        // it was still the raw <div id="segmentButtonA">.
+        // Wait until React has committed the initial panels *and run their
+        // effects* before telling the page its element-dependent init
+        // (meters, spectrum, VFO keys, ...) can run. The host wrapper is part
+        // of the render output and exists before the effect clones the
+        // template into it, so waiting on the host alone can fire ready while
+        // the canvases/keys are still absent — MeterPanel, for one, caches a
+        // gauge per canvas at construction and never retries. `.ywc-panel-body`
+        // is appended by the effect, so it is only present once the template
+        // content is really in the DOM.
         let tries = 0;
         const waitForPanels = () => {
-            const mounted = document.querySelector('.ywc-flex-panel-host[data-ywc-component="vfoA"]');
+            const hosts = document.querySelectorAll('.ywc-flex-panel-host');
+            const mounted = hosts.length > 0
+                && Array.from(hosts).every((h) => h.querySelector('.ywc-panel-body'));
             if (mounted || tries++ > 60) {
                 window.dispatchEvent(new Event('ywc-flex-ready'));
             } else {

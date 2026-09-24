@@ -35,20 +35,39 @@ export class MeterPanel {
     }
 
     _createGauges() {
-        for (const [key, entry] of Object.entries(this.config)) {
-            if (!document.getElementById(entry.canvasId)) continue;
+        for (const key of Object.keys(this.config)) this._ensureGauge(key);
+    }
 
-            const { type, canvasId, ...options } = entry;
-            const gaugeType = type || key;
-            const gauge = createGauge(gaugeType, canvasId, options);
+    /**
+     * Create a gauge for `key` if its canvas is present and it does not exist
+     * yet. Called for every key at construction, and again via ensureGauges()
+     * when a panel that was not mounted then — a Flex UI tab first opened
+     * after page init, the inactive VFO — brings its canvas into the DOM.
+     * Without this a meter whose canvas appeared late stayed dead for the
+     * session, because nothing retried after construction.
+     */
+    _ensureGauge(key) {
+        if (this.gauges[key]) return this.gauges[key];
 
-            if (gauge) {
-                gauge.render();
-                this.gauges[key] = gauge;
-            } else {
-                console.warn(`MeterPanel: Failed to create gauge "${key}" (type "${gaugeType}")`);
-            }
+        const entry = this.config[key];
+        if (!entry || !document.getElementById(entry.canvasId)) return null;
+
+        const { type, canvasId, ...options } = entry;
+        const gaugeType = type || key;
+        const gauge = createGauge(gaugeType, canvasId, options);
+
+        if (!gauge) {
+            console.warn(`MeterPanel: Failed to create gauge "${key}" (type "${gaugeType}")`);
+            return null;
         }
+        gauge.render();
+        this.gauges[key] = gauge;
+        return gauge;
+    }
+
+    /** Create any gauges whose canvases have appeared since construction. */
+    ensureGauges() {
+        for (const key of Object.keys(this.config)) this._ensureGauge(key);
     }
 
     /**
@@ -94,7 +113,8 @@ export class MeterPanel {
     }
 
     _updateOne(key, value) {
-        const gauge = this.gauges[key];
+        // _ensureGauge covers the canvas having arrived after construction.
+        const gauge = this.gauges[key] || this._ensureGauge(key);
         if (!gauge) return;
         updateGaugeValue(gauge, value);
         gauge.gauge.draw();
