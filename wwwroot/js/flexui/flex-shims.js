@@ -57,21 +57,42 @@
         dispose: () => {},
     };
 
+    // Only the menus this shim owns (those with a [data-bs-toggle="dropdown"]
+    // toggler) may be closed here. The Yaesu key widgets also render a
+    // .dropdown-menu but manage their own open/close; clearing those by class
+    // alone made left-click menus (Apps, Band, Mode, ...) open and immediately
+    // vanish because the click bubbled up to this handler.
+    function menuFor(toggle) {
+        if (!toggle) return null;
+        const target = toggle.getAttribute?.('data-bs-target');
+        if (target) return document.querySelector(target);
+        return toggle.parentElement?.querySelector('.dropdown-menu') || null;
+    }
+
+    function closeMenus(except) {
+        document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach((toggle) => {
+            const menu = menuFor(toggle);
+            if (!menu || menu === except) return;
+            menu.classList.remove('show');
+            menu.style.display = '';
+            toggle.setAttribute('aria-expanded', 'false');
+        });
+    }
+
     class Dropdown {
         constructor(el) { this._el = el; }
         static getOrCreateInstance(el) { return new Dropdown(el); }
         toggle() {
-            const menu = this._el?.parentElement?.querySelector('.dropdown-menu')
-                || document.querySelector(this._el?.getAttribute('data-bs-target'));
+            const menu = menuFor(this._el);
             if (!menu) return;
             const willShow = !menu.classList.contains('show');
-            document.querySelectorAll('.dropdown-menu.show').forEach((m) => {
-                m.classList.remove('show');
-                m.style.display = '';
-            });
+            closeMenus(menu);
             if (willShow) {
                 menu.classList.add('show');
                 menu.style.display = 'block';
+                this._el.setAttribute('aria-expanded', 'true');
+            } else {
+                this._el.setAttribute('aria-expanded', 'false');
             }
         }
     }
@@ -91,12 +112,9 @@
             if (modalEl) closeModal(modalEl);
             return;
         }
-        // Click outside an open dropdown closes it.
+        // Click outside an open shim dropdown closes it.
         if (!e.target.closest?.('.dropdown-menu') && !e.target.closest?.('[data-bs-toggle="dropdown"]')) {
-            document.querySelectorAll('.dropdown-menu.show').forEach((m) => {
-                m.classList.remove('show');
-                m.style.display = '';
-            });
+            closeMenus();
         }
     });
 

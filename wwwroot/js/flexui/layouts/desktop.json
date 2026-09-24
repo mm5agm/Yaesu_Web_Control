@@ -45,17 +45,23 @@
             ]
           },
           {
-            "type": "tabset",
-            "weight": 22,
+            "type": "row",
+            "weight": 36,
             "children": [
-              { "type": "tab", "id": "remoteAudio", "name": "Remote Audio", "component": "remoteAudio" }
-            ]
-          },
-          {
-            "type": "tabset",
-            "weight": 14,
-            "children": [
-              { "type": "tab", "id": "clarifier", "name": "Clarifier", "component": "clarifier" }
+              {
+                "type": "tabset",
+                "weight": 55,
+                "children": [
+                  { "type": "tab", "id": "remoteAudio", "name": "Remote Audio", "component": "remoteAudio" }
+                ]
+              },
+              {
+                "type": "tabset",
+                "weight": 45,
+                "children": [
+                  { "type": "tab", "id": "clarifier", "name": "Clarifier", "component": "clarifier" }
+                ]
+              }
             ]
           }
         ]

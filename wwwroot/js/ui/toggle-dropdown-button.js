@@ -10,6 +10,84 @@ function nextOptionIndex(options, selectedId, direction) {
     return (index + options.length) % options.length;
 }
 
+/*
+ * Flex UI panels live inside scrollable dock tabs, so a menu positioned
+ * relative to its key is clipped by the tab and stretches its scroll area.
+ * Inside a .ywc-panel-body the menu is taken out of flow (position: fixed)
+ * and anchored to the key with viewport coordinates, so it floats above the
+ * tab and any neighbouring tabs. The classic Index page is untouched.
+ */
+const FLOATING_MENU_CLASS = "toggle-dd__menu--floating";
+const floatingMenus = new Map();
+
+function shouldFloatMenu(root) {
+    // A popout window is a different document with its own viewport; the
+    // coordinates below are the main document's, so leave those menus alone.
+    if (root.ownerDocument !== document) return false;
+    return !!root.closest?.(".ywc-panel-body");
+}
+
+function positionFloatingMenu(root, menu) {
+    const btn = root.querySelector(".toggle-dd__btn") || root;
+    const rect = btn.getBoundingClientRect();
+    const width = menu.offsetWidth;
+    const height = menu.offsetHeight;
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    let left = rect.left;
+    let top = rect.bottom + 2;
+    if (left + width > vw - 4) left = Math.max(4, vw - width - 4);
+    if (left < 4) left = 4;
+    if (top + height > vh - 4 && rect.top - height - 2 > 4) {
+        top = rect.top - height - 2;
+    }
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+}
+
+function floatMenu(root, menu) {
+    if (!floatingMenus.has(menu)) {
+        // Freeze the menu's resolved width before it becomes fixed: its CSS
+        // min-width is a percentage of the (now viewport-sized) containing
+        // block once fixed, which would stretch it across the screen.
+        menu.style.minWidth = `${menu.offsetWidth}px`;
+        menu.classList.add(FLOATING_MENU_CLASS);
+        menu.style.position = "fixed";
+        menu.style.margin = "0";
+        menu.style.zIndex = "3000";
+        floatingMenus.set(menu, root);
+    }
+    positionFloatingMenu(root, menu);
+}
+
+function unfloatMenu(menu) {
+    if (!floatingMenus.has(menu)) return;
+    floatingMenus.delete(menu);
+    menu.classList.remove(FLOATING_MENU_CLASS);
+    menu.style.position = "";
+    menu.style.margin = "";
+    menu.style.minWidth = "";
+    menu.style.zIndex = "";
+    menu.style.left = "";
+    menu.style.top = "";
+}
+
+function repositionFloatingMenus() {
+    if (!floatingMenus.size) return;
+    for (const [menu, root] of floatingMenus) positionFloatingMenu(root, menu);
+}
+
+window.addEventListener("resize", repositionFloatingMenus);
+document.addEventListener("scroll", repositionFloatingMenus, true);
+
+function syncFloatingMenu(root, menu, open) {
+    if (open) {
+        if (shouldFloatMenu(root)) floatMenu(root, menu);
+    } else {
+        unfloatMenu(menu);
+    }
+}
+
 /**
  * Yaesu key: left-click toggles, cycles, or opens the menu; right-click opens options.
  */
@@ -314,6 +392,7 @@ export class ToggleDropdownButton {
         this.menuOpen = open;
         this.menu.classList.toggle("show", open);
         this.button.setAttribute("aria-expanded", open ? "true" : "false");
+        syncFloatingMenu(this.root, this.menu, open);
 
         if (open) {
             document.addEventListener("pointerdown", this._onDocPointer, true);
@@ -553,6 +632,7 @@ export class ToggleSliderButton {
         this.menuOpen = open;
         this.menu.classList.toggle("show", open);
         this.button.setAttribute("aria-expanded", open ? "true" : "false");
+        syncFloatingMenu(this.root, this.menu, open);
 
         if (open) {
             document.addEventListener("pointerdown", this._onDocPointer, true);
@@ -1114,6 +1194,7 @@ export class CycleContextButton {
         this.menuOpen = open;
         this.menu.classList.toggle("show", open);
         this.button.setAttribute("aria-expanded", open ? "true" : "false");
+        syncFloatingMenu(this.root, this.menu, open);
 
         if (open) {
             document.addEventListener("pointerdown", this._onDocPointer, true);
@@ -1340,6 +1421,7 @@ export class ActionMenuButton {
         this.menuOpen = open;
         this.menu.classList.toggle("show", open);
         this.button.setAttribute("aria-expanded", open ? "true" : "false");
+        syncFloatingMenu(this.root, this.menu, open);
 
         if (open) {
             document.addEventListener("pointerdown", this._onDocPointer, true);
