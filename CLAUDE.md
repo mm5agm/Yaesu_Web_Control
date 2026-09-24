@@ -210,6 +210,8 @@ dotnet publish -c Release -f net10.0-windows -r win-x64 --self-contained
 
 On macOS, set **Serial Port** to a `/dev/cu.*` device. On Linux, use `/dev/ttyUSB*` or `/dev/ttyACM*`. SDR spectrum and Voice Control are Windows-only and are hidden on the CAT-only host.
 
+**macOS Radio Display / Remote Audio:** run via `./scripts/macos/run-dev.sh`. It wraps the built output as a `.app`, which gives YWC its own TCC identity so macOS can prompt for Camera/Microphone. Bare `dotnet run` only works if the app that launched it declares and has been granted camera access — Terminal.app never works (it has no camera usage string); Cursor / VS Code / iTerm2 work once granted Camera in System Settings → Privacy & Security. Launching through opencode is denied unless OpenCode itself is granted Camera/Microphone.
+
 **USB CAT:** install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) on Windows, macOS, and Linux, then **reboot the host** before first use (see USER_MANUAL §2.4).
 
 **Docker (linux/amd64 + linux/arm64):** `Dockerfile` + `docker-compose.yml` publish the `net10.0` CAT-only host. Data volume is `XDG_CONFIG_HOME=/data` → `MM5AGM/Yaesu Web Control/`. Entrypoint starts as root, `chown`s `/data` to `app`, then drops privileges (preserving compose `group_add` GIDs). Pass the serial device with `devices:` / `YWC_SERIAL_DEVICE`. For Remote Audio, compose maps `/dev/snd` and `group_add`s host `audio` (`YWC_AUDIO_GID`); the image installs `libasound2t64` + `libportaudio2`. Container runs with auto-shutdown and local browser-open disabled. Install the Silicon Labs driver on the **host** and reboot before mapping the device into the container.
