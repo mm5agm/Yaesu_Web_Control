@@ -18,12 +18,15 @@ namespace Yaesu_Web_Control.Services
     /// 2026-09-12.
     /// </para>
     /// <para>
-    /// The formula and the SSB table are a straight port of
-    /// <c>loSlideHz</c> in if-out-offset.js, measured on Colin's FTdx101MP
-    /// on 2026-09-11 — see docs/design/sdr-spectrum-axis-investigation.md.
-    /// The two copies are held together by a test that parses the table
-    /// out of the JavaScript (YaesuIfOutOffsetTests), the same way the IF
-    /// width tables are. Change one, and the test says so.
+    /// A straight port of <c>loSlideHz</c> in if-out-offset.js, measured on
+    /// Colin's FTdx101MP on 2026-09-11 and again, with the sideband taken
+    /// into account, on 2026-09-24 (discussion #172) — see
+    /// docs/design/sdr-spectrum-axis-investigation.md. The radio holds the
+    /// centre of its filter still in the IF OUT, so the slide is that
+    /// centre's RF offset from the dial, and it changes sign in a
+    /// lower-sideband mode. The two copies are held together by a test
+    /// that parses the constants out of the JavaScript
+    /// (YaesuIfOutOffsetTests). Change one, and the test says so.
     /// </para>
     /// </remarks>
     public static class YaesuIfOutOffset
@@ -32,17 +35,23 @@ namespace Yaesu_Web_Control.Services
         private const int DefaultCwPitchHz = 700;
 
         /// <summary>
-        /// SSB LO slide by DSP width, in Hz. Not a formula — measured point by
-        /// point (SH codes 12..23; the codes below 12 are all zero) and rounded
-        /// to the nearest 50 Hz. Keyed by width so a code-0 "default" width
-        /// resolves the same way as the explicit code for the same bandwidth.
-        /// Must match SSB_SLIDE_HZ_101 in if-out-offset.js.
+        /// Audio frequency the SSB and DATA passbands are centred on, at every
+        /// DSP width. DATA's is presumably the DATA SHIFT (SSB) menu default.
+        /// Must match SSB_CARRIER_POINT_HZ_101 in if-out-offset.js.
         /// </summary>
-        public static readonly IReadOnlyList<(int WidthHz, int SlideHz)> SsbSlideHz101 =
-        [
-            (2200,   50), (2300,  250), (2400,  350), (2500,  500), (2600,  650),
-            (2700,  850), (2800, 1150), (2900, 1250), (3000, 1400), (3200, 1650),
-        ];
+        public const int SsbCarrierPointHz101 = 1500;
+
+        /// <summary>
+        /// RF offset of the RTTY filter centre (mark + shift/2) from the dial,
+        /// the same in RTTY-L and RTTY-U. Must match RTTY_CENTRE_HZ_101.
+        /// </summary>
+        public const int RttyCentreHz101 = -85;
+
+        /// <summary>
+        /// The CW slide stops growing at this width. Must match
+        /// CW_MAX_SLIDE_WIDTH_HZ_101.
+        /// </summary>
+        public const int CwMaxSlideWidthHz101 = 3000;
 
         /// <summary>
         /// How far the radio has slid its LO for the current filter settings,
@@ -60,23 +69,22 @@ namespace Yaesu_Web_Control.Services
 
             string m     = (mode ?? "").ToUpperInvariant();
             int    pitch = cwPitchHz > 0 ? cwPitchHz : DefaultCwPitchHz;
+            int    side  = m is "LSB" or "DATA-L" or "CW-L" or "RTTY-L" ? -1 : 1;
 
             if (m is "CW-U" or "CW-L")
             {
                 // The radio keeps the CW filter's lower edge at or above half
                 // the pitch by moving the LO instead of the passband.
-                int w = ifWidthHz ?? 0;
-                return ifShiftHz + Math.Max(0, (w - pitch) / 2);
+                int w = Math.Min(ifWidthHz ?? 0, CwMaxSlideWidthHz101);
+                return side * (ifShiftHz + Math.Max(0, (w - pitch) / 2));
             }
-            if (m is "LSB" or "USB" || m.StartsWith("DATA", StringComparison.Ordinal) || m.StartsWith("AM", StringComparison.Ordinal))
-            {
-                int slide = 0;
-                if (ifWidthHz is int width)
-                    foreach (var (w, hz) in SsbSlideHz101)
-                        if (width >= w) slide = hz;
-                return ifShiftHz + slide;
-            }
-            // RTTY / PSK / FM: shift only — the width term is unmeasured there.
+            if (m is "LSB" or "USB" or "DATA-L" or "DATA-U")
+                return side * (SsbCarrierPointHz101 + ifShiftHz);
+            if (m is "RTTY-L" or "RTTY-U")
+                return RttyCentreHz101 + side * ifShiftHz;
+            if (m.StartsWith("AM", StringComparison.Ordinal))
+                return 0;   // centred on the carrier; IF SHIFT does not move it
+            // FM / DATA-FM / PSK: shift only — unmeasured there.
             return ifShiftHz;
         }
 

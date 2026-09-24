@@ -123,10 +123,12 @@ namespace YaesuWebControl.Tests
             // In AFSK the software makes the tones, so the radio's RTTY MARK
             // menu plays no part. (YWC also misread that menu as 1275 Hz on a
             // radio set to 2125 until the codes were found to be 0-based;
-            // tying DATA-L to it would have landed clicks 850 Hz off.)
-            Assert.Contains("return AFSK_RTTY_MIDPOINT_AUDIO_HZ;", offset.Groups["body"].Value, StringComparison.Ordinal);
-            Assert.Matches(@"const AFSK_RTTY_MIDPOINT_AUDIO_HZ = 2210;", js);
-            Assert.DoesNotContain("_rttyMarkHz", js, StringComparison.Ordinal);
+            // tying DATA-L to it would have landed clicks 850 Hz off.) What it
+            // follows is the Mark and Shift typed into the RTTY tuner, which is
+            // the operator's software's pair - 1415 / 170 for VK2RT (#169).
+            // The midpoint arithmetic is tested in core's rtty-settings tests.
+            Assert.Contains("return afskMidpointAudioHz(loadRttySettings());", offset.Groups["body"].Value, StringComparison.Ordinal);
+            Assert.DoesNotContain("_rttyMarkHz", offset.Groups["body"].Value, StringComparison.Ordinal);
         }
 
         [Fact]
