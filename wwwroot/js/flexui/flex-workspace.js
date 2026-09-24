@@ -97,8 +97,26 @@ function forceVfoRenderOnDemand(tabJson) {
     return tabJson;
 }
 
-/** Drop panels the host cannot currently show (no SDR, video off, ...). */
-function filterLayoutJson(json, flags) {
+function isKnownComponent(component) {
+    return typeof component === 'string'
+        && Object.prototype.hasOwnProperty.call(TEMPLATE_BY_COMPONENT, component);
+}
+
+/**
+ * Drop panels the host cannot currently show (no SDR, video off, ...).
+ *
+ * A dropped tab is one of two kinds, and the difference matters for
+ * persistence:
+ *   - component still exists but the host cannot render it right now
+ *     (flag-gated, e.g. video off). Retained in `retained` so a later drag
+ *     cannot permanently erase it from a saved arrangement.
+ *   - component is unknown/renamed/removed. Discarded outright: there is no
+ *     template to render and nothing worth restoring.
+ *
+ * `retained` entries are `{ tab, anchors }`; `anchors` are the sibling tab ids
+ * that shared the dropped tab's tabset, used to re-home it on save.
+ */
+function filterLayoutJson(json, flags, retained) {
     const drop = new Set();
     if (!flags?.remoteAudio) drop.add('remoteAudio');
     if (!flags?.spectrumA) drop.add('spectrumA');
@@ -112,14 +130,29 @@ function filterLayoutJson(json, flags) {
     drop.add('extras');
 
     const clone = structuredClone(json);
-    const filterChildren = (node) => {
+    const filterChildren = (node, anchors) => {
         if (!node) return null;
         if (node.type === 'tab') {
-            if (drop.has(node.id) || drop.has(node.component)) return null;
+            const known = isKnownComponent(node.component);
+            if (drop.has(node.id) || drop.has(node.component)) {
+                if (known && retained) {
+                    retained.push({
+                        tab: node,
+                        anchors: (anchors || []).filter((a) => a !== node.id),
+                    });
+                }
+                return null;
+            }
+            if (!known) return null;
             return forceVfoRenderOnDemand(node);
         }
         if (Array.isArray(node.children)) {
-            node.children = node.children.map(filterChildren).filter(Boolean);
+            const childAnchors = node.type === 'tabset'
+                ? node.children.filter((c) => c?.type === 'tab' && c.id).map((c) => c.id)
+                : [];
+            node.children = node.children
+                .map((child) => filterChildren(child, childAnchors))
+                .filter(Boolean);
         }
         if ((node.type === 'tabset' || node.type === 'border' || node.type === 'row')
             && Array.isArray(node.children) && node.children.length === 0) {
@@ -128,7 +161,7 @@ function filterLayoutJson(json, flags) {
         return node;
     };
 
-    clone.layout = filterChildren(clone.layout);
+    clone.layout = filterChildren(clone.layout, []);
     if (!clone.layout) {
         clone.layout = {
             type: 'row',
@@ -141,6 +174,59 @@ function filterLayoutJson(json, flags) {
         };
     }
     return clone;
+}
+
+function collectTabIds(node, out) {
+    if (!node) return;
+    if (node.type === 'tab') {
+        if (node.id) out.add(node.id);
+        return;
+    }
+    for (const child of node.children || []) collectTabIds(child, out);
+}
+
+function findTabsetForAnchors(node, anchors) {
+    if (!node) return null;
+    if (node.type === 'tabset') {
+        const ids = (node.children || []).filter((c) => c?.type === 'tab').map((c) => c.id);
+        if ((anchors || []).some((a) => ids.includes(a))) return node;
+    }
+    for (const child of node.children || []) {
+        const hit = findTabsetForAnchors(child, anchors);
+        if (hit) return hit;
+    }
+    return null;
+}
+
+function firstTabset(node) {
+    if (!node) return null;
+    if (node.type === 'tabset') return node;
+    for (const child of node.children || []) {
+        const hit = firstTabset(child);
+        if (hit) return hit;
+    }
+    return null;
+}
+
+/**
+ * Re-home tabs withheld from the live model because this host cannot show them
+ * (no SDR, video off). Without this, any save while a panel is unavailable
+ * would persist the reduced model and erase the panel for good.
+ */
+function restoreRetainedTabs(json, retained) {
+    if (!retained?.length || !json?.layout) return json;
+    const present = new Set();
+    collectTabIds(json.layout, present);
+    for (const record of retained) {
+        const id = record?.tab?.id;
+        if (!id || present.has(id)) continue;
+        const host = findTabsetForAnchors(json.layout, record.anchors) || firstTabset(json.layout);
+        if (!host) continue;
+        host.children = host.children || [];
+        host.children.push(structuredClone(record.tab));
+        present.add(id);
+    }
+    return json;
 }
 
 async function loadDefaultJson() {
@@ -319,6 +405,7 @@ export function initFlexWorkspace(host, flags) {
         layoutRef: React.createRef(),
         flags: flags || {},
         scale: getActiveScale(),
+        droppedTabs: [],
     };
 
     function applyScale(scale) {
@@ -335,7 +422,8 @@ export function initFlexWorkspace(host, flags) {
     function persist() {
         if (!state.model) return;
         try {
-            localStorage.setItem(ARRANGEMENT_KEY, JSON.stringify(state.model.toJson()));
+            const json = restoreRetainedTabs(state.model.toJson(), state.droppedTabs);
+            localStorage.setItem(ARRANGEMENT_KEY, JSON.stringify(json));
         } catch { /* quota */ }
     }
 
@@ -363,7 +451,8 @@ export function initFlexWorkspace(host, flags) {
                 localStorage.removeItem(ARRANGEMENT_KEY);
             }
         }
-        json = filterLayoutJson(json || await loadDefaultJson(), state.flags);
+        state.droppedTabs = [];
+        json = filterLayoutJson(json || await loadDefaultJson(), state.flags, state.droppedTabs);
 
         json.global = json.global || {};
         json.global.tabEnableClose = true;
