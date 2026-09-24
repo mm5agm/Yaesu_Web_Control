@@ -3301,10 +3301,12 @@
             spectrumPipeline.onModeA(mode => {
                 spectrumPanelA?.setMode(mode);
                 ensureRttyTones(mode);
+                readDataShift(mode);
             });
             spectrumPipeline.onModeB(mode => {
                 spectrumPanelB?.setMode(mode);
                 ensureRttyTones(mode);
+                readDataShift(mode);
             });
 
             // RTTY click-to-tune needs the mark and shift frequencies the
@@ -3342,6 +3344,27 @@
             }
             ensureRttyTones('@Model.RadioState.ModeA');
             ensureRttyTones('@Model.RadioState.ModeB');
+
+            // DATA-L / DATA-U centre their filter on the radio's DATA SHIFT
+            // (SSB) menu, not on SSB's 1500 Hz, and the spectrum's axis and
+            // passband follow it (#172). Read it each time a VFO goes into
+            // DATA-L/U: one CAT read per mode change, and it picks up an
+            // operator who has changed the menu in between. The server keeps
+            // it for the SDR worker's crop centre as well.
+            function readDataShift(mode) {
+                if (mode !== 'DATA-L' && mode !== 'DATA-U') return;
+                fetch('/api/cat/datashift')
+                    .then(r => r.ok ? r.json() : null)
+                    .then(d => {
+                        const hz = Number(d?.dataShiftHz);
+                        if (!Number.isFinite(hz)) return;
+                        window.filterScopePanelA?.setState({ dataShiftHz: hz });
+                        window.filterScopePanelB?.setState({ dataShiftHz: hz });
+                    })
+                    .catch(() => { /* 1500 stays in place */ });
+            }
+            readDataShift('@Model.RadioState.ModeA');
+            readDataShift('@Model.RadioState.ModeB');
 
             // Show each spectrum panel the slice of RF its receiver is actually
             // listening to. The edges are computed by the matching filter scope

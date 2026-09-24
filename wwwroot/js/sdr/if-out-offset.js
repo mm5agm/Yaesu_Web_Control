@@ -31,8 +31,9 @@ const IF_OUT_HZ = {
 // OF ITS FILTER, not the dial. So the slide is the RF offset of that centre
 // from the dial, and in a lower-sideband mode it is on the other side:
 //
-//   USB / DATA-U   +(1500 + shift)   the SSB passband is centred on 1500 Hz
-//   LSB / DATA-L   -(1500 + shift)   audio at every DSP width, 1100..4000
+//   USB            +(1500 + shift)   the SSB passband is centred on 1500 Hz
+//   LSB            -(1500 + shift)   audio at every DSP width, 1100..4000
+//   DATA-U / -L    +/-(DS + shift)   DS = the DATA SHIFT (SSB) menu, 1500 default
 //   CW-U           +(shift + max(0, (min(width, 3000) - pitch) / 2))
 //   CW-L           the mirror of CW-U
 //   RTTY-L / -U    -85 -/+ shift     the filter sits on mark + shift/2
@@ -41,9 +42,10 @@ const IF_OUT_HZ = {
 // The 09-11 SSB width table (up to +1650 in both sidebands) is gone: on the
 // same radio and the same carrier it no longer describes anything, and its
 // single sign is what put LSB signals 2.6 kHz to the right of the dial.
-// DATA's 1500 is presumably the radio's DATA SHIFT (SSB) menu default; it
-// was not read back, so an operator who has changed that menu will see
-// DATA signals off by the difference.
+// In DATA-L/U the radio centres on its DATA SHIFT (SSB) menu (EX010405)
+// instead of 1500: set to 1000 on 2026-09-24 the slide measured -1003 / +997.
+// The page reads it from /api/cat/datashift into the filter state as
+// dataShiftHz; 1500 (the menu default) stands in until it arrives.
 const SSB_CARRIER_POINT_HZ_101 = 1500;
 const RTTY_CENTRE_HZ_101       = -85;
 const CW_MAX_SLIDE_WIDTH_HZ_101 = 3000;
@@ -71,7 +73,7 @@ export function ifOutHz(model, vfo) {
  * FM / DATA-FM / PSK: shift only - unmeasured in those modes.
  *
  * @param {string} model
- * @param {{mode?: string, ifWidthHz?: number, ifShiftHz?: number, cwPitchHz?: number}} f
+ * @param {{mode?: string, ifWidthHz?: number, ifShiftHz?: number, cwPitchHz?: number, dataShiftHz?: number}} f
  * @returns {number}
  */
 export function loSlideHz(model, f) {
@@ -86,7 +88,11 @@ export function loSlideHz(model, f) {
         const w = Number.isFinite(width) ? Math.min(width, CW_MAX_SLIDE_WIDTH_HZ_101) : 0;
         return side * (shift + Math.max(0, (w - pitch) / 2));
     }
-    if (mode === 'LSB' || mode === 'USB' || mode === 'DATA-L' || mode === 'DATA-U') {
+    if (mode === 'DATA-L' || mode === 'DATA-U') {
+        const ds = Number(f.dataShiftHz);
+        return side * ((Number.isFinite(ds) && ds >= 0 ? ds : SSB_CARRIER_POINT_HZ_101) + shift);
+    }
+    if (mode === 'LSB' || mode === 'USB') {
         return side * (SSB_CARRIER_POINT_HZ_101 + shift);
     }
     if (mode === 'RTTY-L' || mode === 'RTTY-U') {

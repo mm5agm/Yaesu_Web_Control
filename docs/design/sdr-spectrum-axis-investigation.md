@@ -42,10 +42,23 @@ After the fix, applied offset matched the audio within 1-6 Hz in USB, LSB,
 DATA-U and DATA-L at SH 7/18/21 (10k zoom), LSB and DATA-L at 500k, CW-U/L at
 450/2400/4000, RTTY-L/U and AM.
 
-Still unknown: DATA's 1500 is presumably the **DATA SHIFT (SSB)** menu
-(EX010405, default 1500), and **SCOPE CTR** (EX040202) may matter too. I could
-not read either - there is no raw CAT endpoint. A radio with DATA SHIFT set
-away from 1500 will be drawn off by the difference in DATA modes.
+DATA SHIFT, settled the same day: DATA's 1500 is the **DATA SHIFT (SSB)**
+menu (EX010405, `EX010405;` answers `EX0104051500;`). Set to 1000 with
+scripts/probe/data-shift.ps1, the DATA-L slide measured -1003 and DATA-U +997
+(IF shift 0; it still adds on top), with a 999 Hz tone at dial +/-1000. SSB
+stays on 1500. YWC now reads it (`GET api/cat/datashift`, FTdx101MP/D only)
+whenever a VFO goes into DATA-L/U; both copies of the slide take it as a
+parameter. After that, applied vs true was -1000/-1003 and +1000/+998 at
+1000, and -1500/-1499 and +1500/+1501 back at 1500. SCOPE CTR (EX040202) was
+1 (CAR POINT) throughout and was not varied.
+
+The same sweep showed that DATA-L/U read the **CW/PSK width column**, not
+SSB's (as the CAT manual's Table 3 PSK column says): from band noise at DATA
+SHIFT 1000, code 9 -> 785..1213, 12 -> 609..1395, 13 -> 422..1588, centred on
+the DATA SHIFT; wide ones cut at about 160 Hz at the bottom, with the top at
+about DATA SHIFT + w/2, and never above about 2980 Hz (at 1500: 3000 ->
+176..2883, 3200 and up -> ..2977). YWC had DATA in the SSB column, so the
+dropdown labels and the filter drawing were both wrong in DATA.
 
 ## Correction, 2026-09-11: the mirror was wrong, the offset was right
 

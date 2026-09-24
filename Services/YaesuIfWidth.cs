@@ -29,7 +29,7 @@
         {
             null                             => "ssb",
             "LSB" or "USB"                   => "ssb",
-            "DATA-L" or "DATA-U"             => "ssb",
+            "DATA-L" or "DATA-U"             => "cw",    // the PSK column; measured 2026-09-24
             "CW-U" or "CW-L"                 => "cw",
             "RTTY-L" or "RTTY-U"             => "cw",
             "PSK"                            => "cw",

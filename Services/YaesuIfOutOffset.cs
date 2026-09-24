@@ -35,9 +35,11 @@ namespace Yaesu_Web_Control.Services
         private const int DefaultCwPitchHz = 700;
 
         /// <summary>
-        /// Audio frequency the SSB and DATA passbands are centred on, at every
-        /// DSP width. DATA's is presumably the DATA SHIFT (SSB) menu default.
-        /// Must match SSB_CARRIER_POINT_HZ_101 in if-out-offset.js.
+        /// Audio frequency the SSB passband is centred on, at every DSP width,
+        /// and the DATA SHIFT (SSB) menu's default. In DATA-L/U the radio
+        /// centres on whatever that menu says instead (measured at 1000 Hz on
+        /// 2026-09-24), so DATA uses the value read from the radio and falls
+        /// back to this. Must match SSB_CARRIER_POINT_HZ_101 in if-out-offset.js.
         /// </summary>
         public const int SsbCarrierPointHz101 = 1500;
 
@@ -63,7 +65,9 @@ namespace Yaesu_Web_Control.Services
         /// <param name="ifWidthHz">DSP width in Hz, or null when unknown.</param>
         /// <param name="ifShiftHz">IF shift in Hz, signed.</param>
         /// <param name="cwPitchHz">CW pitch in Hz; anything not positive falls back to 700.</param>
-        public static int LoSlideHz(string? model, string? mode, int? ifWidthHz, int ifShiftHz, int cwPitchHz)
+        /// <param name="dataShiftHz">The DATA SHIFT (SSB) menu (EX010405) in Hz; DATA-L/U only.</param>
+        public static int LoSlideHz(string? model, string? mode, int? ifWidthHz, int ifShiftHz, int cwPitchHz,
+                                    int dataShiftHz = SsbCarrierPointHz101)
         {
             if (model is null || RadioCapabilities.SdrIfOutHz(model, "A") is null) return 0;
 
@@ -78,7 +82,9 @@ namespace Yaesu_Web_Control.Services
                 int w = Math.Min(ifWidthHz ?? 0, CwMaxSlideWidthHz101);
                 return side * (ifShiftHz + Math.Max(0, (w - pitch) / 2));
             }
-            if (m is "LSB" or "USB" or "DATA-L" or "DATA-U")
+            if (m is "DATA-L" or "DATA-U")
+                return side * (dataShiftHz + ifShiftHz);
+            if (m is "LSB" or "USB")
                 return side * (SsbCarrierPointHz101 + ifShiftHz);
             if (m is "RTTY-L" or "RTTY-U")
                 return RttyCentreHz101 + side * ifShiftHz;
@@ -97,12 +103,13 @@ namespace Yaesu_Web_Control.Services
         /// holds (SH width code, KP pitch code) so every caller converts them
         /// the same way.
         /// </summary>
-        public static long? DialIfHz(string model, string vfo, string? mode, string? ifWidthCode, int ifShiftHz, int cwPitchCode)
+        public static long? DialIfHz(string model, string vfo, string? mode, string? ifWidthCode, int ifShiftHz, int cwPitchCode,
+                                     int dataShiftHz = SsbCarrierPointHz101)
         {
             if (RadioCapabilities.SdrIfOutHz(model, vfo) is not long ifOut) return null;
             int? widthHz = YaesuIfWidth.HzForCode(model, mode, ifWidthCode);
             int  pitchHz = 300 + Math.Clamp(cwPitchCode, 0, 75) * 10;
-            return ifOut + LoSlideHz(model, mode, widthHz, ifShiftHz, pitchHz);
+            return ifOut + LoSlideHz(model, mode, widthHz, ifShiftHz, pitchHz, dataShiftHz);
         }
     }
 }

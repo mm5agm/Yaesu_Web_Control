@@ -51,6 +51,20 @@ namespace YaesuWebControl.Tests
             Assert.Equal(expected, YaesuIfOutOffset.LoSlideHz("FTdx101MP", mode, widthHz, shiftHz, pitchHz));
         }
 
+        [Theory]
+        [InlineData("DATA-L", 1000,   0, -1000)]   // measured -1003 with DATA SHIFT 1000, 2026-09-24
+        [InlineData("DATA-U", 1000,   0,  1000)]   // measured +997
+        [InlineData("DATA-U", 1000, 500,  1500)]   // IF shift still adds
+        [InlineData("DATA-L", 1500,   0, -1500)]   // the menu default: as before
+        [InlineData("LSB",    1000,   0, -1500)]   // SSB ignores DATA SHIFT
+        [InlineData("USB",    1000,   0,  1500)]
+        public void DATA_slide_follows_the_DATA_SHIFT_menu(string mode, int dataShiftHz, int shiftHz, int expected)
+        {
+            Assert.Equal(expected, YaesuIfOutOffset.LoSlideHz("FTdx101MP", mode, 2400, shiftHz, 700, dataShiftHz));
+            Assert.Equal(9_005_000 + expected,
+                YaesuIfOutOffset.DialIfHz("FTdx101MP", "A", mode, "13", shiftHz, 40, dataShiftHz));
+        }
+
         [Fact]
         public void An_unmeasured_model_gets_no_slide()
         {

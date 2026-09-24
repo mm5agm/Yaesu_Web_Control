@@ -108,7 +108,7 @@ public sealed class SdrManager : BackgroundService
         {
             case "ModeA" or "IfWidthA" or "IfShiftA": _ = RecentreViewAsync("A"); break;
             case "ModeB" or "IfWidthB" or "IfShiftB": _ = RecentreViewAsync("B"); break;
-            case "CwPitch": _ = RecentreViewAsync("A"); _ = RecentreViewAsync("B"); break;
+            case "CwPitch" or "DataShiftHz": _ = RecentreViewAsync("A"); _ = RecentreViewAsync("B"); break;
         }
     }
 
@@ -126,7 +126,8 @@ public sealed class SdrManager : BackgroundService
             mode:        b ? _state.ModeB    : _state.ModeA,
             ifWidthCode: b ? _state.IfWidthB : _state.IfWidthA,
             ifShiftHz:   b ? _state.IfShiftB : _state.IfShiftA,
-            cwPitchCode: _state.CwPitch);
+            cwPitchCode: _state.CwPitch,
+            dataShiftHz: _state.DataShiftHz);
         return dial ?? (b ? config.SdrIfFrequencyHzB : config.SdrIfFrequencyHzA);
     }
 

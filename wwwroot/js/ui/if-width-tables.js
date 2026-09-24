@@ -9,16 +9,20 @@
 // Data is sourced from Table 3 of each radio's official CAT manual.
 
 // Mode group: classifies each operating mode into a bandwidth table column.
-//   'ssb' — wide SSB / DATA-SSB widths
-//   'cw'  — narrow CW / RTTY / PSK widths
+//   'ssb' — wide SSB widths
+//   'cw'  — narrow CW / RTTY / PSK / DATA widths
 //   null  — AM, FM, DATA-FM and variants: IF Width dropdown does not apply
 //
-// DATA-L / DATA-U use the SSB column because the typical use case is FT8/FT4
-// which wants the full SSB passband. (The FT-710 manual lists them under the
-// CW column but the practical operator preference is SSB.)
+// DATA-L / DATA-U read the CW column. They used to be put in the SSB column
+// on the grounds that FT8 wants SSB widths, but the column is the radio's
+// choice, not ours: the FTdx101 and FTdx10 CAT manuals give DATA the PSK
+// column (identical to CW), the FT-710's lists it under CW, and an FTdx101MP
+// measured on 2026-09-24 from band noise in DATA-U gave 217 Hz at code 5,
+// 428 at 9, 785 at 12, 1166 at 13 -- the CW widths. With the SSB labels an
+// operator who picked "2400" got 1400 Hz. The FTDX3000 is assumed to match.
 const MODE_GROUP = {
     'LSB': 'ssb', 'USB': 'ssb',
-    'DATA-L': 'ssb', 'DATA-U': 'ssb',
+    'DATA-L': 'cw', 'DATA-U': 'cw',
     'CW-U': 'cw', 'CW-L': 'cw',
     'RTTY-L': 'cw', 'RTTY-U': 'cw',
     'PSK': 'cw',

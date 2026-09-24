@@ -594,6 +594,12 @@ namespace Yaesu_Web_Control.Services
         private int _cwPitch = 30; // default code 30 = 600 Hz
         public int CwPitch { get => _cwPitch; set => SetField(ref _cwPitch, value); }
 
+        // DATA SHIFT (SSB) menu, Hz - the carrier point in DATA-L/U, which
+        // decides where the radio puts its DATA filter in the IF OUT (#172).
+        // Read on demand by GET api/cat/datashift; 1500 is the radio's default.
+        private int _dataShiftHz = 1500;
+        public int DataShiftHz { get => _dataShiftHz; set => SetField(ref _dataShiftHz, value); }
+
         // RF Gain per VFO: 0–255 (RG command)
         private int _rfGainA = 255;
         public int RfGainA { get => _rfGainA; set => SetField(ref _rfGainA, value); }
