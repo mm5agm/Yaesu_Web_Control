@@ -1,0 +1,271 @@
+@model Yaesu_Web_Control.Pages.FlexUiModel
+@{
+    var isFtdx10 = Model.View.IsFtdx10;
+    var isFt710 = Model.View.IsFt710;
+    var isFtdx3000 = Model.View.IsFtdx3000;
+    var isFtdx5000 = Model.View.IsFtdx5000;
+    var isFtdx101 = Model.View.IsFtdx101;
+    var isSingleReceiver = Model.View.IsSingleReceiver;
+    var hasAntennaSelector = Model.View.HasAntennaSelector;
+    var maxPowerWatts = Model.View.MaxPowerWatts;
+    var hasQmb = Model.View.HasQmb;
+    var hasVcTune = Model.View.HasVcTune;
+    var hasVcTuneSub = Model.View.HasVcTuneSub;
+    var clarModeInit = Model.View.ClarModeInit;
+    var contourMaxFreq = Model.View.ContourMaxFreq;
+    var contourStep = Model.View.ContourStep;
+    var apfStep = Model.View.ApfStep;
+    var ifWidthDefaultA = Model.View.IfWidthDefaultA;
+    var ifWidthDefaultB = Model.View.IfWidthDefaultB;
+    var roofingOptionsJson = Model.View.RoofingOptionsJson;
+    var ctcssTones = Model.View.CtcssTones;
+}
+
+        <div class="col-12 h-100" id="vfoBCol">
+            <div class="card border-success h-100 receiver-card">
+                <div class="card-header bg-success text-white py-1">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-1">
+                        <h5 class="mb-0">
+                            <span id="receiverBHeading">VFO B</span>
+                        </h5>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <span id="splitTxBadgeB" class="badge bg-danger" style="display:none;" aria-live="polite">SPLIT TX</span>
+                            @if (hasVcTuneSub) {
+                            <button type="button" id="vcTuneToggleBtnB" class="btn btn-outline-light btn-sm"
+                                    style="display:none"
+                                    onclick="vcTuneToggle('b')"
+                                    aria-label="SUB VC Tune on/off"
+                                    title="Toggle SUB VC Tune preselector on/off">VC Tune</button>
+                            <span id="vcTuneRowB" class="d-inline-flex align-items-center gap-1" style="display:none !important;">
+                                <button id="vcTuneDefaultBtnB" class="btn btn-sm btn-outline-light"
+                                        onclick="vcTuneCommand('b','default')"
+                                        aria-label="SUB VC Tune default" title="SUB VC Tune auto-tune">Default</button>
+                                <button class="btn btn-sm btn-outline-light"
+                                        onclick="vcTuneStep('b','minus')"
+                                        aria-label="SUB VC Tune step down" title="Step SUB preselector capacitor down">−</button>
+                                <select id="vcTuneStepB" class="form-select form-select-sm"
+                                        style="width: 3.5rem; background-color: transparent; color: white; border-color: rgba(255,255,255,0.5);"
+                                        aria-label="SUB VC Tune step size" title="Step size (1–9)">
+                                    <option value="1" style="color:black;">1</option><option value="2" style="color:black;">2</option><option value="3" style="color:black;">3</option>
+                                    <option value="4" style="color:black;">4</option><option value="5" selected style="color:black;">5</option><option value="6" style="color:black;">6</option>
+                                    <option value="7" style="color:black;">7</option><option value="8" style="color:black;">8</option><option value="9" style="color:black;">9</option>
+                                </select>
+                                <button class="btn btn-sm btn-outline-light"
+                                        onclick="vcTuneStep('b','plus')"
+                                        aria-label="SUB VC Tune step up" title="Step SUB preselector capacitor up">+</button>
+                                <button id="vcTuneCenterBtnB" class="btn btn-sm btn-outline-light"
+                                        onclick="vcTuneCommand('b','center')"
+                                        aria-label="SUB VC Tune center" title="Center SUB preselector capacitor">Center</button>
+                                <span id="vcTuneMeterB" class="small text-white-50" style="font-size: 0.75rem; min-width: 44px;">P5: —</span>
+                                <span id="vcTuneWarnB" class="text-warning small" style="display:none; font-size: 0.75rem;"></span>
+                            </span>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-2">
+                    <div class="vfo-body-grid">
+                        <!-- Col 1: frequency (+ filter scope), RF/AF, band/segment/mode -->
+                        <div class="vfo-col vfo-col--tune">
+                            <div class="vfo-freq-row">
+                                <span id="freqB" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO B frequency" title="VFO B frequency" data-a11y-key="vfo.b.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
+                                <span class="frequency-display digit-display">MHz</span>
+                                <div id="freqB-controls" class="freq-step-controls" style="display:@(Model.ShowFrequencyArrowButtons ? "inline-flex" : "none");">
+                                    <button type="button" id="freqB-up" class="btn btn-secondary btn-sm" aria-label="Step VFO B selected digit up" title="Step VFO B selected digit up (↑)">▲</button>
+                                    <button type="button" id="freqB-down" class="btn btn-secondary btn-sm" aria-label="Step VFO B selected digit down" title="Step VFO B selected digit down (↓)">▼</button>
+                                </div>
+                                <button class="btn btn-outline-secondary btn-sm fkb-open-btn"
+                                        data-freq-keyboard="B"
+                                        aria-label="Keyboard — enter VFO B frequency"
+                                        data-a11y-key="keyboard.openB"
+                                        title="Keyboard — enter VFO B frequency">
+                                    <strong>123</strong>
+                                </button>
+                            </div>
+                            <!-- Compact linear S-meter between frequency and RF gain.
+                                 On single-receiver radios the inactive VFO's meter
+                                 is greyed via .linear-smeter-inactive (applyVfoActiveStyling). -->
+                            <div id="sMeterLinearRowB" class="linear-meter-row linear-meter-row--vfo"
+                                 data-meter-scope="rx" data-linear-smeter="B">
+                                <span class="linear-meter-label">S</span>
+                                <canvas id="sMeterLinearCanvasB"
+                                        role="img" aria-hidden="true"
+                                        aria-label="S meter B (linear)"
+                                        data-a11y-key="meters.linearSmeterB"></canvas>
+                                <span id="sMeterLinearValueB" class="linear-meter-value linear-meter-value--smeter">S0</span>
+                            </div>
+                            <div class="vfo-gain-stack">
+                                <div class="vfo-control-item">
+                                    <label class="vfo-control-label">RF Gain</label>
+                                    <input type="range" id="rfGainSliderB" aria-label="VFO B RF gain" title="VFO B RF gain (0=min, 255=max)" min="0" max="255" step="1" value="@Model.RadioState.RfGainB"
+                                           oninput="document.getElementById('rfGainValueB').textContent = this.value"
+                                           onchange="setRfGain('B', this.value)">
+                                    <span id="rfGainValueB" class="vfo-control-label" style="text-align: right;">@Model.RadioState.RfGainB</span>
+                                </div>
+                                <div class="vfo-control-item">
+                                    <label class="vfo-control-label">AF Gain</label>
+                                    <input type="range" id="afGainSliderB" aria-label="VFO B AF gain" title="VFO B AF gain" min="0" max="255" step="1" value="@Model.AfGainB"
+                                           oninput="document.getElementById('afGainValueB').textContent = this.value">
+                                    <span id="afGainValueB" class="vfo-control-label" style="text-align: right;">@Model.AfGainB</span>
+                                </div>
+                                <div class="vfo-control-item" id="squelchRowB" style="display:none;">
+                                    <label class="vfo-control-label">Squelch</label>
+                                    <input type="range" id="squelchSliderB" aria-label="VFO B squelch" title="VFO B squelch level (0=open, 255=max)" min="0" max="255" step="1" value="@Model.RadioState.SquelchB"
+                                           oninput="document.getElementById('squelchValueB').textContent = this.value"
+                                           onchange="setSquelch('B', this.value)">
+                                    <span id="squelchValueB" class="vfo-control-label" style="text-align: right;">@Model.RadioState.SquelchB</span>
+                                </div>
+                            </div>
+                            <div class="vfo-band-row @(isFtdx101 ? "vfo-band-row--ftdx101" : "")">
+                                <div class="vfo-band-row__band-controls">
+                                    <div id="bandButtonB" data-selected="@(Model.SelectedBandB ?? "")"></div>
+                                    <div id="segmentButtonB" data-selected=""></div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 vfo-band-row__mode-controls">
+                                    <div id="modeButtonB" data-selected="@(Model.RadioState.ModeB ?? "USB")"></div>
+                                    <span class="d-inline-block save-mem-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                                          data-bs-title="Save VFO B frequency, mode, and all current settings to app memories."
+                                          aria-label="Save VFO B to memories">
+                                        <button id="saveMemBtnB" type="button"
+                                                class="btn toggle-dd__btn toggle-dd__btn--icon save-mem-key flex-shrink-0"
+                                                onclick="saveVfoToMemory('B')"
+                                                aria-label="Save VFO B to memories">
+                                            <i class="bi bi-floppy-fill save-mem-key__icon" aria-hidden="true"></i>
+                                        </button>
+                                    </span>
+                                    @if (hasAntennaSelector)
+                                    {
+                                        <div id="antennaButtonB"
+                                             data-selected="@(Model.RadioState.AntennaB ?? "1")"></div>
+                                    }
+                                </div>
+                            </div>
+                            <span id="saveMemStatusB" class="visually-hidden" role="status" aria-live="polite"></span>
+                        </div>
+
+                        <!-- Col 2: roofing, IF width, IF shift, audio filter -->
+                        <div class="vfo-col vfo-col--band">
+                            <div class="filter-scope-vfo-slot" id="filterScopeContainerB">
+                                <canvas id="filterScopeCanvasB" role="img" aria-hidden="true"
+                                        aria-label="VFO B filter display" data-a11y-key="filter.scopeB"></canvas>
+                            </div>
+                            @if (!isFt710)
+                            {
+                                <div id="roofingButtonB"
+                                     data-selected="@(Model.RadioState.RoofingFilterB ?? "")"
+                                     data-options="@roofingOptionsJson"></div>
+                            }
+                            <div id="ifWidthButtonB"
+                                 data-selected="@(string.IsNullOrEmpty(Model.RadioState.IfWidthB) ? ifWidthDefaultB : Model.RadioState.IfWidthB)"
+                                 data-mode="@Model.RadioState.ModeB"></div>
+                            <div id="ifShiftButtonB"
+                                 data-value="@Model.RadioState.IfShiftB"></div>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    id="audioFilterBtnB"
+                                    aria-label="VFO B Audio Filter"
+                                    title="Open the Audio Filter dialog for VFO B's current mode (LCUT FREQ, LCUT SLOPE, HCUT FREQ, HCUT SLOPE)"
+                                    onclick="window.audioFilter && window.audioFilter.open('B')">
+                                <span class="toggle-dd__label">Audio Filter</span>
+                            </button>
+                        </div>
+                        <!-- Col 3: remaining keys -->
+                        <div class="vfo-col vfo-col--keys">
+                            @if (!isSingleReceiver)
+                            {
+                                <!-- Voice control mic button + step selector VFO B — step select left of the button, both enlarged per Colin's testing feedback. Single-receiver radios (FTdx10, FT-710, FTDX3000) have no independent VFO B receiver, so no mic button here at all. -->
+                                <div class="flex-shrink-0" id="voiceMicContainerB" style="display:none;">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <select id="voiceNudgeStepSelectB"
+                                                class="form-select"
+                                                style="width:auto; font-size:1.4rem; font-weight:600; padding:0.4rem 2.4rem 0.4rem 0.6rem;"
+                                                title="Voice nudge step size — how far 'tune up'/'tune down' moves VFO B"
+                                            aria-label="VFO B voice nudge step size">
+                                        <option value="1">1 Hz</option>
+                                        <option value="10">10 Hz</option>
+                                            <option value="100">100 Hz</option>
+                                            <option value="1000">1 kHz</option>
+                                            <option value="10000">10 kHz</option>
+                                            <option value="100000">100 kHz</option>
+                                        </select>
+                                        <button id="voiceMicBtnB" type="button"
+                                                class="btn btn-outline-danger voice-mic-btn d-flex align-items-center justify-content-center"
+                                                style="width:140px; height:120px; padding:0;"
+                                                title="Hold to give a VFO B voice command (right-click for the command list)"
+                                                aria-label="Voice command VFO B — hold to speak">
+                                            <i class="bi bi-mic-fill" style="font-size:4.5rem; line-height:1;" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    <div id="voiceLastHeardB"
+                                         style="font-size:1.1rem; font-weight:700; color:#000; margin-top:0.3rem; max-width:320px; overflow-wrap:break-word;"
+                                         aria-live="polite"></div>
+                                </div>
+                            }
+                            <div class="vfo-controls-column">
+                                <div class="vfo-control-item">
+                                    <button type="button" id="zinBtnB"
+                                            class="btn toggle-dd__btn toggle-dd__btn--action"
+                                            onclick="cwZeroIn('B')"
+                                            aria-label="VFO B CW Auto Zero In"
+                                            title="CW Auto Zero In on VFO B — nudges the VFO so the received CW signal sits at your configured CW pitch">
+                                        <span class="toggle-dd__label">ZIN</span>
+                                    </button>
+                                </div>
+                                <div class="vfo-control-item">
+                                    <div id="agcButtonB" data-selected="@Model.RadioState.AgcB"></div>
+                                </div>
+                                <div class="vfo-control-item">
+                                    <div id="ipoButtonB" data-selected="@Model.RadioState.IpoB"></div>
+                                </div>
+                                <div class="vfo-control-item">
+                                    <div id="attButtonB" data-selected="@Model.RadioState.AttB"></div>
+                                </div>
+                                <div class="vfo-control-item">
+                                    @* DNR is ON/OFF on every supported radio (NR P2 is 0/1). Kees ON9KVE, #144. *@
+                                    <div id="nrButtonB"
+                                         data-vfo="B"
+                                         data-label="DNR"
+                                         data-selected="@Model.RadioState.NrB"
+                                         data-level="@Model.RadioState.NrLevelB"></div>
+                                </div>
+                                <div class="vfo-control-item">
+                                    <div id="nbButtonB"
+                                         data-enabled="@Model.RadioState.NbB"
+                                         data-value="@Model.RadioState.NbLevelB"></div>
+                                </div>
+                                <div class="vfo-control-item">
+                                    <div id="autoNotchButtonB" data-enabled="@Model.RadioState.AutoNotchB"></div>
+                                </div>
+                                <div class="vfo-control-item">
+                                    <div id="manNotchButtonB"
+                                         data-enabled="@Model.RadioState.ManualNotchB"
+                                         data-value="@Model.RadioState.ManualNotchFreqB"></div>
+                                </div>
+                                <div class="vfo-control-item">
+                                    <div id="contourButtonB"
+                                         data-enabled="@(Model.RadioState.ContourOnB ? "1" : "0")"
+                                         data-value="@Model.RadioState.ContourFreqB"
+                                         data-min="100"
+                                         data-max="@contourMaxFreq"
+                                         data-step="@contourStep"></div>
+                                </div>
+                                <div class="vfo-control-item">
+                                    <div id="apfButtonB"
+                                         data-enabled="@(Model.RadioState.ApfOnB ? "1" : "0")"
+                                         data-value="@Model.RadioState.ApfFreqB"
+                                         data-min="-250"
+                                         data-max="250"
+                                         data-step="@apfStep"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VFO B status line — live band/mode/freq summary, banner-coloured -->
+                    @* Announced through #vfoStatusAnnounce, not from here — see VFO A above. *@
+                    <div id="vfoBStatusLine"
+                         class="bg-success text-white px-2 py-1 mt-1 font-monospace rounded"
+                         style="font-size:0.9rem; line-height:1.25; overflow-x:auto; white-space:nowrap;">—</div>
+                                </div>
+                            </div>
+                        </div>

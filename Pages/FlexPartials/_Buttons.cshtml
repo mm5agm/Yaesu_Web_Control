@@ -1,0 +1,134 @@
+@model Yaesu_Web_Control.Pages.FlexUiModel
+@{
+    var isFtdx10 = Model.View.IsFtdx10;
+    var isFt710 = Model.View.IsFt710;
+    var isFtdx3000 = Model.View.IsFtdx3000;
+    var isFtdx5000 = Model.View.IsFtdx5000;
+    var isFtdx101 = Model.View.IsFtdx101;
+    var isSingleReceiver = Model.View.IsSingleReceiver;
+    var hasAntennaSelector = Model.View.HasAntennaSelector;
+    var maxPowerWatts = Model.View.MaxPowerWatts;
+    var hasQmb = Model.View.HasQmb;
+    var hasVcTune = Model.View.HasVcTune;
+    var hasVcTuneSub = Model.View.HasVcTuneSub;
+    var clarModeInit = Model.View.ClarModeInit;
+    var contourMaxFreq = Model.View.ContourMaxFreq;
+    var contourStep = Model.View.ContourStep;
+    var apfStep = Model.View.ApfStep;
+    var ifWidthDefaultA = Model.View.IfWidthDefaultA;
+    var ifWidthDefaultB = Model.View.IfWidthDefaultB;
+    var roofingOptionsJson = Model.View.RoofingOptionsJson;
+    var ctcssTones = Model.View.CtcssTones;
+}
+
+
+<div class="op-col op-col--buttons">
+                            <button id="atuBtn"
+                                    type="button"
+                                    class="btn toggle-dd__btn"
+                                    data-a11y-key="controls.atu"
+                                    data-atu-enabled="@(Model.AtuEnabled ? "true" : "false")"
+                                    aria-pressed="@(Model.AtuEnabled ? "true" : "false")"
+                                    aria-label="Antenna tuner — short tap toggles on/off, long press starts auto-tune"
+                                    title="Tap to toggle ATU on/off; press and hold to start auto-tune"
+                                    style="touch-action: manipulation; user-select: none;">
+                                <span class="toggle-dd__led @(Model.AtuEnabled ? "is-on" : "")" aria-hidden="true"></span>
+                                <span class="toggle-dd__label">ATU</span>
+                            </button>
+                            @* Explicit auto-tune button. The ATU button above also
+                               starts a tune on press-and-hold, but a long press can't
+                               be announced by a screen reader or performed by voice —
+                               this gives keyboard/AT/voice users a real control. It
+                               becomes a red "Stop" while a tune cycle is running.
+                               Visual-only Yaesu action key (no LED) — panel/action
+                               openers in this column share that treatment. *@
+                            <button id="atuTuneBtn"
+                                    type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    data-a11y-key="controls.atuTune"
+                                    aria-label="Start antenna auto-tune"
+                                    title="Start antenna auto-tune"
+                                    onclick="atuTuneButtonClick()"
+                                    style="touch-action: manipulation;">
+                                <span class="toggle-dd__label">Tune</span>
+                            </button>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    aria-label="FM repeater controls"
+                                    title="Open FM repeater controls panel"
+                                    onclick="document.getElementById('fmDialog').show()">
+                                <span class="toggle-dd__label">FM Rep</span>
+                            </button>
+                            <button id="voxBtn"
+                                    type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    aria-label="VOX controls"
+                                    title="Open VOX controls panel"
+                                    onclick="document.getElementById('voxDialog').show()">
+                                <span class="toggle-dd__label">VOX</span>
+                            </button>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    aria-label="CW keyer controls"
+                                    title="Open CW keyer controls panel"
+                                    onclick="document.getElementById('cwDialog').show()">
+                                <span class="toggle-dd__label">CW</span>
+                            </button>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    aria-label="CW reader - decode received Morse to text"
+                                    title="Open the CW reader - decodes the received Morse to text"
+                                    onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">
+                                <span class="toggle-dd__label">CW Read</span>
+                            </button>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    aria-label="CW send - type text and send it as Morse"
+                                    title="Open CW send - type a line, press Enter, the radio keys it"
+                                    onclick="window.cwSendPanel && window.cwSendPanel.toggle()">
+                                <span class="toggle-dd__label">CW Send</span>
+                            </button>
+                            <div id="radioDisplayShowRow" class="radio-display-toggle">
+                                <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                                      data-bs-title="Show Radio Scope" aria-label="Show Radio Scope">
+                                    <button type="button" class="btn toggle-dd__btn" id="radioDisplayShowBtn"
+                                            aria-label="Show Radio Scope" aria-pressed="false">
+                                        <span class="toggle-dd__led" aria-hidden="true"></span>
+                                        <span class="toggle-dd__label">Radio Scope</span>
+                                    </button>
+                                </span>
+                            </div>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    aria-label="DX spots — list of cluster spots on current band"
+                                    title="Open DX spots list — see callsigns spotted on the current band"
+                                    onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">
+                                <span class="toggle-dd__label">DX Spots</span>
+                            </button>
+                            <button type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    aria-label="DX watch — alerts for spotted callsigns"
+                                    title="Open DX watch list — get alerts when watched callsigns are spotted"
+                                    onclick="document.getElementById('dxWatchDialog').show(); window.refreshDxWatchList && window.refreshDxWatchList();">
+                                <span class="toggle-dd__label">DX Watch</span>
+                            </button>
+                            @if (hasQmb)
+                            {
+                                <!-- Quick Memory Bank (QMB) — global radio function, shown once.
+                                     Store (QI;) pushes the current VFO into the QMB stack; Recall
+                                     (QR;) recalls / cycles through the stored slots. Left-click
+                                     opens Store / Recall / V/M. -->
+                                <div id="qmbControls">
+                                    <div id="qmbButton"></div>
+                                    <span id="qmbStatus" class="visually-hidden" role="status" aria-live="polite"></span>
+                                </div>
+                            }
+                            <button id="voiceBtn"
+                                    type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    aria-label="Voice announcements settings"
+                                    title="Voice announcements for band, mode, TX state etc. — useful for partially sighted operators"
+                                    onclick="document.getElementById('voiceDialog').show();">
+                                <span class="toggle-dd__label">Voice</span>
+                            </button>
+    </div>

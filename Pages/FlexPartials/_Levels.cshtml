@@ -1,0 +1,54 @@
+@model Yaesu_Web_Control.Pages.FlexUiModel
+@{
+    var isFtdx10 = Model.View.IsFtdx10;
+    var isFt710 = Model.View.IsFt710;
+    var isFtdx3000 = Model.View.IsFtdx3000;
+    var isFtdx5000 = Model.View.IsFtdx5000;
+    var isFtdx101 = Model.View.IsFtdx101;
+    var isSingleReceiver = Model.View.IsSingleReceiver;
+    var hasAntennaSelector = Model.View.HasAntennaSelector;
+    var maxPowerWatts = Model.View.MaxPowerWatts;
+    var hasQmb = Model.View.HasQmb;
+    var hasVcTune = Model.View.HasVcTune;
+    var hasVcTuneSub = Model.View.HasVcTuneSub;
+    var clarModeInit = Model.View.ClarModeInit;
+    var contourMaxFreq = Model.View.ContourMaxFreq;
+    var contourStep = Model.View.ContourStep;
+    var apfStep = Model.View.ApfStep;
+    var ifWidthDefaultA = Model.View.IfWidthDefaultA;
+    var ifWidthDefaultB = Model.View.IfWidthDefaultB;
+    var roofingOptionsJson = Model.View.RoofingOptionsJson;
+    var ctcssTones = Model.View.CtcssTones;
+}
+
+
+<div class="op-col op-col--levels">
+                            <div id="powerButton"
+                                 data-max-power="@maxPowerWatts"
+                                 data-value="@Model.RadioState.Power"></div>
+                            <div id="micGainButton"
+                                 data-label="MIC Gain"
+                                 data-value="@Model.MicGain"></div>
+                            <div id="procButton"
+                                 data-enabled="@(Model.ProcEnabled ? "1" : "0")"
+                                 data-value="@Model.ProcLevel"></div>
+                            <div id="monitorButton"
+                                 data-enabled="@(Model.MonitorOn ? "1" : "0")"
+                                 data-value="@Model.MonitorLevelA"></div>
+                            <button id="vfoBToggleBtn" type="button"
+                                    class="btn toggle-dd__btn"
+                                    data-bs-toggle="tooltip" data-bs-placement="top"
+                                    title="VFO B panel visibility — click to hide or show the panel"
+                                    aria-label="Show or hide VFO B panel"
+                                    aria-pressed="true">
+                                <span class="toggle-dd__led is-on" aria-hidden="true"></span>
+                                <span class="toggle-dd__label">VFO B</span>
+                            </button>
+                            <button id="txButton"
+                                    class="btn toggle-dd__btn"
+                                    onclick="toggleTx()" aria-label="Toggle transmit"
+                                    title="Click to transmit">
+                                <span class="toggle-dd__led" aria-hidden="true"></span>
+                                <span class="toggle-dd__label"><i class="bi bi-broadcast me-1" aria-hidden="true"></i>TX A</span>
+                            </button>
+    </div>
