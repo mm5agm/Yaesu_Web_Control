@@ -114,14 +114,16 @@
             initRadioDisplayUi('flex');
         });
 
-        // A VFO panel's DOM is cloned the first time its tab is mounted.
-        // Everything element-dependent is initialised once at ywc-flex-ready,
-        // so a VFO that was not mounted at that moment would never get its
-        // Yaesu keys, frequency digits or edit handlers. Initialise it on
-        // first mount instead. The workspace now forces the VFO tabs to render
-        // regardless of which is selected (forceVfoRenderOnDemand), so this
-        // normally fires during the initial render; it also covers a VFO
-        // reopened from the Panels menu when it was never in any loaded layout.
+        // A panel's DOM is cloned the first time its tab is mounted, and
+        // everything element-dependent is initialised once at ywc-flex-ready.
+        // The workspace mounts every panel present in a layout at load (see
+        // applyTabRenderPolicy), so at ready they all exist. These handlers
+        // cover the remaining case: a panel first opened *after* ready — from
+        // the Panels menu, or when switching to a named layout that adds a
+        // panel no earlier layout had. Its init has already run, by then, and
+        // would otherwise never repeat.
+        //
+        // A VFO panel.
         const _vfoPanelKeyInit = new Set();
         function initVfoPanel(vfo) {
             if (_vfoPanelKeyInit.has(vfo)) return;
@@ -133,6 +135,7 @@
             // any VFO panel that mounts after the ready-time init has run.
             const nr = initNrCycleButton(document.getElementById(`nrButton${vfo}`));
             if (nr) window[`nrCycleButton${vfo}`] = nr;
+            try { window.meterPanel?.ensureGauges?.(); } catch { /* create S-meter gauge if this VFO mounted late */ }
             try { window.initializeDigitInteraction?.(vfo); } catch (e) { console.error(e); }
             // The state snapshot is sent once, at connect, and broadcasts only
             // fire on change — so a panel mounting later would hold page-load
@@ -145,9 +148,35 @@
             }
             try { _renderToolbarStatus(true); } catch (e) { console.error(e); }
         }
+
+        // The Levels panel's four Yaesu cycle keys. Guarded on each widget's
+        // window handle so the ready-time call and a later first-mount call
+        // can't create two widgets on the same button.
+        function initLevelsPanel() {
+            if (!window.procCycleButton) initProcCycleButton();
+            if (!window.monitorCycleButton) initMonitorCycleButton();
+            if (!window.powerCycleButton) initPowerCycleButton();
+            if (!window.micGainCycleButton) initMicGainCycleButton();
+        }
+
+        function initPanelOnDemand(component) {
+            // Initial mounts are handled by the ready callbacks below, which
+            // run after every mounted panel exists.
+            if (!__ywcFlexReady.ready) return;
+            switch (component) {
+                case 'levels':      initLevelsPanel(); break;
+                case 'buttons':     initSharedVfoKeyButtons(); wireAtuButton(); break;
+                case 'clarifier':   initSharedVfoKeyButtons(); break;
+                case 'remoteAudio': initRemoteAudioUi(); break;
+                case 'linearMeters': try { window.meterPanel?.ensureGauges?.(); } catch { /* ignore */ } break;
+            }
+        }
+
         window.addEventListener('ywc-flex-template-mounted', (e) => {
-            const m = /^vfo([AB])$/.exec(e.detail?.component || '');
+            const component = e.detail?.component || '';
+            const m = /^vfo([AB])$/.exec(component);
             if (m) initVfoPanel(m[1]);
+            else initPanelOnDemand(component);
         });
 
         const __flexHost = document.getElementById('ywcFlexHost');
@@ -187,15 +216,12 @@
         // via updateContourSliderBounds, expecting a real widget not the raw
         // <div>), and before site.js populates the segment keys.
         onFlexReady(() => {
-            initProcCycleButton();
-            initMonitorCycleButton();
-            initPowerCycleButton();
-            initMicGainCycleButton();
+            initLevelsPanel();
             initSharedVfoKeyButtons();
-            // The VFO panels normally mounted during the initial render (their
-            // tabs force renderOnDemand off), and initVfoPanel is a no-op for
-            // the ones already done. A VFO that is absent here is initialised
-            // when its tab first mounts.
+            // The VFO panels are mounted during the initial render like every
+            // other panel, and initVfoPanel is a no-op for the ones already
+            // done. A VFO that is absent here is initialised when its tab
+            // first mounts.
             initVfoPanel('A');
             initVfoPanel('B');
             window.bandPlanData = BAND_PLANS;
@@ -1315,10 +1341,13 @@
             }
         }
         // Wire short-tap vs long-press behaviour. Using pointer events
-        // covers mouse, touch, and pen with one code path.
-        onFlexReady(function() {
+        // covers mouse, touch, and pen with one code path. Guarded so the
+        // ready-time call and a later first-mount of the Buttons panel (which
+        // holds #atuBtn) don't attach the handlers twice.
+        function wireAtuButton() {
             const atuBtn = document.getElementById('atuBtn');
-            if (!atuBtn) return;
+            if (!atuBtn || atuBtn.dataset.ywcAtuWired === '1') return;
+            atuBtn.dataset.ywcAtuWired = '1';
             atuBtn.addEventListener('pointerdown', function(e) {
                 atuLongFired = false;
                 clearTimeout(atuPressTimer);
@@ -1346,7 +1375,8 @@
             });
             atuBtn.addEventListener('pointerleave', cancelPress);
             atuBtn.addEventListener('pointercancel', cancelPress);
-        });
+        }
+        onFlexReady(wireAtuButton);
 
         // --- MONITOR ON/OFF + LEVEL ---
         let _monitorOn = @(Model.MonitorOn ? "true" : "false");
