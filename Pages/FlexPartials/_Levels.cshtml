@@ -35,15 +35,6 @@
                             <div id="monitorButton"
                                  data-enabled="@(Model.MonitorOn ? "1" : "0")"
                                  data-value="@Model.MonitorLevelA"></div>
-                            <button id="vfoBToggleBtn" type="button"
-                                    class="btn toggle-dd__btn"
-                                    data-bs-toggle="tooltip" data-bs-placement="top"
-                                    title="VFO B panel visibility — click to hide or show the panel"
-                                    aria-label="Show or hide VFO B panel"
-                                    aria-pressed="true">
-                                <span class="toggle-dd__led is-on" aria-hidden="true"></span>
-                                <span class="toggle-dd__label">VFO B</span>
-                            </button>
                             <button id="txButton"
                                     class="btn toggle-dd__btn"
                                     onclick="toggleTx()" aria-label="Toggle transmit"
