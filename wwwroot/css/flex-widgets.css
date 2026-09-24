@@ -79,7 +79,8 @@
 
 .ywc-panel-body {
     overflow: auto;
-    padding: 0.35rem;
+    padding: 0;
+    margin: 0;
     box-sizing: border-box;
 }
 
@@ -128,8 +129,7 @@
 }
 
 .ywc-panel-body {
-    margin-top: 0.35rem;
-    margin-bottom: 0.5rem;
+    margin: 0;
 }
 
 .ywc-panel-body .op-col {
@@ -447,4 +447,76 @@
 .remote-audio-status-row {
     flex: 0 0 100%;
     line-height: 1;
+}
+
+/* ── Squared corners (flex theme only) ───────────────────────────────────────
+   Rounded corners waste space on a dense control surface; the flex host is
+   a dockable grid, so corners are squared to save screen estate. Circles
+   (the toggle LEDs, spinners) are deliberately left round. */
+.ywc-flex-body {
+    --bs-border-radius: 0;
+    --bs-border-radius-sm: 0;
+    --bs-border-radius-lg: 0;
+    --bs-border-radius-pill: 0;
+    --bs-card-border-radius: 0;
+    --bs-btn-border-radius: 0;
+    --bs-btn-border-radius-sm: 0;
+    --bs-btn-border-radius-lg: 0;
+    --bs-badge-border-radius: 0;
+    --bs-modal-border-radius: 0;
+    --bs-toast-border-radius: 0;
+    --bs-dropdown-border-radius: 0;
+    /* FlexLayout alpha_dark theme radii (tab buttons, tab dividers, border
+       buttons) resolve through these two variables. */
+    --flexlayout-tab-button-radius: 0;
+    --flexlayout-border-button-radius: 0;
+}
+
+.ywc-flex-body .card,
+.ywc-flex-body .btn,
+.ywc-flex-body .form-control,
+.ywc-flex-body .form-select,
+.ywc-flex-body .form-check-input,
+.ywc-flex-body .dropdown-menu,
+.ywc-flex-body .dropdown-item,
+.ywc-flex-body .badge,
+.ywc-flex-body .list-group-item,
+.ywc-flex-body .modal-content,
+.ywc-flex-body .toast,
+.ywc-flex-body .toggle-dd__btn,
+.ywc-flex-body .toggle-dd__menu,
+.ywc-flex-body .linear-meter-value,
+.ywc-flex-body .remote-audio-meter-value,
+.ywc-flex-body .apps-launcher__menu,
+.ywc-flex-body .flexlayout__tab,
+.ywc-flex-body .flexlayout__tab_button,
+.ywc-flex-body .flexlayout__tab_button_content,
+.ywc-flex-body .flexlayout__tab_button_leading,
+.ywc-flex-body .flexlayout__tab_button_trailing,
+.ywc-flex-body .flexlayout__tab_toolbar,
+.ywc-flex-body .flexlayout__tabset,
+.ywc-flex-body .flexlayout__splitter,
+.ywc-flex-body .flexlayout__splitter_drag_handle,
+.ywc-flex-body .flexlayout__border,
+.ywc-flex-body .flexlayout__border_button,
+.ywc-flex-body .flexlayout__popup_menu,
+.ywc-flex-body .flexlayout__popup_menu_item,
+.ywc-flex-body .flexlayout__tabset_tab_divider_inner,
+.ywc-flex-body .flexlayout__tab_toolbar_button,
+.ywc-flex-body .flexlayout__tab_toolbar_button-min,
+.ywc-flex-body .flexlayout__tab_toolbar_button-max,
+.ywc-flex-body .flexlayout__tab_button_overflow,
+.ywc-flex-body .flexlayout__splitter_handle,
+.ywc-flex-body .flexlayout__drag_rect {
+    border-radius: 0;
+}
+
+/* Panel content that carries its own corners. */
+.ywc-flex-body .frequency-display .digit.selected,
+.ywc-flex-body #freqA.frequency-display,
+.ywc-flex-body #freqB.frequency-display,
+.ywc-flex-body .filter-scope-vfo-slot canvas,
+.ywc-flex-body .radio-display-hotspots .rdh-label,
+.ywc-flex-body .utc-clock {
+    border-radius: 0;
 }
