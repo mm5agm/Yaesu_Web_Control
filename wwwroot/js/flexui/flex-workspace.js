@@ -19,7 +19,7 @@
  */
 
 const LAYOUT_URL = '/js/flexui/layouts/desktop.json';
-const LAYOUT_VERSION = 'v5';
+const LAYOUT_VERSION = 'v6';
 const ARRANGEMENT_KEY = `ywc.flexui.layout.${LAYOUT_VERSION}`;
 const SCALE_KEY = 'ywc.flexui.scale';
 
@@ -50,6 +50,7 @@ const TEMPLATE_BY_COMPONENT = {
     spectrumA: 'tpl-spectrum-a',
     spectrumB: 'tpl-spectrum-b',
     radioDisplay: 'tpl-radio-display',
+    radioScope: 'tpl-radio-scope',
 };
 
 /** Every panel the workspace can show. Order drives the Panels menu. */
@@ -61,6 +62,7 @@ const PANELS = [
     { id: 'remoteAudio', name: 'Remote Audio', component: 'remoteAudio' },
     { id: 'clarifier', name: 'Clarifier', component: 'clarifier' },
     { id: 'radioDisplay', name: 'Radio Display', component: 'radioDisplay' },
+    { id: 'radioScope', name: 'Radio Scope', component: 'radioScope' },
     { id: 'spectrumA', name: 'Spectrum A', component: 'spectrumA' },
     { id: 'spectrumB', name: 'Spectrum B', component: 'spectrumB' },
     { id: 'vfoA', name: 'VFO A', component: 'vfoA' },
@@ -145,8 +147,7 @@ function filterLayoutJson(json, flags, retained) {
     if (!flags?.spectrumB) drop.add('spectrumB');
     if (!flags?.vfoB) drop.add('vfoB');
     if (!flags?.radioDisplay) drop.add('radioDisplay');
-    // Radio Scope panel was removed; scrub it from layouts saved by older builds.
-    drop.add('radioScope');
+    if (!flags?.radioScope) drop.add('radioScope');
     // Extras was split into Remote Audio and Clarifier; a layout saved by an
     // older build still carries the single 'extras' tab.
     drop.add('extras');
@@ -746,6 +747,7 @@ export function initFlexWorkspace(host, flags) {
             if (p.component === 'spectrumB') return !!state.flags.spectrumB;
             if (p.component === 'vfoB') return state.flags.vfoB !== false;
             if (p.component === 'radioDisplay') return !!state.flags.radioDisplay;
+            if (p.component === 'radioScope') return !!state.flags.radioScope;
             return true;
         });
     }
