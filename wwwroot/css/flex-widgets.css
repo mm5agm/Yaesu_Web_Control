@@ -225,10 +225,10 @@
     width: 100%;
 }
 
-/* The TX level keys and VFO B visibility key form a key grid that reflows
-   with width: two columns at the natural operating width, collapsing to one
-   when the panel is compacted. Keys keep a stable face — their labels carry
-   changing numeric values, so the grid (not the label) decides each width. */
+/* The TX level keys form a key grid that reflows with width: two columns at
+   the natural operating width, collapsing to one when the panel is compacted.
+   Keys keep a stable face — their labels carry changing numeric values, so the
+   grid (not the label) decides each width. */
 .ywc-panel-body .op-col--levels {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
