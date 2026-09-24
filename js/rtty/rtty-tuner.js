@@ -21,9 +21,10 @@
 const POLL_MS    = 50;     // 20 redraws a second
 const POINTS     = 500;    // about 21 ms at 24,000 points a second: one sweep
 const PERSIST    = 6;      // sweeps kept on screen, oldest dimmest
-const SHIFTS     = [170, 200, 425, 850];
+const SHIFTS     = [170, 200, 425, 450, 850];
 const LS_KEY     = 'rttyTuner';
 const QUIET_DB   = -80;    // below this in both filters there is nothing to draw
+const CHUNK      = 5;      // points per stroke: half a cycle of 2 kHz at 24,000 points a second
 
 // How much of what the receiver passes lands in the two tone filters, in dB.
 // RTTY on tune puts nearly all of it there; noise, or a signal off to one side,
@@ -170,6 +171,7 @@ export class RttyTuner {
             if (!res.ok) return;
             const f = await res.json();
             this._last = f;
+            this._adoptServerSettings(f);
             this._push(f);
             this._draw();
         } catch {
@@ -177,6 +179,22 @@ export class RttyTuner {
         } finally {
             this._inFlight = false;
         }
+    }
+
+    // There is one tuner on the server, so another tab or browser changing
+    // its settings changes them for this one too. Show what it is really
+    // using, or the dialog says 170 while the filters sit at 450. Not while
+    // the operator is typing a mark, and not saved: this page's own choice
+    // is still what it starts with next time.
+    _adoptServerSettings(f) {
+        if (!f.running) return;
+        const s = this._settings;
+        if (document.activeElement === this._markEl) return;
+        let changed = false;
+        if (SHIFTS.includes(f.shiftHz) && f.shiftHz !== s.shiftHz) { s.shiftHz = f.shiftHz; changed = true; }
+        if (typeof f.reverse === 'boolean' && f.reverse !== s.reverse) { s.reverse = f.reverse; changed = true; }
+        if (Number.isFinite(f.markHz) && Math.round(f.markHz) !== s.markHz) { s.markHz = Math.round(f.markHz); changed = true; }
+        if (changed) this._showSettings();
     }
 
     _push(f) {
@@ -252,21 +270,32 @@ export class RttyTuner {
         const k = rad / (this._scale || 1e-6);
         const n = this._sweeps.length;
 
+        // Drawn the way a beam lights phosphor: each step between points adds
+        // a little light, so where the trace dwells - along the arms, retraced
+        // twice a cycle - it glows, and the quick swings between mark and
+        // space stay faint. Drawn at full brightness instead, those swings
+        // look as solid as the arms and bury the cross in a tangle.
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
         ctx.lineWidth = 1.4;
         ctx.lineJoin = 'round';
         for (let j = 0; j < n; j++) {
             const sw = this._sweeps[j];
             const age = (j + 1) / n;                     // newest = 1
-            const a = (quiet ? 0.25 : 1) * (0.08 + 0.72 * age * age);
-            ctx.strokeStyle = `rgba(80, 255, 120, ${a.toFixed(3)})`;
-            ctx.beginPath();
-            for (let i = 0; i < sw.length; i += 2) {
-                const x = mid + sw[i] * k;
-                const y = mid - sw[i + 1] * k;
-                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            const a = (quiet ? 0.3 : 1) * (0.02 + 0.13 * age * age);
+            ctx.strokeStyle = `rgba(60, 255, 100, ${a.toFixed(3)})`;
+            // One path is lit once however often it crosses itself, so a
+            // sweep is stroked in pieces of about half a tone cycle: short
+            // enough not to overlap themselves, so the retraces add up.
+            for (let i = 0; i + 2 < sw.length; i += CHUNK * 2) {
+                ctx.beginPath();
+                ctx.moveTo(mid + sw[i] * k, mid - sw[i + 1] * k);
+                const end = Math.min(sw.length, i + CHUNK * 2 + 2);
+                for (let p = i + 2; p < end; p += 2) ctx.lineTo(mid + sw[p] * k, mid - sw[p + 1] * k);
+                ctx.stroke();
             }
-            ctx.stroke();
         }
+        ctx.restore();
 
         if (this._info) this._info.textContent = this._caption();
         if (f) this._setStatus(this._statusText(f));

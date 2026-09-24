@@ -30,9 +30,9 @@ namespace RadioWebControl.Core.Tests.Rtty
         }
 
         /// <summary>RMS of the X and Y traces over the last 50 ms, after settling.</summary>
-        private static (double x, double y) Arms(float[] audio, double mark = Mark, double space = Space)
+        private static (double x, double y) Arms(float[] audio, double mark = Mark, double space = Space, bool limiter = true)
         {
-            var scope = new RttyTuningScope(Rate, mark, space);
+            var scope = new RttyTuningScope(Rate, mark, space, limiter: limiter);
             scope.Process(audio);
             var p = scope.Snapshot(scope.PointRate / 20).Points;
             double sx = 0, sy = 0;
@@ -49,8 +49,34 @@ namespace RadioWebControl.Core.Tests.Rtty
             var (x, y) = Arms(Tone(Mark));
             _out.WriteLine($"mark tone: x {x:F4} y {y:F4}, {Db(x / y):F1} dB");
             Assert.True(Db(x / y) > 15, $"space arm only {Db(x / y):F1} dB below mark");
-            // 0 dB at the centre: the arm is as long as the tone is loud.
+        }
+
+        [Fact]
+        public void WithoutTheLimiterTheArmIsAsLongAsTheToneIsLoud()
+        {
+            // 0 dB at the centre.
+            var (x, _) = Arms(Tone(Mark), limiter: false);
             Assert.InRange(x, 0.3 / Math.Sqrt(2) * 0.9, 0.3 / Math.Sqrt(2) * 1.1);
+        }
+
+        [Fact]
+        public void TheLimiterHoldsTheFigureTheSameSizeThroughAFade()
+        {
+            // 40 dB of fade must not shrink the cross: that is what kept the
+            // old terminal-unit display crisp.
+            var (loud, _)  = Arms(Tone(Mark, amplitude: 0.3));
+            var (faded, _) = Arms(Tone(Mark, amplitude: 0.003));
+            _out.WriteLine($"arm loud {loud:F4}, 40 dB down {faded:F4}");
+            Assert.InRange(Db(faded / loud), -1.0, 1.0);
+        }
+
+        [Fact]
+        public void TheLimiterMakesUnequalTonesDrawEqualArms()
+        {
+            // Selective fading often leaves one tone well below the other.
+            var (m, _) = Arms(Tone(Mark, amplitude: 0.3));
+            var (_, s) = Arms(Tone(Space, amplitude: 0.03));
+            Assert.InRange(Db(s / m), -1.5, 1.5);
         }
 
         [Fact]
@@ -76,8 +102,8 @@ namespace RadioWebControl.Core.Tests.Rtty
         {
             // 400 Hz off: the operator is nowhere near and the scope should say
             // so by showing next to nothing, not a confident shape.
-            var (onX, _) = Arms(Tone(Mark));
-            var (x, y) = Arms(Tone(Mark - 400));
+            var (onX, _) = Arms(Tone(Mark), limiter: false);
+            var (x, y) = Arms(Tone(Mark - 400), limiter: false);
             _out.WriteLine($"400 Hz off: x {Db(x / onX):F1} dB, y {Db(y / onX):F1} dB relative to on tune");
             Assert.True(Db(x / onX) < -20);
             Assert.True(Db(y / onX) < -20);
