@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Language" content="en">
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Display">
+    <meta name="x-app-repo" content="mm5agm/Yaesu_Web_Control">
+    <meta name="x-app-name" content="Yaesu Web Control">
+    <title>@(ViewData["Title"]?.ToString() == "Flex UI" ? "Flex UI" : ViewData["Title"] + " - Yaesu Web Control")</title>
+    <script type="importmap">{}</script>
+
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/theme-yaesu.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/gauge-debug.css" />
+    <link rel="stylesheet" href="~/css/closer-to-raw-power.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/toggle-dropdown-button.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/flex-widgets.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/flexlayout/style/dark.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+
+    <script src="~/lib/canvas-gauges/gauge.min.js"></script>
+
+    <script type="module">
+        import { calibrateNumeric, calibrateSMeterLabel, calibrateSMeterForGauge, loadFromBackend } from '/js/calibration/calibration-engine.js?v=@Yaesu_Web_Control.AppVersion.Current';
+        window.calibrationEngine = { calibrateNumeric, calibrateSMeterLabel, calibrateSMeterForGauge };
+        const calibMap = { 'S-Meter': ['SMETER', 'SMETER_LABELS'] };
+        window.calibrationEngine.reload = () => loadFromBackend(calibMap);
+        window.calibrationEngine.reload();
+    </script>
+    <script type="module">
+        import { MeterFormatters } from '/js/ui/meter-formatters.js?v=@Yaesu_Web_Control.AppVersion.Current';
+        window.MeterFormatters = MeterFormatters;
+    </script>
+</head>
+<body class="ywc-flex-body">
+    <header class="ywc-flex-nav sticky-top">
+        <a class="ywc-flex-brand" asp-area="" asp-page="/FlexUi">Yaesu Web Control
+            <small class="text-muted fw-normal" style="font-size:0.6em;">v@(AppVersion.Display)</small>
+        </a>
+        <nav class="ywc-flex-nav-links" aria-label="Site navigation">
+            <a asp-area="" asp-page="/Index">Classic Home</a>
+            <a asp-area="" asp-page="/FlexUi" aria-current="page"><i class="bi bi-grid-1x2-fill" aria-hidden="true"></i> Flex UI</a>
+            <a asp-area="" asp-page="/Settings">Settings</a>
+            <a asp-area="" asp-page="/Memories">Memories</a>
+            <a asp-area="" asp-page="/UserManual">User Manual</a>
+            <a asp-area="" asp-page="/About">About</a>
+        </nav>
+    </header>
+
+    <main role="application" aria-label="Yaesu radio flex workspace" class="ywc-flex-main">
+        @RenderBody()
+    </main>
+
+    @* Bootstrap shim must install before site.js: site.js tests `typeof bootstrap`
+       on demand (tooltips / modal). Flex UI does not ship Bootstrap's JS. *@
+    <script src="~/js/flexui/flex-shims.js"></script>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    @* One connection factory for every /radioHub connection; must precede site.js. *@
+    <script src="~/js/ui/hub-connection.js" asp-append-version="true"></script>
+    <script src="~/js/ui/site.js" asp-append-version="true"></script>
+    <script src="~/js/update/update-banner.js" asp-append-version="true"></script>
+    @{
+        var _ywcSettingsService = (Yaesu_Web_Control.Services.ISettingsService)Context.RequestServices
+            .GetService(typeof(Yaesu_Web_Control.Services.ISettingsService))!;
+        var _ywcVoiceEnabled = false;
+        try
+        {
+#if WINDOWS
+            var _ywcSettings = await _ywcSettingsService.GetSettingsAsync();
+            _ywcVoiceEnabled = _ywcSettings.VoiceControlEnabled;
+#endif
+        }
+        catch { /* settings unavailable -> defaults */ }
+    }
+    <script>window.ywcVoiceEnabled = @(_ywcVoiceEnabled ? "true" : "false");</script>
+    <script src="~/js/ui/voice-control.js" asp-append-version="true"></script>
+    <script src="~/lib/flexlayout/flexlayout.bundle.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

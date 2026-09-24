@@ -1,0 +1,67 @@
+@model Yaesu_Web_Control.Pages.FlexUiModel
+@{
+    var isFtdx10 = Model.View.IsFtdx10;
+    var isFt710 = Model.View.IsFt710;
+    var isFtdx3000 = Model.View.IsFtdx3000;
+    var isFtdx5000 = Model.View.IsFtdx5000;
+    var isFtdx101 = Model.View.IsFtdx101;
+    var isSingleReceiver = Model.View.IsSingleReceiver;
+    var hasAntennaSelector = Model.View.HasAntennaSelector;
+    var maxPowerWatts = Model.View.MaxPowerWatts;
+    var hasQmb = Model.View.HasQmb;
+    var hasVcTune = Model.View.HasVcTune;
+    var hasVcTuneSub = Model.View.HasVcTuneSub;
+    var clarModeInit = Model.View.ClarModeInit;
+    var contourMaxFreq = Model.View.ContourMaxFreq;
+    var contourStep = Model.View.ContourStep;
+    var apfStep = Model.View.ApfStep;
+    var ifWidthDefaultA = Model.View.IfWidthDefaultA;
+    var ifWidthDefaultB = Model.View.IfWidthDefaultB;
+    var roofingOptionsJson = Model.View.RoofingOptionsJson;
+    var ctcssTones = Model.View.CtcssTones;
+}
+
+                <div id="spectrumContainerB" class="card border-dark h-100" style="flex: 1 1 0; min-width:0;">
+                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
+                        <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="VFO B spectrum span">
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 1_000 ? "active" : "")" data-hz="1000" data-vfo="B" data-a11y-key="spectrum.spanB1k" aria-label="VFO B span 1 kHz" title="VFO B span 1 kHz — one CW signal, the dial in the middle; software zoom, switches instantly">1k</button>
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 2_000 ? "active" : "")" data-hz="2000" data-vfo="B" data-a11y-key="spectrum.spanB2k" aria-label="VFO B span 2 kHz" title="VFO B span 2 kHz — one CW signal and its close neighbours; software zoom, switches instantly">2k</button>
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 5_000 ? "active" : "")" data-hz="5000" data-vfo="B" data-a11y-key="spectrum.spanB5k" aria-label="VFO B span 5 kHz" title="VFO B span 5 kHz — a CW QSO and its neighbours, or one SSB signal; software zoom, switches instantly">5k</button>
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 10_000 ? "active" : "")" data-hz="10000" data-vfo="B" data-a11y-key="spectrum.spanB10k" aria-label="VFO B span 10 kHz" title="VFO B span 10 kHz — a few CW signals, or a couple of SSB QSOs; software zoom, switches instantly">10k</button>
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 20_000 ? "active" : "")" data-hz="20000" data-vfo="B" data-a11y-key="spectrum.spanB20k" aria-label="VFO B span 20 kHz" title="VFO B span 20 kHz — a CW sub-band at CW resolution; software zoom, switches instantly">20k</button>
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 50_000 ? "active" : "")" data-hz="50000" data-vfo="B" data-a11y-key="spectrum.spanB50k" aria-label="VFO B span 50 kHz" title="VFO B span 50 kHz — a busy slice of band; software zoom, switches instantly">50k</button>
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 100_000 ? "active" : "")" data-hz="100000" data-vfo="B" data-a11y-key="spectrum.spanB100k" aria-label="VFO B span 100 kHz" title="VFO B span 100 kHz — best for narrow bands like 30m / 60m; software zoom, switches instantly">100k</button>
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 200_000 ? "active" : "")" data-hz="200000" data-vfo="B" data-a11y-key="spectrum.spanB200k" aria-label="VFO B span 200 kHz" title="VFO B span 200 kHz">200k</button>
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 500_000 ? "active" : "")" data-hz="500000" data-vfo="B" data-a11y-key="spectrum.spanB500k" aria-label="VFO B span 500 kHz" title="VFO B span 500 kHz">500k</button>
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 1_000_000 ? "active" : "")" data-hz="1000000" data-vfo="B" data-a11y-key="spectrum.spanB1m" aria-label="VFO B span 1 MHz" title="VFO B span 1 MHz">1M</button>
+                                <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 2_000_000 ? "active" : "")" data-hz="2000000" data-vfo="B" data-a11y-key="spectrum.spanB2m" aria-label="VFO B span 2 MHz" title="VFO B span 2 MHz">2M</button>
+                            </div>
+                            <button type="button" class="btn btn-outline-light btn-sm spectrum-hold-btn" data-vfo="B" title="Freeze this spectrum at the current frame so you can study it. Click again to resume live streaming.">Hold</button>
+                            <span id="spectrumStatusBadgeB" class="badge bg-secondary small">—</span>
+                        </div>
+                    </div>
+                    <div class="spectrum-dsp-bar d-flex align-items-center gap-2 px-2 py-1 small" data-vfo="B">
+                        <label class="text-nowrap mb-0" title="Vertical scale — dB of headroom above the auto-tracked noise floor. Smaller = taller peaks (zoom in on weak signals); larger = flatter. The noise floor stays pinned near the bottom automatically, so there's no floor slider to chase.">Range</label>
+                        <input type="range" class="form-range spectrum-range-slider" data-vfo="B" min="5" max="160" step="1" value="60" aria-label="VFO B spectrum vertical range (dB above the noise floor)" style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-range-label" data-vfo="B" style="min-width:3.5em; text-align:right;">60 dB</span>
+                        <label class="text-nowrap mb-0 ms-2" title="How fast the waterfall scrolls, from full speed down to 1/128. Does not affect the spectrum trace above it.">Speed</label>
+                        <input type="range" class="form-range spectrum-speed-slider" data-vfo="B" min="0" max="7" step="1" value="0" aria-label="VFO B waterfall scroll speed" style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-speed-label" data-vfo="B" style="min-width:3.5em; text-align:right;">Full</span>
+                        <label class="text-nowrap mb-0 ms-2" title="Waterfall brightness — lifts weak signals up the waterfall colour scale. The spectrum trace auto-ranges, so this brightens the waterfall only, leaving the trace unchanged.">Bright</label>
+                        <input type="range" class="form-range spectrum-bright-slider" data-vfo="B" min="0" max="60" step="1" value="0" aria-label="VFO B waterfall brightness" style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-bright-label" data-vfo="B" style="min-width:3.5em; text-align:right;">Off</span>
+                        <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
+                        <input type="range" class="form-range spectrum-smooth-slider" data-vfo="B" min="0" max="8" step="1" value="2" aria-label="VFO B spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
+                        <span class="text-monospace spectrum-smooth-label" data-vfo="B" style="min-width:3.5em; text-align:right;">2</span>
+                        <div class="form-check form-check-inline mb-0 ms-2 text-nowrap" title="Shades the slice of RF the receiver is actually listening to, from the current IF Width, IF Shift and roofing filter. The dial is at the edge of that band, not in the middle of it, so this shows where a signal has to sit to be heard - and in CW and RTTY, why click-to-tune lands beside the signal rather than on it.">
+                            <input class="form-check-input spectrum-passband-toggle" type="checkbox" data-vfo="B" id="spectrumPassbandToggleB" checked
+                                   aria-label="Show the VFO B receiver passband as a shaded band on the spectrum">
+                            <label class="form-check-label" for="spectrumPassbandToggleB">Passband</label>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <canvas id="spectrumCanvasB" role="img" aria-hidden="true" aria-label="RF spectrum display VFO B" style="display:block; width:100%;"></canvas>
+                    </div>
+                </div>

@@ -1,0 +1,450 @@
+/* Flex UI (/flexui) — host chrome and panel scoping.
+   The classic page is untouched; these rules only match the flex host and the
+   cloned panel bodies. The op-col block below is site.css's #operatingControlsRow
+   rules re-scoped to .ywc-panel-body, because the cloned panels no longer live
+   inside that row. */
+
+.ywc-flex-body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--yaesu-face-lo, #1a1a1a);
+    color: var(--yaesu-ink, #e6e6e6);
+}
+
+.ywc-flex-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.25rem 0.75rem;
+    background: #111;
+    border-bottom: 1px solid #333;
+    z-index: 20;
+}
+
+.ywc-flex-brand {
+    font-weight: 700;
+    color: #ffe066;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.ywc-flex-nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.ywc-flex-nav-links a {
+    color: #cfe3ff;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.ywc-flex-nav-links a[aria-current="page"] {
+    color: #fff;
+    font-weight: 700;
+}
+
+.ywc-flex-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0.25rem 0.5rem 0.5rem;
+}
+
+.ywc-flex-toolbar {
+    flex: 0 0 auto;
+}
+
+#ywcFlexHost {
+    flex: 1 1 auto;
+    min-height: 60vh;
+    width: 100%;
+    /* FlexLayout's root is position:absolute; inset:0. Without a positioned
+       containing block it anchors to the viewport and covers the toolbar. */
+    position: relative;
+    overflow: hidden;
+}
+
+.ywc-flex-panel-host,
+.ywc-panel-body {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.ywc-panel-body {
+    overflow: auto;
+    padding: 0.35rem;
+    box-sizing: border-box;
+}
+
+/* Merged Buttons panel: lay the keys out as a compact wrapping row. */
+.ywc-panel-body .op-col--buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
+}
+
+.ywc-panel-body .op-col--buttons > .btn,
+.ywc-panel-body .op-col--buttons > .toggle-dd,
+.ywc-panel-body .op-col--buttons > .toggle-dd > .toggle-dd__btn {
+    width: auto;
+    max-width: 100%;
+}
+
+/* Keep grid columns from overflowing a narrow docked panel. */
+.ywc-panel-body .op-col--levels {
+    max-width: 100%;
+    overflow: auto;
+}
+
+/* Linear meters panel: give rows a sensible min width. */
+.ywc-panel-body .linear-meter-canvas,
+.ywc-panel-body .linear-meter-row canvas {
+    min-width: 0;
+}
+
+#ywcFlexParking {
+    position: absolute;
+    left: -10000px;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+/* FlexLayout chrome tweaks for the shack-dark look. */
+.ywc-flex-body .flexlayout__layout {
+    background: #1a1a1a;
+}
+
+.ywc-flex-body .flexlayout__tab_button {
+    font-size: 0.8rem;
+}
+
+.ywc-panel-body {
+    margin-top: 0.35rem;
+    margin-bottom: 0.5rem;
+}
+
+.ywc-panel-body .op-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+}
+
+.ywc-panel-body .radio-display-toggle,
+.ywc-panel-body .radio-display-toggle > .radio-display-tip,
+.ywc-panel-body .radio-display-toggle > .radio-display-tip > #radioDisplayShowBtn {
+    width: 100%;
+}
+
+/* The TX level keys and VFO B visibility key form a compact 2-column,
+   3-row control table. */
+.ywc-panel-body .op-col--levels {
+    display: grid;
+    grid-template-columns: repeat(2, 10rem);
+    grid-auto-rows: minmax(2.65rem, auto);
+    align-items: stretch;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+/* Level keys use a stable compact face. Their labels contain changing numeric
+   values, so the default intrinsic button width would make each face resize
+   when the value changes (e.g. 5 W versus 100 W). */
+.ywc-panel-body .op-col--levels > .toggle-dd,
+.ywc-panel-body .op-col--levels > .toggle-dd > .toggle-dd__btn,
+.ywc-panel-body .op-col--levels > .toggle-dd__btn {
+    width: 10rem;
+    max-width: 100%;
+}
+
+.ywc-panel-body .op-col--levels > #vfoBToggleBtn {
+    grid-column: 1;
+    grid-row: 3;
+}
+
+.ywc-panel-body .op-col--levels > #txButton {
+    grid-column: 2;
+    grid-row: 3;
+}
+
+/* Compact linear SWR / Power bars — leftmost column of the
+   operating-controls row. */
+.ywc-panel-body .op-col--linear-meters {
+    min-width: 0;
+    gap: 0.35rem;
+}
+
+.ywc-panel-body .linear-meter-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.ywc-panel-body .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--yaesu-ink, #e6e6e6);
+    line-height: 1;
+}
+
+.ywc-panel-body .linear-meter-row canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+.ywc-panel-body .linear-meter-value {
+    flex: 0 0 3.6rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #dc3545;
+    color: #fff;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+.ywc-panel-body .linear-meter-value--comp {
+    background: #ffc107;
+    color: #000;
+}
+
+.ywc-panel-body .linear-meter-value--alc {
+    background: #0dcaf0;
+    color: #000;
+}
+
+/* Per-VFO linear S-meter (between frequency row and RF/AF stack). */
+.linear-meter-row--vfo {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+    width: 100%;
+    margin: 0.15rem 0 0.25rem;
+    transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+.linear-meter-row--vfo .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--yaesu-ink, #e6e6e6);
+    line-height: 1;
+}
+
+.linear-meter-row--vfo canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+.linear-meter-row--vfo .linear-meter-value {
+    flex: 0 0 3.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #198754;
+    color: #fff;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+/* Single-receiver: inactive VFO's S-meter is not a live reading for that
+   panel — grey it the same way TX freezes the radial S-meters. */
+.linear-meter-row--vfo.linear-smeter-inactive {
+    filter: grayscale(1);
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+/* TX freeze dimming for VFO linear S-meters (class toggled on the row). */
+.linear-meter-row--vfo.meters-tx-dim {
+    filter: grayscale(1);
+    opacity: 0.3;
+}
+
+.ywc-panel-body .op-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: nowrap;
+}
+
+.ywc-panel-body .op-slider-row input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 4.5rem;
+    height: 18px;
+}
+
+.ywc-panel-body .op-col--buttons > .btn {
+    width: 100%;
+}
+
+/* col-auto in the markup, like the level column it sits beside. The keys keep
+   their own width here instead of filling the column as elsewhere in this row.
+   The auto margins take whatever width the row has left once the extras column
+   hits its cap, as equal space either side of these keys — without them that
+   slack collects at the end of the row instead. */
+.ywc-panel-body .op-col--vfo-actions {
+    align-items: center;
+    margin-inline: auto;
+}
+
+.ywc-panel-body .op-col--vfo-actions > .btn {
+    width: auto;
+}
+
+/* .col in the markup, capped: the Remote Audio and Clarifier blocks stay on the
+   same number of lines as the key columns beside them down to about 32rem, and
+   wrap into a taller block below that. Letting the column grow past the cap only
+   spreads the same controls over more width. */
+.ywc-panel-body .op-col--extras {
+    max-width: 34rem;
+    min-width: 0;
+}
+
+.ywc-panel-body .op-extras-block {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.45rem;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.ywc-panel-body .op-extras-meters {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 12rem;
+    flex: 1 1 12rem;
+}
+
+.remote-audio-meter-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.remote-audio-meter-row .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--yaesu-ink, #e6e6e6);
+    line-height: 1;
+}
+
+.remote-audio-meter-canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+.remote-audio-meter-value {
+    flex: 0 0 3.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #0dcaf0;
+    color: #000;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+.remote-audio-meter-value--tx {
+    background: #ffc107;
+}
+
+.remote-audio-popout-meters {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 18rem;
+}
+
+.remote-audio-popout-meters .remote-audio-meter-row {
+    flex: 1 1 9rem;
+}
+
+.ywc-panel-body #clarifierRow {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.ywc-panel-body #clarifierRow .toggle-dd {
+    flex: 0 0 auto;
+}
+
+.ywc-panel-body #clarifierRow .toggle-dd__btn {
+    min-height: 2.65rem;
+    height: 2.65rem;
+    padding: 0.22rem 0.7rem 0.4rem;
+    box-sizing: border-box;
+}
+
+.ywc-panel-body #clarifierRow .toggle-dd__btn--toolbar {
+    min-width: 4.75rem;
+}
+
+.ywc-panel-body #clarVfoButton .toggle-dd__btn {
+    width: 5.5rem;
+}
+
+.ywc-panel-body #clarModeButton .toggle-dd__btn {
+    width: 7rem;
+}
+
+.ywc-panel-body #clarOffsetButton .toggle-dd__btn {
+    width: 10rem;
+}
+
+.ywc-panel-body #clarifierRow .toggle-dd__label {
+    font-size: 0.8rem;
+}
+
+.ywc-panel-body .clarifier-label {
+    flex: 0 0 100%;
+}
+
+.ywc-panel-body .remote-audio-label {
+    flex: 0 0 100%;
+}
+
+.remote-audio-status-row {
+    flex: 0 0 100%;
+    line-height: 1;
+}
