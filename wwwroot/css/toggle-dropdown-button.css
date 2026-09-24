@@ -350,6 +350,17 @@
         0 0 0 1px rgba(255, 122, 24, 0.28);
 }
 
+/* Flex UI: menus float above dock tabs (see toggle-dropdown-button.js) so they
+   are not clipped by the tab and do not add to its scroll area. */
+.toggle-dd__menu--floating {
+    position: fixed;
+    z-index: 3000;
+    max-width: calc(100vw - 0.5rem);
+    max-height: calc(100vh - 0.5rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 /* Compact fit for VFO key columns */
 .vfo-controls-column .toggle-dd,
 .vfo-col--band .toggle-dd,
