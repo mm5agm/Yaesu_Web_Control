@@ -906,16 +906,21 @@ export function initVfoKeyButtonsFor(vfo) {
 }
 
 /**
- * The VFO-agnostic keys (QMB, Apps, Clarifier), which live outside the VFO
- * panels and are initialised once at workspace ready.
+ * The VFO-agnostic keys (QMB, Apps, Clarifier), which live in the Buttons and
+ * Clarifier panels outside the VFO panels.
+ *
+ * Idempotent: each widget sets its own `window.*` handle, and this checks
+ * that before recreating. The Flex UI can call it at workspace ready and
+ * again when a panel that was not mounted at ready is first opened, without
+ * duplicating widgets or their listeners.
  */
 export function initSharedVfoKeyButtons() {
     const result = {};
-    result.qmb = initQmbButton();
-    result.apps = initAppsButton();
-    result.clarVfo = initClarVfoButton();
-    result.clarMode = initClarModeButton();
-    result.clarOffset = initClarOffsetButton();
+    result.qmb = window.qmbButton || initQmbButton();
+    result.apps = window.appsButton || initAppsButton();
+    result.clarVfo = window.clarVfoButton || initClarVfoButton();
+    result.clarMode = window.clarModeButton || initClarModeButton();
+    result.clarOffset = window.clarOffsetButton || initClarOffsetButton();
     return result;
 }
 
