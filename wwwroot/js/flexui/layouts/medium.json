@@ -1,0 +1,92 @@
+{
+  "global": {
+    "tabEnableClose": true,
+    "tabSetEnableMaximize": true,
+    "rootOrientationVertical": true,
+    "splitterSize": 10
+  },
+  "borders": [],
+  "layout": {
+    "type": "row",
+    "weight": 100,
+    "children": [
+      {
+        "type": "row",
+        "weight": 34,
+        "children": [
+          {
+            "type": "tabset",
+            "weight": 50,
+            "children": [{ "type": "tab", "id": "vfoA", "name": "VFO A", "component": "vfoA" }]
+          },
+          {
+            "type": "tabset",
+            "weight": 50,
+            "children": [{ "type": "tab", "id": "vfoB", "name": "VFO B", "component": "vfoB" }]
+          }
+        ]
+      },
+      {
+        "type": "row",
+        "weight": 22,
+        "children": [
+          {
+            "type": "tabset",
+            "weight": 34,
+            "children": [{ "type": "tab", "id": "linearMeters", "name": "Linear Meters", "component": "linearMeters" }]
+          },
+          {
+            "type": "tabset",
+            "weight": 33,
+            "children": [{ "type": "tab", "id": "levels", "name": "Levels", "component": "levels" }]
+          },
+          {
+            "type": "tabset",
+            "weight": 33,
+            "children": [{ "type": "tab", "id": "vfoActions", "name": "VFO Actions", "component": "vfoActions" }]
+          }
+        ]
+      },
+      {
+        "type": "row",
+        "weight": 18,
+        "children": [
+          {
+            "type": "tabset",
+            "weight": 70,
+            "children": [{ "type": "tab", "id": "buttons", "name": "Buttons", "component": "buttons" }]
+          },
+          {
+            "type": "tabset",
+            "weight": 30,
+            "children": [{ "type": "tab", "id": "extras", "name": "Extras", "component": "extras" }]
+          }
+        ]
+      },
+      {
+        "type": "row",
+        "weight": 26,
+        "children": [
+          {
+            "type": "tabset",
+            "weight": 40,
+            "children": [{ "type": "tab", "id": "spectrumA", "name": "Spectrum A", "component": "spectrumA" }]
+          },
+          {
+            "type": "tabset",
+            "weight": 40,
+            "children": [{ "type": "tab", "id": "spectrumB", "name": "Spectrum B", "component": "spectrumB" }]
+          },
+          {
+            "type": "tabset",
+            "weight": 20,
+            "children": [
+              { "type": "tab", "id": "radioDisplay", "name": "Radio Display", "component": "radioDisplay" },
+              { "type": "tab", "id": "radioScope", "name": "Radio Scope", "component": "radioScope" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

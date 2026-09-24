@@ -1,0 +1,105 @@
+@model Yaesu_Web_Control.Pages.FlexUiModel
+@{
+    var isFtdx10 = Model.View.IsFtdx10;
+    var isFt710 = Model.View.IsFt710;
+    var isFtdx3000 = Model.View.IsFtdx3000;
+    var isFtdx5000 = Model.View.IsFtdx5000;
+    var isFtdx101 = Model.View.IsFtdx101;
+    var isSingleReceiver = Model.View.IsSingleReceiver;
+    var hasAntennaSelector = Model.View.HasAntennaSelector;
+    var maxPowerWatts = Model.View.MaxPowerWatts;
+    var hasQmb = Model.View.HasQmb;
+    var hasVcTune = Model.View.HasVcTune;
+    var hasVcTuneSub = Model.View.HasVcTuneSub;
+    var clarModeInit = Model.View.ClarModeInit;
+    var contourMaxFreq = Model.View.ContourMaxFreq;
+    var contourStep = Model.View.ContourStep;
+    var apfStep = Model.View.ApfStep;
+    var ifWidthDefaultA = Model.View.IfWidthDefaultA;
+    var ifWidthDefaultB = Model.View.IfWidthDefaultB;
+    var roofingOptionsJson = Model.View.RoofingOptionsJson;
+    var ctcssTones = Model.View.CtcssTones;
+}
+
+
+<div class="op-col op-col--extras">
+                            <!-- Remote Audio — visible when Settings → Remote Audio is enabled -->
+                            <div id="remoteAudioBar" class="op-extras-block" style="display:none;">
+                                <strong class="text-nowrap remote-audio-label"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
+                                <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                                      data-bs-title="Connect to transceiver audio" aria-label="Connect to transceiver audio">
+                                    <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioStartBtn"
+                                            aria-label="Connect to transceiver audio">
+                                        <i class="bi bi-telephone-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
+                                      data-bs-title="Disconnect transceiver audio" aria-label="Disconnect transceiver audio">
+                                    <button type="button" class="btn btn-sm btn-danger remote-audio-icon-btn" id="remoteAudioStopBtn" disabled
+                                            aria-label="Disconnect transceiver audio">
+                                        <i class="bi bi-telephone-x-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span class="d-inline-block remote-audio-tip" id="remoteAudioPopoutTip" data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-title="Popout audio, useful to navigate YWC without interrupting the audio stream"
+                                      aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary remote-audio-icon-btn" id="remoteAudioPopoutBtn"
+                                            aria-label="Popout audio, useful to navigate YWC without interrupting the audio stream">
+                                        <i class="bi bi-window-plus remote-audio-btn-icon" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span class="d-inline-block remote-audio-tip" id="remoteAudioMicMuteTip" data-bs-toggle="tooltip"
+                                      data-bs-placement="top" data-bs-title="Mute microphone" aria-label="Mute microphone">
+                                    <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioMicMute"
+                                            aria-pressed="false" aria-label="Mute microphone" disabled>
+                                        <i class="bi bi-mic-fill remote-audio-btn-icon" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span class="d-inline-block remote-audio-tip" id="remoteAudioRxMuteTip" data-bs-toggle="tooltip"
+                                      data-bs-placement="top" data-bs-title="Deafen — mute received audio"
+                                      aria-label="Deafen — mute received audio">
+                                    <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioRxMute"
+                                            aria-pressed="false" aria-label="Deafen — mute received audio" disabled>
+                                        <i class="bi bi-headphones remote-audio-btn-icon" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span class="d-inline-block remote-audio-tip" id="remoteAudioLevelsTip" data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-title="Browser microphone and software gain"
+                                      aria-label="Browser microphone and software gain">
+                                    <button type="button"
+                                            class="btn toggle-dd__btn toggle-dd__btn--action"
+                                            id="remoteAudioLevelsBtn"
+                                            aria-label="Open mic and gain settings">
+                                        <span class="toggle-dd__label">Mic &amp; Gain</span>
+                                    </button>
+                                </span>
+                                <div class="op-extras-meters" aria-label="Remote audio levels">
+                                    <div class="remote-audio-meter-row">
+                                        <span class="linear-meter-label" title="Radio → browser level">RX</span>
+                                        <canvas id="remoteAudioRxMeter" class="remote-audio-meter-canvas"
+                                                role="img" aria-label="Received audio level"></canvas>
+                                        <span id="remoteAudioRxMeterValue" class="linear-meter-value remote-audio-meter-value">0%</span>
+                                    </div>
+                                    <div class="remote-audio-meter-row">
+                                        <span class="linear-meter-label" title="Browser mic → radio level">TX</span>
+                                        <canvas id="remoteAudioTxMeter" class="remote-audio-meter-canvas"
+                                                role="img" aria-label="Transmit audio level"></canvas>
+                                        <span id="remoteAudioTxMeterValue" class="linear-meter-value remote-audio-meter-value remote-audio-meter-value--tx">0%</span>
+                                    </div>
+                                </div>
+                                <div class="remote-audio-status-row">
+                                    <span class="small text-muted" id="remoteAudioStatus">Idle</span>
+                                </div>
+                            </div>
+
+                            <!-- Clarifier (RIT/XIT) -->
+                            <div id="clarifierRow" class="op-extras-block">
+                                <strong class="text-nowrap clarifier-label"><i class="bi bi-sliders" aria-hidden="true"></i> Clarifier</strong>
+                                <div id="clarVfoButton" data-selected="A"></div>
+                                <div id="clarModeButton" data-selected="@clarModeInit"></div>
+                                <div id="clarOffsetButton"
+                                     data-value="@Model.RadioState.ClarifierOffsetA"></div>
+                            </div>
+    </div>

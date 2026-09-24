@@ -1,0 +1,58 @@
+@page "/flexui"
+@model Yaesu_Web_Control.Pages.FlexUiModel
+@{
+    Layout = "_FlexLayout";
+    ViewData["Title"] = "Flex UI";
+    ViewData["BodyRole"] = "application";
+    ViewData["BodyLabel"] = "Yaesu radio flex workspace";
+}
+
+@* Overlays: message box, init overlay, viewport warning. *@
+<partial name="FlexPartials/_FlexOverlays" />
+
+@* Hidden data holder so site.js's vfoRow.dataset lookups keep working. *@
+<div id="vfoRow" data-radio-model="@Model.RadioModel"
+     data-max-power="@Model.View.MaxPowerWatts"
+     data-single-receiver="@(Model.View.IsSingleReceiver ? "true" : "false")"
+     hidden aria-hidden="true"></div>
+
+@* Single live region for both VFO status lines (see Index.cshtml). *@
+<span id="vfoStatusAnnounce" class="visually-hidden" role="status"
+      aria-live="polite" aria-atomic="true"></span>
+
+@await Html.PartialAsync("FlexPartials/_FlexToolbar", Model)
+
+<div id="ywcFlexHost" class="ywc-flex-host" aria-label="Dockable radio panels"></div>
+
+@* Panel templates. Cloned into a FlexLayout tab host on mount. *@
+<div id="ywcPanelTemplates" hidden aria-hidden="true">
+    <template id="tpl-linear-meters">@await Html.PartialAsync("FlexPartials/_LinearMeters", Model)</template>
+    <template id="tpl-levels">@await Html.PartialAsync("FlexPartials/_Levels", Model)</template>
+    <template id="tpl-vfo-actions">@await Html.PartialAsync("FlexPartials/_VfoActions", Model)</template>
+    <template id="tpl-buttons">@await Html.PartialAsync("FlexPartials/_Buttons", Model)</template>
+    <template id="tpl-extras">@await Html.PartialAsync("FlexPartials/_Extras", Model)</template>
+    <template id="tpl-vfo-a">@await Html.PartialAsync("FlexPartials/_VfoA", Model)</template>
+    <template id="tpl-vfo-b">@await Html.PartialAsync("FlexPartials/_VfoB", Model)</template>
+    <template id="tpl-spectrum-a">@await Html.PartialAsync("FlexPartials/_SpectrumA", Model)</template>
+    <template id="tpl-spectrum-b">@await Html.PartialAsync("FlexPartials/_SpectrumB", Model)</template>
+    <template id="tpl-radio-display">@await Html.PartialAsync("FlexPartials/_RadioDisplay", Model)</template>
+    <template id="tpl-radio-scope">@await Html.PartialAsync("Shared/_RadioScopePartial", Model.RadioModel)</template>
+    <template id="tpl-empty"><div></div></template>
+</div>
+
+@* Dialogs live once in the document (not in templates). *@
+@await Html.PartialAsync("FlexPartials/_FlexDialogs", Model)
+
+@section Scripts {
+<script>
+window.ywcFlexFlags = {
+    remoteAudio: true,
+    spectrumA: @Model.View.IsWindowsHost.ToString().ToLower(),
+    spectrumB: @Model.View.IsWindowsHost.ToString().ToLower(),
+    vfoB: true,
+    radioDisplay: @Model.View.VideoDisplayEnabled.ToString().ToLower(),
+    radioScope: @((Model.View.SupportsSpectrumScopeCat && !Model.View.VideoDisplayEnabled).ToString().ToLower())
+};
+</script>
+@await Html.PartialAsync("FlexPartials/_FlexScripts", Model)
+}

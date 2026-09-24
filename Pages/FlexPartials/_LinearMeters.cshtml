@@ -1,0 +1,85 @@
+@model Yaesu_Web_Control.Pages.FlexUiModel
+@{
+    var isFtdx10 = Model.View.IsFtdx10;
+    var isFt710 = Model.View.IsFt710;
+    var isFtdx3000 = Model.View.IsFtdx3000;
+    var isFtdx5000 = Model.View.IsFtdx5000;
+    var isFtdx101 = Model.View.IsFtdx101;
+    var isSingleReceiver = Model.View.IsSingleReceiver;
+    var hasAntennaSelector = Model.View.HasAntennaSelector;
+    var maxPowerWatts = Model.View.MaxPowerWatts;
+    var hasQmb = Model.View.HasQmb;
+    var hasVcTune = Model.View.HasVcTune;
+    var hasVcTuneSub = Model.View.HasVcTuneSub;
+    var clarModeInit = Model.View.ClarModeInit;
+    var contourMaxFreq = Model.View.ContourMaxFreq;
+    var contourStep = Model.View.ContourStep;
+    var apfStep = Model.View.ApfStep;
+    var ifWidthDefaultA = Model.View.IfWidthDefaultA;
+    var ifWidthDefaultB = Model.View.IfWidthDefaultB;
+    var roofingOptionsJson = Model.View.RoofingOptionsJson;
+    var ctcssTones = Model.View.CtcssTones;
+}
+
+
+<div class="op-col op-col--linear-meters">
+                            <div class="linear-meter-row">
+                                <span class="linear-meter-label">SWR</span>
+                                <canvas id="swrLinearCanvas"
+                                        role="img" aria-hidden="true"
+                                        aria-label="SWR meter (linear)"
+                                        data-a11y-key="meters.linearSwr"></canvas>
+                                <span id="swrLinearValue" class="linear-meter-value linear-meter-value--swr">1.0:1</span>
+                            </div>
+                            <div class="linear-meter-row">
+                                <span class="linear-meter-label">PWR</span>
+                                <canvas id="powerLinearCanvas"
+                                        role="img" aria-hidden="true"
+                                        aria-label="Power output meter (linear)"
+                                        data-a11y-key="meters.linearPower"></canvas>
+                                <span id="powerLinearValue" class="linear-meter-value linear-meter-value--pwr">0 W</span>
+                            </div>
+                            <div class="linear-meter-row">
+                                <span class="linear-meter-label">COMP</span>
+                                <canvas id="compressionLinearCanvas"
+                                        role="img" aria-hidden="true"
+                                        aria-label="Compression meter (linear)"
+                                        data-a11y-key="meters.linearCompression"></canvas>
+                                <span id="compressionLinearValue" class="linear-meter-value linear-meter-value--comp">0 dB</span>
+                            </div>
+                            <div class="linear-meter-row">
+                                <span class="linear-meter-label">ALC</span>
+                                <canvas id="alcLinearCanvas"
+                                        role="img" aria-hidden="true"
+                                        aria-label="ALC meter (linear)"
+                                        data-a11y-key="meters.linearAlc"></canvas>
+                                <span id="alcLinearValue" class="linear-meter-value linear-meter-value--alc">0V</span>
+                            </div>
+                            @if (!isFtdx10 && !isFt710 && !isFtdx5000)
+                            {
+                                <div class="linear-meter-row">
+                                    <span class="linear-meter-label">TEMP</span>
+                                    <canvas id="tempLinearCanvas"
+                                            role="img" aria-hidden="true"
+                                            aria-label="Amplifier temperature meter (linear)"
+                                            data-a11y-key="meters.linearTemp"></canvas>
+                                    <span id="tempLinearValue" class="linear-meter-value linear-meter-value--temp">--°C</span>
+                                </div>
+                                <div class="linear-meter-row">
+                                    <span class="linear-meter-label">IDD</span>
+                                    <canvas id="iddLinearCanvas"
+                                            role="img" aria-hidden="true"
+                                            aria-label="Drain current meter (linear)"
+                                            data-a11y-key="meters.linearIdd"></canvas>
+                                    <span id="iddLinearValue" class="linear-meter-value linear-meter-value--idd">0.0A</span>
+                                </div>
+                                <div class="linear-meter-row">
+                                    <span class="linear-meter-label">VDD</span>
+                                    <canvas id="vddLinearCanvas"
+                                            role="img" aria-hidden="true"
+                                            aria-label="Amplifier supply voltage meter (linear)"
+                                            data-a11y-key="meters.linearVdd"></canvas>
+                                    <span id="vddLinearValue" class="linear-meter-value linear-meter-value--vdd">48.0V</span>
+                                </div>
+                            }
+    </div>
