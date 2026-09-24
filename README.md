@@ -82,6 +82,7 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
+| RTTY Tuner froze on *Stopped.* after its browser tab had been in the background, until the dialog was closed and reopened; it now starts again by itself | - | *Not yet in a build* |
 | RTTY Tuner opened just after YWC started could use the mode from the last session instead of the radio's, which in RTTY-U put the space filter on the wrong side of mark until the radio's mode came in | - | *Not yet in a build* |
 
 Everything fixed in the v2.5.2 pre-releases is in [v2.5.2](#2026-09-24---v252).
