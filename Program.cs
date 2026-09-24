@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Yaesu_Web_Control.Services;
+using Yaesu_Web_Control.Services.Flex;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -505,6 +506,10 @@ builder.Services.AddHostedService<RigctldServer>();
 
 // Register your settings service
 builder.Services.AddSingleton<ISettingsService, SettingsService>();
+
+// Named Flex UI workspace arrangements (flex-layouts.json). Kept out of
+// ApplicationSettings deliberately — see FlexLayoutStore for why.
+builder.Services.AddSingleton<IFlexLayoutStore, FlexLayoutStore>();
 
 // Remote radio audio (browser ↔ USB) — opt-in; devices open only while a client is connected.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioSessionManager>();

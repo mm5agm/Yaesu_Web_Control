@@ -2795,6 +2795,20 @@
             </p>
         </div>
     </details>
+
+    <!-- Flex UI saved layouts — outside the main form, like Backup & Restore,
+         so its buttons can never submit the settings form. -->
+    <details class="settings-section">
+        <summary><i class="bi bi-layout-wtf" aria-hidden="true"></i>&nbsp;Flex UI saved layouts</summary>
+        <div class="section-body">
+            <p class="text-muted">
+                Named panel arrangements for the <a asp-page="/FlexUi">Flex UI</a>. Create them there with
+                “Save current as…”, or rename, duplicate, export and import them here. They are included in
+                the full backup above.
+            </p>
+            <div id="settingsFlexLayoutsAdmin"></div>
+        </div>
+    </details>
 </div>
 
 <script>
@@ -2915,6 +2929,10 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script type="module">
+        import { initFlexLayoutsAdmin } from '/js/flexui/flex-layouts-admin.js?v=@Yaesu_Web_Control.AppVersion.Current';
+        initFlexLayoutsAdmin(document.getElementById('settingsFlexLayoutsAdmin'));
+    </script>
     <script>
         // Serial port dropdown — same /api/ports source as Diagnostics
         (function () {
