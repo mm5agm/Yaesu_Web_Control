@@ -65,6 +65,25 @@
     </div>
 </dialog>
 
+<!-- Flex UI layouts manager. Rows are built by
+     wwwroot/js/flexui/flex-layouts-admin.js when the dialog opens. -->
+<dialog id="flexLayoutsDialog" class="flex-layouts-dialog"
+        style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; width:min(620px, 94vw);"
+        aria-labelledby="flexLayoutsTitle">
+    <div class="flex-layouts-dialog__header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <span id="flexLayoutsTitle" class="fw-bold">Saved layouts</span>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                aria-label="Close saved layouts"></button>
+    </div>
+    <div class="p-3">
+        <p class="small text-muted mb-2">
+            Saved panel arrangements. “Use” switches the Flex UI to that layout now.
+            Changes are saved automatically to the active layout.
+        </p>
+        <div id="flexLayoutsAdmin"></div>
+    </div>
+</dialog>
+
 <!-- VOX Dialog -->
 <dialog id="voxDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:280px;" aria-labelledby="voxDialogTitle">
     <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">

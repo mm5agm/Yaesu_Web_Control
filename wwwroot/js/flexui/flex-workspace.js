@@ -23,6 +23,16 @@ const LAYOUT_VERSION = 'v5';
 const ARRANGEMENT_KEY = `ywc.flexui.layout.${LAYOUT_VERSION}`;
 const SCALE_KEY = 'ywc.flexui.scale';
 
+// Named arrangements live on the server (flex-layouts.json). localStorage is
+// the offline working copy plus a queue of writes that could not reach the
+// server. See the persistence section below.
+const API_BASE = '/api/flexlayouts';
+const DEFAULT_ID = '__default__';
+const ACTIVE_KEY = 'ywc.flexui.activeId';
+const PRESETS_KEY = 'ywc.flexui.presets';
+const PENDING_KEY = 'ywc.flexui.pending';
+const AUTO_SAVE_DEBOUNCE_MS = 600;
+
 /** Root font-size in px for each scale. rem-based Bootstrap/theme sizing scales. */
 const SCALES = { xsmall: 12, small: 14, medium: 16, large: 18 };
 const SCALE_ORDER = ['xsmall', 'small', 'medium', 'large'];
@@ -406,6 +416,13 @@ export function initFlexWorkspace(host, flags) {
         flags: flags || {},
         scale: getActiveScale(),
         droppedTabs: [],
+        presets: [],
+        activeId: DEFAULT_ID,
+        serverActiveId: DEFAULT_ID,
+        remoteAvailable: false,
+        pending: new Map(),
+        pendingActive: null,
+        mountSeq: 0,
     };
 
     function applyScale(scale) {
@@ -419,17 +436,114 @@ export function initFlexWorkspace(host, flags) {
         dispatchPanelResize();
     }
 
-    function persist() {
-        if (!state.model) return;
+    // ── Persistence: server arrangements with an offline queue ────────────
+    //
+    // The server (flex-layouts.json via /api/flexlayouts) is the source of
+    // truth for named layouts. localStorage holds:
+    //   - the active arrangement's working copy (ARRANGEMENT_KEY), so edits
+    //     survive a reload even while the Default (built-in) arrangement is
+    //     selected and there is no server slot to write to;
+    //   - a cache of preset metadata for offline display (PRESETS_KEY);
+    //   - a queue of writes that could not reach the server (PENDING_KEY).
+    //
+    // Auto-save applies to a named preset. Edits made while Default is active
+    // stay a local draft until the user saves them as a preset — the built-in
+    // Default is never overwritten.
+
+    let saveTimer = null;
+    let flushing = false;
+
+    function readJson(key) {
         try {
-            const json = restoreRetainedTabs(state.model.toJson(), state.droppedTabs);
-            localStorage.setItem(ARRANGEMENT_KEY, JSON.stringify(json));
-        } catch { /* quota */ }
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : null;
+        } catch { return null; }
+    }
+
+    function writeJson(key, value) {
+        try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota */ }
+    }
+
+    function loadPending() {
+        const doc = readJson(PENDING_KEY);
+        state.pending = new Map();
+        if (Array.isArray(doc?.entries)) {
+            for (const entry of doc.entries) if (entry?.id) state.pending.set(entry.id, entry);
+        }
+        state.pendingActive = doc?.activeId ?? null;
+    }
+
+    function savePending() {
+        writeJson(PENDING_KEY, {
+            entries: [...state.pending.values()],
+            activeId: state.pendingActive,
+        });
+    }
+
+    function upsertPreset(summary) {
+        if (!summary?.id) return;
+        const i = state.presets.findIndex((p) => p.id === summary.id);
+        if (i >= 0) state.presets[i] = { ...state.presets[i], ...summary };
+        else state.presets.push(summary);
+        writeJson(PRESETS_KEY, state.presets);
+    }
+
+    async function refreshPresets() {
+        try {
+            const res = await fetch(API_BASE, { headers: { Accept: 'application/json' } });
+            if (!res.ok) throw new Error(String(res.status));
+            const snap = await res.json();
+            state.presets = Array.isArray(snap.layouts) ? snap.layouts : [];
+            state.serverActiveId = snap.activeId || DEFAULT_ID;
+            state.remoteAvailable = true;
+            writeJson(PRESETS_KEY, state.presets);
+            return true;
+        } catch {
+            state.remoteAvailable = false;
+            const cached = readJson(PRESETS_KEY);
+            if (Array.isArray(cached)) state.presets = cached;
+            return false;
+        }
+    }
+
+    async function fetchPresetJson(id) {
+        try {
+            const res = await fetch(`${API_BASE}/${encodeURIComponent(id)}`, {
+                headers: { Accept: 'application/json' },
+            });
+            if (!res.ok) return null;
+            const detail = await res.json();
+            return detail?.layout ?? null;
+        } catch {
+            return null;
+        }
+    }
+
+    function applyGlobals(json) {
+        json.global = json.global || {};
+        json.global.tabEnableClose = true;
+        json.global.tabSetEnableMaximize = true;
+        json.global.tabEnablePopout = true;
+        json.global.tabEnablePopoutFloatIcon = true;
+        return json;
+    }
+
+    function mountJson(rawJson) {
+        state.droppedTabs = [];
+        const json = applyGlobals(filterLayoutJson(rawJson, state.flags, state.droppedTabs));
+        state.model = FL.Model.fromJson(json);
+        state.mountSeq += 1;
+        state.model.addChangeListener(() => { persist(); dispatchPanelResize(); buildPanelsMenu(); });
+        renderApp();
+        syncScaleUi();
+        wireVfoTitles();
+        queueMicrotask(dispatchPanelResize);
     }
 
     function renderApp() {
         if (!state.root) state.root = ReactDOM.createRoot(host);
         const App = () => React.createElement(FL.Layout, {
+            key: state.mountSeq,
             model: state.model,
             factory: createTemplateElement,
             ref: state.layoutRef,
@@ -440,31 +554,174 @@ export function initFlexWorkspace(host, flags) {
         state.root.render(React.createElement(App));
     }
 
-    async function loadModel({ reset = false } = {}) {
-        applyScale(state.scale);
-        let json = null;
-        if (!reset) {
-            try {
-                const raw = localStorage.getItem(ARRANGEMENT_KEY);
-                if (raw) json = JSON.parse(raw);
-            } catch {
-                localStorage.removeItem(ARRANGEMENT_KEY);
-            }
+    function persist() {
+        if (!state.model) return;
+        const json = restoreRetainedTabs(state.model.toJson(), state.droppedTabs);
+        writeJson(ARRANGEMENT_KEY, json);
+        if (state.activeId === DEFAULT_ID) {
+            buildLayoutsMenu();
+            return;
         }
-        state.droppedTabs = [];
-        json = filterLayoutJson(json || await loadDefaultJson(), state.flags, state.droppedTabs);
+        const known = state.presets.find((p) => p.id === state.activeId);
+        state.pending.set(state.activeId, {
+            id: state.activeId,
+            name: known?.name || 'Layout',
+            layout: json,
+            exists: true,
+        });
+        savePending();
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => { flushPending(); }, AUTO_SAVE_DEBOUNCE_MS);
+    }
 
-        json.global = json.global || {};
-        json.global.tabEnableClose = true;
-        json.global.tabSetEnableMaximize = true;
-        json.global.tabEnablePopout = true;
-        json.global.tabEnablePopoutFloatIcon = true;
+    async function flushPending() {
+        if (flushing || (state.pending.size === 0 && state.pendingActive == null)) return;
+        flushing = true;
+        try {
+            for (const [id, entry] of [...state.pending]) {
+                if (!entry.exists) {
+                    const res = await fetch(`${API_BASE}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                    if (res.ok || res.status < 500) { state.pending.delete(id); savePending(); }
+                    else throw new Error(`delete ${res.status}`);
+                    continue;
+                }
 
-        state.model = FL.Model.fromJson(json);
-        state.model.addChangeListener(() => { persist(); dispatchPanelResize(); buildPanelsMenu(); });
-        renderApp();
-        syncScaleUi();
-        queueMicrotask(dispatchPanelResize);
+                let res = await fetch(`${API_BASE}/${encodeURIComponent(id)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: entry.name, layout: entry.layout ?? null }),
+                });
+                if (res.status === 404) {
+                    // Queued offline before it existed on the server.
+                    res = await fetch(API_BASE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id, name: entry.name, layout: entry.layout }),
+                    });
+                }
+                if (!res.ok) {
+                    // A 4xx we cannot fix (invalid, forbidden, cap) would wedge
+                    // the queue forever; drop it. 409 is retryable (stale token).
+                    if (res.status >= 400 && res.status < 500 && res.status !== 409) {
+                        state.pending.delete(id);
+                        savePending();
+                        continue;
+                    }
+                    throw new Error(`save ${res.status}`);
+                }
+                const body = await res.json().catch(() => null);
+                if (body?.layout) upsertPreset(body.layout);
+                state.pending.delete(id);
+                savePending();
+            }
+
+            if (state.pendingActive != null) {
+                const res = await fetch(`${API_BASE}/active`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: state.pendingActive }),
+                });
+                if (res.ok || (res.status >= 400 && res.status < 500)) {
+                    state.pendingActive = null;
+                    savePending();
+                } else {
+                    throw new Error(`active ${res.status}`);
+                }
+            }
+            state.remoteAvailable = true;
+        } catch {
+            state.remoteAvailable = false;
+        } finally {
+            flushing = false;
+            buildLayoutsMenu();
+        }
+    }
+
+    function readDraft() {
+        return readJson(ARRANGEMENT_KEY);
+    }
+
+    async function resolveActive() {
+        // A queued active change is local intent and wins over the server's record.
+        let id = state.pendingActive ?? readJson(ACTIVE_KEY) ?? state.serverActiveId ?? DEFAULT_ID;
+        if (id !== DEFAULT_ID && !state.presets.some((p) => p.id === id)) id = DEFAULT_ID;
+        state.activeId = id;
+        writeJson(ACTIVE_KEY, id);
+    }
+
+    async function loadActiveJson() {
+        if (state.activeId === DEFAULT_ID) {
+            return readDraft() || await loadDefaultJson();
+        }
+        const queued = state.pending.get(state.activeId);
+        if (queued?.layout) return queued.layout;
+        const remote = await fetchPresetJson(state.activeId);
+        if (remote) return remote;
+        return readDraft() || await loadDefaultJson();
+    }
+
+    async function switchTo(id) {
+        await flushPending();
+        let json = null;
+        if (id === DEFAULT_ID) {
+            json = await loadDefaultJson();
+        } else {
+            const queued = state.pending.get(id);
+            json = queued?.layout || await fetchPresetJson(id);
+        }
+        if (!json) {
+            // Could not resolve the arrangement (offline, or deleted elsewhere).
+            // Do not switch: never write one preset's layout over another.
+            buildLayoutsMenu();
+            return;
+        }
+        state.activeId = id;
+        writeJson(ACTIVE_KEY, id);
+        state.pendingActive = id;
+        savePending();
+        mountJson(json);
+        await flushPending();
+        buildLayoutsMenu();
+    }
+
+    async function createPreset(name, json) {
+        const id = (window.crypto?.randomUUID?.()
+            || `l${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`).replace(/-/g, '');
+        const now = new Date().toISOString();
+        state.pending.set(id, { id, name, layout: json, exists: true });
+        state.pendingActive = id;
+        state.activeId = id;
+        writeJson(ACTIVE_KEY, id);
+        upsertPreset({ id, name, createdAt: now, updatedAt: now });
+        savePending();
+        await flushPending();
+        buildLayoutsMenu();
+        return id;
+    }
+
+    function renamePreset(id, name) {
+        const preset = state.presets.find((p) => p.id === id);
+        if (preset) { preset.name = name; writeJson(PRESETS_KEY, state.presets); }
+        const queued = state.pending.get(id);
+        state.pending.set(id, { id, name, layout: queued?.layout ?? null, exists: true });
+        savePending();
+        flushPending();
+        buildLayoutsMenu();
+    }
+
+    function deletePreset(id) {
+        state.presets = state.presets.filter((p) => p.id !== id);
+        writeJson(PRESETS_KEY, state.presets);
+        state.pending.set(id, { id, name: '', layout: null, exists: false });
+        savePending();
+        if (state.activeId === id) switchTo(DEFAULT_ID);
+        else flushPending();
+        buildLayoutsMenu();
+    }
+
+    function saveCurrentAs(name) {
+        const json = restoreRetainedTabs(state.model.toJson(), state.droppedTabs);
+        return createPreset(name, json);
     }
 
     function availablePanels() {
@@ -534,11 +791,77 @@ export function initFlexWorkspace(host, flags) {
         buildPanelsMenu();
     }
 
+    // ── Layouts menu ──────────────────────────────────────────────────────
+
+    function addMenuItem(menu, label, active, onClick) {
+        const li = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'dropdown-item' + (active ? ' active' : '');
+        btn.setAttribute('role', 'menuitemradio');
+        btn.setAttribute('aria-checked', active ? 'true' : 'false');
+        btn.textContent = label;
+        btn.addEventListener('click', onClick);
+        li.appendChild(btn);
+        menu.appendChild(li);
+    }
+
+    function addMenuDivider(menu) {
+        const li = document.createElement('li');
+        const hr = document.createElement('hr');
+        hr.className = 'dropdown-divider';
+        li.appendChild(hr);
+        menu.appendChild(li);
+    }
+
+    function suggestedLayoutName() {
+        return `Layout ${state.presets.length + 1}`;
+    }
+
+    function buildLayoutsMenu() {
+        const menu = document.getElementById('ywcFlexLayoutMenu');
+        if (menu) {
+            menu.replaceChildren();
+            addMenuItem(menu, 'Default', state.activeId === DEFAULT_ID, () => switchTo(DEFAULT_ID));
+            for (const preset of state.presets) {
+                addMenuItem(menu, preset.name || 'Layout', state.activeId === preset.id,
+                    () => switchTo(preset.id));
+            }
+            if (!state.remoteAvailable && state.presets.length === 0) {
+                const li = document.createElement('li');
+                const span = document.createElement('span');
+                span.className = 'dropdown-item disabled small';
+                span.textContent = 'Saved layouts unavailable';
+                li.appendChild(span);
+                menu.appendChild(li);
+            }
+            addMenuDivider(menu);
+            addMenuItem(menu, 'Save current as…', false, () => {
+                const name = window.prompt('Name this layout', suggestedLayoutName());
+                if (name && name.trim()) saveCurrentAs(name.trim());
+            });
+            addMenuItem(menu, 'Manage layouts…', false, () => {
+                window.dispatchEvent(new CustomEvent('ywc-flex-manage-layouts'));
+            });
+        }
+
+        const label = document.getElementById('ywcFlexLayoutName');
+        if (label) {
+            const preset = state.presets.find((p) => p.id === state.activeId);
+            const saving = !state.remoteAvailable && state.pending.size > 0;
+            const name = preset?.name || 'Default';
+            label.textContent = saving ? `${name} (saving…)` : name;
+        }
+    }
+
     window.ywcFlex = {
         get model() { return state.model; },
         get api() { return state.model; },
         flags: state.flags,
         get scale() { return state.scale; },
+        get activeId() { return state.activeId; },
+        get presets() { return state.presets.slice(); },
+        get remoteAvailable() { return state.remoteAvailable; },
         panels: PANELS,
         scales: SCALE_ORDER,
         setScale(scale) {
@@ -549,9 +872,23 @@ export function initFlexWorkspace(host, flags) {
             syncScaleUi();
         },
         async resetLayout() {
+            await switchTo(DEFAULT_ID);
             try { localStorage.removeItem(ARRANGEMENT_KEY); } catch { /* ignore */ }
-            await loadModel({ reset: true });
+            // Re-mount the pristine default so the discarded draft isn't
+            // immediately re-persisted by an incidental model change.
+            mountJson(await loadDefaultJson());
+            buildLayoutsMenu();
         },
+        switchTo,
+        saveCurrentAs,
+        renamePreset,
+        deletePreset,
+        async refreshLayouts() {
+            await flushPending();
+            await refreshPresets();
+            buildLayoutsMenu();
+        },
+        buildLayoutsMenu,
         showPanel,
         hidePanel,
         togglePanel,
@@ -572,7 +909,15 @@ export function initFlexWorkspace(host, flags) {
             updateVfoTitle(component === 'vfoA' ? 'A' : 'B');
         }
     });
-    loadModel().then(() => {
+    (async () => {
+        applyScale(state.scale);
+        await refreshPresets();
+        loadPending();
+        await resolveActive();
+        await flushPending();
+        mountJson(await loadActiveJson());
+        buildLayoutsMenu();
+    })().then(() => {
         // Wait until React has committed the initial panels before telling the
         // page its element-dependent init (meters, spectrum, VFO keys, ...)
         // can run. Waiting on a real panel host — not just one frame — avoids
@@ -594,12 +939,26 @@ export function initFlexWorkspace(host, flags) {
         window.dispatchEvent(new Event('ywc-flex-ready'));
     });
 
+    // Reconnect handling: flush any queued writes and refresh the preset list
+    // when the network returns, and retry periodically while something is queued.
+    window.addEventListener('online', async () => {
+        await flushPending();
+        await refreshPresets();
+        buildLayoutsMenu();
+    });
+    setInterval(() => {
+        if (state.pending.size > 0 || state.pendingActive != null) flushPending();
+    }, 30000);
+
     return window.ywcFlex;
 }
 
 function wireToolbar() {
     document.getElementById('flexResetLayoutBtn')?.addEventListener('click', () => {
         window.ywcFlex?.resetLayout();
+    });
+    document.getElementById('flexLayoutsBtn')?.addEventListener('click', () => {
+        window.ywcFlex?.buildLayoutsMenu();
     });
     document.getElementById('flexLayoutScale')?.addEventListener('change', (e) => {
         window.ywcFlex?.setScale(e.target.value);

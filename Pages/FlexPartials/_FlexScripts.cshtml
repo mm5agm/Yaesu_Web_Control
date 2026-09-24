@@ -56,6 +56,7 @@
         import { initMicGainCycleButton } from "/js/ui/mic-gain-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initVfoKeyButtonsFor, initSharedVfoKeyButtons } from "/js/ui/vfo-key-buttons.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initFlexWorkspace }    from "/js/flexui/flex-workspace.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initFlexLayoutsAdmin, enableDialogDrag } from "/js/flexui/flex-layouts-admin.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
         // Published on flex-ready rather than at module eval: site.js's
         // tryPopulateSegmentsOnLoad() retries until window.bandPlanData exists,
@@ -156,6 +157,29 @@
         } else {
             window.__ywcFlexResolve();
         }
+
+        // Saved-layouts manager, opened from the toolbar's "Manage layouts…".
+        // Built lazily on first open so the list reflects current server state.
+        let _flexLayoutsAdmin = null;
+        const _flexLayoutsDialog = document.getElementById('flexLayoutsDialog');
+        if (_flexLayoutsDialog) {
+            enableDialogDrag(_flexLayoutsDialog,
+                _flexLayoutsDialog.querySelector('.flex-layouts-dialog__header'));
+        }
+        window.addEventListener('ywc-flex-manage-layouts', () => {
+            if (!_flexLayoutsAdmin) {
+                _flexLayoutsAdmin = initFlexLayoutsAdmin(document.getElementById('flexLayoutsAdmin'), {
+                    onSelect: (id) => window.ywcFlex?.switchTo(id).then(() => _flexLayoutsAdmin?.refresh()),
+                    // Rename / delete / duplicate / import happen in the admin
+                    // module; pull the new list into the workspace so the
+                    // toolbar's Layout dropdown updates without a reload.
+                    onChange: () => window.ywcFlex?.refreshLayouts(),
+                });
+            } else {
+                _flexLayoutsAdmin.refresh();
+            }
+            try { _flexLayoutsDialog?.showModal(); } catch { _flexLayoutsDialog?.setAttribute('open', ''); }
+        });
 
         loadLabels();
         // Runs first of all ready callbacks. The VFO key widgets must exist

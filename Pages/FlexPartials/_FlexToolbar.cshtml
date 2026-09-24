@@ -64,6 +64,19 @@
             <i class="bi bi-keyboard" aria-hidden="true"></i>
         </button>
 
+        @* Layouts menu — switch between saved panel arrangements. Rows are
+           built by flex-workspace.js (window.ywcFlex.buildLayoutsMenu). *@
+        <div class="dropdown ywc-flex-layouts">
+            <button type="button" id="flexLayoutsBtn" class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                    data-bs-toggle="dropdown" aria-expanded="false"
+                    title="Saved panel arrangements"
+                    aria-label="Saved panel arrangements">
+                <i class="bi bi-layout-wtf" aria-hidden="true"></i>
+                <span id="ywcFlexLayoutName">Default</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" id="ywcFlexLayoutMenu" aria-label="Saved layouts"></ul>
+        </div>
+
         @* Panels menu — reopen a tab that has been closed. Each entry toggles
            the panel via window.ywcFlex.togglePanel(id). *@
         <div class="dropdown ywc-flex-panels">
