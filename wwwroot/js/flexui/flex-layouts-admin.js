@@ -76,7 +76,7 @@ export function initFlexLayoutsAdmin(container, opts = {}) {
         if (state.presets.length === 0) {
             const empty = document.createElement('p');
             empty.className = 'text-muted small mb-0';
-            empty.textContent = 'No saved layouts yet. On the Flex UI, arrange the panels and use “Save current as…”.';
+            empty.textContent = 'No saved layouts yet. On the Experimental UI, arrange the panels and use “Save current as…”.';
             list.appendChild(empty);
             return;
         }

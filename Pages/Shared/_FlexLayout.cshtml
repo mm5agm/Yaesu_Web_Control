@@ -7,7 +7,7 @@
     <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Display">
     <meta name="x-app-repo" content="mm5agm/Yaesu_Web_Control">
     <meta name="x-app-name" content="Yaesu Web Control">
-    <title>@(ViewData["Title"]?.ToString() == "Flex UI" ? "Flex UI" : ViewData["Title"] + " - Yaesu Web Control")</title>
+    <title>@(ViewData["Title"]?.ToString() == "Experimental UI" ? "Experimental UI" : ViewData["Title"] + " - Yaesu Web Control")</title>
     <script type="importmap">{}</script>
 
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
@@ -43,7 +43,7 @@
         </a>
         <nav class="ywc-flex-nav-links" aria-label="Site navigation">
             <a asp-area="" asp-page="/Index">Classic Home</a>
-            <a asp-area="" asp-page="/FlexUi" aria-current="page"><i class="bi bi-grid-1x2-fill" aria-hidden="true"></i> Flex UI</a>
+            <a asp-area="" asp-page="/FlexUi" aria-current="page"><i class="bi bi-grid-1x2-fill" aria-hidden="true"></i> Experimental UI</a>
             <a asp-area="" asp-page="/Settings">Settings</a>
             <a asp-area="" asp-page="/Memories">Memories</a>
             <a asp-area="" asp-page="/UserManual">User Manual</a>
@@ -51,7 +51,7 @@
         </nav>
     </header>
 
-    <main role="application" aria-label="Yaesu radio flex workspace" class="ywc-flex-main">
+    <main role="application" aria-label="Yaesu radio experimental workspace" class="ywc-flex-main">
         @RenderBody()
     </main>
 
