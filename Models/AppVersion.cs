@@ -47,7 +47,7 @@ public static class AppVersion
 
     /// <summary>Date this version was released, ISO format.
     /// Bump on actual release; current value reflects the planned ship date.</summary>
-    public const string ReleaseDate = "2026-09-15";
+    public const string ReleaseDate = "2026-09-24";
 
     /// <summary>
     /// Firmware versions of the developer's bench radio(s) at the time this

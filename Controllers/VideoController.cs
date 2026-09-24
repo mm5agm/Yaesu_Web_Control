@@ -30,13 +30,19 @@ namespace Yaesu_Web_Control.Controllers
         }
 
         [HttpGet("devices")]
-        public IActionResult ListDevices()
+        public IActionResult ListDevices([FromQuery] bool probe = false)
         {
             try
             {
-                // Never probe-open cameras while the capture loop holds the
-                // dongle — that second Open is what kills the host on stop/pop-out.
-                var devices = VideoDeviceEnumerator.ListDevices(allowProbe: !_capture.IsCapturing)
+                // Page load must not Open() cameras. Index calls this on every
+                // render; a burst of refreshes used to probe-open the HDMI
+                // dongle concurrently, and a second Open native-crashes the
+                // host with no managed exception (the log just stops). Names
+                // from DirectShow / sysfs / AVFoundation are enough for the
+                // dropdown. Probe only when the operator clicks Refresh, and
+                // never while the capture loop already holds the device.
+                var devices = VideoDeviceEnumerator.ListDevices(
+                        allowProbe: probe && !_capture.IsCapturing)
                     .ToList();
                 if (devices.Count == 0 && _capture.OpenDeviceIndex is int idx)
                 {
@@ -101,9 +107,12 @@ namespace Yaesu_Web_Control.Controllers
         public async Task<IActionResult> Status()
         {
             var s = await _settings.GetSettingsAsync();
-            var rates = VideoDeviceFpsCaps.RatesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
+            // Status is polled from every open Radio Display / Index page.
+            // Never Open() the dongle from here — capability cache is filled
+            // by a real capture session or by an explicit devices?probe=1.
+            var rates = VideoDeviceFpsCaps.RatesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: false);
             var targetFps = VideoFpsOptions.Normalize(s.VideoTargetFps, rates);
-            var sizes = VideoDeviceSizeCaps.SizesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: !_capture.IsCapturing);
+            var sizes = VideoDeviceSizeCaps.SizesFor(s.VideoCaptureDeviceKey, allowDeviceOpen: false);
             return Ok(new
             {
                 enabled = s.VideoDisplayEnabled,

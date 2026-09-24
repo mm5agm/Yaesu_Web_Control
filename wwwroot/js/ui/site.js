@@ -1,4 +1,4 @@
-﻿// Full-page "server has stopped" overlay. Shown when the SystemTrayService
+// Full-page "server has stopped" overlay. Shown when the SystemTrayService
 // broadcasts ServerShutdown right before stopping the host, so the browser
 // tab doesn't sit on stale data with a frozen meter needle. The page can't
 // reliably close its own tab (browsers only allow window.close() for tabs
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- SignalR connection setup and disconnect on page unload ---
     if (window.signalRConnection === undefined) {
-        window.signalRConnection = new signalR.HubConnectionBuilder().withUrl("/radioHub").withAutomaticReconnect().build();
+        window.signalRConnection = window.ywcHubConnection("/radioHub");
         window.signalRConnection.start().then(function () {
             window.signalRConnection.invoke("Heartbeat").catch(function () { });
         }).catch(function (err) { });
@@ -1044,10 +1044,7 @@ async function checkTxStatus() {
 // SignalR connection - shared by both the outer handler below and the
 // second handler at the bottom of the file (after the IIFE).
 // ---------------------------------------------------------------------------
-const connection = new signalR.HubConnectionBuilder()
-    .withUrl("/radioHub")
-    .withAutomaticReconnect()
-    .build();
+const connection = window.ywcHubConnection("/radioHub");
 
 // Redirect to Settings page if the backend signals an init failure
 connection.on("ShowSettingsPage", function () {
@@ -1186,9 +1183,105 @@ function updateMicGainLabel(mode) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Filter Function Display: host-side spectrum of the radio's RX audio.
+//
+// The host runs an FFT over the radio's USB RX audio and pushes ~12 frames a
+// second to pages that asked for them (SubscribeFilterSpectrum). The frame is
+// shaped like the browser AnalyserNode output Remote Audio hands the panel,
+// so the panel draws either through the same code; this one is the fallback
+// for when Remote Audio is not playing, which on most pages is always. Bins
+// arrive base64-encoded because the JSON hub protocol sends byte[] that way.
+// ---------------------------------------------------------------------------
+const filterSpectrumFeed = {
+    latest: null,          // { data: Uint8Array, sampleRate, fftSize, at }
+    reasonLogged: false,
+    provider() {
+        const f = filterSpectrumFeed.latest;
+        // A stale frame means the capture stopped (device unplugged, host
+        // busy); better an empty passband than a frozen one.
+        if (!f || Date.now() - f.at > 1000) return null;
+        return f;
+    },
+    subscribe(attempt) {
+        // The panel is built by Index.cshtml's module script on
+        // DOMContentLoaded; the hub can be up before that. Give it a moment
+        // rather than assume an order. Pages without the panel give up.
+        if (!window.filterScopePanelA) {
+            attempt = attempt || 0;
+            if (attempt < 20) setTimeout(function () { filterSpectrumFeed.subscribe(attempt + 1); }, 250);
+            return;
+        }
+        connection.invoke("SubscribeFilterSpectrum").then(function (reason) {
+            if (reason) {
+                filterSpectrumFeed.latest = null;
+                if (!filterSpectrumFeed.reasonLogged) {
+                    console.info("Filter display: no host audio spectrum - " + reason);
+                    filterSpectrumFeed.reasonLogged = true;
+                }
+                return;
+            }
+            window.filterScopePanelA.setHostSpectrumProvider(filterSpectrumFeed.provider);
+        }).catch(function () { /* older host without the hub method */ });
+    },
+    receive(value) {
+        if (!value || typeof value.bins !== 'string') return;
+        const raw = atob(value.bins);
+        const data = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) data[i] = raw.charCodeAt(i);
+        filterSpectrumFeed.latest = {
+            data, sampleRate: value.sampleRate, fftSize: value.fftSize, at: Date.now()
+        };
+    }
+};
+// Group membership dies with the connection, so ask again after a reconnect.
+connection.onreconnected(function () { filterSpectrumFeed.subscribe(); });
+
+// While a VFO is "editing", the frequency display shows the operator's
+// in-progress value instead of what the radio reports, so a poll arriving
+// mid-edit can't yank the digits back. Something has to end that, and there
+// are two ways it ends, not one:
+//
+//   1. The radio echoes back the frequency this display sent. The edit landed.
+//   2. The radio goes somewhere this display never sent it — the spectrum
+//      mouse wheel, the front-panel knob, or another CAT program.
+//
+// Only (1) existed, so (2) left the display frozen while the rig tuned away
+// under it, until the operator happened to click somewhere else on the page.
+// Colin hit this on 2026-09-20 bench-testing #168: the radio's own display
+// followed the wheel and YWC's did not.
+//
+// Called before the display update so a change takes effect on the very
+// broadcast that revealed it, not the next one.
+function reconcileFrequencyEditing(receiver, valueHz) {
+    const s = window.radioControl && window.radioControl._state;
+    if (!s || !s.editing[receiver]) return;
+
+    // Mid-edit: localFreq is only non-null between a digit step and the
+    // settling send, and the operator's value wins for that moment.
+    if (s.localFreq[receiver] !== null && s.localFreq[receiver] !== undefined) return;
+
+    if (valueHz === s.lastSentFreq[receiver]) { s.editing[receiver] = false; return; }
+
+    // Somebody else moved the radio. Wait out our own write first: a broadcast
+    // already in flight when we sent carries the OLD frequency, and acting on
+    // it would show the pre-edit value for a moment before the echo settles —
+    // the flip-back this editing flag exists to prevent.
+    const SETTLE_MS = 1500;
+    if (Date.now() - (s._lastFreqSend[receiver] || 0) > SETTLE_MS) {
+        s.editing[receiver]      = false;
+        s.lastSentFreq[receiver] = null;
+    }
+}
+
 // First SignalR RadioStateUpdate handler (outer scope).
 // Handles ModeA/B, FrequencyA/B, PowerA/B updates pushed from the backend.
 connection.on("RadioStateUpdate", function (update) {
+
+    if (update.property === "FilterSpectrum") {
+        filterSpectrumFeed.receive(update.value);
+        return;
+    }
 
     // --- SERVER SHUTDOWN ---
     // Sent by SystemTrayService just before the host stops, so the browser
@@ -1238,6 +1331,7 @@ connection.on("RadioStateUpdate", function (update) {
             window.IfWidth.rebuildIfWidthSelect(
                 document.getElementById('ifWidthSelectA'), window._radioModel, update.value);
         }
+        updateIfShiftForMode('A', update.value);
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeA', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('A', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('A', update.value);
@@ -1252,6 +1346,7 @@ connection.on("RadioStateUpdate", function (update) {
             window.IfWidth.rebuildIfWidthSelect(
                 document.getElementById('ifWidthSelectB'), window._radioModel, update.value);
         }
+        updateIfShiftForMode('B', update.value);
         if (typeof window.updateToolbarStatus === 'function') window.updateToolbarStatus('modeB', update.value);
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('B', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('B', update.value);
@@ -1305,15 +1400,8 @@ connection.on("RadioStateUpdate", function (update) {
         // updateBandButton alone. Re-apply it whenever the frequency moves.
         lastVfoHz.A = update.value;
         try { applyBandOutOfBand('A'); } catch (e) { console.error('applyBandOutOfBand A error:', e); }
+        try { reconcileFrequencyEditing('A', update.value); } catch (e) { console.error('reconcileFrequencyEditing A error:', e); }
         try { window.updateFrequencyDisplay('A', update.value); } catch (e) { console.error('updateFrequencyDisplay A error:', e); }
-        // Clear editing mode once the radio echoes back our sent frequency.
-        if (window.radioControl && window.radioControl._state) {
-            const s = window.radioControl._state;
-            if (s.editing.A && s.lastSentFreq.A !== null && s.localFreq.A === null
-                && update.value === s.lastSentFreq.A) {
-                s.editing.A = false;
-            }
-        }
         try { window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'A', hz: update.value } })); }
         catch (e) { console.error('radioFrequencyUpdate dispatch error:', e); }
         try { if (window.syncSegmentSelectToFrequency) window.syncSegmentSelectToFrequency('A', update.value); }
@@ -1326,15 +1414,8 @@ connection.on("RadioStateUpdate", function (update) {
         }
         lastVfoHz.B = update.value;
         try { applyBandOutOfBand('B'); } catch (e) { console.error('applyBandOutOfBand B error:', e); }
+        try { reconcileFrequencyEditing('B', update.value); } catch (e) { console.error('reconcileFrequencyEditing B error:', e); }
         try { window.updateFrequencyDisplay('B', update.value); } catch (e) { console.error('updateFrequencyDisplay B error:', e); }
-        // Clear editing mode once the radio echoes back our sent frequency.
-        if (window.radioControl && window.radioControl._state) {
-            const s = window.radioControl._state;
-            if (s.editing.B && s.lastSentFreq.B !== null && s.localFreq.B === null
-                && update.value === s.lastSentFreq.B) {
-                s.editing.B = false;
-            }
-        }
         try { window.dispatchEvent(new CustomEvent('radioFrequencyUpdate', { detail: { receiver: 'B', hz: update.value } })); }
         catch (e) { console.error('radioFrequencyUpdate dispatch error:', e); }
         try { if (window.syncSegmentSelectToFrequency) window.syncSegmentSelectToFrequency('B', update.value); }
@@ -2267,6 +2348,50 @@ function setupIfShiftSlider(receiver) {
     slider.addEventListener('change', sendShift);
 }
 
+// IF SHIFT has no effect in AM or FM: measured on an FTdx101MP on
+// 2026-09-19 (#166) -- parked 5 kHz off a broadcast carrier, +1000 and
+// -1000 sound identical, and the radio's own filter display shows no
+// shift. The knob still turns and CAT still reports a value, so grey the
+// control out rather than let it look as if it does something.
+const IF_SHIFT_FIXED_TITLE =
+    'IF Shift has no effect in AM or FM on this radio - the filter is fixed about the carrier.';
+
+function updateIfShiftForMode(receiver, mode) {
+    const m = (mode || '').toUpperCase();
+    const fixed = m === 'AM' || m === 'AM-N' || m.includes('FM');
+    const slider = document.getElementById(`ifShiftSlider${receiver}`);
+    const zero   = document.getElementById(`ifShiftZero${receiver}`);
+    // The tooltip has to live on the wrapper: a disabled control dispatches no
+    // mouse events, so a title on the slider itself never shows (2026-09-20).
+    const wrap = document.getElementById(`ifShiftWrap${receiver}`);
+    for (const el of [slider, zero]) {
+        if (!el) continue;
+        if (fixed) {
+            if (!el.dataset.ifsTitle) el.dataset.ifsTitle = el.title || '';
+            if (!el.dataset.ifsLabel) el.dataset.ifsLabel = el.getAttribute('aria-label') || '';
+            el.removeAttribute('title');
+            if (el.dataset.ifsLabel) {
+                el.setAttribute('aria-label', `${el.dataset.ifsLabel} - ${IF_SHIFT_FIXED_TITLE}`);
+            }
+            el.disabled = true;
+        } else if (el.disabled) {
+            el.disabled = false;
+            el.title = el.dataset.ifsTitle || '';
+            if (el.dataset.ifsLabel) el.setAttribute('aria-label', el.dataset.ifsLabel);
+        }
+    }
+    if (wrap) {
+        if (fixed) {
+            wrap.title = IF_SHIFT_FIXED_TITLE;
+            wrap.classList.add('is-inert');
+        } else {
+            wrap.removeAttribute('title');
+            wrap.classList.remove('is-inert');
+        }
+    }
+}
+window.updateIfShiftForMode = updateIfShiftForMode;
+
 function resetIfShift(receiver) {
     const slider = document.getElementById(`ifShiftSlider${receiver}`);
     const label  = document.getElementById(`ifShiftValue${receiver}`);
@@ -2385,7 +2510,7 @@ async function _setClarifier(vfo, rxOn, txOn, offsetHz) {
 
 function resetIfWidth(receiver) {
     const select = document.getElementById(`ifWidthSelect${receiver}`);
-    if (!select) return;
+    if (!select || select.disabled) return;   // AM / FM: width is fixed, nothing to reset
     // Default is the last option (widest bandwidth — 3.0 kHz for FTdx101, 3.4 kHz for FTdx10)
     const defaultOpt = select.options[select.options.length - 1];
     if (!defaultOpt) return;
@@ -2684,9 +2809,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Only the trailing (settle) send releases localFreq, so the poll
                 // can take over once the radio confirms lastSentFreq. Intermediate
                 // sends keep localFreq set so the display keeps showing the live
-                // in-progress value. state.editing stays true either way — the
-                // fetchRadioStatus reset block clears it once the radio echoes
-                // lastSentFreq back, avoiding the "flip back then settle" race.
+                // in-progress value. state.editing stays true either way —
+                // reconcileFrequencyEditing (by the SignalR handler) clears it
+                // once the radio echoes lastSentFreq back, avoiding the "flip
+                // back then settle" race, or once the radio moves somewhere we
+                // did not send it.
                 if (settle) state.localFreq[receiver] = null;
             };
             if (Date.now() - (state._lastFreqSend[receiver] || 0) >= SEND_THROTTLE_MS) {
@@ -2700,6 +2827,21 @@ document.addEventListener('DOMContentLoaded', function() {
         // without first picking a digit. Defaults to "4th from the right"
         // so the first action moves something audible rather than a 1 Hz
         // tick the user can't hear.
+        // Picking a digit also sets that VFO's tuning step, so one mouse-wheel
+        // notch on the spectrum moves the dial by the digit the operator just
+        // pointed at (Bruce VK2RT, discussion #168). `idx` is the position among
+        // the eight rendered digits, most significant first, so the last digit is
+        // 1 Hz. The reverse — moving the selected digit when the step is changed
+        // elsewhere — is deliberately NOT done: the selection is cleared whenever
+        // the user clicks anywhere else on the page, so it cannot be a reliable
+        // display of a value that persists.
+        function latchTuningStepFromDigit(idx, digitCount) {
+            if (idx === null || idx === undefined || idx < 0) return;
+            const store = window.ywcTuningStep;   // set by the tuning-step module
+            if (!store) return;
+            store.set(receiver, Math.pow(10, digitCount - 1 - idx));
+        }
+
         function ensureSelection() {
             const digits = Array.from(display.querySelectorAll('.digit')).filter(d => d.textContent !== '.');
             if (digits.length === 0) return;
@@ -2719,8 +2861,17 @@ document.addEventListener('DOMContentLoaded', function() {
             state.selectedIdx[receiver] = digits.indexOf(e.target);
             if (state.selectedIdx[receiver] !== -1) {
                 digits[state.selectedIdx[receiver]].classList.add('selected');
-                state.editing[receiver] = true;
-                state.localFreq[receiver] = parseInt(digits.map(d => d.textContent).join(''));
+                // Selecting a digit is NOT an edit. It used to set editing +
+                // localFreq here, which froze the display on the value as it
+                // was at the moment of the click: `updateFrequencyDisplay`
+                // shows localFreq while editing, and editing only cleared when
+                // the radio echoed a frequency THIS display had sent. So after
+                // clicking a digit to set the wheel step (#168), wheeling the
+                // spectrum moved the radio while YWC sat still -- reported by
+                // Colin on 2026-09-20. `stepSelectedDigit` sets both the moment
+                // the operator actually changes the value, which is the point
+                // at which the display must stop following the poll.
+                latchTuningStepFromDigit(state.selectedIdx[receiver], digits.length);
             }
             // Explicitly focus the display so the very next ArrowUp/Down
             // press is delivered here instead of bubbling to body. The
@@ -2738,6 +2889,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     digits.forEach(d => d.classList.remove('selected'));
                     digits[hovered].classList.add('selected');
                     state.selectedIdx[receiver] = hovered;
+                    latchTuningStepFromDigit(hovered, digits.length);
                 }
             }
             ensureSelection();
@@ -3604,7 +3756,9 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 
 
-connection.start().catch(function (err) {
+connection.start().then(function () {
+    filterSpectrumFeed.subscribe();
+}).catch(function (err) {
     return;
 });
 
@@ -3738,86 +3892,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 })();
 
-// ── GitHub update check ───────────────────────────────────────────────────
-(function () {
-    const DISMISS_KEY_PREFIX = 'updateCheckDismissed_';
-
-    function _dismissKey(version) { return DISMISS_KEY_PREFIX + version; }
-
-    function _escHtml(s) {
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    function _isNewer(latest, current) {
-        const parse = v => v.split('.').map(n => parseInt(n, 10) || 0);
-        const a = parse(latest);
-        const b = parse(current);
-        for (let i = 0; i < Math.max(a.length, b.length); i++) {
-            const diff = (a[i] || 0) - (b[i] || 0);
-            if (diff > 0) return true;
-            if (diff < 0) return false;
-        }
-        return false;
-    }
-
-    function _dismiss(version) {
-        try { localStorage.setItem(_dismissKey(version), '1'); } catch { /* private browsing */ }
-        const el = document.getElementById('updateBanner');
-        if (el) el.remove();
-    }
-
-    function _showUpdateBanner(version, releaseUrl) {
-        if (document.getElementById('updateBanner')) return;
-        try { if (localStorage.getItem(_dismissKey(version))) return; } catch { /* private browsing */ }
-        const banner = document.createElement('div');
-        banner.id = 'updateBanner';
-        banner.style.cssText = [
-            'position:fixed', 'top:50%', 'left:50%', 'transform:translate(-50%,-50%)', 'z-index:9999',
-            'background:#1e2a38', 'border:1px solid #4a8abf', 'border-radius:8px',
-            'padding:10px 14px', 'color:#cde', 'font-size:0.84rem',
-            'box-shadow:0 4px 16px rgba(0,0,0,0.6)', 'max-width:340px', 'width:320px'
-        ].join(';');
-        banner.innerHTML =
-            `<div style="display:flex;align-items:flex-start;gap:8px">` +
-            `<div style="flex:1"><strong>Update available — v${_escHtml(version)}</strong><br>` +
-            `<span style="color:#aab;font-size:0.78rem">A newer version of Yaesu Web Control is available.</span></div>` +
-            `<button id="updateBannerDismissX" ` +
-            `style="background:none;border:none;color:#aaa;cursor:pointer;font-size:1rem;line-height:1;padding:0" aria-label="Dismiss">✕</button>` +
-            `</div>` +
-            `<div style="margin-top:8px;display:flex;gap:8px">` +
-            `<a href="${_escHtml(releaseUrl)}" target="_blank" rel="noopener" ` +
-            `style="background:#1a4a7a;border:1px solid #4a8abf;color:#cde;padding:3px 10px;border-radius:4px;font-size:0.78rem;text-decoration:none">Download</a>` +
-            `<button id="updateBannerDismissBtn" ` +
-            `style="background:#2d2d44;border:1px solid #555;color:#aaa;padding:3px 10px;border-radius:4px;font-size:0.78rem;cursor:pointer">Dismiss</button>` +
-            `</div>`;
-        document.body.appendChild(banner);
-        document.getElementById('updateBannerDismissX').addEventListener('click', () => _dismiss(version));
-        document.getElementById('updateBannerDismissBtn').addEventListener('click', () => _dismiss(version));
-    }
-
-    async function _checkForUpdate() {
-        const meta = document.querySelector('meta[name="x-app-version"]');
-        if (!meta) return;
-        const current = meta.content.trim();
-        try {
-            const resp = await fetch('https://api.github.com/repos/mm5agm/Yaesu_Web_Control/releases/latest', {
-                headers: { Accept: 'application/vnd.github+json' }
-            });
-            if (!resp.ok) return;
-            const data = await resp.json();
-            const latest = (data.tag_name || '').replace(/^v/i, '');
-            if (latest && _isNewer(latest, current)) {
-                _showUpdateBanner(latest, data.html_url || 'https://github.com/mm5agm/Yaesu_Web_Control/releases');
-            }
-        } catch { /* network unavailable or rate limited — silently skip */ }
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => setTimeout(_checkForUpdate, 3000));
-    } else {
-        setTimeout(_checkForUpdate, 3000);
-    }
-})();
+// ── GitHub update check ─────────────────────────────────
+// Moved to core/js/update/update-banner.js, shared with Icom Web Control,
+// when the banner learned to show what is in the release. It is loaded by
+// _Layout.cshtml and configured by the x-app-* meta tags there.
+//
+// The shared copy also fixes a fault this one had: it compared versions
+// with a plain parseInt, so "2.5.2-pre3" read as 2.5.2 and a tester on a
+// pre-release was never told the full release had shipped.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VC Tune preselector controls

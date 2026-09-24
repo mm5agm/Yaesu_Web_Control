@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -448,7 +448,29 @@ builder.Services.AddSingleton<CalibrationStorage>();
 builder.Services.AddSingleton<ICalibrationService, CalibrationService>();
 
 // ADD SIGNALR EARLY (before services that depend on IHubContext):
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+    // The default ClientTimeoutInterval is 30 seconds: a client that has sent
+    // nothing in that time is considered gone, which arms RadioHub's shutdown
+    // countdown. Everything that makes a browser "send something" -- SignalR's
+    // own ping, and site.js's 5-second Heartbeat -- is a JS timer, and browsers
+    // throttle and freeze timers in tabs they judge to be in the background.
+    //
+    // On 2026-09-19 the About page sat open and visible for 24 minutes, went
+    // quiet, was dropped, and the host exited 30 seconds later while the page
+    // was still on screen. Two minutes is longer than any throttling interval a
+    // browser applies, so an idle tab stays counted.
+    //
+    // This does not delay the ordinary case. Closing a tab closes the socket,
+    // which the server sees immediately -- the timeout only governs connections
+    // that go silent without closing.
+    options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
+
+    // Server -> client ping. Kept well under the client's own serverTimeout
+    // (100s, set in wwwroot/js/ui/hub-connection.js) so the browser does not
+    // decide the server has gone while the server is perfectly happy.
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+});
 
 // Register the persistence service (no hub dependency)
 builder.Services.AddSingleton<RadioStatePersistenceService>();
@@ -488,6 +510,9 @@ builder.Services.AddSingleton<ISettingsService, SettingsService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>());
+// Host-side RX audio spectrum for the Filter Function Display (#161). Opens the
+// bridge's RX-only capture on the first subscribed page, closes it on the last.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.FilterSpectrumService>();
 
 // The CW reader listens to the audio bridge rather than opening the capture
 // device itself, so it must be a singleton alongside it: one decoder, one
@@ -496,6 +521,8 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.BridgeCwAudioSource>
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwQsoLogService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderModeService>();
+// RTTY tuning scope: takes its own capture hold on the bridge while its dialog is open.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyTunerService>();
 // Radio Display (USB UVC / HDMI capture → MJPEG) — opt-in; capture opens while viewers connect.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoCaptureService>();
@@ -538,6 +565,16 @@ builder.Services.AddHostedService(provider => provider.GetRequiredService<RadioI
 
 // ADD THIS LINE for Razor Pages support:
 builder.Services.AddRazorPages();
+
+// The Memories page posts every memory row in one form, so the framework's
+// default 1024-field ceiling is really a limit on how many memories the
+// operator may own -- 52 of them, and then Save fails with a bare HTTP 400 and
+// no explanation (#167). See WebFormLimits for what that looks like and why it
+// is so hard to read.
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(
+    o => o.ValueCountLimit = Yaesu_Web_Control.WebFormLimits.ValueCountLimit);
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(
+    o => o.MaxModelBindingCollectionSize = Yaesu_Web_Control.WebFormLimits.ModelBindingCollectionSize);
 
 // ── HTTP port resolution ────────────────────────────────────────────────────
 // Pick the port BEFORE Kestrel binds, so we can fall back gracefully if the
@@ -638,9 +675,17 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<WsjtxUdpService>()
 // Register process status cache service for efficient process lookups
 builder.Services.AddSingleton<ProcessStatusCacheService>();
 
-// Register radio memories service
-builder.Services.AddSingleton<Yaesu_Web_Control.Services.MemoryService>();
-builder.Services.AddSingleton<Yaesu_Web_Control.Services.MemoryBankService>();
+// Register radio memories services. Both live in core (shared with Icom
+// Web Control) and know nothing about where this app keeps its files, so the
+// paths are handed in here.
+var memoriesFolder = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+    "MM5AGM", "Yaesu Web Control");
+builder.Services.AddSingleton(new RadioWebControl.Core.Services.MemoryService(
+    Path.Combine(memoriesFolder, "memories.json")));
+builder.Services.AddSingleton(sp => new RadioWebControl.Core.Services.MemoryBankService(
+    sp.GetRequiredService<RadioWebControl.Core.Services.MemoryService>(),
+    Path.Combine(memoriesFolder, "memory-banks.json")));
 
 // Register DX cluster service — single instance shared between controllers and
 // the background hosted service so the API can read the spot buffer.

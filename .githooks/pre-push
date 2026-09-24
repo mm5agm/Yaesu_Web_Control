@@ -1,0 +1,91 @@
+#!/bin/sh
+#
+# pre-push: keep main at the last release.
+#
+# main only moves at release time. scripts/finish-release.ps1 enforces that
+# from the inside -- the version bump in five places, a README entry, and a
+# tree check before it tags -- but nothing stopped the same two commands being
+# run by hand. On 2026-09-19 a mistyped cd ran Icom Web Control's docs merge
+# in this repo instead, and pushed 31 unreleased commits to main. Branch
+# protection allowed it, because the push was a fast-forward, and then refused
+# the force-push that would have undone it.
+#
+# So a push of main is allowed only when it is one of:
+#
+#   * a release merge -- the commit finish-release.ps1 makes, whose subject is
+#     "Release vX.Y.Z"
+#   * a documentation-only change -- see DOC_PATHS below. README corrections
+#     have always reached main this way between releases, by cherry-pick.
+#
+# Anything else is the accident this exists to catch. If you genuinely mean it,
+# push again with --no-verify.
+#
+# Hooks are not cloned. Install once per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# Every other branch is left alone -- this says nothing about develop.
+#
+# scripts/core-sync.ps1 pushes the core/ subtree from inside this working
+# copy, so this hook runs for it too -- and the target there is
+# Radio_Web_Control_Core, whose main IS the trunk: a plain commit landing on
+# it is the normal case, not the accident. Let that push through untouched.
+# (Caught on 2026-09-19, the day this hook went in: the first core push
+# after it was refused for not being a release merge.)
+case "$2" in
+    *Radio_Web_Control_Core*) exit 0 ;;
+esac
+
+PROTECTED_BRANCH='main'
+ZERO='0000000000000000000000000000000000000000'
+
+# Anchored at the repo root. Anything matching may reach main on its own;
+# anything else needs a release merge.
+DOC_PATHS='^(README\.md|USER_MANUAL\.md|docs/|pictures/)'
+
+status=0
+
+while read -r _local_ref local_sha remote_ref remote_sha; do
+    [ "$remote_ref" = "refs/heads/$PROTECTED_BRANCH" ] || continue
+
+    # Deleting the branch, or creating it from nothing. Neither is the
+    # accident, and a deletion has no commits to inspect.
+    [ "$local_sha" = "$ZERO" ] && continue
+    [ "$remote_sha" = "$ZERO" ] && continue
+
+    subject=$(git log -1 --format=%s "$local_sha")
+    case "$subject" in
+        'Release v'*) continue ;;
+    esac
+
+    # grep exits 1 when every path was allowed, which is the good case.
+    offenders=$(git diff --name-only "$remote_sha" "$local_sha" \
+                | grep -Ev "$DOC_PATHS" || true)
+
+    [ -n "$offenders" ] || continue
+
+    count=$(git rev-list --count "$remote_sha..$local_sha")
+    shown=$(printf '%s\n' "$offenders" | head -10 | sed 's/^/    /')
+    total=$(printf '%s\n' "$offenders" | wc -l | tr -d ' ')
+
+    printf '\n'
+    printf 'BLOCKED: this push moves %s by %s commit(s) and changes %s file(s)\n' \
+           "$PROTECTED_BRANCH" "$count" "$total"
+    printf 'outside the documentation set, but its tip is not a release merge.\n\n'
+    printf '  tip subject: %s\n\n' "$subject"
+    printf '%s\n' "$shown"
+    if [ "$total" -gt 10 ]; then
+        printf '    ... and %s more\n' "$((total - 10))"
+    fi
+    printf '\n'
+    printf '%s is meant to sit at the last release. To release, run\n' "$PROTECTED_BRANCH"
+    printf '.\\scripts\\finish-release.ps1 -Version vX.Y.Z, which bumps the version,\n'
+    printf 'checks the README entry and makes the merge this hook recognises.\n\n'
+    printf 'If you are in the wrong repository, that is what this caught -- check\n'
+    printf 'git remote -v before anything else.\n\n'
+    printf 'To push anyway: git push --no-verify ...\n\n'
+
+    status=1
+done
+
+exit $status

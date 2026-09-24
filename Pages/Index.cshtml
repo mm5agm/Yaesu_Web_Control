@@ -688,6 +688,10 @@
                                 title="Open the CW reader - decodes the received Morse to text"
                                 onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">CW Read</button>
                         <button class="btn btn-sm ms-1 btn-outline-secondary"
+                                aria-label="RTTY tuner - crossed-ellipse tuning scope"
+                                title="Open the RTTY tuner - mark and space filters on an X-Y scope; tune for the cross"
+                                onclick="window.rttyTuner && window.rttyTuner.toggle()">RTTY Tune</button>
+                        <button class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="CW send - type text and send it as Morse"
                                 title="Open CW send - type a line, press Enter, the radio keys it"
                                 onclick="window.cwSendPanel && window.cwSendPanel.toggle()">CW Send</button>
@@ -981,6 +985,19 @@
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
                         <input type="range" class="form-range spectrum-smooth-slider" data-vfo="A" min="0" max="8" step="1" value="2" aria-label="VFO A spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="A" style="min-width:3.5em; text-align:right;">2</span>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumStepSelectA" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO A. Also set by clicking a digit on the VFO A frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz.">Step</label>
+                        <select class="form-select form-select-sm spectrum-step-select" data-vfo="A" id="spectrumStepSelectA"
+                                style="width:auto;" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO A. Also set by clicking a digit on the VFO A frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz."
+                                aria-label="VFO A tuning step - how far one mouse-wheel notch on the spectrum moves the dial">
+                            <option value="1">1 Hz</option>
+                            <option value="10">10 Hz</option>
+                            <option value="100">100 Hz</option>
+                            <option value="1000">1 kHz</option>
+                            <option value="10000">10 kHz</option>
+                            <option value="100000">100 kHz</option>
+                            <option value="1000000">1 MHz</option>
+                            <option value="10000000">10 MHz</option>
+                        </select>
                         <div class="form-check form-check-inline mb-0 ms-2 text-nowrap" title="Shades the slice of RF the receiver is actually listening to, from the current IF Width, IF Shift and roofing filter. The dial is at the edge of that band, not in the middle of it, so this shows where a signal has to sit to be heard - and in CW and RTTY, why click-to-tune lands beside the signal rather than on it.">
                             <input class="form-check-input spectrum-passband-toggle" type="checkbox" data-vfo="A" id="spectrumPassbandToggleA" checked
                                    aria-label="Show the VFO A receiver passband as a shaded band on the spectrum">
@@ -1029,6 +1046,19 @@
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
                         <input type="range" class="form-range spectrum-smooth-slider" data-vfo="B" min="0" max="8" step="1" value="2" aria-label="VFO B spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="B" style="min-width:3.5em; text-align:right;">2</span>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumStepSelectB" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO B. Also set by clicking a digit on the VFO B frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz.">Step</label>
+                        <select class="form-select form-select-sm spectrum-step-select" data-vfo="B" id="spectrumStepSelectB"
+                                style="width:auto;" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO B. Also set by clicking a digit on the VFO B frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz."
+                                aria-label="VFO B tuning step - how far one mouse-wheel notch on the spectrum moves the dial">
+                            <option value="1">1 Hz</option>
+                            <option value="10">10 Hz</option>
+                            <option value="100">100 Hz</option>
+                            <option value="1000">1 kHz</option>
+                            <option value="10000">10 kHz</option>
+                            <option value="100000">100 kHz</option>
+                            <option value="1000000">1 MHz</option>
+                            <option value="10000000">10 MHz</option>
+                        </select>
                         <div class="form-check form-check-inline mb-0 ms-2 text-nowrap" title="Shades the slice of RF the receiver is actually listening to, from the current IF Width, IF Shift and roofing filter. The dial is at the edge of that band, not in the middle of it, so this shows where a signal has to sit to be heard - and in CW and RTTY, why click-to-tune lands beside the signal rather than on it.">
                             <input class="form-check-input spectrum-passband-toggle" type="checkbox" data-vfo="B" id="spectrumPassbandToggleB" checked
                                    aria-label="Show the VFO B receiver passband as a shaded band on the spectrum">
@@ -1153,6 +1183,7 @@
                                         style="width:auto; font-size:1.4rem; font-weight:600; padding:0.4rem 2.4rem 0.4rem 0.6rem;"
                                         title="Voice nudge step size — how far 'tune up'/'tune down' moves VFO A"
                                         aria-label="VFO A voice nudge step size">
+                                    <option value="1">1 Hz</option>
                                     <option value="10">10 Hz</option>
                                     <option value="100">100 Hz</option>
                                     <option value="1000">1 kHz</option>
@@ -1175,10 +1206,10 @@
                              QMB stacked under it. The slot grows so this stack sits
                              in the middle of the gap between bands and AGC. -->
                         <div class="filter-scope-column-slot">
-                        <div class="flex-shrink-0 d-flex flex-column gap-1" id="filterScopeContainerA" style="width:160px;">
+                        <div class="flex-shrink-0 d-flex flex-column gap-1" id="filterScopeContainerA" style="width:240px;">
                             <canvas id="filterScopeCanvasA" role="img" aria-hidden="true"
                                     aria-label="VFO A filter display" data-a11y-key="filter.scopeA"
-                                    style="display:block; height:80px; border-radius:4px;"></canvas>
+                                    style="display:block; height:120px; border-radius:4px;"></canvas>
                             <button id="saveMemBtnA" type="button"
                                     class="btn btn-outline-secondary btn-sm w-100"
                                     style="padding:1px 4px;"
@@ -1452,6 +1483,7 @@
                     <!-- IF Width and IF Shift -->
                     <div class="d-flex align-items-center gap-2 mb-0" style="flex-wrap: wrap;">
                         <label class="mb-0 text-nowrap fw-bold">IF Width:</label>
+                        <span class="ctl-tip-wrap d-inline-block flex-shrink-0" id="ifWidthWrapA">
                         <select class="form-select form-select-sm fw-bold flex-shrink-0" id="ifWidthSelectA"
                                 aria-label="VFO A IF width"
                                 title="VFO A IF width"
@@ -1463,6 +1495,7 @@
                                 <option value="@opt.Value" selected="@(Model.RadioState.IfWidthA==opt.Value||isDefault ? "selected" : null)">@opt.Label</option>
                             }
                         </select>
+                        </span>
                         <button type="button" class="btn btn-secondary btn-sm fw-bold flex-shrink-0 ms-2"
                                 id="audioFilterBtnA"
                                 aria-label="VFO A Audio Filter"
@@ -1471,6 +1504,7 @@
                             Audio Filter
                         </button>
                         <label class="mb-0 text-nowrap ms-1 fw-bold">IF Shift: <span id="ifShiftValueA" class="fw-bold">@Model.RadioState.IfShiftA</span></label>
+                        <span class="ctl-tip-wrap d-flex align-items-center gap-2 flex-shrink-0" id="ifShiftWrapA">
                         <input type="range" class="form-range ifshift-slider flex-shrink-0"
                                id="ifShiftSliderA"
                                aria-label="VFO A IF shift"
@@ -1479,7 +1513,9 @@
                                style="width: clamp(70px, 8vw, 120px); height: 18px;"
                                oninput="document.getElementById('ifShiftValueA').textContent = this.value; if(window.filterScopePanelA) window.filterScopePanelA.setState({ifShiftHz: parseInt(this.value)||0})">
                         <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
+                                id="ifShiftZeroA"
                                 onclick="resetIfShift('A')" title="Zero IF Shift">Zero</button>
+                        </span>
                     </div>
 
                     <!-- VFO A status line — live band/mode/freq/power summary, banner-coloured -->
@@ -1602,6 +1638,7 @@
                                             style="width:auto; font-size:1.4rem; font-weight:600; padding:0.4rem 2.4rem 0.4rem 0.6rem;"
                                             title="Voice nudge step size — how far 'tune up'/'tune down' moves VFO B"
                                             aria-label="VFO B voice nudge step size">
+                                        <option value="1">1 Hz</option>
                                         <option value="10">10 Hz</option>
                                         <option value="100">100 Hz</option>
                                         <option value="1000">1 kHz</option>
@@ -1624,10 +1661,10 @@
                         <!-- Filter/audio scope column — canvas with Save-to-Mem stacked
                              under it (QMB is VFO A only). Slot centers it in the gap. -->
                         <div class="filter-scope-column-slot">
-                        <div class="flex-shrink-0 d-flex flex-column gap-1" id="filterScopeContainerB" style="width:160px;">
+                        <div class="flex-shrink-0 d-flex flex-column gap-1" id="filterScopeContainerB" style="width:240px;">
                             <canvas id="filterScopeCanvasB" role="img" aria-hidden="true"
                                     aria-label="VFO B filter display" data-a11y-key="filter.scopeB"
-                                    style="display:block; height:80px; border-radius:4px;"></canvas>
+                                    style="display:block; height:120px; border-radius:4px;"></canvas>
                             <button id="saveMemBtnB" type="button"
                                     class="btn btn-outline-secondary btn-sm w-100"
                                     style="padding:1px 4px;"
@@ -1864,6 +1901,7 @@
                     <!-- IF Width and IF Shift -->
                     <div class="d-flex align-items-center gap-2 mb-0" style="flex-wrap: wrap;">
                         <label class="mb-0 text-nowrap fw-bold">IF Width:</label>
+                        <span class="ctl-tip-wrap d-inline-block flex-shrink-0" id="ifWidthWrapB">
                         <select class="form-select form-select-sm fw-bold flex-shrink-0" id="ifWidthSelectB"
                                 aria-label="VFO B IF width"
                                 title="VFO B IF width"
@@ -1875,6 +1913,7 @@
                                 <option value="@opt.Value" selected="@(Model.RadioState.IfWidthB==opt.Value||isDefault ? "selected" : null)">@opt.Label</option>
                             }
                         </select>
+                        </span>
                         <button type="button" class="btn btn-secondary btn-sm fw-bold flex-shrink-0 ms-2"
                                 id="audioFilterBtnB"
                                 aria-label="VFO B Audio Filter"
@@ -1883,6 +1922,7 @@
                             Audio Filter
                         </button>
                         <label class="mb-0 text-nowrap ms-1 fw-bold">IF Shift: <span id="ifShiftValueB" class="fw-bold">@Model.RadioState.IfShiftB</span></label>
+                        <span class="ctl-tip-wrap d-flex align-items-center gap-2 flex-shrink-0" id="ifShiftWrapB">
                         <input type="range" class="form-range ifshift-slider flex-shrink-0"
                                id="ifShiftSliderB"
                                aria-label="VFO B IF shift"
@@ -1891,7 +1931,9 @@
                                style="width: clamp(70px, 8vw, 120px); height: 18px;"
                                oninput="document.getElementById('ifShiftValueB').textContent = this.value; if(window.filterScopePanelB) window.filterScopePanelB.setState({ifShiftHz: parseInt(this.value)||0})">
                         <button type="button" class="btn btn-secondary btn-sm flex-shrink-0"
+                                id="ifShiftZeroB"
                                 onclick="resetIfShift('B')" title="Zero IF Shift">Zero</button>
+                        </span>
                     </div>
 
                     <!-- VFO B status line — live band/mode/freq summary, banner-coloured -->
@@ -2755,6 +2797,50 @@
     </div>
 </dialog>
 
+<!-- RTTY tuner: the mark filter on X, the space filter on Y, as a terminal unit
+     used to drive an oscilloscope. Non-modal so the VFO stays in reach. -->
+<dialog id="rttyTunerDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; width:340px; max-width:95vw;" aria-labelledby="rttyTunerTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
+        <strong id="rttyTunerTitle">RTTY Tuner</strong>
+        <button class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('rttyTunerDialog').close()"
+                aria-label="Close RTTY tuner">&#10005;</button>
+    </div>
+    <div class="p-2">
+        <div class="d-flex align-items-center gap-2 mb-2 small flex-wrap">
+            <label for="rttyTunerMark">Mark</label>
+            <input id="rttyTunerMark" type="number" min="300" max="3000" step="5" value="2125"
+                   class="form-control form-control-sm" style="width:5.5rem;"
+                   title="Mark tone in the receive audio, Hz. 2125 unless your RTTY setup says otherwise.">
+            <label for="rttyTunerShift">Shift</label>
+            <select id="rttyTunerShift" class="form-select form-select-sm" style="width:auto;">
+                <option value="170">170</option>
+                <option value="200">200</option>
+                <option value="425">425</option>
+                <option value="450">450</option>
+                <option value="850">850</option>
+            </select>
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" id="rttyTunerReverse">
+                <label class="form-check-label" for="rttyTunerReverse"
+                       title="Space on the other side of mark: reversed tones, or REV on the radio">Rev</label>
+            </div>
+        </div>
+        <canvas id="rttyTunerCanvas" width="320" height="320"
+                style="width:100%; display:block; border:1px solid #444; border-radius:6px;"
+                aria-label="RTTY crossed-ellipse tuning scope"></canvas>
+        <div id="rttyTunerInfo" class="mt-1"
+             style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
+            Waiting.
+        </div>
+        <div id="rttyTunerStatus" class="mt-1 small" role="status" aria-live="polite">Stopped.</div>
+        <div class="small mt-1" style="color:#9ab;">
+            Tune for a clean cross: mark draws the line across, space the line up.
+            Arms leaning and opening means off tune.
+        </div>
+    </div>
+</dialog>
+
 <!-- DX Watch alert toast container — populated by site.js when a watched spot arrives.
      Position is user-draggable; saved in localStorage as dxAlertPos. Defaults to
      bottom-right of the viewport on first run. -->
@@ -2789,6 +2875,7 @@
         window.ywcVoiceNudgeStepHzA = @Model.VoiceNudgeStepHzA;
         window.ywcVoiceNudgeStepHzB = @Model.VoiceNudgeStepHzB;
         window.ywcIsWindowsHost = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IsWindowsHost));
+        window.ywcAutoModeChangeOnTune = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AutoModeChangeOnTune));
     </script>
     @* Every import below is tied to the app version, so a release invalidates
        all of them at once. They used to carry hand-kept numbers (?v=1 … ?v=22)
@@ -2802,6 +2889,8 @@
         import { FTdx101Meters }        from "/js/orchestrators/FTdx101Meters.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { SdrSpectrumPipeline }  from "/js/sdr/sdr-spectrum-pipeline.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { SpectrumPanel }        from "/js/sdr/spectrum-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { tuningStep }           from "/js/ui/tuning-step.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { formatTuningStep }     from "/js/tuning/tuning-step-store.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { axisOffsetHz }         from "/js/sdr/if-out-offset.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import "/js/ui/if-width-tables.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -2815,6 +2904,7 @@
         // the panels that offer it so the global is there when they render.
         import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -3162,6 +3252,11 @@
             window.cwReaderPanel = new CwReaderPanel();
             window.cwReaderPanel.init();
 
+            // The RTTY tuner taps the same audio bridge, with its own hold, so
+            // it runs with or without the CW reader.
+            window.rttyTuner = new RttyTuner();
+            window.rttyTuner.init();
+
             // Typed CW goes out through the keyer memories the M1-M5 buttons
             // use; the panel only sequences the writes and plays.
             window.cwSendPanel = new CwSendPanel();
@@ -3206,10 +3301,12 @@
             spectrumPipeline.onModeA(mode => {
                 spectrumPanelA?.setMode(mode);
                 ensureRttyTones(mode);
+                readDataShift(mode);
             });
             spectrumPipeline.onModeB(mode => {
                 spectrumPanelB?.setMode(mode);
                 ensureRttyTones(mode);
+                readDataShift(mode);
             });
 
             // RTTY click-to-tune needs the mark and shift frequencies the
@@ -3230,6 +3327,14 @@
                         if (!t) return;
                         spectrumPanelA?.setRttyTones(t);
                         spectrumPanelB?.setRttyTones(t);
+                        // The filter scopes place the RTTY filter from the
+                        // same mark and shift (#178); looked up lazily, as
+                        // below, because they are constructed later.
+                        const pb = {};
+                        if (Number(t.markHz) > 0) pb.rttyMarkHz = Number(t.markHz);
+                        if (Number(t.shiftHz) > 0) pb.rttyShiftHz = Number(t.shiftHz);
+                        window.filterScopePanelA?.setState(pb);
+                        window.filterScopePanelB?.setState(pb);
                     })
                     .catch(() => {
                         // Leaving the Yaesu defaults in place is a better
@@ -3239,6 +3344,27 @@
             }
             ensureRttyTones('@Model.RadioState.ModeA');
             ensureRttyTones('@Model.RadioState.ModeB');
+
+            // DATA-L / DATA-U centre their filter on the radio's DATA SHIFT
+            // (SSB) menu, not on SSB's 1500 Hz, and the spectrum's axis and
+            // passband follow it (#172). Read it each time a VFO goes into
+            // DATA-L/U: one CAT read per mode change, and it picks up an
+            // operator who has changed the menu in between. The server keeps
+            // it for the SDR worker's crop centre as well.
+            function readDataShift(mode) {
+                if (mode !== 'DATA-L' && mode !== 'DATA-U') return;
+                fetch('/api/cat/datashift')
+                    .then(r => r.ok ? r.json() : null)
+                    .then(d => {
+                        const hz = Number(d?.dataShiftHz);
+                        if (!Number.isFinite(hz)) return;
+                        window.filterScopePanelA?.setState({ dataShiftHz: hz });
+                        window.filterScopePanelB?.setState({ dataShiftHz: hz });
+                    })
+                    .catch(() => { /* 1500 stays in place */ });
+            }
+            readDataShift('@Model.RadioState.ModeA');
+            readDataShift('@Model.RadioState.ModeB');
 
             // Show each spectrum panel the slice of RF its receiver is actually
             // listening to. The edges are computed by the matching filter scope
@@ -3369,6 +3495,11 @@
                     window._radioModel,
                     '@Model.RadioState.ModeB'
                 );
+            }
+            // IF Shift is greyed out in AM / FM, where the radio ignores it.
+            if (window.updateIfShiftForMode) {
+                window.updateIfShiftForMode('A', '@Model.RadioState.ModeA');
+                window.updateIfShiftForMode('B', '@Model.RadioState.ModeB');
             }
 
             // Hold button — toggles whether the panel updates from incoming
@@ -3507,6 +3638,30 @@
                     label.textContent = formatSmooth(r);
                     panel.setSpectrumSmooth(r);
                 });
+            });
+
+            // Tuning step — how far one mouse-wheel notch on the spectrum moves
+            // the dial (Bruce VK2RT, discussion #168: the old 1 kHz was hard-coded,
+            // and RTTY needs 1 Hz). The select is one of four views of the same
+            // per-VFO number; the others are the frequency display's selected
+            // digit, the spectrum's right-click menu, and the voice nudge step.
+            // The store owns the value and persists it, so the select is
+            // initialised FROM the store rather than from the markup's first
+            // <option> — otherwise a reload would silently reset it to 1 Hz.
+            ['A', 'B'].forEach(vfo => {
+                const select = document.querySelector(`.spectrum-step-select[data-vfo="${vfo}"]`);
+                if (!select) return;
+
+                select.value = String(tuningStep.get(vfo));
+                select.addEventListener('change', () => {
+                    tuningStep.set(vfo, parseInt(select.value, 10));
+                });
+            });
+
+            // Keep every view in step with the store, whichever one changed it.
+            tuningStep.subscribe((vfo, stepHz) => {
+                const select = document.querySelector(`.spectrum-step-select[data-vfo="${vfo}"]`);
+                if (select && select.value !== String(stepHz)) select.value = String(stepHz);
             });
 
             // Passband overlay toggle. On by default and persisted per VFO by
@@ -4222,7 +4377,7 @@
             if (dlg) makeResizable(dlg);
         });
 
-        ['voxDialog', 'cwDialog', 'cwSendDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog'].forEach(id => {
+        ['voxDialog', 'cwDialog', 'cwSendDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog', 'rttyTunerDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
             makeDraggable(dlg, dlg.querySelector('div:not(.radio-display-scope-splitter)'));

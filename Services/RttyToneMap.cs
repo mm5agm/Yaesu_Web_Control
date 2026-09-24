@@ -52,11 +52,18 @@ namespace Yaesu_Web_Control.Services
         public static Addresses? For(string? radioModel)
             => radioModel != null && Map.TryGetValue(radioModel, out var a) ? a : null;
 
-        /// <summary>MARK FREQUENCY answer code to Hz. 1 = 1275, 2 = 2125.</summary>
+        /// <summary>
+        /// MARK FREQUENCY answer code to Hz: 0 = 1275, 1 = 2125. The CAT
+        /// manuals print "1: 1275 Hz 2: 2125 Hz", but the codes are 0-based
+        /// like the SHIFT row. Measured on the FTdx101MP 2026-09-23: with the
+        /// front panel showing 2125 the radio answers 1, and in RTTY-L a
+        /// carrier on the dial comes out at 2125 Hz. Read as printed, YWC
+        /// showed 1275. Other models are assumed to follow the same pattern.
+        /// </summary>
         public static int? MarkHzFromCode(string? code) => code?.TrimStart('0') switch
         {
-            "1" => 1275,
-            "2" => 2125,
+            ""  => 1275,  // "0" trims to empty
+            "1" => 2125,
             _   => null,
         };
 

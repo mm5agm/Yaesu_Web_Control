@@ -145,12 +145,23 @@ namespace Yaesu_Web_Control.Services.Audio
         /// </summary>
         public void ReleaseCapture()
         {
-            if (Interlocked.Decrement(ref _captureHolds) > 0)
+            var remaining = Interlocked.Decrement(ref _captureHolds);
+            if (remaining > 0)
                 return;
 
-            // Never let a stray release drive the count negative - a later
-            // acquire would then not open anything.
-            Interlocked.Exchange(ref _captureHolds, 0);
+            if (remaining < 0)
+            {
+                // Stray release. Restore a floor of zero without wiping a
+                // hold that landed after this decrement (Exchange(0) used to
+                // do that, and the next grace-close tore down a live stream).
+                Interlocked.CompareExchange(ref _captureHolds, 0, remaining);
+                return;
+            }
+
+            // Last hold. An Acquire that won the race after our decrement
+            // will have raised the count again — leave the devices alone.
+            if (Volatile.Read(ref _captureHolds) > 0)
+                return;
 
             if (_activeSocket == null && _devicesOpen)
                 ScheduleDeviceClose();

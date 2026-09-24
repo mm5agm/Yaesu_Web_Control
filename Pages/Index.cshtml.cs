@@ -90,6 +90,11 @@ namespace Yaesu_Web_Control.Pages
         public float SdrSpectrumHighDbB { get; set; } = 0f;
 
         public string BandPlan { get; set; } = "Region1";
+
+        /// <summary>When false, tuning by clicking the spectrum or a DX spot
+        /// leaves the mode alone instead of setting it from the band plan.
+        /// Settings &gt; Band Plan; discussion #169.</summary>
+        public bool AutoModeChangeOnTune { get; set; } = true;
         public string RadioModel { get; set; } = "FTdx101MP";
         public List<string> InstalledRoofingFilters { get; set; } = new() { "6", "7", "8", "9", "A" };
 
@@ -163,6 +168,7 @@ namespace Yaesu_Web_Control.Pages
             VoiceNudgeStepHzA = settings.VoiceNudgeStepHzA;
             VoiceNudgeStepHzB = settings.VoiceNudgeStepHzB;
             BandPlan = settings.BandPlan switch { "UK" => "Region1", "USA" => "Region2", var v => v };
+            AutoModeChangeOnTune = settings.AutoModeChangeOnTune;
             RadioModel = settings.RadioModel;
             InstalledRoofingFilters = settings.InstalledRoofingFilters;
             VideoDisplayEnabled = settings.VideoDisplayEnabled;

@@ -13,32 +13,56 @@ namespace YaesuWebControl.Tests
     /// </summary>
     public class YaesuIfOutOffsetTests
     {
-        // ---- the SSB table is the JavaScript's, entry for entry ------------
-
-        [Fact]
-        public void The_SSB_slide_table_matches_the_browser_copy()
-        {
-            var js = ParseSsbTable(File.ReadAllText(LocateJavaScript()));
-            var cs = YaesuIfOutOffset.SsbSlideHz101.Select(e => (e.WidthHz, e.SlideHz)).ToList();
-            Assert.Equal(js, cs);
-        }
-
-        // ---- the formula, on measured points ------------------------------
+        // ---- the constants are the JavaScript's ----------------------------
 
         [Theory]
-        [InlineData("CW-U", 3500,  700, 0, 1400)]   // Colin's filter on 2026-09-12: dial 1.4 kHz off the nominal IF OUT
-        [InlineData("CW-U",  500,  700, 0,    0)]   // narrower than the pitch: no slide
-        [InlineData("CW-L", 2400,  600, 0,  900)]
-        [InlineData("CW-U", 3500,  700, -200, 1200)] // IF shift adds directly
-        [InlineData("USB",  2400,  700, 0,  350)]
-        [InlineData("USB",  3000,  700, 0, 1400)]
-        [InlineData("LSB",  2100,  700, 0,    0)]   // below the first measured width
-        [InlineData("DATA-U", 3200, 700, 0, 1650)]
-        [InlineData("RTTY-U", 500, 700, 100, 100)]  // shift only
-        [InlineData("FM",   null,  700, 0,    0)]
-        public void LO_slide_follows_mode_width_shift_and_pitch(string mode, int? widthHz, int pitchHz, int shiftHz, int expected)
+        [InlineData("SSB_CARRIER_POINT_HZ_101", YaesuIfOutOffset.SsbCarrierPointHz101)]
+        [InlineData("RTTY_CENTRE_HZ_101", YaesuIfOutOffset.RttyCentreHz101)]
+        [InlineData("CW_MAX_SLIDE_WIDTH_HZ_101", YaesuIfOutOffset.CwMaxSlideWidthHz101)]
+        public void The_constants_match_the_browser_copy(string name, int expected)
+        {
+            Assert.Equal(expected, ParseConstant(File.ReadAllText(LocateJavaScript()), name));
+        }
+
+        // ---- the formula, on points measured 2026-09-24 (#172) -------------
+        // Measured with the receiver's audio as ground truth: the 810 kHz
+        // carrier heard at a known tone, then located in the SDR stream.
+
+        [Theory]
+        [InlineData("USB",    2800, 700,    0,  1500)]   // every width 1100..4000 gave 1497
+        [InlineData("USB",    1100, 700,    0,  1500)]
+        [InlineData("LSB",    2800, 700,    0, -1500)]   // #172: was +1150, drawing LSB 2.6 kHz right of the dial
+        [InlineData("USB",    3200, 700,  500,  2000)]   // IF shift adds...
+        [InlineData("LSB",    3200, 700, -500, -1000)]   // ...and in LSB it subtracts
+        [InlineData("DATA-U", 1500, 700,    0,  1500)]
+        [InlineData("DATA-L", 1500, 700,    0, -1500)]   // VK2RT's #178 shot: a DATA-L signal drawn on the dial
+        [InlineData("CW-U",   1200, 700,    0,   250)]
+        [InlineData("CW-L",   2400, 700,    0,  -850)]   // measured -849: the mirror of CW-U
+        [InlineData("CW-L",   2400, 700,  300, -1150)]
+        [InlineData("CW-U",    500, 700,    0,     0)]   // narrower than the pitch: no slide
+        [InlineData("CW-U",   4000, 700,    0,  1150)]   // stops growing at 3000: 3000..4000 all gave 1149
+        [InlineData("RTTY-L", 1200, 700,    0,   -85)]
+        [InlineData("RTTY-L", 1200, 700,  300,  -385)]
+        [InlineData("RTTY-U", 1200, 700,  300,   215)]
+        [InlineData("AM",     9000, 700,  300,     0)]   // the shift does nothing in AM
+        [InlineData("FM",     null, 700,    0,     0)]
+        public void LO_slide_follows_mode_sideband_width_shift_and_pitch(string mode, int? widthHz, int pitchHz, int shiftHz, int expected)
         {
             Assert.Equal(expected, YaesuIfOutOffset.LoSlideHz("FTdx101MP", mode, widthHz, shiftHz, pitchHz));
+        }
+
+        [Theory]
+        [InlineData("DATA-L", 1000,   0, -1000)]   // measured -1003 with DATA SHIFT 1000, 2026-09-24
+        [InlineData("DATA-U", 1000,   0,  1000)]   // measured +997
+        [InlineData("DATA-U", 1000, 500,  1500)]   // IF shift still adds
+        [InlineData("DATA-L", 1500,   0, -1500)]   // the menu default: as before
+        [InlineData("LSB",    1000,   0, -1500)]   // SSB ignores DATA SHIFT
+        [InlineData("USB",    1000,   0,  1500)]
+        public void DATA_slide_follows_the_DATA_SHIFT_menu(string mode, int dataShiftHz, int shiftHz, int expected)
+        {
+            Assert.Equal(expected, YaesuIfOutOffset.LoSlideHz("FTdx101MP", mode, 2400, shiftHz, 700, dataShiftHz));
+            Assert.Equal(9_005_000 + expected,
+                YaesuIfOutOffset.DialIfHz("FTdx101MP", "A", mode, "13", shiftHz, 40, dataShiftHz));
         }
 
         [Fact]
@@ -51,28 +75,21 @@ namespace YaesuWebControl.Tests
         [Fact]
         public void The_dial_IF_is_IF_OUT_plus_the_slide_from_raw_CAT_codes()
         {
-            // SH code 20 in CW on the '101 is 3500 Hz; KP code 40 is 700 Hz.
-            Assert.Equal(9_005_000 + 1_400, YaesuIfOutOffset.DialIfHz("FTdx101MP", "A", "CW-U", "20", 0, 40));
-            Assert.Equal(8_900_000 + 1_400, YaesuIfOutOffset.DialIfHz("FTdx101MP", "B", "CW-U", "20", 0, 40));
+            // SH code 13 in CW on the '101 is 1200 Hz; KP code 40 is 700 Hz.
+            Assert.Equal(9_005_000 + 250, YaesuIfOutOffset.DialIfHz("FTdx101MP", "A", "CW-U", "13", 0, 40));
+            Assert.Equal(8_900_000 + 250, YaesuIfOutOffset.DialIfHz("FTdx101MP", "B", "CW-U", "13", 0, 40));
+            Assert.Equal(9_005_000 - 250, YaesuIfOutOffset.DialIfHz("FTdx101MP", "A", "CW-L", "13", 0, 40));
             // Code 0 is the radio's default width and resolves to no known width — no width term.
             Assert.Equal(9_005_000, YaesuIfOutOffset.DialIfHz("FTdx101MP", "A", "CW-U", "0", 0, 40));
         }
 
         // ---- reading the JavaScript ----------------------------------------
 
-        private static List<(int, int)> ParseSsbTable(string text)
+        private static int ParseConstant(string text, string name)
         {
-            int at = text.IndexOf("SSB_SLIDE_HZ_101", StringComparison.Ordinal);
-            Assert.True(at >= 0, "SSB_SLIDE_HZ_101 not found in if-out-offset.js");
-            int open  = text.IndexOf('[', at);
-            int close = text.IndexOf("];", open, StringComparison.Ordinal);
-            string block = text.Substring(open + 1, close - open - 1);
-
-            var rows = Regex.Matches(block, @"\[\s*(\d+)\s*,\s*(\d+)\s*\]")
-                .Select(m => (int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value)))
-                .ToList();
-            Assert.NotEmpty(rows);
-            return rows;
+            var m = Regex.Match(text, @"const\s+" + name + @"\s*=\s*(-?\d+)\s*;");
+            Assert.True(m.Success, $"{name} not found in if-out-offset.js");
+            return int.Parse(m.Groups[1].Value);
         }
 
         private static string LocateJavaScript()
@@ -87,7 +104,7 @@ namespace YaesuWebControl.Tests
             }
             throw new FileNotFoundException(
                 $"Could not find {relative} above {AppContext.BaseDirectory}. This test " +
-                "compares the C# LO-slide table against the browser's copy and needs both.");
+                "compares the C# LO-slide constants against the browser's copy and needs both.");
         }
     }
 }

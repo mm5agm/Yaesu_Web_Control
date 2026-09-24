@@ -18,15 +18,23 @@ namespace Yaesu_Web_Control.Services.Video
     {
         private const int MaxProbeIndex = 15;
         private static readonly object CacheLock = new();
+        private static readonly object EnumLock = new();
         private static IReadOnlyList<VideoDeviceInfo> _cache = Array.Empty<VideoDeviceInfo>();
 
         /// <summary>
         /// List capture devices. When <paramref name="allowProbe"/> is false
-        /// (capture loop already holds a UVC device), return the last probe
-        /// result instead of opening cameras — a second Open on the live
-        /// HDMI dongle native-crashes the host process.
+        /// (the default for page load), return friendly names / the last probe
+        /// result instead of opening cameras — a second Open on an HDMI
+        /// dongle native-crashes the host process. Concurrent callers are
+        /// serialised so two probes cannot Open the same index at once.
         /// </summary>
         public static IReadOnlyList<VideoDeviceInfo> ListDevices(bool allowProbe = true)
+        {
+            lock (EnumLock)
+                return ListDevicesCore(allowProbe);
+        }
+
+        private static IReadOnlyList<VideoDeviceInfo> ListDevicesCore(bool allowProbe)
         {
             if (!allowProbe)
             {

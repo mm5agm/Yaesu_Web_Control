@@ -1,6 +1,6 @@
 # The SDR spectrum trace does not match what the receiver hears
 
-**STATUS: FIXED in the browser 2026-09-11 and verified on air on both receivers - see "Implemented" below. Originally: measured, diagnosed, NOT fixed. 2026-09-10, RX only, against the
+**STATUS: SSB/DATA/CW-L slide RE-MEASURED and corrected 2026-09-24 (#172) - see the next section. FIXED in the browser 2026-09-11 and verified on air on both receivers - see "Implemented" below. Originally: measured, diagnosed, NOT fixed. 2026-09-10, RX only, against the
 FTdx101MP on 20 m CW. CORRECTED 2026-09-11 - read the next section before
 anything else: Fault 1 (the mirror) is withdrawn, the offset I retracted is
 real, and the SUB receiver's SDR is 100 kHz off.**
@@ -9,6 +9,56 @@ This is the write-up of a full session's measurement. Everything below was
 measured on air; where something is inference rather than measurement I say
 so. Nothing here has been fixed, and any fix is device-level, so it must be
 bench-checked against the radio and never signed off on a build.
+
+## Re-measured 2026-09-24: the slide changes sign with the sideband (#172)
+
+**The 09-11 SSB width table below is superseded.** Bruce VK2RT reported
+(discussion #172) that in LSB a station appeared right of the dial while the
+passband was shaded to the left. Re-measured on the FTdx101MP, RX only, with
+the same 810 kHz carrier and the receiver's own audio (the audio tap) as
+ground truth: the tone heard fixes where the carrier really is relative to
+the dial, and that is compared with where the SDR stream puts it.
+
+The radio holds the centre of its filter still in the IF OUT, so the LO slide
+is that centre's RF offset from the dial, and it flips sign in a
+lower-sideband mode:
+
+| Mode | Measured slide |
+|---|---|
+| USB / DATA-U | +(1500 + shift). 1497 at every SH 1100..4000, on the 10k zoom and the 500k hardware span. |
+| LSB / DATA-L | -(1500 + shift). Measured -1503; shift -500 gave -999. |
+| CW-U | shift + max(0, (min(w, 3000) - pitch) / 2). 1200 -> 249, 2400 -> 852, 3000..4000 all 1149. |
+| CW-L | mirror of CW-U: -255, -849; shift +300 at 2400 -> -1155. |
+| RTTY-L / RTTY-U | -85 -/+ shift (RTTY-L shift -300 -> 210, +300 -> -386). |
+| AM | 0 at every width; IF SHIFT has no effect. |
+
+Points where the carrier sat outside the shifted filter were too weak to
+trust and are left out. The 09-11 table (up to +1650, applied to both
+sidebands and to DATA and AM) drew LSB about +2655 Hz off, USB -350, DATA
+-/+1500 and AM +1650. I do not know why 09-11 measured a width dependence;
+the radio's state may have differed that day.
+
+After the fix, applied offset matched the audio within 1-6 Hz in USB, LSB,
+DATA-U and DATA-L at SH 7/18/21 (10k zoom), LSB and DATA-L at 500k, CW-U/L at
+450/2400/4000, RTTY-L/U and AM.
+
+DATA SHIFT, settled the same day: DATA's 1500 is the **DATA SHIFT (SSB)**
+menu (EX010405, `EX010405;` answers `EX0104051500;`). Set to 1000 with
+scripts/probe/data-shift.ps1, the DATA-L slide measured -1003 and DATA-U +997
+(IF shift 0; it still adds on top), with a 999 Hz tone at dial +/-1000. SSB
+stays on 1500. YWC now reads it (`GET api/cat/datashift`, FTdx101MP/D only)
+whenever a VFO goes into DATA-L/U; both copies of the slide take it as a
+parameter. After that, applied vs true was -1000/-1003 and +1000/+998 at
+1000, and -1500/-1499 and +1500/+1501 back at 1500. SCOPE CTR (EX040202) was
+1 (CAR POINT) throughout and was not varied.
+
+The same sweep showed that DATA-L/U read the **CW/PSK width column**, not
+SSB's (as the CAT manual's Table 3 PSK column says): from band noise at DATA
+SHIFT 1000, code 9 -> 785..1213, 12 -> 609..1395, 13 -> 422..1588, centred on
+the DATA SHIFT; wide ones cut at about 160 Hz at the bottom, with the top at
+about DATA SHIFT + w/2, and never above about 2980 Hz (at 1500: 3000 ->
+176..2883, 3200 and up -> ..2977). YWC had DATA in the SSB column, so the
+dropdown labels and the filter drawing were both wrong in DATA.
 
 ## Correction, 2026-09-11: the mirror was wrong, the offset was right
 

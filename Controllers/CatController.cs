@@ -3548,9 +3548,44 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
+        // DATA SHIFT (SSB) - "the carrier point in DATA mode", 0-3000 Hz. The
+        // FTdx101 centres its DATA-L/U filter on this, so the spectrum's IF OUT
+        // slide follows it (measured at 1000 Hz on 2026-09-24, #172). Only the
+        // FTdx101MP/D address is verified (EX010405); other models report the
+        // 1500 default and FromRadio = false.
+        [HttpGet("datashift")]
+        public async Task<IActionResult> ReadDataShift()
+        {
+            var settings   = await _settingsService.GetSettingsAsync();
+            var radioModel = settings.RadioModel ?? "";
+            bool is101 = radioModel is "FTdx101MP" or "FTdx101D";
+            if (!is101)
+                return Ok(new { radioModel, fromRadio = false, dataShiftHz = _radioStateService.DataShiftHz });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var code = await ReadExValueAsync("010405");
+                if (int.TryParse(code, out int hz) && hz >= 0 && hz <= 3000)
+                {
+                    _radioStateService.DataShiftHz = hz;
+                    return Ok(new { radioModel, fromRadio = true, dataShiftHz = hz });
+                }
+                return Ok(new { radioModel, fromRadio = false, dataShiftHz = _radioStateService.DataShiftHz });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading DATA SHIFT");
+                return Ok(new { radioModel, fromRadio = false, dataShiftHz = _radioStateService.DataShiftHz });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
         // Reads one EX menu item by its raw address (the text after "EX") and
         // returns the value code, or null if the radio didn't answer in the
-        // expected shape. Shared by the RTTY reads above.
+        // expected shape. Shared by the RTTY and DATA SHIFT reads above.
         private async Task<string?> ReadExValueAsync(string? address)
         {
             if (string.IsNullOrEmpty(address)) return null;

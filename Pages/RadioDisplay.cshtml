@@ -273,6 +273,9 @@
     </div>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    @* Builds the hub connection with a retry policy that never gives up.
+       This page has no _Layout, so it must load it itself. *@
+    <script src="~/js/ui/hub-connection.js" asp-append-version="true"></script>
     <script type="module">
         import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl } from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -289,10 +292,13 @@
         // One hub connection for the pop-out: scope settings changed at the
         // rig, the active band, and the VFO / front-end state the hotspot
         // overlay needs to label and cycle what is on the TFT.
-        const conn = new signalR.HubConnectionBuilder()
-            .withUrl('/radioHub')
-            .withAutomaticReconnect()
-            .build();
+        //
+        // It is also what stops the host shutting down while this page is the
+        // only one open. The page sets Layout = null, so there is no site.js
+        // and no heartbeat; the hub counts open connections, and this is the
+        // one. Do not remove it without adding /js/ui/host-presence.js in its
+        // place -- HostPresenceTests fails the build if neither is here.
+        const conn = window.ywcHubConnection('/radioHub');
         conn.on('RadioStateUpdate', (update) => {
             if (update.property === 'ScopeSetting')
                 window.radioScopeControls.forEach(c => c.applyRemote(update.value));

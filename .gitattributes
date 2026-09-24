@@ -37,6 +37,10 @@
 # Unix shell scripts: always LF.
 *.sh        text eol=lf
 
+# Git hooks: run by sh, have no extension, and CRLF breaks the interpreter
+# line. Must stay LF even on Windows checkouts.
+.githooks/** text eol=lf
+
 # Binary assets — never normalize or diff as text.
 *.png       binary
 *.jpg       binary

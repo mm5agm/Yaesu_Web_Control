@@ -258,6 +258,7 @@ namespace Yaesu_Web_Control.Pages
                 current.SdrSampleRateHz   = 0;             // legacy field — kept zero in v2.3.0+ files
                 current.SdrFftSize        = Settings.SdrFftSize;
                 current.BandPlan          = Settings.BandPlan;
+                current.AutoModeChangeOnTune = Settings.AutoModeChangeOnTune;
                 // MP comes fully loaded; D has 600Hz standard plus 1.2kHz/300Hz optional.
                 if (Settings.RadioModel == "FTdx101MP")
                 {
@@ -327,6 +328,7 @@ namespace Yaesu_Web_Control.Pages
                 current.AudioStreamingEnabled = Settings.AudioStreamingEnabled;
                 current.AudioRadioRxDevice = Settings.AudioRadioRxDevice ?? "";
                 current.AudioRadioTxDevice = Settings.AudioRadioTxDevice ?? "";
+                current.FilterScopeAudioEnabled = Settings.FilterScopeAudioEnabled;
                 // AudioRxGain / AudioTxGain are live-only (Mic & Gain / pop-out → /api/audio/gain).
                 // Do not overwrite them from this form — the inputs were removed from Settings.
 

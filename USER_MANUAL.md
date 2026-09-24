@@ -1,4 +1,4 @@
-# Yaesu Web Control — User Manual
+﻿# Yaesu Web Control — User Manual
 
 > 🔍 **Searching this manual:** press **Ctrl + F** (Windows / Linux) or **⌘ + F** (Mac) to open your browser's find-in-page box. Type any term — a band name like "60m", a control like "Speech Processor", an error message you've hit — to jump straight to the relevant section.
 
@@ -89,6 +89,7 @@
     - 15.9 [WSJT-X is very slow to key the radio (long PTT / Tune delay)](#159-wsjt-x-is-very-slow-to-key-the-radio-1020-second-delay-on-ptt--tune)
     - 15.10 [What's different on macOS / Linux vs Windows?](#1510-whats-different-on-macos--linux-vs-windows)
     - 15.11 [Test Connection fails / CAT does not respond over USB](#1511-test-connection-fails--cat-does-not-respond-over-usb)
+    - 15.12 [The Memories page shows a blank HTTP ERROR 400 when I press Save](#1512-the-memories-page-shows-a-blank-http-error-400-when-i-press-save)
 16. [Accessibility and Screen Readers](#16-accessibility-and-screen-readers)
     - 16.1 [Making Everything Bigger](#161-making-everything-bigger)
     - 16.2 [Windows High Contrast Mode](#162-windows-high-contrast-mode)
@@ -137,6 +138,10 @@
     - 21.5 [Stopping](#215-stopping)
     - 21.6 [The panel](#216-the-panel)
     - 21.7 [Troubleshooting](#217-troubleshooting)
+22. [RTTY Tuner](#22-rtty-tuner)
+    - 22.1 [Reading the figure](#221-reading-the-figure)
+    - 22.2 [Mark, Shift and Rev](#222-mark-shift-and-rev)
+    - 22.3 [Troubleshooting](#223-troubleshooting)
 
 ---
 
@@ -163,6 +168,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | CW Reader ([§20](#20-cw-reader)) | Yes | Yes | Yes |
 | CW Send ([§21](#21-cw-send)) | Yes | Yes | Yes |
+| RTTY Tuner ([§22](#22-rtty-tuner)) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
 | USB serial driver | **Windows / macOS:** if the radio's COM / `/dev/cu.*` ports are missing or CAT never answers, install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** usually skip — the kernel already includes CP210x support. |
@@ -414,7 +420,14 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.2**) are shown in the top-left corner.
 
-**Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the latest version or if the internet is not available.
+**Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner listing what has changed, with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the newest version or if the internet is not available.
+
+**What it offers you depends on which build you are running, and on nothing else.**
+
+- **On a full release** — for example **v2.5.1** — the banner only ever tells you about another **full release**. Pre-releases are deliberately left out: if you want to try one you go and fetch it yourself from the [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases), rather than being nudged towards a less-tested build while you're operating. There is no setting that changes this.
+- **On a pre-release** — anything with a `-pre` in its name, such as **v2.5.2-pre6** — the banner also tells you about newer pre-releases, and marks them **Pre-release** so you can see what you are being offered. You chose to test, so leaving you on an old test build helps nobody; if you report something that three pre-releases ago fixed, neither of us finds out. When the finished version arrives you are offered that instead.
+
+Either way the banner never offers you a nightly `unstable-` build, and dismissing it is remembered for that version.
 
 **External app buttons** (WSJT-X, JTAlert, Log4OM, GridTracker, Fldigi) appear if they are enabled in Application Setup. The colour of each button indicates status:
 
@@ -524,17 +537,61 @@ The slider snaps to 5 W steps for ease of dragging, but the numerical label show
 
 The spectrum display is only visible if an SDR device has been configured in Settings (**Windows host only** — see §6.3). It shows a real-time spectrum and scrolling waterfall of the band around the current VFO A frequency.
 
-This panel is drawn by YWC from your SDR. It is not the radio's own scope, and nothing here changes what the radio is displaying. To drive the radio's screen instead — its span, waterfall or 3DSS, reference level — see §5.20, which needs no SDR at all.
+This panel is drawn by YWC from your SDR. It is not the radio's own scope, and nothing here changes what the radio is displaying. To drive the radio's screen instead — its span, waterfall or 3DSS, reference level — see §5.20. That needs no SDR at all, though seeing the radio's screen in the browser rather than looking at the rig needs the Radio Display capture hardware (§19).
 
 **Span buttons** — Click **1k**, **2k**, **5k**, **10k**, **20k**, **50k**, **100k**, **200k**, **500k**, **1M** or **2M** to change the visible bandwidth. These are the FTdx101's own scope spans plus 2 MHz, so the browser and the front panel speak the same language. The display recentres on the VFO. From **100k** down the change is instant — the SDR keeps running and only the slice it sends changes (see §6.3 for how); from **200k** up the SDR is retuned, which pauses that panel for a few seconds. For CW, **20k** shows a whole sub-band with each station a few pixels wide and easy to click; **1k** and **2k** show one station as a broad hump, which is what the radio's own scope shows at those spans too — a keyed carrier is not a needle at 7.6 Hz per bin.
 
-**Passband** — tick the **Passband** box (beside the span buttons) to draw the receiver's IF passband as a shaded band on the trace, with the amber dial marker inside it. Its width and position follow the radio's IF Width and IF Shift, so it shows exactly which slice of the band you are listening to, and it moves as you change either control. On the FTdx101 the marker sits at the station's true frequency — see the note on where signals are drawn in §6.3. The setting is remembered per VFO across browser reloads.
+**Passband** — tick the **Passband** box (beside the span buttons) to draw the receiver's IF passband as a shaded band on the trace, with the amber dial marker inside it. Its width and position follow the radio's IF Width and IF Shift, so it shows exactly which slice of the band you are listening to, and it moves as you change either control. On the FTdx101 the marker sits at the station's true frequency — see the note on where signals are drawn in §6.3. In **DATA-L** and **DATA-U** the radio centres its filter on the **DATA SHIFT (SSB)** menu (FUNC → RADIO SETTING → MODE PSK/DATA, 1500 Hz by default) rather than on 1500 Hz, so on the FTdx101 YWC reads that menu from the radio each time a VFO goes into DATA-L or DATA-U, and the trace, the shaded passband and the Filter Function Display follow it. If you change DATA SHIFT while you are in a DATA mode, switch mode away and back to pick it up. The setting is remembered per VFO across browser reloads.
+
+> **In RTTY-L and RTTY-U** the radio's RTTY filter sits on the two tones, not where an SSB filter would be, so the shaded band straddles the amber dial marker: the dial is the upper tone and the other is 170 Hz below it (at the default 170 Hz shift). A wide RTTY filter grows mostly away from the tones, the way the radio's own filter does. The filter display under the S-meter shows the same, centred on 2210 Hz audio (mark + half the shift) rather than 1500. This was measured on the FTdx101MP at the default **MARK 2125 / SHIFT 170** and **POLARITY RX NOR**; YWC reads your radio's MARK and SHIFT and follows them.
 
 ![Spectrum panel at a narrow span on the CW end of 20 m — the receiver's passband is shaded around the amber dial marker, and each CW station is a separate line](pictures/Spectrum_Passband.png)
 
-**Click to tune** — Click anywhere on the spectrum **or the waterfall** to tune VFO A to that frequency. A click on a signal trail in the waterfall QSYs to the frequency of that column, which is the natural way to chase an interesting signal you can see slowly drifting down the screen. **The mode also changes automatically** to match the segment of the band you clicked into — CW below the digital sub-band, DATA-U around the FT8/FT4/RTTY watering holes, USB/LSB in the phone segment, FM at the top of 10m and on 2m/4m. If you click somewhere outside the recognised amateur bands the mode is left as-is. In CW the click puts the station on your CW pitch, ready for the CW reader (§20) — see the note on where signals are drawn in §6.3.
+**Click to tune** — Click anywhere on the spectrum **or the waterfall** to tune VFO A to that frequency. A click on a signal trail in the waterfall QSYs to the frequency of that column, which is the natural way to chase an interesting signal you can see slowly drifting down the screen. **The mode also changes automatically** to match the segment of the band you clicked into — CW below the digital sub-band, DATA-U around the FT8/FT4/RTTY watering holes, USB/LSB in the phone segment, FM at the top of 10m and on 2m/4m. If you click somewhere outside the recognised amateur bands the mode is left as-is. **You can turn the automatic mode change off** in **Settings → §6.1** (*Change mode automatically when tuning from the band plan*) — see the note below. In CW the click puts the station on your CW pitch, ready for the CW reader (§20) — see the note on where signals are drawn in §6.3.
 
-**Mouse wheel to tune** — Scroll the mouse wheel over the spectrum to tune VFO A up or down in 1 kHz steps.
+> **Contest and off-band-plan operating — turning the mode change off.**
+> The band plan is a convention, not a rule, and operators routinely work outside it:
+> RTTY contests run well above 14.100, which the plan calls USB, and 40m SSB is used
+> around 7.050, which the plan calls DATA-U. With the automatic change on, every click
+> on the spectrum puts you back into the "right" mode, so selecting the mode you actually
+> want only lasts until your next click.
+>
+> This is worth more than the annoyance it looks like. Your radio takes transmit audio
+> from the **microphone** in SSB (`SSB MOD SOURCE` defaults to `MIC`) but from the
+> **rear/USB port** in DATA (`DATA MOD SOURCE` defaults to `REAR`). So a mode change you
+> did not ask for can quietly cut your data software out of the transmit path — and
+> because receive audio is produced in every mode, you will not notice until you
+> transmit and nothing goes out.
+>
+> Untick **Change mode automatically when tuning from the band plan** in
+> **Settings → §6.1** and YWC leaves the mode entirely to you. Clicking the spectrum,
+> clicking a DX spot row, and stepping through spots from the keyboard then tune only.
+> Tuning offsets still follow the mode the radio is *actually* in, so a click on a RTTY
+> signal lands where that mode needs it. In the radio's own **RTTY-L** the dial sits on the
+> signal's mark tone, just as it sits on the signal in CW, so click the middle of the two
+> tones and the dial goes to mark, ready for the radio's RTTY decoder. In **DATA-L**, the
+> usual mode for AFSK RTTY where your software makes the tones, the dial is the suppressed
+> carrier, so a click puts it above the signal with the two tones where your RTTY
+> software is listening. YWC takes those tones from the **Mark**, **Shift** and **Rev** in
+> the RTTY Tuner ([§22.2](#222-mark-shift-and-rev)): 2125 Hz and 2295 Hz unless you change
+> them, which is the default in most RTTY software. If your software uses a different
+> mark, 1415 Hz for example, which puts the pair in the middle of the SSB passband, open
+> the tuner once and type it into **Mark**. Every click after that uses it, whether the
+> tuner is open or not. The radio's RTTY MARK menu plays no part in DATA-L, since your
+> software makes the tones.
+>
+> Choosing a named segment (CW, FT8, SSB, RTTY) from a VFO’s band dropdown still sets
+> that segment’s mode either way. That is a choice you made by name, not a mode guessed
+> from a frequency.
+
+**Mouse wheel to tune** — Scroll the mouse wheel over the spectrum to tune that panel's VFO up or down by one **tuning step**. The step starts at 1 kHz and is remembered per VFO across browser reloads. Four things set it, and they all set the same thing:
+
+- **The Step box** on the spectrum's control bar, beside Smooth — anything from 1 Hz to 10 MHz.
+- **Right-click on the spectrum** for the same list as a pop-up menu, with the current step ticked. Escape or a click elsewhere closes it, and the arrow keys, Home and End move through it.
+- **Click a digit in the frequency display** — the digit you pick becomes the wheel step, so clicking the 100 Hz digit gives you a 100 Hz wheel. This is usually the quickest route, because you are already pointing at the digit you want to work in. Every digit works, including the leftmost one: the display shows eight digits, so the coarsest step you can click is 10 MHz.
+- **The Voice Nudge Step Size** for that VFO, from its dropdown or by voice. The wheel and the voice nudge share one step per VFO, so changing either moves the other — except at the top of the range: voice has no phrase for 1 MHz or 10 MHz, so picking either of those for the wheel leaves the voice nudge step where it was.
+
+Every change is announced to screen readers. 1 Hz is now offered everywhere, including the voice nudge — Bruce VK2RT asked for it in [discussion #168](https://github.com/mm5agm/Yaesu_Web_Control/discussions/168), because 1 kHz is far too coarse for chasing RTTY. I have measured the FTdx101MP honouring a 1 Hz step set over CAT exactly, on both receivers; I have not measured the other models. Note that AM and FM bottom out at 10 Hz on the radio's own dial on every model, so a 1 Hz wheel step may not be honoured in those modes.
 
 **Frequency crosshair** — Move the mouse over the spectrum to see the exact RF frequency at the cursor position displayed above the waterfall.
 
@@ -632,6 +689,8 @@ The frequency display shows the current VFO frequency in MHz to 1 Hz resolution 
 4. The radio tunes **live as you scroll** — the frequency is sent several times a second so the rig tracks the display in real time, and the final position is always sent when you stop.
 5. Click anywhere outside the frequency display to deselect.
 
+**Clicking a digit also sets the spectrum wheel step.** Whichever digit you select becomes the step the mouse wheel uses over that VFO's spectrum panel — click the 10 Hz digit and the spectrum tunes in 10 Hz. The step is latched when you click, so it survives deselecting. See §5.4 for the other three ways to set it.
+
 **▲ / ▼ step buttons** — small up/down buttons appear below the frequency display (always on a tablet or phone, and on any device when *Show frequency arrow buttons* is enabled in Settings for accessibility). Tap a digit to select it, then press **▲** / **▼** to step it. **Press and hold to repeat**, and the radio tunes live as it steps — it now tracks each step in real time rather than only jumping to the final value when you release.
 
 ---
@@ -679,6 +738,8 @@ Existing installs auto-populate empty slots on the next startup with whatever th
 
 **Roofing Filter** — Select the roofing filter bandwidth: 12 kHz, 3 kHz, 1.2 kHz, 600 Hz, 300 Hz
 
+Selecting a narrower roofing filter can change the IF Width as well. If IF Width is at 4.0 kHz and you drop the roofing filter from 12 kHz to 3 kHz, the radio itself pulls IF Width down to 3.0 kHz at that moment, and the IF Width dropdown and the Filter Function Display follow — the radio's own screen shows the same change. That is the radio's doing, not the app's: the app only sends the roofing filter command and reads the result back. It is a one-off adjustment, not a limit: you can widen IF Width again afterwards (3.5 kHz behind a 3 kHz roofing filter is allowed, and the roofing filter then does the real narrowing — see the Filter Function Display below), and going back to 12 kHz does not restore the width the narrower filter took away.
+
 **Control column** (the two-column grid of dropdowns to the right):
 
 | Control | Options |
@@ -697,14 +758,21 @@ Existing installs auto-populate empty slots on the next startup with whatever th
 
 All of these settings are read from the radio when the app connects.
 
-**Filter Function Display** — A compact real-time display positioned alongside the band buttons, between the band button column and the receiver controls column. It shows the shape of the active DSP filter passband, matching the style of the filter scope on the FTdx101MP front panel.
+**Filter Function Display** — A compact display positioned alongside the band buttons, between the band button column and the receiver controls column. It draws the shape of the active DSP filter passband from the radio's current IF Width, IF Shift and notch/contour settings, labels the roofing filter, and fills the passband with the receiver's audio spectrum.
+
+![The Filter Function Display in DATA-U at a 3 kHz IF Width on 20 m, with the FT8 stations filling the passband from edge to edge and the roofing filter named in the corner](pictures/Filter_Function_Display.png)
+
+It is drawn the way the radio draws its own: across a fixed audio span of 0–4 kHz, with the passband where it really sits, so a 600 Hz SSB filter is a narrow slot a third of the way across and a 3 kHz one nearly fills the box — put the two side by side and they match. The difference is that this one has frequency labels along the bottom edge, which the radio's does not. (Versions up to 2.5.2 zoomed the axis to fit the passband instead, so the trapezium always filled the panel whatever the width; that mode is still in the code should it ever be wanted back.) The span only stretches when a passband would run past it — AM at 9 kHz, or a wide CW filter about a low pitch.
+
+The trapezium is the DSP filter — the IF Width setting — and it grows and shrinks with that setting alone, as on the radio. The roofing filter is a separate, earlier filter, and where it is narrower than the IF Width you see it in the bars instead: a 300 Hz roofing filter behind a 2.9 kHz IF Width draws as a narrow hump of band noise in the middle of a wide trapezium, with a much lower floor either side, which is exactly what the radio's own display shows. Earlier versions clamped the trapezium to the roofing width, which was reasonable while the bars were not real; now that they are, it hid that hump.
 
 - The **red-bordered trapezoid** represents the active **DSP filter passband** (the IF Width setting). The sloped sides reflect the filter roll-off characteristic at the passband edges.
-- **Green animated bars** inside the trapezoid represent signals passing through the filter. No signals are shown outside the passband, making it immediately clear which audio frequencies are being received.
-- A **"Roof Nk" label** in the top-right corner shows the currently selected roofing filter (e.g. "Roof 3k", "Roof 12k", "Roof 600"). This is useful because the DSP filter is the *active* limit when the roofing filter is wider than the DSP setting — in that case the trapezium looks identical for several roofing choices (12k and 3k both produce the same shape if the DSP filter is set to 3 kHz, since both roofing filters are at least as wide as 3 kHz). The label is the only way to see which roofing is actually in circuit when this happens.
-- **Passband width** reflects the current IF Width setting, automatically constrained by the selected Roofing Filter if it is narrower than the DSP setting. If the roofing filter is wider, the DSP filter is what you see.
-- **Passband position** shifts left or right as the IF Shift slider is adjusted — the display updates live while dragging the slider.
+- **Green bars** inside the trapezoid are the spectrum of the receiver's audio — what the filter is actually passing, the same thing the radio's own filter display draws. YWC gets that audio from the radio's USB sound device: set **Radio RX device** under **Settings → Remote Audio** (§18.2) and the bars appear; remote audio itself does not need to be switched on, and nothing is played anywhere. The host analyses the audio and sends the result to every open main page about twelve times a second; the USB device is opened only while a main page is showing and released when the last one closes. If Remote Audio *is* playing in the browser, the bars come from that instead, with slightly less delay. A switch on the same Settings card, **Show the radio's RX audio in the Filter Function Display**, turns the feed off if you would rather not have the device open. With no RX device set the trapezoid is drawn empty. Earlier versions filled it with a moving pattern that was not derived from any signal at all; that has been removed, because it looked exactly like received signal and it was described here as if it were.
+- A **"Roof Nk" label** in the top-right corner shows the currently selected roofing filter (e.g. "Roof 3k", "Roof 12k", "Roof 600"). The trapezium does not change with it, so the label is how you see which roofing filter is in circuit — and, when it is narrower than the IF Width, the bars show its effect as described above.
+- **Passband width** reflects the current IF Width setting.
+- **Passband position** shifts left or right as the IF Shift slider is adjusted — the display updates live while dragging the slider. Where the passband sits in SSB was measured on my FTdx101MP with the audio feed above, one width at a time: widths of 850 Hz and below are centred on 1500 Hz, the IF centre (300 Hz is roughly 1350–1650 Hz), and the wider settings narrow in from the 3 kHz default with about a third taken off the low side and two-thirds off the high (2.4 kHz is roughly 300–2700 Hz). Earlier versions drew every SSB width starting at 300 Hz and growing upward, which put the trapezium in the wrong place at everything but 3 kHz — and, once the bars were real, put the signal outside it. In CW the passband is centred on your CW pitch for the narrow widths, measured the same way; once a width is too wide to sit centred on the pitch (from about 800 Hz with a 700 Hz pitch) its low edge stops at about 250 Hz and it grows upward from there, so a 3.5 kHz CW filter fills the display much as the radio's own draws it. Earlier versions centred every CW width on the pitch, which sent the wide ones off the left of the display.
 - A **white downward arrow** appears on the top edge of the passband when the Contour filter is active, indicating the contour centre frequency. It moves as the contour frequency slider is adjusted.
+- A **dark vertical bar** marks the Manual Notch frequency while Man Notch is on, and a **cyan wedge** marks the APF peak while APF is on (CW). Both sit at the frequency the radio is set to, so they move with the IF Shift slider along with the rest of the passband.
 - The display updates automatically whenever any filter parameter changes, whether adjusted from the browser or from the radio's front panel.
 
 ---
@@ -715,11 +783,13 @@ All of these settings are read from the radio when the app connects.
 
 The IF Width dropdown is **mode-aware**: the SH command code sent to the radio is the same in every mode, but the resulting bandwidth differs per mode. In SSB code 8 gives 1650 Hz; in CW the same code gives 400 Hz. The dropdown labels are rebuilt automatically when you change mode so they show the actual bandwidth the radio will use.
 
-- **SSB modes** (LSB, USB, DATA-L, DATA-U) show the wide SSB widths — from 300 Hz up to around 3.2 kHz (4 kHz on FTdx10/FT-710).
-- **CW, RTTY, and PSK modes** show the narrow widths — from 50 Hz up to 3 kHz or so.
+- **SSB modes** (LSB, USB) show the wide SSB widths — from 300 Hz up to around 3.2 kHz (4 kHz on FTdx10/FT-710).
+- **CW, RTTY, PSK and DATA modes** (DATA-L, DATA-U) show the narrow widths — from 50 Hz up to 3 kHz or so. DATA uses this set because the radio does: in DATA, code 13 is 1.2 kHz, not the SSB set's 2.3 kHz. Earlier versions labelled DATA with the SSB widths, so picking "2.4 kHz" in DATA-U actually gave you 1.4 kHz. For FT8 and other wide data modes, pick **3.0 kHz** or wider.
 - **AM and FM modes** hide the IF Width dropdown — the SH command does not apply in those modes (the radio uses fixed filters, or a separate narrow/wide mode toggle).
 
 The first entry in the dropdown ("Default") is the radio's mode-dependent default, which varies by the selected roofing filter. The current width is read from the radio on connect; selecting a new value sends it immediately.
+
+Selecting a roofing filter narrower than the current IF Width makes the radio reduce the IF Width to match, and the dropdown updates to show the new value — see the Roofing Filter note in [§5.7](#57-receiver-controls).
 
 **Audio Filter button** — Opens the **Audio Filter** popout dialog for this VFO, where you can adjust the per-mode LCUT FREQ, LCUT SLOPE, HCUT FREQ and HCUT SLOPE. See [§5.18](#518-audio-filter-popout) for the full description. Replaces the IF Low Cut dropdown that was in this row in v2.3.9 and earlier — that control was sending a CAT command no current Yaesu HF radio actually supports, so it was a no-op. The new Audio Filter popout uses EX menu commands that the radio honours.
 
@@ -779,7 +849,7 @@ The last segment you used on each band is remembered, so when you return to a ba
 - **Recall** steps into the QMB and moves to a stored slot; the radio's display shows **QMB**. Pressing Recall again steps to the next stored slot, exactly like short-pressing the front-panel **[QMB]** key.
 - **V/M** leaves QMB mode and returns to normal VFO tuning (the front-panel **[V/M]** key).
 
-![The QMB row on the main control panel — the three buttons Store, Recall and V/M sit on their own row labelled QMB, directly below the band buttons and above the Mode and antenna selectors](pictures/QMB_Button_Placement.png)
+![The QMB row on the main control panel — the three buttons Store, Recall and V/M sit on their own row labelled QMB, directly below the Filter Function Display and its Save to Mem button](pictures/QMB_Button_Placement.png)
 
 Recall is *modal* — once the radio is in QMB mode it stays there until you press **V/M**, so the V/M button is how you get back out without touching the rig. This matters most if you operate entirely from the browser. The radio sends no confirmation back over CAT for these three actions, so the radio's own display (showing **QMB** or not) is the thing to watch. The QMB buttons only appear for radio models that support it.
 
@@ -964,9 +1034,9 @@ The panel is non-modal — it stays open while you use the rest of the app. Drag
 
 ![Right-click context menu on a memory tile showing Recall, Rename, Change Mode and Delete options](pictures/Memories_Tile_Closeup.png)
 
-**Save to Mem button** — A **Save to Mem** button appears below the S-meter on both the VFO A and VFO B panels. Click it to save the current VFO frequency, mode and all advanced settings as a new memory. A label input box appears — type a name (up to 12 characters) and press Enter or click Save. The new memory appears immediately in the floating panel.
+**Save to Mem button** — A **Save to Mem** button sits directly below the Filter Function Display on both the VFO A and VFO B panels. Click it to save the current VFO frequency, mode and all advanced settings as a new memory. A label input box appears — type a name (up to 12 characters) and press Enter or click Save. The new memory appears immediately in the floating panel.
 
-![The Save to Mem button on a VFO panel, sitting next to the Segment dropdown](pictures/Memories_Save_To_Mem_Button.png)
+![The Save to Mem button on a VFO panel, directly below the Filter Function Display and above the QMB row](pictures/QMB_Button_Placement.png)
 
 **Banks dropdown** — a **Banks** dropdown sits in the floating panel's toolbar alongside the Save to Rig buttons. The first entry is always **📥 YWC Starter Bank (built-in)** — the bundled set of common watering-hole memories shipped with the app (§8.5). Below that, any banks you've saved yourself appear (§8.4). Select any entry to switch — the memory list is replaced with that bank's contents and the tiles refresh automatically. The dropdown resets to its placeholder after loading.
 
@@ -1030,7 +1100,7 @@ Click the **DX Spots** button on the toolbar to open a list of DX cluster spots 
 | Spotter | The station that reported the spot |
 | Comment | Free-text comment from the spotter |
 
-**Click any row** to QSY VFO A to that spot's frequency **and switch mode** to match the band-plan segment the frequency falls into (FT8 → DATA-U, CW → CW-U, phone segments → USB or LSB as appropriate, etc.). This matches the click-to-tune behaviour on the spectrum panel — so clicking an FT8 spot from a phone segment flips the radio to DATA-U in one step rather than leaving you on the wrong mode.
+**Click any row** to QSY VFO A to that spot's frequency **and switch mode** to match the band-plan segment the frequency falls into (FT8 → DATA-U, CW → CW-U, phone segments → USB or LSB as appropriate, etc.). This matches the click-to-tune behaviour on the spectrum panel — so clicking an FT8 spot from a phone segment flips the radio to DATA-U in one step rather than leaving you on the wrong mode. It also obeys the same **Settings → §6.1** switch: with *Change mode automatically when tuning from the band plan* unticked, clicking a spot tunes without touching the mode (§5.4).
 
 **Click any column header** to sort by that column; click again to reverse the sort direction. The current sort is shown by a ▲ or ▼ next to the column name.
 
@@ -1125,7 +1195,7 @@ All changes are confirmed by reading the radio's state back after each command, 
 | What you see | A spectrum YWC draws in the browser | The radio's own screen, unchanged |
 | Where the data comes from | An SDR on the rear-panel IF output | The radio's internal scope |
 | What the controls change | What YWC draws | What the **radio** displays |
-| Extra hardware | SDR required | None |
+| Extra hardware | SDR required | See [§19](#19-radio-display) |
 
 The **Radio Scope** card sits above the spectrum panels and is collapsed by default, because these controls reach into the radio rather than into the app. Click the header to expand it. It appears when Radio Display is **off** on radios that support CAT scope control — **FTdx101MP/D** and **FTdx10**. See [§19.4](#194-cat-scope-controls) when Radio Display is on (the same controls dock beside the video by default, or float when the column is hidden). On the **FTdx101MP/D** and **FTdx10**, the captured Radio Display picture itself is also clickable in MONO W/F (tune, and cycle the on-screen readouts and soft-buttons over CAT). The **FT-710** is not.
 
@@ -1208,6 +1278,7 @@ Clicking **Restart Now** stops YWC and (when running as the installed exe) autom
 | Baud Rate | Must match the radio's CAT Rate setting. Default: 38400 |
 | Meter Poll Interval (ms) | Minimum cycle period for CAT meter polls (delay between cycle starts). Default: **200** ms. Valid range: 50–1000. The next cycle starts after this interval minus the time the previous cycle took, so the setting is a target period rather than a raw wait after each poll. Lower values give a faster S-meter update rate but increase CAT bus traffic — if you share the port with WSJT-X or rigctld, reducing this below ~100 ms raises the chance of collisions where both programs try to read the bus at the same time. Raise it (e.g. to 500) if you see erratic readings or CAT timeouts when running digital modes. |
 | Band Plan | **IARU Region 1** (Europe, Africa, Middle East — includes 4m), **IARU Region 2** (Americas), **IARU Region 3** (Asia-Pacific), or **Japan** (JARL). Affects which bands and segment frequencies are shown. UK is Region 1; USA, Canada, and South America are Region 2; Australia, New Zealand, and most of Asia (except Japan) are Region 3. |
+| Change mode automatically when tuning from the band plan | On by default. Clicking the spectrum or a DX spot also sets the mode the band plan gives for that frequency. Turn it **off** for contest or off-band-plan work — RTTY above 14.100 and 40m SSB around 7.050 both fight the automatic change, and an unwanted change can move transmit audio from your data software to the microphone. Picking a named segment from a VFO band dropdown still sets that segment's mode either way. See §5.4. |
 
 After changing the serial port or baud rate, click **Test Connection** to verify the radio responds. A green tick confirms success.
 
@@ -1575,6 +1646,8 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 
 On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close. If the dongle is unplugged, the badge stays **Disconnected** until you refresh the device list and click **Start** — YWC does not reopen whatever camera now sits at the old index. **Auto** and reloading the page do not bypass that halt; only **Start** (after refresh) or choosing a different device clears it.
 
+> **Why the device list needs a Refresh at all.** Loading the page lists the names of your capture devices and nothing else. Finding out which sizes and frame rates a stick actually supports means opening it, and a capture stick does not survive being opened while something already has it open — the whole application disappears, with no error and nothing in the log. So **Refresh** beside the device list is the one place YWC asks, it is yours to press, and it declines while the stream is running. Press it after plugging a stick in, or when you want the size and frame-rate lists filled in for a device you have not used yet.
+
 On **FTdx10** and **FTdx101MP/D**, **Controls** on the video bar opens a dialog to drive the radio’s own scope (span, 3DSS, Center/Cursor/Fix, FFT speed, Level, Peak, Marker, Color, AF-FFT/OSC). HDMI capture is still one-way — clicks never reach the radio’s touchscreen. On the **FTdx101MP/D**, YWC also maps clicks on the captured MONO W/F picture itself to CAT (tune, cycle ANT/ATT/IPO/R.FIL/AGC, and the CURSOR/SPAN/3DSS/HOLD soft-buttons). The **FTdx10** overlay is the same idea: ATT/IPO/R.FIL/AGC, click-to-tune, and CURSOR/3DSS/SPAN/SPEED (no ANT — one jack; MULTI and EXPAND have no CAT command on either radio). **FT-710** has neither the overlay nor CAT scope **Controls**. See [§19.4](#194-cat-scope-controls).
 
 ---
@@ -1652,7 +1725,12 @@ These must match WSJT-X's **Settings → Reporting → UDP Server** settings. Se
 
 ## 8. Radio Memories
 
-The app maintains its own list of memory channels, independent of the radio's built-in memories. You can store as many channels as you like, organised with labels, and recall any of them at a click from the floating Mem panel (see Section 5.15).
+There are two separate sets of memories, and it helps to keep them apart:
+
+- **The radio's own memory channels** — the ones you see on the front panel. The radios YWC supports have **99** of them (channels 001–099). YWC only touches these when you press Import or Export (§8.2, §8.4).
+- **YWC's memories** — a list the app keeps on your PC in `memories.json`, independent of the radio. It holds up to **1,000** memories, each with a label and, if you want, the full receiver setup (§8.1). Recall any of them at a click from the floating Mem panel (see Section 5.15).
+
+So a full import from the radio fills 99 of YWC's 1,000, and you can keep adding your own beside them. This section is about YWC's list.
 
 ### 8.1 Memories Editor
 
@@ -1692,6 +1770,15 @@ The editor shows all your saved memories in a table. For each memory you can edi
 
 Click **Save** to save all changes. Click **Add Memory** to append a blank row. Click the **trash** icon on any row to delete that memory.
 
+**Putting the list in order.** The order of the rows in the editor is the order everywhere else: the Mem panel tiles on the main page, and the order memories go to the radio (§8.4 - **Export to Radio** writes the first 99 in list order, so if your list is longer than the radio this is how you choose which 99 it gets). Two ways to change it:
+
+- Click the **Label**, **Frequency** or **Mode** column heading to sort the whole list by that column; click it again to reverse the sort. Sorting by Mode keeps each mode's memories in frequency order.
+- The three buttons at the right of each row move that memory **to the top**, **up one** or **down one**.
+
+Either way the row numbers change as you go and the message above the table says what you did - and reminds you that the new order is only kept when you press **Save**. Reload without saving and the list goes back to how it was.
+
+> **If Save gave you a blank page reading `HTTP ERROR 400`** on a version before the fix for [discussion #167](https://github.com/mm5agm/Yaesu_Web_Control/discussions/167): that was a limit in the web framework, not anything you did. The page sends every memory in one form, twenty fields per row, and the framework refused any form with more than 1,024 fields - which worked out at 52 memories, so anyone who had imported a reasonably full radio could not save a single label change. The limit now allows 1,000 memories. If you still see it on a current version, reload the page and press Save again: a page left open for a very long time can show the same error for a different reason, and a reload cures that one.
+
 The **Pop Out** button opens the Memories page in a new browser tab — useful if you want to edit memories on a second monitor while the main control panel is open in the first.
 
 **Save to Mem button** — When you click "Save to Mem" on a VFO panel, the app captures the **full live state** of that VFO at the moment you clicked it: frequency, mode, antenna, IF width and shift, roofing, NB/NR/AGC, and power. The memory is added with all advanced fields populated. Edit the label later from the Memories page.
@@ -1707,7 +1794,7 @@ The radio's built-in memory channels can be read into the app using the **Import
 | **Import (Replace)** | Reads channels 001–099 from the radio and replaces ALL app memories with what is found. Your existing app memories are lost. |
 | **Import (Add)** | Reads channels 001–099 from the radio and adds them to your existing app memories without deleting anything. |
 
-Import reads up to 99 channels and takes up to 30 seconds. A progress indicator is shown while it runs. Channels that are empty on the radio are skipped automatically.
+Import reads up to 99 channels and takes up to 30 seconds. A progress indicator is shown while it runs. Channels that are empty on the radio are skipped automatically. Once it has finished, reload the page to see the imported channels in the table; you can then edit their labels and save as normal (before the fix for [discussion #167](https://github.com/mm5agm/Yaesu_Web_Control/discussions/167), Save failed outright once the table held more than about fifty memories - see §8.1).
 
 > **Note:** Importing does not affect the radio — it only reads from it.
 
@@ -1750,6 +1837,8 @@ If a record has no frequency it's skipped silently — most loggers always inclu
 
 > **Warning:** Export to Radio (Replace) overwrites all 99 radio memory channels. Make sure you have imported or backed up anything you want to keep first.
 
+The radio has only 99 channels and YWC can hold 1,000 memories, so if your list is longer than the radio, **Export to Radio** writes the first 99 in list order and stops; **Export to Radio (Add)** fills whatever empty channels it found and reports how many memories had no room. To choose which 99 go, put them at the top of the list first - sort by a column heading or use the row buttons (§8.1) - and press **Save** before you export.
+
 ---
 
 ### 8.5 Memory Banks
@@ -1781,6 +1870,8 @@ The bank is saved immediately. Your current working memories are unchanged.
 Deleting a bank does not affect your current working memories.
 
 Banks are stored in `%APPDATA%\MM5AGM\Yaesu Web Control\memory-banks.json` and are not affected by importing from or exporting to the radio.
+
+A bank holds every field of every memory, advanced fields included. Before the fix on 2026-09-20 loading a bank kept only label, frequency, mode and the clarifier settings, so the antenna, IF width and shift, roofing, NB, NR, AGC, power and notes captured by **Save to Mem** were quietly dropped every time a bank was loaded. A bank saved with an older version still has those fields in the file - they were saved, just not loaded - so loading it again with the current version brings them back.
 
 ---
 
@@ -2389,7 +2480,7 @@ Every VFO frequency display is a "digit-pickable" control. You select a digit (i
 
 | Input | Action | What happens |
 |---|---|---|
-| **Click** a digit | Select | That digit highlights yellow. The next step / arrow / button action acts on it. |
+| **Click** a digit | Select | That digit highlights yellow. The next step / arrow / button action acts on it, and that digit also becomes the spectrum mouse-wheel tuning step for this VFO (§5.4). |
 | **Mouse wheel** over a digit | Select + step | Wheels up = +1, wheels down = −1 on the digit under the cursor. |
 | **Tab** into the freq display | Focus the display | A blue outline appears around the whole display. Now the keyboard keys below act on it. |
 | **ArrowUp** / **ArrowDown** | Step selected digit by ±1 | If no digit is currently highlighted, the first press just highlights the kHz digit (4th from the right) — a second press then steps it. This avoids accidentally changing a digit you can't see is selected. |
@@ -2410,7 +2501,8 @@ A few extra notes:
 
 | Key / Action | Result |
 |---|---|
-| Mouse wheel (on spectrum) | Tune that panel's VFO in 1 kHz steps |
+| Mouse wheel (on spectrum) | Tune that panel's VFO by the current tuning step (1 kHz until you change it — see §5.4) |
+| Right-click (on spectrum) | Open the tuning-step menu, 1 Hz to 10 MHz, current step ticked |
 | Click on spectrum | Tune that panel's VFO to the clicked frequency |
 | **Tab** (in band buttons) | Move focus into the band button group |
 | **← / →** (in band buttons) | Move to the previous/next band and switch immediately |
@@ -2563,7 +2655,9 @@ Up to and including v2.4.2 — and in the v2.4.3 pre-releases up to pre3 — the
 
 **App shuts down unexpectedly after closing the browser**
 
-- This is normal behaviour. When the last browser tab is closed, the app waits 30 seconds for a reconnection before exiting. If you want to keep the app running (for example while WSJT-X is using it via rigctld), leave a browser tab open on the main page. If you need to force-quit immediately without waiting, open Windows Task Manager (**Ctrl+Shift+Esc**), find **Yaesu_Web_Control.exe**, and click **End Task**.
+- This is normal behaviour. When the last browser tab is closed, the app waits 30 seconds for a reconnection before exiting. **Any** page counts as an open tab, including the Remote Audio and Radio Display pop-out windows, so listening on Remote Audio alone will not let the app quit underneath you.
+- If you want the app to keep running with no browser open at all — while WSJT-X is using it via rigctld, say — turn off **Automatically exit when no browser is connected** in **Settings**, and quit it from the system tray on Windows or with Ctrl+C in the console on macOS and Linux. (In Docker the app ignores the setting and always stays up.) Otherwise, just leave any one tab open.
+- If you need to force-quit immediately without waiting, open Windows Task Manager (**Ctrl+Shift+Esc**), find **Yaesu_Web_Control.exe**, and click **End Task**.
 
 **Cannot access the app from a tablet**
 
@@ -2777,6 +2871,16 @@ Checklist:
 6. **Windows / macOS only:** if the steps above still fail, install the Silicon Labs VCP driver from the link above, then **reboot**.
 
 See also [§2.4](#24-usb-serial-driver-windows--macos--linux) and [§3](#3-first-time-setup).
+
+---
+
+### 15.12 The Memories page shows a blank `HTTP ERROR 400` when I press Save
+
+Two different things produce that identical blank page, and they are told apart by what happens on a reload.
+
+**It fails every time, on a freshly loaded page, and you have more than about fifty memories.** This is the form-size limit fixed under [discussion #167](https://github.com/mm5agm/Yaesu_Web_Control/discussions/167): the web framework accepted at most 1,024 form fields, and the Memories page sends twenty per memory, so the page died at 52 memories - exactly the number a full import from the radio produces. Install a version that has the fix (see the *Fixed since the last release* table in the README for which build) and it will take up to 1,000 memories. Nothing was lost: `memories.json` on disk was never touched by the failed save.
+
+**It fails once, after the page has sat open for a long time, and works after a reload.** That is the page's security token expiring - every form in YWC carries one, and it is only good for the life of the page. Reload, make your change again, and Save. Your edits from before the reload are gone, so if you have changed a lot of rows, save as you go rather than at the end.
 
 ---
 
@@ -3039,6 +3143,8 @@ If you can't use a mouse wheel — head-tracking input, on-screen keyboard users
 - Click the ▲ / ▼ buttons to step the selected digit by ±1 (one button click = one ArrowUp / ArrowDown). Press and hold to repeat that step every 500 ms until released.
 - Clicking outside the display deselects.
 
+**The spectrum's tuning step is keyboard-reachable too.** The mouse wheel over a spectrum panel tunes by a settable step (§5.4), and while right-clicking the spectrum is one way to pick that step, it is not the only one: the **Step** box on the spectrum's control bar, beside Smooth, is an ordinary dropdown you can Tab to and change from the keyboard. Selecting a digit in the frequency display sets the same step, so if you tune by ArrowUp / ArrowDown you are setting it as you go.
+
 Originally requested by Yuri W4YSW. Shipped in v2.3.9.
 
 ---
@@ -3062,7 +3168,7 @@ Every command below targets whichever VFO's mic button you're holding down — a
 | Set frequency | "tune to fourteen point zero seven four megahertz", "set frequency to fourteen megahertz" | Held VFO tunes to that frequency. Whole MHz, one decimal, or three decimals; "megahertz" is optional |
 | Change band | "forty metres", "go to twenty metres", "switch to eighty metres"; or the digit form "two zero metres", "eight zero metres" | Held VFO jumps to that band's default (usually FT8) frequency. The lead-in word ("go to" / "switch to") is optional. Bands: 160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6 and 4 metres. "top band" also works for 160 m |
 | Step up / down | "tune up" / "step up" / "nudge up"; "tune down" / "step down" / "nudge down" | Held VFO moves by that VFO's configured step size (see below; default 10 kHz) |
-| Set step size | "set step to ten kilohertz", "step size one kilohertz", or just "ten kilohertz" | Changes the held VFO's step size: 10 Hz, 100 Hz, 1 kHz, 10 kHz, or 100 kHz. The lead-in word is optional here too. Same value as the dropdown next to that VFO's mic button — either one updates the other |
+| Set step size | "set step to ten kilohertz", "step size one kilohertz", or just "ten kilohertz" | Changes the held VFO's step size: 1 Hz, 10 Hz, 100 Hz, 1 kHz, 10 kHz, or 100 kHz — the wheel also offers 1 MHz and 10 MHz, which have no voice phrase. The lead-in word is optional here too. Same value as the dropdown next to that VFO's mic button — either one updates the other, and it is the same step the spectrum mouse wheel uses (§5.4) |
 | Band up / down | "band up" / "band down" | Held VFO jumps to the next/previous ham band |
 | Set mode | "mode U S B", "set mode L S B" (also C W, A M, F M, data, data l, r t t y — spell mode letters out one at a time) | Held VFO switches to that mode |
 | Swap VFOs | "swap V F O", "swap A and B" | VFO A and B contents swap (radio-wide, not VFO-specific) |
@@ -3153,7 +3259,7 @@ The Settings page → Voice Control section has a **Diagnostics** block that sho
 
 **"Tune up" doesn't seem to do much.**
 - Check you're watching the VFO panel whose mic button you actually pressed — each VFO steps independently, so "tune up" spoken into VFO B's button moves VFO B, not VFO A.
-- Each VFO's step size is shown (and changeable) in the dropdown next to that VFO's mic button, default **10 kHz**. If it's set small (e.g. 10 Hz) the movement can be easy to miss. Change it with the dropdown or by voice: "set step to ten kilohertz".
+- Each VFO's step size is shown (and changeable) in the dropdown next to that VFO's mic button, default **10 kHz**. If it's set small (e.g. 1 Hz or 10 Hz) the movement can be easy to miss. Change it with the dropdown or by voice: "set step to ten kilohertz". This is the same per-VFO step the spectrum mouse wheel uses (§5.4), so setting it here changes the wheel too.
 - If you need bigger jumps use "set frequency to …" or "go to … metres" instead.
 
 **Speech engine works for a while then stops responding.**
@@ -3210,6 +3316,8 @@ Remote Audio streams **radio RX → browser speakers** and **browser microphone 
 2. Enable **remote audio**.
 3. Pick **Radio RX device** (capture / what you hear) and **Radio TX device** (playback / where mic audio goes). Both are **required** when the feature is on — YWC will not fall back to the PC’s default mic/speakers (blank TX previously caused browser-mic feedback into the room). Use **Refresh device list** after plugging the radio in. On Windows only **WASAPI** devices are shown. Entries that look like a USB codec are sorted first and marked with a radio icon (📻); renamed devices stay in the full list without the icon.
 4. **Save Settings**. RX/TX software gain is adjusted later via **Mic & Gain** on Home (or the pop-out), not on this page.
+
+Setting **Radio RX device** on its own — with remote audio left off — is enough for the Filter Function Display on the main page to show the receiver's audio spectrum (§5.7); the **Show the radio's RX audio in the Filter Function Display** switch on this card turns that off.
 
 ### 18.3 HTTPS for remote browsers
 
@@ -3783,6 +3891,53 @@ The panel is non-modal: it can stay open while you work the rest of the page, an
 | M5 has the wrong text after sending | The write-back failed, and the status line will have said so. The next line you send from CW Send puts M5 back again; or press **M5** on the CW Keyer panel, which rewrites the slot from YWC’s own text before playing it. |
 | Characters missing from what was sent | Only A–Z, 0–9, space and `? / . ,` are keyed. The rest are dropped before the line is stored. |
 | Nobody comes back to my CQ | Check you are actually transmitting — the banner and the **sent** tag both tell you. Then check the radio: power, antenna, and whether the ATU has tuned on that band. |
+
+---
+
+## 22. RTTY Tuner
+
+The **RTTY Tune** button on the main control panel opens a tuning scope for RTTY, the kind that sat beside every RTTY terminal unit before anything had a waterfall. The receive audio goes through two narrow filters, one on the mark tone and one on the space tone. The mark filter drives the scope sideways and the space filter drives it up and down, so a signal shifting between the two tones draws a cross. You tune for the cross.
+
+It does not decode anything; the radio's own RTTY decoder, or your RTTY software, does that. It only shows you when the signal is sitting where the decoder expects it.
+
+Nothing here transmits. The tuner only listens.
+
+It uses the same capture device as the CW Reader: set the **RX device** to the radio's USB codec under Settings → Remote Audio ([§6.8](#68-remote-audio)). Remote Audio itself does not need to be switched on. The device is held open only while the tuner is open, and let go a couple of seconds after you close it. The CW Reader and the tuner can run together.
+
+### 22.1 Reading the figure
+
+| What you see | What it means |
+|---|---|
+| A clean cross, each arm a thin ellipse | On tune. Mark draws the line across, space the line up. |
+| The arms lean towards each other and open into fat ellipses | Off tune. Each tone is getting into both filters. Tune until they close up. |
+| One arm right, the other a blob or missing | The shift is wrong, **Rev** is wrong, or the station is idling on one tone. |
+| A dim, fuzzy ball in the middle | Noise. Nothing is landing in the tone filters. |
+
+The figure grows to fill the face whatever the signal level. So that plain noise does not look as solid as a signal, the trace is drawn dim whenever little of the audio is landing in the two filters.
+
+Under the scope, a line gives the two filter frequencies and three levels in dBFS: mark filter (**M**), space filter (**S**) and everything the receiver is passing (**in**). The line under that says in words which of the cases above you are looking at.
+
+### 22.2 Mark, Shift and Rev
+
+- **Mark** is the mark tone in the receive audio. In the radio's RTTY-L and RTTY-U that is the radio's own RTTY MARK setting, **2125 Hz** unless you have changed it. In DATA-L it is whatever your RTTY software uses: many operators run **1415 Hz**, which puts the two tones in the middle of the SSB passband.
+- **Shift** is the station's shift. Amateur RTTY is **170 Hz**; 200, 425, 450 and 850 are there for everything else. 450 is the shift of the German weather service broadcasts (DDK9 on 10.1008 MHz, among others), which run all day and are the easiest real RTTY to find when the amateur bands are quiet.
+- **Rev** puts the space filter on the other side of mark. Tick it if the station is sending reversed, or if you have **REV** set on the radio.
+
+Which side of mark the space filter goes on depends on the mode on VFO A:
+
+- **RTTY-L:** space above mark, 2125 and 2295 Hz. I measured this on my FTdx101MP. In RTTY-L the dial sits on the mark tone, and a signal below the dial comes out higher in the audio.
+- **RTTY-U:** space below mark, 2125 and 1955 Hz. This is what upper sideband should do, but I have not measured it. If the figure looks wrong in RTTY-U, try **Rev** and let me know.
+- **DATA-L, DATA-U and anything else:** space above mark, 2125 and 2295 Hz. That is AFSK, where your RTTY software makes the tones, and it is the usual default in RTTY software.
+
+These settings are remembered in the browser. In **DATA-L**, click-to-tune on the spectrum uses them as well, to put a clicked signal's tones where your software is listening ([§5.4](#54-spectrum-display)). So set **Mark** to your software's mark tone even if you never use the tuner.
+
+### 22.3 Troubleshooting
+
+| Symptom | What to try |
+|---|---|
+| Status says the radio audio could not be opened | Set the Remote Audio **RX device** to the radio's USB codec in Settings ([§6.8](#68-remote-audio)). The tuner uses the same device as the CW Reader. |
+| Only ever a fuzzy ball, even on a strong signal | Check that **Mark** and **Shift** match the signal and that the mode is right. A 3 kHz SSB filter passes plenty of noise; a narrower RTTY filter on the radio gives a cleaner cross. |
+| Both arms there but they swap over | That is harmless: the picture is the same either way round. Tick **Rev** if your decoder is printing rubbish. |
 
 ---
 

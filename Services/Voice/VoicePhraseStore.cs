@@ -489,6 +489,7 @@ namespace Yaesu_Web_Control.Services.Voice
                 Triggers   = ["set step", "step size", "nudge step"],
                 Vocabulary = new()
                 {
+                    ["1"]      = ["one hertz"],
                     ["10"]     = ["ten hertz"],
                     ["100"]    = ["one hundred hertz", "hundred hertz"],
                     ["1000"]   = ["one kilohertz", "one k"],

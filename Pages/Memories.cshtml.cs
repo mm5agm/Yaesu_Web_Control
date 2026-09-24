@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Yaesu_Web_Control.Services;
+using RadioWebControl.Core.Models;
+using RadioWebControl.Core.Services;
 
 namespace Yaesu_Web_Control.Pages
 {
@@ -27,9 +29,16 @@ namespace Yaesu_Web_Control.Pages
 
         public async Task<IActionResult> OnPostAsync()
         {
-            // Remove empty rows (no label and no frequency)
+            // Remove empty rows (no label and no frequency), then take the
+            // order the operator left the rows in. The form binds by index,
+            // so a row moved or sorted on the page still arrives at its
+            // original index; the page writes its new position into the
+            // hidden SortOrder field, and that is what we sort on here.
+            // OrderBy is stable, so rows with equal SortOrder (an untouched
+            // page, or an old memories.json with none) keep their index order.
             Memories = Memories
                 .Where(m => m.FrequencyHz > 0 || !string.IsNullOrWhiteSpace(m.Label))
+                .OrderBy(m => m.SortOrder)
                 .ToList();
 
             // Assign sort order from list position
