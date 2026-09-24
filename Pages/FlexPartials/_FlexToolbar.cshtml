@@ -76,19 +76,19 @@
             <ul class="dropdown-menu dropdown-menu-end" id="ywcFlexPanelsMenu" aria-label="Flex panels"></ul>
         </div>
 
-        <label class="d-inline-flex align-items-center gap-1 small mb-0" for="flexLayoutPreset"
-               title="Layout preset (saved separately per device class)">
-            Layout
-            <select id="flexLayoutPreset" class="form-select form-select-sm" style="width:auto;"
-                    aria-label="Flex layout preset">
-                <option value="large">Large (desktop)</option>
-                <option value="medium">Medium</option>
-                <option value="small">Small</option>
+        <label class="d-inline-flex align-items-center gap-1 small mb-0" for="flexLayoutScale"
+               title="UI size — font and component scale. Does not move panels.">
+            Size
+            <select id="flexLayoutScale" class="form-select form-select-sm" style="width:auto;"
+                    aria-label="UI size (font and component scale)">
                 <option value="xsmall">Extra small</option>
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
             </select>
         </label>
         <button type="button" id="flexResetLayoutBtn" class="btn btn-sm btn-outline-secondary"
-                title="Reset the flex layout for the current preset" aria-label="Reset flex layout">
+                title="Reset the panel arrangement to its default positions" aria-label="Reset panel arrangement">
             Reset layout
         </button>
 
