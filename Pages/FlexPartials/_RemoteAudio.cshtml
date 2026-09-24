@@ -22,10 +22,9 @@
 }
 
 
-<div class="op-col op-col--extras">
+<div class="op-col op-col--remote-audio">
                             <!-- Remote Audio — visible when Settings → Remote Audio is enabled -->
                             <div id="remoteAudioBar" class="op-extras-block" style="display:none;">
-                                <strong class="text-nowrap remote-audio-label"><i class="bi bi-soundwave" aria-hidden="true"></i> Remote Audio</strong>
                                 <span class="d-inline-block remote-audio-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                                       data-bs-title="Connect to transceiver audio" aria-label="Connect to transceiver audio">
                                     <button type="button" class="btn btn-sm btn-success remote-audio-icon-btn" id="remoteAudioStartBtn"
@@ -92,14 +91,5 @@
                                 <div class="remote-audio-status-row">
                                     <span class="small text-muted" id="remoteAudioStatus">Idle</span>
                                 </div>
-                            </div>
-
-                            <!-- Clarifier (RIT/XIT) -->
-                            <div id="clarifierRow" class="op-extras-block">
-                                <strong class="text-nowrap clarifier-label"><i class="bi bi-sliders" aria-hidden="true"></i> Clarifier</strong>
-                                <div id="clarVfoButton" data-selected="A"></div>
-                                <div id="clarModeButton" data-selected="@clarModeInit"></div>
-                                <div id="clarOffsetButton"
-                                     data-value="@Model.RadioState.ClarifierOffsetA"></div>
                             </div>
     </div>

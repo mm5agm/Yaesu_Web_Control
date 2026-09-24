@@ -372,26 +372,47 @@
     height: 18px;
 }
 
-/* VFO A/B actions — a centred row of compact keys that wraps when the panel
-   is compacted instead of overflowing. */
+/* VFO A/B actions — same key grid as the Levels panel (auto-fit columns,
+   a 2.65rem row, 0.4rem gap) so the two panels read as one control surface.
+   Falls back to a single column when the panel is compacted. */
 .ywc-panel-body .op-col--vfo-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    grid-auto-rows: minmax(2.65rem, auto);
+    align-items: stretch;
     gap: 0.4rem;
 }
 
 .ywc-panel-body .op-col--vfo-actions > .btn {
-    width: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     flex: 0 0 auto;
 }
 
-/* .col in the markup, capped: the Remote Audio and Clarifier blocks stay on the
+/* These keys carry the toolbar face (1.9rem) because the markup is shared
+   with the top nav. Inside the panel they take the standard operating-bar
+   key size, so their rows line up with the Levels keys beside them. */
+.ywc-panel-body .op-col--vfo-actions .toggle-dd__btn--toolbar {
+    --yaesu-led-w: 0.85rem;
+    --yaesu-led-h: 0.24rem;
+    --yaesu-led-mt: 0.02rem;
+    --yaesu-led-mb: 0.34rem;
+    min-width: 0;
+    min-height: 2.65rem;
+    height: 2.65rem;
+    padding: 0.22rem 0.55rem 0.4rem;
+}
+
+.ywc-panel-body .op-col--vfo-actions .toggle-dd__btn--toolbar .toggle-dd__label {
+    font-size: 0.8rem;
+}
+
+/* .col in the markup, capped: the Remote Audio and Clarifier panels stay on the
    same number of lines as the key columns beside them down to about 32rem, and
    wrap into a taller block below that. Letting the column grow past the cap only
    spreads the same controls over more width. */
-.ywc-panel-body .op-col--extras {
+.ywc-panel-body .op-col--remote-audio,
+.ywc-panel-body .op-col--clarifier {
     max-width: 34rem;
     min-width: 0;
 }
@@ -501,14 +522,6 @@
 
 .ywc-panel-body #clarifierRow .toggle-dd__label {
     font-size: 0.8rem;
-}
-
-.ywc-panel-body .clarifier-label {
-    flex: 0 0 100%;
-}
-
-.ywc-panel-body .remote-audio-label {
-    flex: 0 0 100%;
 }
 
 .remote-audio-status-row {
