@@ -2,22 +2,30 @@
  * Flex UI workspace — builds a Caplin FlexLayout dock from the panel
  * <template>s rendered by Pages/FlexUi.cshtml.
  *
- * The classic Index page is untouched; this module only ever runs at /flexui.
- * It owns: layout presets, persistence, panel templates -> React elements,
- * tab show/hide (so a closed tab can be reopened without a reload), and the
- * toolbar wiring. Panel *initialisation* (meters, spectrum, VFO keys, ...)
- * lives in _FlexScripts.cshtml, which listens for the mount event fired below.
+ * "Layout" here means panel *position*: a single default arrangement that the
+ * user may rearrange by dragging, persisted in localStorage. It is deliberately
+ * NOT exposed as a choice of preset arrangements — multiple arrangements
+ * (phone/tablet/desktop/ultrawide) are a future concern.
+ *
+ * What the toolbar exposes is **scale**: a UI size (x-small / small / medium /
+ * large) that changes font and component size only. Changing scale never moves
+ * a panel.
+ *
+ * The classic Index page is untouched; this module only runs at /flexui. It
+ * owns layout persistence, panel templates -> React elements, tab show/hide
+ * (so a closed tab can be reopened without a reload), scale, and toolbar
+ * wiring. Panel *initialisation* lives in _FlexScripts.cshtml, which listens
+ * for the mount-ready event fired below.
  */
 
-const PRESET_KEY = 'ywc.flexui.preset';
+const LAYOUT_URL = '/js/flexui/layouts/desktop.json';
 const LAYOUT_VERSION = 'v1';
+const ARRANGEMENT_KEY = `ywc.flexui.layout.${LAYOUT_VERSION}`;
+const SCALE_KEY = 'ywc.flexui.scale';
 
-const LAYOUT_URLS = {
-    large: '/js/flexui/layouts/large.json',
-    medium: '/js/flexui/layouts/medium.json',
-    small: '/js/flexui/layouts/small.json',
-    xsmall: '/js/flexui/layouts/xsmall.json',
-};
+/** Root font-size in px for each scale. rem-based Bootstrap/theme sizing scales. */
+const SCALES = { xsmall: 12, small: 14, medium: 16, large: 18 };
+const SCALE_ORDER = ['xsmall', 'small', 'medium', 'large'];
 
 /** Component -> template element id. */
 const TEMPLATE_BY_COMPONENT = {
@@ -49,32 +57,27 @@ const PANELS = [
     { id: 'radioScope', name: 'Radio Scope', component: 'radioScope' },
 ];
 
-const defaultCache = {};
+let defaultLayoutCache = null;
 
-function storageKey(preset) {
-    return `ywc.flexui.${preset}.${LAYOUT_VERSION}`;
-}
-
-/** @returns {'large'|'medium'|'small'|'xsmall'} */
-export function detectPreset() {
+/** @returns {'xsmall'|'small'|'medium'|'large'} */
+export function detectScale() {
     const w = window.innerWidth || 1280;
-    if (w >= 1600) return 'large';
-    if (w >= 1100) return 'large';
-    if (w >= 900) return 'medium';
-    if (w >= 600) return 'small';
+    if (w >= 2000) return 'large';
+    if (w >= 1100) return 'medium';
+    if (w >= 800) return 'small';
     return 'xsmall';
 }
 
-function getActivePreset() {
+function getActiveScale() {
     try {
-        const stored = localStorage.getItem(PRESET_KEY);
-        if (stored && LAYOUT_URLS[stored]) return stored;
+        const stored = localStorage.getItem(SCALE_KEY);
+        if (stored && SCALES[stored]) return stored;
     } catch { /* ignore */ }
-    return detectPreset();
+    return detectScale();
 }
 
-function setActivePreset(preset) {
-    try { localStorage.setItem(PRESET_KEY, preset); } catch { /* ignore */ }
+function setActiveScale(scale) {
+    try { localStorage.setItem(SCALE_KEY, scale); } catch { /* ignore */ }
 }
 
 /** Drop panels the host cannot currently show (no SDR, video off, ...). */
@@ -119,13 +122,12 @@ function filterLayoutJson(json, flags) {
     return clone;
 }
 
-async function loadDefaultJson(preset) {
-    if (defaultCache[preset]) return structuredClone(defaultCache[preset]);
-    const res = await fetch(`${LAYOUT_URLS[preset]}?v=${encodeURIComponent(document.querySelector('meta[name="x-app-version"]')?.content || '')}`);
-    if (!res.ok) throw new Error(`Failed to load ${preset} layout`);
-    const json = await res.json();
-    defaultCache[preset] = json;
-    return structuredClone(json);
+async function loadDefaultJson() {
+    if (defaultLayoutCache) return structuredClone(defaultLayoutCache);
+    const res = await fetch(`${LAYOUT_URL}?v=${encodeURIComponent(document.querySelector('meta[name="x-app-version"]')?.content || '')}`);
+    if (!res.ok) throw new Error('Failed to load flex layout');
+    defaultLayoutCache = await res.json();
+    return structuredClone(defaultLayoutCache);
 }
 
 /**
@@ -236,20 +238,24 @@ export function initFlexWorkspace(host, flags) {
         root: null,
         layoutRef: React.createRef(),
         flags: flags || {},
-        preset: getActivePreset(),
+        scale: getActiveScale(),
     };
 
-    function applyPresetCss(preset) {
-        document.documentElement.dataset.ywcFlexPreset = preset;
-        const size = preset === 'xsmall' ? '14px' : preset === 'small' ? '12px'
-            : preset === 'medium' ? '10px' : '8px';
-        document.documentElement.style.setProperty('--flexlayout-splitter-size', size);
+    function applyScale(scale) {
+        document.documentElement.dataset.ywcFlexScale = scale;
+        // rem is relative to the root, so this is what actually resizes the
+        // Bootstrap/theme-based components. Layout positions are untouched.
+        document.documentElement.style.fontSize = `${SCALES[scale] || 16}px`;
+        // FlexLayout's own chrome is px-based; nudge the splitter with scale.
+        const splitter = scale === 'xsmall' ? 12 : scale === 'small' ? 10 : scale === 'medium' ? 8 : 8;
+        document.documentElement.style.setProperty('--flexlayout-splitter-size', `${splitter}px`);
+        dispatchPanelResize();
     }
 
     function persist() {
         if (!state.model) return;
         try {
-            localStorage.setItem(storageKey(state.preset), JSON.stringify(state.model.toJson()));
+            localStorage.setItem(ARRANGEMENT_KEY, JSON.stringify(state.model.toJson()));
         } catch { /* quota */ }
     }
 
@@ -265,28 +271,27 @@ export function initFlexWorkspace(host, flags) {
         state.root.render(React.createElement(App));
     }
 
-    async function loadModel(preset, { reset = false } = {}) {
-        applyPresetCss(preset);
+    async function loadModel({ reset = false } = {}) {
+        applyScale(state.scale);
         let json = null;
         if (!reset) {
             try {
-                const raw = localStorage.getItem(storageKey(preset));
+                const raw = localStorage.getItem(ARRANGEMENT_KEY);
                 if (raw) json = JSON.parse(raw);
             } catch {
-                localStorage.removeItem(storageKey(preset));
+                localStorage.removeItem(ARRANGEMENT_KEY);
             }
         }
-        json = filterLayoutJson(json || await loadDefaultJson(preset), state.flags);
+        json = filterLayoutJson(json || await loadDefaultJson(), state.flags);
 
         json.global = json.global || {};
         json.global.tabEnableClose = true;
         json.global.tabSetEnableMaximize = true;
 
-        state.preset = preset;
         state.model = FL.Model.fromJson(json);
         state.model.addChangeListener(() => { persist(); dispatchPanelResize(); buildPanelsMenu(); });
         renderApp();
-        syncPresetUi();
+        syncScaleUi();
         queueMicrotask(dispatchPanelResize);
     }
 
@@ -301,9 +306,9 @@ export function initFlexWorkspace(host, flags) {
         });
     }
 
-    function syncPresetUi() {
-        const sel = document.getElementById('flexLayoutPreset');
-        if (sel && sel.value !== state.preset) sel.value = state.preset;
+    function syncScaleUi() {
+        const sel = document.getElementById('flexLayoutScale');
+        if (sel && sel.value !== state.scale) sel.value = state.scale;
         buildPanelsMenu();
     }
 
@@ -362,16 +367,19 @@ export function initFlexWorkspace(host, flags) {
         get model() { return state.model; },
         get api() { return state.model; },
         flags: state.flags,
-        get preset() { return state.preset; },
+        get scale() { return state.scale; },
         panels: PANELS,
-        async setPreset(preset) {
-            if (!LAYOUT_URLS[preset]) return;
-            setActivePreset(preset);
-            await loadModel(preset);
+        scales: SCALE_ORDER,
+        setScale(scale) {
+            if (!SCALES[scale]) return;
+            state.scale = scale;
+            setActiveScale(scale);
+            applyScale(scale);
+            syncScaleUi();
         },
         async resetLayout() {
-            try { localStorage.removeItem(storageKey(state.preset)); } catch { /* ignore */ }
-            await loadModel(state.preset, { reset: true });
+            try { localStorage.removeItem(ARRANGEMENT_KEY); } catch { /* ignore */ }
+            await loadModel({ reset: true });
         },
         showPanel,
         hidePanel,
@@ -379,7 +387,7 @@ export function initFlexWorkspace(host, flags) {
     };
 
     wireToolbar();
-    loadModel(state.preset).then(() => {
+    loadModel().then(() => {
         // Wait until React has committed the initial panels before telling the
         // page its element-dependent init (meters, spectrum, VFO keys, ...)
         // can run. Waiting on a real panel host — not just one frame — avoids
@@ -408,8 +416,7 @@ function wireToolbar() {
     document.getElementById('flexResetLayoutBtn')?.addEventListener('click', () => {
         window.ywcFlex?.resetLayout();
     });
-    document.getElementById('flexLayoutPreset')?.addEventListener('change', (e) => {
-        const v = e.target.value;
-        if (LAYOUT_URLS[v]) window.ywcFlex?.setPreset(v);
+    document.getElementById('flexLayoutScale')?.addEventListener('change', (e) => {
+        window.ywcFlex?.setScale(e.target.value);
     });
 }
