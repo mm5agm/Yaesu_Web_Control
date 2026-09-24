@@ -98,6 +98,21 @@
             for (const fn of q) { try { fn(); } catch (e) { console.error(e); } }
         };
 
+        // Radio Display is not in the default flex layout, so its template is
+        // cloned (and initRadioDisplayUi's #radioDisplayContainer exists) only
+        // after the operator opens the panel. Register at module-eval time, not
+        // inside onFlexReady: a layout saved by an earlier build may still hold
+        // the Radio Display tab, and that tab's mount event fires during the
+        // initial render — before ywc-flex-ready — so an onFlexReady-registered
+        // listener would miss it and leave the panel dead (no device list, no
+        // controls).
+        let _radioDisplayInit = false;
+        window.addEventListener('ywc-flex-template-mounted', (e) => {
+            if (e.detail?.component !== 'radioDisplay' || _radioDisplayInit) return;
+            _radioDisplayInit = true;
+            initRadioDisplayUi('flex');
+        });
+
         const __flexHost = document.getElementById('ywcFlexHost');
         if (__flexHost) {
             initFlexWorkspace(__flexHost, window.ywcFlexFlags || {});
@@ -129,7 +144,6 @@
             window.updateFrequencyDisplay?.('A', @Model.RadioState.FrequencyA);
             window.updateFrequencyDisplay?.('B', @Model.RadioState.FrequencyB);
             initRemoteAudioUi();
-            initRadioDisplayUi('index');
         });
 
         // Flex UI cloning: site.js binds #splitBtn / #quickSplitBtn / #swapVfoBtn /
@@ -178,15 +192,26 @@
             initFreqKeyboard();
             initMemoriesPanel();
 
-            // Radio-scope CAT controls. Bind each host (standalone card and/or
-            // Radio Display Controls dialog) so SignalR updates reach every
-            // instance. The constructor no-ops when the root is absent.
+            // Radio-scope CAT controls for the Radio Display panel. Bind its
+            // Controls dialog so SignalR updates reach the instance. The dialog
+            // is not in the default flex layout, so binding is deferred until the
+            // Radio Display template is first mounted (i.e. opened).
             window.radioScopeControls = [];
-            const scopeCard = document.getElementById('radioScopeCard');
-            if (scopeCard) window.radioScopeControls.push(new RadioScopeControl(scopeCard));
-            const scopeDlg = document.getElementById('radioDisplayScopeDialog');
-            if (scopeDlg) window.radioScopeControls.push(new RadioScopeControl(scopeDlg));
-            window.radioScopeControl = window.radioScopeControls[0] || null;
+            const _boundScopeRoots = new Set();
+            function bindRadioScopeHosts() {
+                const scopeDlg = document.getElementById('radioDisplayScopeDialog');
+                if (scopeDlg && !_boundScopeRoots.has(scopeDlg)) {
+                    _boundScopeRoots.add(scopeDlg);
+                    window.radioScopeControls.push(new RadioScopeControl(scopeDlg));
+                }
+                window.radioScopeControl = window.radioScopeControls[0] || null;
+            }
+            bindRadioScopeHosts();
+            window.addEventListener('ywc-flex-template-mounted', (e) => {
+                if (e.detail?.component === 'radioDisplay') {
+                    bindRadioScopeHosts();
+                }
+            });
 
             // ── UTC clock in the top bar ──────────────────────────────────────
             const utcClockEl = document.getElementById('utcClock');
@@ -233,7 +258,7 @@
             window.spectrumPanelA = spectrumPanelA;
             window.spectrumPanelB = spectrumPanelB;
 
-            // After Radio Scope + spectrum panels exist so z/w/s target detection works.
+            // After spectrum panels exist so z/w/s target detection works.
             initKeyboardShortcuts();
 
             // Region-specific band plan for FT8/CW/SSB markers on both panels.

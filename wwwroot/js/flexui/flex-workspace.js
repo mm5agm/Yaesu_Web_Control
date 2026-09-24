@@ -19,7 +19,7 @@
  */
 
 const LAYOUT_URL = '/js/flexui/layouts/desktop.json';
-const LAYOUT_VERSION = 'v1';
+const LAYOUT_VERSION = 'v3';
 const ARRANGEMENT_KEY = `ywc.flexui.layout.${LAYOUT_VERSION}`;
 const SCALE_KEY = 'ywc.flexui.scale';
 
@@ -39,22 +39,20 @@ const TEMPLATE_BY_COMPONENT = {
     spectrumA: 'tpl-spectrum-a',
     spectrumB: 'tpl-spectrum-b',
     radioDisplay: 'tpl-radio-display',
-    radioScope: 'tpl-radio-scope',
 };
 
 /** Every panel the workspace can show. Order drives the Panels menu. */
 const PANELS = [
-    { id: 'vfoA', name: 'VFO A', component: 'vfoA' },
-    { id: 'vfoB', name: 'VFO B', component: 'vfoB' },
-    { id: 'spectrumA', name: 'Spectrum A', component: 'spectrumA' },
-    { id: 'spectrumB', name: 'Spectrum B', component: 'spectrumB' },
     { id: 'linearMeters', name: 'Linear Meters', component: 'linearMeters' },
     { id: 'levels', name: 'Levels', component: 'levels' },
     { id: 'vfoActions', name: 'VFO Actions', component: 'vfoActions' },
     { id: 'buttons', name: 'Buttons', component: 'buttons' },
     { id: 'extras', name: 'Extras', component: 'extras' },
     { id: 'radioDisplay', name: 'Radio Display', component: 'radioDisplay' },
-    { id: 'radioScope', name: 'Radio Scope', component: 'radioScope' },
+    { id: 'spectrumA', name: 'Spectrum A', component: 'spectrumA' },
+    { id: 'spectrumB', name: 'Spectrum B', component: 'spectrumB' },
+    { id: 'vfoA', name: 'VFO A', component: 'vfoA' },
+    { id: 'vfoB', name: 'VFO B', component: 'vfoB' },
 ];
 
 let defaultLayoutCache = null;
@@ -88,8 +86,8 @@ function filterLayoutJson(json, flags) {
     if (!flags?.spectrumB) drop.add('spectrumB');
     if (!flags?.vfoB) drop.add('vfoB');
     if (!flags?.radioDisplay) drop.add('radioDisplay');
-    if (!flags?.radioScope) drop.add('radioScope');
-    if (drop.size === 0) return structuredClone(json);
+    // Radio Scope panel was removed; scrub it from layouts saved by older builds.
+    drop.add('radioScope');
 
     const clone = structuredClone(json);
     const filterChildren = (node) => {
@@ -325,6 +323,7 @@ export function initFlexWorkspace(host, flags) {
             factory: createTemplateElement,
             ref: state.layoutRef,
             realtimeResize: true,
+            popoutURL: '/popout.html',
             onModelChange: () => { persist(); dispatchPanelResize(); buildPanelsMenu(); },
         });
         state.root.render(React.createElement(App));
@@ -346,6 +345,8 @@ export function initFlexWorkspace(host, flags) {
         json.global = json.global || {};
         json.global.tabEnableClose = true;
         json.global.tabSetEnableMaximize = true;
+        json.global.tabEnablePopout = true;
+        json.global.tabEnablePopoutFloatIcon = true;
 
         state.model = FL.Model.fromJson(json);
         state.model.addChangeListener(() => { persist(); dispatchPanelResize(); buildPanelsMenu(); });
@@ -360,7 +361,6 @@ export function initFlexWorkspace(host, flags) {
             if (p.component === 'spectrumB') return !!state.flags.spectrumB;
             if (p.component === 'vfoB') return state.flags.vfoB !== false;
             if (p.component === 'radioDisplay') return !!state.flags.radioDisplay;
-            if (p.component === 'radioScope') return !!state.flags.radioScope;
             return true;
         });
     }

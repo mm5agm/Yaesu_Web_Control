@@ -84,25 +84,78 @@
     box-sizing: border-box;
 }
 
-/* Merged Buttons panel: lay the keys out as a compact wrapping row. */
-.ywc-panel-body .op-col--buttons {
+/* Radio Display panel: fill the docked tab like the pop-out page, so the
+   video scales with the panel (and with tab maximise) instead of using
+   Index's natural-size cap. Mirrors the inline layout on
+   Pages/RadioDisplay.cshtml. Only the Flex UI renders this component. */
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer {
+    height: 100%;
+    margin: 0;
+    max-width: 100%;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer > .col-12 {
+    height: 100%;
+    padding: 0;
+    max-width: 100%;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .card {
+    height: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .card-header {
+    flex: 0 0 auto;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .card-body {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0 !important;
+    max-height: none !important;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .radio-display-body {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .radio-display-body.controls-docked {
     flex-direction: row;
-    flex-wrap: wrap;
-    align-content: flex-start;
+    height: 100%;
+    min-height: 0;
 }
 
-.ywc-panel-body .op-col--buttons > .btn,
-.ywc-panel-body .op-col--buttons > .toggle-dd,
-.ywc-panel-body .op-col--buttons > .toggle-dd > .toggle-dd__btn {
-    width: auto;
-    max-width: 100%;
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .radio-display-video-pane {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* Keep grid columns from overflowing a narrow docked panel. */
-.ywc-panel-body .op-col--levels {
-    max-width: 100%;
-    overflow: auto;
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .radio-display-body.controls-docked #radioDisplayScopeDialog {
+    max-height: none;
+    align-self: stretch;
 }
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayImg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center center;
+    background: #000;
+}
+
+/* Buttons and level key grids reflow with width — see the responsive rules
+   after the .op-col base rule below. */
 
 /* Linear meters panel: give rows a sensible min width. */
 .ywc-panel-body .linear-meter-canvas,
@@ -139,41 +192,58 @@
     gap: 0.4rem;
 }
 
-.ywc-panel-body .radio-display-toggle,
-.ywc-panel-body .radio-display-toggle > .radio-display-tip,
-.ywc-panel-body .radio-display-toggle > .radio-display-tip > #radioDisplayShowBtn {
+/* Buttons panel — a responsive key grid. Columns appear and disappear with
+   width: one column when the panel is compacted, more as it widens, so the
+   keys never overflow a docked panel. */
+.ywc-panel-body .op-col--buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+    grid-auto-rows: minmax(2.65rem, auto);
+    align-content: start;
+    align-items: stretch;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.ywc-panel-body .op-col--buttons > .btn,
+.ywc-panel-body .op-col--buttons > .toggle-dd,
+.ywc-panel-body .op-col--buttons > .toggle-dd > .toggle-dd__btn,
+.ywc-panel-body .op-col--buttons > #qmbControls {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* QMB keeps its full-cell width inside the buttons grid (its full-width rule
+   on the classic page is scoped to #operatingControlsRow, not the flex body). */
+.ywc-panel-body .op-col--buttons #qmbButton.toggle-dd {
+    display: block;
     width: 100%;
 }
 
-/* The TX level keys and VFO B visibility key form a compact 2-column,
-   3-row control table. */
+.ywc-panel-body .op-col--buttons #qmbButton > .btn {
+    width: 100%;
+}
+
+/* The TX level keys and VFO B visibility key form a key grid that reflows
+   with width: two columns at the natural operating width, collapsing to one
+   when the panel is compacted. Keys keep a stable face — their labels carry
+   changing numeric values, so the grid (not the label) decides each width. */
 .ywc-panel-body .op-col--levels {
     display: grid;
-    grid-template-columns: repeat(2, 10rem);
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
     grid-auto-rows: minmax(2.65rem, auto);
     align-items: stretch;
     gap: 0.4rem;
     min-width: 0;
 }
 
-/* Level keys use a stable compact face. Their labels contain changing numeric
-   values, so the default intrinsic button width would make each face resize
-   when the value changes (e.g. 5 W versus 100 W). */
 .ywc-panel-body .op-col--levels > .toggle-dd,
 .ywc-panel-body .op-col--levels > .toggle-dd > .toggle-dd__btn,
 .ywc-panel-body .op-col--levels > .toggle-dd__btn {
-    width: 10rem;
+    width: 100%;
     max-width: 100%;
-}
-
-.ywc-panel-body .op-col--levels > #vfoBToggleBtn {
-    grid-column: 1;
-    grid-row: 3;
-}
-
-.ywc-panel-body .op-col--levels > #txButton {
-    grid-column: 2;
-    grid-row: 3;
+    min-width: 0;
 }
 
 /* Compact linear SWR / Power bars — leftmost column of the
@@ -302,22 +372,19 @@
     height: 18px;
 }
 
-.ywc-panel-body .op-col--buttons > .btn {
-    width: 100%;
-}
-
-/* col-auto in the markup, like the level column it sits beside. The keys keep
-   their own width here instead of filling the column as elsewhere in this row.
-   The auto margins take whatever width the row has left once the extras column
-   hits its cap, as equal space either side of these keys — without them that
-   slack collects at the end of the row instead. */
+/* VFO A/B actions — a centred row of compact keys that wraps when the panel
+   is compacted instead of overflowing. */
 .ywc-panel-body .op-col--vfo-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
-    margin-inline: auto;
+    justify-content: center;
+    gap: 0.4rem;
 }
 
 .ywc-panel-body .op-col--vfo-actions > .btn {
     width: auto;
+    flex: 0 0 auto;
 }
 
 /* .col in the markup, capped: the Remote Audio and Clarifier blocks stay on the

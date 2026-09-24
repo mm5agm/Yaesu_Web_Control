@@ -2,6 +2,8 @@
   "global": {
     "tabEnableClose": true,
     "tabSetEnableMaximize": true,
+    "tabEnablePopout": true,
+    "tabEnablePopoutFloatIcon": true,
     "rootOrientationVertical": true,
     "splitterSize": 8
   },
@@ -12,31 +14,18 @@
     "children": [
       {
         "type": "row",
-        "weight": 30,
+        "weight": 28,
         "children": [
           {
             "type": "tabset",
-            "weight": 50,
+            "weight": 18,
             "children": [
-              { "type": "tab", "id": "vfoA", "name": "VFO A", "component": "vfoA" }
+              { "type": "tab", "id": "linearMeters", "name": "Linear Meters", "component": "linearMeters" }
             ]
           },
           {
             "type": "tabset",
-            "weight": 50,
-            "children": [
-              { "type": "tab", "id": "vfoB", "name": "VFO B", "component": "vfoB" }
-            ]
-          }
-        ]
-      },
-      {
-        "type": "row",
-        "weight": 18,
-        "children": [
-          {
-            "type": "tabset",
-            "weight": 20,
+            "weight": 16,
             "children": [
               { "type": "tab", "id": "levels", "name": "Levels", "component": "levels" }
             ]
@@ -50,14 +39,14 @@
           },
           {
             "type": "tabset",
-            "weight": 44,
+            "weight": 26,
             "children": [
               { "type": "tab", "id": "buttons", "name": "Buttons", "component": "buttons" }
             ]
           },
           {
             "type": "tabset",
-            "weight": 18,
+            "weight": 22,
             "children": [
               { "type": "tab", "id": "extras", "name": "Extras", "component": "extras" }
             ]
@@ -66,13 +55,20 @@
       },
       {
         "type": "row",
-        "weight": 14,
+        "weight": 34,
         "children": [
           {
             "type": "tabset",
-            "weight": 100,
+            "weight": 55,
             "children": [
-              { "type": "tab", "id": "linearMeters", "name": "Linear Meters", "component": "linearMeters" }
+              { "type": "tab", "id": "spectrumA", "name": "Spectrum A", "component": "spectrumA" }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 45,
+            "children": [
+              { "type": "tab", "id": "spectrumB", "name": "Spectrum B", "component": "spectrumB" }
             ]
           }
         ]
@@ -83,24 +79,17 @@
         "children": [
           {
             "type": "tabset",
-            "weight": 45,
+            "weight": 50,
             "children": [
-              { "type": "tab", "id": "spectrumA", "name": "Spectrum A", "component": "spectrumA" }
+              { "type": "tab", "id": "vfoA", "name": "VFO A", "component": "vfoA" }
             ]
           },
           {
             "type": "tabset",
-            "weight": 35,
+            "weight": 50,
             "children": [
-              { "type": "tab", "id": "spectrumB", "name": "Spectrum B", "component": "spectrumB" }
-            ]
-          },
-          {
-            "type": "tabset",
-            "weight": 20,
-            "children": [
-              { "type": "tab", "id": "radioDisplay", "name": "Radio Display", "component": "radioDisplay" },
-              { "type": "tab", "id": "radioScope", "name": "Radio Scope", "component": "radioScope" }
+              { "type": "tab", "id": "vfoB", "name": "VFO B", "component": "vfoB" },
+              { "type": "tab", "id": "radioDisplay", "name": "Radio Display", "component": "radioDisplay" }
             ]
           }
         ]
