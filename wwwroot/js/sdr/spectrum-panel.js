@@ -11,10 +11,7 @@
 import { autoModeForHz } from '../ui/band-plan.js?v=1';
 import { tuningStep } from '../ui/tuning-step.js?v=1';
 import { formatTuningStep } from '../tuning/tuning-step-store.js?v=1';
-
-// AFSK RTTY in DATA-L: the software's 2125 Hz mark and 2295 Hz space, the
-// default in RTTY software, straddle 2210 Hz. See _tuneOffsetHz.
-const AFSK_RTTY_MIDPOINT_AUDIO_HZ = 2210;
+import { loadRttySettings, afskMidpointAudioHz } from '../rtty/rtty-settings.js?v=1';
 
 export class SpectrumPanel {
 
@@ -890,11 +887,14 @@ export class SpectrumPanel {
      * DATA-L is different: it is plain lower sideband with the dial on the
      * suppressed carrier, and on HF it is how AFSK RTTY is run -- the software
      * makes the tones (discussion #169: Bruce VK2RT runs all his RTTY this
-     * way). So there the dial goes 2210 Hz above the clicked midpoint, putting
-     * the tones on 2125 / 2295 Hz audio -- the AFSK convention RTTY software
-     * defaults to. That is deliberately NOT the radio's RTTY MARK / SHIFT /
-     * POLARITY menus: in DATA-L the software makes the tones and those menus
-     * play no part. DATA-U stays at zero -- that is FT8 and friends, where
+     * way). So there the dial goes above the clicked midpoint by the audio
+     * midpoint of the software's tones, which are the Mark / Shift / Rev set
+     * in the RTTY tuner: 2210 Hz for the 2125 / 170 default, 1500 Hz for the
+     * 1415 Hz mark Bruce actually runs, which sits the pair in the middle of
+     * the SSB passband. Read at click time, so a change in the tuner applies
+     * to the next click. That is deliberately NOT the radio's RTTY MARK /
+     * SHIFT / POLARITY menus: in DATA-L the software makes the tones and
+     * those menus play no part. DATA-U stays at zero -- that is FT8 and friends, where
      * tuning the dial onto the click is the convention.
      *
      * @param {string} mode
@@ -907,7 +907,7 @@ export class SpectrumPanel {
             return this._rttyPolarityRev ? -half : half;
         }
         if (mode === 'DATA-L') {
-            return AFSK_RTTY_MIDPOINT_AUDIO_HZ;
+            return afskMidpointAudioHz(loadRttySettings());
         }
 
         // CW needs none (see above). SSB, the DATA modes, AM and FM are left
