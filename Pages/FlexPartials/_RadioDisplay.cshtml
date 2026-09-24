@@ -27,7 +27,6 @@
         <div class="col-12">
             <div class="card border-dark">
                 <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center gap-2 py-2">
-                    <strong class="me-1"><i class="bi bi-display" aria-hidden="true"></i> Radio Display</strong>
                     <span id="radioDisplayBadge" class="badge bg-secondary">Idle</span>
                     <select id="radioDisplayDeviceSelect" class="form-select form-select-sm"
                             style="width:14rem; max-width:min(14rem, 40vw); min-width:0;"
@@ -41,34 +40,45 @@
                             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
                         </button>
                     </span>
-                    <span class="d-inline-block radio-display-tip" id="radioDisplaySizeWrap"
-                          data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Capture size. Auto picks the best mode for this dongle. Larger modes are usually the dongle upscaling the same picture — no more detail, softer, and about twice the bandwidth."
-                          aria-label="Capture size" hidden>
-                        <select id="radioDisplaySizeSelect" class="form-select form-select-sm"
-                                style="width:7.5rem; max-width:7.5rem;" aria-label="Capture size">
-                            <option value="">Auto size</option>
-                        </select>
-                    </span>
-                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="How fast the picture updates" aria-label="Stream frame rate">
-                        <select id="radioDisplayFpsSelect" class="form-select form-select-sm"
-                                style="width:5.5rem; max-width:5.5rem;" aria-label="Stream frame rate">
-                            <option value="15">15 fps</option>
-                            <option value="30">30 fps</option>
-                            <option value="60">60 fps</option>
-                        </select>
-                    </span>
-                    <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
-                          data-bs-title="Max keeps the image as captured. Low and Medium recompress — smaller stream (saves bandwidth), more CPU."
-                          aria-label="Image quality">
-                        <select id="radioDisplayQualitySelect" class="form-select form-select-sm"
-                                style="width:6.5rem; max-width:6.5rem;" aria-label="Image quality">
-                            <option value="40">Low</option>
-                            <option value="65">Medium</option>
-                            <option value="85" selected>Max</option>
-                        </select>
-                    </span>
+                    @* Capture size, frame rate and image quality grouped behind
+                       one gear menu so the header stays compact. The select ids
+                       are unchanged, so radio-display-ui.js binds them as before. *@
+                    <div class="dropdown">
+                        <button type="button" class="btn btn-sm btn-outline-light dropdown-toggle"
+                                id="radioDisplaySettingsBtn"
+                                data-bs-toggle="dropdown" aria-expanded="false"
+                                title="Stream settings — capture size, frame rate, image quality"
+                                aria-label="Video stream settings">
+                            <i class="bi bi-gear" aria-hidden="true"></i>
+                        </button>
+                        <div class="dropdown-menu p-2" style="min-width:14rem;" aria-label="Video stream settings">
+                            @* d-block keeps this visible even though the shared
+                               JS sets wrap.hidden when the host reports no
+                               sizes (macOS / OpenCV). Mirrors the classic
+                               pages, where d-inline-block did the same. *@
+                            <div id="radioDisplaySizeWrap" class="d-block">
+                                <label class="form-label small mb-1" for="radioDisplaySizeSelect">Capture size</label>
+                                <select id="radioDisplaySizeSelect" class="form-select form-select-sm mb-2"
+                                        aria-label="Capture size">
+                                    <option value="">Auto size</option>
+                                </select>
+                            </div>
+                            <label class="form-label small mb-1" for="radioDisplayFpsSelect">Frame rate</label>
+                            <select id="radioDisplayFpsSelect" class="form-select form-select-sm mb-2"
+                                    aria-label="Stream frame rate">
+                                <option value="15">15 fps</option>
+                                <option value="30">30 fps</option>
+                                <option value="60">60 fps</option>
+                            </select>
+                            <label class="form-label small mb-1" for="radioDisplayQualitySelect">Image quality</label>
+                            <select id="radioDisplayQualitySelect" class="form-select form-select-sm"
+                                    aria-label="Image quality">
+                                <option value="40">Low</option>
+                                <option value="65">Medium</option>
+                                <option value="85" selected>Max</option>
+                            </select>
+                        </div>
+                    </div>
                     <span class="d-inline-block radio-display-tip" data-bs-toggle="tooltip" data-bs-placement="top"
                           data-bs-title="Start or stop the video stream" aria-label="Start or stop the video stream">
                         <button type="button" class="btn btn-sm btn-outline-success" id="radioDisplayStreamBtn"
