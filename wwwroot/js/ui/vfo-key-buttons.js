@@ -906,21 +906,39 @@ export function initVfoKeyButtonsFor(vfo) {
 }
 
 /**
+ * Roots this module has already turned into widgets.
+ *
+ * A `window.<name>` check cannot be used for idempotency here: an element with
+ * id="clarVfoButton" is itself exposed as `window.clarVfoButton` (browser
+ * named access), so the element — not the widget — reads as already done and
+ * the init is skipped. Track the root elements instead.
+ */
+const _initialisedRoots = new WeakSet();
+
+function initSharedOnce(getRoot, initFn) {
+    const root = getRoot();
+    if (!root || _initialisedRoots.has(root)) return null;
+    const widget = initFn();
+    if (widget) _initialisedRoots.add(root);
+    return widget;
+}
+
+/**
  * The VFO-agnostic keys (QMB, Apps, Clarifier), which live in the Buttons and
  * Clarifier panels outside the VFO panels.
  *
- * Idempotent: each widget sets its own `window.*` handle, and this checks
- * that before recreating. The Flex UI can call it at workspace ready and
- * again when a panel that was not mounted at ready is first opened, without
- * duplicating widgets or their listeners.
+ * Idempotent, so the Flex UI can call it at workspace ready and again when a
+ * panel that was not mounted at ready is first opened, without duplicating
+ * widgets or their listeners. A root absent on the first call is simply
+ * picked up on a later one.
  */
 export function initSharedVfoKeyButtons() {
     const result = {};
-    result.qmb = window.qmbButton || initQmbButton();
-    result.apps = window.appsButton || initAppsButton();
-    result.clarVfo = window.clarVfoButton || initClarVfoButton();
-    result.clarMode = window.clarModeButton || initClarModeButton();
-    result.clarOffset = window.clarOffsetButton || initClarOffsetButton();
+    result.qmb = initSharedOnce(() => document.getElementById("qmbButton"), initQmbButton);
+    result.apps = initSharedOnce(() => document.getElementById("appsButton"), initAppsButton);
+    result.clarVfo = initSharedOnce(() => document.getElementById("clarVfoButton"), initClarVfoButton);
+    result.clarMode = initSharedOnce(() => document.getElementById("clarModeButton"), initClarModeButton);
+    result.clarOffset = initSharedOnce(() => document.getElementById("clarOffsetButton"), initClarOffsetButton);
     return result;
 }
 
