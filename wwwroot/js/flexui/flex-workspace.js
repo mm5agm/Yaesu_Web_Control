@@ -19,7 +19,7 @@
  */
 
 const LAYOUT_URL = '/js/flexui/layouts/desktop.json';
-const LAYOUT_VERSION = 'v3';
+const LAYOUT_VERSION = 'v4';
 const ARRANGEMENT_KEY = `ywc.flexui.layout.${LAYOUT_VERSION}`;
 const SCALE_KEY = 'ywc.flexui.scale';
 
@@ -33,7 +33,8 @@ const TEMPLATE_BY_COMPONENT = {
     levels: 'tpl-levels',
     vfoActions: 'tpl-vfo-actions',
     buttons: 'tpl-buttons',
-    extras: 'tpl-extras',
+    remoteAudio: 'tpl-remote-audio',
+    clarifier: 'tpl-clarifier',
     vfoA: 'tpl-vfo-a',
     vfoB: 'tpl-vfo-b',
     spectrumA: 'tpl-spectrum-a',
@@ -47,7 +48,8 @@ const PANELS = [
     { id: 'levels', name: 'Levels', component: 'levels' },
     { id: 'vfoActions', name: 'VFO Actions', component: 'vfoActions' },
     { id: 'buttons', name: 'Buttons', component: 'buttons' },
-    { id: 'extras', name: 'Extras', component: 'extras' },
+    { id: 'remoteAudio', name: 'Remote Audio', component: 'remoteAudio' },
+    { id: 'clarifier', name: 'Clarifier', component: 'clarifier' },
     { id: 'radioDisplay', name: 'Radio Display', component: 'radioDisplay' },
     { id: 'spectrumA', name: 'Spectrum A', component: 'spectrumA' },
     { id: 'spectrumB', name: 'Spectrum B', component: 'spectrumB' },
@@ -81,13 +83,16 @@ function setActiveScale(scale) {
 /** Drop panels the host cannot currently show (no SDR, video off, ...). */
 function filterLayoutJson(json, flags) {
     const drop = new Set();
-    if (!flags?.remoteAudio) drop.add('extras');
+    if (!flags?.remoteAudio) drop.add('remoteAudio');
     if (!flags?.spectrumA) drop.add('spectrumA');
     if (!flags?.spectrumB) drop.add('spectrumB');
     if (!flags?.vfoB) drop.add('vfoB');
     if (!flags?.radioDisplay) drop.add('radioDisplay');
     // Radio Scope panel was removed; scrub it from layouts saved by older builds.
     drop.add('radioScope');
+    // Extras was split into Remote Audio and Clarifier; a layout saved by an
+    // older build still carries the single 'extras' tab.
+    drop.add('extras');
 
     const clone = structuredClone(json);
     const filterChildren = (node) => {
