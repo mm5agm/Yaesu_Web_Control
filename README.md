@@ -13,11 +13,11 @@ Yaesu Web Control (**YWC**) is a continuation of my FTdx101_WebApp with more Yae
 
 > **v2.5.2 is a substantial update for RTTY operators with an SDR connected.** The spectrum now draws every signal where you actually hear it, in every mode and on both sidebands; the shaded passband sits over the RTTY tones, where the radio's filter really is; clicking a RTTY signal tunes onto it in both RTTY-L and DATA-L, using your own software's mark tone; and there is a crossed-ellipse RTTY tuning scope and a tuning step down to 1 Hz. Most of it came from Bruce VK2RT's reports while getting ready for CQ WW RTTY. Everything is written up in the [v2.5.2 notes](#2026-09-24---v252).
 
-### Since v2.5.2 — in the code, not yet in a full release
+**Since v2.5.2** — in the code, not yet in a full release:
 
 Nothing yet.
 
-### New in v2.5.2
+**New in v2.5.2:**
 
 - **An RTTY tuning scope.** The **RTTY Tune** button opens the crossed-ellipse display that used to sit beside every RTTY terminal unit. You tune for a clean cross; the arms lean and open up when you are off tune, and one goes missing when the shift or polarity is wrong. It uses the same USB audio as the CW Reader and transmits nothing. [§22](USER_MANUAL.md#22-rtty-tuner).
 - **A tuning step you can set**, 1 Hz to 10 MHz per VFO, from the **Step** box on the spectrum panel, a right-click on the spectrum, clicking a digit of the frequency display, or the voice command *"set step size one hertz"*. [§5.4](USER_MANUAL.md#54-spectrum-display), [§5.6](USER_MANUAL.md#56-frequency-display-and-tuning).
@@ -383,7 +383,7 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 
 *A substantial update for RTTY operators with an SDR connected. Nearly everything the spectrum display did in RTTY and DATA modes was out by something — where signals were drawn, where the passband was shaded, where a click tuned to — and all of it is now measured on my FTdx101MP and fixed. Most of it came from Bruce VK2RT's reports while getting ready for CQ WW RTTY. It also carries the fixes from nine pre-releases, listed below. Install it over v2.5.1 or any v2.5.2 pre-release; your settings are kept.*
 
-### For RTTY operators with an SDR
+**For RTTY operators with an SDR**
 
 - **Signals are drawn where you hear them, in every mode** ([#172](https://github.com/mm5agm/Yaesu_Web_Control/discussions/172)). On the FTdx101 the radio slides its filter one way in the upper sideband and the other way in the lower, and YWC slid the trace the same way in both. In LSB a station was drawn about 2.6 kHz right of the dial; in DATA-L a signal you were copying was drawn on the dial instead of about 1.5 kHz below it. Re-measured in every mode, using the tone the receiver actually hears; on air it now lands within a few Hz.
 - **YWC reads the radio's DATA SHIFT (SSB) menu** ([#172](https://github.com/mm5agm/Yaesu_Web_Control/discussions/172)). The radio centres its DATA filter on that menu, so anyone who had moved it from 1500 Hz saw every DATA signal off by the difference. The FTdx101 now reports it when a VFO goes into DATA-L or DATA-U, and the trace and passband follow it (measured at 1000 and 1500 Hz). To pick up a change made while already in DATA, switch mode away and back. [§5.4](USER_MANUAL.md#54-spectrum-display).
@@ -395,7 +395,7 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 - **Stop YWC changing the mode when you click** (**Settings → Band Plan**, [#169](https://github.com/mm5agm/Yaesu_Web_Control/discussions/169)). A RTTY contest runs above 14.100, which the band plan calls USB, and a mode change you did not ask for can cut your data software out of the transmit path while receive carries on normally.
 - **YWC read the radio's RTTY MARK setting wrongly**: a radio set to 2125 Hz showed as 1275.
 
-### Other fixes and additions
+**Other fixes and additions**
 
 - **The Filter Function Display shows the receiver's real audio** from the radio's USB audio ([#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161)), with the passband drawn where it really is at every width (measured), a fixed 0–4 kHz span like the radio's own, and AM and FM drawn as the radio draws them ([#166](https://github.com/mm5agm/Yaesu_Web_Control/issues/166)). IF Width and IF Shift are greyed out in AM and FM, where the radio ignores them.
 - **RSPduo: pick Tuner 1 or Tuner 2** ([#161](https://github.com/mm5agm/Yaesu_Web_Control/issues/161)) — it streamed only a flat noise floor before.
@@ -555,7 +555,7 @@ Pressing an M button had done nothing since v1.6.0: it sent `KY <text>;`, and `K
 - **Meter updates pushed over SignalR with less CAT and disk overhead, and RF power scaled to each radio's own rating** ([#122](https://github.com/mm5agm/Yaesu_Web_Control/pull/122), Fabio) — a 100 W radio's gauge no longer tops out at the FTdx101MP's 200 W.
 - Frozen S-meter readings are no longer drawn during transmit (the FTdx101 stops updating `SM` while keyed).
 
-### Other fixes and additions
+**Other fixes and additions**
 
 - **ATU Tune button and voice commands** ([#105](https://github.com/mm5agm/Yaesu_Web_Control/pull/105)) — the auto-tune was only reachable by a long press, which a screen reader cannot announce and voice cannot perform. A keyboard-reachable **Tune** button that becomes **Stop** while a cycle runs, plus tuner voice intents. Existing phrase packs keep your edits.
 - **CTCSS never worked** — six separate faults in the write, the tone table, the parser and the init read; and the Clarifier read never reached the app. All fixed while removing a dead block of start-up code.
