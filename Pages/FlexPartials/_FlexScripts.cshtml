@@ -49,7 +49,7 @@
         import { RadioScopeControl }    from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRadioDisplayUi }   from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initKeyboardShortcuts, syncDisplayTargetButton } from "/js/ui/keyboard-shortcuts.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { initNrCycleButtons }   from "/js/ui/nr-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initNrCycleButton }    from "/js/ui/nr-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initProcCycleButton } from "/js/ui/proc-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMonitorCycleButton } from "/js/ui/monitor-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initPowerCycleButton } from "/js/ui/power-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -127,6 +127,11 @@
             if (!document.getElementById(`bandButton${vfo}`)) return;
             _vfoPanelKeyInit.add(vfo);
             initVfoKeyButtonsFor(vfo);
+            // DNR lives in its own module and is not part of initVfoKeyButtonsFor,
+            // so it has to be initialised here too — otherwise it is missing on
+            // any VFO panel that mounts after the ready-time init has run.
+            const nr = initNrCycleButton(document.getElementById(`nrButton${vfo}`));
+            if (nr) window[`nrCycleButton${vfo}`] = nr;
             try { window.initializeDigitInteraction?.(vfo); } catch (e) { console.error(e); }
             // The state snapshot is sent once, at connect, and broadcasts only
             // fire on change — so a panel mounting later would hold page-load
@@ -158,7 +163,6 @@
         // via updateContourSliderBounds, expecting a real widget not the raw
         // <div>), and before site.js populates the segment keys.
         onFlexReady(() => {
-            initNrCycleButtons();
             initProcCycleButton();
             initMonitorCycleButton();
             initPowerCycleButton();
