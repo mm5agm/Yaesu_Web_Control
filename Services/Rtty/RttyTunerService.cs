@@ -29,6 +29,12 @@ namespace Yaesu_Web_Control.Services.Rtty
     /// It opens no device of its own: it takes a capture hold on the audio
     /// bridge, the same reference-counted hold the CW reader takes, so the two
     /// can run together.
+    ///
+    /// The mode is asked of the radio when the tuner starts. Until the
+    /// connect-time MD0; read lands, RadioStateService still holds the mode
+    /// from the last session's radio_state.json, and on a cold start the
+    /// tuner saw "LSB" there while the radio was in RTTY-L - which puts space
+    /// on the wrong side of mark whenever the radio is really in RTTY-U.
     /// </summary>
     public sealed class RttyTunerService : IDisposable
     {
@@ -51,6 +57,7 @@ namespace Yaesu_Web_Control.Services.Rtty
 
         private readonly RadioAudioBridgeService _bridge;
         private readonly RadioStateService _state;
+        private readonly CatMultiplexerService _mux;
         private readonly ILogger<RttyTunerService> _logger;
         private readonly object _gate = new();
 
@@ -67,10 +74,12 @@ namespace Yaesu_Web_Control.Services.Rtty
 
         public RttyTunerService(RadioAudioBridgeService bridge,
                                 RadioStateService state,
+                                CatMultiplexerService mux,
                                 ILogger<RttyTunerService> logger)
         {
             _bridge = bridge;
             _state = state;
+            _mux = mux;
             _logger = logger;
         }
 
@@ -95,6 +104,10 @@ namespace Yaesu_Web_Control.Services.Rtty
             // Checked both ways round, so a later mode change cannot move space out of range.
             if (markHz + shiftHz > 3500 || markHz - shiftHz < 150)
                 return "That mark and shift put the space tone outside the audio passband.";
+
+            // A re-tone of a running tuner already has the mode: the
+            // ModeA change handler has kept it current since the start.
+            if (!IsRunning) await ReadModeAsync();
 
             bool acquire;
             lock (_gate)
@@ -148,6 +161,24 @@ namespace Yaesu_Web_Control.Services.Rtty
                         markHz, shiftHz, reverse ? "reverse" : "normal", _state.ModeA);
             }
             return null;
+        }
+
+        /// <summary>
+        /// Asks the radio for VFO A's mode; the dispatcher puts the answer
+        /// into RadioStateService. With no answer the tuner goes on with what
+        /// state holds, and the ModeA change handler re-tones when it lands.
+        /// </summary>
+        private async Task ReadModeAsync()
+        {
+            if (!_mux.IsConnected) return;
+            try
+            {
+                await _mux.SendCommandAndDispatchAsync($"MD{RadioCapabilities.ModeP1("A")};", "RttyTuner");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "RTTY tuner could not read the mode - using {Mode}", _state.ModeA);
+            }
         }
 
         /// <summary>The dialog has closed. Takes effect after <see cref="StopDebounce"/> unless restarted.</summary>

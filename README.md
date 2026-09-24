@@ -80,7 +80,11 @@ Every one of these is written up in full in the [release notes](#2026-09-14---v2
 
 One line per fix, newest first, with the build that has it. A pre-release installs exactly like a release and carries everything before it; each one is written up under [Release Notes](#release-notes). *Not yet in a build* means the fix is in the code and will be in the next pre-release or release.
 
-Nothing since v2.5.2 yet. Everything fixed in the v2.5.2 pre-releases is in [v2.5.2](#2026-09-24---v252).
+| Fixed | Issue | In build |
+|---|---|---|
+| RTTY Tuner opened just after YWC started could use the mode from the last session instead of the radio's, which in RTTY-U put the space filter on the wrong side of mark until the radio's mode came in | - | *Not yet in a build* |
+
+Everything fixed in the v2.5.2 pre-releases is in [v2.5.2](#2026-09-24---v252).
 
 **Supported transceivers:**
 

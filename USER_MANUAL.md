@@ -3906,6 +3906,10 @@ It uses the same capture device as the CW Reader: set the **RX device** to the r
 
 ### 22.1 Reading the figure
 
+![RTTY Tuner on a real off-air RTTY signal in RTTY-L on 80 m: a clean cross, mark across and space up, with Mark 2125 Space 2295 Hz, M -31, S -34, in -25 dBFS](pictures/RTTY-Tuner.png)
+
+That is a real RTTY station on 80 m, received on my FTdx101MP in RTTY-L. The two arms are about the same size: mark is at -31 dBFS and space at -34, only 3 dB apart. **Equal arms are what tell you it is RTTY.** A steady carrier in the mark filter draws a bright, convincing line too, but only one, and its space level stays far below its mark level however long you watch.
+
 | What you see | What it means |
 |---|---|
 | A clean cross, each arm a thin ellipse | On tune. Mark draws the line across, space the line up. |
