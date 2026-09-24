@@ -418,7 +418,7 @@ export function initFlexWorkspace(host, flags) {
     const React = window.React;
     const ReactDOM = window.ReactDOM;
     if (!FL?.Model || !React || !ReactDOM?.createRoot) {
-        host.textContent = 'FlexLayout library failed to load.';
+        host.textContent = 'Dockable layout library failed to load.';
         return null;
     }
 
@@ -959,7 +959,7 @@ export function initFlexWorkspace(host, flags) {
         requestAnimationFrame(waitForPanels);
     }).catch((err) => {
         console.error(err);
-        host.textContent = 'Failed to load Flex layout.';
+        host.textContent = 'Failed to load the experimental layout.';
         window.dispatchEvent(new Event('ywc-flex-ready'));
     });
 
