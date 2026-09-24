@@ -18,11 +18,11 @@
 // Radio-agnostic: it talks to /api/rtty and nothing else. The host page
 // provides the dialog and the elements named in the constructor defaults.
 
+import { RTTY_SHIFTS as SHIFTS, DEFAULT_RTTY_SETTINGS, loadRttySettings, saveRttySettings } from './rtty-settings.js';
+
 const POLL_MS    = 50;     // 20 redraws a second
 const POINTS     = 500;    // about 21 ms at 24,000 points a second: one sweep
 const PERSIST    = 6;      // sweeps kept on screen, oldest dimmest
-const SHIFTS     = [170, 200, 425, 450, 850];
-const LS_KEY     = 'rttyTuner';
 const QUIET_DB   = -80;    // below this in both filters there is nothing to draw
 const CHUNK      = 5;      // points per stroke: half a cycle of 2 kHz at 24,000 points a second
 
@@ -51,7 +51,7 @@ export class RttyTuner {
         this._sweeps   = [];       // arrays of [x, y, ...] in amplitude units
         this._scale    = 1e-4;     // decaying peak, so the figure fills the face
         this._last     = null;
-        this._settings = { markHz: 2125, shiftHz: 170, reverse: false };
+        this._settings = { ...DEFAULT_RTTY_SETTINGS };
     }
 
     init() {
@@ -101,20 +101,10 @@ export class RttyTuner {
 
     // ── Settings ────────────────────────────────────────────────────────────
 
-    _loadSettings() {
-        try {
-            const s = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-            if (s) {
-                if (Number.isFinite(s.markHz) && s.markHz >= 300 && s.markHz <= 3000) this._settings.markHz = s.markHz;
-                if (SHIFTS.includes(s.shiftHz)) this._settings.shiftHz = s.shiftHz;
-                this._settings.reverse = !!s.reverse;
-            }
-        } catch { /* private window, blocked storage: defaults stand */ }
-    }
+    // Shared with click-to-tune, which reads them for AFSK modes.
+    _loadSettings() { this._settings = loadRttySettings(); }
 
-    _saveSettings() {
-        try { localStorage.setItem(LS_KEY, JSON.stringify(this._settings)); } catch { /* ignore */ }
-    }
+    _saveSettings() { saveRttySettings(this._settings); }
 
     _showSettings() {
         if (this._markEl)  this._markEl.value    = String(this._settings.markHz);
@@ -194,7 +184,7 @@ export class RttyTuner {
         if (SHIFTS.includes(f.shiftHz) && f.shiftHz !== s.shiftHz) { s.shiftHz = f.shiftHz; changed = true; }
         if (typeof f.reverse === 'boolean' && f.reverse !== s.reverse) { s.reverse = f.reverse; changed = true; }
         if (Number.isFinite(f.markHz) && Math.round(f.markHz) !== s.markHz) { s.markHz = Math.round(f.markHz); changed = true; }
-        if (changed) this._showSettings();
+        if (changed) { this._showSettings(); this._saveSettings(); }
     }
 
     _push(f) {

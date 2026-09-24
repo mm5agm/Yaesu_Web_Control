@@ -11,10 +11,7 @@
 import { autoModeForHz } from '../ui/band-plan.js?v=1';
 import { tuningStep } from '../ui/tuning-step.js?v=1';
 import { formatTuningStep } from '../tuning/tuning-step-store.js?v=1';
-
-// AFSK RTTY in DATA-L: the software's 2125 Hz mark and 2295 Hz space, the
-// default in RTTY software, straddle 2210 Hz. See _tuneOffsetHz.
-const AFSK_RTTY_MIDPOINT_AUDIO_HZ = 2210;
+import { loadRttySettings, afskMidpointAudioHz } from '../rtty/rtty-settings.js?v=1';
 
 export class SpectrumPanel {
 
@@ -44,11 +41,12 @@ export class SpectrumPanel {
         this._cwPitchHz   = 700;
         this._modeName    = '';
 
-        // RTTY tone settings for the radio's own RTTY-L / RTTY-U, where the
-        // dial is on mark: mark sits half a shift off the midpoint the
-        // operator clicks, on the side the polarity says. The mark frequency
-        // itself is not needed. Seeded from the radio's own extended menu via
-        // setRttyTones() (GET /api/cat/rtty); Yaesu's defaults until then.
+        // RTTY tone settings for the radio's own RTTY-L / RTTY-U. The shift
+        // and polarity place the dial half a shift off the midpoint the
+        // operator clicks; the mark frequency anchors the audio-to-RF mapping
+        // of the passband overlay. Seeded from the radio's own extended menu
+        // via setRttyTones() (GET /api/cat/rtty); Yaesu's defaults until then.
+        this._rttyMarkHz      = 2125;
         this._rttyShiftHz     = 170;
         this._rttyPolarityRev = false;
 
@@ -760,13 +758,16 @@ export class SpectrumPanel {
     /**
      * The radio's RTTY tone settings, read from its extended menu by
      * GET /api/cat/rtty. Only the values actually supplied are taken, so a
-     * partial answer leaves the rest at the Yaesu defaults. markHz is ignored:
-     * in RTTY-L / RTTY-U the dial is on mark, and in DATA-L the tones are the
-     * software's, not the radio's (see _tuneOffsetHz).
+     * partial answer leaves the rest at the Yaesu defaults. The click offset
+     * needs only shift and polarity (see _tuneOffsetHz); markHz is used by the
+     * passband overlay (see _passbandRfRange). None of it applies in DATA-L,
+     * where the tones are the software's, not the radio's.
      * @param {{markHz?: number, shiftHz?: number, polarityRev?: boolean}} tones
      */
     setRttyTones(tones) {
         if (!tones) return;
+        const mark = Number(tones.markHz);
+        if (Number.isFinite(mark) && mark > 0) this._rttyMarkHz = mark;
         const shift = Number(tones.shiftHz);
         if (Number.isFinite(shift) && shift > 0) this._rttyShiftHz = shift;
         if (typeof tones.polarityRev === 'boolean') this._rttyPolarityRev = tones.polarityRev;
@@ -883,18 +884,24 @@ export class SpectrumPanel {
      * space in RF (REV below). Stepping the RTTY-L dial across the same
      * carrier showed it is lower sideband about mark: the carrier at the dial
      * comes out at 2125 Hz audio and 50 Hz lower in RF comes out 50 Hz higher,
-     * so a 2295 Hz space tone is 170 Hz below mark in RF. No real RTTY signal
-     * was on the air to confirm the decoder prints, and RTTY-U has not been
-     * checked on the rig at all.
+     * so a 2295 Hz space tone is 170 Hz below mark in RF. RTTY-U, stepped
+     * across the same carrier on 2026-09-24 (#178), is upper sideband about
+     * mark + shift: the carrier at the dial comes out at 2295 Hz and 200 Hz
+     * higher in RF at 2495. So the two tones sit at dial - 170 and dial in
+     * RTTY-U too, and the same +85 lands them. Only POLARITY-RX NOR was
+     * measured.
      *
      * DATA-L is different: it is plain lower sideband with the dial on the
      * suppressed carrier, and on HF it is how AFSK RTTY is run -- the software
      * makes the tones (discussion #169: Bruce VK2RT runs all his RTTY this
-     * way). So there the dial goes 2210 Hz above the clicked midpoint, putting
-     * the tones on 2125 / 2295 Hz audio -- the AFSK convention RTTY software
-     * defaults to. That is deliberately NOT the radio's RTTY MARK / SHIFT /
-     * POLARITY menus: in DATA-L the software makes the tones and those menus
-     * play no part. DATA-U stays at zero -- that is FT8 and friends, where
+     * way). So there the dial goes above the clicked midpoint by the audio
+     * midpoint of the software's tones, which are the Mark / Shift / Rev set
+     * in the RTTY tuner: 2210 Hz for the 2125 / 170 default, 1500 Hz for the
+     * 1415 Hz mark Bruce actually runs, which sits the pair in the middle of
+     * the SSB passband. Read at click time, so a change in the tuner applies
+     * to the next click. That is deliberately NOT the radio's RTTY MARK /
+     * SHIFT / POLARITY menus: in DATA-L the software makes the tones and
+     * those menus play no part. DATA-U stays at zero -- that is FT8 and friends, where
      * tuning the dial onto the click is the convention.
      *
      * @param {string} mode
@@ -907,7 +914,7 @@ export class SpectrumPanel {
             return this._rttyPolarityRev ? -half : half;
         }
         if (mode === 'DATA-L') {
-            return AFSK_RTTY_MIDPOINT_AUDIO_HZ;
+            return afskMidpointAudioHz(loadRttySettings());
         }
 
         // CW needs none (see above). SSB, the DATA modes, AM and FM are left
@@ -1511,6 +1518,23 @@ export class SpectrumPanel {
             return this._isLowerSideband(mode)
                 ? { loHz: this._vfoHz + pitch - pb.hi, hiHz: this._vfoHz + pitch - pb.lo }
                 : { loHz: this._vfoHz - pitch + pb.lo, hiHz: this._vfoHz - pitch + pb.hi };
+        }
+
+        // The radio's RTTY modes: the dial is on a tone, not the suppressed
+        // carrier, so audio maps to RF through that tone. Measured on the
+        // FTdx101MP against the 810 kHz carrier (2026-09-23/24, #178): RTTY-L
+        // is lower sideband about mark (the dial comes out at the mark
+        // frequency, 2125 Hz), RTTY-U upper sideband about mark + shift (the
+        // dial comes out at 2295 Hz). The filter is centred on 2210 Hz audio
+        // in both, so the shaded band straddles the two tones at dial - 170
+        // and dial. Treating RTTY-L as plain LSB drew it 1.2-1.8 kHz below.
+        if (mode === 'RTTY-L') {
+            const a = this._rttyMarkHz;
+            return { loHz: this._vfoHz + a - pb.hi, hiHz: this._vfoHz + a - pb.lo };
+        }
+        if (mode === 'RTTY-U') {
+            const a = this._rttyMarkHz + this._rttyShiftHz;
+            return { loHz: this._vfoHz - a + pb.lo, hiHz: this._vfoHz - a + pb.hi };
         }
 
         // Lower sideband inverts: the highest audio frequency is the LOWEST RF.

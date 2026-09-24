@@ -543,7 +543,7 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 
 **Passband** — tick the **Passband** box (beside the span buttons) to draw the receiver's IF passband as a shaded band on the trace, with the amber dial marker inside it. Its width and position follow the radio's IF Width and IF Shift, so it shows exactly which slice of the band you are listening to, and it moves as you change either control. On the FTdx101 the marker sits at the station's true frequency — see the note on where signals are drawn in §6.3. The setting is remembered per VFO across browser reloads.
 
-> **Known problem in RTTY-L and RTTY-U:** the shaded passband is drawn in the wrong place in the radio's own RTTY modes. It is drawn as though RTTY-L were plain LSB, which puts it about 0.6-1.8 kHz below the dial, where the radio is not listening. The amber dial marker and click-to-tune are both right; only the shading is wrong. I will fix it once I have measured where the radio's RTTY filter really sits, rather than guess. Until then, in RTTY aim by the marker, not the shading, or untick **Passband**.
+> **In RTTY-L and RTTY-U** the radio's RTTY filter sits on the two tones, not where an SSB filter would be, so the shaded band straddles the amber dial marker: the dial is the upper tone and the other is 170 Hz below it (at the default 170 Hz shift). A wide RTTY filter grows mostly away from the tones, the way the radio's own filter does. The filter display under the S-meter shows the same, centred on 2210 Hz audio (mark + half the shift) rather than 1500. This was measured on the FTdx101MP at the default **MARK 2125 / SHIFT 170** and **POLARITY RX NOR**; YWC reads your radio's MARK and SHIFT and follows them.
 
 ![Spectrum panel at a narrow span on the CW end of 20 m — the receiver's passband is shaded around the amber dial marker, and each CW station is a separate line](pictures/Spectrum_Passband.png)
 
@@ -571,10 +571,14 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 > signal's mark tone, just as it sits on the signal in CW, so click the middle of the two
 > tones and the dial goes to mark, ready for the radio's RTTY decoder. In **DATA-L**, the
 > usual mode for AFSK RTTY where your software makes the tones, the dial is the suppressed
-> carrier, so a click puts it above the signal and the two tones on 2125 Hz and 2295 Hz,
-> the default in RTTY software. The radio's RTTY MARK menu plays no part in DATA-L, since
-> your software makes the tones; if you have moved your software's tones away from 2125 Hz,
-> the click lands off by the same amount.
+> carrier, so a click puts it above the signal with the two tones where your RTTY
+> software is listening. YWC takes those tones from the **Mark**, **Shift** and **Rev** in
+> the RTTY Tuner ([§22.2](#222-mark-shift-and-rev)): 2125 Hz and 2295 Hz unless you change
+> them, which is the default in most RTTY software. If your software uses a different
+> mark, 1415 Hz for example, which puts the pair in the middle of the SSB passband, open
+> the tuner once and type it into **Mark**. Every click after that uses it, whether the
+> tuner is open or not. The radio's RTTY MARK menu plays no part in DATA-L, since your
+> software makes the tones.
 >
 > Choosing a named segment (CW, FT8, SSB, RTTY) from a VFO’s band dropdown still sets
 > that segment’s mode either way. That is a choice you made by name, not a mode guessed
@@ -3915,7 +3919,7 @@ Under the scope, a line gives the two filter frequencies and three levels in dBF
 
 ### 22.2 Mark, Shift and Rev
 
-- **Mark** is the mark tone in the receive audio. Leave it at **2125 Hz** unless you know your setup uses something else.
+- **Mark** is the mark tone in the receive audio. In the radio's RTTY-L and RTTY-U that is the radio's own RTTY MARK setting, **2125 Hz** unless you have changed it. In DATA-L it is whatever your RTTY software uses: many operators run **1415 Hz**, which puts the two tones in the middle of the SSB passband.
 - **Shift** is the station's shift. Amateur RTTY is **170 Hz**; 200, 425, 450 and 850 are there for everything else. 450 is the shift of the German weather service broadcasts (DDK9 on 10.1008 MHz, among others), which run all day and are the easiest real RTTY to find when the amateur bands are quiet.
 - **Rev** puts the space filter on the other side of mark. Tick it if the station is sending reversed, or if you have **REV** set on the radio.
 
@@ -3925,7 +3929,7 @@ Which side of mark the space filter goes on depends on the mode on VFO A:
 - **RTTY-U:** space below mark, 2125 and 1955 Hz. This is what upper sideband should do, but I have not measured it. If the figure looks wrong in RTTY-U, try **Rev** and let me know.
 - **DATA-L, DATA-U and anything else:** space above mark, 2125 and 2295 Hz. That is AFSK, where your RTTY software makes the tones, and it is the usual default in RTTY software.
 
-These settings are remembered in the browser.
+These settings are remembered in the browser. In **DATA-L**, click-to-tune on the spectrum uses them as well, to put a clicked signal's tones where your software is listening ([§5.4](#54-spectrum-display)). So set **Mark** to your software's mark tone even if you never use the tuner.
 
 ### 22.3 Troubleshooting
 
