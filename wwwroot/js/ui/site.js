@@ -1078,6 +1078,11 @@ async function checkTxStatus() {
 // ---------------------------------------------------------------------------
 const connection = window.ywcHubConnection("/radioHub");
 
+// The connection that receives RadioStateUpdate. Exposed so the Flex UI can
+// ask for a fresh state snapshot (hub method RequestState) when a VFO panel
+// mounts after the connect-time snapshot has already gone out.
+window.ywcRadioConnection = connection;
+
 // Redirect to Settings page if the backend signals an init failure
 connection.on("ShowSettingsPage", function () {
     window.location.href = "/Settings";
@@ -3410,6 +3415,9 @@ window.setApfFreq = setApfFreq;
     // Kick everything off
     initializeDigitInteraction('A');
     initializeDigitInteraction('B');
+    // Exposed so the Flex UI can bind digit interaction for a VFO panel whose
+    // tab first mounts after this point (see initVfoPanel in _FlexScripts).
+    window.initializeDigitInteraction = initializeDigitInteraction;
     // Overwrite the interim window.radioControl with the real implementations
     window.radioControl = {
         setFrequency,
