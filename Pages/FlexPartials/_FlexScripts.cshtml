@@ -54,7 +54,7 @@
         import { initMonitorCycleButton } from "/js/ui/monitor-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initPowerCycleButton } from "/js/ui/power-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMicGainCycleButton } from "/js/ui/mic-gain-cycle-button.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { initVfoKeyButtons }    from "/js/ui/vfo-key-buttons.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { initVfoKeyButtonsFor, initSharedVfoKeyButtons } from "/js/ui/vfo-key-buttons.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initFlexWorkspace }    from "/js/flexui/flex-workspace.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
         // Published on flex-ready rather than at module eval: site.js's
@@ -113,6 +113,37 @@
             initRadioDisplayUi('flex');
         });
 
+        // A VFO panel's DOM is cloned the first time its tab is mounted.
+        // Everything element-dependent is initialised once at ywc-flex-ready,
+        // so a VFO that was not mounted at that moment would never get its
+        // Yaesu keys, frequency digits or edit handlers. Initialise it on
+        // first mount instead. The workspace now forces the VFO tabs to render
+        // regardless of which is selected (forceVfoRenderOnDemand), so this
+        // normally fires during the initial render; it also covers a VFO
+        // reopened from the Panels menu when it was never in any loaded layout.
+        const _vfoPanelKeyInit = new Set();
+        function initVfoPanel(vfo) {
+            if (_vfoPanelKeyInit.has(vfo)) return;
+            if (!document.getElementById(`bandButton${vfo}`)) return;
+            _vfoPanelKeyInit.add(vfo);
+            initVfoKeyButtonsFor(vfo);
+            try { window.initializeDigitInteraction?.(vfo); } catch (e) { console.error(e); }
+            // The state snapshot is sent once, at connect, and broadcasts only
+            // fire on change — so a panel mounting later would hold page-load
+            // values. Ask for the snapshot again now its widgets exist. Skip it
+            // on the initial mount: the connect snapshot and the ready-time
+            // seed below already cover that, and the workspace is not ready
+            // until they have run.
+            if (__ywcFlexReady.ready) {
+                try { window.ywcRadioConnection?.invoke('RequestState').catch(() => {}); } catch { /* ignore */ }
+            }
+            try { _renderToolbarStatus(true); } catch (e) { console.error(e); }
+        }
+        window.addEventListener('ywc-flex-template-mounted', (e) => {
+            const m = /^vfo([AB])$/.exec(e.detail?.component || '');
+            if (m) initVfoPanel(m[1]);
+        });
+
         const __flexHost = document.getElementById('ywcFlexHost');
         if (__flexHost) {
             initFlexWorkspace(__flexHost, window.ywcFlexFlags || {});
@@ -132,7 +163,13 @@
             initMonitorCycleButton();
             initPowerCycleButton();
             initMicGainCycleButton();
-            initVfoKeyButtons();
+            initSharedVfoKeyButtons();
+            // The VFO panels normally mounted during the initial render (their
+            // tabs force renderOnDemand off), and initVfoPanel is a no-op for
+            // the ones already done. A VFO that is absent here is initialised
+            // when its tab first mounts.
+            initVfoPanel('A');
+            initVfoPanel('B');
             window.bandPlanData = BAND_PLANS;
             window.getBandSegments = getSegments;
             window.getBandSegmentForHz = segmentForHz;
