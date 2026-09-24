@@ -19,7 +19,7 @@
  */
 
 const LAYOUT_URL = '/js/flexui/layouts/desktop.json';
-const LAYOUT_VERSION = 'v4';
+const LAYOUT_VERSION = 'v5';
 const ARRANGEMENT_KEY = `ywc.flexui.layout.${LAYOUT_VERSION}`;
 const SCALE_KEY = 'ywc.flexui.scale';
 
