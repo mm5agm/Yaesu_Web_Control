@@ -10,33 +10,40 @@
 // Stateless: every call reads storage afresh, so a page that imports this by
 // two different URLs (two module instances) still sees one set of settings.
 
+// Every shift in ordinary RTTY use. This is the fallback, not a radio table:
+// which of these a given rig can actually be set to is a per-radio fact, so
+// the host page says so by the options it puts in its Shift control and the
+// tuner reads them from there. Nothing here knows about any one radio.
 export const RTTY_SHIFTS = [170, 200, 425, 450, 850];
 export const DEFAULT_RTTY_SETTINGS = Object.freeze({ markHz: 2125, shiftHz: 170, reverse: false });
 
 const LS_KEY = 'rttyTuner';
 
 /** A valid settings object from anything; whatever is missing or out of range takes the default. */
-export function normaliseRttySettings(s) {
+export function normaliseRttySettings(s, allowed = RTTY_SHIFTS) {
+    const shifts = (Array.isArray(allowed) && allowed.length) ? allowed : RTTY_SHIFTS;
     const out = { ...DEFAULT_RTTY_SETTINGS };
+    // The default shift need not be one this radio has.
+    if (!shifts.includes(out.shiftHz)) out.shiftHz = shifts[0];
     if (!s || typeof s !== 'object') return out;
     const mark = Number(s.markHz);
     const shift = Number(s.shiftHz);
     if (Number.isFinite(mark) && mark >= 300 && mark <= 3000) out.markHz = Math.round(mark);
-    if (RTTY_SHIFTS.includes(shift)) out.shiftHz = shift;
+    if (shifts.includes(shift)) out.shiftHz = shift;
     out.reverse = s.reverse === true;
     return out;
 }
 
-export function loadRttySettings(storage = globalThis.localStorage) {
+export function loadRttySettings(storage = globalThis.localStorage, allowed = RTTY_SHIFTS) {
     try {
-        return normaliseRttySettings(JSON.parse(storage?.getItem(LS_KEY) || 'null'));
+        return normaliseRttySettings(JSON.parse(storage?.getItem(LS_KEY) || 'null'), allowed);
     } catch {
-        return { ...DEFAULT_RTTY_SETTINGS };   // private window, blocked storage
+        return normaliseRttySettings(null, allowed);   // private window, blocked storage
     }
 }
 
-export function saveRttySettings(settings, storage = globalThis.localStorage) {
-    try { storage?.setItem(LS_KEY, JSON.stringify(normaliseRttySettings(settings))); } catch { /* ignore */ }
+export function saveRttySettings(settings, storage = globalThis.localStorage, allowed = RTTY_SHIFTS) {
+    try { storage?.setItem(LS_KEY, JSON.stringify(normaliseRttySettings(settings, allowed))); } catch { /* ignore */ }
 }
 
 /**
