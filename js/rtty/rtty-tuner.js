@@ -26,6 +26,8 @@ const PERSIST    = 6;      // sweeps kept on screen, oldest dimmest
 const QUIET_DB   = -80;    // below this in both filters there is nothing to draw
 const CHUNK      = 5;      // points per stroke: half a cycle of 2 kHz at 24,000 points a second
 const RADIO_MS   = 4000;  // how often to re-read the radio's RTTY menu while open
+const FETCH_MS   = 2000;   // a frame request that takes longer than this is abandoned
+const RESTART_MS = 3000;   // at most one automatic restart this often
 
 // How much of what the receiver passes lands in the two tone filters, in dB.
 // RTTY on tune puts nearly all of it there; noise, or a signal off to one side,
@@ -63,6 +65,7 @@ export class RttyTuner {
         this._pushBusy    = false;   // a radio-tones write is outstanding
         this._pushPending = null;    // the newest tones to write once it finishes
         this._statusHold  = 0;       // Date.now() until which _draw must not overwrite
+        this._restartAt   = 0;       // Date.now() of the last automatic restart
     }
 
     init() {
@@ -107,6 +110,15 @@ export class RttyTuner {
             this._send('stop');
         });
 
+        // A tab in the background gets its timers slowed or frozen by the
+        // browser, the host stops the tuner after 15 s without a poll, and
+        // the figure used to sit on "Stopped." until the dialog was reopened.
+        // Coming back to the tab starts it again at once; _poll covers the
+        // cases this event does not see.
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && this._dialog.open) this._restart();
+        });
+
         if (window.ResizeObserver) {
             new ResizeObserver(() => { this._resize(); this._draw(); }).observe(this._canvas);
         }
@@ -134,7 +146,10 @@ export class RttyTuner {
 
     // Shared with click-to-tune, which reads them for AFSK modes.
     _loadSettings() {
-        this._settings = loadRttySettings();
+        // Read against this radio's set, so a shift stored by an older build that
+        // offered more rungs snaps to one this radio has rather than leaving the
+        // Shift control showing nothing.
+        this._settings = loadRttySettings(undefined, this._shifts());
 
         // Storage does not record whether the saved tones were typed or taken
         // from the radio, and on a reload that is exactly what the sync needs
@@ -147,7 +162,18 @@ export class RttyTuner {
         this._radioApplied = untouched ? { ...this._settings } : null;
     }
 
-    _saveSettings() { saveRttySettings(this._settings); }
+    _saveSettings() { saveRttySettings(this._settings, undefined, this._shifts()); }
+
+    // Which shifts this radio has, taken from the options the host page put in
+    // its Shift control. The IC-7300 offers three (170/200/425, CI-V 00 40);
+    // another rig offers another set, and neither list belongs in shared code.
+    // Falls back to the standard set when the control is missing.
+    _shifts() {
+        const opts = this._shiftEl?.options;
+        if (!opts || !opts.length) return SHIFTS;
+        const list = Array.from(opts, o => Number(o.value)).filter(Number.isFinite);
+        return list.length ? list : SHIFTS;
+    }
 
     _showSettings() {
         if (this._markEl)  this._markEl.value    = String(this._settings.markHz);
@@ -159,7 +185,7 @@ export class RttyTuner {
         const mark  = Number(this._markEl?.value);
         const shift = Number(this._shiftEl?.value);
         if (Number.isFinite(mark) && mark >= 300 && mark <= 3000) this._settings.markHz = Math.round(mark);
-        if (SHIFTS.includes(shift)) this._settings.shiftHz = shift;
+        if (this._shifts().includes(shift)) this._settings.shiftHz = shift;
         this._settings.reverse = !!this._revEl?.checked;
     }
 
@@ -250,7 +276,7 @@ export class RttyTuner {
             if (!r.ok) { if (manual) this._setStatus(r.reason || 'The radio did not answer.', 4000); return; }
 
             const mark  = Number.isFinite(r.markHz) ? Math.round(r.markHz) : null;
-            const shift = SHIFTS.includes(r.shiftHz) ? r.shiftHz : null;
+            const shift = this._shifts().includes(r.shiftHz) ? r.shiftHz : null;
             if (mark === null && shift === null) return;
 
             if (!manual) {
@@ -317,9 +343,10 @@ export class RttyTuner {
             if (!r.ok) { this._setStatus(r.reason || 'The radio would not take those tones.', 4000); return; }
 
             // Only the parts the radio actually took. A null is a value with no
-            // rung on this radio - 450 and 850 Hz shift, for instance - and the
-            // tuner goes on using it regardless, because it is a receive aid
-            // and the radio's menu is not what makes it work.
+            // rung on this radio, and the tuner goes on using it regardless,
+            // because it is a receive aid and the radio's menu is not what makes
+            // it work. With the Shift control now offering only rungs the radio
+            // has, a null shift means a mark the menu cannot express, not a shift.
             const took = [];
             if (r.markHz  != null) took.push(`mark ${r.markHz} Hz`);
             if (r.shiftHz != null) took.push(`shift ${r.shiftHz} Hz`);
@@ -363,14 +390,32 @@ export class RttyTuner {
         this._draw();
     }
 
+    // Start the host again after it stopped without being asked to - see the
+    // visibilitychange handler in init. Rate-limited, so a host that cannot
+    // start (no audio device, say) is not asked twenty times a second.
+    _restart() {
+        const now = Date.now();
+        if (now - this._restartAt < RESTART_MS) return;
+        this._restartAt = now;
+        this._send('start');
+    }
+
     async _poll() {
         // A slow reply must not stack requests behind it: skip a frame instead.
+        // But a reply that never comes must not stop the polling for good,
+        // which is what _inFlight alone did: hence the abort.
         if (this._inFlight) return;
         this._inFlight = true;
+        const abort = new AbortController();
+        const bail  = setTimeout(() => abort.abort(), FETCH_MS);
         try {
-            const res = await fetch(`/api/rtty/tuner?points=${POINTS}`);
+            const res = await fetch(`/api/rtty/tuner?points=${POINTS}`, { signal: abort.signal });
             if (!res.ok) return;
             const f = await res.json();
+            // The dialog is open and still polling, so a stopped host was not
+            // our doing: the page went quiet long enough for the host's idle
+            // stop, or the app restarted underneath it.
+            if (!f.running && this._dialog?.open) this._restart();
             this._last = f;
             this._adoptServerSettings(f);
             this._push(f);
@@ -378,6 +423,7 @@ export class RttyTuner {
         } catch {
             // One dropped frame in twenty. Not worth saying.
         } finally {
+            clearTimeout(bail);
             this._inFlight = false;
         }
     }
@@ -417,7 +463,7 @@ export class RttyTuner {
         }
 
         let changed = false;
-        if (SHIFTS.includes(f.shiftHz) && f.shiftHz !== s.shiftHz) { s.shiftHz = f.shiftHz; changed = true; }
+        if (this._shifts().includes(f.shiftHz) && f.shiftHz !== s.shiftHz) { s.shiftHz = f.shiftHz; changed = true; }
         if (typeof f.reverse === 'boolean' && f.reverse !== s.reverse) { s.reverse = f.reverse; changed = true; }
         if (Number.isFinite(f.markHz) && Math.round(f.markHz) !== s.markHz) { s.markHz = Math.round(f.markHz); changed = true; }
 
