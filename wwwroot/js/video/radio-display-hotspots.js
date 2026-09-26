@@ -128,18 +128,54 @@ const CONDITIONS = {
 // for the red VFO line (spectrum only — the waterfall can hold red streaks in
 // the hotter colour schemes).
 //
+// `scope.screen` says how to tell that the frame really is the scope screen
+// (#179). The zones only fit that screen: on the RTTY / CW decode screen the
+// radio puts DEC LVL where CURSOR is, and a click there cycled the scope
+// placement on every press. A screen check names zones by id: at least `min`
+// of `lit` must hold label text and every one of `dark` must hold none. With
+// no `scope.screen` every frame counts as the scope screen.
+//
+// `decode` is the RTTY / PSK / CW decode screen: its own check and zones,
+// used only when that check passes, so a menu or any other screen stays
+// dead. Built-in only — layout overrides and measure() leave it alone.
+//
 // Add a radio by adding an entry: the zones it has, what each does, and
 // rects once someone has measured them (a zone with no rect is inert but
 // still listed by measure()).
 const LAYOUTS = {
     // FTdx101MP / FTdx101D, MONO layout, W/F display. Measured from
     // pictures/Radio_Display_Docked.png and bench-confirmed 2026-09-12.
-    // MONO / MULTI / EXPAND / MEM CH have no CAT command on this radio —
+    // MONO / MULTI / EXPAND have no CAT command on this radio —
     // EXPAND here is the vertical expand, not L/N/S.
     FTdx101: {
         scope: {
             plot:   [0.003, 0.520, 0.986, 0.812],
             marker: [0.003, 0.540, 0.986, 0.720],
+            // Measured 2026-09-26 on the FTdx101MP: 3DSS..HOLD are 8-12 %
+            // bright pixels on the scope screen and exactly 0 % on both the
+            // RTTY and CW decode screens, whose button row is empty there.
+            screen: { lit: ['dss3', 'mono', 'multi', 'expand', 'hold'], min: 3 },
+        },
+        // Neither soft-key has a CAT command (CAT manual 2308-L): nothing
+        // opens or closes the decode screen, and the threshold is set by
+        // touching DEC LVL and turning MULTI, which SF cannot assign it to.
+        // DEC LVL / DEC OFF cells are 12-13 % text on both decode screens,
+        // but CENTER / SPAN fill the same cells on the scope screen, so the
+        // check also needs the scope's own cells empty.
+        // The ANT..AGC readout row is drawn in the same place on the decode
+        // screen (same frames), so those zones stay live there: `keep`.
+        decode: {
+            screen: {
+                lit: ['declvl', 'decoff'], min: 2,
+                dark: ['dss3', 'mono', 'multi', 'expand', 'hold'],
+            },
+            keep: ['ant', 'att', 'ipo', 'rfil', 'agc', 'multifn'],
+            zones: {
+                declvl: { rect: [0.003, 0.847, 0.124, 0.902], action: 'none',
+                          hint: 'DEC LVL has no CAT command — touch it on the radio, then turn MULTI to set the decode threshold' },
+                decoff: { rect: [0.128, 0.847, 0.247, 0.902], action: 'none',
+                          hint: 'DEC OFF has no CAT command — touch it on the radio to close the decode screen' },
+            },
         },
         zones: {
             ant:    { rect: [0.003, 0.416, 0.196, 0.476], action: 'readout.ant' },
@@ -154,7 +190,10 @@ const LAYOUTS = {
             multi:  { rect: [0.487, 0.847, 0.606, 0.902], action: 'none', hint: 'MULTI has no CAT command — press it on the radio' },
             expand: { rect: [0.609, 0.847, 0.729, 0.902], action: 'none', hint: 'EXPAND has no CAT command — press it on the radio' },
             hold:   { rect: [0.732, 0.847, 0.851, 0.902], action: 'scope.hold' },
-            memch:  { rect: [0.854, 0.847, 0.971, 0.902], action: 'none', hint: 'MEM CH has no CAT command' },
+            // The right-hand box shows what the MULTI knob is set to (MONI LEVEL,
+            // MEM CH, ...), not a MEM CH key: it read MEM CH in the picture
+            // this was measured from. Colin 2026-09-26: MULTI / MONI LEVEL.
+            multifn: { rect: [0.854, 0.847, 0.971, 0.902], action: 'none', hint: 'What the MULTI knob is set to — set it on the radio' },
         },
     },
     // FTdx10 MONO W/F. Pixel boxes from Fabio 2026-09-12 on an 800-wide
@@ -207,6 +246,9 @@ function normalizeLayout(raw, builtin) {
     const out = emptyLayout();
     if (!raw || typeof raw !== 'object') return out;
     out.scope = { ...(raw.scope || {}) };
+    // An override saved before the screen check existed still gets it.
+    if (!out.scope.screen && builtin?.scope?.screen) out.scope.screen = builtin.scope.screen;
+    if (builtin?.decode) out.decode = builtin.decode;
     const src = {};
     for (const group of ['readouts', 'buttons'])
         for (const [id, z] of Object.entries(raw[group] || {})) src[id] = z;
@@ -270,6 +312,21 @@ function inZone(z, fx, fy, nw, nh) {
     return !!r && fx >= r[0] && fx <= r[2] && fy >= r[1] && fy <= r[3];
 }
 
+// Share of pixels in an RGBA block bright enough to be label text (white or
+// the blue of a selected soft-key). An empty soft-key cell reads 0.
+export function textFraction(rgba) {
+    const n = rgba.length / 4;
+    if (!n) return 0;
+    let lit = 0;
+    for (let i = 0; i < rgba.length; i += 4)
+        if (Math.max(rgba[i], rgba[i + 1], rgba[i + 2]) > 150) lit++;
+    return lit / n;
+}
+
+// A soft-key cell holds a label when this share of it is text. The labels
+// measure 8-12 %, an empty cell 0 %, so anything in between would do.
+const LABEL_MIN_FRACTION = 0.02;
+
 // Generic measure list for a radio with no built-in table; a model with one
 // measures the zones it declares instead.
 const MEASURE_GENERIC = [
@@ -329,6 +386,7 @@ export class RadioDisplayHotspots {
         this._canvas = document.createElement('canvas');
         this._ctx = this._canvas.getContext('2d', { willReadFrequently: true });
         this._marker = { at: 0, x: null };
+        this._screen = { at: 0, name: 'scope' };
         this._busy = false;
         this._lastScopeRefresh = 0;
         this._debug = localStorage.getItem(DEBUG_KEY) === '1';
@@ -520,12 +578,27 @@ export class RadioDisplayHotspots {
     _hit(fx, fy) {
         const L = this.layout;
         const { nw, nh } = this._nat();
+        const screen = this._screenNow();
+        if (screen === 'decode') {
+            for (const [id, zone] of this._decodeZones())
+                if (inZone(zone.rect, fx, fy, nw, nh)) return { kind: 'zone', id, zone };
+            return null;
+        }
+        if (screen !== 'scope') return null;
         for (const [id, zone] of Object.entries(L.zones || {})) {
             if (this._zoneHidden(zone)) continue;
             if (inZone(zone.rect, fx, fy, nw, nh)) return { kind: 'zone', id, zone };
         }
         if (inZone(L.scope?.plot, fx, fy, nw, nh)) return { kind: 'scope' };
         return null;
+    }
+
+    /** [id, zone] pairs live on the decode screen: the kept scope zones, then its own. */
+    _decodeZones() {
+        const D = this.layout.decode;
+        if (!D) return [];
+        const kept = (D.keep || []).filter(id => this.layout.zones?.[id]).map(id => [id, this.layout.zones[id]]);
+        return [...kept, ...Object.entries(D.zones || {})];
     }
 
     /** True when one of the zone's hideWhen conditions holds for the scope now. */
@@ -571,7 +644,12 @@ export class RadioDisplayHotspots {
         const hit = this._hit(f.fx, f.fy);
         this.overlay.style.cursor = hit ? (hit.kind === 'scope' ? 'crosshair' : 'pointer') : 'default';
 
-        if (!hit) { this._hideCursor(); return; }
+        if (!hit) {
+            // Say why nothing is clickable, rather than going quiet.
+            if (this._screenNow() !== 'scope') this._showCursor(null, 'Radio is not on the scope screen — clicks are off');
+            else this._hideCursor();
+            return;
+        }
 
         if (hit.kind === 'scope') {
             const r = this._freqAt(f.fx);
@@ -757,6 +835,49 @@ export class RadioDisplayHotspots {
         return this._marker.x;
     }
 
+    /**
+     * Which screen the frame shows: 'scope' (the zones were measured on it),
+     * 'decode', or 'other'. A layout with no scope check, or no frame to look
+     * at yet, counts as the scope screen. Cached for 250 ms, like the marker.
+     */
+    _screenNow() {
+        if (!this.layout?.scope?.screen) return 'scope';
+        const now = Date.now();
+        if (now - this._screen.at < 250) return this._screen.name;
+        this._screen.at = now;
+        this._screen.name = 'scope';
+        if (!this._grabFrame()) return 'scope';
+
+        if (this._checkPasses(this.layout.scope.screen) !== false) this._screen.name = 'scope';
+        else if (this.layout.decode?.screen && this._checkPasses(this.layout.decode.screen)) this._screen.name = 'decode';
+        else this._screen.name = 'other';
+        return this._screen.name;
+    }
+
+    /**
+     * Run one screen check against the frame already in the canvas. Zone ids
+     * are looked up in the scope zones, then the decode zones. null when no
+     * cell could be measured (nothing to judge by).
+     */
+    _checkPasses(check) {
+        const { nw, nh } = this._nat();
+        const W = this._canvas.width, H = this._canvas.height;
+        const labelled = id => {
+            const rect = (this.layout.zones?.[id] || this.layout.decode?.zones?.[id])?.rect;
+            const z = normalizeZone(rect, nw, nh);
+            if (!z) return null;
+            const x0 = Math.round(z[0] * W), y0 = Math.round(z[1] * H);
+            const w = Math.round(z[2] * W) - x0, h = Math.round(z[3] * H) - y0;
+            if (w <= 0 || h <= 0) return null;
+            return textFraction(this._ctx.getImageData(x0, y0, w, h).data) >= LABEL_MIN_FRACTION;
+        };
+        const lit = (check.lit || []).map(labelled).filter(v => v !== null);
+        const dark = (check.dark || []).map(labelled).filter(v => v !== null);
+        if (!lit.length && !dark.length) return null;
+        const min = Math.min(check.min ?? lit.length, lit.length);
+        return lit.filter(Boolean).length >= min && !dark.some(Boolean);
+    }
+
     // ── actions ──────────────────────────────────────────────────────────────
 
     /** POST and return the parsed JSON reply (null on failure). */
@@ -872,6 +993,20 @@ export class RadioDisplayHotspots {
             g.fillStyle = colour; g.fillText(hidden ? `${label} (hidden)` : label, x + 3, y + 12);
         };
         const L = this.layout;
+        // On some other screen the scope boxes would only be drawn over
+        // controls that are not there, so say so and draw nothing else — bar
+        // the decode screen's own hint zones when that is the screen.
+        const screen = this._measureDrag || this._measureQueue.length ? 'scope' : this._screenNow();
+        if (screen !== 'scope') {
+            if (screen === 'decode')
+                for (const [id, zone] of this._decodeZones())
+                    box(zone.rect, (zone.action || '').startsWith('readout.') ? '#0f0' : '#aaa', id);
+            g.fillStyle = '#f66';
+            g.fillText(screen === 'decode'
+                ? 'decode screen: readouts live, scope zones off, DEC LVL / DEC OFF are hints only'
+                : 'not the scope screen: all zones off', 6, c.height - 6);
+            return;
+        }
         // Green = readout, yellow = scope soft-key, grey = no CAT action;
         // dashed = hidden by a hideWhen condition right now.
         for (const [id, zone] of Object.entries(L.zones || {})) {
