@@ -128,6 +128,13 @@ const CONDITIONS = {
 // for the red VFO line (spectrum only — the waterfall can hold red streaks in
 // the hotter colour schemes).
 //
+// `scope.screen` says how to tell that the frame really is the scope screen
+// (#179). The zones only fit that screen: on the RTTY / CW decode screen the
+// radio puts DEC LVL where CURSOR is, and a click there cycled the scope
+// placement on every press. `zones` are soft-keys whose labels are on screen
+// only when the scope is; the frame counts as the scope screen when at least
+// `min` of them hold text. With no `scope.screen` every frame counts.
+//
 // Add a radio by adding an entry: the zones it has, what each does, and
 // rects once someone has measured them (a zone with no rect is inert but
 // still listed by measure()).
@@ -140,6 +147,10 @@ const LAYOUTS = {
         scope: {
             plot:   [0.003, 0.520, 0.986, 0.812],
             marker: [0.003, 0.540, 0.986, 0.720],
+            // Measured 2026-09-26 on the FTdx101MP: 3DSS..HOLD are 8-12 %
+            // bright pixels on the scope screen and exactly 0 % on both the
+            // RTTY and CW decode screens, whose button row is empty there.
+            screen: { zones: ['dss3', 'mono', 'multi', 'expand', 'hold'], min: 3 },
         },
         zones: {
             ant:    { rect: [0.003, 0.416, 0.196, 0.476], action: 'readout.ant' },
@@ -207,6 +218,8 @@ function normalizeLayout(raw, builtin) {
     const out = emptyLayout();
     if (!raw || typeof raw !== 'object') return out;
     out.scope = { ...(raw.scope || {}) };
+    // An override saved before the screen check existed still gets it.
+    if (!out.scope.screen && builtin?.scope?.screen) out.scope.screen = builtin.scope.screen;
     const src = {};
     for (const group of ['readouts', 'buttons'])
         for (const [id, z] of Object.entries(raw[group] || {})) src[id] = z;
@@ -270,6 +283,21 @@ function inZone(z, fx, fy, nw, nh) {
     return !!r && fx >= r[0] && fx <= r[2] && fy >= r[1] && fy <= r[3];
 }
 
+// Share of pixels in an RGBA block bright enough to be label text (white or
+// the blue of a selected soft-key). An empty soft-key cell reads 0.
+export function textFraction(rgba) {
+    const n = rgba.length / 4;
+    if (!n) return 0;
+    let lit = 0;
+    for (let i = 0; i < rgba.length; i += 4)
+        if (Math.max(rgba[i], rgba[i + 1], rgba[i + 2]) > 150) lit++;
+    return lit / n;
+}
+
+// A soft-key cell holds a label when this share of it is text. The labels
+// measure 8-12 %, an empty cell 0 %, so anything in between would do.
+const LABEL_MIN_FRACTION = 0.02;
+
 // Generic measure list for a radio with no built-in table; a model with one
 // measures the zones it declares instead.
 const MEASURE_GENERIC = [
@@ -329,6 +357,7 @@ export class RadioDisplayHotspots {
         this._canvas = document.createElement('canvas');
         this._ctx = this._canvas.getContext('2d', { willReadFrequently: true });
         this._marker = { at: 0, x: null };
+        this._screen = { at: 0, ok: true };
         this._busy = false;
         this._lastScopeRefresh = 0;
         this._debug = localStorage.getItem(DEBUG_KEY) === '1';
@@ -519,6 +548,7 @@ export class RadioDisplayHotspots {
 
     _hit(fx, fy) {
         const L = this.layout;
+        if (!this._onScopeScreen()) return null;
         const { nw, nh } = this._nat();
         for (const [id, zone] of Object.entries(L.zones || {})) {
             if (this._zoneHidden(zone)) continue;
@@ -571,7 +601,12 @@ export class RadioDisplayHotspots {
         const hit = this._hit(f.fx, f.fy);
         this.overlay.style.cursor = hit ? (hit.kind === 'scope' ? 'crosshair' : 'pointer') : 'default';
 
-        if (!hit) { this._hideCursor(); return; }
+        if (!hit) {
+            // Say why nothing is clickable, rather than going quiet.
+            if (!this._onScopeScreen()) this._showCursor(null, 'Radio is not on the scope screen — clicks are off');
+            else this._hideCursor();
+            return;
+        }
 
         if (hit.kind === 'scope') {
             const r = this._freqAt(f.fx);
@@ -757,6 +792,37 @@ export class RadioDisplayHotspots {
         return this._marker.x;
     }
 
+    /**
+     * True when the frame is the screen the zones were measured on (see
+     * `scope.screen`). A layout with no check, or no frame to look at yet,
+     * counts as the scope screen. Cached for 250 ms, like the marker.
+     */
+    _onScopeScreen() {
+        const check = this.layout?.scope?.screen;
+        if (!check || !Array.isArray(check.zones) || !check.zones.length) return true;
+        const now = Date.now();
+        if (now - this._screen.at < 250) return this._screen.ok;
+        this._screen.at = now;
+        this._screen.ok = true;
+
+        if (!this._grabFrame()) return true;
+        const { nw, nh } = this._nat();
+        const W = this._canvas.width, H = this._canvas.height;
+        let labelled = 0, measured = 0;
+        for (const id of check.zones) {
+            const z = normalizeZone(this.layout.zones?.[id]?.rect, nw, nh);
+            if (!z) continue;
+            const x0 = Math.round(z[0] * W), y0 = Math.round(z[1] * H);
+            const w = Math.round(z[2] * W) - x0, h = Math.round(z[3] * H) - y0;
+            if (w <= 0 || h <= 0) continue;
+            measured++;
+            if (textFraction(this._ctx.getImageData(x0, y0, w, h).data) >= LABEL_MIN_FRACTION) labelled++;
+        }
+        const min = Math.min(check.min ?? measured, measured);
+        this._screen.ok = measured === 0 || labelled >= min;
+        return this._screen.ok;
+    }
+
     // ── actions ──────────────────────────────────────────────────────────────
 
     /** POST and return the parsed JSON reply (null on failure). */
@@ -872,6 +938,13 @@ export class RadioDisplayHotspots {
             g.fillStyle = colour; g.fillText(hidden ? `${label} (hidden)` : label, x + 3, y + 12);
         };
         const L = this.layout;
+        // On some other screen the boxes would only be drawn over controls
+        // that are not there, so say so and draw nothing else.
+        if (!this._measureDrag && !this._measureQueue.length && !this._onScopeScreen()) {
+            g.fillStyle = '#f66';
+            g.fillText('not the scope screen: all zones off', 6, c.height - 6);
+            return;
+        }
         // Green = readout, yellow = scope soft-key, grey = no CAT action;
         // dashed = hidden by a hideWhen condition right now.
         for (const [id, zone] of Object.entries(L.zones || {})) {

@@ -1273,6 +1273,10 @@ fieldset.calibration-card {
     position: absolute;
     z-index: 2;
     overflow: hidden;
+    /* Clicks here are for the radio; a double-click must not select the
+       hover label's text. */
+    user-select: none;
+    -webkit-user-select: none;
 }
 .radio-display-hotspots .rdh-debug {
     position: absolute;
