@@ -15,7 +15,7 @@ Yaesu Web Control (**YWC**) is a continuation of my FTdx101_WebApp with more Yae
 
 **Since v2.5.2** — in the code, not yet in a full release:
 
-Nothing yet.
+- **FT-710: the radio's own scope in the spectrum panel, with no SDR** *(test build, not yet checked on a radio)*. With menu SCU-LAN10 switched ON (no unit needed), the FT-710 sends its scope over USB, and YWC can now draw it as the spectrum and waterfall. FTDI's driver and LibFT4222 have to be installed separately. This is built on protocol work by the Nexus project and ON8ST, and ut9fj has offered to test it. [§6.3](USER_MANUAL.md#63-sdr-spectrum-display).
 
 **New in v2.5.2:**
 

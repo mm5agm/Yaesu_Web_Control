@@ -1473,6 +1473,26 @@ The delay is **hardware**, not software. Changing the sample rate means YWC asks
 
 YWC keeps the previous spectrum frame visible during the pause rather than blanking out the canvas — the brief frozen image is intentional, not a glitch. It returns to live data as soon as the new sample rate is running.
 
+#### FT-710: the radio's own scope, no SDR needed *(test build, not yet checked on a radio)*
+
+The FT-710 has no IF output, but it can send its own spectrum scope to the computer over the same USB lead as CAT. YWC can show that scope in the spectrum panel, so you need no SDR, no splitter and no T/R switch, and nothing is at risk when you transmit.
+
+> I don't own an FT-710, so this has not yet been tried on a real radio. Until someone has checked it on air, treat what it shows as a guide rather than a measurement. If you try it, please tell me in [Discussion #187](https://github.com/mm5agm/Yaesu_Web_Control/discussions/187).
+
+**Setting it up (Windows only):**
+
+1. On the radio, set menu item **SCU-LAN10** (EX 03-01-26) to **ON**. You don't need an SCU-LAN10 unit; this switch makes the radio's scope data appear on USB.
+2. Install FTDI's **D2XX driver** from [ftdichip.com](https://ftdichip.com/drivers/d2xx-drivers/).
+3. Download **LibFT4222** for Windows from [ftdichip.com](https://ftdichip.com/software-examples/ft4222h-software-examples/) and copy **LibFT4222-64.dll** into the Yaesu Web Control program folder. YWC can't include these two FTDI files because they are closed source. If either is missing, the spectrum panel tells you so.
+4. In **Settings → SDR Spectrum Display**, with the radio model set to FT-710 and saved, press **Scan** under **SDR Devices** and choose **FT-710 internal scope** as the SDR for VFO A. Save.
+5. On the radio, put the scope in a **CENTER** mode (3DSS CENTER, or waterfall CENTER). In CURSOR or FIX mode the panel shows a message instead of a waterfall, because YWC can't tell where those modes put the picture. YWC never changes the radio's scope mode itself.
+
+**What's different from an SDR:**
+
+- **The span is the radio's.** Change it on the radio. The span buttons are hidden for this panel, and the width follows the radio within about a second.
+- **The panel follows VFO A.**
+- **The first connection can be slow.** Opening the radio's USB scope for the first time after power-on can take a while. If it hasn't opened after 20 seconds, YWC tries again.
+
 ---
 
 ### 6.4 Roofing Filters

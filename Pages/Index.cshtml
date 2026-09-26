@@ -3081,8 +3081,25 @@
             // long even though frames are already flowing. So promote the VFO to
             // "streaming" on its first frame, which reveals the panel within
             // ~100ms of connecting instead of waiting on the heartbeat.
-            spectrumPipeline.onSpectrumUpdate('A', data => { spectrumPanelA.update(data); markStreamingFromFrame('A'); });
-            spectrumPipeline.onSpectrumUpdate('B', data => { spectrumPanelB.update(data); markStreamingFromFrame('B'); });
+            spectrumPipeline.onSpectrumUpdate('A', data => { spectrumPanelA.update(data); markStreamingFromFrame('A'); syncSpanButtons('A', data); });
+            spectrumPipeline.onSpectrumUpdate('B', data => { spectrumPanelB.update(data); markStreamingFromFrame('B'); syncSpanButtons('B', data); });
+
+            // The FT-710's own scope (rfOrdered frames) runs at whatever span
+            // the radio is set to, so the SDR span buttons would do nothing.
+            // Hide them and let the active button follow the radio instead.
+            const spanSource = { A: null, B: null };
+            function syncSpanButtons(vfo, data) {
+                const radioScope = !!data.rfOrdered;
+                const buttons = document.querySelectorAll(`.span-btn[data-vfo="${vfo}"]`);
+                const group = buttons[0]?.closest('.btn-group');
+                if (spanSource[vfo] !== radioScope) {
+                    spanSource[vfo] = radioScope;
+                    if (group) group.style.display = radioScope ? 'none' : '';
+                }
+                if (radioScope) {
+                    buttons.forEach(b => b.classList.toggle('active', Number(b.dataset.hz) === data.spanHz));
+                }
+            }
 
             // Per-VFO status routing — drives the panel state + small badge in the header.
             function setStatusBadge(vfo, status) {
@@ -3094,6 +3111,8 @@
                     streaming:    ['success',   'Live'],
                     disconnected: ['danger',    'Disconnected'],
                     nodll:        ['danger',    'No SoapySDR'],
+                    noft4222:     ['danger',    'No FTDI driver'],
+                    scopeplacement: ['warning', 'Check radio scope'],
                 };
                 const [colour, text] = labels[status] ?? ['secondary', status];
                 badge.className = `badge bg-${colour} small`;
