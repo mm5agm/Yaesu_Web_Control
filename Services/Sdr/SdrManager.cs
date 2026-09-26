@@ -16,12 +16,18 @@
 //   SpectrumUpdate value = { sdrId: "A"|"B", bins, centreHz, spanHz }
 //   SdrStatus     value = { sdrId: "A"|"B", status: "..." }
 //   SdrError      value = { sdrId: "A"|"B", error:  "..." }
+//
+// The FT-710's own scope (device key "yaesu-scope:ft710") runs through the
+// same worker and envelope, with rfOrdered: true on each SpectrumUpdate: its
+// bins are in RF order centred on the dial, not in the inverted order of the
+// 9 MHz IF tap, and centreHz is the dial frequency rather than an IF.
 
 using System.ComponentModel;
 using System.Net.Sockets;
 using Microsoft.AspNetCore.SignalR;
 using Yaesu_Web_Control.Hubs;
 using Yaesu_Web_Control.Models;
+using Yaesu_Web_Control.Services;
 
 namespace Yaesu_Web_Control.Services.Sdr;
 
@@ -30,6 +36,7 @@ public sealed class SdrManager : BackgroundService
     private readonly ISettingsService             _settings;
     private readonly IHubContext<RadioHub>        _hub;
     private readonly RadioStateService            _state;
+    private readonly ICatClient                   _cat;
     private readonly ILogger<SdrManager>          _logger;
 
     private const int RetryDelayMs           = 5_000;
@@ -39,6 +46,17 @@ public sealed class SdrManager : BackgroundService
     // actually matched — the rate is set by the IQ rate over the FFT size.
     private const int StatusHeartbeatFrames  = 75;     // ~3 s at the 25/s send cap
     private const int WorkerConnectTimeoutMs = 10_000;
+
+    // How often the FT-710's scope span and mode are read while its own scope
+    // is streaming: two SS reads per cycle, on the port the meter poll uses.
+    // A span changed on the radio can be drawn at the old width for up to
+    // this long.
+    private const int ScopePlacementPollMs    = 1_000;
+
+    // Unanswered reads in a row before the last known span and mode stop
+    // being trusted. An SS read comes back empty for a moment after the scope
+    // settings change, so one miss is not news.
+    private const int ScopePlacementMaxMisses = 5;
 
     // One restart token per VFO, so a span change that needs a new hardware
     // rate on one SDR respawns that worker alone; the other keeps streaming.
@@ -88,11 +106,13 @@ public sealed class SdrManager : BackgroundService
         ISettingsService             settings,
         IHubContext<RadioHub>        hub,
         RadioStateService            state,
+        ICatClient                   cat,
         ILogger<SdrManager>          logger)
     {
         _settings = settings;
         _hub      = hub;
         _state    = state;
+        _cat      = cat;
         _logger   = logger;
 
         // The dial moves through the IF OUT as the operator works the
@@ -214,9 +234,27 @@ public sealed class SdrManager : BackgroundService
         WorkerProcess? worker = null;
         TcpClient?     client = null;
 
+        // The radio's own scope rather than an SDR on the IF tap. Its frames
+        // arrive unplaced and are placed here from the radio's SS settings.
+        bool radioScope = Ft710ScopeFrame.IsScopeKey(deviceKey);
+        ScopePlacementState? placement = null;
+        bool librariesMissing = false;
+
         try
         {
             await BroadcastStatus(vfo, "connecting", stoppingToken).ConfigureAwait(false);
+
+            if (radioScope && !Ft710ScopeFrame.ModelHasBridge(config.RadioModel))
+            {
+                await BroadcastStatus(vfo, "disconnected", stoppingToken).ConfigureAwait(false);
+                await BroadcastDetail(vfo,
+                    "The radio's own scope is only available on the FT-710. Choose the FT-710 as the " +
+                    "radio model in Settings, or choose an SDR for this panel.",
+                    stoppingToken).ConfigureAwait(false);
+                // Wait for a settings save rather than respawn every 5 s.
+                await Task.Delay(Timeout.Infinite, stoppingToken).ConfigureAwait(false);
+                return;
+            }
 
             // Per-VFO span so each panel can run at a different width
             // (e.g. 2 MHz on the calling band, 2.5 kHz zoomed on the QSO).
@@ -277,6 +315,12 @@ public sealed class SdrManager : BackgroundService
             var writeLock = new SemaphoreSlim(1, 1);
             lock (_activeLock) _writers[vfo] = new WriterSlot(writer, writeLock, plan, config.SdrFftSize);
 
+            if (radioScope)
+            {
+                placement = new ScopePlacementState();
+                _ = PollScopePlacementAsync(vfo, placement, stoppingToken);
+            }
+
             int heartbeatCounter = 0;
 
             while (!stoppingToken.IsCancellationRequested)
@@ -307,6 +351,38 @@ public sealed class SdrManager : BackgroundService
                 // delivery to *every* client for ~7 s until the zombie is reaped.
                 switch (msg)
                 {
+                    case SpectrumFrameMsg sf when placement is not null:
+                        // Placed from the radio's span and mode, or held back
+                        // with the reason on screen: a row drawn at a guessed
+                        // frequency is worse than none.
+                        var where = placement.Result;
+                        if (where.CanPlace)
+                        {
+                            if (placement.ShownProblem is not null)
+                            {
+                                placement.ShownProblem = null;
+                                Dispatch(BroadcastStatus(vfo, "streaming", stoppingToken), vfo);
+                            }
+                            var placed = sf with { CentreHz = _state.FrequencyA, SpanHz = where.SpanHz!.Value };
+                            Dispatch(BroadcastFrame(vfo, placed, stoppingToken, rfOrdered: true), vfo);
+                        }
+                        else if (where.Problem != placement.ShownProblem)
+                        {
+                            placement.ShownProblem = where.Problem;
+                            _logger.LogInformation("SDR {Vfo}: FT-710 scope frames held back — {Problem}", vfo, where.Problem);
+                            Dispatch(BroadcastStatus(vfo, "scopeplacement", stoppingToken), vfo);
+                            Dispatch(BroadcastDetail(vfo, where.Problem ?? "", stoppingToken), vfo);
+                        }
+
+                        if (++heartbeatCounter >= StatusHeartbeatFrames)
+                        {
+                            heartbeatCounter = 0;
+                            Dispatch(BroadcastStatus(vfo, placement.ShownProblem is null ? "streaming" : "scopeplacement", stoppingToken), vfo);
+                            if (placement.ShownProblem is not null)
+                                Dispatch(BroadcastDetail(vfo, placement.ShownProblem, stoppingToken), vfo);
+                        }
+                        break;
+
                     case SpectrumFrameMsg sf:
                         Dispatch(BroadcastFrame(vfo, sf, stoppingToken), vfo);
 
@@ -319,6 +395,7 @@ public sealed class SdrManager : BackgroundService
 
                     case StatusUpdateMsg s:
                         _logger.LogInformation("SDR {Vfo}: worker status — {Status}", vfo, s.Status);
+                        if (s.Status == "noft4222") librariesMissing = true;
                         Dispatch(BroadcastStatus(vfo, s.Status, stoppingToken), vfo);
                         break;
 
@@ -328,6 +405,12 @@ public sealed class SdrManager : BackgroundService
                         break;
                 }
             }
+
+            // FTDI's libraries are missing, and respawning the worker every
+            // 5 s would only flash "connecting" over the install instructions.
+            // Wait for the files to appear (or a settings save) instead.
+            while (librariesMissing && !Ft4222Libraries.BothPresent())
+                await Task.Delay(RetryDelayMs, stoppingToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -471,6 +554,77 @@ public sealed class SdrManager : BackgroundService
         }
     }
 
+    // ── The FT-710's own scope: where its rows sit ───────────────────────────
+
+    /// <summary>
+    /// Latest span/mode verdict for one radio-scope session. Written by the
+    /// poller, read by the frame loop; a stale read costs one frame.
+    /// </summary>
+    private sealed class ScopePlacementState
+    {
+        private volatile Ft710ScopePlacement.Result _result = Ft710ScopePlacement.Resolve(null, null);
+        public Ft710ScopePlacement.Result Result { get => _result; set => _result = value; }
+
+        // The problem last put on screen; "" = nothing shown yet, so the
+        // first verdict, good or bad, is always announced. Frame loop only.
+        public string? ShownProblem { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Reads the FT-710's scope span (SS05) and mode (SS06) once a second for
+    /// as long as its scope session runs. Reads only: the scope mode is the
+    /// operator's, and setting it from here would change their front panel.
+    /// </summary>
+    private async Task PollScopePlacementAsync(string vfo, ScopePlacementState state, CancellationToken ct)
+    {
+        char? span = null, mode = null;
+        int misses = 0;
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                if (_cat.IsConnected && await ScopeCatGate.Instance.WaitAsync(2_000, ct).ConfigureAwait(false))
+                {
+                    char? s, m;
+                    try
+                    {
+                        s = await ReadScopeValueAsync(ScopeCommands.Span, ct).ConfigureAwait(false);
+                        m = await ReadScopeValueAsync(ScopeCommands.Mode, ct).ConfigureAwait(false);
+                    }
+                    finally { ScopeCatGate.Instance.Release(); }
+
+                    if (s is not null && m is not null)
+                    {
+                        misses = 0;
+                        if (s != span || m != mode)
+                            _logger.LogInformation("SDR {Vfo}: FT-710 scope span code {Span}, mode code {Mode}", vfo, s, m);
+                        span = s;
+                        mode = m;
+                    }
+                    else if (++misses >= ScopePlacementMaxMisses)
+                    {
+                        span = mode = null;
+                    }
+                    state.Result = Ft710ScopePlacement.Resolve(span, mode);
+                }
+                await Task.Delay(ScopePlacementPollMs, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SDR {Vfo}: FT-710 scope placement poll stopped — {Message}", vfo, ex.Message);
+            state.Result = Ft710ScopePlacement.Resolve(null, null);
+        }
+    }
+
+    private async Task<char?> ReadScopeValueAsync(char subCommand, CancellationToken ct)
+    {
+        // P1 is always 0 on the FT-710: one receiver, one scope.
+        var answer = await _cat.SendCommandAsync(ScopeCommands.Read('0', subCommand), "SdrScope", ct).ConfigureAwait(false);
+        return ScopeCommands.Value(answer, '0', subCommand);
+    }
+
     private static async Task<TcpClient> ConnectToWorkerAsync(int port, CancellationToken ct)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(WorkerConnectTimeoutMs);
@@ -507,7 +661,7 @@ public sealed class SdrManager : BackgroundService
             TaskScheduler.Default);
     }
 
-    private async Task BroadcastFrame(string vfo, SpectrumFrameMsg sf, CancellationToken ct)
+    private async Task BroadcastFrame(string vfo, SpectrumFrameMsg sf, CancellationToken ct, bool rfOrdered = false)
     {
         try
         {
@@ -516,7 +670,7 @@ public sealed class SdrManager : BackgroundService
                 new
                 {
                     property = "SpectrumUpdate",
-                    value    = new { sdrId = vfo, bins = sf.Bins, centreHz = sf.CentreHz, spanHz = sf.SpanHz },
+                    value    = new { sdrId = vfo, bins = sf.Bins, centreHz = sf.CentreHz, spanHz = sf.SpanHz, rfOrdered },
                 },
                 ct).ConfigureAwait(false);
         }

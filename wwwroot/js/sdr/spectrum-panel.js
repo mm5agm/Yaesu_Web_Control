@@ -100,6 +100,8 @@ export class SpectrumPanel {
         // Last received spectrum data; held so the canvas can be redrawn on resize.
         this._lastBins    = null;
         this._lastCentreHz = 0;
+        // True while frames come from the radio's own scope (see update()).
+        this._rfOrdered = false;
         this._lastSpanHz   = 0;
 
         // DX cluster spots overlaid on the spectrum. Each entry is the JSON
@@ -560,7 +562,7 @@ export class SpectrumPanel {
     // ── Public API ───────────────────────────────────────────────────────────
 
     /** Update the spectrum/waterfall with a new frame of FFT data. */
-    update({ bins, centreHz, spanHz }) {
+    update({ bins, centreHz, spanHz, rfOrdered = false }) {
         // Hold mode (set via setHold(true)) freezes the display at the
         // last received frame so the operator can inspect a fleeting signal
         // without it scrolling off the waterfall. Incoming frames are
@@ -585,7 +587,14 @@ export class SpectrumPanel {
         // side and one flip covers every band. No other Yaesu model has been
         // measured; if one turns out not to be inverted, this is where the
         // per-model switch belongs.
-        bins = Array.prototype.slice.call(bins).reverse();
+        //
+        // rfOrdered frames are the exception: the FT-710's own scope, read
+        // from the radio over USB, arrives LOW to HIGH frequency already, and
+        // centred on the dial rather than on an IF (see Ft710ScopeFrame.cs).
+        this._rfOrdered = !!rfOrdered;
+        bins = this._rfOrdered
+            ? Array.prototype.slice.call(bins)
+            : Array.prototype.slice.call(bins).reverse();
 
         // A span change (span buttons restart the worker at a new sample rate) or
         // a bin-count change means the previous band/scale no longer applies —
@@ -638,6 +647,11 @@ export class SpectrumPanel {
     /** Store the latest error detail string for display alongside status overlays. */
     setError(detail) {
         this._errorDetail = detail;
+        // The detail can arrive just after the status it explains; redraw so
+        // it is not left off until the next status heartbeat.
+        if (this._status === 'noft4222' || this._status === 'scopeplacement' || this._status === 'disconnected') {
+            this._drawStatusOverlay(this._status);
+        }
     }
 
     /**
@@ -803,6 +817,12 @@ export class SpectrumPanel {
      * @returns {number}
      */
     _axisOffsetHz() {
+        // The radio's own scope is centred where the server says (the dial
+        // when the frame was sent), with no IF slide to correct for.
+        if (this._rfOrdered) {
+            const v = this._lastCentreHz - this._vfoHz;
+            return Number.isFinite(v) ? v : 0;
+        }
         if (!this._axisOffsetProvider) return 0;
         try {
             const v = this._axisOffsetProvider(this._lastCentreHz);
@@ -2095,10 +2115,13 @@ export class SpectrumPanel {
             connecting:   'Connecting to SDR device…',
             disconnected: 'SDR device unavailable — retrying every 5 s',
             nodll:        'SoapySDR.dll not found — install SoapySDR + device driver',
+            noft4222:     "FTDI's FT4222 libraries are not installed",
+            scopeplacement: "Can't place the radio's scope on the axis",
         };
 
+        const withDetail = status === 'disconnected' || status === 'noft4222' || status === 'scopeplacement';
         const line1 = messages[status] ?? `SDR status: ${status}`;
-        const line2 = status === 'disconnected' && this._errorDetail
+        const line2 = withDetail && this._errorDetail
             ? this._errorDetail
             : null;
 
@@ -2108,14 +2131,35 @@ export class SpectrumPanel {
         ctx.fillStyle = '#8899bb';
         ctx.textAlign = 'center';
 
-        ctx.font = '14px sans-serif';
-        ctx.fillText(line1, W / 2, H / 2 - (line2 ? 10 : 0));
+        // The detail can be a paragraph (the FTDI install instructions), so
+        // it is wrapped to the canvas rather than run off both edges.
+        ctx.font = '11px sans-serif';
+        const detailLines = line2 ? this._wrapText(ctx, line2, W - 24) : [];
 
-        if (line2) {
-            ctx.font      = '11px sans-serif';
-            ctx.fillStyle = '#cc6655';
-            ctx.fillText(line2, W / 2, H / 2 + 12);
+        const top = H / 2 - (detailLines.length * 14) / 2 - (line2 ? 10 : 0);
+        ctx.font = '14px sans-serif';
+        ctx.fillText(line1, W / 2, top);
+
+        ctx.font      = '11px sans-serif';
+        ctx.fillStyle = '#cc6655';
+        detailLines.forEach((text, i) => ctx.fillText(text, W / 2, top + 22 + i * 14));
+    }
+
+    /** Split text into lines no wider than maxWidth in the context's current font. */
+    _wrapText(ctx, text, maxWidth) {
+        const lines = [];
+        let line = '';
+        for (const word of String(text).split(/\s+/)) {
+            const next = line ? `${line} ${word}` : word;
+            if (line && ctx.measureText(next).width > maxWidth) {
+                lines.push(line);
+                line = word;
+            } else {
+                line = next;
+            }
         }
+        if (line) lines.push(line);
+        return lines;
     }
 
     // ── Accessibility ────────────────────────────────────────────────────────

@@ -845,6 +845,13 @@ try
         if (target != "A" && target != "B") return Results.BadRequest("sdrId must be A or B.");
 
         var s = await settings.GetSettingsAsync();
+
+        // The FT-710's own scope shows whatever span the radio is set to.
+        // Saving an SDR span would do nothing but respawn the worker, and
+        // reopening the radio's USB bridge is the slow, fragile part.
+        if (Yaesu_Web_Control.Services.Sdr.Ft710ScopeFrame.IsScopeKey(target == "A" ? s.SdrDeviceKeyA : s.SdrDeviceKeyB))
+            return Results.Conflict("This panel shows the radio's own scope. Change the span on the radio.");
+
         if (target == "A") s.SdrSampleRateHzA = hz;
         else               s.SdrSampleRateHzB = hz;
         await settings.SaveSettingsAsync(s);
