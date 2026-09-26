@@ -82,6 +82,7 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
+| RTTY Tuner in RTTY-U listened for space at 1955 Hz instead of 2295, so it needed *Rev* to show a cross, and that *Rev* then broke the cross in RTTY-L. The band plan's RTTY segment on 20/15/10m also selected RTTY-U, where the radio's own decoder reads amateur RTTY reversed; it now selects RTTY-L | - | *Not yet in a build* |
 | RTTY Tuner froze on *Stopped.* after its browser tab had been in the background, until the dialog was closed and reopened; it now starts again by itself | - | *Not yet in a build* |
 | RTTY Tuner opened just after YWC started could use the mode from the last session instead of the radio's, which in RTTY-U put the space filter on the wrong side of mark until the radio's mode came in | - | *Not yet in a build* |
 

@@ -829,7 +829,9 @@ Region 1 is the only plan that includes the 4m (70 MHz) band. Japan has no 60m s
 | CW | 14.025 MHz | CW-U |
 | FT8 | 14.074 MHz | DATA-U |
 | SSB | 14.150 MHz | USB |
-| RTTY | 14.080 MHz | RTTY-U |
+| RTTY | 14.080 MHz | RTTY-L |
+
+RTTY is RTTY-L on every band, including above 10 MHz. On the FTdx101 the dial sits on the upper tone in RTTY-U as well, so in RTTY-U the radio's own decoder reads normal amateur RTTY with mark and space swapped and prints rubbish.
 
 The last segment you used on each band is remembered, so when you return to a band the dropdown re-selects your previous segment.
 
@@ -3925,13 +3927,13 @@ Under the scope, a line gives the two filter frequencies and three levels in dBF
 
 - **Mark** is the mark tone in the receive audio. In the radio's RTTY-L and RTTY-U that is the radio's own RTTY MARK setting, **2125 Hz** unless you have changed it. In DATA-L it is whatever your RTTY software uses: many operators run **1415 Hz**, which puts the two tones in the middle of the SSB passband.
 - **Shift** is the station's shift. Amateur RTTY is **170 Hz**; 200, 425, 450 and 850 are there for everything else. 450 is the shift of the German weather service broadcasts (DDK9 on 10.1008 MHz, among others), which run all day and are the easiest real RTTY to find when the amateur bands are quiet.
-- **Rev** puts the space filter on the other side of mark. Tick it if the station is sending reversed, or if you have **REV** set on the radio.
+- **Rev** puts the space filter below mark instead of above it. Tick it only if you have **POLARITY RX** set to **REV** on the radio, or, in the DATA modes, if your RTTY software puts space below mark. A station sending reversed does not need it: its two tones land in the same places, and the cross looks the same either way round.
 
-Which side of mark the space filter goes on depends on the mode on VFO A:
+In every mode the space filter goes above mark, at 2125 and 2295 Hz unless you change **Mark**:
 
-- **RTTY-L:** space above mark, 2125 and 2295 Hz. I measured this on my FTdx101MP. In RTTY-L the dial sits on the mark tone, and a signal below the dial comes out higher in the audio.
-- **RTTY-U:** space below mark, 2125 and 1955 Hz. This is what upper sideband should do, but I have not measured it. If the figure looks wrong in RTTY-U, try **Rev** and let me know.
-- **DATA-L, DATA-U and anything else:** space above mark, 2125 and 2295 Hz. That is AFSK, where your RTTY software makes the tones, and it is the usual default in RTTY software.
+- **RTTY-L:** I measured this on my FTdx101MP. The dial sits on the mark tone, and a signal below the dial comes out higher in the audio.
+- **RTTY-U:** I measured this too. The two tones come out at the same 2125 and 2295 Hz, so the cross is the same as in RTTY-L. But the dial is still on the upper tone, which on the air is the station's mark, and the radio's own decoder reads it reversed. Use RTTY-L for amateur RTTY.
+- **DATA-L, DATA-U and anything else:** that is AFSK, where your RTTY software makes the tones, and space above mark is the usual default in RTTY software.
 
 These settings are remembered in the browser. In **DATA-L**, click-to-tune on the spectrum uses them as well, to put a clicked signal's tones where your software is listening ([§5.4](#54-spectrum-display)). So set **Mark** to your software's mark tone even if you never use the tuner.
 
@@ -3941,7 +3943,9 @@ These settings are remembered in the browser. In **DATA-L**, click-to-tune on th
 |---|---|
 | Status says the radio audio could not be opened | Set the Remote Audio **RX device** to the radio's USB codec in Settings ([§6.8](#68-remote-audio)). The tuner uses the same device as the CW Reader. |
 | Only ever a fuzzy ball, even on a strong signal | Check that **Mark** and **Shift** match the signal and that the mode is right. A 3 kHz SSB filter passes plenty of noise; a narrower RTTY filter on the radio gives a cleaner cross. |
-| Both arms there but they swap over | That is harmless: the picture is the same either way round. Tick **Rev** if your decoder is printing rubbish. |
+| Both arms there but they swap over | That is harmless: the picture is the same either way round. |
+| A perfect cross but the radio's decoder prints rubbish | Check the mode. In RTTY-U the radio decodes amateur RTTY reversed; switch to **RTTY-L** at the same dial frequency. **Rev** does not help: it only moves the tuner's filter, and it will break the cross. |
+| The cross broke when I changed between RTTY-U and RTTY-L | Untick **Rev**. Before this was fixed, RTTY-U needed Rev to draw a cross. |
 
 ---
 
