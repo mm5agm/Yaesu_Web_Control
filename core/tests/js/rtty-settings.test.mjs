@@ -55,3 +55,19 @@ test('storage that throws gives the defaults', () => {
     assert.deepEqual(loadRttySettings(broken), { ...DEFAULT_RTTY_SETTINGS });
     assert.doesNotThrow(() => saveRttySettings(DEFAULT_RTTY_SETTINGS, broken));
 });
+
+test('an allowed list narrows what a stored shift may be', () => {
+    // The host page says which shifts its radio has; the IC-7300 has three.
+    const icom = [170, 200, 425];
+    assert.equal(normaliseRttySettings({ markHz: 2125, shiftHz: 850 }, icom).shiftHz, 170);
+    assert.equal(normaliseRttySettings({ markHz: 2125, shiftHz: 425 }, icom).shiftHz, 425);
+});
+
+test('a default shift the radio lacks falls to its first rung', () => {
+    assert.equal(normaliseRttySettings(null, [425, 850]).shiftHz, 425);
+});
+
+test('an empty or absent list keeps the standard set', () => {
+    assert.equal(normaliseRttySettings({ shiftHz: 850 }, []).shiftHz, 850);
+    assert.equal(normaliseRttySettings({ shiftHz: 850 }).shiftHz, 850);
+});

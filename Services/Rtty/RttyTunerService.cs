@@ -10,21 +10,29 @@ namespace Yaesu_Web_Control.Services.Rtty
     /// at a time.
     ///
     /// The part that is Yaesu's is where the two filters go. The mark tone is
-    /// the operator's (2125 Hz unless they say otherwise), and which side of it
-    /// the space tone falls in the audio depends on the radio's mode:
+    /// the operator's (2125 Hz unless they say otherwise), and the space tone
+    /// comes out 170 Hz above it in every mode measured so far:
     ///
     ///   RTTY-L   the dial is on mark and the radio demodulates lower
     ///            sideband about it, so space - 170 Hz below mark on the air -
     ///            comes out 170 Hz ABOVE mark in the audio. Measured on the
     ///            FTdx101MP 2026-09-23: a carrier stepped below the RTTY-L dial
     ///            rose in pitch Hz for Hz from 2125.
-    ///   RTTY-U   upper sideband, so space comes out below mark. Not measured.
+    ///   RTTY-U   upper sideband about mark + shift: a carrier at the dial
+    ///            comes out at 2295 Hz (measured 2026-09-24, #178), so the two
+    ///            tones are 2125 and 2295 here too. The upper one is the
+    ///            station's mark, so the radio's decoder reads amateur RTTY
+    ///            reversed in RTTY-U, but the cross is the same either way
+    ///            round. This used to put space at 1955, unmeasured: in CQ WW
+    ///            RTTY (2026-09-26) it took Reverse to get a cross in RTTY-U,
+    ///            and that Reverse broke the cross on switching to RTTY-L.
     ///   anything else - DATA-L, DATA-U, LSB, USB - is AFSK, where the software
     ///            makes the tones, and RTTY software puts space above mark
     ///            (2125 / 2295) by default.
     ///
-    /// Reverse flips the space tone to the other side of mark, for REV polarity
-    /// on the radio or reversed tones in the software.
+    /// Reverse puts the space tone below mark instead, for REV polarity on the
+    /// radio or reversed tones in the software. A station sending reversed
+    /// does not need it: its tones land in the same two places.
     ///
     /// It opens no device of its own: it takes a capture hold on the audio
     /// bridge, the same reference-counted hold the CW reader takes, so the two
@@ -33,8 +41,9 @@ namespace Yaesu_Web_Control.Services.Rtty
     /// The mode is asked of the radio when the tuner starts. Until the
     /// connect-time MD0; read lands, RadioStateService still holds the mode
     /// from the last session's radio_state.json, and on a cold start the
-    /// tuner saw "LSB" there while the radio was in RTTY-L - which puts space
-    /// on the wrong side of mark whenever the radio is really in RTTY-U.
+    /// tuner saw "LSB" there while the radio was in RTTY-L. No mode moves the
+    /// tones today, but the status reports the mode and a model measured
+    /// differently would need it.
     /// </summary>
     public sealed class RttyTunerService : IDisposable
     {
@@ -87,12 +96,12 @@ namespace Yaesu_Web_Control.Services.Rtty
 
         /// <summary>
         /// Where the mark and space filters go, in audio Hz. Pure, so the
-        /// rule can be tested without a radio.
+        /// rule can be tested without a radio. The mode is kept for a radio
+        /// that turns out to differ; on the FTdx101MP none does.
         /// </summary>
         public static (double MarkHz, double SpaceHz) TonesFor(string? mode, double markHz, int shiftHz, bool reverse)
         {
-            bool spaceAbove = mode != "RTTY-U";
-            if (reverse) spaceAbove = !spaceAbove;
+            bool spaceAbove = !reverse;
             return (markHz, spaceAbove ? markHz + shiftHz : markHz - shiftHz);
         }
 
