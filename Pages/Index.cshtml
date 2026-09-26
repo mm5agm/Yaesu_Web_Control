@@ -683,11 +683,11 @@
                                 aria-label="DX spots — list of cluster spots on current band"
                                 title="Open DX spots list — see callsigns spotted on the current band"
                                 onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">DX Spots</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
+                        <button id="cwReaderOpenBtn" class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="CW reader - decode received Morse to text"
                                 title="Open the CW reader - decodes the received Morse to text"
                                 onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">CW Read</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
+                        <button id="rttyTunerOpenBtn" class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="RTTY tuner - crossed-ellipse tuning scope"
                                 title="Open the RTTY tuner - mark and space filters on an X-Y scope; tune for the cross"
                                 onclick="window.rttyTuner && window.rttyTuner.toggle()">RTTY Tune</button>
@@ -2905,6 +2905,7 @@
         import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -3257,6 +3258,41 @@
             window.rttyTuner = new RttyTuner();
             window.rttyTuner.init();
 
+            // Close the CW reader and the RTTY tuner once the radio has
+            // settled in a mode neither is any use in, so an RTTY tuner is not
+            // left holding the audio after a move to CW, or the reader after a
+            // move to RTTY. Both follow MAIN (the server reads ModeA), so only
+            // ModeA feeds them. The RTTY tuner stays open in DATA, LSB and USB
+            // because those are the AFSK modes it also works in; the CW reader
+            // only in CW. Closing the reader leaves its decoder running, as
+            // the X does, so the copy is still there when it is reopened.
+            const announceModeClose = msg => {
+                const el = document.getElementById('vfoStatusAnnounce');
+                if (!el) return;
+                el.textContent = '';
+                requestAnimationFrame(() => { el.textContent = msg; });
+            };
+            const guardFor = (name, dialogId, buttonId, belongs, close) => {
+                const dialog = () => document.getElementById(dialogId);
+                const g = new ModePanelGuard({
+                    name, belongs, close,
+                    isOpen: () => !!dialog()?.open,
+                    announce: announceModeClose,
+                });
+                g.setFocusReturn(el => !!dialog()?.contains(el), document.getElementById(buttonId));
+                return g;
+            };
+            const modePanelGuards = [
+                guardFor('CW reader', 'cwReaderDialog', 'cwReaderOpenBtn',
+                         m => m.startsWith('CW'),
+                         () => document.getElementById('cwReaderDialog')?.close()),
+                guardFor('RTTY tuner', 'rttyTunerDialog', 'rttyTunerOpenBtn',
+                         m => m.startsWith('RTTY') || m.startsWith('DATA') || m === 'PSK'
+                              || m === 'LSB' || m === 'USB',
+                         () => document.getElementById('rttyTunerDialog')?.close()),
+            ];
+            modePanelGuards.forEach(g => g.setMode('@Model.RadioState.ModeA'));
+
             // Typed CW goes out through the keyer memories the M1-M5 buttons
             // use; the panel only sequences the writes and plays.
             window.cwSendPanel = new CwSendPanel();
@@ -3300,6 +3336,7 @@
             });
             spectrumPipeline.onModeA(mode => {
                 spectrumPanelA?.setMode(mode);
+                modePanelGuards.forEach(g => g.setMode(mode));
                 ensureRttyTones(mode);
                 readDataShift(mode);
             });
