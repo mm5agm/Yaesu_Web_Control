@@ -3586,6 +3586,8 @@ The **CW Read** button on the main control panel opens a reader that listens to 
 
 Nothing here transmits. The reader only listens. To answer the station you are reading, use **CW Send** ([§21](#21-cw-send)).
 
+If you move MAIN out of CW (to RTTY or SSB, say) and it stays there for two seconds, the panel closes itself and a screen reader hears "CW reader closed, mode is now ...". Only the panel closes. The reader keeps running, as it does when you close it with **×**, so your copy is still there when you open it again. A brief change, such as a band change or a memory recall passing through another mode, does not close it.
+
 ![The CW Reader panel — decoded text at the top, the status line beneath it, and the Reader Mode, transcript and log controls](pictures/CW-Reader.png)
 
 If CW is new to you, read [§20.1](#201-if-cw-is-new-to-you) and [§20.2](#202-what-to-expect-from-a-machine-reading-morse) first. They are short, and between them they save most of the disappointment people have with machine copy.
@@ -3905,6 +3907,8 @@ It does not decode anything; the radio's own RTTY decoder, or your RTTY software
 Nothing here transmits. The tuner only listens.
 
 It uses the same capture device as the CW Reader: set the **RX device** to the radio's USB codec under Settings → Remote Audio ([§6.8](#68-remote-audio)). Remote Audio itself does not need to be switched on. The device is held open only while the tuner is open, and let go a couple of seconds after you close it. The CW Reader and the tuner can run together.
+
+The tuner closes itself if MAIN leaves the modes it works in and stays out for two seconds, for example a move to CW, AM or FM. It stays open in RTTY-L, RTTY-U, the DATA modes, PSK, LSB and USB, because in the DATA modes and SSB the tones come from your RTTY software. A screen reader hears "RTTY tuner closed, mode is now ...". Nothing opens on its own: moving to CW does not open the CW Reader.
 
 ### 22.1 Reading the figure
 
