@@ -1304,7 +1304,12 @@ fieldset.calibration-card {
     background: rgba(0, 0, 0, 0.75);
     color: #fff;
     font: 12px/1.4 monospace;
-    white-space: nowrap;
+    /* One line when it fits; a long hint wraps inside the picture rather
+       than running off both edges of it. */
+    width: max-content;
+    max-width: calc(100% - 8px);
+    box-sizing: border-box;
+    text-align: center;
     pointer-events: none;
 }
 

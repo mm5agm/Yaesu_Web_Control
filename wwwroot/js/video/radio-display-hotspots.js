@@ -162,11 +162,14 @@ const LAYOUTS = {
         // DEC LVL / DEC OFF cells are 12-13 % text on both decode screens,
         // but CENTER / SPAN fill the same cells on the scope screen, so the
         // check also needs the scope's own cells empty.
+        // The ANT..AGC readout row is drawn in the same place on the decode
+        // screen (same frames), so those zones stay live there: `keep`.
         decode: {
             screen: {
                 lit: ['declvl', 'decoff'], min: 2,
                 dark: ['dss3', 'mono', 'multi', 'expand', 'hold'],
             },
+            keep: ['ant', 'att', 'ipo', 'rfil', 'agc'],
             zones: {
                 declvl: { rect: [0.003, 0.847, 0.124, 0.902], action: 'none',
                           hint: 'DEC LVL has no CAT command — touch it on the radio, then turn MULTI to set the decode threshold' },
@@ -574,7 +577,7 @@ export class RadioDisplayHotspots {
         const { nw, nh } = this._nat();
         const screen = this._screenNow();
         if (screen === 'decode') {
-            for (const [id, zone] of Object.entries(L.decode?.zones || {}))
+            for (const [id, zone] of this._decodeZones())
                 if (inZone(zone.rect, fx, fy, nw, nh)) return { kind: 'zone', id, zone };
             return null;
         }
@@ -585,6 +588,14 @@ export class RadioDisplayHotspots {
         }
         if (inZone(L.scope?.plot, fx, fy, nw, nh)) return { kind: 'scope' };
         return null;
+    }
+
+    /** [id, zone] pairs live on the decode screen: the kept scope zones, then its own. */
+    _decodeZones() {
+        const D = this.layout.decode;
+        if (!D) return [];
+        const kept = (D.keep || []).filter(id => this.layout.zones?.[id]).map(id => [id, this.layout.zones[id]]);
+        return [...kept, ...Object.entries(D.zones || {})];
     }
 
     /** True when one of the zone's hideWhen conditions holds for the scope now. */
@@ -985,10 +996,11 @@ export class RadioDisplayHotspots {
         const screen = this._measureDrag || this._measureQueue.length ? 'scope' : this._screenNow();
         if (screen !== 'scope') {
             if (screen === 'decode')
-                for (const [id, zone] of Object.entries(L.decode?.zones || {})) box(zone.rect, '#aaa', id);
+                for (const [id, zone] of this._decodeZones())
+                    box(zone.rect, (zone.action || '').startsWith('readout.') ? '#0f0' : '#aaa', id);
             g.fillStyle = '#f66';
             g.fillText(screen === 'decode'
-                ? 'decode screen: scope zones off, DEC LVL / DEC OFF are hints only'
+                ? 'decode screen: readouts live, scope zones off, DEC LVL / DEC OFF are hints only'
                 : 'not the scope screen: all zones off', 6, c.height - 6);
             return;
         }
