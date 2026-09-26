@@ -145,7 +145,7 @@ const CONDITIONS = {
 const LAYOUTS = {
     // FTdx101MP / FTdx101D, MONO layout, W/F display. Measured from
     // pictures/Radio_Display_Docked.png and bench-confirmed 2026-09-12.
-    // MONO / MULTI / EXPAND / MEM CH have no CAT command on this radio —
+    // MONO / MULTI / EXPAND have no CAT command on this radio —
     // EXPAND here is the vertical expand, not L/N/S.
     FTdx101: {
         scope: {
@@ -169,7 +169,7 @@ const LAYOUTS = {
                 lit: ['declvl', 'decoff'], min: 2,
                 dark: ['dss3', 'mono', 'multi', 'expand', 'hold'],
             },
-            keep: ['ant', 'att', 'ipo', 'rfil', 'agc'],
+            keep: ['ant', 'att', 'ipo', 'rfil', 'agc', 'multifn'],
             zones: {
                 declvl: { rect: [0.003, 0.847, 0.124, 0.902], action: 'none',
                           hint: 'DEC LVL has no CAT command — touch it on the radio, then turn MULTI to set the decode threshold' },
@@ -190,7 +190,10 @@ const LAYOUTS = {
             multi:  { rect: [0.487, 0.847, 0.606, 0.902], action: 'none', hint: 'MULTI has no CAT command — press it on the radio' },
             expand: { rect: [0.609, 0.847, 0.729, 0.902], action: 'none', hint: 'EXPAND has no CAT command — press it on the radio' },
             hold:   { rect: [0.732, 0.847, 0.851, 0.902], action: 'scope.hold' },
-            memch:  { rect: [0.854, 0.847, 0.971, 0.902], action: 'none', hint: 'MEM CH has no CAT command' },
+            // The right-hand box shows what the MULTI knob is set to (MONI LEVEL,
+            // MEM CH, ...), not a MEM CH key: it read MEM CH in the picture
+            // this was measured from. Colin 2026-09-26: MULTI / MONI LEVEL.
+            multifn: { rect: [0.854, 0.847, 0.971, 0.902], action: 'none', hint: 'What the MULTI knob is set to — set it on the radio' },
         },
     },
     // FTdx10 MONO W/F. Pixel boxes from Fabio 2026-09-12 on an 800-wide
