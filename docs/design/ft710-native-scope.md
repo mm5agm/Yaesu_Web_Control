@@ -77,8 +77,13 @@ FT-710 FT4222H ──USB──> Yaesu_Sdr_Worker (Ft4222Bridge + Ft710ScopeFrame
     the same at every span (`Ft710ScopePlacement.RowWidthOverSpan`).
   - **SCOPE CTR (EX 04-02-02) moves the centre.** Measured by ut9fj on the
     same day: on CARRIER POINT the radio centres on the dial; on FILTER it
-    centres on the middle of the filter, 1.5 kHz up in DATA-U at 50k. This
-    build still centres on the dial, so it is right on CARRIER POINT only.
+    centres on the middle of the filter. From the centre label the radio
+    prints: LSB 1.5 kHz below the dial, DATA-U 1.5 kHz above, CW-L, CW-U
+    and AM on the dial. YWC reads `EX040202;` with the span and mode each
+    second and, on FILTER, shifts the row by
+    `Ft710ScopePlacement.FilterCentreOffsetHz`. USB and DATA-L are taken as
+    mirrors of the measured pair. Not measured: whether the 1.5 kHz follows
+    a narrower filter width, and RTTY, PSK and FM, which stay on the dial.
   - **Only CENTER modes are placed:** 3DSS CENTER, and W/F CENTER in EXPAND
     or NORMAL. In CURSOR mode the window stays still while the dial moves,
     and in FIX mode it starts at a band edge that no CAT command reports.
@@ -98,9 +103,9 @@ FT-710 FT4222H ──USB──> Yaesu_Sdr_Worker (Ft4222Bridge + Ft710ScopeFrame
    sits under the dial at several spans: 10k, 50k, 200k and 1M. Then tune
    off by a known amount and check that the peak moves by that amount, in the
    right direction.
-2. **SCOPE CTR (menu 04-02-02).** FILTER and CARRIER POINT may put the centre
-   in different places. Repeat item 1 with each setting. Nexus found a
-   residual offset of about 1.1 kHz, and this setting may be the reason.
+2. **SCOPE CTR (menu 04-02-02) on FILTER** in USB at normal and narrow
+   widths, and in RTTY, PSK and FM: the centre label the radio shows, so
+   the offsets above can be confirmed or extended.
 3. **Levels.** The 0.5 dB per step figure is a guess that makes the display
    look like the radio's own screen. Compare a signal's height against the
    S-meter, or step a generator 10 dB, and report how far the trace moves.

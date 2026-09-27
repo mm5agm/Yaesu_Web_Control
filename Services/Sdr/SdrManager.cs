@@ -363,7 +363,10 @@ public sealed class SdrManager : BackgroundService
                                 placement.ShownProblem = null;
                                 Dispatch(BroadcastStatus(vfo, "streaming", stoppingToken), vfo);
                             }
-                            var placed = sf with { CentreHz = _state.FrequencyA, SpanHz = where.SpanHz!.Value };
+                            // On FILTER the radio centres on the filter, not the dial.
+                            long centre = _state.FrequencyA + (placement.ScopeCtrFilter
+                                ? Ft710ScopePlacement.FilterCentreOffsetHz(_state.ModeA) : 0);
+                            var placed = sf with { CentreHz = centre, SpanHz = where.SpanHz!.Value };
                             Dispatch(BroadcastFrame(vfo, placed, stoppingToken, rfOrdered: true), vfo);
                         }
                         else if (where.Problem != placement.ShownProblem)
@@ -565,13 +568,19 @@ public sealed class SdrManager : BackgroundService
         private volatile Ft710ScopePlacement.Result _result = Ft710ScopePlacement.Resolve(null, null);
         public Ft710ScopePlacement.Result Result { get => _result; set => _result = value; }
 
+        // SCOPE CTR is FILTER. False until read: CARRIER POINT is the
+        // factory default, and it centres on the dial.
+        private volatile bool _scopeCtrFilter;
+        public bool ScopeCtrFilter { get => _scopeCtrFilter; set => _scopeCtrFilter = value; }
+
         // The problem last put on screen; "" = nothing shown yet, so the
         // first verdict, good or bad, is always announced. Frame loop only.
         public string? ShownProblem { get; set; } = "";
     }
 
     /// <summary>
-    /// Reads the FT-710's scope span (SS05) and mode (SS06) once a second for
+    /// Reads the FT-710's scope span (SS05), mode (SS06) and SCOPE CTR
+    /// (EX040202) once a second for
     /// as long as its scope session runs. Reads only: the scope mode is the
     /// operator's, and setting it from here would change their front panel.
     /// </summary>
@@ -586,12 +595,22 @@ public sealed class SdrManager : BackgroundService
                 if (_cat.IsConnected && await ScopeCatGate.Instance.WaitAsync(2_000, ct).ConfigureAwait(false))
                 {
                     char? s, m;
+                    bool? filter;
                     try
                     {
                         s = await ReadScopeValueAsync(ScopeCommands.Span, ct).ConfigureAwait(false);
                         m = await ReadScopeValueAsync(ScopeCommands.Mode, ct).ConfigureAwait(false);
+                        filter = Ft710ScopePlacement.ParseScopeCtrIsFilter(
+                            await _cat.SendCommandAsync(Ft710ScopePlacement.ScopeCtrRead, "SdrScope", ct).ConfigureAwait(false));
                     }
                     finally { ScopeCatGate.Instance.Release(); }
+
+                    // An unanswered read keeps the last known setting.
+                    if (filter is bool f && f != state.ScopeCtrFilter)
+                    {
+                        _logger.LogInformation("SDR {Vfo}: FT-710 SCOPE CTR is {Ctr}", vfo, f ? "FILTER" : "CARRIER POINT");
+                        state.ScopeCtrFilter = f;
+                    }
 
                     if (s is not null && m is not null)
                     {

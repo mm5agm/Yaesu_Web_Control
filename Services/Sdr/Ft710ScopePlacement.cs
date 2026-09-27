@@ -103,6 +103,49 @@ public static class Ft710ScopePlacement
         };
     }
 
+    /// <summary>
+    /// The CAT read for SCOPE CTR (menu 04-02-02). FT-710 CAT manual:
+    /// 0 FILTER, 1 CARRIER POINT. The operating manual gives CARRIER as the
+    /// factory default.
+    /// </summary>
+    public const string ScopeCtrRead = "EX040202;";
+
+    /// <summary>
+    /// True for FILTER, false for CARRIER POINT, null if the answer is not an
+    /// SCOPE CTR answer. The address is checked so another menu item's answer
+    /// can never be read as this one.
+    /// </summary>
+    public static bool? ParseScopeCtrIsFilter(string? answer)
+    {
+        if (answer is null) return null;
+        var a = answer.Trim().TrimEnd(';');
+        if (!a.StartsWith("EX040202", StringComparison.OrdinalIgnoreCase) || a.Length != 9) return null;
+        return a[8] switch { '0' => true, '1' => false, _ => null };
+    }
+
+    /// <summary>
+    /// How far the radio moves its scope centre from the dial when SCOPE CTR
+    /// is FILTER, for the operating mode on VFO A. MEASURED by ut9fj on his
+    /// FT-710, 2026-09-27 (Discussion #187), from the centre frequency the
+    /// radio prints under its own scope at a 50k span:
+    ///
+    ///   CW-L, CW-U, AM   centre on the dial
+    ///   LSB              1.5 kHz below the dial
+    ///   DATA-U           1.5 kHz above the dial
+    ///
+    /// USB is taken as the mirror of LSB, and DATA-L of DATA-U. NOT MEASURED:
+    /// whether the 1.5 kHz follows the filter width (his USB photos at normal
+    /// and 1.8 kHz width were too blurred to read), and anything for RTTY,
+    /// PSK or the FM modes. Those return 0, the same as CARRIER POINT, which
+    /// is what this build did everywhere before.
+    /// </summary>
+    public static long FilterCentreOffsetHz(string? mode) => mode switch
+    {
+        "USB" or "DATA-U" => 1_500,
+        "LSB" or "DATA-L" => -1_500,
+        _                 => 0,
+    };
+
     // FT-710 CAT manual, SS P2=6: 0,1,2 are 3DSS CENTER/CURSOR/FIX; 3,4 W/F
     // CENTER; 6,7 W/F CURSOR; 9,A W/F FIX. 5 and 8 are documented as "-".
     private static bool IsKnownMode(char c) =>

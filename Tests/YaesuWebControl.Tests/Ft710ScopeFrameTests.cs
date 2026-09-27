@@ -260,4 +260,29 @@ public class Ft710ScopeFrameTests
         for (int i = 0; i < times; i++) frame.CopyTo(all, i * frame.Length);
         return all;
     }
+
+    [Theory]
+    [InlineData("EX0402020;", true)]
+    [InlineData("EX0402021;", false)]
+    [InlineData("EX0402021", false)]
+    [InlineData("EX0402012;", null)]   // another menu item
+    [InlineData("EX04020;", null)]
+    [InlineData("?;", null)]
+    [InlineData(null, null)]
+    public void Scope_ctr_answer_is_read_only_from_its_own_address(string? answer, bool? filter)
+        => Assert.Equal(filter, Ft710ScopePlacement.ParseScopeCtrIsFilter(answer));
+
+    [Theory]
+    [InlineData("LSB", -1_500)]     // measured
+    [InlineData("DATA-U", 1_500)]   // measured
+    [InlineData("CW-U", 0)]         // measured
+    [InlineData("CW-L", 0)]         // measured
+    [InlineData("AM", 0)]           // measured
+    [InlineData("USB", 1_500)]
+    [InlineData("DATA-L", -1_500)]
+    [InlineData("RTTY-U", 0)]       // not measured: stays on the dial
+    [InlineData("PSK", 0)]
+    [InlineData(null, 0)]
+    public void Filter_centre_follows_the_measured_offsets(string? mode, long offsetHz)
+        => Assert.Equal(offsetHz, Ft710ScopePlacement.FilterCentreOffsetHz(mode));
 }
