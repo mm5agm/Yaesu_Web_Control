@@ -70,8 +70,15 @@ FT-710 FT4222H ──USB──> Yaesu_Sdr_Worker (Ft4222Bridge + Ft710ScopeFrame
 - **Placement.** The frame carries no frequency; its parameter block is
   zeroes on this model. So SdrManager reads `SS05;` for the span code and
   `SS06;` for the mode once a second, under the same gate as the Radio Scope
-  controller (`ScopeCatGate`). Each frame is then drawn centred on VFO A at
-  that span.
+  controller (`ScopeCatGate`). Each frame is then drawn centred on VFO A.
+  - **The row is 1.0695 times wider than the reported span.** Measured by
+    ut9fj on 2026-09-27 with a TinySA carrier at 20k, 50k, 200k and 1M:
+    drawn at the bare span, every signal sat 6.5% too close to the centre,
+    the same at every span (`Ft710ScopePlacement.RowWidthOverSpan`).
+  - **SCOPE CTR (EX 04-02-02) moves the centre.** Measured by ut9fj on the
+    same day: on CARRIER POINT the radio centres on the dial; on FILTER it
+    centres on the middle of the filter, 1.5 kHz up in DATA-U at 50k. This
+    build still centres on the dial, so it is right on CARRIER POINT only.
   - **Only CENTER modes are placed:** 3DSS CENTER, and W/F CENTER in EXPAND
     or NORMAL. In CURSOR mode the window stays still while the dial moves,
     and in FIX mode it starts at a band edge that no CAT command reports.

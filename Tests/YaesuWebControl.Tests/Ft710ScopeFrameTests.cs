@@ -199,11 +199,28 @@ public class Ft710ScopeFrameTests
     [InlineData('0')]   // 3DSS CENTER
     [InlineData('3')]   // W/F CENTER EXPAND
     [InlineData('4')]   // W/F CENTER NORMAL
-    public void Center_modes_place_the_row_at_the_radio_span(char mode)
+    public void Center_modes_place_the_row_wider_than_the_radio_span(char mode)
     {
         var r = Ft710ScopePlacement.Resolve('5', mode);
         Assert.True(r.CanPlace);
-        Assert.Equal(50_000, r.SpanHz);
+        Assert.Equal(53_475, r.SpanHz);   // 50 kHz x 1.0695
+    }
+
+    // ut9fj's FT-710 readings (Discussion #187): offsets shown when the row
+    // was spread across the bare span. With the measured width they must land
+    // within half a percent of the true offset from the dial.
+    [Theory]
+    [InlineData('4', 2_810.0, 3_000.0)]       // 20k
+    [InlineData('5', 13_973.0, 15_000.0)]     // 50k
+    [InlineData('5', 4_683.0, 5_000.0)]       // 50k
+    [InlineData('7', 14_048.0, 15_000.0)]     // 200k
+    [InlineData('9', 186_556.0, 200_000.0)]   // 1M
+    public void Measured_width_puts_a_known_carrier_at_its_frequency(char spanCode, double shownAtBareSpan, double trueOffset)
+    {
+        double bare  = Ft710ScopePlacement.SpanHz(spanCode)!.Value;
+        double width = Ft710ScopePlacement.Resolve(spanCode, '3').SpanHz!.Value;
+        double now   = shownAtBareSpan * width / bare;
+        Assert.InRange(now / trueOffset, 0.995, 1.005);
     }
 
     [Theory]

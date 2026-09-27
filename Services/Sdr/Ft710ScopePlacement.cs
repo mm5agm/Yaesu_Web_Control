@@ -37,8 +37,31 @@ public static class Ft710ScopePlacement
     };
 
     /// <summary>
-    /// The outcome of reading the radio's scope settings: either a span the
-    /// row can be drawn at, centred on the dial, or the reason it cannot.
+    /// How much wider the row's 850 bins are than the span the radio reports.
+    /// MEASURED by ut9fj on his FT-710, 2026-09-27 (Discussion #187): a TinySA
+    /// carrier on 50.315 MHz, SCOPE CTR on CARRIER POINT, read off the panel
+    /// with the 850 bins spread across the nominal span. Every signal came out
+    /// too close to the centre by the same ratio at every span:
+    ///
+    ///   span   dial     shown offset  true offset  ratio
+    ///   20k    50.312    2.810 kHz      3 kHz      0.937
+    ///   50k    50.300   13.973         15          0.932
+    ///   50k    50.310    4.683          5          0.937
+    ///   200k   50.300   14.048         15          0.937
+    ///   1M     50.115  186.556        200          0.933
+    ///
+    /// Mean 0.935, so the row covers 1 / 0.935 = 1.0695 times the span. ON8ST's
+    /// independent "1.1 kHz of error at 15 kHz off centre" (Nexus) is the same
+    /// ratio on another radio, so it is the model, not one set. Why the radio
+    /// draws a wider row than its span label says is not known.
+    /// </summary>
+    public const double RowWidthOverSpan = 1.0695;
+
+    /// <summary>
+    /// The outcome of reading the radio's scope settings: either the width
+    /// in Hz the whole row covers, centred on the dial, or the reason it
+    /// cannot be placed. The width is the radio's span times
+    /// <see cref="RowWidthOverSpan"/>, not the span itself.
     /// </summary>
     public sealed record Result(long? SpanHz, string? Problem)
     {
@@ -72,7 +95,7 @@ public static class Ft710ScopePlacement
 
         return placement switch
         {
-            ScopeCommands.PlacementCenter => new(span, null),
+            ScopeCommands.PlacementCenter => new((long)Math.Round(span.Value * RowWidthOverSpan), null),
             ScopeCommands.PlacementCursor => new(null,
                 "The radio's scope is in CURSOR mode. Set it to CENTER on the radio to see it here."),
             _ => new(null,
