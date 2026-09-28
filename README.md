@@ -82,12 +82,12 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
-| FT-710 showed an antenna dropdown with three antennas, but the radio has one ANT jack and no CAT command for choosing one. The dropdown is gone on the FT-710, and on single-antenna radios (FT-710, FTdx10, FT-991A) YWC no longer asks the radio for an antenna it cannot report | - | *Not yet in a build* |
-| Radio Display could go blank for a second or two after an antenna change (or any other change the app saves). Each save briefly left the capture with the default settings, which have Radio Display off, so it closed the capture device and reopened it | - | *Not yet in a build* |
-| Radio Display: on the RTTY or CW decode screen the click zones stayed live over a screen they no longer matched, so DEC LVL cycled the scope placement (a different change on each press). The overlay now checks the frame is the scope screen before any click and turns the zones off when it is not; on the decode screen the ANT to AGC readouts stay clickable, and DEC LVL and DEC OFF say what to do on the radio, as neither has a CAT command | [#179](https://github.com/mm5agm/Yaesu_Web_Control/issues/179) | *Not yet in a build* |
-| RTTY Tuner in RTTY-U listened for space at 1955 Hz instead of 2295, so it needed *Rev* to show a cross, and that *Rev* then broke the cross in RTTY-L. The band plan's RTTY segment on 20/15/10m also selected RTTY-U, where the radio's own decoder reads amateur RTTY reversed; it now selects RTTY-L | - | *Not yet in a build* |
-| RTTY Tuner froze on *Stopped.* after its browser tab had been in the background, until the dialog was closed and reopened; it now starts again by itself | - | *Not yet in a build* |
-| RTTY Tuner opened just after YWC started could use the mode from the last session instead of the radio's, which in RTTY-U put the space filter on the wrong side of mark until the radio's mode came in | - | *Not yet in a build* |
+| FT-710 showed an antenna dropdown with three antennas, but the radio has one ANT jack and no CAT command for choosing one. The dropdown is gone on the FT-710, and on single-antenna radios (FT-710, FTdx10, FT-991A) YWC no longer asks the radio for an antenna it cannot report | - | [v2.5.3-pre1](#2026-09-28---v253-pre1-pre-release) |
+| Radio Display could go blank for a second or two after an antenna change (or any other change the app saves). Each save briefly left the capture with the default settings, which have Radio Display off, so it closed the capture device and reopened it | - | [v2.5.3-pre1](#2026-09-28---v253-pre1-pre-release) |
+| Radio Display: on the RTTY or CW decode screen the click zones stayed live over a screen they no longer matched, so DEC LVL cycled the scope placement (a different change on each press). The overlay now checks the frame is the scope screen before any click and turns the zones off when it is not; on the decode screen the ANT to AGC readouts stay clickable, and DEC LVL and DEC OFF say what to do on the radio, as neither has a CAT command | [#179](https://github.com/mm5agm/Yaesu_Web_Control/issues/179) | [v2.5.3-pre1](#2026-09-28---v253-pre1-pre-release) |
+| RTTY Tuner in RTTY-U listened for space at 1955 Hz instead of 2295, so it needed *Rev* to show a cross, and that *Rev* then broke the cross in RTTY-L. The band plan's RTTY segment on 20/15/10m also selected RTTY-U, where the radio's own decoder reads amateur RTTY reversed; it now selects RTTY-L | - | [v2.5.3-pre1](#2026-09-28---v253-pre1-pre-release) |
+| RTTY Tuner froze on *Stopped.* after its browser tab had been in the background, until the dialog was closed and reopened; it now starts again by itself | - | [v2.5.3-pre1](#2026-09-28---v253-pre1-pre-release) |
+| RTTY Tuner opened just after YWC started could use the mode from the last session instead of the radio's, which in RTTY-U put the space filter on the wrong side of mark until the radio's mode came in | - | [v2.5.3-pre1](#2026-09-28---v253-pre1-pre-release) |
 
 Everything fixed in the v2.5.2 pre-releases is in [v2.5.2](#2026-09-24---v252).
 
@@ -387,6 +387,23 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 ---
 
 ## Release Notes
+
+## 2026-09-28 - v2.5.3-pre1 (pre-release)
+
+*The FT-710's own scope in the spectrum panel, with no SDR, for FT-710 owners to try, plus the fixes made since v2.5.2. The scope part is experimental: it has been checked on one FT-710 on receive only. Everything else works exactly as in v2.5.2, and with the scope not selected the FT-710 behaves as it did before. Install it over v2.5.2; your settings are kept.*
+
+- **FT-710: the radio's own scope in the spectrum panel, with no SDR** *(experimental)*. Switch the radio's **SCU-LAN10** menu ON (no unit needed), connect the USB cable, and pick the FT-710 scope as the SDR in Settings. FTDI's driver and LibFT4222 have to be installed separately. ut9fj has checked it on his FT-710 on receive: signals land at their true frequency at every span, and the panel follows the span you set on the radio. Please note:
+  - Set the radio's **SCOPE CTR** to **CARRIER POINT** for now. On **FILTER**, RTTY, PSK and FM stay centred on the dial, but USB and LSB have not been confirmed yet.
+  - **Change the span on the radio.** The panel follows it; YWC does not set it.
+  - **Not yet tested while transmitting.**
+  This is built on protocol work by the Nexus project and ON8ST. [§6.3](USER_MANUAL.md#63-sdr-spectrum-display).
+- **The FT-710 no longer shows an antenna dropdown.** The radio has one ANT jack and no CAT command for choosing one. On single-antenna radios (FT-710, FTdx10, FT-991A) YWC no longer asks the radio for an antenna it cannot report.
+- **Radio Display no longer goes blank for a second or two** after an antenna change or any other change the app saves.
+- **Radio Display on the RTTY or CW decode screen** ([#179](https://github.com/mm5agm/Yaesu_Web_Control/issues/179)): the click zones stayed live over a screen they no longer matched, so DEC LVL changed the scope placement. The zones now switch off away from the scope screen; the ANT to AGC readouts stay clickable, and DEC LVL and DEC OFF say what to do on the radio.
+- **RTTY Tuner in RTTY-U** listened for space at 1955 Hz instead of 2295, so it needed *Rev* to show a cross. The band plan's RTTY segment on 20/15/10m now selects RTTY-L, as the radio's own decoder reads amateur RTTY reversed in RTTY-U.
+- **RTTY Tuner froze on *Stopped.*** after its tab had been in the background; it now starts again by itself.
+- **RTTY Tuner opened just after YWC started** could use the last session's mode instead of the radio's.
+- **The RTTY Tuner and CW Reader close** when MAIN leaves the modes they work in.
 
 ## 2026-09-24 - v2.5.2
 

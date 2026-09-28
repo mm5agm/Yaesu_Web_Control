@@ -418,7 +418,7 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 ### 5.1 Top Bar
 
-The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.2**) are shown in the top-left corner.
+The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.3**) are shown in the top-left corner.
 
 **Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner listing what has changed, with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the newest version or if the internet is not available.
 
@@ -1473,11 +1473,11 @@ The delay is **hardware**, not software. Changing the sample rate means YWC asks
 
 YWC keeps the previous spectrum frame visible during the pause rather than blanking out the canvas — the brief frozen image is intentional, not a glitch. It returns to live data as soon as the new sample rate is running.
 
-#### FT-710: the radio's own scope, no SDR needed *(test build, not yet checked on a radio)*
+#### FT-710: the radio's own scope, no SDR needed *(experimental)*
 
 The FT-710 has no IF output, but it can send its own spectrum scope to the computer over the same USB lead as CAT. YWC can show that scope in the spectrum panel, so you need no SDR, no splitter and no T/R switch, and nothing is at risk when you transmit.
 
-> I don't own an FT-710, so this has not yet been tried on a real radio. Until someone has checked it on air, treat what it shows as a guide rather than a measurement. If you try it, please tell me in [Discussion #187](https://github.com/mm5agm/Yaesu_Web_Control/discussions/187).
+> I don't own an FT-710. One owner has checked it on his radio on receive: signals land at their true frequency at every span, and the panel follows the span set on the radio. It has **not yet been checked while transmitting**. If you try it, please tell me in [Discussion #187](https://github.com/mm5agm/Yaesu_Web_Control/discussions/187).
 
 **Setting it up (Windows only):**
 
@@ -1486,6 +1486,7 @@ The FT-710 has no IF output, but it can send its own spectrum scope to the compu
 3. Download **LibFT4222** for Windows from [ftdichip.com](https://ftdichip.com/software-examples/ft4222h-software-examples/) and copy **LibFT4222-64.dll** into the Yaesu Web Control program folder. YWC can't include these two FTDI files because they are closed source. If either is missing, the spectrum panel tells you so.
 4. In **Settings → SDR Spectrum Display**, with the radio model set to FT-710 and saved, press **Scan** under **SDR Devices** and choose **FT-710 internal scope** as the SDR for VFO A. Save.
 5. On the radio, put the scope in a **CENTER** mode (3DSS CENTER, or waterfall CENTER). In CURSOR or FIX mode the panel shows a message instead of a waterfall, because YWC can't tell where those modes put the picture. YWC never changes the radio's scope mode itself.
+6. On the radio, set **SCOPE CTR** to **CARRIER POINT** for now. On **FILTER**, RTTY, PSK and FM stay centred on the dial, but USB and LSB have not been confirmed on a radio yet.
 
 **What's different from an SDR:**
 
