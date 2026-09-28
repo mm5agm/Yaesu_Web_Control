@@ -74,7 +74,7 @@
                                     onclick="document.getElementById('cwDialog').show()">
                                 <span class="toggle-dd__label">CW</span>
                             </button>
-                            <button type="button"
+                            <button id="cwReaderOpenBtn" type="button"
                                     class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="CW reader - decode received Morse to text"
                                     title="Open the CW reader - decodes the received Morse to text"
@@ -87,6 +87,13 @@
                                     title="Open CW send - type a line, press Enter, the radio keys it"
                                     onclick="window.cwSendPanel && window.cwSendPanel.toggle()">
                                 <span class="toggle-dd__label">CW Send</span>
+                            </button>
+                            <button id="rttyTunerOpenBtn" type="button"
+                                    class="btn toggle-dd__btn toggle-dd__btn--action"
+                                    aria-label="RTTY tuner - crossed-ellipse tuning scope"
+                                    title="Open the RTTY tuner - mark and space filters on an X-Y scope; tune for the cross"
+                                    onclick="window.rttyTuner && window.rttyTuner.toggle()">
+                                <span class="toggle-dd__label">RTTY Tune</span>
                             </button>
                             <button type="button"
                                     class="btn toggle-dd__btn toggle-dd__btn--action"
