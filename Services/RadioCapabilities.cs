@@ -152,10 +152,13 @@ public static class RadioCapabilities
     /// expose a per-VFO antenna selector. Single-antenna radios get the
     /// selector hidden (Jacek SP3L #34, FTdx10 has one ANT jack — showing
     /// a selector for a control that does nothing is just visual noise).
+    /// The FT-710 has one ANT jack too, and neither its CAT manual nor the
+    /// FTdx10's lists an AN command at all, so on these models the antenna
+    /// is not polled either (MeterPollingService).
     /// </summary>
     public static bool HasAntennaSelector(string radioModel) => radioModel switch
     {
-        "FTdx10" or "FT-991A" => false,
+        "FTdx10" or "FT-710" or "FT-991A" => false,
         _                     => true
     };
 
