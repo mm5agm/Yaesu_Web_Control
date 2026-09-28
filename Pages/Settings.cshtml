@@ -3175,6 +3175,8 @@
         // driver=rtlsdr,label=Generic RTL2832U,...  →  "Generic RTL2832U [rtlsdr]"
         function keyToLabel(key) {
             if (!key) return '';
+            // The radio's own scope, not an SDR (Ft710ScopeFrame.KeyPrefix).
+            if (key.startsWith('yaesu-scope:')) return 'FT-710 internal scope [radio]';
             if (key.startsWith('sdrplay:')) {
                 const { hwVer, serial } = parseSdrplayKey(key);
                 const model = hwVer != null ? (SDRPLAY_HW_VER_NAMES[hwVer] || `hw${hwVer}`) : null;

@@ -43,6 +43,8 @@
     <Compile Include="..\..\Services\Sdr\SoapySdrInterop.cs"   Link="LinkedSdr\SoapySdrInterop.cs"   />
     <Compile Include="..\..\Services\Sdr\SpectrumProcessor.cs" Link="LinkedSdr\SpectrumProcessor.cs" />
     <Compile Include="..\..\Services\Sdr\WireProtocol.cs"      Link="LinkedSdr\WireProtocol.cs"      />
+    <Compile Include="..\..\Services\Sdr\Ft710ScopeFrame.cs"   Link="LinkedSdr\Ft710ScopeFrame.cs"   />
+    <Compile Include="..\..\Services\Sdr\Ft4222Libraries.cs"   Link="LinkedSdr\Ft4222Libraries.cs"   />
   </ItemGroup>
 
 </Project>
