@@ -4,8 +4,10 @@
 
 .DESCRIPTION
     Pulls every release (and every asset) for one or more GitHub repos via the
-    `gh` CLI and prints a per-release table plus running totals. Unlike the
-    shields.io badge on the code page, this counts pre-release downloads too.
+    `gh` CLI and prints a per-release table plus running totals, split into
+    Windows (.exe/.msi/.zip) and Mac (.dmg/.pkg) downloads. Unlike the
+    shields.io badge on the code page, this counts pre-release downloads and
+    Mac downloads too - the badge counts only Yaesu_Web_Control_Setup.exe.
 
     Defaults to both of my apps: Yaesu Web Control and Icom Web Control.
 
@@ -53,27 +55,45 @@ function Get-RepoStats {
 
     $rows = foreach ($r in $releases) {
         if ($PreOnly -and -not $r.prerelease) { continue }
-        $count = ($r.assets | Measure-Object -Property download_count -Sum).Sum
-        if ($null -eq $count) { $count = 0 }
+        $win = 0; $mac = 0; $other = 0
+        foreach ($a in $r.assets) {
+            switch -Regex ($a.name) {
+                '\.(exe|msi|zip)$' { $win   += $a.download_count; break }
+                '\.(dmg|pkg)$'     { $mac   += $a.download_count; break }
+                default            { $other += $a.download_count }
+            }
+        }
         [pscustomobject]@{
             Tag       = $r.tag_name
             Kind      = if ($r.prerelease) { 'pre' } else { 'release' }
             Published = if ($r.published_at) { ([datetime]$r.published_at).ToString('yyyy-MM-dd') } else { '-' }
-            Downloads = [int]$count
+            Windows   = [int]$win
+            Mac       = [int]$mac
+            Other     = [int]$other
+            Downloads = [int]($win + $mac + $other)
         }
     }
 
+    # Only show the Other column if some asset didn't match Windows or Mac.
+    $columns = @('Published', 'Tag', 'Kind', 'Windows', 'Mac')
+    if (($rows | Measure-Object Other -Sum).Sum -gt 0) { $columns += 'Other' }
+    $columns += 'Downloads'
+
     $rows | Sort-Object Published -Descending |
-        Format-Table Published, Tag, Kind, Downloads -AutoSize | Out-String | Write-Host
+        Format-Table $columns -AutoSize | Out-String | Write-Host
 
-    $rel  = ($rows | Where-Object Kind -eq 'release' | Measure-Object Downloads -Sum).Sum
-    $pre  = ($rows | Where-Object Kind -eq 'pre'     | Measure-Object Downloads -Sum).Sum
-    if ($null -eq $rel) { $rel = 0 }
-    if ($null -eq $pre) { $pre = 0 }
+    function Sum-Of($set, $prop) {
+        $s = ($set | Measure-Object $prop -Sum).Sum
+        if ($null -eq $s) { 0 } else { [int]$s }
+    }
 
-    Write-Host ("  Full releases : {0,6}" -f $rel) -ForegroundColor Green
-    Write-Host ("  Pre-releases  : {0,6}" -f $pre) -ForegroundColor Green
-    Write-Host ("  Grand total   : {0,6}" -f ($rel + $pre)) -ForegroundColor Green
+    $relRows = @($rows | Where-Object Kind -eq 'release')
+    $preRows = @($rows | Where-Object Kind -eq 'pre')
+
+    $fmt = "  {0,-14}: {1,6}   (Windows {2,6}, Mac {3,6})"
+    Write-Host ($fmt -f 'Full releases', (Sum-Of $relRows Downloads), (Sum-Of $relRows Windows), (Sum-Of $relRows Mac)) -ForegroundColor Green
+    Write-Host ($fmt -f 'Pre-releases',  (Sum-Of $preRows Downloads), (Sum-Of $preRows Windows), (Sum-Of $preRows Mac)) -ForegroundColor Green
+    Write-Host ($fmt -f 'Grand total',   (Sum-Of $rows Downloads),    (Sum-Of $rows Windows),    (Sum-Of $rows Mac))    -ForegroundColor Green
 }
 
 foreach ($slug in $Repo) {
