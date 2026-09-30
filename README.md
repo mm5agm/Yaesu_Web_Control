@@ -82,6 +82,7 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
+| Searching Start for "Yaesu" found nothing, because the Start menu entry sat inside a folder named MM5AGM, which sorts under M. It is now a top-level entry, and an upgrade removes the old one. The installer also now records YWC for Apps & features in the 64-bit part of the registry, where a 64-bit app belongs, instead of the 32-bit part | - | *Not yet in a build* |
 | Installing an upgrade offered the default folder instead of the one YWC was already installed in, so anyone who had installed it somewhere else got a second copy unless they changed the folder by hand. The installer now offers the existing folder | [#192](https://github.com/mm5agm/Yaesu_Web_Control/issues/192) | *Not yet in a build* |
 | FT-710 showed an antenna dropdown with three antennas, but the radio has one ANT jack and no CAT command for choosing one. The dropdown is gone on the FT-710, and on single-antenna radios (FT-710, FTdx10, FT-991A) YWC no longer asks the radio for an antenna it cannot report | - | [v2.5.3-pre1](#2026-09-28---v253-pre1-pre-release) |
 | Radio Display could go blank for a second or two after an antenna change (or any other change the app saves). Each save briefly left the capture with the default settings, which have Radio Display off, so it closed the capture device and reopened it | - | [v2.5.3-pre1](#2026-09-28---v253-pre1-pre-release) |
