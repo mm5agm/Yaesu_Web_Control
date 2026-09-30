@@ -7,6 +7,12 @@
 Name "${APPNAME} ${VERSION}"
 OutFile "Yaesu_Web_Control_Setup.exe"
 InstallDir "${INSTALLDIR}"
+; On an upgrade, offer the folder YWC is already installed in rather than the
+; default (#192). The install section writes InstallLocation to this key, so a
+; previous install anywhere else is found here; a fresh install finds no key
+; and falls back to InstallDir above. Read through the same (32-bit) registry
+; view the WriteRegStr calls below use, so the two always agree.
+InstallDirRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "InstallLocation"
 
 RequestExecutionLevel admin
 
