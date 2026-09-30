@@ -1273,6 +1273,10 @@ fieldset.calibration-card {
     position: absolute;
     z-index: 2;
     overflow: hidden;
+    /* Clicks here are for the radio; a double-click must not select the
+       hover label's text. */
+    user-select: none;
+    -webkit-user-select: none;
 }
 .radio-display-hotspots .rdh-debug {
     position: absolute;
@@ -1300,7 +1304,12 @@ fieldset.calibration-card {
     background: rgba(0, 0, 0, 0.75);
     color: #fff;
     font: 12px/1.4 monospace;
-    white-space: nowrap;
+    /* One line when it fits; a long hint wraps inside the picture rather
+       than running off both edges of it. */
+    width: max-content;
+    max-width: calc(100% - 8px);
+    box-sizing: border-box;
+    text-align: center;
     pointer-events: none;
 }
 

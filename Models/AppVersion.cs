@@ -4,7 +4,7 @@ namespace Yaesu_Web_Control;
 
 public static class AppVersion
 {
-    public const string Current = "2.5.2";
+    public const string Current = "2.5.3";
 
     /// <summary>
     /// The git tag CI built from ("v2.5.2-pre2", "v2.5.2"), or "" for a local
@@ -47,7 +47,7 @@ public static class AppVersion
 
     /// <summary>Date this version was released, ISO format.
     /// Bump on actual release; current value reflects the planned ship date.</summary>
-    public const string ReleaseDate = "2026-09-15";
+    public const string ReleaseDate = "2026-09-28";
 
     /// <summary>
     /// Firmware versions of the developer's bench radio(s) at the time this

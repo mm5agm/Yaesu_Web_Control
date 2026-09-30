@@ -138,6 +138,10 @@
     - 21.5 [Stopping](#215-stopping)
     - 21.6 [The panel](#216-the-panel)
     - 21.7 [Troubleshooting](#217-troubleshooting)
+22. [RTTY Tuner](#22-rtty-tuner)
+    - 22.1 [Reading the figure](#221-reading-the-figure)
+    - 22.2 [Mark, Shift and Rev](#222-mark-shift-and-rev)
+    - 22.3 [Troubleshooting](#223-troubleshooting)
 
 ---
 
@@ -164,6 +168,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | CW Reader ([§20](#20-cw-reader)) | Yes | Yes | Yes |
 | CW Send ([§21](#21-cw-send)) | Yes | Yes | Yes |
+| RTTY Tuner ([§22](#22-rtty-tuner)) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
 | USB serial driver | **Windows / macOS:** if the radio's COM / `/dev/cu.*` ports are missing or CAT never answers, install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** usually skip — the kernel already includes CP210x support. |
@@ -413,7 +418,7 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 ### 5.1 Top Bar
 
-The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.2**) are shown in the top-left corner.
+The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.3**) are shown in the top-left corner.
 
 **Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner listing what has changed, with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the newest version or if the internet is not available.
 
@@ -536,7 +541,9 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 
 **Span buttons** — Click **1k**, **2k**, **5k**, **10k**, **20k**, **50k**, **100k**, **200k**, **500k**, **1M** or **2M** to change the visible bandwidth. These are the FTdx101's own scope spans plus 2 MHz, so the browser and the front panel speak the same language. The display recentres on the VFO. From **100k** down the change is instant — the SDR keeps running and only the slice it sends changes (see §6.3 for how); from **200k** up the SDR is retuned, which pauses that panel for a few seconds. For CW, **20k** shows a whole sub-band with each station a few pixels wide and easy to click; **1k** and **2k** show one station as a broad hump, which is what the radio's own scope shows at those spans too — a keyed carrier is not a needle at 7.6 Hz per bin.
 
-**Passband** — tick the **Passband** box (beside the span buttons) to draw the receiver's IF passband as a shaded band on the trace, with the amber dial marker inside it. Its width and position follow the radio's IF Width and IF Shift, so it shows exactly which slice of the band you are listening to, and it moves as you change either control. On the FTdx101 the marker sits at the station's true frequency — see the note on where signals are drawn in §6.3. The setting is remembered per VFO across browser reloads.
+**Passband** — tick the **Passband** box (beside the span buttons) to draw the receiver's IF passband as a shaded band on the trace, with the amber dial marker inside it. Its width and position follow the radio's IF Width and IF Shift, so it shows exactly which slice of the band you are listening to, and it moves as you change either control. On the FTdx101 the marker sits at the station's true frequency — see the note on where signals are drawn in §6.3. In **DATA-L** and **DATA-U** the radio centres its filter on the **DATA SHIFT (SSB)** menu (FUNC → RADIO SETTING → MODE PSK/DATA, 1500 Hz by default) rather than on 1500 Hz, so on the FTdx101 YWC reads that menu from the radio each time a VFO goes into DATA-L or DATA-U, and the trace, the shaded passband and the Filter Function Display follow it. If you change DATA SHIFT while you are in a DATA mode, switch mode away and back to pick it up. The setting is remembered per VFO across browser reloads.
+
+> **In RTTY-L and RTTY-U** the radio's RTTY filter sits on the two tones, not where an SSB filter would be, so the shaded band straddles the amber dial marker: the dial is the upper tone and the other is 170 Hz below it (at the default 170 Hz shift). A wide RTTY filter grows mostly away from the tones, the way the radio's own filter does. The filter display under the S-meter shows the same, centred on 2210 Hz audio (mark + half the shift) rather than 1500. This was measured on the FTdx101MP at the default **MARK 2125 / SHIFT 170** and **POLARITY RX NOR**; YWC reads your radio's MARK and SHIFT and follows them.
 
 ![Spectrum panel at a narrow span on the CW end of 20 m — the receiver's passband is shaded around the amber dial marker, and each CW station is a separate line](pictures/Spectrum_Passband.png)
 
@@ -560,7 +567,18 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 > **Settings → §6.1** and YWC leaves the mode entirely to you. Clicking the spectrum,
 > clicking a DX spot row, and stepping through spots from the keyboard then tune only.
 > Tuning offsets still follow the mode the radio is *actually* in, so a click on a RTTY
-> signal keeps your RTTY offset instead of tuning zero-beat onto it.
+> signal lands where that mode needs it. In the radio's own **RTTY-L** the dial sits on the
+> signal's mark tone, just as it sits on the signal in CW, so click the middle of the two
+> tones and the dial goes to mark, ready for the radio's RTTY decoder. In **DATA-L**, the
+> usual mode for AFSK RTTY where your software makes the tones, the dial is the suppressed
+> carrier, so a click puts it above the signal with the two tones where your RTTY
+> software is listening. YWC takes those tones from the **Mark**, **Shift** and **Rev** in
+> the RTTY Tuner ([§22.2](#222-mark-shift-and-rev)): 2125 Hz and 2295 Hz unless you change
+> them, which is the default in most RTTY software. If your software uses a different
+> mark, 1415 Hz for example, which puts the pair in the middle of the SSB passband, open
+> the tuner once and type it into **Mark**. Every click after that uses it, whether the
+> tuner is open or not. The radio's RTTY MARK menu plays no part in DATA-L, since your
+> software makes the tones.
 >
 > Choosing a named segment (CW, FT8, SSB, RTTY) from a VFO’s band dropdown still sets
 > that segment’s mode either way. That is a choice you made by name, not a mode guessed
@@ -777,8 +795,8 @@ The trapezium is the DSP filter — the IF Width setting — and it grows and sh
 
 The IF Width dropdown is **mode-aware**: the SH command code sent to the radio is the same in every mode, but the resulting bandwidth differs per mode. In SSB code 8 gives 1650 Hz; in CW the same code gives 400 Hz. The dropdown labels are rebuilt automatically when you change mode so they show the actual bandwidth the radio will use.
 
-- **SSB modes** (LSB, USB, DATA-L, DATA-U) show the wide SSB widths — from 300 Hz up to around 3.2 kHz (4 kHz on FTdx10/FT-710).
-- **CW, RTTY, and PSK modes** show the narrow widths — from 50 Hz up to 3 kHz or so.
+- **SSB modes** (LSB, USB) show the wide SSB widths — from 300 Hz up to around 3.2 kHz (4 kHz on FTdx10/FT-710).
+- **CW, RTTY, PSK and DATA modes** (DATA-L, DATA-U) show the narrow widths — from 50 Hz up to 3 kHz or so. DATA uses this set because the radio does: in DATA, code 13 is 1.2 kHz, not the SSB set's 2.3 kHz. Earlier versions labelled DATA with the SSB widths, so picking "2.4 kHz" in DATA-U actually gave you 1.4 kHz. For FT8 and other wide data modes, pick **3.0 kHz** or wider.
 - **AM and FM modes** hide the IF Width dropdown — the SH command does not apply in those modes (the radio uses fixed filters, or a separate narrow/wide mode toggle).
 
 The first entry in the dropdown ("Default") is the radio's mode-dependent default, which varies by the selected roofing filter. The current width is read from the radio on connect; selecting a new value sends it immediately.
@@ -823,7 +841,9 @@ Region 1 is the only plan that includes the 4m (70 MHz) band. Japan has no 60m s
 | CW | 14.025 MHz | CW-U |
 | FT8 | 14.074 MHz | DATA-U |
 | SSB | 14.150 MHz | USB |
-| RTTY | 14.080 MHz | RTTY-U |
+| RTTY | 14.080 MHz | RTTY-L |
+
+RTTY is RTTY-L on every band, including above 10 MHz. On the FTdx101 the dial sits on the upper tone in RTTY-U as well, so in RTTY-U the radio's own decoder reads normal amateur RTTY with mark and space swapped and prints rubbish.
 
 The last segment you used on each band is remembered, so when you return to a band the dropdown re-selects your previous segment.
 
@@ -1464,6 +1484,27 @@ Only spans of **200k and above** change the SDR's sample rate; from 100k down th
 The delay is **hardware**, not software. Changing the sample rate means YWC asks the SDR worker process to close the device, reopen it at the new rate, and restart streaming. The SDRplay API takes roughly a second to release a device cleanly and another second or so to reinitialise it. Only the SDR whose span you changed restarts; the other panel carries on.
 
 YWC keeps the previous spectrum frame visible during the pause rather than blanking out the canvas — the brief frozen image is intentional, not a glitch. It returns to live data as soon as the new sample rate is running.
+
+#### FT-710: the radio's own scope, no SDR needed *(experimental)*
+
+The FT-710 has no IF output, but it can send its own spectrum scope to the computer over the same USB lead as CAT. YWC can show that scope in the spectrum panel, so you need no SDR, no splitter and no T/R switch, and nothing is at risk when you transmit.
+
+> I don't own an FT-710. One owner has checked it on his radio on receive: signals land at their true frequency at every span, and the panel follows the span set on the radio. It has **not yet been checked while transmitting**. If you try it, please tell me in [Discussion #187](https://github.com/mm5agm/Yaesu_Web_Control/discussions/187).
+
+**Setting it up (Windows only):**
+
+1. On the radio, set menu item **SCU-LAN10** (EX 03-01-26) to **ON**. You don't need an SCU-LAN10 unit; this switch makes the radio's scope data appear on USB.
+2. Install FTDI's **D2XX driver** from [ftdichip.com](https://ftdichip.com/drivers/d2xx-drivers/).
+3. Download **LibFT4222** for Windows from [ftdichip.com](https://ftdichip.com/software-examples/ft4222h-software-examples/) and copy **LibFT4222-64.dll** into the Yaesu Web Control program folder. YWC can't include these two FTDI files because they are closed source. If either is missing, the spectrum panel tells you so.
+4. In **Settings → SDR Spectrum Display**, with the radio model set to FT-710 and saved, press **Scan** under **SDR Devices** and choose **FT-710 internal scope** as the SDR for VFO A. Save.
+5. On the radio, put the scope in a **CENTER** mode (3DSS CENTER, or waterfall CENTER). In CURSOR or FIX mode the panel shows a message instead of a waterfall, because YWC can't tell where those modes put the picture. YWC never changes the radio's scope mode itself.
+6. On the radio, set **SCOPE CTR** to **CARRIER POINT** for now. On **FILTER**, RTTY, PSK and FM stay centred on the dial, but USB and LSB have not been confirmed on a radio yet.
+
+**What's different from an SDR:**
+
+- **The span is the radio's.** Change it on the radio. The span buttons are hidden for this panel, and the width follows the radio within about a second.
+- **The panel follows VFO A.**
+- **The first connection can be slow.** Opening the radio's USB scope for the first time after power-on can take a while. If it hasn't opened after 20 seconds, YWC tries again.
 
 ---
 
@@ -3578,6 +3619,8 @@ The **CW Read** button on the main control panel opens a reader that listens to 
 
 Nothing here transmits. The reader only listens. To answer the station you are reading, use **CW Send** ([§21](#21-cw-send)).
 
+If you move MAIN out of CW (to RTTY or SSB, say) and it stays there for two seconds, the panel closes itself and a screen reader hears "CW reader closed, mode is now ...". Only the panel closes. The reader keeps running, as it does when you close it with **×**, so your copy is still there when you open it again. A brief change, such as a band change or a memory recall passing through another mode, does not close it.
+
 ![The CW Reader panel — decoded text at the top, the status line beneath it, and the Reader Mode, transcript and log controls](pictures/CW-Reader.png)
 
 If CW is new to you, read [§20.1](#201-if-cw-is-new-to-you) and [§20.2](#202-what-to-expect-from-a-machine-reading-morse) first. They are short, and between them they save most of the disappointment people have with machine copy.
@@ -3885,6 +3928,61 @@ The panel is non-modal: it can stay open while you work the rest of the page, an
 | M5 has the wrong text after sending | The write-back failed, and the status line will have said so. The next line you send from CW Send puts M5 back again; or press **M5** on the CW Keyer panel, which rewrites the slot from YWC’s own text before playing it. |
 | Characters missing from what was sent | Only A–Z, 0–9, space and `? / . ,` are keyed. The rest are dropped before the line is stored. |
 | Nobody comes back to my CQ | Check you are actually transmitting — the banner and the **sent** tag both tell you. Then check the radio: power, antenna, and whether the ATU has tuned on that band. |
+
+---
+
+## 22. RTTY Tuner
+
+The **RTTY Tune** button on the main control panel opens a tuning scope for RTTY, the kind that sat beside every RTTY terminal unit before anything had a waterfall. The receive audio goes through two narrow filters, one on the mark tone and one on the space tone. The mark filter drives the scope sideways and the space filter drives it up and down, so a signal shifting between the two tones draws a cross. You tune for the cross.
+
+It does not decode anything; the radio's own RTTY decoder, or your RTTY software, does that. It only shows you when the signal is sitting where the decoder expects it.
+
+Nothing here transmits. The tuner only listens.
+
+It uses the same capture device as the CW Reader: set the **RX device** to the radio's USB codec under Settings → Remote Audio ([§6.8](#68-remote-audio)). Remote Audio itself does not need to be switched on. The device is held open only while the tuner is open, and let go a couple of seconds after you close it. The CW Reader and the tuner can run together.
+
+The tuner closes itself if MAIN leaves the modes it works in and stays out for two seconds, for example a move to CW, AM or FM. It stays open in RTTY-L, RTTY-U, the DATA modes, PSK, LSB and USB, because in the DATA modes and SSB the tones come from your RTTY software. A screen reader hears "RTTY tuner closed, mode is now ...". Nothing opens on its own: moving to CW does not open the CW Reader.
+
+### 22.1 Reading the figure
+
+![RTTY Tuner on a real off-air RTTY signal in RTTY-L on 80 m: a clean cross, mark across and space up, with Mark 2125 Space 2295 Hz, M -31, S -34, in -25 dBFS](pictures/RTTY-Tuner.png)
+
+That is a real RTTY station on 80 m, received on my FTdx101MP in RTTY-L. The two arms are about the same size: mark is at -31 dBFS and space at -34, only 3 dB apart. **Equal arms are what tell you it is RTTY.** A steady carrier in the mark filter draws a bright, convincing line too, but only one, and its space level stays far below its mark level however long you watch.
+
+| What you see | What it means |
+|---|---|
+| A clean cross, each arm a thin ellipse | On tune. Mark draws the line across, space the line up. |
+| The arms lean towards each other and open into fat ellipses | Off tune. Each tone is getting into both filters. Tune until they close up. |
+| One arm right, the other a blob or missing | The shift is wrong, **Rev** is wrong, or the station is idling on one tone. |
+| A dim, fuzzy ball in the middle | Noise. Nothing is landing in the tone filters. |
+
+The figure grows to fill the face whatever the signal level. So that plain noise does not look as solid as a signal, the trace is drawn dim whenever little of the audio is landing in the two filters.
+
+Under the scope, a line gives the two filter frequencies and three levels in dBFS: mark filter (**M**), space filter (**S**) and everything the receiver is passing (**in**). The line under that says in words which of the cases above you are looking at.
+
+### 22.2 Mark, Shift and Rev
+
+- **Mark** is the mark tone in the receive audio. In the radio's RTTY-L and RTTY-U that is the radio's own RTTY MARK setting, **2125 Hz** unless you have changed it. In DATA-L it is whatever your RTTY software uses: many operators run **1415 Hz**, which puts the two tones in the middle of the SSB passband.
+- **Shift** is the station's shift. Amateur RTTY is **170 Hz**; 200, 425, 450 and 850 are there for everything else. 450 is the shift of the German weather service broadcasts (DDK9 on 10.1008 MHz, among others), which run all day and are the easiest real RTTY to find when the amateur bands are quiet.
+- **Rev** puts the space filter below mark instead of above it. Tick it only if you have **POLARITY RX** set to **REV** on the radio, or, in the DATA modes, if your RTTY software puts space below mark. A station sending reversed does not need it: its two tones land in the same places, and the cross looks the same either way round.
+
+In every mode the space filter goes above mark, at 2125 and 2295 Hz unless you change **Mark**:
+
+- **RTTY-L:** I measured this on my FTdx101MP. The dial sits on the mark tone, and a signal below the dial comes out higher in the audio.
+- **RTTY-U:** I measured this too. The two tones come out at the same 2125 and 2295 Hz, so the cross is the same as in RTTY-L. But the dial is still on the upper tone, which on the air is the station's mark, and the radio's own decoder reads it reversed. Use RTTY-L for amateur RTTY.
+- **DATA-L, DATA-U and anything else:** that is AFSK, where your RTTY software makes the tones, and space above mark is the usual default in RTTY software.
+
+These settings are remembered in the browser. In **DATA-L**, click-to-tune on the spectrum uses them as well, to put a clicked signal's tones where your software is listening ([§5.4](#54-spectrum-display)). So set **Mark** to your software's mark tone even if you never use the tuner.
+
+### 22.3 Troubleshooting
+
+| Symptom | What to try |
+|---|---|
+| Status says the radio audio could not be opened | Set the Remote Audio **RX device** to the radio's USB codec in Settings ([§6.8](#68-remote-audio)). The tuner uses the same device as the CW Reader. |
+| Only ever a fuzzy ball, even on a strong signal | Check that **Mark** and **Shift** match the signal and that the mode is right. A 3 kHz SSB filter passes plenty of noise; a narrower RTTY filter on the radio gives a cleaner cross. |
+| Both arms there but they swap over | That is harmless: the picture is the same either way round. |
+| A perfect cross but the radio's decoder prints rubbish | Check the mode. In RTTY-U the radio decodes amateur RTTY reversed; switch to **RTTY-L** at the same dial frequency. **Rev** does not help: it only moves the tuner's filter, and it will break the cross. |
+| The cross broke when I changed between RTTY-U and RTTY-L | Untick **Rev**. Before this was fixed, RTTY-U needed Rev to draw a cross. |
 
 ---
 

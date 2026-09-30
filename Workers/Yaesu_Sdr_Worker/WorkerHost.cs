@@ -114,6 +114,18 @@ internal sealed class WorkerHost
             catch (Exception ex) { Log($"control reader exited: {ex.Message}"); }
         }, stoppingToken);
 
+        // The radio's own scope is not an SDR: no IQ, no FFT, no tuning. It
+        // shares only the connection and the frame format with the path
+        // below, so it has a loop of its own rather than a branch in that one.
+        if (Ft710ScopeFrame.IsScopeKey(_opts.DeviceKey))
+        {
+            int rc = await RunRadioScopeAsync(writer, stoppingToken).ConfigureAwait(false);
+            try { stream.Dispose(); } catch { }
+            client.Dispose();
+            Log($"exit code {rc}");
+            return rc;
+        }
+
         try
         {
             await writer.WriteStatusAsync("connecting", stoppingToken).ConfigureAwait(false);
@@ -254,6 +266,109 @@ internal sealed class WorkerHost
 
         Log($"exit code {exit}");
         return exit;
+    }
+
+    // How long the first FT4222 open may take before it is given up. Nexus
+    // saw one hang for minutes on a bridge that had just appeared; every
+    // later open was instant. Giving up exits the worker, and SdrManager
+    // starts a fresh one after its usual retry pause.
+    private const int ScopeOpenTimeoutMs = 20_000;
+
+    // The FT-710 produces about 84 frames a second. The panel needs far
+    // fewer, and every frame sent is a SignalR message to every browser.
+    private const int ScopeSendsPerSecond = 20;
+
+    /// <summary>
+    /// Streams the FT-710's own scope from its internal FT4222. Each frame
+    /// goes out as a SpectrumFrame whose centre and span are ZERO: the worker
+    /// has no CAT, so it cannot know where the row sits. SdrManager fills
+    /// both in from the radio's scope settings before anything reaches a
+    /// browser. Bins are in the radio's order, low to high frequency.
+    /// </summary>
+    private async Task<int> RunRadioScopeAsync(FrameWriter writer, CancellationToken ct)
+    {
+        Ft4222Bridge? bridge = null;
+        try
+        {
+            await writer.WriteStatusAsync("connecting", ct).ConfigureAwait(false);
+
+            bridge = await Task.Run(() => Ft4222Bridge.Open(Log), ct)
+                .WaitAsync(TimeSpan.FromMilliseconds(ScopeOpenTimeoutMs), ct).ConfigureAwait(false);
+            Log($"FT4222 open: '{bridge.Description}'");
+            await writer.WriteStatusAsync("streaming", ct).ConfigureAwait(false);
+
+            var   assembler = new Ft710ScopeFrame.Assembler();
+            long  interval  = Stopwatch.Frequency / ScopeSendsPerSecond;
+            var   clock     = Stopwatch.StartNew();
+            long  lastSend  = -interval;
+            ulong sequence  = 0;
+            int   misses    = 0;
+
+            while (!ct.IsCancellationRequested)
+            {
+                // Pace the reads rather than drain all 84 frames a second:
+                // chip-select is released after each read (see Ft4222Bridge),
+                // so a pause costs nothing and the next read resynchronises
+                // on the trailer.
+                long wait = lastSend + interval - clock.ElapsedTicks;
+                if (wait > 0)
+                    await Task.Delay(TimeSpan.FromSeconds((double)wait / Stopwatch.Frequency), ct).ConfigureAwait(false);
+
+                byte[]? frame = assembler.Push(bridge.Read());
+                if (frame is null)
+                {
+                    // One miss is the stream's rotation; a long run of them
+                    // is a stream that is not FT-710 scope data at all.
+                    if (++misses == 50)
+                        Log("no frame trailer in 50 reads — is SCU-LAN10 ON and is this an FT-710?");
+                    continue;
+                }
+                misses = 0;
+                lastSend = clock.ElapsedTicks;
+
+                float[] bins = Ft710ScopeFrame.ParseMainRowDb(frame);
+                try
+                {
+                    await writer.WriteSpectrumAsync(++sequence, 0, 0, bins, ct).ConfigureAwait(false);
+                }
+                catch (IOException ex)
+                {
+                    Log($"client disconnected: {ex.Message}");
+                    break;
+                }
+            }
+            return 0;
+        }
+        catch (OperationCanceledException)
+        {
+            Log("cancelled — exiting cleanly");
+            return 0;
+        }
+        catch (DllNotFoundException ex)
+        {
+            Log($"FATAL: FTDI library not found — {ex.Message}");
+            try { await writer.WriteStatusAsync("noft4222", CancellationToken.None); } catch { }
+            try { await writer.WriteErrorAsync(Ft4222Libraries.MissingMessage, CancellationToken.None); } catch { }
+            return 3;
+        }
+        catch (TimeoutException)
+        {
+            Log($"FATAL: FT4222 open did not finish in {ScopeOpenTimeoutMs / 1000} s");
+            try { await writer.WriteStatusAsync("disconnected", CancellationToken.None); } catch { }
+            try { await writer.WriteErrorAsync("The FT-710 scope did not open in time. Retrying.", CancellationToken.None); } catch { }
+            return 4;
+        }
+        catch (Exception ex)
+        {
+            Log($"FATAL: FT-710 scope error — {ex.GetType().Name}: {ex.Message}");
+            try { await writer.WriteStatusAsync("disconnected", CancellationToken.None); } catch { }
+            try { await writer.WriteErrorAsync(ex.Message, CancellationToken.None); } catch { }
+            return 4;
+        }
+        finally
+        {
+            bridge?.Dispose();
+        }
     }
 
     private ISdrDevice CreateDevice(string key)

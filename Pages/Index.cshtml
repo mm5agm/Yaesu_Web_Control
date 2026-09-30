@@ -772,10 +772,14 @@
                                 aria-label="DX spots — list of cluster spots on current band"
                                 title="Open DX spots list — see callsigns spotted on the current band"
                                 onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">DX Spots</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
+                        <button id="cwReaderOpenBtn" class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="CW reader - decode received Morse to text"
                                 title="Open the CW reader - decodes the received Morse to text"
                                 onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">CW Read</button>
+                        <button id="rttyTunerOpenBtn" class="btn btn-sm ms-1 btn-outline-secondary"
+                                aria-label="RTTY tuner - crossed-ellipse tuning scope"
+                                title="Open the RTTY tuner - mark and space filters on an X-Y scope; tune for the cross"
+                                onclick="window.rttyTuner && window.rttyTuner.toggle()">RTTY Tune</button>
                         <button class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="CW send - type text and send it as Morse"
                                 title="Open CW send - type a line, press Enter, the radio keys it"
@@ -2914,6 +2918,50 @@
     </div>
 </dialog>
 
+<!-- RTTY tuner: the mark filter on X, the space filter on Y, as a terminal unit
+     used to drive an oscilloscope. Non-modal so the VFO stays in reach. -->
+<dialog id="rttyTunerDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; width:340px; max-width:95vw;" aria-labelledby="rttyTunerTitle">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
+        <strong id="rttyTunerTitle">RTTY Tuner</strong>
+        <button class="btn btn-sm ywc-dialog-close"
+                onclick="document.getElementById('rttyTunerDialog').close()"
+                aria-label="Close RTTY tuner">&#10005;</button>
+    </div>
+    <div class="p-2">
+        <div class="d-flex align-items-center gap-2 mb-2 small flex-wrap">
+            <label for="rttyTunerMark">Mark</label>
+            <input id="rttyTunerMark" type="number" min="300" max="3000" step="5" value="2125"
+                   class="form-control form-control-sm" style="width:5.5rem;"
+                   title="Mark tone in the receive audio, Hz. 2125 unless your RTTY setup says otherwise.">
+            <label for="rttyTunerShift">Shift</label>
+            <select id="rttyTunerShift" class="form-select form-select-sm" style="width:auto;">
+                <option value="170">170</option>
+                <option value="200">200</option>
+                <option value="425">425</option>
+                <option value="450">450</option>
+                <option value="850">850</option>
+            </select>
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" id="rttyTunerReverse">
+                <label class="form-check-label" for="rttyTunerReverse"
+                       title="Space on the other side of mark: reversed tones, or REV on the radio">Rev</label>
+            </div>
+        </div>
+        <canvas id="rttyTunerCanvas" width="320" height="320"
+                style="width:100%; display:block; border:1px solid #444; border-radius:6px;"
+                aria-label="RTTY crossed-ellipse tuning scope"></canvas>
+        <div id="rttyTunerInfo" class="mt-1"
+             style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
+            Waiting.
+        </div>
+        <div id="rttyTunerStatus" class="mt-1 small" role="status" aria-live="polite">Stopped.</div>
+        <div class="small mt-1" style="color:#9ab;">
+            Tune for a clean cross: mark draws the line across, space the line up.
+            Arms leaning and opening means off tune.
+        </div>
+    </div>
+</dialog>
+
 <!-- DX Watch alert toast container — populated by site.js when a watched spot arrives.
      Position is user-draggable; saved in localStorage as dxAlertPos. Defaults to
      bottom-right of the viewport on first run. -->
@@ -2977,6 +3025,8 @@
         // the panels that offer it so the global is there when they render.
         import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -3153,8 +3203,25 @@
             // long even though frames are already flowing. So promote the VFO to
             // "streaming" on its first frame, which reveals the panel within
             // ~100ms of connecting instead of waiting on the heartbeat.
-            spectrumPipeline.onSpectrumUpdate('A', data => { spectrumPanelA.update(data); markStreamingFromFrame('A'); });
-            spectrumPipeline.onSpectrumUpdate('B', data => { spectrumPanelB.update(data); markStreamingFromFrame('B'); });
+            spectrumPipeline.onSpectrumUpdate('A', data => { spectrumPanelA.update(data); markStreamingFromFrame('A'); syncSpanButtons('A', data); });
+            spectrumPipeline.onSpectrumUpdate('B', data => { spectrumPanelB.update(data); markStreamingFromFrame('B'); syncSpanButtons('B', data); });
+
+            // The FT-710's own scope (rfOrdered frames) runs at whatever span
+            // the radio is set to, so the SDR span buttons would do nothing.
+            // Hide them and let the active button follow the radio instead.
+            const spanSource = { A: null, B: null };
+            function syncSpanButtons(vfo, data) {
+                const radioScope = !!data.rfOrdered;
+                const buttons = document.querySelectorAll(`.span-btn[data-vfo="${vfo}"]`);
+                const group = buttons[0]?.closest('.btn-group');
+                if (spanSource[vfo] !== radioScope) {
+                    spanSource[vfo] = radioScope;
+                    if (group) group.style.display = radioScope ? 'none' : '';
+                }
+                if (radioScope) {
+                    buttons.forEach(b => b.classList.toggle('active', Number(b.dataset.hz) === data.spanHz));
+                }
+            }
 
             // Per-VFO status routing — drives the panel state + small badge in the header.
             function setStatusBadge(vfo, status) {
@@ -3166,6 +3233,8 @@
                     streaming:    ['success',   'Live'],
                     disconnected: ['danger',    'Disconnected'],
                     nodll:        ['danger',    'No SoapySDR'],
+                    noft4222:     ['danger',    'No FTDI driver'],
+                    scopeplacement: ['warning', 'Check radio scope'],
                 };
                 const [colour, text] = labels[status] ?? ['secondary', status];
                 badge.className = `badge bg-${colour} small`;
@@ -3324,6 +3393,46 @@
             window.cwReaderPanel = new CwReaderPanel();
             window.cwReaderPanel.init();
 
+            // The RTTY tuner taps the same audio bridge, with its own hold, so
+            // it runs with or without the CW reader.
+            window.rttyTuner = new RttyTuner();
+            window.rttyTuner.init();
+
+            // Close the CW reader and the RTTY tuner once the radio has
+            // settled in a mode neither is any use in, so an RTTY tuner is not
+            // left holding the audio after a move to CW, or the reader after a
+            // move to RTTY. Both follow MAIN (the server reads ModeA), so only
+            // ModeA feeds them. The RTTY tuner stays open in DATA, LSB and USB
+            // because those are the AFSK modes it also works in; the CW reader
+            // only in CW. Closing the reader leaves its decoder running, as
+            // the X does, so the copy is still there when it is reopened.
+            const announceModeClose = msg => {
+                const el = document.getElementById('vfoStatusAnnounce');
+                if (!el) return;
+                el.textContent = '';
+                requestAnimationFrame(() => { el.textContent = msg; });
+            };
+            const guardFor = (name, dialogId, buttonId, belongs, close) => {
+                const dialog = () => document.getElementById(dialogId);
+                const g = new ModePanelGuard({
+                    name, belongs, close,
+                    isOpen: () => !!dialog()?.open,
+                    announce: announceModeClose,
+                });
+                g.setFocusReturn(el => !!dialog()?.contains(el), document.getElementById(buttonId));
+                return g;
+            };
+            const modePanelGuards = [
+                guardFor('CW reader', 'cwReaderDialog', 'cwReaderOpenBtn',
+                         m => m.startsWith('CW'),
+                         () => document.getElementById('cwReaderDialog')?.close()),
+                guardFor('RTTY tuner', 'rttyTunerDialog', 'rttyTunerOpenBtn',
+                         m => m.startsWith('RTTY') || m.startsWith('DATA') || m === 'PSK'
+                              || m === 'LSB' || m === 'USB',
+                         () => document.getElementById('rttyTunerDialog')?.close()),
+            ];
+            modePanelGuards.forEach(g => g.setMode('@Model.RadioState.ModeA'));
+
             // Typed CW goes out through the keyer memories the M1-M5 buttons
             // use; the panel only sequences the writes and plays.
             window.cwSendPanel = new CwSendPanel();
@@ -3367,11 +3476,14 @@
             });
             spectrumPipeline.onModeA(mode => {
                 spectrumPanelA?.setMode(mode);
+                modePanelGuards.forEach(g => g.setMode(mode));
                 ensureRttyTones(mode);
+                readDataShift(mode);
             });
             spectrumPipeline.onModeB(mode => {
                 spectrumPanelB?.setMode(mode);
                 ensureRttyTones(mode);
+                readDataShift(mode);
             });
 
             // RTTY click-to-tune needs the mark and shift frequencies the
@@ -3392,6 +3504,14 @@
                         if (!t) return;
                         spectrumPanelA?.setRttyTones(t);
                         spectrumPanelB?.setRttyTones(t);
+                        // The filter scopes place the RTTY filter from the
+                        // same mark and shift (#178); looked up lazily, as
+                        // below, because they are constructed later.
+                        const pb = {};
+                        if (Number(t.markHz) > 0) pb.rttyMarkHz = Number(t.markHz);
+                        if (Number(t.shiftHz) > 0) pb.rttyShiftHz = Number(t.shiftHz);
+                        window.filterScopePanelA?.setState(pb);
+                        window.filterScopePanelB?.setState(pb);
                     })
                     .catch(() => {
                         // Leaving the Yaesu defaults in place is a better
@@ -3401,6 +3521,27 @@
             }
             ensureRttyTones('@Model.RadioState.ModeA');
             ensureRttyTones('@Model.RadioState.ModeB');
+
+            // DATA-L / DATA-U centre their filter on the radio's DATA SHIFT
+            // (SSB) menu, not on SSB's 1500 Hz, and the spectrum's axis and
+            // passband follow it (#172). Read it each time a VFO goes into
+            // DATA-L/U: one CAT read per mode change, and it picks up an
+            // operator who has changed the menu in between. The server keeps
+            // it for the SDR worker's crop centre as well.
+            function readDataShift(mode) {
+                if (mode !== 'DATA-L' && mode !== 'DATA-U') return;
+                fetch('/api/cat/datashift')
+                    .then(r => r.ok ? r.json() : null)
+                    .then(d => {
+                        const hz = Number(d?.dataShiftHz);
+                        if (!Number.isFinite(hz)) return;
+                        window.filterScopePanelA?.setState({ dataShiftHz: hz });
+                        window.filterScopePanelB?.setState({ dataShiftHz: hz });
+                    })
+                    .catch(() => { /* 1500 stays in place */ });
+            }
+            readDataShift('@Model.RadioState.ModeA');
+            readDataShift('@Model.RadioState.ModeB');
 
             // Show each spectrum panel the slice of RF its receiver is actually
             // listening to. The edges are computed by the matching filter scope
@@ -4453,7 +4594,7 @@
             if (dlg) makeResizable(dlg);
         });
 
-        ['voxDialog', 'cwDialog', 'cwSendDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog'].forEach(id => {
+        ['voxDialog', 'cwDialog', 'cwSendDialog', 'fmDialog', 'dxWatchDialog', 'voiceDialog', 'voiceHelpDialog', 'audioFilterDialogA', 'audioFilterDialogB', 'utcClockInfoDialog', 'remoteAudioLevelsDialog', 'radioDisplayScopeDialog', 'rttyTunerDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (!dlg) return;
             makeDraggable(dlg, dlg.querySelector('div:not(.radio-display-scope-splitter)'));

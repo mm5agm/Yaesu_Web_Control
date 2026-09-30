@@ -38,6 +38,8 @@ namespace Yaesu_Web_Control.Controllers
         /// from the automatic scan on page open; only the former re-runs a
         /// SoapySDR scan that already crashed this session (#164).
         /// </summary>
+        private const string Ft710ScopeLabel = "FT-710 internal scope (USB, menu SCU-LAN10 = ON)";
+
         [HttpGet("devices")]
         public IActionResult GetDevices([FromQuery] bool retry = false)
         {
@@ -134,6 +136,18 @@ namespace Yaesu_Web_Control.Controllers
                 notes.Add(scan.Message ?? $"SoapySDR scan failed ({scan.Error}).");
             }
 
+            // ── The FT-710's own scope (the FT4222H inside the radio) ─────────
+            // Not enumerated: the first open of the bridge can hang for a
+            // long time (see WorkerHost), and a Settings scan must not. It is
+            // offered whenever the radio is set up as an FT-710, and the
+            // worker says plainly if it cannot find it.
+            if (Ft710ScopeFrame.ModelHasBridge(_settings.GetCachedSettings().RadioModel))
+            {
+                all.Add(new SdrDeviceInfo(Ft710ScopeFrame.Ft710Key, Ft710ScopeLabel, "radio"));
+                if (!Ft4222Libraries.BothPresent())
+                    notes.Add(Ft4222Libraries.MissingMessage);
+            }
+
             // Merge in devices currently held by running workers. The SDRplay
             // API hides Selected devices from GetDevices in other processes,
             // so without this the Settings Scan would report the user's
@@ -150,7 +164,12 @@ namespace Yaesu_Web_Control.Controllers
 
                 // Build a synthetic entry from the key alone.
                 string label, driver;
-                if (key.StartsWith(SdrplayDevice.KeyPrefix, StringComparison.OrdinalIgnoreCase))
+                if (Ft710ScopeFrame.IsScopeKey(key))
+                {
+                    label  = Ft710ScopeLabel;
+                    driver = "radio";
+                }
+                else if (key.StartsWith(SdrplayDevice.KeyPrefix, StringComparison.OrdinalIgnoreCase))
                 {
                     label  = SdrplayDevice.LabelForKey(key);
                     driver = "sdrplay";

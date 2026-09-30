@@ -34,8 +34,9 @@ public class ScopeController : ControllerBase
     private readonly ILogger<ScopeController> _logger;
 
     // SS frames are short and the radio answers them promptly, but they share
-    // the port with the meter poll. One at a time, same as CatController.
-    private static readonly SemaphoreSlim _gate = new(1, 1);
+    // the port with the meter poll. One at a time, same as CatController, and
+    // shared with SdrManager's reads of the FT-710's span and mode.
+    private static SemaphoreSlim _gate => ScopeCatGate.Instance;
 
     // How long to let the radio redraw before reading a setting back after a
     // write. Measured on an FTdx101MP: without it, roughly one read in three

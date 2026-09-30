@@ -61,6 +61,16 @@ const ROOFING_HZ_FTDX10 = { '6':12000,'7':3000,'9':500,'A':300,'a':300 };
 // so it falls through to null and no roofing outline is drawn.
 const ROOFING_HZ_3000 = { '1':15000,'2':6000,'3':3000,'4':600,'5':300 };
 
+// Top of the audio passband in the radio's RTTY modes: wide RTTY filters stop
+// here however wide they are set (FTdx101MP, 2026-09-24, #178).
+const RTTY_AUDIO_TOP_HZ = 2750;
+
+// Audio limits of the passband in DATA-L / DATA-U: a filter wider than twice
+// the DATA SHIFT loses everything below the bottom, and nothing passes above
+// the top however wide it is set (FTdx101MP, 2026-09-24, #172).
+const DATA_AUDIO_BOTTOM_HZ = 160;
+const DATA_AUDIO_TOP_HZ    = 2980;
+
 export class FilterScopePanel {
     constructor(canvasId, radioModel, initialState = {}) {
         this._canvasId  = canvasId;
@@ -85,6 +95,15 @@ export class FilterScopePanel {
             // APF marker derived from it were off by the same amount. Seeded
             // and kept current from the radio's own KP setting.
             cwPitchHz:        700,
+            // The radio's RTTY MARK FREQUENCY and SHIFT (extended menu), which
+            // place the RTTY-L / RTTY-U filter. Yaesu's defaults until the
+            // host reads the real ones from GET /api/cat/rtty.
+            rttyMarkHz:       2125,
+            rttyShiftHz:      170,
+            // The radio's DATA SHIFT (SSB) menu, Hz: where DATA-L / DATA-U
+            // centre their filter in place of SSB's 1500. The host reads it
+            // from GET /api/cat/datashift; 1500 is the radio's default.
+            dataShiftHz:      1500,
             ...initialState
         };
 
@@ -239,7 +258,7 @@ export class FilterScopePanel {
      * how far the radio has slid its LO (see sdr/if-out-offset.js). The width
      * is the DSP width alone, NOT clamped to the roofing filter: it is the SH
      * setting that moves the LO, whatever the roofing filter is doing.
-     * @returns {{mode: string, ifWidthCode: number, ifWidthHz: number|null, ifShiftHz: number, cwPitchHz: number}}
+     * @returns {{mode: string, ifWidthCode: number, ifWidthHz: number|null, ifShiftHz: number, cwPitchHz: number, dataShiftHz: number}}
      */
     getFilterState() {
         return {
@@ -248,6 +267,7 @@ export class FilterScopePanel {
             ifWidthHz:   this._dspWidthHz(),
             ifShiftHz:   this._state.ifShiftHz || 0,
             cwPitchHz:   this._cwPitchHz(),
+            dataShiftHz: this._dataCentreHz(),
         };
     }
 
@@ -310,6 +330,15 @@ export class FilterScopePanel {
         return m === 'AM' || m === 'AM-N' || m.includes('FM');
     }
 
+    // Audio frequency the RTTY filter is centred on at zero IF SHIFT: the
+    // midpoint of mark and space, both of which are above mark in audio.
+    _rttyAudioCentreHz() {
+        const mark  = Number(this._state.rttyMarkHz);
+        const shift = Number(this._state.rttyShiftHz);
+        return (Number.isFinite(mark) && mark > 0 ? mark : 2125)
+             + (Number.isFinite(shift) && shift > 0 ? shift : 170) / 2;
+    }
+
     _roofingHz() {
         if (this._model === 'FTDX3000') {
             return ROOFING_HZ_3000[String(this._state.roofingCode)] || null;
@@ -318,6 +347,12 @@ export class FilterScopePanel {
             return ROOFING_HZ_FTDX10[String(this._state.roofingCode)] || null;
         }
         return ROOFING_HZ[String(this._state.roofingCode)] || null;
+    }
+
+    // DATA SHIFT (SSB) in Hz, or 1500 when it has not been read.
+    _dataCentreHz() {
+        const ds = Number(this._state.dataShiftHz);
+        return Number.isFinite(ds) && ds >= 0 && ds <= 3000 ? ds : 1500;
     }
 
     // Returns { lo, hi } passband edges in audio Hz
@@ -347,8 +382,39 @@ export class FilterScopePanel {
             // spectrum panel mirrors these edges about the dial for its
             // overlay; this panel draws no outline in these modes (_draw).
             return { lo: 0, hi: ifWidthHz / 2 };
+        } else if (mode.startsWith('RTTY')) {
+            // The radio's own RTTY-L / RTTY-U. Measured on an FTdx101MP on
+            // 2026-09-24 (#178) from band noise at MARK 2125 / SHIFT 170: the
+            // filter sits on the midpoint of the two tones, 2210 Hz, not on
+            // the 1500 Hz IF centre the SSB branch below uses -- 300 ->
+            // 2062..2350, 500 -> 1969..2438, 800 -> 1811..2578, the same in
+            // both modes. From 1200 Hz up the top stops near 2750 Hz while the
+            // bottom keeps going down (1200 -> 1617..2725, 2000 ->
+            // 1219..2777, 3000 -> 721..2754). IF SHIFT moves it one for one
+            // (+/-300 -> centre 2499 / 1907). The centre is taken as mark +
+            // shift/2 for other MARK / SHIFT settings; only the default was
+            // measured, and so was only POLARITY-RX NOR.
+            const centre = this._rttyAudioCentreHz() + shift;
+            const lo = centre - ifWidthHz / 2;
+            const hi = Math.max(lo + 50, Math.min(centre + ifWidthHz / 2, RTTY_AUDIO_TOP_HZ));
+            return { lo, hi };
+        } else if (mode === 'DATA-L' || mode === 'DATA-U') {
+            // DATA-L / DATA-U. Measured on an FTdx101MP on 2026-09-24 (#172)
+            // from band noise with DATA SHIFT (SSB) at 1000, every SH code:
+            // the filter is centred on the DATA SHIFT, not on SSB's 1500,
+            // at the CW-column width (code 9 -> 785..1213, 12 -> 609..1395,
+            // 13 -> 422..1588). Wider ones keep their top at DATA SHIFT +
+            // width/2 (2000 -> ..1986, 3000 -> ..2467, 3500 -> ..2701) and
+            // lose their bottom below about 160 Hz. Swept again at the
+            // default 1500: centred on 1500 to 2400 Hz wide (1200 ->
+            // 908..2086, 2400 -> 334..2648), then 176..2883 at 3000 and
+            // about 2980 at the top from 3200 up. IF shift is taken to add
+            // one for one, as it does to the slide.
+            const centre = this._dataCentreHz() + shift;
+            const lo = Math.max(DATA_AUDIO_BOTTOM_HZ, centre - ifWidthHz / 2);
+            return { lo, hi: Math.max(lo + 50, Math.min(centre + ifWidthHz / 2, DATA_AUDIO_TOP_HZ)) };
         } else {
-            // SSB / DATA. Measured on an FTdx101MP on 2026-09-19 by sweeping
+            // SSB. Measured on an FTdx101MP on 2026-09-19 by sweeping
             // every SH width code and reading the receiver's audio spectrum
             // (the same feed that draws the bars): the passband does NOT
             // start at 300 Hz and grow upward, which is what this used to
@@ -515,7 +581,10 @@ export class FilterScopePanel {
         // --- IF shift arrow at top ---
         const shift = this._state.ifShiftHz || 0;
         if (!carrierCentred && Math.abs(shift) > 50) {
-            const arrowX = x(1500 + shift);
+            const m = (this._state.mode || '').toUpperCase();
+            const zeroShiftHz = m.startsWith('RTTY') ? this._rttyAudioCentreHz()
+                : m.startsWith('DATA') ? this._dataCentreHz() : 1500;
+            const arrowX = x(zeroShiftHz + shift);
             const dir    = shift > 0 ? 1 : -1;
             const aSize  = 5;
             ctx.fillStyle = 'rgba(200,220,255,0.8)';

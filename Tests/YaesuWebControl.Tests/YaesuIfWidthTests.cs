@@ -23,6 +23,8 @@ namespace YaesuWebControl.Tests
         [InlineData("FTdx10", "USB", 12, 2250)]     // differs from the 101's 2200
         [InlineData("FT-710", "CW-U", 12, 800)]
         [InlineData("FTDX3000", "CW-U", 10, 500)]
+        [InlineData("FTdx101MP", "DATA-U", 13, 1200)]   // DATA reads the PSK/CW column: measured 1166, 2026-09-24
+        [InlineData("FTdx101MP", "DATA-L", 9, 450)]     // measured 428; the SSB column said 1800
         public void KnownWidths(string model, string mode, int code, int expected)
             => Assert.Equal(expected, YaesuIfWidth.HzFor(model, mode, code));
 

@@ -10,6 +10,11 @@
 // FT8 frequencies (14.074, 7.074 etc.) are the same worldwide regardless of region.
 // Differences are mainly in the SSB segment start, 80m/40m phone calling areas,
 // and 60m allocations.
+//
+// RTTY is RTTY-L on every band, not USB-style RTTY-U above 10 MHz. On the
+// FTdx101MP the dial sits on the upper tone in both modes, so RTTY-U hands the
+// radio's decoder amateur RTTY with mark and space swapped and it prints
+// rubbish. Seen in CQ WW RTTY on 20m, 2026-09-26.
 
 export const BAND_PLANS = {
     Region1: {
@@ -44,7 +49,7 @@ export const BAND_PLANS = {
         '20m': {
             CW:   { freq: 14025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 14074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 14080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 14080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 14225000, mode: 'USB',     label: 'SSB' }
         },
         '17m': {
@@ -55,7 +60,7 @@ export const BAND_PLANS = {
         '15m': {
             CW:   { freq: 21025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 21074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 21080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 21080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 21280000, mode: 'USB',     label: 'SSB' }
         },
         '12m': {
@@ -66,7 +71,7 @@ export const BAND_PLANS = {
         '10m': {
             CW:   { freq: 28025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 28074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 28080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 28080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 28500000, mode: 'USB',     label: 'SSB' }
         },
         '6m': {
@@ -114,7 +119,7 @@ export const BAND_PLANS = {
         '20m': {
             CW:   { freq: 14025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 14074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 14080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 14080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 14225000, mode: 'USB',     label: 'SSB' }
         },
         '17m': {
@@ -125,7 +130,7 @@ export const BAND_PLANS = {
         '15m': {
             CW:   { freq: 21025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 21074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 21080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 21080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 21300000, mode: 'USB',     label: 'SSB' }
         },
         '12m': {
@@ -136,7 +141,7 @@ export const BAND_PLANS = {
         '10m': {
             CW:   { freq: 28025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 28074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 28080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 28080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 28500000, mode: 'USB',     label: 'SSB' }
         },
         '6m': {
@@ -179,7 +184,7 @@ export const BAND_PLANS = {
         '20m': {
             CW:   { freq: 14025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 14074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 14080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 14080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 14225000, mode: 'USB',     label: 'SSB' }
         },
         '17m': {
@@ -190,7 +195,7 @@ export const BAND_PLANS = {
         '15m': {
             CW:   { freq: 21025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 21074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 21080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 21080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 21290000, mode: 'USB',     label: 'SSB' }
         },
         '12m': {
@@ -201,7 +206,7 @@ export const BAND_PLANS = {
         '10m': {
             CW:   { freq: 28025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 28074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 28080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 28080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 28500000, mode: 'USB',     label: 'SSB' }
         },
         '6m': {
@@ -239,7 +244,7 @@ export const BAND_PLANS = {
         '20m': {
             CW:   { freq: 14025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 14074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 14080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 14080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 14225000, mode: 'USB',     label: 'SSB' }
         },
         '17m': {
@@ -250,7 +255,7 @@ export const BAND_PLANS = {
         '15m': {
             CW:   { freq: 21025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 21074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 21080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 21080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 21290000, mode: 'USB',     label: 'SSB' }
         },
         '12m': {
@@ -261,7 +266,7 @@ export const BAND_PLANS = {
         '10m': {
             CW:   { freq: 28025000, mode: 'CW-U',   label: 'CW' },
             FT8:  { freq: 28074000, mode: 'DATA-U',  label: 'FT8' },
-            RTTY: { freq: 28080000, mode: 'RTTY-U',  label: 'RTTY' },
+            RTTY: { freq: 28080000, mode: 'RTTY-L',  label: 'RTTY' },
             SSB:  { freq: 28500000, mode: 'USB',     label: 'SSB' }
         },
         '6m': {
@@ -550,7 +555,7 @@ export function segmentForHz(bandPlan, band, hz) {
  * USB because every region uses USB on 5 MHz.
  *
  * Returns one of the mode names accepted by window.setMode() (LSB, USB, CW-U,
- * DATA-U, RTTY-U, FM, AM). Returns null for frequencies outside known amateur
+ * DATA-U, FM, AM). Returns null for frequencies outside known amateur
  * bands so the caller can decide not to change mode.
  */
 export function modeForHz(hz) {

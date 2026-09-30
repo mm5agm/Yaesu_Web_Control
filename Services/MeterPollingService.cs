@@ -404,10 +404,15 @@ namespace Yaesu_Web_Control.Services
                         int temp = CatCommands.ParseMeterReading(tempResponse ?? "");
                         _stateService.Temperature = temp;
 
-                        var an0 = await _multiplexer.SendCommandAsync("AN0;", "MeterPoll", stoppingToken);
-                        if (!string.IsNullOrEmpty(an0)) _dispatcher.DispatchMessage(an0);
-                        var an1 = await _multiplexer.SendCommandAsync("AN1;", "MeterPoll", stoppingToken);
-                        if (!string.IsNullOrEmpty(an1)) _dispatcher.DispatchMessage(an1);
+                        // Single-antenna radios have no AN command, so asking only
+                        // earns a "?;" every two seconds.
+                        if (RadioCapabilities.HasAntennaSelector(settings.RadioModel))
+                        {
+                            var an0 = await _multiplexer.SendCommandAsync("AN0;", "MeterPoll", stoppingToken);
+                            if (!string.IsNullOrEmpty(an0)) _dispatcher.DispatchMessage(an0);
+                            var an1 = await _multiplexer.SendCommandAsync("AN1;", "MeterPoll", stoppingToken);
+                            if (!string.IsNullOrEmpty(an1)) _dispatcher.DispatchMessage(an1);
+                        }
                     }
 
                     // Frequency backstop poll — single-receiver radios only (see field comment).

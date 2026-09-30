@@ -11,6 +11,7 @@
 import { autoModeForHz } from '../ui/band-plan.js?v=1';
 import { tuningStep } from '../ui/tuning-step.js?v=1';
 import { formatTuningStep } from '../tuning/tuning-step-store.js?v=1';
+import { loadRttySettings, afskMidpointAudioHz } from '../rtty/rtty-settings.js?v=1';
 
 export class SpectrumPanel {
 
@@ -40,11 +41,11 @@ export class SpectrumPanel {
         this._cwPitchHz   = 700;
         this._modeName    = '';
 
-        // RTTY tone settings, for the same job the pitch does in CW: they say
-        // what audio frequency the operator's decoder is listening for, so
-        // click-to-tune can put the signal there instead of on the dial.
-        // Seeded from the radio's own extended menu via setRttyTones()
-        // (GET /api/cat/rtty); these are Yaesu's defaults until that arrives.
+        // RTTY tone settings for the radio's own RTTY-L / RTTY-U. The shift
+        // and polarity place the dial half a shift off the midpoint the
+        // operator clicks; the mark frequency anchors the audio-to-RF mapping
+        // of the passband overlay. Seeded from the radio's own extended menu
+        // via setRttyTones() (GET /api/cat/rtty); Yaesu's defaults until then.
         this._rttyMarkHz      = 2125;
         this._rttyShiftHz     = 170;
         this._rttyPolarityRev = false;
@@ -99,6 +100,8 @@ export class SpectrumPanel {
         // Last received spectrum data; held so the canvas can be redrawn on resize.
         this._lastBins    = null;
         this._lastCentreHz = 0;
+        // True while frames come from the radio's own scope (see update()).
+        this._rfOrdered = false;
         this._lastSpanHz   = 0;
 
         // DX cluster spots overlaid on the spectrum. Each entry is the JSON
@@ -841,7 +844,7 @@ export class SpectrumPanel {
     // ── Public API ───────────────────────────────────────────────────────────
 
     /** Update the spectrum/waterfall with a new frame of FFT data. */
-    update({ bins, centreHz, spanHz }) {
+    update({ bins, centreHz, spanHz, rfOrdered = false }) {
         // Hold mode (set via setHold(true)) freezes the display at the
         // last received frame so the operator can inspect a fleeting signal
         // without it scrolling off the waterfall. Incoming frames are
@@ -866,7 +869,14 @@ export class SpectrumPanel {
         // side and one flip covers every band. No other Yaesu model has been
         // measured; if one turns out not to be inverted, this is where the
         // per-model switch belongs.
-        bins = Array.prototype.slice.call(bins).reverse();
+        //
+        // rfOrdered frames are the exception: the FT-710's own scope, read
+        // from the radio over USB, arrives LOW to HIGH frequency already, and
+        // centred on the dial rather than on an IF (see Ft710ScopeFrame.cs).
+        this._rfOrdered = !!rfOrdered;
+        bins = this._rfOrdered
+            ? Array.prototype.slice.call(bins)
+            : Array.prototype.slice.call(bins).reverse();
 
         // A span change (span buttons restart the worker at a new sample rate) or
         // a bin-count change means the previous band/scale no longer applies —
@@ -919,6 +929,11 @@ export class SpectrumPanel {
     /** Store the latest error detail string for display alongside status overlays. */
     setError(detail) {
         this._errorDetail = detail;
+        // The detail can arrive just after the status it explains; redraw so
+        // it is not left off until the next status heartbeat.
+        if (this._status === 'noft4222' || this._status === 'scopeplacement' || this._status === 'disconnected') {
+            this._drawStatusOverlay(this._status);
+        }
     }
 
     /**
@@ -1039,14 +1054,17 @@ export class SpectrumPanel {
     /**
      * The radio's RTTY tone settings, read from its extended menu by
      * GET /api/cat/rtty. Only the values actually supplied are taken, so a
-     * partial answer leaves the rest at the Yaesu defaults.
+     * partial answer leaves the rest at the Yaesu defaults. The click offset
+     * needs only shift and polarity (see _tuneOffsetHz); markHz is used by the
+     * passband overlay (see _passbandRfRange). None of it applies in DATA-L,
+     * where the tones are the software's, not the radio's.
      * @param {{markHz?: number, shiftHz?: number, polarityRev?: boolean}} tones
      */
     setRttyTones(tones) {
         if (!tones) return;
-        const mark  = Number(tones.markHz);
+        const mark = Number(tones.markHz);
+        if (Number.isFinite(mark) && mark > 0) this._rttyMarkHz = mark;
         const shift = Number(tones.shiftHz);
-        if (Number.isFinite(mark)  && mark  > 0) this._rttyMarkHz  = mark;
         if (Number.isFinite(shift) && shift > 0) this._rttyShiftHz = shift;
         if (typeof tones.polarityRev === 'boolean') this._rttyPolarityRev = tones.polarityRev;
     }
@@ -1081,6 +1099,12 @@ export class SpectrumPanel {
      * @returns {number}
      */
     _axisOffsetHz() {
+        // The radio's own scope is centred where the server says (the dial
+        // when the frame was sent), with no IF slide to correct for.
+        if (this._rfOrdered) {
+            const v = this._lastCentreHz - this._vfoHz;
+            return Number.isFinite(v) ? v : 0;
+        }
         if (!this._axisOffsetProvider) return 0;
         try {
             const v = this._axisOffsetProvider(this._lastCentreHz);
@@ -1150,24 +1174,49 @@ export class SpectrumPanel {
      * the dial 700 Hz further and the peak 700 Hz off the notch, and left the
      * signal just as inaudible; it was never confirmed by ear.
      *
-     * RTTY. The FTdx101 operating manual's RTTY Decode procedure says to
-     * "align the peak of the received signal with the mark frequency and shift
-     * frequency marker of the TFT screen" -- i.e. the radio draws the tone
-     * markers offset from the dial, which is only necessary because the dial
-     * is the suppressed carrier and not the mark tone. So the offset here is
-     * the mark frequency (2125 Hz by default, from the radio's own MARK
-     * FREQUENCY menu), nudged by half the shift so that the MIDPOINT of the
-     * two tones lands on the click -- the midpoint being what the eye picks
-     * out of a two-tone RTTY blob. See _rttyAnchorAudioHz. Derived from the
-     * manual, not from a signal, and not re-checked since the axis correction.
+     * RTTY-L / RTTY-U: like CW, the dial IS the signal -- the mark tone.
+     * Measured on the FTdx101MP on 2026-09-23 against Radio Scotland's 810 kHz
+     * carrier: in RTTY-L a dial of 810.000 gives a steady tone and 812.210
+     * gives nothing. This used to add the whole mark frequency (+2210 Hz),
+     * read from the manual's "align the peak with the mark and shift markers"
+     * as if the dial were the suppressed carrier; that put every clicked RTTY
+     * signal 2.2 kHz outside the 500 Hz RTTY filter, in silence. All that is
+     * left is half the shift: the eye clicks the MIDPOINT of the two-tone
+     * blob, and the dial belongs on mark, which POLARITY-RX NOR puts above
+     * space in RF (REV below). Stepping the RTTY-L dial across the same
+     * carrier showed it is lower sideband about mark: the carrier at the dial
+     * comes out at 2125 Hz audio and 50 Hz lower in RF comes out 50 Hz higher,
+     * so a 2295 Hz space tone is 170 Hz below mark in RF. RTTY-U, stepped
+     * across the same carrier on 2026-09-24 (#178), is upper sideband about
+     * mark + shift: the carrier at the dial comes out at 2295 Hz and 200 Hz
+     * higher in RF at 2495. So the two tones sit at dial - 170 and dial in
+     * RTTY-U too, and the same +85 lands them. Only POLARITY-RX NOR was
+     * measured.
+     *
+     * DATA-L is different: it is plain lower sideband with the dial on the
+     * suppressed carrier, and on HF it is how AFSK RTTY is run -- the software
+     * makes the tones (discussion #169: Bruce VK2RT runs all his RTTY this
+     * way). So there the dial goes above the clicked midpoint by the audio
+     * midpoint of the software's tones, which are the Mark / Shift / Rev set
+     * in the RTTY tuner: 2210 Hz for the 2125 / 170 default, 1500 Hz for the
+     * 1415 Hz mark Bruce actually runs, which sits the pair in the middle of
+     * the SSB passband. Read at click time, so a change in the tuner applies
+     * to the next click. That is deliberately NOT the radio's RTTY MARK /
+     * SHIFT / POLARITY menus: in DATA-L the software makes the tones and
+     * those menus play no part. DATA-U stays at zero -- that is FT8 and friends, where
+     * tuning the dial onto the click is the convention.
      *
      * @param {string} mode
      * @returns {number} Hz to add to the clicked frequency.
      */
     _tuneOffsetHz(mode) {
         if (mode === 'RTTY-L' || mode === 'RTTY-U') {
-            const anchor = this._rttyAnchorAudioHz(mode);
-            return this._isLowerSideband(mode) ? anchor : -anchor;
+            // Dial on mark; the click was on the midpoint (see above).
+            const half = this._rttyShiftHz / 2;
+            return this._rttyPolarityRev ? -half : half;
+        }
+        if (mode === 'DATA-L') {
+            return afskMidpointAudioHz(loadRttySettings());
         }
 
         // CW needs none (see above). SSB, the DATA modes, AM and FM are left
@@ -1178,28 +1227,6 @@ export class SpectrumPanel {
         // convention rather than fix a bug. AM and FM genuinely need no
         // offset: the carrier is centred.
         return 0;
-    }
-
-    /**
-     * Where in the audio passband the midpoint of the two RTTY tones should
-     * land, in Hz.
-     *
-     * Mark and space sit `shift` apart. Which side of mark the space tone
-     * falls on, in AUDIO, depends on both the sideband and the radio's
-     * POLARITY-RX menu: POLARITY-RX = NOR means space is below mark in RF, and
-     * a lower-sideband mode inverts RF against audio, so under NOR the space
-     * tone is ABOVE mark in audio on RTTY-L and BELOW it on RTTY-U. REV swaps
-     * that. With the defaults (2125 Hz mark, 170 Hz shift, NOR) this gives
-     * 2210 Hz on RTTY-L -- the mode amateurs actually use -- and 2040 Hz on
-     * RTTY-U.
-     *
-     * @param {string} mode
-     * @returns {number} Audio Hz.
-     */
-    _rttyAnchorAudioHz(mode) {
-        const lower = this._isLowerSideband(mode);
-        const spaceAboveMarkInAudio = this._rttyPolarityRev ? !lower : lower;
-        return this._rttyMarkHz + (spaceAboveMarkInAudio ? 1 : -1) * this._rttyShiftHz / 2;
     }
 
     /**
@@ -1812,6 +1839,23 @@ export class SpectrumPanel {
                 : { loHz: this._vfoHz - pitch + pb.lo, hiHz: this._vfoHz - pitch + pb.hi };
         }
 
+        // The radio's RTTY modes: the dial is on a tone, not the suppressed
+        // carrier, so audio maps to RF through that tone. Measured on the
+        // FTdx101MP against the 810 kHz carrier (2026-09-23/24, #178): RTTY-L
+        // is lower sideband about mark (the dial comes out at the mark
+        // frequency, 2125 Hz), RTTY-U upper sideband about mark + shift (the
+        // dial comes out at 2295 Hz). The filter is centred on 2210 Hz audio
+        // in both, so the shaded band straddles the two tones at dial - 170
+        // and dial. Treating RTTY-L as plain LSB drew it 1.2-1.8 kHz below.
+        if (mode === 'RTTY-L') {
+            const a = this._rttyMarkHz;
+            return { loHz: this._vfoHz + a - pb.hi, hiHz: this._vfoHz + a - pb.lo };
+        }
+        if (mode === 'RTTY-U') {
+            const a = this._rttyMarkHz + this._rttyShiftHz;
+            return { loHz: this._vfoHz - a + pb.lo, hiHz: this._vfoHz - a + pb.hi };
+        }
+
         // Lower sideband inverts: the highest audio frequency is the LOWEST RF.
         if (this._isLowerSideband(mode)) {
             return { loHz: this._vfoHz - pb.hi, hiHz: this._vfoHz - pb.lo };
@@ -2371,10 +2415,13 @@ export class SpectrumPanel {
             connecting:   'Connecting to SDR device…',
             disconnected: 'SDR device unavailable — retrying every 5 s',
             nodll:        'SoapySDR.dll not found — install SoapySDR + device driver',
+            noft4222:     "FTDI's FT4222 libraries are not installed",
+            scopeplacement: "Can't place the radio's scope on the axis",
         };
 
+        const withDetail = status === 'disconnected' || status === 'noft4222' || status === 'scopeplacement';
         const line1 = messages[status] ?? `SDR status: ${status}`;
-        const line2 = status === 'disconnected' && this._errorDetail
+        const line2 = withDetail && this._errorDetail
             ? this._errorDetail
             : null;
 
@@ -2384,14 +2431,35 @@ export class SpectrumPanel {
         ctx.fillStyle = '#8899bb';
         ctx.textAlign = 'center';
 
-        ctx.font = '14px sans-serif';
-        ctx.fillText(line1, W / 2, H / 2 - (line2 ? 10 : 0));
+        // The detail can be a paragraph (the FTDI install instructions), so
+        // it is wrapped to the canvas rather than run off both edges.
+        ctx.font = '11px sans-serif';
+        const detailLines = line2 ? this._wrapText(ctx, line2, W - 24) : [];
 
-        if (line2) {
-            ctx.font      = '11px sans-serif';
-            ctx.fillStyle = '#cc6655';
-            ctx.fillText(line2, W / 2, H / 2 + 12);
+        const top = H / 2 - (detailLines.length * 14) / 2 - (line2 ? 10 : 0);
+        ctx.font = '14px sans-serif';
+        ctx.fillText(line1, W / 2, top);
+
+        ctx.font      = '11px sans-serif';
+        ctx.fillStyle = '#cc6655';
+        detailLines.forEach((text, i) => ctx.fillText(text, W / 2, top + 22 + i * 14));
+    }
+
+    /** Split text into lines no wider than maxWidth in the context's current font. */
+    _wrapText(ctx, text, maxWidth) {
+        const lines = [];
+        let line = '';
+        for (const word of String(text).split(/\s+/)) {
+            const next = line ? `${line} ${word}` : word;
+            if (line && ctx.measureText(next).width > maxWidth) {
+                lines.push(line);
+                line = word;
+            } else {
+                line = next;
+            }
         }
+        if (line) lines.push(line);
+        return lines;
     }
 
     // ── Accessibility ────────────────────────────────────────────────────────
