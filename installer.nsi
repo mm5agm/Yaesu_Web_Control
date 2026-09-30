@@ -7,8 +7,23 @@
 Name "${APPNAME} ${VERSION}"
 OutFile "Yaesu_Web_Control_Setup.exe"
 InstallDir "${INSTALLDIR}"
+; On an upgrade, offer the folder YWC is already installed in rather than the
+; default (#192). The install section writes InstallLocation to the uninstall
+; key; a fresh install finds no key and falls back to InstallDir above.
+; InstallDirRegKey can only read the 32-bit registry view, which is where
+; installers up to v2.5.3-pre1 wrote the key. Later ones write the 64-bit
+; view, and .onInit below reads that first, so both are found.
+InstallDirRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "InstallLocation"
 
 RequestExecutionLevel admin
+
+Function .onInit
+    SetRegView 64
+    ReadRegStr $0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "InstallLocation"
+    SetRegView 32
+    StrCmp $0 "" +2
+        StrCpy $INSTDIR $0
+FunctionEnd
 
 Page directory
 Page instfiles
@@ -63,10 +78,27 @@ Section "Install"
     SetOutPath "$INSTDIR"
 
     CreateShortCut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\Yaesu_Web_Control.exe"
-    CreateDirectory "$SMPROGRAMS\${COMPANY}"
-    CreateShortCut "$SMPROGRAMS\${COMPANY}\${APPNAME}.lnk" "$INSTDIR\Yaesu_Web_Control.exe"
+
+    ; Start menu entry goes straight into Programs, so that typing "Yaesu" into
+    ; Start finds it. Up to v2.5.3-pre1 it lived in a folder named after the
+    ; publisher, which sorts the app under M for MM5AGM. Same change as Icom
+    ; Web Control made in its v1.0.5.
+    CreateShortCut "$SMPROGRAMS\${APPNAME}.lnk" "$INSTDIR\Yaesu_Web_Control.exe"
+
+    ; Remove the old entry so an upgrade leaves exactly one. RMDir without /r
+    ; deletes the folder only if it is now empty, so an Icom Web Control
+    ; shortcut still in there (IWC before v1.0.5) is left alone.
+    Delete "$SMPROGRAMS\${COMPANY}\${APPNAME}.lnk"
+    RMDir "$SMPROGRAMS\${COMPANY}"
 
     WriteUninstaller "$INSTDIR\Uninstall.exe"
+
+    ; NSIS itself is a 32-bit process, so an unqualified HKLM write lands in
+    ; Wow6432Node -- the wrong view for a 64-bit-only app. Clear the old 32-bit
+    ; key first or an upgrade leaves two rows in Apps & features.
+    SetRegView 32
+    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
+    SetRegView 64
 
     ; DisplayName is the name column only -- Apps & features renders DisplayVersion
     ; in its own column beside it, so including the version here showed it twice.
@@ -85,8 +117,16 @@ Section "Uninstall"
     Sleep 1500
 
     Delete "$DESKTOP\${APPNAME}.lnk"
+    Delete "$SMPROGRAMS\${APPNAME}.lnk"
+    ; Pre-v2.5.3 location, still removed so uninstalling an old install leaves
+    ; nothing behind; the folder itself only goes if it is empty.
     Delete "$SMPROGRAMS\${COMPANY}\${APPNAME}.lnk"
     RMDir "$SMPROGRAMS\${COMPANY}"
     RMDir /r "$INSTDIR"
+    ; Both views: newer installers write the 64-bit one, older ones the 32-bit
+    ; one, and an uninstaller built by either may run against either.
+    SetRegView 32
+    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
+    SetRegView 64
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
 SectionEnd
