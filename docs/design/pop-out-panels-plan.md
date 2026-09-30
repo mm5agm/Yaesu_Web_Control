@@ -131,17 +131,26 @@ monitor. Two options:
 
 ## Order of work
 
-Each phase is its own branch and PR, and each is testable on its own.
+Five PRs, one branch each, merged in this order. Each is testable on its
+own, so a problem in one doesn't hold up the others.
 
-1. **Groundwork + CW reader.** `core/js/popout/`, the `/CwReader` page, the
-   partial, and a pop-out button on the reader. This is what Rick asked for,
-   so it's first.
-2. **RTTY tuner.** The per-window lease in `RttyTunerService` first (it
-   fixes the tablet + PC case on its own), then the `/RttyTuner` page.
-3. **Audio Filter.** Move the inline script into a module, then the
+1. **Groundwork + CW reader** (one PR). `core/js/popout/`, the `/CwReader`
+   page, the partial, and a pop-out button on the reader. The helper goes in
+   with its first user, which is where its design gets proved before three
+   more panels depend on it. This is what Rick asked for, so it's first and
+   can go into a pre-release on its own.
+2. **2a - RTTY tuner stop fix** (bug fix, no pop-out). The per-window lease
+   in `RttyTunerService`. It fixes the PC + tablet case that exists today, so
+   it doesn't wait for the pop-out. Needs its own bench check (audio capture
+   hold/release).
+3. **2b - RTTY tuner pop-out.** The `/RttyTuner` page, built on 2a.
+4. **3 - Audio Filter.** Move the inline script into a module, then the
    `/AudioFilter?vfo=` page.
-4. **DX Spots.** The page, initial load from `/api/dxcluster/spots`, its own
-   SignalR connection, and click-to-QSY over HTTP.
+5. **4 - DX Spots.** The page, initial load from `/api/dxcluster/spots`, its
+   own SignalR connection, and click-to-QSY over HTTP.
+
+Each PR adds its own row to the README "Fixed since the last release"
+table, so it's clear which pre-release has which.
 
 After phase 1, core owes a push. Run `./scripts/core-sync.ps1 -Push`, then
 `-Pull` in IWC. IWC could then add its own `/CwReader` page (and the RTTY
@@ -150,7 +159,7 @@ tuner one) later, as a separate IWC job.
 ## Testing
 
 - Unit tests: whatever is pure in `popout.js` (the size/position clamping)
-  goes in `core/tests`. Phase 2's lease logic goes in
+  goes in `core/tests`. 2a's lease logic goes in
   `Tests/YaesuWebControl.Tests` (the only test project CI runs).
 - Browser, per phase:
   - pop out, drag to the second monitor, close, pop out again
