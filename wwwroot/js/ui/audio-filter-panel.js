@@ -25,6 +25,9 @@ export class AudioFilterPanel {
         this._lastLcutHz = 300;
         this._lastHcutHz = 3000;
         this._busy = false;
+        // A slider the operator is dragging, which a re-read must not move.
+        this._dragging = null;
+        this._lastRead = 0;
     }
 
     get vfo() { return this._vfo; }
@@ -53,7 +56,32 @@ export class AudioFilterPanel {
             const cur = el('HcutSlopeBtn').dataset.slopeCode || '0';
             this._write('hcutSlope', cur === '0' ? '1' : '0');
         });
+        for (const part of ['LcutFreqSlider', 'HcutFreqSlider']) {
+            el(part).addEventListener('pointerdown', e => { this._dragging = e.target; });
+        }
+        window.addEventListener('pointerup',     () => { this._dragging = null; });
+        window.addEventListener('pointercancel', () => { this._dragging = null; });
+
+        // The radio doesn't report a menu change made on its front panel, so
+        // nothing tells an open panel its values are out of date. Re-read
+        // when the operator comes back to it: the window gaining focus (a
+        // pop-out on another monitor, or the main page after another app),
+        // or a click on the dialog itself. The re-read is local to the
+        // panel's own VFO and costs four menu reads.
+        window.addEventListener('focus', () => this._refreshIfShowing());
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') this._refreshIfShowing();
+        });
+        this.dialog?.addEventListener('pointerdown', () => this._refreshIfShowing());
         return this;
+    }
+
+    _refreshIfShowing() {
+        if (!this.dialog?.open) return;
+        // A click that also focuses the window fires both events; one read
+        // is enough.
+        if (Date.now() - this._lastRead < 1000) return;
+        this.refresh();
     }
 
     /** Show the dialog (main page) and read the radio. */
@@ -83,6 +111,7 @@ export class AudioFilterPanel {
     async refresh() {
         if (this._busy) return;
         this._busy = true;
+        this._lastRead = Date.now();
         const el = p => this._el(p);
         try {
             const resp = await fetch(`/api/cat/audiofilter/${this._vfo.toLowerCase()}`);
@@ -125,6 +154,9 @@ export class AudioFilterPanel {
             slider.disabled = true; off.disabled = true; label.textContent = '—';
             return;
         }
+        // Mid-drag: the slider and its label belong to the operator; the
+        // write on release brings back the radio's own answer.
+        if (this._dragging === slider) return;
         off.disabled = false;
         if (v.label === 'OFF') {
             off.checked = true; slider.disabled = true;
