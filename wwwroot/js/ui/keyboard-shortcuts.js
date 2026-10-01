@@ -487,6 +487,12 @@ function toggleMemories() {
 }
 
 function toggleDxSpots() {
+    // Popped out, the list is in its own window: bring that to the front
+    // rather than opening a second copy here.
+    if (!document.getElementById('dxSpotsDialog')?.open && typeof window.dxSpotsOpen === 'function') {
+        window.dxSpotsOpen();
+        return;
+    }
     window.dxSpotsPanel?.toggle?.();
 }
 

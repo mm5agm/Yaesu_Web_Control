@@ -1132,6 +1132,8 @@ Click the **DX Spots** button on the toolbar to open a list of DX cluster spots 
 - The spectrum overlay drops callsign labels on crowded bands (§5.4). The list shows them all.
 - The list shows comments, spotter info and exact time — the overlay only has room for the callsign.
 - The list is fully accessible to screen readers; canvas-rendered text in the overlay is not.
+
+**In a window of its own.** The **↗** button in the list's title bar opens it in a separate window, which can go on a second monitor ([§5.21](#521-pop-out-windows)). The window starts with every spot the cluster already has and keeps up as new ones arrive, follows VFO A's band, and keeps the same sort, **All bands** and **Show only watched callsigns** choices. Clicking a row tunes VFO A just as it does in the main page. **Reattach** puts the list back.
 - On phones and tablets, tapping a list row is easier than tapping a tiny spectrum label.
 
 **Age-out** — spots older than the configured age (default 15 min, set in Settings → DX Cluster) are dropped automatically. The list re-renders every 30 seconds to remove stale rows even when no new spots arrive.
@@ -1268,7 +1270,7 @@ Every button and the level slider carry labels that screen readers announce, and
 
 ### 5.21 Pop-out windows
 
-A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)), the **RTTY Tuner** ([§22](#22-rtty-tuner)) and each VFO's **Audio Filter** ([§5.18](#518-audio-filter-popout)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
+A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)), the **RTTY Tuner** ([§22](#22-rtty-tuner)), each VFO's **Audio Filter** ([§5.18](#518-audio-filter-popout)) and the **DX Spots** list ([§5.17](#517-dx-spots-list)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
 
 - **To pop a panel out**, press the **↗** button in its title bar. The panel closes in the main page and opens in its own window. Its button on the main page changes to show that it's popped out, for example **CW Read (pop-out)**, and pressing that button brings the window to the front instead of opening a second copy.
 - **To put it back**, press **Reattach** in the pop-out window. The window closes and the panel opens in the main page again. Closing the window with **×** also works, but leaves the panel closed.
