@@ -247,6 +247,64 @@ export class PopoutHost {
     }
 }
 
+/**
+ * The main page's half of a pop-out panel, wired to its dialog and buttons:
+ * the usual case, so each panel does not write it out again.
+ *
+ * While the pop-out is open the panel's own open button brings that window
+ * to the front instead of opening the dialog, and says so; the dialog stays
+ * shut so the two are not both running. Reattach in the window, or closing
+ * it, gives the button back, and Reattach reopens the dialog here.
+ *
+ * @param {object} opts
+ * @param {string} opts.name, opts.url, opts.defaultSize  as for PopoutHost
+ * @param {() => HTMLDialogElement|null} opts.dialog  the in-page panel
+ * @param {HTMLElement|null} opts.openButton  the toolbar button that shows the panel
+ * @param {HTMLElement|null} opts.popoutButton  the button in the dialog that pops it out
+ * @param {() => void} opts.show  opens the in-page panel
+ * @param {{text:string,title:string,aria:string}} opts.closedLabel  the open button normally
+ * @param {{text:string,title:string,aria:string}} opts.openLabel  the open button while popped out
+ * @param {string} [opts.onClass='btn-outline-info'], [opts.offClass='btn-outline-secondary']
+ * @returns {{ host: PopoutHost, open: () => void }} open() is what the toolbar button calls
+ */
+export function attachPopout({
+    name, url, defaultSize, dialog, openButton, popoutButton, show,
+    closedLabel, openLabel, onClass = 'btn-outline-info', offClass = 'btn-outline-secondary',
+}) {
+    const label = l => {
+        if (!openButton || !l) return;
+        openButton.textContent = l.text;
+        openButton.title = l.title;
+        openButton.setAttribute('aria-label', l.aria);
+    };
+    const host = new PopoutHost({
+        name, url, defaultSize,
+        onChange: open => {
+            if (open && dialog()?.open) dialog().close();
+            label(open ? openLabel : closedLabel);
+            openButton?.classList.toggle(onClass, open);
+            openButton?.classList.toggle(offClass, !open);
+        },
+        onReattach: () => { if (!dialog()?.open) show(); },
+    }).start();
+
+    popoutButton?.addEventListener('click', () => {
+        if (!host.open()) {
+            alert('The browser blocked the pop-out window. Allow pop-ups for this address, then try again.');
+            return;
+        }
+        // Focus was on the button inside the dialog that is about to close;
+        // leave it somewhere that still exists.
+        dialog()?.close();
+        openButton?.focus();
+    });
+
+    return {
+        host,
+        open: () => { if (host.isOpen) host.focus(); else show(); },
+    };
+}
+
 export class PopoutChild {
     /**
      * @param {object} opts

@@ -1266,7 +1266,7 @@ Every button and the level slider carry labels that screen readers announce, and
 
 ### 5.21 Pop-out windows
 
-A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
+A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)) and the **RTTY Tuner** ([§22](#22-rtty-tuner)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
 
 - **To pop a panel out**, press the **↗** button in its title bar. The panel closes in the main page and opens in its own window. Its button on the main page changes to show that it's popped out, for example **CW Read (pop-out)**, and pressing that button brings the window to the front instead of opening a second copy.
 - **To put it back**, press **Reattach** in the pop-out window. The window closes and the panel opens in the main page again. Closing the window with **×** also works, but leaves the panel closed.
@@ -3959,6 +3959,10 @@ Nothing here transmits. The tuner only listens.
 It uses the same capture device as the CW Reader: set the **RX device** to the radio's USB codec under Settings → Remote Audio ([§6.8](#68-remote-audio)). Remote Audio itself does not need to be switched on. The device is held open only while the tuner is open, and let go a couple of seconds after you close it. The CW Reader and the tuner can run together.
 
 The tuner closes itself if MAIN leaves the modes it works in and stays out for two seconds, for example a move to CW, AM or FM. It stays open in RTTY-L, RTTY-U, the DATA modes, PSK, LSB and USB, because in the DATA modes and SSB the tones come from your RTTY software. A screen reader hears "RTTY tuner closed, mode is now ...". Nothing opens on its own: moving to CW does not open the CW Reader.
+
+**Size, tones only and its own window.** Drag the tuner's bottom-right corner to make it bigger or smaller; the scope stays square and fills the space, and the size is remembered. Once **Mark** is set, the **Tones only** button in the title bar hides Mark, Shift, Rev and the text lines, leaving just the scope, so the tuner can be made very small. Press it again to bring them back. The **↗** button opens the tuner in a window of its own, which you can put on a second monitor ([§5.21](#521-pop-out-windows)). That window doesn't close when the mode changes. It says it is paused, lets go of the audio, and starts again when you go back to RTTY, DATA, LSB or USB.
+
+The tuner can be open in more than one place at once, for example the main page and a pop-out window, or a PC and a tablet. Closing it in one leaves it running in the others, and the audio is let go only when the last one closes.
 
 ### 22.1 Reading the figure
 
