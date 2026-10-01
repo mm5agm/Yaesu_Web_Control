@@ -127,6 +127,9 @@
     <!-- Update banner — shared with IWC; lives in core/js/update/ and is copied
          into wwwroot by the shared-core-js copy target. Independent of site.js. -->
     <script src="~/js/update/update-banner.js" asp-append-version="true"></script>
+    <!-- Puts the clicked movable dialog in front of the others. Shared with IWC,
+         from core/js/dialogs/. -->
+    <script src="~/js/dialogs/dialog-stack.js" asp-append-version="true"></script>
     @{
         // Voice Control: server-render the enable flag so voice-control.js
         // can decide whether to show the per-VFO mic buttons before any user

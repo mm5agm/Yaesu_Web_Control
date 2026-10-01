@@ -798,6 +798,19 @@ fieldset.calibration-card {
 #fmDialog  > div:first-child:active {
     cursor: grabbing;
 }
+/* Every modeless dialog (opened with show(), not showModal()) stacks with the
+   page instead of going into the browser's top layer. Without a z-index of
+   its own, anything on the page that has one (gauge label overlays at 10,
+   spectrum controls at 2, Bootstrap's focused button-group button at 1)
+   paints straight through it. The CW Reader, RTTY Tuner, DX Watch and the
+   rest showed the meters and buttons underneath them for exactly that reason.
+   1040 is the bottom of the band that js/dialogs/dialog-stack.js (shared,
+   from core/) renumbers to put the clicked dialog in front; it stays under
+   Bootstrap's modal backdrop (1050), so a message box still covers them all. */
+dialog[open]:not(:modal) {
+    z-index: 1040;
+}
+
 #voxDialog {
     position: fixed;
     top: 80px;
