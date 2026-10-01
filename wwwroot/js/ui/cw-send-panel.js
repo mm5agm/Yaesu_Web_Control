@@ -94,6 +94,11 @@ export class CwSendPanel {
         this._breakIn = null;      // '0' | '1' | '2' | null unknown
         this._lineNo = 0;
         this._cursor = null;       // interval moving the highlight along the piece on air
+        // Called with true when a line starts going out and false once the
+        // queue has drained and M5 is back. The queue lives in one page
+        // only, so the pages use it to hold Pop out / Reattach while a line
+        // is on its way, and the pop-out tells the main page through it.
+        this.onBusy = null;
     }
 
     init() {
@@ -128,6 +133,9 @@ export class CwSendPanel {
     }
 
     // ── Open / close ─────────────────────────────────────────────────────
+
+    /** True from the first line queued until M5 has been put back. */
+    get busy() { return this._running; }
 
     toggle() {
         if (!this._dialog) return;
@@ -527,5 +535,6 @@ export class CwSendPanel {
     // is optional - the page provides it, the module only calls it.
     _setMemButtons(busy) {
         try { window.cwMemButtonsBusy?.(busy); } catch { /* ignore */ }
+        try { this.onBusy?.(busy); } catch { /* ignore */ }
     }
 }

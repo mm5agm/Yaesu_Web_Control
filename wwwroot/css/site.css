@@ -291,6 +291,7 @@ pre, code { tab-size: 4; }
    outline-secondary button, add it here too - or give the dialogs a shared
    class and key this off that instead, which would be the better fix. */
 #cwReaderDialog .btn-outline-secondary,
+#cwSendDialog .btn-outline-secondary,
 #rttyTunerDialog .btn-outline-secondary,
 #audioFilterDialogA .btn-outline-secondary,
 #audioFilterDialogB .btn-outline-secondary,
@@ -299,6 +300,25 @@ pre, code { tab-size: 4; }
 #voiceDialog .btn-outline-secondary {
     color: #adb5bd;          /* 7.3:1 on #222 - passes AA and AAA */
     border-color: #6c757d;
+}
+
+/* Dialog close (✕) button - a solid red so it stands out clearly against
+   the dark dialog header. The default btn-outline-secondary was a faint
+   grey outline that several operators found hard to spot. It lived in
+   Index.cshtml until the pop-out windows, which have their own pages,
+   showed their ✕ as a bare unstyled button. */
+.ywc-dialog-close {
+    background: #c0392b;
+    color: #fff;
+    border: 1px solid #e74c3c;
+    font-weight: bold;
+    line-height: 1;
+}
+.ywc-dialog-close:hover,
+.ywc-dialog-close:focus {
+    background: #e74c3c;
+    color: #fff;
+    border-color: #ff6b5a;
 }
 
 /* Mode select - sized to fit longest option (D-FM-N), sits below band buttons */

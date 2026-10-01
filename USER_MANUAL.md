@@ -1272,7 +1272,7 @@ Every button and the level slider carry labels that screen readers announce, and
 
 ### 5.21 Pop-out windows
 
-A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)), the **RTTY Tuner** ([§22](#22-rtty-tuner)), each VFO's **Audio Filter** ([§5.18](#518-audio-filter-popout)) and the **DX Spots** list ([§5.17](#517-dx-spots-list)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
+A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)), **CW Send** ([§21](#21-cw-send)), the **RTTY Tuner** ([§22](#22-rtty-tuner)), each VFO's **Audio Filter** ([§5.18](#518-audio-filter-popout)) and the **DX Spots** list ([§5.17](#517-dx-spots-list)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
 
 - **To pop a panel out**, press the **↗** button in its title bar. The panel closes in the main page and opens in its own window. Its button on the main page changes to show that it's popped out, for example **CW Read (pop-out)**, and pressing that button brings the window to the front instead of opening a second copy.
 - **To put it back**, press **Reattach** in the pop-out window. The window closes and the panel opens in the main page again. Closing the window with **×** also works, but leaves the panel closed.
@@ -3939,6 +3939,12 @@ Three things follow from that, and all are worth knowing:
 ### 21.6 The panel
 
 The panel is non-modal: it can stay open while you work the rest of the page, and the CW Reader can be open beside it. That pairing is the normal way to use it — read in one, answer in the other, with nothing to switch between. Drag the title bar to move it; drag the bottom-right corner to resize it, and the log grows to fill whatever height you give it. Both are remembered between sessions. Close it with **×**; a line already going out finishes on its own.
+
+**In a window of its own.** The **↗** button in the title bar opens CW Send in a separate window, which can go on a second monitor beside the CW Reader's ([§5.21](#521-pop-out-windows)). It works exactly as the panel does, and follows the radio's speed and break-in. A line is sent by whichever window you typed it in, so:
+
+- **↗** is greyed out while a line from the main page is still going out, and **Reattach** is greyed out while a line from the window is. Wait for it to finish, or press **Stop**. Both pages are protecting M5: switching mid-line would leave the radio's keyer memory 5 holding a piece of the line instead of your own text.
+- Closing the window with **×** while a line is going out makes the browser ask first, for the same reason.
+- While the window is sending, the M1–M5 buttons on the main page are greyed out, as they are when the panel sends.
 
 ### 21.7 Troubleshooting
 

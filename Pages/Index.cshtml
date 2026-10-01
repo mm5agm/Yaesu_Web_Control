@@ -254,22 +254,8 @@
         50%      { transform: scale(1.12); opacity: 0.85; }
     }
 
-    /* Dialog close (✕) button — a solid red so it stands out clearly against
-       the dark dialog header. The default btn-outline-secondary was a faint
-       grey outline that several operators found hard to spot. */
-    .ywc-dialog-close {
-        background: #c0392b;
-        color: #fff;
-        border: 1px solid #e74c3c;
-        font-weight: bold;
-        line-height: 1;
-    }
-    .ywc-dialog-close:hover,
-    .ywc-dialog-close:focus {
-        background: #e74c3c;
-        color: #fff;
-        border-color: #ff6b5a;
-    }
+    /* The dialog close (✕) button style is in site.css, so the pop-out
+       windows, which do not load this page, get it too. */
 
     /* Spectrum panel height — Bruce VK2RT, discussion #171, who wanted more
        vertical room for the spectrum.
@@ -787,10 +773,10 @@
                                 aria-label="RTTY tuner - crossed-ellipse tuning scope"
                                 title="Open the RTTY tuner - mark and space filters on an X-Y scope; tune for the cross"
                                 onclick="window.rttyTunerOpen && window.rttyTunerOpen()">RTTY Tune</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
+                        <button id="cwSendOpenBtn" class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="CW send - type text and send it as Morse"
                                 title="Open CW send - type a line, press Enter, the radio keys it"
-                                onclick="window.cwSendPanel && window.cwSendPanel.toggle()">CW Send</button>
+                                onclick="window.cwSendOpen && window.cwSendOpen()">CW Send</button>
                         <button id="voiceBtn"
                                 class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="Voice announcements settings"
@@ -2592,95 +2578,9 @@
      same SignalR DxSpot stream the spectrum overlay uses. -->
 <partial name="_DxSpotsPartial" model="false" />
 
-<!-- CW SEND - type a line, Enter keys it. Built on the same KM/KY keyer
-     memories as the M1-M5 buttons, borrowing M5 as the scratch slot and
-     putting it back afterwards. Non-modal and draggable like the reader. -->
-<style>
-    #cwSendDialog .cws-header { cursor:move; }
-    /* A definite width so lines wrap instead of stretching the panel to
-       the longest one; the corner drags to resize, and a size the operator
-       has set is kept (dlgSize_cwSendDialog) - see makeResizable. */
-    #cwSendDialog { width:560px; min-width:420px; min-height:220px; max-height:95vh; resize:both; overflow:auto; }
-    #cwSendDialog[open] { display:flex; flex-direction:column; }
-    #cwSendDialog .cws-header { flex:0 0 auto; }
-    #cwSendDialog .cws-body { flex:1 1 auto; min-height:0; }
-    #cwSendDialog.user-sized #cwSendLog { max-height:none; flex:1 1 auto; min-height:4rem; }
-    #cwSendInput {
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 1.05rem;
-        text-transform: uppercase;
-        background: #111; border-color: #444; color: #dfe;
-    }
-    #cwSendInput:focus { background: #111; color: #dfe; border-color: #6aa; box-shadow: none; }
-    #cwSendLog {
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 0.95rem;
-        line-height: 1.5;
-        min-height: 6rem;
-        max-height: 30vh;
-        overflow-y: auto;
-        position: relative;   /* offsetTop of a character is then within the log */
-        background: #111;
-        border: 1px solid #444;
-        border-radius: 6px;
-        padding: 6px 10px;
-        color: #dfe;
-    }
-    #cwSendLog .cws-line { display:flex; gap:0.6rem; align-items:baseline; }
-    #cwSendLog .cws-time { color:#778; font-size:0.75rem; flex:0 0 auto; }
-    #cwSendLog .cws-text { flex:1 1 auto; white-space:pre-wrap; word-break:break-word; }
-    #cwSendLog .cws-tag  { color:#9ab; font-size:0.75rem; flex:0 0 auto; }
-    #cwSendLog .cws-line[data-state="queued"]  .cws-text { color:#9ab; }
-    #cwSendLog .cws-line[data-state="sending"] .cws-text { color:#ffd24a; }
-    #cwSendLog .cws-line[data-state="sending"] .cws-tag  { color:#ffd24a; }
-    #cwSendLog .cws-line[data-state="sent"]    .cws-tag  { color:#9d9; }
-    #cwSendLog .cws-line[data-state="monitor"] .cws-tag  { color:#8fd0ff; }
-    #cwSendLog .cws-line[data-state="dropped"] .cws-text { color:#778; text-decoration:line-through; }
-    #cwSendLog .cws-line[data-state="error"]   .cws-tag  { color:#ff6b6b; }
-    #cwSendLog .cws-ch.cws-done { color:#eee; }
-    #cwSendLog .cws-ch.cws-cur  { background:#ffd24a; color:#111; border-radius:2px; }
-    #cwSendStatus { font-size: 0.8rem; color:#9ab; min-height:1.2em; }
-    #cwSendStatus.cws-problem { color:#ffd23f; font-weight:600; }
-    #cwSendBanner {
-        font-size: 0.9rem; font-weight: 600; color: #ffd23f;
-        background: rgba(255, 210, 63, 0.10);
-        border-left: 3px solid #ffd23f;
-        padding: 0.4rem 0.6rem; border-radius: 0.25rem;
-    }
-</style>
-<dialog id="cwSendDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; max-width:95vw;" aria-labelledby="cwSendTitle">
-    <div class="cws-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
-        <strong id="cwSendTitle">CW Send</strong>
-        <div class="d-flex align-items-center gap-2">
-            <button id="cwSendStopBtn" class="btn btn-sm btn-outline-warning" type="button"
-                    title="Send nothing further. The piece already playing cannot be stopped - the radio has no CAT command for that.">Stop</button>
-            <button id="cwSendClearBtn" class="btn btn-sm btn-outline-light" type="button" title="Clear the sent-lines log">Clear log</button>
-            <button class="btn btn-sm ywc-dialog-close"
-                    onclick="document.getElementById('cwSendDialog').close()"
-                    aria-label="Close CW send panel">&#10005;</button>
-        </div>
-    </div>
-    <div class="cws-body p-2 d-flex flex-column gap-2">
-        <div id="cwSendBanner" role="status" aria-live="polite" hidden></div>
-        <div id="cwSendLog" role="log" aria-live="polite" aria-label="CW lines sent"></div>
-        <div class="input-group">
-            <input type="text" id="cwSendInput" class="form-control"
-                   autocomplete="off" spellcheck="false" autocapitalize="characters"
-                   placeholder="Type here and press Enter to send"
-                   aria-label="CW text to send - Enter sends, Escape stops"
-                   title="A-Z 0-9 space ? / . , - Enter sends the line, Escape drops anything not yet started (or clears the box when nothing is sending)">
-            <button id="cwSendClearInputBtn" class="btn btn-outline-light" type="button"
-                    title="Empty the text box without sending it" aria-label="Clear the text box">Clear</button>
-        </div>
-        <div class="d-flex align-items-center gap-2">
-            <label class="mb-0 text-nowrap" for="cwSendSpeedSlider">Speed WPM: <span id="cwSendSpeedValue">@Model.CwSpeed</span></label>
-            <input type="range" id="cwSendSpeedSlider" min="4" max="60" step="1" value="@Model.CwSpeed"
-                   style="flex:1; height:18px;"
-                   aria-label="CW keyer speed" title="CW keyer speed in WPM - the same control as in the CW keyer panel">
-        </div>
-        <div id="cwSendStatus" role="status" aria-live="polite"></div>
-    </div>
-</dialog>
+<!-- CW Send panel. The markup and its CSS are shared with the /CwSend
+     pop-out window, so both live in Pages/Shared/_CwSendPartial.cshtml. -->
+<partial name="_CwSendPartial" model="new Yaesu_Web_Control.Pages.CwSendPartialModel(false, Model.CwSpeed)" />
 
 <!-- CW Reader panel. The markup and its CSS are shared with the /CwReader
      pop-out window, so both live in Pages/Shared/_CwReaderPartial.cshtml. -->
@@ -3273,6 +3173,50 @@
             // use; the panel only sequences the writes and plays.
             window.cwSendPanel = new CwSendPanel();
             window.cwSendPanel.init();
+
+            // CW Send can live in a window of its own too (/CwSend), beside
+            // the CW reader on a second monitor. The queue is in whichever
+            // page the line was typed in, so Pop out waits while a line from
+            // here is still going out - popping out mid-line would leave two
+            // pages borrowing M5. While the window is sending, it says so over
+            // a channel and the keyer's M1-M5 buttons here are marked busy.
+            {
+                const popoutBtn = document.getElementById('cwSendPopoutBtn');
+                const popoutTitle = popoutBtn?.title ?? '';
+                window.cwSendPanel.onBusy = busy => {
+                    if (!popoutBtn) return;
+                    popoutBtn.disabled = busy;
+                    popoutBtn.title = busy
+                        ? 'Wait for the line to finish (or press Stop) before popping CW Send out'
+                        : popoutTitle;
+                };
+                window.cwSendOpen = attachPopout({
+                    name: 'cw-send',
+                    url: '/CwSend',
+                    defaultSize: { width: 600, height: 340 },
+                    dialog: () => document.getElementById('cwSendDialog'),
+                    openButton: document.getElementById('cwSendOpenBtn'),
+                    popoutButton: popoutBtn,
+                    show: () => window.cwSendPanel.show(),
+                    closedLabel: {
+                        text: 'CW Send',
+                        title: 'Open CW send - type a line, press Enter, the radio keys it',
+                        aria: 'CW send - type text and send it as Morse',
+                    },
+                    openLabel: {
+                        text: 'CW Send (pop-out)',
+                        title: 'CW Send is in its own window - click to bring it to the front',
+                        aria: 'CW send is in a pop-out window - bring it to the front',
+                    },
+                }).open;
+                try {
+                    new BroadcastChannel('ywc-cw-send-busy').addEventListener('message', ev => {
+                        // A line typed here marks the buttons itself; only
+                        // follow the window when this page is not sending.
+                        if (!window.cwSendPanel.busy) window.cwMemButtonsBusy?.(!!ev.data?.busy);
+                    });
+                } catch { /* no BroadcastChannel: the buttons are not marked */ }
+            }
 
             // The log form is separate from the reader and starts closed. The
             // operator opens it when a QSO is worth keeping, and it asks the
