@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Yaesu_Web_Control.Services;
 
@@ -27,6 +28,16 @@ namespace Yaesu_Web_Control.Pages
         {
             var settings = await _settings.GetSettingsAsync();
             AutoModeChangeOnTune = settings.AutoModeChangeOnTune;
+        }
+
+        // GET /DxSpots?handler=AutoMode. The window can stay open on a second
+        // monitor while the setting is changed in the main page, so it asks
+        // again before each click-to-QSY rather than trusting the value it
+        // opened with.
+        public async Task<IActionResult> OnGetAutoModeAsync()
+        {
+            var settings = await _settings.GetSettingsAsync();
+            return new JsonResult(new { autoModeChangeOnTune = settings.AutoModeChangeOnTune });
         }
     }
 }
