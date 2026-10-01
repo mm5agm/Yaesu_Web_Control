@@ -1,0 +1,72 @@
+@model bool
+@{
+    // The DX spots list's markup and CSS, shared by the main page's floating
+    // dialog and the /DxSpots pop-out window. DxSpotsPanel
+    // (wwwroot/js/ui/dx-spots-panel.js) finds its elements by these ids.
+    //
+    // Model: true for the pop-out, which swaps the Pop out button for
+    // Reattach; its close button closes the window rather than the dialog.
+    var popout = Model;
+}
+<style>
+    .dxs-call     { font-weight:600; }
+    .dxs-watched  { color:#ff5050; font-weight:bold; }
+    .dxs-num      { font-family:monospace; text-align:right; }
+    .dxs-mode     { font-family:monospace; }
+    .dxs-comment  { color:#bbb; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #dxSpotsTbody tr        { cursor:pointer; }
+    #dxSpotsTbody tr:hover td { background:#333; }
+    #dxSpotsDialog th[data-sort]:hover { background:#444; }
+</style>
+<dialog id="dxSpotsDialog" open="@popout"
+        class="@(popout ? "dxs-popout" : null)"
+        style="@(popout ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:720px; max-width:95vw;")"
+        aria-labelledby="dxSpotsTitle">
+    <div class="dxs-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; @(popout ? "" : "cursor:move;")">
+        <strong id="dxSpotsTitle">DX Spots</strong>
+        <div class="d-flex align-items-center gap-3">
+            <small id="dxSpotsCount" class="text-muted">0 shown / 0 total</small>
+            <div class="form-check form-switch mb-0" style="cursor:default;">
+                <input class="form-check-input" type="checkbox" id="dxSpotsAllBandsChk">
+                <label class="form-check-label small" for="dxSpotsAllBandsChk">All bands</label>
+            </div>
+            @if (popout)
+            {
+                <button id="dxSpotsReattachBtn" class="btn btn-sm btn-outline-secondary" type="button"
+                        title="Put the DX spots list back in the main page"
+                        aria-label="Reattach the DX spots list to the main page">Reattach</button>
+                <button class="btn btn-sm ywc-dialog-close" type="button" onclick="window.close()"
+                        aria-label="Close the DX spots window">✕</button>
+            }
+            else
+            {
+                <button id="dxSpotsPopoutBtn" class="btn btn-sm btn-outline-secondary" type="button"
+                        title="Open the DX spots list in a window of its own, which can go on another monitor"
+                        aria-label="Pop the DX spots list out into its own window"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></button>
+                <button class="btn btn-sm ywc-dialog-close" type="button"
+                        onclick="document.getElementById('dxSpotsDialog').close()"
+                        aria-label="Close DX spots panel">✕</button>
+            }
+        </div>
+    </div>
+    <div class="dxs-body p-2" style="@(popout ? "" : "max-height:60vh; ")overflow-y:auto;">
+        <table class="table table-sm table-dark table-hover mb-0" style="font-size:0.85rem;">
+            <thead style="position:sticky; top:0; background:#222; z-index:1;">
+                <tr>
+                    <th data-sort="callsign" style="cursor:pointer;">Callsign</th>
+                    <th data-sort="freq"     style="cursor:pointer;">Freq kHz</th>
+                    <th data-sort="mode"     style="cursor:pointer;">Mode</th>
+                    <th data-sort="time"     style="cursor:pointer;">Time UTC</th>
+                    <th data-sort="age"      style="cursor:pointer;">Age</th>
+                    <th data-sort="spotter"  style="cursor:pointer;">Spotter</th>
+                    <th>Comment</th>
+                </tr>
+            </thead>
+            <tbody id="dxSpotsTbody"></tbody>
+        </table>
+        <div id="dxSpotsEmpty" class="text-muted small p-3" style="display:none;">
+            No spots on this band. Configure DX cluster in Settings (§6.6) if not already done,
+            or tick <strong>All bands</strong> above to see spots from elsewhere.
+        </div>
+    </div>
+</dialog>

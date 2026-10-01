@@ -82,6 +82,7 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
+| The DX Spots list could only float inside the main page. Its **↗** button now opens it in a window of its own, for a second monitor, with the full spot list, live updates and click-to-tune; **Reattach** puts it back ([§5.17](USER_MANUAL.md#517-dx-spots-list)) | - | *Not yet in a build* |
 | The Audio Filter dialogs could only float inside the main page. Each VFO's Audio Filter now has a **↗** button that opens it in a window of its own, for a second monitor; **Reattach** puts it back ([§5.18](USER_MANUAL.md#518-audio-filter-popout)) | - | *Not yet in a build* |
 | The RTTY Tuner was a fixed size and could only float inside the main page. It can now be resized by its corner, with the scope staying square and filling the space; a **Tones only** button hides everything but the scope, so it can be made very small; and its **↗** button opens it in a window of its own for a second monitor. That window pauses, rather than closing, when the mode leaves RTTY, DATA, LSB and USB ([§22](USER_MANUAL.md#22-rtty-tuner)) | - | *Not yet in a build* |
 | With the RTTY Tuner open in two places - two browser tabs, or two PCs - closing it in one stopped the figure in the other too, which sat on "Stopped." until it was closed and opened again. Each window now holds the radio's audio for itself, and the audio is let go only when the last one closes | - | *Not yet in a build* |
