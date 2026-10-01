@@ -33,6 +33,7 @@
    - 5.18 [Audio Filter popout](#518-audio-filter-popout)
    - 5.19 [VC Tune Preselector (FTdx101MP)](#519-vc-tune-preselector-ftdx101mp)
    - 5.20 [Radio Scope — the radio's own display (FTdx101MP/D and FTdx10)](#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
+   - 5.21 [Pop-out windows](#521-pop-out-windows)
 6. [Settings Page](#6-settings-page)
    - 6.1 [Radio Connection](#61-radio-connection)
    - 6.2 [Web Server Settings](#62-web-server-settings)
@@ -1262,6 +1263,19 @@ When you expand the card it reads the current settings from the radio, so it ope
 #### Screen reader use
 
 Every button and the level slider carry labels that screen readers announce, and all of them can be renamed through the Accessibility Labels editor (§16.6) if the defaults do not suit you.
+
+### 5.21 Pop-out windows
+
+A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
+
+- **To pop a panel out**, press the **↗** button in its title bar. The panel closes in the main page and opens in its own window. Its button on the main page changes to show that it's popped out, for example **CW Read (pop-out)**, and pressing that button brings the window to the front instead of opening a second copy.
+- **To put it back**, press **Reattach** in the pop-out window. The window closes and the panel opens in the main page again. Closing the window with **×** also works, but leaves the panel closed.
+- **Size and position are remembered.** The next time you pop the panel out, YWC asks the browser for the same size and place.
+- **Second monitor.** The first time, the window opens on the same monitor as the main page, so drag it across. Chrome and Edge only let a page put a window on a *different* monitor if you give it permission to place windows, so on a computer with more than one monitor the pop-out window shows a bar asking for it. Press **Allow**, then **Allow** again when the browser asks, and the window should reopen on the monitor you left it on. Press **Not now** and the bar doesn't come back; the window then reopens on the main page's monitor and you drag it across each time. Firefox doesn't ask, and places the window itself.
+- **It goes behind the main page.** On the same monitor, clicking or scrolling the main page brings the main page to the front and covers the pop-out window, as with any two windows. A browser can't keep a window on top, so the pop-out is at its best on a second monitor. Press the panel's button on the main page, for example **CW Read (pop-out)**, to bring it back to the front.
+- **A blocked pop-up.** If your browser blocks the window, YWC says so. Allow pop-ups for YWC's address (usually `http://localhost:8080`) and press **↗** again.
+- **Reloading the main page** while a panel is popped out is fine. The main page still knows the window is open.
+- **Pop-out windows belong to this computer.** A tablet or a second PC using YWC at the same time keeps its own panels and doesn't see your pop-out.
 
 ---
 
@@ -3621,6 +3635,8 @@ Nothing here transmits. The reader only listens. To answer the station you are r
 
 If you move MAIN out of CW (to RTTY or SSB, say) and it stays there for two seconds, the panel closes itself and a screen reader hears "CW reader closed, mode is now ...". Only the panel closes. The reader keeps running, as it does when you close it with **×**, so your copy is still there when you open it again. A brief change, such as a band change or a memory recall passing through another mode, does not close it.
 
+The **↗** button in the panel's title bar opens the reader in a window of its own, which you can put on a second monitor ([§5.21](#521-pop-out-windows)). That window doesn't close when the mode changes. Instead it says *Not in CW mode, so the reader is paused*, and carries on as soon as MAIN is back in CW. **Log QSO** stays on the main page and isn't in the pop-out window.
+
 ![The CW Reader panel — decoded text at the top, the status line beneath it, and the Reader Mode, transcript and log controls](pictures/CW-Reader.png)
 
 If CW is new to you, read [§20.1](#201-if-cw-is-new-to-you) and [§20.2](#202-what-to-expect-from-a-machine-reading-morse) first. They are short, and between them they save most of the disappointment people have with machine copy.
@@ -3718,6 +3734,7 @@ Along the top of the panel are four buttons and two switches. The switches — *
 | **Log QSO** | Opens the log form — see [§20.8](#208-logging-a-qso). |
 | **Follow** *(switch, on by default)* | Keeps the newest text in view. See below. |
 | **Tune** *(switch, off by default)* | Shows the tuning display beside the text — see [§20.5](#205-the-tune-display). |
+| **↗** | Opens the reader in a window of its own, for a second monitor — see [§5.21](#521-pop-out-windows). In that window, **Reattach** puts it back in the main page. |
 | **×** | Closes the panel. It does **not** stop the reader — see [§20.6](#206-reader-mode). |
 
 **Follow** is the one to understand first, because the situation it exists for comes up in your first hour.

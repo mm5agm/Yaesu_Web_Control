@@ -18,6 +18,11 @@ two repositories.
   changing a character of it. Pure functions, tested in
   `tests/js/cw-tokens.test.mjs`; `docs/design/cw-decoder.md` §7.3 records the
   measurements behind it, including the suppression version that was rejected.
+- `popout/popout.js` — opens a panel in a window of its own (for a second
+  monitor), remembers the window's size and position, and keeps the main page
+  and the pop-out in step over a `BroadcastChannel`: `PopoutHost` in the main
+  page, `PopoutChild` in the pop-out page. The pop-out page itself is the
+  app's. Tested in `tests/js/popout.test.mjs`.
 - `audio/` — the remote-audio client: `audio-protocol.js` (frame constants and
   PCM helpers), `audio-capture.js`, `audio-playback.js` and `audio-session.js`.
   These speak the app's audio WebSocket and nothing else — no CAT, no CI-V, no
