@@ -1159,6 +1159,8 @@ Four controls in each dialog:
 
 **FTdx101 dual-receiver — both VFOs at once.** On the FTdx101 family you can open both VFO A's and VFO B's Audio Filter dialogs simultaneously; each opens with one click of its own button and can be dragged anywhere on screen, with positions remembered independently. When both VFOs happen to be in the same mode class, the dialogs show a small note ("VFO B is also in SSB — these settings affect both VFOs") because the radio shares the values between the two receivers for the same mode.
 
+**In a window of its own.** The **↗** button in the dialog's title bar opens that VFO's Audio Filter in a separate window, which can go on a second monitor ([§5.21](#521-pop-out-windows)). VFO A and VFO B each have their own window. The window re-reads the radio when its VFO changes mode, just as the dialog does, and **Reattach** puts it back in the main page.
+
 **Replaces the old IF Low Cut dropdown.** The dropdown that was there in v2.3.9 sent a CAT command (`SL`) that turned out not to exist on any of YWC's supported radios — so it was a phantom control that *looked* like it was doing something but never actually reached the radio. The Audio Filter popout uses the radio's `EX` (menu) command path, which all five supported radios honour, so the values you set actually take effect on the audio.
 
 **Per-radio support.** Per-mode CAT availability varies:
@@ -1266,7 +1268,7 @@ Every button and the level slider carry labels that screen readers announce, and
 
 ### 5.21 Pop-out windows
 
-A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)) and the **RTTY Tuner** ([§22](#22-rtty-tuner)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
+A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)), the **RTTY Tuner** ([§22](#22-rtty-tuner)) and each VFO's **Audio Filter** ([§5.18](#518-audio-filter-popout)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
 
 - **To pop a panel out**, press the **↗** button in its title bar. The panel closes in the main page and opens in its own window. Its button on the main page changes to show that it's popped out, for example **CW Read (pop-out)**, and pressing that button brings the window to the front instead of opening a second copy.
 - **To put it back**, press **Reattach** in the pop-out window. The window closes and the panel opens in the main page again. Closing the window with **×** also works, but leaves the panel closed.

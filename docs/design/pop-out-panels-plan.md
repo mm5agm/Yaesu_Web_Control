@@ -1,7 +1,7 @@
 # Pop-out windows for the CW reader, RTTY tuner, Audio Filter and DX Spots
 
 Status: **PR 1 (groundwork + CW reader) built 2026-10-01** on
-`feature/popout-cw-reader` (PR #195); 2a (per-window lease) is PR #196; 2b (RTTY tuner pop-out, resize, tones only) built 2026-10-01 on `feature/popout-rtty-tuner`; 3-4 not started. Planned 2026-09-30. Asked for by Rick W2JAZ on #190,
+`feature/popout-cw-reader` (PR #195); 2a (per-window lease) is PR #196; 2b (RTTY tuner pop-out, resize, tones only) built 2026-10-01 on `feature/popout-rtty-tuner` (PR #197); 3 (Audio Filter) built 2026-10-01 on `feature/popout-audio-filter`; 4 not started. Planned 2026-09-30. Asked for by Rick W2JAZ on #190,
 who wants the CW reader on a second monitor for a club demo in November.
 
 ## The problem

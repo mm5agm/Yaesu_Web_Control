@@ -292,6 +292,8 @@ pre, code { tab-size: 4; }
    class and key this off that instead, which would be the better fix. */
 #cwReaderDialog .btn-outline-secondary,
 #rttyTunerDialog .btn-outline-secondary,
+#audioFilterDialogA .btn-outline-secondary,
+#audioFilterDialogB .btn-outline-secondary,
 #voxDialog .btn-outline-secondary,
 #voiceDialog .btn-outline-secondary {
     color: #adb5bd;          /* 7.3:1 on #222 - passes AA and AAA */
