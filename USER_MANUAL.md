@@ -1163,6 +1163,8 @@ Four controls in each dialog:
 
 **In a window of its own.** The **↗** button in the dialog's title bar opens that VFO's Audio Filter in a separate window, which can go on a second monitor ([§5.21](#521-pop-out-windows)). VFO A and VFO B each have their own window. The window re-reads the radio when its VFO changes mode, just as the dialog does, and **Reattach** puts it back in the main page.
 
+The radio doesn't tell YWC when you change these settings on its own menu, so the dialog and the window read them again whenever you click on them or come back to their window. A change made at the radio shows up as soon as you look at the panel again.
+
 **Replaces the old IF Low Cut dropdown.** The dropdown that was there in v2.3.9 sent a CAT command (`SL`) that turned out not to exist on any of YWC's supported radios — so it was a phantom control that *looked* like it was doing something but never actually reached the radio. The Audio Filter popout uses the radio's `EX` (menu) command path, which all five supported radios honour, so the values you set actually take effect on the audio.
 
 **Per-radio support.** Per-mode CAT availability varies:
