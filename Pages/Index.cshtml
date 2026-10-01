@@ -567,13 +567,13 @@
     <!-- Power and SWR Meters -->
     <div class="row mt-3">
         <div class="col-12">
-            <div class="card border-secondary">
+            <div class="card border-secondary" id="meterCard">
                 <div class="card-body py-2">
                     <!-- Gauges row. The id is the hook site.js uses to add
                          .meters-tx-dim while transmitting; data-meter-scope="rx"
                          on a cell marks it as one the radio stops measuring
                          during an over. -->
-                    <div id="meterGaugesRow" class="d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
+                    <div id="meterGaugesRow" class="fold-target d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
                         <!-- S-Meter rolling history strip — leftmost so the live trace
                              reads left-to-right toward the S-meter needle. Hidden
                              until the toolbar's S-hist toggle is on. Sized to match
@@ -796,6 +796,13 @@
                                 aria-label="Voice announcements settings"
                                 title="Voice announcements for band, mode, TX state etc. — useful for partially sighted operators"
                                 onclick="document.getElementById('voiceDialog').show();">Voice</button>
+                        <!-- Fold button (Discussion #171): hides the gauges only.
+                             This row and the Power/MIC controls stay, and the
+                             gauges keep updating while hidden. Last in the
+                             toolbar so it never sits on top of a gauge. -->
+                        <button type="button" id="meterFoldBtn" class="btn btn-sm ms-1 btn-outline-secondary fold-btn">
+                            <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">Hide meters</span>
+                        </button>
                     </div>
 
                 </div>
@@ -2080,6 +2087,7 @@
             <div class="card-body py-2 px-3">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <span class="fw-bold text-nowrap">Clarifier</span>
+                    <div id="clarControls" class="fold-target" style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                     <div class="btn-group btn-group-sm" id="clarVfoGroup" role="group" aria-label="Clarifier VFO selection">
                         <button type="button" class="btn btn-outline-primary active" id="clarVfoABtn"
                                 onclick="selectClarVfo('A')" title="Apply clarifier to VFO A"
@@ -2117,6 +2125,12 @@
                             onclick="resetClarifier()"
                             title="Reset offset to 0 Hz (mode unchanged)"
                             aria-label="Reset clarifier offset to zero">Reset</button>
+                    </div>
+                    <!-- Fold button (Discussion #171): hides everything but the
+                         word Clarifier, which stays so the strip can be found. -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm fold-btn ms-auto flex-shrink-0" id="clarFoldBtn">
+                        <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">Hide</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -2756,6 +2770,7 @@
         import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { attachPopout }         from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { attachFold }           from "/js/layout/fold-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { AudioFilterPanel }     from "/js/ui/audio-filter-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -2809,6 +2824,35 @@
             const scopeDlg = document.getElementById('radioDisplayScopeDialog');
             if (scopeDlg) window.radioScopeControls.push(new RadioScopeControl(scopeDlg));
             window.radioScopeControl = window.radioScopeControls[0] || null;
+
+            // Fold the meter gauges and the Clarifier strip away (Discussion
+            // #171), as the Radio Scope card already can. The choice is kept
+            // per browser. The Power row sits under the gauges with an inline
+            // !important pull-up and indent, so it is reset by hand when they
+            // go; a resize afterwards lets anything sized to its box redraw.
+            const powerRow = document.querySelector('#meterCard .closer-to-raw-power');
+            attachFold({
+                name: 'meters',
+                button: document.getElementById('meterFoldBtn'),
+                targets: [document.getElementById('meterGaugesRow')],
+                root: document.getElementById('meterCard'),
+                shownLabel:  { text: 'Hide meters', title: 'Hide the meter gauges (Power, MIC and the toolbar stay)', aria: 'Hide the meter gauges' },
+                foldedLabel: { text: 'Show meters', title: 'Show the meter gauges again', aria: 'Show the meter gauges' },
+                onChange: folded => {
+                    if (powerRow) {
+                        powerRow.style.setProperty('margin-top', folded ? '0' : '-18px', 'important');
+                        powerRow.style.paddingLeft  = folded ? '0' : '280px';
+                    }
+                    if (!folded) window.dispatchEvent(new Event('resize'));
+                },
+            });
+            attachFold({
+                name: 'clarifier',
+                button: document.getElementById('clarFoldBtn'),
+                targets: [document.getElementById('clarControls')],
+                shownLabel:  { text: 'Hide', title: 'Hide the clarifier controls', aria: 'Hide the clarifier controls' },
+                foldedLabel: { text: 'Show', title: 'Show the clarifier controls again', aria: 'Show the clarifier controls' },
+            });
 
             // ── UTC clock in the top bar ──────────────────────────────────────
             const utcClockEl = document.getElementById('utcClock');

@@ -301,6 +301,12 @@ pre, code { tab-size: 4; }
     border-color: #6c757d;
 }
 
+/* Folded sections (js/layout/fold-panel.js). The targets carry d-flex or an
+   inline display, either of which beats the browser's own [hidden] rule, so
+   this one has to say !important. */
+.fold-target[hidden] { display: none !important; }
+.fold-btn { white-space: nowrap; }
+
 /* Mode select - sized to fit longest option (D-FM-N), sits below band buttons */
 .vfo-mode-select {
     width: 7rem;

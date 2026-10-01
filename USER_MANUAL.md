@@ -516,6 +516,8 @@ The meter scales are calibrated to show meaningful units rather than raw ADC val
 
 The vertical axis is calibrated in S-units (S1, S5, S9, S9+30, S9+60) using the same calibration table as the analog gauge. The horizontal axis runs from **-30s** on the left to **now** on the right. The strip is purely a visual aid — none of the information is sent to the radio.
 
+**Hiding the meters.** The **Hide meters** button at the end of the toolbar under the meters folds the gauges away, so the space goes to the spectrum and VFO panels. Only the gauges go: the Power, MIC Gain and PROC controls and the toolbar itself move up and stay, and the button becomes **Show meters** to bring them back. The meters keep reading while they are hidden, so they are current the moment they come back. The choice is remembered by the browser, so each PC or tablet keeps its own.
+
 ---
 
 ### 5.3 Power, Mic Gain and Speech Processor
@@ -658,6 +660,8 @@ On **dual-receiver radios** (FTdx101MP / FTdx101D) there are **two** S-meter gau
 Both panels have identical controls — changing a control on either panel writes to the radio.
 
 **VFO-B toggle** — the **VFO-B** button in the toolbar shows or hides the VFO B panel. The last state is remembered across sessions.
+
+**Clarifier strip** — the strip under the VFO panels holds the clarifier (RIT/XIT): which VFO it applies to, OFF / RX / TX / RX+TX, and the offset. Its **Hide** button at the right-hand end folds the controls away and leaves only the word **Clarifier** and a **Show** button. Hiding it changes nothing on the radio, and the choice is remembered by the browser.
 
 **A↔B Swap** — the **A↔B** button in the toolbar swaps the frequencies and modes between VFO A and VFO B in one click. Available on all supported radios.
 
