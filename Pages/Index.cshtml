@@ -320,10 +320,10 @@
        panel pushed its own control out of reach. This strip runs the full
        width instead, is visible on a dark card, and takes the keyboard. */
     .spectrum-resize-grip {
-        height: 14px;
+        height: 16px;
         cursor: row-resize;
-        background: #212529;
-        border-top: 1px solid #495057;
+        background: #2b3035;
+        border-top: 1px solid #6c757d;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -332,25 +332,32 @@
 
     .spectrum-resize-grip::before {
         content: "";
-        width: 44px;
-        height: 4px;
-        border-top: 2px dotted #adb5bd;
-        border-bottom: 2px dotted #adb5bd;
+        width: 64px;
+        height: 5px;
+        border-top: 2px dotted #ced4da;
+        border-bottom: 2px dotted #ced4da;
     }
 
     .spectrum-resize-grip:hover,
     .spectrum-resize-grip.dragging {
-        background: #2c3237;
+        background: #3a4047;
     }
 
     .spectrum-resize-grip:hover::before,
     .spectrum-resize-grip.dragging::before {
-        border-color: #dee2e6;
+        border-color: #fff;
     }
 
+    /* Amber, as the Radio Display splitter uses: a 2px blue ring inside the
+       strip all but vanished against the blue VFO card under it. */
     .spectrum-resize-grip:focus-visible {
-        outline: 2px solid #0d6efd;
-        outline-offset: -2px;
+        outline: 3px solid #ffc107;
+        outline-offset: -3px;
+        background: #3a4047;
+    }
+
+    .spectrum-resize-grip:focus-visible::before {
+        border-color: #ffc107;
     }
 
     /* While a grip drag is in progress, stop the pointer selecting the text it

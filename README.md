@@ -82,6 +82,7 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
+| The bar for resizing the spectrum panel was hard to see, and when you reached it with Tab its thin blue outline was almost invisible against the blue VFO card. The bar is now lighter with a bigger grip mark, and keyboard focus draws a clear amber outline | [#171](https://github.com/mm5agm/Yaesu_Web_Control/issues/171) | *Not yet in a build* |
 | The Range, Speed, Bright and Smooth sliders on the spectrum display had a faint track that was hard to see against the dark panel. They now draw like the Notch slider, with a clear outline | - | *Not yet in a build* |
 | The Audio Filter kept showing the values it read when it opened, so a change made on the radio's own menu never appeared until it was closed and opened again. It now reads the radio again whenever you click on it or come back to its window ([§5.18](USER_MANUAL.md#518-audio-filter-popout)) | - | *Not yet in a build* |
 | The DX Spots list could only float inside the main page. Its **↗** button now opens it in a window of its own, for a second monitor, with the full spot list, live updates and click-to-tune; **Reattach** puts it back ([§5.17](USER_MANUAL.md#517-dx-spots-list)) | - | *Not yet in a build* |
