@@ -39,6 +39,11 @@
         }
         #cwReaderDialog.cwr-popout .cwr-header { cursor: default; flex-wrap: wrap; gap: 0.4rem; }
         #cwReaderDialog.cwr-popout .cwr-header > div { flex-wrap: wrap; }
+        .popout-screen-offer {
+            font-size: 0.85rem; color: #cde; background: rgba(120, 170, 255, 0.10);
+            border-left: 3px solid #78aaff; border-radius: 0.25rem;
+            padding: 0.4rem 0.6rem; margin-bottom: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -52,9 +57,10 @@
     <script type="module">
         import { CwReaderPanel }  from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { ModePanelGuard } from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { PopoutChild }    from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
         const popout = new PopoutChild({ name: 'cw-reader', fallbackUrl: '/' }).start();
+        offerScreenPermission(document.querySelector('#cwReaderDialog .cwr-body'));
         document.getElementById('cwReaderReattachBtn')
             ?.addEventListener('click', () => popout.reattach());
 

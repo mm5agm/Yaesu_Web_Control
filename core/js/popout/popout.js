@@ -101,6 +101,70 @@ function makeChannel(name) {
     catch { return null; }
 }
 
+// ── Second-monitor placement ─────────────────────────────────────────────────
+//
+// Chrome and Edge pull a new window onto the opener's monitor, whatever left
+// and top say, unless the page holds the Window Management permission. With
+// it, window.open honours a position on any screen. Firefox has no such API
+// and places the window itself, so there it reports 'unsupported' and nothing
+// is offered.
+
+const SCREEN_OFFER_DISMISSED = 'popoutScreenOfferDismissed';
+
+/** 'granted' | 'denied' | 'prompt' | 'unsupported' */
+export async function screenPermissionState() {
+    if (typeof window === 'undefined' || typeof window.getScreenDetails !== 'function') return 'unsupported';
+    try {
+        const st = await navigator.permissions.query({ name: 'window-management' });
+        return st.state;
+    } catch {
+        return 'unsupported';
+    }
+}
+
+/**
+ * Offer, once, to let the browser reopen pop-outs on the monitor they were
+ * left on. Shown only where it would make a difference: a browser that has
+ * the permission to ask for, a computer with more than one screen, and an
+ * operator who has not already said no. Asking needs a click, so this is a
+ * button, never a prompt fired on load.
+ *
+ * @param {HTMLElement} container  the bar goes at the top of this element
+ */
+export async function offerScreenPermission(container) {
+    if (!container) return;
+    if (await screenPermissionState() !== 'prompt') return;
+    if (!window.screen?.isExtended) return;
+    try { if (localStorage.getItem(SCREEN_OFFER_DISMISSED)) return; } catch { /* ask anyway */ }
+
+    const bar = document.createElement('div');
+    bar.className = 'popout-screen-offer';
+    bar.setAttribute('role', 'region');
+    bar.setAttribute('aria-label', 'Reopen on this monitor');
+    const text = document.createElement('span');
+    text.textContent = 'To reopen this window on the monitor you leave it on, the browser needs your permission to place windows. ';
+    const allow = document.createElement('button');
+    allow.type = 'button';
+    allow.className = 'btn btn-sm btn-primary ms-2';
+    allow.textContent = 'Allow';
+    const no = document.createElement('button');
+    no.type = 'button';
+    no.className = 'btn btn-sm btn-outline-secondary ms-1';
+    no.textContent = 'Not now';
+    bar.append(text, allow, no);
+    container.prepend(bar);
+
+    allow.addEventListener('click', async () => {
+        // getScreenDetails() is what raises the browser's own question.
+        try { await window.getScreenDetails(); } catch { /* refused: nothing more to do */ }
+        bar.remove();
+    });
+    no.addEventListener('click', () => {
+        try { localStorage.setItem(SCREEN_OFFER_DISMISSED, '1'); } catch { /* ignore */ }
+        bar.remove();
+    });
+}
+
 export class PopoutHost {
     /**
      * @param {object} opts
