@@ -74,9 +74,18 @@
         const post = (url, body) => fetch(url, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
+        // The setting as it is now, not as it was when this window opened:
+        // it can be changed in the main page while this one stays open. The
+        // value rendered into the page stands if the host can't be asked.
+        async function refreshAutoMode() {
+            try {
+                const r = await fetch('/DxSpots?handler=AutoMode', { cache: 'no-store' });
+                if (r.ok) window.ywcAutoModeChangeOnTune = (await r.json()).autoModeChangeOnTune !== false;
+            } catch { /* keep the last known value */ }
+        }
         async function tune(hz) {
             try {
-                await post('/api/cat/frequency/a', { frequencyHz: hz });
+                await Promise.all([post('/api/cat/frequency/a', { frequencyHz: hz }), refreshAutoMode()]);
                 // Band-plan-aware mode change, as on the main page, unless the
                 // operator has turned it off in Settings.
                 const code = MODE_CODE[autoModeForHz(hz)];
