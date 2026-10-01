@@ -1,6 +1,7 @@
 # Pop-out windows for the CW reader, RTTY tuner, Audio Filter and DX Spots
 
-Status: **plan, not started** (2026-09-30). Asked for by Rick W2JAZ on #190,
+Status: **PR 1 (groundwork + CW reader) built 2026-10-01** on
+`feature/popout-cw-reader`; PRs 2a-4 not started. Planned 2026-09-30. Asked for by Rick W2JAZ on #190,
 who wants the CW reader on a second monitor for a club demo in November.
 
 ## The problem
