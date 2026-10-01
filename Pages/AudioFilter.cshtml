@@ -1,0 +1,76 @@
+@page
+@model Yaesu_Web_Control.Pages.AudioFilterModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Audio Filter";
+    var vfo = Model.Vfo;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>Audio Filter VFO @vfo - Yaesu Web Control</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <style>
+        html, body { height: 100%; margin: 0; background: #222; color: #eee; overflow: hidden; }
+        /* The panel is the whole window here, not a floating dialog: the
+           window's own frame does the moving and resizing. */
+        dialog.audio-filter-popout {
+            position: static;
+            display: block;
+            width: 100%;
+            height: 100%;
+            max-width: none;
+            max-height: none;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            background: #222;
+            color: #eee;
+            overflow: auto;
+        }
+        .popout-screen-offer {
+            font-size: 0.85rem; color: #cde; background: rgba(120, 170, 255, 0.10);
+            border-left: 3px solid #78aaff; border-radius: 0.25rem;
+            padding: 0.4rem 0.6rem;
+        }
+    </style>
+</head>
+<body>
+    <partial name="_AudioFilterPartial" model="(vfo, true)" />
+
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    @* Builds the hub connection with a retry policy that never gives up.
+       This page has no _Layout, so it must load it itself. *@
+    <script src="~/js/ui/hub-connection.js" asp-append-version="true"></script>
+    <script type="module">
+        import { AudioFilterPanel } from "/js/ui/audio-filter-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+
+        const vfo = '@vfo';
+        const popout = new PopoutChild({ name: 'audio-filter-' + vfo.toLowerCase(), fallbackUrl: '/' }).start();
+        offerScreenPermission(document.querySelector('#audioFilterDialog' + vfo + ' .p-3'));
+        document.getElementById('audioFilterReattachBtn' + vfo)
+            ?.addEventListener('click', () => popout.reattach());
+
+        const panel = new AudioFilterPanel(vfo).init();
+        panel.refresh();
+
+        // Mode changes change which EX menu settings apply, so re-read on
+        // this VFO's. A reconnect re-reads too, in case the mode changed while
+        // the link was down. This connection is also what keeps the host
+        // running while this window is the only one open: the page sets
+        // Layout = null, so there is no site.js here.
+        const conn = window.ywcHubConnection('/radioHub');
+        conn.on('RadioStateUpdate', update => {
+            if (update.property === 'Mode' + vfo) panel.onModeChanged(vfo);
+        });
+        conn.onreconnected(() => panel.refresh());
+        conn.start().catch(err => console.error('[audio-filter-popout]', err));
+    </script>
+</body>
+</html>

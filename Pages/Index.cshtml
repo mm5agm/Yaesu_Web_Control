@@ -2402,56 +2402,7 @@
      SL-based "IF Low Cut" dropdown. -->
 @foreach (var vfo in new[] { "A", "B" })
 {
-    <dialog id="audioFilterDialog@(vfo)" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:380px; max-width:520px; position:fixed; margin:0;" aria-labelledby="audioFilterDialogTitle@(vfo)">
-        <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
-            <strong id="audioFilterDialogTitle@(vfo)">Audio Filter — VFO @vfo <span id="audioFilterModeLabel@(vfo)" class="text-info ms-1"></span></strong>
-            <button class="btn btn-sm ywc-dialog-close" onclick="document.getElementById('audioFilterDialog@(vfo)').close()" aria-label="Close VFO @vfo Audio Filter dialog">✕</button>
-        </div>
-        <div class="p-3 d-flex flex-column gap-3">
-            <div id="audioFilterStatus@(vfo)" class="small text-warning" style="min-height:1.2em;"></div>
-            <div id="audioFilterUnsupported@(vfo)" class="alert alert-secondary mb-0" style="display:none;">
-                Audio Filter is not available for this mode on this radio model.
-            </div>
-            <div id="audioFilterControls@(vfo)">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <label class="mb-0 fw-bold" style="min-width:90px;">LCUT FREQ:</label>
-                    <input type="checkbox" id="audioFilterLcutFreqOff@(vfo)" class="form-check-input"
-                           title="Disable low-cut filter (OFF)" aria-label="LCUT FREQ off">
-                    <label class="mb-0 small" for="audioFilterLcutFreqOff@(vfo)">Off</label>
-                    <input type="range" id="audioFilterLcutFreqSlider@(vfo)"
-                           min="100" max="1000" step="50" value="100"
-                           style="flex:1; height:18px;"
-                           aria-label="LCUT FREQ Hz">
-                    <span id="audioFilterLcutFreqLabel@(vfo)" class="text-end" style="min-width:64px;">—</span>
-                </div>
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <label class="mb-0 fw-bold" style="min-width:90px;">LCUT SLOPE:</label>
-                    <button type="button" class="btn btn-sm btn-outline-light audio-filter-slope-btn"
-                            id="audioFilterLcutSlopeBtn@(vfo)" data-slope-code="0"
-                            title="Toggle LCUT slope between 6 dB/oct and 18 dB/oct"
-                            aria-label="LCUT slope">— dB/oct</button>
-                </div>
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <label class="mb-0 fw-bold" style="min-width:90px;">HCUT FREQ:</label>
-                    <input type="checkbox" id="audioFilterHcutFreqOff@(vfo)" class="form-check-input"
-                           title="Disable high-cut filter (OFF)" aria-label="HCUT FREQ off">
-                    <label class="mb-0 small" for="audioFilterHcutFreqOff@(vfo)">Off</label>
-                    <input type="range" id="audioFilterHcutFreqSlider@(vfo)"
-                           min="700" max="4000" step="50" value="3000"
-                           style="flex:1; height:18px;"
-                           aria-label="HCUT FREQ Hz">
-                    <span id="audioFilterHcutFreqLabel@(vfo)" class="text-end" style="min-width:64px;">—</span>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <label class="mb-0 fw-bold" style="min-width:90px;">HCUT SLOPE:</label>
-                    <button type="button" class="btn btn-sm btn-outline-light audio-filter-slope-btn"
-                            id="audioFilterHcutSlopeBtn@(vfo)" data-slope-code="0"
-                            title="Toggle HCUT slope between 6 dB/oct and 18 dB/oct"
-                            aria-label="HCUT slope">— dB/oct</button>
-                </div>
-            </div>
-        </div>
-    </dialog>
+    <partial name="_AudioFilterPartial" model="(vfo, false)" />
 }
 
 <!-- Voice Announcements Dialog -->
@@ -2842,6 +2793,7 @@
         import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { attachPopout }         from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { AudioFilterPanel }     from "/js/ui/audio-filter-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -3259,6 +3211,43 @@
                     aria: 'RTTY tuner is in a pop-out window - bring it to the front',
                 },
             }).open;
+
+            // Audio Filter: one panel per VFO, each of which can also live in
+            // a window of its own (/AudioFilter?vfo=A or B). The radio holds
+            // the settings, so the dialog and the window read the same values.
+            // site.js calls window.audioFilter.onModeChanged on ModeA/ModeB.
+            {
+                const panels = {}, opens = {};
+                for (const vfo of ['A', 'B']) {
+                    const btn = document.getElementById('audioFilterBtn' + vfo);
+                    const panel = panels[vfo] = new AudioFilterPanel(vfo, { anchor: btn }).init();
+                    opens[vfo] = attachPopout({
+                        name: 'audio-filter-' + vfo.toLowerCase(),
+                        url: '/AudioFilter?vfo=' + vfo,
+                        defaultSize: { width: 460, height: 330 },
+                        dialog: () => panel.dialog,
+                        openButton: btn,
+                        popoutButton: document.getElementById('audioFilterPopoutBtn' + vfo),
+                        show: () => panel.open(),
+                        onClass: 'btn-info',
+                        offClass: 'btn-secondary',
+                        closedLabel: {
+                            text: 'Audio Filter',
+                            title: `Open the Audio Filter dialog for VFO ${vfo}'s current mode (LCUT FREQ, LCUT SLOPE, HCUT FREQ, HCUT SLOPE)`,
+                            aria: `VFO ${vfo} Audio Filter`,
+                        },
+                        openLabel: {
+                            text: 'Audio Filter (pop-out)',
+                            title: `The VFO ${vfo} Audio Filter is in its own window - click to bring it to the front`,
+                            aria: `VFO ${vfo} Audio Filter is in a pop-out window - bring it to the front`,
+                        },
+                    }).open;
+                }
+                window.audioFilter = {
+                    open: vfo => opens[vfo === 'B' ? 'B' : 'A'](),
+                    onModeChanged: vfo => { panels.A.onModeChanged(vfo); panels.B.onModeChanged(vfo); },
+                };
+            }
 
             // Close the CW reader and the RTTY tuner once the radio has
             // settled in a mode neither is any use in, so an RTTY tuner is not
@@ -5468,191 +5457,6 @@
                 await fetch('/api/cat/cw/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msgs) });
             } catch (e) { console.error('saveCwMessages error:', e); }
         }
-
-        // --- AUDIO FILTER POPOUT ---
-        // One independent dialog per VFO so the user can view/adjust both at
-        // once on FTdx101-family dual-receiver radios. Each instance reads/
-        // writes the four EX-menu values for *its* VFO's current mode class,
-        // backed by /api/cat/audiofilter/{vfo}. The dialog is a thin read/
-        // write proxy — the radio holds all state.
-        window.audioFilter = (function () {
-            const $ = (id) => document.getElementById(id);
-
-            function makeInstance(vfo) {
-                const dialogId = 'audioFilterDialog' + vfo;
-                const dlg = () => $(dialogId);
-                const id = (suffix) => `audioFilter${suffix}${vfo}`;
-                const el = (suffix) => $(id(suffix));
-                // Remember the slider's last non-OFF Hz so toggling OFF→ON
-                // returns to the same value rather than the slider's min.
-                let _lastLcutHz = 300;
-                let _lastHcutHz = 3000;
-                let _busy = false;
-
-                async function open() {
-                    const d = dlg();
-                    if (d && typeof d.show === 'function' && !d.open) {
-                        // On first open (no saved drag position), anchor the
-                        // dialog just below the Audio Filter button that
-                        // opened it.
-                        const hasSaved = !!localStorage.getItem('dlgPos_' + dialogId);
-                        if (!hasSaved) {
-                            const btn = $('audioFilterBtn' + vfo);
-                            if (btn) {
-                                const r = btn.getBoundingClientRect();
-                                d.style.left = Math.round(r.left) + 'px';
-                                d.style.top  = Math.round(r.bottom + 6) + 'px';
-                                d.style.transform = 'none';
-                            }
-                        }
-                        d.show();
-                    }
-                    await refresh();
-                }
-
-                async function refresh() {
-                    if (_busy) return;
-                    _busy = true;
-                    try {
-                        const resp = await fetch(`/api/cat/audiofilter/${vfo.toLowerCase()}`);
-                        if (!resp.ok) {
-                            el('Status').textContent = 'Failed to read audio filter.';
-                            return;
-                        }
-                        const data = await resp.json();
-                        el('ModeLabel').textContent = data.modeClass ? `(${data.modeClass})` : '';
-
-                        const otherVfo = vfo === 'A' ? 'B' : 'A';
-                        el('Status').textContent = data.otherVfoShares
-                            ? `VFO ${otherVfo} is also in ${data.modeClass} — these settings affect both VFOs.`
-                            : '';
-
-                        const anySupported = (data.lcutFreq && data.lcutFreq.supported)
-                                          || (data.lcutSlope && data.lcutSlope.supported)
-                                          || (data.hcutFreq && data.hcutFreq.supported)
-                                          || (data.hcutSlope && data.hcutSlope.supported);
-                        el('Unsupported').style.display = anySupported ? 'none' : '';
-                        el('Controls').style.display    = anySupported ? '' : 'none';
-                        if (!anySupported) return;
-
-                        renderFreqRow('Lcut', data.lcutFreq);
-                        renderSlopeBtn('Lcut', data.lcutSlope);
-                        renderFreqRow('Hcut', data.hcutFreq);
-                        renderSlopeBtn('Hcut', data.hcutSlope);
-                    } catch (e) {
-                        console.error(`audioFilter[${vfo}].refresh error:`, e);
-                    } finally {
-                        _busy = false;
-                    }
-                }
-
-                function renderFreqRow(prefix, v) {
-                    const slider = el(prefix + 'FreqSlider');
-                    const off    = el(prefix + 'FreqOff');
-                    const label  = el(prefix + 'FreqLabel');
-                    if (!v || !v.supported) {
-                        slider.disabled = true; off.disabled = true; label.textContent = '—';
-                        return;
-                    }
-                    off.disabled = false;
-                    if (v.label === 'OFF') {
-                        off.checked = true; slider.disabled = true;
-                        label.textContent = 'OFF';
-                    } else {
-                        off.checked = false; slider.disabled = false;
-                        if (typeof v.hz === 'number') {
-                            slider.value = v.hz;
-                            if (prefix === 'Lcut') _lastLcutHz = v.hz; else _lastHcutHz = v.hz;
-                        }
-                        label.textContent = v.label || (slider.value + ' Hz');
-                    }
-                }
-
-                function renderSlopeBtn(prefix, v) {
-                    const btn = el(prefix + 'SlopeBtn');
-                    if (!v || !v.supported) {
-                        btn.disabled = true; btn.textContent = '—';
-                        btn.classList.remove('btn-warning'); btn.classList.add('btn-outline-light');
-                        return;
-                    }
-                    btn.disabled = false;
-                    btn.dataset.slopeCode = v.code || '0';
-                    btn.textContent = v.label || (v.code === '1' ? '18 dB/oct' : '6 dB/oct');
-                    btn.classList.toggle('btn-warning',      v.code === '1');
-                    btn.classList.toggle('btn-outline-light', v.code !== '1');
-                }
-
-                function hzToFreqCode(hz, isLcut) {
-                    const base = isLcut ? 100 : 700;
-                    const n = Math.round((hz - base) / 50) + 1;
-                    return String(n).padStart(2, '0');
-                }
-
-                async function writeOne(setting, code) {
-                    try {
-                        const resp = await fetch(`/api/cat/audiofilter/${vfo.toLowerCase()}/${setting}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ code })
-                        });
-                        if (!resp.ok) return;
-                        const data = await resp.json();
-                        const v = data.result;
-                        if (setting === 'lcutFreq') renderFreqRow('Lcut', v);
-                        else if (setting === 'hcutFreq') renderFreqRow('Hcut', v);
-                        else if (setting === 'lcutSlope') renderSlopeBtn('Lcut', v);
-                        else if (setting === 'hcutSlope') renderSlopeBtn('Hcut', v);
-                    } catch (e) { console.error(`audioFilter[${vfo}].writeOne error:`, e); }
-                }
-
-                function wireDom() {
-                    el('LcutFreqSlider').addEventListener('input',  (e) => el('LcutFreqLabel').textContent = e.target.value + ' Hz');
-                    el('LcutFreqSlider').addEventListener('change', (e) => writeOne('lcutFreq', hzToFreqCode(parseInt(e.target.value), true)));
-                    el('LcutFreqOff').addEventListener('change', (e) => {
-                        if (e.target.checked) writeOne('lcutFreq', '00');
-                        else                  writeOne('lcutFreq', hzToFreqCode(_lastLcutHz, true));
-                    });
-                    el('LcutSlopeBtn').addEventListener('click', () => {
-                        const cur = el('LcutSlopeBtn').dataset.slopeCode || '0';
-                        writeOne('lcutSlope', cur === '0' ? '1' : '0');
-                    });
-                    el('HcutFreqSlider').addEventListener('input',  (e) => el('HcutFreqLabel').textContent = e.target.value + ' Hz');
-                    el('HcutFreqSlider').addEventListener('change', (e) => writeOne('hcutFreq', hzToFreqCode(parseInt(e.target.value), false)));
-                    el('HcutFreqOff').addEventListener('change', (e) => {
-                        if (e.target.checked) writeOne('hcutFreq', '00');
-                        else                  writeOne('hcutFreq', hzToFreqCode(_lastHcutHz, false));
-                    });
-                    el('HcutSlopeBtn').addEventListener('click', () => {
-                        const cur = el('HcutSlopeBtn').dataset.slopeCode || '0';
-                        writeOne('hcutSlope', cur === '0' ? '1' : '0');
-                    });
-                }
-
-                function onModeChanged(changedVfo) {
-                    if (changedVfo !== vfo) return;
-                    const d = dlg();
-                    if (!d || !d.open) return;
-                    refresh();
-                }
-
-                return { open, refresh, onModeChanged, wireDom };
-            }
-
-            const instances = { A: makeInstance('A'), B: makeInstance('B') };
-
-            document.addEventListener('DOMContentLoaded', () => {
-                instances.A.wireDom();
-                instances.B.wireDom();
-            });
-
-            return {
-                open: (vfo) => instances[(vfo === 'B') ? 'B' : 'A'].open(),
-                onModeChanged: (vfo, mode) => {
-                    instances.A.onModeChanged(vfo, mode);
-                    instances.B.onModeChanged(vfo, mode);
-                }
-            };
-        })();
 
         // Expose functions called from HTML onclick/onchange attributes
         window.launchWsjtx  = launchWsjtx;
