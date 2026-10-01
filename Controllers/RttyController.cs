@@ -28,16 +28,25 @@ namespace Yaesu_Web_Control.Controllers
             public bool   Reverse { get; set; }
         }
 
+        /// <summary>
+        /// Which window is asking: each open tuner holds the audio under its
+        /// own id, so one closing does not stop the others. A page that sends
+        /// none shares one lease, as every page did before.
+        /// </summary>
+        private static string? ClientId(string? client)
+            => string.IsNullOrEmpty(client) || client.Length > 64 ? null : client;
+
         /// <summary>Start the scope, or move its filters if it is already running.</summary>
         [HttpPost("tuner/start")]
-        public async Task<IActionResult> Start([FromBody] StartRequest? req)
+        public async Task<IActionResult> Start([FromBody] StartRequest? req, [FromQuery] string? client = null)
         {
+            var id = ClientId(client);
             req ??= new StartRequest();
             try
             {
-                var error = await _tuner.StartAsync(req.MarkHz, req.ShiftHz, req.Reverse);
+                var error = await _tuner.StartAsync(req.MarkHz, req.ShiftHz, req.Reverse, id);
                 if (error != null) return BadRequest(new { error });
-                return Ok(_tuner.Frame(0));
+                return Ok(_tuner.Frame(0, id));
             }
             catch (Exception ex)
             {
@@ -46,11 +55,14 @@ namespace Yaesu_Web_Control.Controllers
             }
         }
 
-        /// <summary>The dialog has closed. The audio is let go a couple of seconds later.</summary>
+        /// <summary>
+        /// This window's dialog has closed. The audio is let go a couple of
+        /// seconds later, once no other window has the tuner open.
+        /// </summary>
         [HttpPost("tuner/stop")]
-        public IActionResult Stop()
+        public IActionResult Stop([FromQuery] string? client = null)
         {
-            _tuner.RequestStop();
+            _tuner.RequestStop(ClientId(client));
             return Ok();
         }
 
@@ -59,7 +71,7 @@ namespace Yaesu_Web_Control.Controllers
         /// 24,000 a second: 500 is about 21 ms, one sweep of the scope.
         /// </summary>
         [HttpGet("tuner")]
-        public IActionResult Tuner([FromQuery] int points = 500)
-            => Ok(_tuner.Frame(Math.Clamp(points, 0, 4800)));
+        public IActionResult Tuner([FromQuery] int points = 500, [FromQuery] string? client = null)
+            => Ok(_tuner.Frame(Math.Clamp(points, 0, 4800), ClientId(client)));
     }
 }

@@ -66,6 +66,11 @@ export class RttyTuner {
         this._pushPending = null;    // the newest tones to write once it finishes
         this._statusHold  = 0;       // Date.now() until which _draw must not overwrite
         this._restartAt   = 0;       // Date.now() of the last automatic restart
+        // Which window this is, to the host. Each open tuner holds the audio
+        // under its own id, so closing the dialog here does not stop the
+        // figure in a pop-out or on another PC. New on every page load: a
+        // reloaded page is a new window, and the old one's lease runs out.
+        this._client = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
     }
 
     init() {
@@ -201,7 +206,7 @@ export class RttyTuner {
             this._wantAt = Date.now();
         }
         try {
-            const res = await fetch(`/api/rtty/tuner/${what}`, {
+            const res = await fetch(`/api/rtty/tuner/${what}?client=${this._client}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: what === 'start' ? JSON.stringify(this._settings) : '{}',
@@ -409,12 +414,14 @@ export class RttyTuner {
         const abort = new AbortController();
         const bail  = setTimeout(() => abort.abort(), FETCH_MS);
         try {
-            const res = await fetch(`/api/rtty/tuner?points=${POINTS}`, { signal: abort.signal });
+            const res = await fetch(`/api/rtty/tuner?points=${POINTS}&client=${this._client}`, { signal: abort.signal });
             if (!res.ok) return;
             const f = await res.json();
             // The dialog is open and still polling, so a stopped host was not
             // our doing: the page went quiet long enough for the host's idle
-            // stop, or the app restarted underneath it.
+            // stop, or the app restarted underneath it. The host also says
+            // stopped when another window kept it running but this window's
+            // own hold lapsed, so this starts us again and we are counted.
             if (!f.running && this._dialog?.open) this._restart();
             this._last = f;
             this._adoptServerSettings(f);

@@ -50,20 +50,6 @@ namespace Yaesu_Web_Control.Services.Rtty
         public const double DefaultMarkHz  = 2125.0;
         public const int    DefaultShiftHz = 170;
 
-        /// <summary>
-        /// Nobody has asked for a sweep in this long: the page has gone, so
-        /// stop holding the radio's audio device open for it.
-        /// </summary>
-        private static readonly TimeSpan IdleStop = TimeSpan.FromSeconds(15);
-
-        /// <summary>
-        /// Closing and reopening the dialog must not close and reopen the
-        /// radio's USB capture: churning PortAudio on that codec has
-        /// native-crashed the host (see FilterSpectrumService). A stop only
-        /// takes effect once it has stood this long.
-        /// </summary>
-        private static readonly TimeSpan StopDebounce = TimeSpan.FromSeconds(2);
-
         private readonly RadioAudioBridgeService _bridge;
         private readonly RadioStateService _state;
         private readonly CatMultiplexerService _mux;
@@ -77,8 +63,8 @@ namespace Yaesu_Web_Control.Services.Rtty
         private double _markHz = DefaultMarkHz;
         private int _shiftHz = DefaultShiftHz;
         private bool _reverse;
-        private DateTime _lastPollUtc;
-        private DateTime? _stopRequestedUtc;
+        // One per window showing the figure; the audio is held while any is.
+        private readonly RttyTunerLeases _leases = new();
         private System.Threading.Timer? _timer;
 
         public RttyTunerService(RadioAudioBridgeService bridge,
@@ -105,8 +91,12 @@ namespace Yaesu_Web_Control.Services.Rtty
             return (markHz, spaceAbove ? markHz + shiftHz : markHz - shiftHz);
         }
 
-        /// <summary>Start, or re-tone if already running. Returns an error for bad settings.</summary>
-        public async Task<string?> StartAsync(double markHz, int shiftHz, bool reverse)
+        /// <summary>
+        /// Start for <paramref name="client"/>, or re-tone if already running.
+        /// The filters are shared, so a re-tone from one window moves them for
+        /// every window. Returns an error for bad settings.
+        /// </summary>
+        public async Task<string?> StartAsync(double markHz, int shiftHz, bool reverse, string? client = null)
         {
             if (markHz < 300 || markHz > 3000) return "Mark must be between 300 and 3000 Hz.";
             if (shiftHz is not (170 or 200 or 425 or 450 or 850)) return "Shift must be 170, 200, 425, 450 or 850 Hz.";
@@ -124,8 +114,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                 _markHz = markHz;
                 _shiftHz = shiftHz;
                 _reverse = reverse;
-                _lastPollUtc = DateTime.UtcNow;
-                _stopRequestedUtc = null;
+                _leases.Start(client, DateTime.UtcNow);
 
                 var (m, s) = TonesFor(_state.ModeA, _markHz, _shiftHz, _reverse);
                 if (_scope == null)
@@ -190,12 +179,16 @@ namespace Yaesu_Web_Control.Services.Rtty
             }
         }
 
-        /// <summary>The dialog has closed. Takes effect after <see cref="StopDebounce"/> unless restarted.</summary>
-        public void RequestStop()
+        /// <summary>
+        /// <paramref name="client"/>'s dialog has closed. The audio is let go
+        /// once no other window holds it, after
+        /// <see cref="RttyTunerLeases.StopDebounce"/> unless restarted.
+        /// </summary>
+        public void RequestStop(string? client = null)
         {
             lock (_gate)
             {
-                if (_scope != null) _stopRequestedUtc ??= DateTime.UtcNow;
+                if (_scope != null) _leases.Stop(client, DateTime.UtcNow);
             }
         }
 
@@ -204,9 +197,7 @@ namespace Yaesu_Web_Control.Services.Rtty
             string? why = null;
             lock (_gate)
             {
-                var now = DateTime.UtcNow;
-                if (_stopRequestedUtc is { } at && now - at >= StopDebounce) why = "dialog closed";
-                else if (now - _lastPollUtc > IdleStop) why = "no page polling";
+                why = _leases.Expire(DateTime.UtcNow);
             }
             if (why != null) StopNow(why);
         }
@@ -222,7 +213,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                 _timer?.Dispose();
                 _timer = null;
                 _scope = null;
-                _stopRequestedUtc = null;
+                _leases.Clear();
                 _captureError = null;
                 // An acquire still in flight releases its own hold when it
                 // finds the scope gone, so only a completed hold is ours.
@@ -238,14 +229,17 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// The latest <paramref name="points"/> points of the figure, scaled
         /// to whole numbers against this sweep's own peak so the reply stays
         /// small. The peak is sent too, for the display's gain control.
+        ///
+        /// Running means running for <paramref name="client"/>: a window
+        /// whose lease lapsed while another kept the tuner going is told it
+        /// is stopped, so it starts again and is counted.
         /// </summary>
-        public RttyTunerFrame Frame(int points)
+        public RttyTunerFrame Frame(int points, string? client = null)
         {
             RttyScopeFrame? f;
             lock (_gate)
             {
-                _lastPollUtc = DateTime.UtcNow;
-                f = _scope?.Snapshot(points);
+                f = _scope != null && _leases.Poll(client, DateTime.UtcNow) ? _scope.Snapshot(points) : null;
             }
 
             var (mark, space) = TonesFor(_state.ModeA, _markHz, _shiftHz, _reverse);
