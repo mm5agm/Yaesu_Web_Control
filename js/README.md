@@ -18,6 +18,30 @@ two repositories.
   changing a character of it. Pure functions, tested in
   `tests/js/cw-tokens.test.mjs`; `docs/design/cw-decoder.md` §7.3 records the
   measurements behind it, including the suppression version that was rejected.
+- `popout/popout.js` — opens a panel in a window of its own (for a second
+  monitor), remembers the window's size and position, and keeps the main page
+  and the pop-out in step over a `BroadcastChannel`: `PopoutHost` in the main
+  page, `PopoutChild` in the pop-out page. The pop-out page itself is the
+  app's. Tested in `tests/js/popout.test.mjs`.
+- `popout/popout-mode-pause.js` — `startModePausedPopout`: a mode-specific
+  pop-out (CW reader, RTTY tuner) pauses once the mode has settled outside its
+  modes and resumes when it is back, where the main page's dialog would close.
+  The app says which mode names belong. Tested in
+  `tests/js/popout-mode-pause.test.mjs`.
+- `modes/mode-panel-guard.js` — `ModePanelGuard`: closes a panel only once the
+  mode has held outside the panel's modes for a settle time, never on a blip.
+  Tested in `tests/js/mode-panel-guard.test.mjs`.
+- `hub/hub-connection.js` — `window.rwcHubConnection(url)`: builds every
+  `/radioHub` SignalR connection with the same timeouts and a retry policy that
+  never gives up. A plain script, loaded straight after `signalr.min.js`, so
+  classic scripts and modules can both use it. Its server half is each app's
+  `Program.cs` hub timeouts; the header comment says how they must relate.
+- `dx/dx-spots-panel.js` — `DxSpotsPanel`, the DX cluster spot list, for the
+  main page's dialog and a pop-out window alike. It is fed `DxSpot` messages
+  from the hub and tunes through `window.radioControl` / `window.setMode` on
+  the main page, or a `tune` callback a pop-out passes in. The app also hands
+  it `autoModeForHz` rather than the panel importing the app's band plan,
+  which would load a second copy of that module.
 - `audio/` — the remote-audio client: `audio-protocol.js` (frame constants and
   PCM helpers), `audio-capture.js`, `audio-playback.js` and `audio-session.js`.
   These speak the app's audio WebSocket and nothing else — no CAT, no CI-V, no

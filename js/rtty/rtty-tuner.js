@@ -28,6 +28,7 @@ const CHUNK      = 5;      // points per stroke: half a cycle of 2 kHz at 24,000
 const RADIO_MS   = 4000;  // how often to re-read the radio's RTTY menu while open
 const FETCH_MS   = 2000;   // a frame request that takes longer than this is abandoned
 const RESTART_MS = 3000;   // at most one automatic restart this often
+const COMPACT_KEY = 'rttyTunerCompact';   // localStorage: the tones-only view
 
 // How much of what the receiver passes lands in the two tone filters, in dB.
 // RTTY on tune puts nearly all of it there; noise, or a signal off to one side,
@@ -48,6 +49,8 @@ export class RttyTuner {
             shift:     'rttyTunerShift',
             reverse:   'rttyTunerReverse',
             fromRadio: 'rttyTunerFromRadio',
+            paused:    'rttyTunerPaused',
+            compact:   'rttyTunerCompactBtn',
         }, ids);
 
         this._timer    = null;
@@ -66,10 +69,18 @@ export class RttyTuner {
         this._pushPending = null;    // the newest tones to write once it finishes
         this._statusHold  = 0;       // Date.now() until which _draw must not overwrite
         this._restartAt   = 0;       // Date.now() of the last automatic restart
+        this._paused      = false;   // a pop-out waiting out a mode the tuner has no use in
+        // Which window this is, to the host. Each open tuner holds the audio
+        // under its own id, so closing the dialog here does not stop the
+        // figure in a pop-out or on another PC. New on every page load: a
+        // reloaded page is a new window, and the old one's lease runs out.
+        this._client = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
     }
 
     init() {
         const $ = id => document.getElementById(this._ids[id]);
+        this._pausedEl  = $('paused');
+        this._compactEl = $('compact');
         this._dialog  = $('dialog');
         this._canvas  = $('canvas');
         this._info    = $('info');
@@ -116,11 +127,35 @@ export class RttyTuner {
         // Coming back to the tab starts it again at once; _poll covers the
         // cases this event does not see.
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && this._dialog.open) this._restart();
+            if (document.visibilityState === 'visible' && this._active()) this._restart();
         });
 
+        // A tab or pop-out window closing fires no dialog close, and the host
+        // would hold the audio for this window until the idle stop. Say so
+        // instead; a beacon is the one request a closing page still gets out.
+        window.addEventListener('pagehide', () => {
+            if (!this._timer) return;
+            try { navigator.sendBeacon?.(`/api/rtty/tuner/stop?client=${this._client}`); } catch { /* idle stop covers it */ }
+        });
+
+        // Tones only: just the scope, for an operator who has set Mark and
+        // wants the cross in the smallest window. The host page styles the
+        // rtty-compact class; this only keeps the choice.
+        if (this._compactEl) {
+            let compact = false;
+            try { compact = localStorage.getItem(COMPACT_KEY) === '1'; } catch { /* ignore */ }
+            this._setCompact(compact);
+            this._compactEl.addEventListener('click', () => {
+                const on = !this._dialog.classList.contains('rtty-compact');
+                this._setCompact(on);
+                try { localStorage.setItem(COMPACT_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+            });
+        }
+
         if (window.ResizeObserver) {
-            new ResizeObserver(() => { this._resize(); this._draw(); }).observe(this._canvas);
+            const ro = new ResizeObserver(() => { this._resize(); this._draw(); });
+            ro.observe(this._canvas);
+            if (this._canvas.parentElement) ro.observe(this._canvas.parentElement);
         }
         this._resize();
         this._draw();
@@ -132,6 +167,15 @@ export class RttyTuner {
         if (this._dialog.open) { this._dialog.close(); return; }
         // Non-modal: the operator tunes the VFO while watching the figure.
         this._dialog.show();
+        this.start();
+    }
+
+    /**
+     * Start the figure in a panel that is already showing - the pop-out
+     * window, whose dialog is open from the start. toggle() calls it too.
+     */
+    start() {
+        if (!this._dialog || this._paused) return;
         this._resize();
         if (this._radioEl && !this._radioProbed) {
             this._radioProbed = true;
@@ -140,6 +184,42 @@ export class RttyTuner {
         this._send('start');
         this._startPolling();
         this._startRadioSync();
+    }
+
+    get isPaused() { return this._paused; }
+
+    /**
+     * Pause or resume, for a pop-out window that stays open while the radio
+     * is in a mode the tuner is no use in: it lets the audio go, as closing
+     * the dialog does, and shows why. Resuming starts it again.
+     */
+    setPaused(paused, message = '') {
+        paused = !!paused;
+        if (this._pausedEl) {
+            this._pausedEl.hidden = !paused;
+            this._pausedEl.textContent = paused ? message : '';
+        }
+        if (paused === this._paused) return;
+        this._paused = paused;
+        if (paused) {
+            const wasRunning = !!this._timer;
+            this._stopPolling();
+            this._stopRadioSync();
+            if (wasRunning) this._send('stop');
+        } else if (this._dialog?.open) {
+            this.start();
+        }
+    }
+
+    _active() { return !!this._dialog?.open && !this._paused; }
+
+    _setCompact(on) {
+        this._dialog.classList.toggle('rtty-compact', on);
+        if (!this._compactEl) return;
+        this._compactEl.setAttribute('aria-pressed', on ? 'true' : 'false');
+        this._compactEl.title = on
+            ? 'Show Mark, Shift and the readouts again'
+            : 'Tones only - show just the scope, without Mark, Shift and the readouts';
     }
 
     // ── Settings ────────────────────────────────────────────────────────────
@@ -201,7 +281,7 @@ export class RttyTuner {
             this._wantAt = Date.now();
         }
         try {
-            const res = await fetch(`/api/rtty/tuner/${what}`, {
+            const res = await fetch(`/api/rtty/tuner/${what}?client=${this._client}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: what === 'start' ? JSON.stringify(this._settings) : '{}',
@@ -409,13 +489,15 @@ export class RttyTuner {
         const abort = new AbortController();
         const bail  = setTimeout(() => abort.abort(), FETCH_MS);
         try {
-            const res = await fetch(`/api/rtty/tuner?points=${POINTS}`, { signal: abort.signal });
+            const res = await fetch(`/api/rtty/tuner?points=${POINTS}&client=${this._client}`, { signal: abort.signal });
             if (!res.ok) return;
             const f = await res.json();
             // The dialog is open and still polling, so a stopped host was not
             // our doing: the page went quiet long enough for the host's idle
-            // stop, or the app restarted underneath it.
-            if (!f.running && this._dialog?.open) this._restart();
+            // stop, or the app restarted underneath it. The host also says
+            // stopped when another window kept it running but this window's
+            // own hold lapsed, so this starts us again and we are counted.
+            if (!f.running && this._active()) this._restart();
             this._last = f;
             this._adoptServerSettings(f);
             this._push(f);
@@ -497,9 +579,20 @@ export class RttyTuner {
         const c = this._canvas;
         if (!c) return;
         const dpr = window.devicePixelRatio || 1;
-        const css = Math.max(160, Math.min(c.clientWidth || 280, 480));
-        if (this._css === css && c.width === Math.round(css * dpr)) return;
+        // Two layouts. In the flow, the canvas is as wide as the panel and as
+        // tall as it is wide, up to a cap. Positioned out of the flow - the
+        // host page does that once the panel has been sized, and in a pop-out
+        // window - it is the largest square that fits the box around it,
+        // however big the operator makes the window.
+        const box = c.parentElement;
+        const boxed = !!box && getComputedStyle(c).position === 'absolute';
+        const css = boxed
+            ? Math.max(100, Math.floor(Math.min(box.clientWidth, box.clientHeight)) - 2)
+            : Math.max(160, Math.min(c.clientWidth || 280, 480));
+        const width = boxed ? `${css}px` : '100%';
+        if (this._css === css && c.width === Math.round(css * dpr) && c.style.width === width) return;
         c.width = c.height = Math.round(css * dpr);
+        c.style.width = width;
         c.style.height = `${css}px`;
         this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this._css = css;
