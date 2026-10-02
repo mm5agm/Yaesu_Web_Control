@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- SignalR connection setup and disconnect on page unload ---
     if (window.signalRConnection === undefined) {
-        window.signalRConnection = window.ywcHubConnection("/radioHub");
+        window.signalRConnection = window.rwcHubConnection("/radioHub");
         window.signalRConnection.start().then(function () {
             window.signalRConnection.invoke("Heartbeat").catch(function () { });
         }).catch(function (err) { });
@@ -1044,7 +1044,7 @@ async function checkTxStatus() {
 // SignalR connection - shared by both the outer handler below and the
 // second handler at the bottom of the file (after the IIFE).
 // ---------------------------------------------------------------------------
-const connection = window.ywcHubConnection("/radioHub");
+const connection = window.rwcHubConnection("/radioHub");
 
 // Redirect to Settings page if the backend signals an init failure
 connection.on("ShowSettingsPage", function () {

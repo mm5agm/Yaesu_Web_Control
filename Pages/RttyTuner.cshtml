@@ -52,10 +52,10 @@
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     @* Builds the hub connection with a retry policy that never gives up.
        This page has no _Layout, so it must load it itself. *@
-    <script src="~/js/ui/hub-connection.js" asp-append-version="true"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
     <script type="module">
         import { RttyTuner }      from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { ModePanelGuard } from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { startModePausedPopout } from "/js/popout/popout-mode-pause.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
         const popout = new PopoutChild({ name: 'rtty-tuner', fallbackUrl: '/' }).start();
@@ -70,60 +70,32 @@
         // AFSK modes it also works in.
         const belongs = m => typeof m === 'string'
             && (m.startsWith('RTTY') || m.startsWith('DATA') || m === 'PSK' || m === 'LSB' || m === 'USB');
-        const announceEl = document.getElementById('rttyTunerAnnounce');
-        const announce = msg => {
-            if (!announceEl) return;
-            announceEl.textContent = '';
-            requestAnimationFrame(() => { announceEl.textContent = msg; });
-        };
-        let mode = '@Model.ModeA';
-
         // The main page closes its tuner once the mode has settled somewhere
         // the tuner is no use. A window on a second monitor closing itself
         // would be worse than a dialog doing it, so this one pauses instead -
         // letting the audio go, as a close does - and starts again the moment
         // the radio is back in a mode it works in.
-        const pausedText = () =>
-            `Not in an RTTY or data mode (the radio is in ${mode || 'another mode'}), so the tuner is paused. ` +
-            'It starts again when you go back to RTTY, DATA, LSB or USB.';
-        const pause = () => {
-            tuner.setPaused(true, pausedText());
-            announce(`RTTY tuner paused, mode is now ${mode}`);
-        };
-        const guard = new ModePanelGuard({
+        // startModePausedPopout (core) does the pausing and the resuming,
+        // and starts at once only if the window opened in one of its modes.
+        const modePause = startModePausedPopout({
             name: 'RTTY tuner',
+            panel: tuner,
             belongs,
-            isOpen: () => !tuner.isPaused,
-            close: pause,
-            announce: () => { /* pause() has said it already */ },
+            pausedText: m =>
+                `Not in an RTTY or data mode (the radio is in ${m}), so the tuner is paused. ` +
+                'It starts again when you go back to RTTY, DATA, LSB or USB.',
+            startNow: () => tuner.start(),
+            initialMode: '@Model.ModeA',
+            announceEl: document.getElementById('rttyTunerAnnounce'),
         });
-
-        const setMode = m => {
-            if (typeof m !== 'string' || !m) return;
-            mode = m;
-            guard.setMode(m);
-            if (belongs(m) && tuner.isPaused) {
-                tuner.setPaused(false);
-                announce('RTTY tuner running again');
-            }
-        };
-
-        // What the radio was in when the window opened is known for certain,
-        // so a window opened in CW starts paused rather than holding the
-        // audio for two seconds first.
-        if (mode && !belongs(mode)) {
-            tuner.setPaused(true, pausedText());
-        } else {
-            tuner.start();
-        }
 
         // Mode changes, and the hub's state replay on connect. This
         // connection is also what keeps the host running while this window is
         // the only one open: the page sets Layout = null, so there is no
         // site.js here.
-        const conn = window.ywcHubConnection('/radioHub');
+        const conn = window.rwcHubConnection('/radioHub');
         conn.on('RadioStateUpdate', update => {
-            if (update.property === 'ModeA') setMode(update.value);
+            if (update.property === 'ModeA') modePause.setMode(update.value);
         });
         conn.start().catch(err => console.error('[rtty-tuner-popout]', err));
     </script>

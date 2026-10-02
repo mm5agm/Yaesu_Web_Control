@@ -275,7 +275,7 @@
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     @* Builds the hub connection with a retry policy that never gives up.
        This page has no _Layout, so it must load it itself. *@
-    <script src="~/js/ui/hub-connection.js" asp-append-version="true"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
     <script type="module">
         import { initRadioDisplayUi } from "/js/video/radio-display-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RadioScopeControl } from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -298,7 +298,7 @@
         // and no heartbeat; the hub counts open connections, and this is the
         // one. Do not remove it without adding /js/ui/host-presence.js in its
         // place -- HostPresenceTests fails the build if neither is here.
-        const conn = window.ywcHubConnection('/radioHub');
+        const conn = window.rwcHubConnection('/radioHub');
         conn.on('RadioStateUpdate', (update) => {
             if (update.property === 'ScopeSetting')
                 window.radioScopeControls.forEach(c => c.applyRemote(update.value));
