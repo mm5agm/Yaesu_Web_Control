@@ -8,6 +8,11 @@
         private readonly RadioStateService _stateService;
         private readonly ILogger<CatMessageDispatcher> _logger;
 
+        // BI says on/off, the CW BK-IN TYPE menu says Semi/Full; CwBreakIn
+        // ("0"/"1"/"2") is built from the two.
+        private bool _bkInOn;
+        private bool _bkInFull;
+
         // Callback for initialization complete
         public Action? OnInitializationComplete { get; set; }
 
@@ -724,14 +729,31 @@
                             _stateService.CwSpeed = Math.Clamp(ksVal, 4, 60);
                         break;
                     case "BI":
-                        // BI{n}; — CW break-in: 0=off, 1=semi BK-IN, 2=full BK-IN
+                        // BI{n}; — CW break-in 0 = off, 1 = on. Semi vs Full is
+                        // the CW BK-IN TYPE menu (see the EX case), so "on" is
+                        // reported as "2" when that menu last read FULL.
                         if (message.Length >= 4)
-                            _stateService.CwBreakIn = message[2].ToString();
+                        {
+                            _bkInOn = message[2] != '0';
+                            _stateService.CwBreakIn = !_bkInOn ? "0" : _bkInFull ? "2" : "1";
+                        }
                         break;
                     case "SD":
-                        // SD{nnnn}; — semi BK-IN delay 0000-2500 ms
-                        if (message.Length >= 7 && int.TryParse(message.Substring(2, 4), out int sdVal))
-                            _stateService.CwBreakInDelay = Math.Clamp(sdVal, 0, 2500);
+                        // SD{nn}; step number on FTdx101/FTdx10/FT-710,
+                        // SD{nnnn}; ms on FTDX3000 — see CwBreakInCodes.
+                        if (CwBreakInCodes.ParseDelayMs(message) is int sdMs)
+                            _stateService.CwBreakInDelay = sdMs;
+                        break;
+                    case "EX":
+                        // Only CW BK-IN TYPE is tracked here, and only at the
+                        // address confirmed for this model.
+                        if (CwBreakInCodes.BkInTypeExAddress(_stateService.RadioModel) is string bkAddr
+                            && message.StartsWith("EX" + bkAddr, StringComparison.Ordinal)
+                            && message.Length > 2 + bkAddr.Length)
+                        {
+                            _bkInFull = message[2 + bkAddr.Length] == '1';
+                            if (_bkInOn) _stateService.CwBreakIn = _bkInFull ? "2" : "1";
+                        }
                         break;
                     case "ID":
                         // ID{nnnn}; — hardware revision identifier e.g. ID0682;

@@ -947,8 +947,8 @@ Click the **CW** button to open the CW Keyer pop-up panel.
 |---------|-------------|
 | Speed | Keyer speed in WPM (4–60) |
 | ZIN | CW Auto Zero In. One click sends the Yaesu `ZI` command; the radio nudges the VFO so the received CW signal sits exactly at your configured CW pitch (set via the Pitch control). Much faster than chasing the signal with the VFO knob. Targets whichever VFO is currently active on dual-receiver radios. **Also available as a per-VFO ZIN button in each VFO panel's header** — handy for Search-and-Pounce operating when you don't want to open the popout for every signal. The per-VFO buttons target their specific VFO regardless of which is currently focused. |
-| Break-in | **Off** (keyer only), **Semi** (semi break-in), or **Full** (QSK full break-in) |
-| Delay | Semi break-in delay (0–2500 ms) — only relevant in Semi mode |
+| Break-in | **Off** (keyer only), **Semi** (semi break-in), or **Full** (QSK full break-in). **Full** is offered on the FTdx101MP/D only for now. On the other models it's set in the radio's own menu (CW BK-IN TYPE), and YWC shows Semi whichever type the radio uses |
+| Delay | Semi break-in delay, 30–3000 ms: how long the radio stays on transmit after the last element before it drops back to receive. The radio holds only certain steps (30, 50, 100, 150, 200, 250 ms, then every 100 ms), so the slider moves to the nearest one when you let go. Only relevant in Semi mode |
 | Pitch | CW sidetone pitch frequency (300–1050 Hz in 10 Hz steps). Also sets the CW receive offset so the radio zero-beats at this tone. Read from the radio on connect. |
 | M1–M5 buttons | Sends the corresponding memory message. See **Sending a memory message** below — there is more to it than it looks. |
 

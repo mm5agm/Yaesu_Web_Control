@@ -422,6 +422,12 @@ namespace Yaesu_Web_Control.Services
                 foreach (var q in readQueries)
                     await multiplexer.SendCommandAndDispatchAsync(q, "Initialization", stoppingToken);
 
+                // CW BK-IN TYPE (Semi/Full) is a menu item, not part of BI.
+                // Read after BI; so the dispatcher can combine the two. Only
+                // where the address is confirmed - see CwBreakInCodes.
+                if (CwBreakInCodes.BkInTypeExAddress(settings.RadioModel) is string bkTypeAddr)
+                    await multiplexer.SendCommandAndDispatchAsync($"EX{bkTypeAddr};", "Initialization", stoppingToken);
+
                 // 4b. Single-receiver "ping-pong" -- read the OTHER VFO's
                 // P1=0-Fixed receive controls so YWC has both *A and *B
                 // populated. Without this, the inactive panel shows defaults
