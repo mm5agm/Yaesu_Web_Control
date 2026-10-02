@@ -3173,6 +3173,11 @@
             // use; the panel only sequences the writes and plays.
             window.cwSendPanel = new CwSendPanel();
             window.cwSendPanel.init();
+            // It warns, rather than closing like the reader, when the transmit
+            // VFO is not in CW: site.js keeps these current after this.
+            window.cwSendPanel.setMode('A', '@Model.RadioState.ModeA');
+            window.cwSendPanel.setMode('B', '@Model.RadioState.ModeB');
+            window.cwSendPanel.setTxVfo(@Model.RadioState.TxVfo);
 
             // CW Send can live in a window of its own too (/CwSend), beside
             // the CW reader on a second monitor. The queue is in whichever

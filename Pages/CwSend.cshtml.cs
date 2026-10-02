@@ -22,6 +22,10 @@ namespace Yaesu_Web_Control.Pages
 
         public int CwSpeed => _radioState.CwSpeed;
         public string CwBreakIn => _radioState.CwBreakIn ?? "";
+        // The panel warns when the transmit VFO is not in CW (KY keys nothing then).
+        public string ModeA => _radioState.ModeA ?? "";
+        public string ModeB => _radioState.ModeB ?? "";
+        public int TxVfo => _radioState.TxVfo;
 
         public void OnGet()
         {

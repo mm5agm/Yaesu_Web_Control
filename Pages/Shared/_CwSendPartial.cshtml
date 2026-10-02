@@ -57,7 +57,9 @@
     #cwSendLog .cws-ch.cws-cur  { background:#ffd24a; color:#111; border-radius:2px; }
     #cwSendStatus { font-size: 0.8rem; color:#9ab; min-height:1.2em; }
     #cwSendStatus.cws-problem { color:#ffd23f; font-weight:600; }
-    #cwSendBanner {
+    /* d-flex would override [hidden] */
+    #cwSendModeWarn[hidden] { display:none !important; }
+    #cwSendModeWarn, #cwSendBanner {
         font-size: 0.9rem; font-weight: 600; color: #ffd23f;
         background: rgba(255, 210, 63, 0.10);
         border-left: 3px solid #ffd23f;
@@ -72,7 +74,7 @@
         <strong id="cwSendTitle">CW Send</strong>
         <div class="d-flex align-items-center gap-2">
             <button id="cwSendStopBtn" class="btn btn-sm btn-outline-warning" type="button"
-                    title="Send nothing further. The piece already playing cannot be stopped - the radio has no CAT command for that.">Stop</button>
+                    title="Send nothing further. The word or two already playing finishes - the radio has no CAT command to cut it short.">Stop</button>
             <button id="cwSendClearBtn" class="btn btn-sm btn-outline-light" type="button" title="Clear the sent-lines log">Clear log</button>
             @if (popout)
             {
@@ -98,6 +100,11 @@
         </div>
     </div>
     <div class="cws-body p-2 d-flex flex-column gap-2">
+        <div id="cwSendModeWarn" class="cws-warn d-flex align-items-center gap-2 flex-wrap" role="alert" hidden>
+            <span id="cwSendModeWarnText"></span>
+            <button id="cwSendSwitchCwBtn" class="btn btn-sm btn-warning ms-auto" type="button"
+                    title="Put the transmit VFO in CW-U. Nothing changes until you press this.">Switch to CW</button>
+        </div>
         <div id="cwSendBanner" role="status" aria-live="polite" hidden></div>
         <div id="cwSendLog" role="log" aria-live="polite" aria-label="CW lines sent"></div>
         <div class="input-group">

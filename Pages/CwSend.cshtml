@@ -63,6 +63,9 @@
         const panel = new CwSendPanel();
         panel.init();
         panel.setBreakIn('@Model.CwBreakIn' || null);
+        panel.setMode('A', '@Model.ModeA');
+        panel.setMode('B', '@Model.ModeB');
+        panel.setTxVfo(@Model.TxVfo);
         panel.show();
 
         // The queue lives in this window. Closing it mid-line would leave the
@@ -103,6 +106,9 @@
         conn.on('RadioStateUpdate', update => {
             if (update.property === 'CwSpeed')   panel.setSpeed(update.value);
             if (update.property === 'CwBreakIn') panel.setBreakIn(update.value);
+            if (update.property === 'ModeA')     panel.setMode('A', update.value);
+            if (update.property === 'ModeB')     panel.setMode('B', update.value);
+            if (update.property === 'TxVfo')     panel.setTxVfo(update.value);
         });
         conn.start().catch(err => console.error('[cw-send-popout]', err));
     </script>
