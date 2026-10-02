@@ -1272,7 +1272,7 @@ Every button and the level slider carry labels that screen readers announce, and
 
 ### 5.21 Pop-out windows
 
-A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)), the **RTTY Tuner** ([§22](#22-rtty-tuner)), each VFO's **Audio Filter** ([§5.18](#518-audio-filter-popout)) and the **DX Spots** list ([§5.17](#517-dx-spots-list)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
+A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)), **CW Send** ([§21](#21-cw-send)), the **RTTY Tuner** ([§22](#22-rtty-tuner)), each VFO's **Audio Filter** ([§5.18](#518-audio-filter-popout)) and the **DX Spots** list ([§5.17](#517-dx-spots-list)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
 
 - **To pop a panel out**, press the **↗** button in its title bar. The panel closes in the main page and opens in its own window. Its button on the main page changes to show that it's popped out, for example **CW Read (pop-out)**, and pressing that button brings the window to the front instead of opening a second copy.
 - **To put it back**, press **Reattach** in the pop-out window. The window closes and the panel opens in the main page again. Closing the window with **×** also works, but leaves the panel closed.
@@ -3878,6 +3878,8 @@ You can press Enter again while a line is still going out; the next line is queu
 
 The keyer takes **A–Z, 0–9, space, and `? / . ,`**. Anything else is dropped before sending, and lower case is sent as upper. A line with nothing sendable in it is refused with a message rather than silently keying nothing. The **Speed** slider sets the radio’s keyer speed (4–60 wpm) and is the same setting as the one on the CW Keyer panel.
 
+**The transmit VFO must be in CW** (CW-U or CW-L). In any other mode the radio accepts the text and keys nothing, not even the sidetone, so CW Send checks first. If VFO A is in DATA-U, say, a banner says *"VFO A is in DATA-U, so the radio won't play CW"* and nothing is sent. The **Switch VFO A to CW** button beside it puts that VFO into CW-U. The mode is changed only when you press it, never behind your back.
+
 **Break-in decides whether it goes out**, exactly as it does for M1–M5 ([§5.12](#512-cw-keyer-panel)). With Break-in **Semi** or **Full** the line is transmitted. With Break-in **Off** the radio plays it to the sidetone monitor and no RF leaves the set — a yellow banner across the top of the panel says so while that is the case, and each line is tagged **monitor only** rather than **sent**.
 
 ### 21.2 Practising without transmitting
@@ -3920,11 +3922,11 @@ Anything you send more than occasionally belongs in a memory instead of your fin
 
 ### 21.4 What the radio is actually doing
 
-There is no “send this text” command on any Yaesu. What the radio has is five keyer memories of up to 50 characters each, and a command that plays one of them whole. So CW Send cuts your line into pieces of up to 50 characters at word boundaries, writes each piece into **keyer memory 5**, plays it, waits for it to finish, and writes the next. When the last piece has gone, your own **M5** text is written back.
+There is no “send this text” command on any Yaesu. What the radio has is five keyer memories of up to 50 characters each, and a command that plays one of them whole. So CW Send cuts your line into pieces of a word or two (about 10 characters, split at word boundaries), writes each piece into **keyer memory 5**, plays it, waits for it to finish, and writes the next. A single word longer than that goes in one piece, up to the memory's 50 characters. When the last piece has gone, your own **M5** text is written back.
 
 Three things follow from that, and all are worth knowing:
 
-**There is a short gap between pieces.** Each piece is a separate memory write and playback, and the radio cannot be told to start the next one early. The pause is a fraction of a second — I have measured it on the air and it is small enough not to trouble the other station, but a very long line is not quite one continuous transmission. Keep lines to a sentence or two and you will never notice.
+**The pieces join at word spaces.** Each piece is a separate memory write and playback, and the radio cannot be told to start the next one early. So every piece is timed from the keyer speed, and the next one is written and started as the last ends. On my FTdx101MP the extra wait at each join is about a fifth of a second at 25 wpm, and by ear the joins sound like ordinary word spaces, with nothing clipped.
 
 **Your M5 is borrowed.** While a line is going out, the radio’s keyer memory 5 holds a piece of it, not your message. It is read before the first piece and put back after the last, and the panel tells you if the write-back failed — check M5 in the CW Keyer panel if it ever does. The M1–M5 buttons are disabled while CW Send is busy, for the same reason a second message cannot be started on top of a first.
 
@@ -3932,7 +3934,7 @@ Three things follow from that, and all are worth knowing:
 
 ### 21.5 Stopping
 
-**Stop** (or **Escape** with the cursor in the box) drops everything that has not started: queued lines are tagged **not sent**, and a line part way through is tagged **stopped after part 2 of 3**. The piece already playing has to finish — the radio has no command to stop a memory playback, and I measured every candidate on the air before writing that ([§5.12](#512-cw-keyer-panel)). This is precisely why the line is sent in pieces rather than as one long memory: the most you can ever be committed to is one piece, and a piece is at most 50 characters.
+**Stop** (or **Escape** with the cursor in the box) drops everything that has not started: queued lines are tagged **not sent**, and a line part way through is tagged **stopped after part 2 of 3**. The piece already playing has to finish, so what you hear after pressing Stop is the word or two already playing. The radio has no command to stop a memory playback, and I measured every candidate on the air before writing that ([§5.12](#512-cw-keyer-panel)). That includes going to receive, switching break-in off, changing mode and back, and sending the same play command a second time, which is what stops it from the radio's front panel. This is why the line is sent in short pieces rather than as one long memory: the most you can ever be committed to is one piece.
 
 **Escape** with nothing sending simply empties the box (as does the **Clear** button beside it) — handy after a paste that was never meant for the keyer. **Clear log** empties the sent-lines log.
 
@@ -3940,10 +3942,17 @@ Three things follow from that, and all are worth knowing:
 
 The panel is non-modal: it can stay open while you work the rest of the page, and the CW Reader can be open beside it. That pairing is the normal way to use it — read in one, answer in the other, with nothing to switch between. Drag the title bar to move it; drag the bottom-right corner to resize it, and the log grows to fill whatever height you give it. Both are remembered between sessions. Close it with **×**; a line already going out finishes on its own.
 
+**In a window of its own.** The **↗** button in the title bar opens CW Send in a separate window, which can go on a second monitor beside the CW Reader's ([§5.21](#521-pop-out-windows)). It works exactly as the panel does, and follows the radio's speed and break-in. A line is sent by whichever window you typed it in, so:
+
+- **↗** is greyed out while a line from the main page is still going out, and **Reattach** is greyed out while a line from the window is. Wait for it to finish, or press **Stop**. Both pages are protecting M5: switching mid-line would leave the radio's keyer memory 5 holding a piece of the line instead of your own text.
+- Closing the window with **×** while a line is going out makes the browser ask first, for the same reason.
+- While the window is sending, the M1–M5 buttons on the main page are greyed out, as they are when the panel sends.
+
 ### 21.7 Troubleshooting
 
 | Symptom | What to try |
 |---|---|
+| Nothing is sent, and a banner says *"VFO A is in DATA-U, so the radio won't play CW"* (or another mode) | The radio only plays its keyer memories in CW. Press **Switch VFO A to CW** on the banner, or change the mode yourself, and send again. |
 | Lines are tagged **monitor only** and nothing is transmitted | Break-in is **Off**. Set it to **Semi** or **Full** on the CW Keyer panel ([§5.12](#512-cw-keyer-panel)). The yellow banner on the panel says the same. If you meant to practise, that is the setting you want ([§21.2](#212-practising-without-transmitting)). |
 | I can’t hear the sending | With break-in off the radio plays to the monitor, so turn the radio’s **MONI** level up. |
 | “Radio is still sending – waiting for it to finish” | Something else is playing — an M button, or a piece from the previous line. It resumes on its own. |

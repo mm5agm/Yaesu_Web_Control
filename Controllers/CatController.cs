@@ -2882,6 +2882,14 @@ namespace Yaesu_Web_Control.Controllers
 
             /// <summary>Radio keyer slot 1-5 this message maps to (M1 = 1).</summary>
             public int Slot { get; set; } = 1;
+
+            /// <summary>
+            /// CW Send's second and later pieces of one line: write and play,
+            /// nothing else. The first piece already made every read below,
+            /// and each one is a CAT round trip heard as a long word space at
+            /// the join.
+            /// </summary>
+            public bool Continuation { get; set; }
         }
 
         // The radio's own limit on a keyer memory (KM, "up to 50 characters").
@@ -2905,9 +2913,21 @@ namespace Yaesu_Web_Control.Controllers
         // Store text in one of the radio's five keyer memories. The radio's own
         // '}' terminator is appended here; without it the previous, longer
         // message is left trailing after the new one.
-        private async Task WriteKeyerMemoryAsync(int slot, string text) =>
+        // KM and KY are set commands and the radio never answers them, so
+        // SendCommandAsync always waits out its whole timeout. The default 150 ms
+        // is harmless for a button press, but CW Send pays it at every join
+        // between pieces, as silence. waitMs is how long to leave the radio
+        // before the next command.
+        private async Task WriteKeyerMemoryAsync(int slot, string text, int waitMs = 150) =>
             await _catClient.SendCommandAsync(
-                $"KM{slot}{text}{KeyerMemoryTerminator};", "WebUI", CancellationToken.None);
+                $"KM{slot}{text}{KeyerMemoryTerminator};", "WebUI", CancellationToken.None, waitMs);
+
+        // Unmeasured: how soon the radio will take a KY after a KM. 30 ms is
+        // several times the ~4 ms a 15-character KM takes on the wire at 38400.
+        private const int CwContinuationKmWaitMs = 30;
+        // KY's wait is pure delay before the HTTP reply, and CW Send times the
+        // next piece from that reply, so it is silence at every join too.
+        private const int CwKyWaitMs = 10;
 
         private async Task<string?> ReadKeyerMemoryAsync(int slot)
         {
@@ -3082,7 +3102,11 @@ namespace Yaesu_Web_Control.Controllers
                 // Sending KY again does not stop it either - it restarts the
                 // message from the beginning, which is the last thing a hand
                 // reaching for a stop button wants.
-                if (await ReadPlaybackActiveAsync() == true)
+                // A continuation piece skips this: the piece before it is the
+                // only thing that could be playing, CW Send has already waited
+                // it out, and RI4 has never asserted for a KY playback on the
+                // bench radio anyway.
+                if (!request.Continuation && await ReadPlaybackActiveAsync() == true)
                 {
                     _logger.LogInformation("CW M{Slot} pressed while playing - no stop exists", request.Slot);
                     return StatusCode(409, new
@@ -3091,8 +3115,33 @@ namespace Yaesu_Web_Control.Controllers
                     });
                 }
 
-                var stored = await ReadKeyerMemoryAsync(request.Slot);
-                if (stored is null)
+                // KY plays a memory only while the transmit VFO is in CW. In any
+                // other mode the radio accepts KM and KY without complaint and
+                // keys nothing - not even the monitor - which is what an
+                // operator in DATA-U saw on 2026-10-01. Refuse and say why, so
+                // the panel can offer to switch rather than look like it sent.
+                // The mode is the app's live copy (the radio announces MD
+                // changes), so this costs no CAT round trip between pieces of a
+                // CW Send line. Unknown is let through rather than blocked.
+                var txVfo = _radioStateService.TxVfo == 1 ? "B" : "A";
+                var txMode = txVfo == "B" ? _radioStateService.ModeB : _radioStateService.ModeA;
+                if (!string.IsNullOrEmpty(txMode) && txMode != "CW-U" && txMode != "CW-L")
+                {
+                    _logger.LogInformation("CW M{Slot} refused: transmit VFO {Vfo} is in {Mode}", request.Slot, txVfo, txMode);
+                    return StatusCode(409, new
+                    {
+                        error = $"VFO {txVfo} is in {txMode}, so the radio won't play CW. Switch VFO {txVfo} to CW first.",
+                        code = "notCw",
+                        vfo = txVfo,
+                        mode = txMode
+                    });
+                }
+
+                // A continuation always writes: the slot holds the previous
+                // piece, which by construction is different text, so reading it
+                // back first is a round trip that can only say "write it".
+                var stored = request.Continuation ? null : await ReadKeyerMemoryAsync(request.Slot);
+                if (stored is null && !request.Continuation)
                 {
                     _logger.LogWarning(
                         "Keyer memory {Slot} did not read back; writing it rather than refusing to send",
@@ -3102,7 +3151,7 @@ namespace Yaesu_Web_Control.Controllers
                 bool wroteMemory = stored is null
                     || !string.Equals(stored.TrimEnd(), clean, StringComparison.Ordinal);
                 if (wroteMemory)
-                    await WriteKeyerMemoryAsync(request.Slot, clean);
+                    await WriteKeyerMemoryAsync(request.Slot, clean, request.Continuation ? CwContinuationKmWaitMs : 150);
 
                 // Break-in decides whether a playback reaches the antenna. With
                 // it off the radio plays the memory to the sidetone monitor and
@@ -3122,14 +3171,17 @@ namespace Yaesu_Web_Control.Controllers
                 // "transmitted", and the panel's aria-live line reports it - an
                 // operator who cannot see the BK-IN lamp must still be told
                 // whether that message went out or only to the headphones.
-                var breakIn = await ReadBreakInAsync();
+                // A continuation uses the app's live copies of break-in and
+                // speed (the radio announces changes to both) instead of
+                // asking again - see CwMessageRequest.Continuation.
+                var breakIn = request.Continuation ? _radioStateService.CwBreakIn : await ReadBreakInAsync();
                 bool transmitted = breakIn != "0";
 
                 // Read the speed before starting, not after: once KY is away
                 // the radio is busy keying and a KS read competes with it.
-                var wpm = await ReadKeyerSpeedAsync();
+                int? wpm = request.Continuation ? _radioStateService.CwSpeed : await ReadKeyerSpeedAsync();
 
-                await _catClient.SendCommandAsync($"KY{KeyerPlaybackParam(request.Slot)};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync($"KY{KeyerPlaybackParam(request.Slot)};", "WebUI", CancellationToken.None, CwKyWaitMs);
                 _playingSlot = request.Slot;
                 // Logged at Information, with the stop above it: an operator
                 // pressing a button is rare enough to be worth a line, and

@@ -33,6 +33,13 @@ import { durationMs, charTimeline } from '../cw/morse-timing.js';
 
 const SLOT = 5;                 // scratch keyer memory
 const MAX_CHUNK = 50;           // the radio's KM limit
+// The size a line is cut into. Stop can only refuse the next piece - nothing
+// stops the one playing (KY1/KY0/TX0/KR0/MX0/BI0, rewriting KM, and on
+// 2026-10-01 flipping the TX VFO to CW-L or USB and back, all let it run
+// out) - so this is how long Stop takes to bite: a word or two, a few
+// seconds at normal speeds. The price is a CAT round trip at every join,
+// heard as a word space a little longer than the keyer's own.
+const PART_CHARS = 10;
 const POLL_MS = 250;            // RI4 poll while a chunk plays
 const CURSOR_MS = 40;           // how often the sent-character highlight moves
 const RETRY_BUSY_MS = 1000;     // wait when the radio says something else is playing
@@ -40,9 +47,12 @@ const MAX_FOLLOW_MS = 150000;   // a 50-char chunk at 4 wpm is ~2.5 min
 // Slack on top of the computed keying time before the next piece is
 // written: the radio's own latency between KY and the first element, and
 // a little for a keyer whose spacing is not exactly the textbook's. Small
-// on purpose - every millisecond here is silence between pieces.
-const TIMING_MARGIN_MS = 250;
-const TIMING_MARGIN_FRAC = 0.03;
+// on purpose - every millisecond here is silence between pieces. Was
+// 250 ms + 3% until 2026-10-01, when the joins in a line cut into pieces of
+// a word or two were "a bit obvious": 0.76 s against a 0.34 s word space at
+// 25 wpm, half of it this margin.
+const TIMING_MARGIN_MS = 80;
+const TIMING_MARGIN_FRAC = 0.01;
 
 // Same character set the server keeps (CleanCw): the chunk lengths have to
 // agree with what the radio will actually store, or a 50-char chunk full of
@@ -51,17 +61,19 @@ export function cleanCw(text) {
     return (text || '').toUpperCase().replace(/\s+/g, ' ').replace(/[^A-Z0-9 ?/.,]/g, '').replace(/ +/g, ' ').trim();
 }
 
-// Split cleaned text into <=50-char pieces at word boundaries. A single
-// word longer than 50 characters (nobody sends one, but a pasted string
-// might) is cut hard rather than dropped.
-export function chunkCw(clean, max = MAX_CHUNK) {
+// Split cleaned text into pieces at word boundaries, packing words up to
+// `max` characters. A word longer than that goes in a piece of its own,
+// unbroken, so a join never lands inside a word; one longer than the radio's
+// 50 (nobody sends one, but a pasted string might) is cut hard rather than
+// dropped.
+export function chunkCw(clean, max = PART_CHARS, hardMax = MAX_CHUNK) {
     const out = [];
     let cur = '';
     for (const word of clean.split(' ')) {
         if (!word) continue;
         if (word.length > max) {
             if (cur) { out.push(cur); cur = ''; }
-            for (let i = 0; i < word.length; i += max) out.push(word.slice(i, i + max));
+            for (let i = 0; i < word.length; i += hardMax) out.push(word.slice(i, i + hardMax));
             continue;
         }
         if (!cur) cur = word;
@@ -85,6 +97,9 @@ export class CwSendPanel {
             clearInputBtn: 'cwSendClearInputBtn',
             speedSlider: 'cwSendSpeedSlider',
             speedValue: 'cwSendSpeedValue',
+            modeWarn: 'cwSendModeWarn',
+            modeWarnText: 'cwSendModeWarnText',
+            switchCwBtn: 'cwSendSwitchCwBtn',
         }, ids);
         this._queue = [];          // [{ line, chunks }]
         this._current = null;      // the item whose chunks are going out
@@ -92,8 +107,15 @@ export class CwSendPanel {
         this._savedSlot = null;    // what M5 held before we borrowed it; null = not read
         this._lastWritten = null;  // what we last put in M5
         this._breakIn = null;      // '0' | '1' | '2' | null unknown
+        this._txVfo = null;        // 'A' | 'B' | null unknown
+        this._modes = { A: null, B: null };
         this._lineNo = 0;
         this._cursor = null;       // interval moving the highlight along the piece on air
+        // Called with true when a line starts going out and false once the
+        // queue has drained and M5 is back. The queue lives in one page
+        // only, so the pages use it to hold Pop out / Reattach while a line
+        // is on its way, and the pop-out tells the main page through it.
+        this.onBusy = null;
     }
 
     init() {
@@ -105,7 +127,11 @@ export class CwSendPanel {
         this._banner = $(this._ids.banner);
         this._speedSlider = $(this._ids.speedSlider);
         this._speedValue = $(this._ids.speedValue);
+        this._modeWarn = $(this._ids.modeWarn);
+        this._modeWarnText = $(this._ids.modeWarnText);
+        this._switchCwBtn = $(this._ids.switchCwBtn);
         if (!this._dialog || !this._input) return;
+        this._switchCwBtn?.addEventListener('click', () => this.switchToCw());
 
         this._input.addEventListener('keydown', e => this._onKeydown(e));
         $(this._ids.stopBtn)?.addEventListener('click', () => this.stop());
@@ -128,6 +154,9 @@ export class CwSendPanel {
     }
 
     // ── Open / close ─────────────────────────────────────────────────────
+
+    /** True from the first line queued until M5 has been put back. */
+    get busy() { return this._running; }
 
     toggle() {
         if (!this._dialog) return;
@@ -166,13 +195,75 @@ export class CwSendPanel {
         if (off) this._banner.textContent = 'Break-in is off - text plays to the monitor only, nothing is transmitted.';
     }
 
+    // The transmit VFO (TxVfo: 0 = A, 1 = B) and each VFO's mode, pushed in
+    // from the page. KY keys nothing at all - not even the monitor - unless
+    // the transmit VFO is in CW, so a line typed in DATA-U would look sent
+    // and say nothing. The server refuses it too; this says so before the
+    // operator types, and offers the switch. The mode is never changed
+    // without the press.
+    setTxVfo(v) {
+        const n = parseInt(v, 10);
+        this._txVfo = n === 1 ? 'B' : n === 0 ? 'A' : null;
+        this._renderModeWarn();
+    }
+
+    setMode(vfo, mode) {
+        if (vfo !== 'A' && vfo !== 'B') return;
+        this._modes[vfo] = mode || null;
+        this._renderModeWarn();
+    }
+
+    /** The transmit VFO and its mode when that mode is not CW; null when it is, or unknown. */
+    get notCw() {
+        const vfo = this._txVfo;
+        const mode = vfo ? this._modes[vfo] : null;
+        if (!vfo || !mode || mode === 'CW-U' || mode === 'CW-L') return null;
+        return { vfo, mode };
+    }
+
+    _renderModeWarn() {
+        if (!this._modeWarn) return;
+        const bad = this.notCw;
+        this._modeWarn.hidden = !bad;
+        if (!bad) return;
+        if (this._modeWarnText) this._modeWarnText.textContent = `VFO ${bad.vfo} is in ${bad.mode}, so the radio won't play CW.`;
+        if (this._switchCwBtn) {
+            this._switchCwBtn.textContent = `Switch VFO ${bad.vfo} to CW`;
+            this._switchCwBtn.disabled = false;
+        }
+    }
+
+    // CW-U: the radio's own CW key lands there, and it is the sideband the
+    // keyer panel's pitch is set for. The panel hides itself when the
+    // radio's MD announcement comes back over SignalR, not on the POST -
+    // the radio says what mode it is in, not this button.
+    async switchToCw() {
+        const bad = this.notCw;
+        if (!bad) return;
+        if (this._switchCwBtn) this._switchCwBtn.disabled = true;
+        try {
+            const r = await fetch(`/api/cat/mode/${bad.vfo}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: '3' }),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            this.setMode(bad.vfo, 'CW-U');
+            this._say(`VFO ${bad.vfo} switched to CW-U.`);
+        } catch (e) {
+            this._say(`Could not switch VFO ${bad.vfo} to CW: ${e.message}`, true);
+            if (this._switchCwBtn) this._switchCwBtn.disabled = false;
+        }
+        this._input?.focus();
+    }
+
     // ── Input ────────────────────────────────────────────────────────────
 
     _onKeydown(e) {
         if (e.key === 'Enter') {
             e.preventDefault();
-            this.send(this._input.value);
-            this._input.value = '';
+            // A line that was refused stays in the box, to send once the
+            // reason is put right.
+            if (this.send(this._input.value) > 0) this._input.value = '';
         } else if (e.key === 'Escape') {
             e.preventDefault();
             // Escape is Stop while anything is going out; with nothing to
@@ -197,6 +288,11 @@ export class CwSendPanel {
             if ((text || '').trim()) this._say('Nothing sendable in that line - the keyer takes A-Z, 0-9, space ? / . , only.', true);
             return 0;
         }
+        const bad = this.notCw;
+        if (bad) {
+            this._say(`Not sent: VFO ${bad.vfo} is in ${bad.mode}, so the radio won't play CW. Switch it to CW first.`, true);
+            return 0;
+        }
         const chunks = chunkCw(clean);
         const item = { no: ++this._lineNo, line: clean, chunks, pos: 0, stopped: false, el: this._logLine(clean, 'queued') };
         this._queue.push(item);
@@ -211,7 +307,7 @@ export class CwSendPanel {
         for (const it of dropped) this._tag(it.el, 'dropped', 'not sent');
         if (this._current) {
             this._current.stopped = true;
-            this._say('Stopping - the piece already playing has to finish, nothing more will start.');
+            this._say('Stopping after the word or two already playing - the radio cannot cut it short.');
         } else if (dropped.length) {
             this._say('Queue cleared.');
         }
@@ -253,7 +349,7 @@ export class CwSendPanel {
             }
             this._tag(item.el, 'sending', n > 1 ? `sending part ${i + 1} of ${n}` : 'sending');
             this._updateQueueStatus();
-            const r = await this._sendChunk(item.chunks[i]);
+            const r = await this._sendChunk(item.chunks[i], i > 0);
             if (!r) {
                 this._tag(item.el, 'error', i ? `failed at part ${i + 1} of ${n}` : 'failed');
                 return;
@@ -270,14 +366,14 @@ export class CwSendPanel {
     // One KM+KY through the server. Returns the response body, or null if
     // the chunk could not be started (the line is abandoned then - text
     // arriving with a hole in it is worse than text that stops).
-    async _sendChunk(chunk) {
+    async _sendChunk(chunk, continuation = false) {
         const deadline = Date.now() + MAX_FOLLOW_MS;
         for (;;) {
             let r, d;
             try {
                 r = await fetch('/api/cat/cw/send', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: chunk, slot: SLOT }),
+                    body: JSON.stringify({ message: chunk, slot: SLOT, continuation }),
                 });
                 d = await r.json().catch(() => ({}));
             } catch (e) {
@@ -288,6 +384,15 @@ export class CwSendPanel {
                 this._lastWritten = d.sent ?? chunk;
                 if (d.breakIn != null) this.setBreakIn(d.breakIn);
                 return d;
+            }
+            // 409 notCw = the transmit VFO left CW (the server's own check,
+            // in case the mode changed since the line was queued). Waiting
+            // would not help; the line stops here and the banner offers the
+            // switch.
+            if (r.status === 409 && d.code === 'notCw') {
+                if (d.vfo) this.setMode(d.vfo, d.mode);
+                this._say(d.error, true);
+                return null;
             }
             // 409 = the radio says something is still playing (a memory
             // button pressed from the keyer dialog, or our previous chunk
@@ -527,5 +632,6 @@ export class CwSendPanel {
     // is optional - the page provides it, the module only calls it.
     _setMemButtons(busy) {
         try { window.cwMemButtonsBusy?.(busy); } catch { /* ignore */ }
+        try { this.onBusy?.(busy); } catch { /* ignore */ }
     }
 }
