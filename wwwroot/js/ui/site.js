@@ -1336,6 +1336,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('A', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('A', update.value);
         if (window.radioControl && window.radioControl._state) window.radioControl._state.lastMode.A = update.value;
+        window.cwSendPanel?.setMode?.('A', update.value);
     }
     if (update.property === "ModeB") {
         updateModeSelect('B', update.value);
@@ -1351,6 +1352,7 @@ connection.on("RadioStateUpdate", function (update) {
         if (window.voiceAnnounce) window.voiceAnnounce.sayMode('B', update.value);
         if (window.audioFilter && window.audioFilter.onModeChanged) window.audioFilter.onModeChanged('B', update.value);
         if (window.radioControl && window.radioControl._state) window.radioControl._state.lastMode.B = update.value;
+        window.cwSendPanel?.setMode?.('B', update.value);
     }
 
     // --- ANTENNA CHANGE ---
@@ -1496,6 +1498,7 @@ connection.on("RadioStateUpdate", function (update) {
     }
     if (update.property === "TxVfo") {
         txVfo = update.value;
+        window.cwSendPanel?.setTxVfo?.(update.value);
         updateTxButton();
         applyVfoActiveStyling();
         updateRxTxSelectors();
