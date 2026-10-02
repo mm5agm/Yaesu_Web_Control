@@ -46,7 +46,7 @@
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     @* Builds the hub connection with a retry policy that never gives up.
        This page has no _Layout, so it must load it itself. *@
-    <script src="~/js/ui/hub-connection.js" asp-append-version="true"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
     <script type="module">
         import { AudioFilterPanel } from "/js/ui/audio-filter-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -65,7 +65,7 @@
         // the link was down. This connection is also what keeps the host
         // running while this window is the only one open: the page sets
         // Layout = null, so there is no site.js here.
-        const conn = window.ywcHubConnection('/radioHub');
+        const conn = window.rwcHubConnection('/radioHub');
         conn.on('RadioStateUpdate', update => {
             if (update.property === 'Mode' + vfo) panel.onModeChanged(vfo);
         });

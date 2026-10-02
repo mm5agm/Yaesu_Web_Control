@@ -2646,11 +2646,11 @@
         import { axisOffsetHz }         from "/js/sdr/if-out-offset.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import "/js/ui/if-width-tables.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer, autoModeForHz } from "/js/ui/band-plan.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { loadLabels }           from "/js/ui/a11y-labels.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { DxSpotsPanel }         from "/js/dx/dx-spots-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         // Side-effect import: publishes window.radioFeatureSetup, which the
         // shared CW panel calls if the host app provides it. Loaded before
         // the panels that offer it so the global is there when they render.
@@ -3016,7 +3016,10 @@
             // Stand up the DX Spots list panel BEFORE wiring the pipeline so its
             // handlers can dispatch to it. It works whether or not the SDR is
             // configured — relies only on the DxSpot/FrequencyA event stream.
-            window.dxSpotsPanel = new DxSpotsPanel();
+            // The shared panel doesn't import the band plan itself (a second
+            // URL would load a second copy of it), so the gated lookup is
+            // handed in: off in Settings means no mode change on a spot click.
+            window.dxSpotsPanel = new DxSpotsPanel({ autoModeForHz });
             window.dxSpotsPanel.init();
             window.dxSpotsPanel.setVfoFrequency(@Model.RadioState.FrequencyA);
             // The list can live in a window of its own too (/DxSpots), which

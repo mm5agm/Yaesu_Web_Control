@@ -46,22 +46,22 @@ namespace YaesuWebControl.Tests
                 // test looked for "/radioHub" anywhere, and a comment
                 // explaining why the page needed one was enough to pass it.
                 bool connectsItself = System.Text.RegularExpressions.Regex.IsMatch(
-                    text, @"(withUrl|ywcHubConnection)\s*\(\s*[""']/radioHub[""']");
+                    text, @"(withUrl|rwcHubConnection)\s*\(\s*[""']/radioHub[""']");
                 bool usesHelper = System.Text.RegularExpressions.Regex.IsMatch(
                     text, @"keepHostAlive\s*\(");
 
                 if (!connectsItself && !usesHelper)
                     offenders.Add(name);
 
-                // Calling window.ywcHubConnection() without loading the script
+                // Calling window.rwcHubConnection() without loading the script
                 // that defines it fails at runtime and nowhere else: the page
                 // renders, logs a warning to a console nobody has open, and
                 // quietly stops holding the host up. _Layout supplies it for
                 // every other page; these have no _Layout.
-                if (text.Contains("ywcHubConnection", StringComparison.Ordinal)
-                    && !text.Contains("js/ui/hub-connection.js", StringComparison.Ordinal))
+                if (text.Contains("rwcHubConnection", StringComparison.Ordinal)
+                    && !text.Contains("js/hub/hub-connection.js", StringComparison.Ordinal))
                 {
-                    offenders.Add(name + " (calls ywcHubConnection but never loads hub-connection.js)");
+                    offenders.Add(name + " (calls rwcHubConnection but never loads hub-connection.js)");
                 }
             }
 
@@ -85,7 +85,7 @@ namespace YaesuWebControl.Tests
         }
 
         /// <summary>
-        /// Every /radioHub connection is built by wwwroot/js/ui/hub-connection.js
+        /// Every /radioHub connection is built by core/js/hub/hub-connection.js
         /// and nowhere else.
         ///
         /// This is not tidiness. A connection built by hand gets
@@ -101,7 +101,7 @@ namespace YaesuWebControl.Tests
         public void EveryHubConnectionUsesTheSharedBuilder()
         {
             string repo = Path.GetDirectoryName(LocateRepoPath("Pages"))!;
-            string helper = Path.Combine(repo, "wwwroot", "js", "ui", "hub-connection.js");
+            string helper = Path.Combine(repo, "wwwroot", "js", "hub", "hub-connection.js");
 
             // wwwroot/js/<area> mirroring core/js/<area> is a build-time copy of
             // shared code, which cannot depend on this app's globals. Derived
@@ -134,7 +134,7 @@ namespace YaesuWebControl.Tests
 
             Assert.True(offenders.Count == 0,
                 "These build a SignalR connection directly instead of calling " +
-                "window.ywcHubConnection(\"/radioHub\") from wwwroot/js/ui/hub-connection.js. " +
+                "window.rwcHubConnection(\"/radioHub\") from core/js/hub/hub-connection.js. " +
                 "A hand-built connection takes withAutomaticReconnect()'s default policy, which " +
                 "stops retrying after about 42 seconds and leaves the page dead:" + Environment.NewLine +
                 string.Join(Environment.NewLine, offenders.Select(o => "    " + o)));
@@ -147,9 +147,9 @@ namespace YaesuWebControl.Tests
         [Fact]
         public void SharedBuilderRetriesForeverAndRaisesTimeouts()
         {
-            string js = File.ReadAllText(LocateRepoPath("wwwroot/js/ui/hub-connection.js"));
+            string js = File.ReadAllText(LocateRepoPath("core/js/hub/hub-connection.js"));
 
-            Assert.Contains("window.ywcHubConnection", js, StringComparison.Ordinal);
+            Assert.Contains("window.rwcHubConnection", js, StringComparison.Ordinal);
             Assert.Contains("nextRetryDelayInMilliseconds", js, StringComparison.Ordinal);
             Assert.Contains("serverTimeoutInMilliseconds", js, StringComparison.Ordinal);
 

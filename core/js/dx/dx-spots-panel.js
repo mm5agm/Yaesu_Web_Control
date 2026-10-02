@@ -1,12 +1,18 @@
-﻿// Yaesu Web Control – DX Spots List Panel
+// Radio Web Control - DX Spots List Panel
+// Shared by Icom Web Control and Yaesu Web Control. This file is copied into
+// each app's wwwroot at build time - see js/README.md. Edit it here, in the
+// core, never in a wwwroot copy. Served at /js/dx/dx-spots-panel.js.
 //
 // Popup list of DX cluster spots. Sortable columns, click-to-QSY, filtered
 // to the operator's current band (with an "All bands" override). Works
 // regardless of whether an SDR is configured — relies only on the SignalR
 // DxSpot event stream, which flows unconditionally.
 
-// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
-import { autoModeForHz } from './band-plan.js?v=1';
+//
+// Nothing here knows the radio. Click-to-QSY goes through window.radioControl
+// and window.setMode on the main page (each app's site.js), or through the
+// tune callback a pop-out page passes in; the band-plan mode lookup is the
+// app's own and is passed in too.
 
 const LS_KEY     = 'dxSpotsPanel';
 const AGE_MAX_MS = 15 * 60 * 1000;   // matches DxSpotAgeMinutes default
@@ -44,9 +50,12 @@ export class DxSpotsPanel {
      *        header drag, and the main page's saved place is left alone
      * @param {(hz: number) => void} [opts.tune]  click-to-QSY; defaults to
      *        the main page's window.radioControl and window.setMode
+     * @param {(hz: number) => (string|null)} [opts.autoModeForHz]  the mode to
+     *        follow a main-page QSY with, or null for none (the app's band plan)
      */
-    constructor({ floating = true, tune = null } = {}) {
+    constructor({ floating = true, tune = null, autoModeForHz = null } = {}) {
         this._floating       = floating;
+        this._autoModeForHz  = autoModeForHz;
         this._tune           = tune ?? (hz => this._tuneHere(hz));
         this._spots          = [];
         this._vfoHz          = 0;
@@ -134,6 +143,11 @@ export class DxSpotsPanel {
         if (!this._dialog) return;
         if (this._dialog.open) this._dialog.close();
         else                   this.show();
+    }
+
+    close() {
+        if (!this._dialog) return;
+        if (this._dialog.open) this._dialog.close();
     }
 
     // ── Band / mode helpers ─────────────────────────────────────────────────
@@ -298,7 +312,7 @@ export class DxSpotsPanel {
         // autoModeForHz returns the mode name window.setMode
         // accepts, or null when the operator has turned the
         // automatic change off in Settings (discussion #169).
-        const targetMode = autoModeForHz(hz);
+        const targetMode = this._autoModeForHz ? this._autoModeForHz(hz) : null;
         if (targetMode && typeof window.setMode === 'function') {
             try { window.setMode('A', targetMode); } catch { /* ignore */ }
         }
@@ -382,7 +396,12 @@ export class DxSpotsPanel {
         const header = this._dialog.querySelector('.dxs-header');
         if (!header) return;
         header.addEventListener('mousedown', (e) => {
-            if (e.target.closest('button, input, label')) return;
+            // Don't start a drag when the mousedown lands on an interactive
+            // control OR its Bootstrap wrapper - the .form-check/.form-switch
+            // div has padding around the "All bands" switch, and clicking that
+            // padding (target = the div, not the input) was starting a drag and
+            // preventDefault-ing the toggle, so the checkbox could never change.
+            if (e.target.closest('button, input, label, select, .form-check, .form-switch')) return;
             const rect  = this._dialog.getBoundingClientRect();
             const origX = e.clientX, origY = e.clientY;
             const baseL = rect.left,  baseT = rect.top;

@@ -58,7 +58,7 @@ export class SdrSpectrumPipeline {
     connect() {
         if (this._connection) return;
 
-        const conn = window.ywcHubConnection('/radioHub');
+        const conn = window.rwcHubConnection('/radioHub');
 
         conn.on('RadioStateUpdate', (msg) => {
             // ServerShutdown: tear down our connection so Kestrel has nothing

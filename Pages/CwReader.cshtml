@@ -53,10 +53,10 @@
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     @* Builds the hub connection with a retry policy that never gives up.
        This page has no _Layout, so it must load it itself. *@
-    <script src="~/js/ui/hub-connection.js" asp-append-version="true"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
     <script type="module">
         import { CwReaderPanel }  from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { ModePanelGuard } from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { startModePausedPopout } from "/js/popout/popout-mode-pause.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
         const popout = new PopoutChild({ name: 'cw-reader', fallbackUrl: '/' }).start();
@@ -68,60 +68,32 @@
         panel.init({ standalone: true });
 
         const belongs = m => typeof m === 'string' && m.startsWith('CW');
-        const announceEl = document.getElementById('cwReaderAnnounce');
-        const announce = msg => {
-            if (!announceEl) return;
-            announceEl.textContent = '';
-            requestAnimationFrame(() => { announceEl.textContent = msg; });
-        };
-        let mode = '@Model.ModeA';
-
         // The main page closes its CW reader once the mode has settled
         // outside CW. A window on a second monitor closing itself would be
         // worse than a dialog doing it, so this one pauses instead and picks
         // up again the moment the radio is back in CW. The decoder keeps
         // running on the server throughout, exactly as when the dialog closes.
-        const pausedText = () =>
-            `Not in CW mode (the radio is in ${mode || 'another mode'}), so the reader is paused. ` +
-            'It picks up again when you go back to CW.';
-        const pause = () => {
-            panel.setPaused(true, pausedText());
-            announce(`CW reader paused, mode is now ${mode}`);
-        };
-        const guard = new ModePanelGuard({
+        // startModePausedPopout (core) does the pausing and the resuming,
+        // and starts at once only if the window opened in one of its modes.
+        const modePause = startModePausedPopout({
             name: 'CW reader',
+            panel: panel,
             belongs,
-            isOpen: () => !panel.isPaused,
-            close: pause,
-            announce: () => { /* pause() has said it already */ },
+            pausedText: m =>
+                `Not in CW mode (the radio is in ${m}), so the reader is paused. ` +
+                'It picks up again when you go back to CW.',
+            startNow: () => panel.startPolling(),
+            initialMode: '@Model.ModeA',
+            announceEl: document.getElementById('cwReaderAnnounce'),
         });
-
-        const setMode = m => {
-            if (typeof m !== 'string' || !m) return;
-            mode = m;
-            guard.setMode(m);
-            if (belongs(m) && panel.isPaused) {
-                panel.setPaused(false);
-                announce('CW reader running again');
-            }
-        };
-
-        // What the radio was in when the window opened is known for certain,
-        // so there is nothing to wait out: a window opened in USB starts
-        // paused rather than showing two seconds of copy first.
-        if (mode && !belongs(mode)) {
-            panel.setPaused(true, pausedText());
-        } else {
-            panel.startPolling();
-        }
 
         // Mode changes, and the hub's state replay on connect. This
         // connection is also what keeps the host running while this window is
         // the only one open: the page sets Layout = null, so there is no
         // site.js here.
-        const conn = window.ywcHubConnection('/radioHub');
+        const conn = window.rwcHubConnection('/radioHub');
         conn.on('RadioStateUpdate', update => {
-            if (update.property === 'ModeA') setMode(update.value);
+            if (update.property === 'ModeA') modePause.setMode(update.value);
         });
         conn.start().catch(err => console.error('[cw-reader-popout]', err));
     </script>

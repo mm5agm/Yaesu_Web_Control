@@ -467,7 +467,7 @@ builder.Services.AddSignalR(options =>
     options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
 
     // Server -> client ping. Kept well under the client's own serverTimeout
-    // (100s, set in wwwroot/js/ui/hub-connection.js) so the browser does not
+    // (100s, set in wwwroot/js/hub/hub-connection.js) so the browser does not
     // decide the server has gone while the server is perfectly happy.
     options.KeepAliveInterval = TimeSpan.FromSeconds(15);
 });
