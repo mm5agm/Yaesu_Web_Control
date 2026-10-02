@@ -272,6 +272,14 @@ It targets `net10.0`, so it runs on any host. Nothing in the UI, live CAT
 transport, SDR, or Audio paths is covered by it — see the standing
 instructions above on reporting protocol-level changes as verified.
 
+`Tests/ui/ywc-ui.mjs` drives the pages and pop-outs in headless Chrome
+against the running app (`node Tests/ui/ywc-ui.mjs`, `--only <text>`,
+`--headed`). Every write is stubbed and the mode/frequency come from the
+script, so it is safe with the radio connected, but it proves nothing about
+CAT. It is not in CI - run it before a pre-release and after any change to
+pages, pop-outs or `core/js`. The browser driver it uses is shared, in
+`core/tests/ui/browser-harness.mjs`.
+
 `Tests/test-api.ps1` is a separate, manual API-poking script — not part of
 the automated suite.
 
@@ -745,8 +753,8 @@ Index page lays out two card panels (`spectrumContainerA`, `spectrumContainerB`)
 
 `Index` (main control panel; `RadioState` exposes `RadioStateService` for
 server-rendered initial values), `Settings`, `Diagnostics` (SDR device
-scanning, port listing), `Memories`, `Calibrations` / `Calibration/MeterCalibration`
-/ `Calibration/SMeterCalibration`, `Labels` (accessibility label overrides),
+scanning, port listing), `Memories`, `Calibrations` / `Calibration/MeterCalibration`,
+`Labels` (accessibility label overrides),
 `RemoteAudio`, `RadioDisplay` (Remote Video), `Ports`, `ApplicationSetup`,
 `About`, `UserManual`.
 
