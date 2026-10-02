@@ -2822,14 +2822,30 @@ namespace Yaesu_Web_Control.Controllers
         {
             if (!new[] { "0", "1", "2" }.Contains(request.Mode))
                 return BadRequest(new { error = "Break-in mode 0/1/2" });
+            // BI is only off/on. Semi/Full is the CW BK-IN TYPE menu, written
+            // only where its address is confirmed; elsewhere Full isn't offered.
+            // Until 2026-10-02 "2" went out as BI2;, which the radio ignored.
+            var bkAddr = CwBreakInCodes.BkInTypeExAddress(_radioStateService.RadioModel);
+            if (request.Mode == "2" && bkAddr == null)
+                return BadRequest(new { error = "Full break-in isn't available for this radio" });
             if (!await _requestSemaphore.WaitAsync(2000))
                 return StatusCode(503, new { error = "Radio busy" });
             try
             {
                 await EnsureConnectedAsync();
-                await _catClient.SendCommandAsync($"BI{request.Mode};", "WebUI", CancellationToken.None);
-                _radioStateService.CwBreakIn = request.Mode;
-                return Ok();
+                if (request.Mode != "0" && bkAddr != null)
+                    await _catClient.SendCommandAsync($"EX{bkAddr}{(request.Mode == "2" ? '1' : '0')};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync(request.Mode == "0" ? "BI0;" : "BI1;", "WebUI", CancellationToken.None);
+
+                // The radio is the source of truth: report what it now holds.
+                var on = await ReadBreakInAsync();
+                var type = bkAddr != null ? await ReadExValueAsync(bkAddr) : null;
+                string actual = on == null ? request.Mode
+                              : on == "0" ? "0"
+                              : type == null ? (request.Mode == "0" ? "1" : request.Mode)
+                              : type == "1" ? "2" : "1";
+                _radioStateService.CwBreakIn = actual;
+                return Ok(new { mode = actual });
             }
             catch (Exception ex) { _logger.LogError(ex, "Error setting CW break-in"); return StatusCode(500, new { error = "Failed" }); }
             finally { _requestSemaphore.Release(); }
@@ -2838,16 +2854,23 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("cw/breakindelay")]
         public async Task<IActionResult> SetCwBreakInDelay([FromBody] CwBreakInDelayRequest request)
         {
-            if (request.DelayMs < 0 || request.DelayMs > 2500)
-                return BadRequest(new { error = "Delay 0–2500 ms" });
+            if (request.DelayMs < CwBreakInCodes.MinDelayMs || request.DelayMs > CwBreakInCodes.MaxDelayMs)
+                return BadRequest(new { error = $"Delay {CwBreakInCodes.MinDelayMs}-{CwBreakInCodes.MaxDelayMs} ms" });
             if (!await _requestSemaphore.WaitAsync(2000))
                 return StatusCode(503, new { error = "Radio busy" });
             try
             {
                 await EnsureConnectedAsync();
-                await _catClient.SendCommandAsync($"SD{request.DelayMs:D4};", "WebUI", CancellationToken.None);
-                _radioStateService.CwBreakInDelay = request.DelayMs;
-                return Ok();
+                // FTdx101/FTdx10/FT-710 take a step number, FTDX3000 takes ms.
+                // Until 2026-10-02 every model was sent ms, which the
+                // step-number radios ignored.
+                var model = _radioStateService.RadioModel;
+                await _catClient.SendCommandAsync(CwBreakInCodes.SetDelayCommand(model, request.DelayMs), "WebUI", CancellationToken.None);
+                var answer = await _catClient.SendCommandAsync("SD;", "WebUI", CancellationToken.None, 400);
+                int delay = (answer != null ? CwBreakInCodes.ParseDelayMs(answer) : null)
+                            ?? CwBreakInCodes.SnapDelayMs(model, request.DelayMs);
+                _radioStateService.CwBreakInDelay = delay;
+                return Ok(new { delayMs = delay });
             }
             catch (Exception ex) { _logger.LogError(ex, "Error setting CW break-in delay"); return StatusCode(500, new { error = "Failed" }); }
             finally { _requestSemaphore.Release(); }
@@ -3003,7 +3026,8 @@ namespace Yaesu_Web_Control.Controllers
         // behind, and the next press sends rather than silently stopping.
         private static int _playingSlot;
 
-        // Read the break-in state: "BI;" -> "BI0" off / "BI1" semi / "BI2" full.
+        // Read the break-in state: "BI;" -> "BI0" off / "BI1" on (Semi or
+        // Full is the CW BK-IN TYPE menu, not BI).
         // Null when the radio did not answer, which is treated as "do not
         // block the send" rather than as off.
         private async Task<string?> ReadBreakInAsync()

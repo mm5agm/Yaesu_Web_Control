@@ -2290,12 +2290,15 @@
                     onchange="setCwBreakIn(this.value)">
                 <option value="0" selected="@(Model.CwBreakIn=="0"?"selected":null)">Off</option>
                 <option value="1" selected="@(Model.CwBreakIn=="1"?"selected":null)">Semi BK-IN</option>
-                <option value="2" selected="@(Model.CwBreakIn=="2"?"selected":null)">Full BK-IN</option>
+                @if (Yaesu_Web_Control.Services.CwBreakInCodes.SupportsFullBreakIn(Model.RadioModel))
+                {
+                    <option value="2" selected="@(Model.CwBreakIn=="2"?"selected":null)">Full BK-IN</option>
+                }
             </select>
         </div>
         <div class="d-flex align-items-center gap-2">
             <label class="mb-0 text-nowrap" style="min-width:100px;">BK-IN Delay: <span id="cwDelayValue">@Model.CwBreakInDelay</span> ms</label>
-            <input type="range" id="cwDelaySlider" min="0" max="2500" step="50" value="@Model.CwBreakInDelay"
+            <input type="range" id="cwDelaySlider" min="30" max="3000" step="10" value="@Model.CwBreakInDelay"
                    style="flex:1; height:18px;"
                    oninput="document.getElementById('cwDelayValue').textContent = this.value"
                    onchange="setCwBreakInDelay(this.value)"
@@ -5325,11 +5328,26 @@
             catch (e) { console.error('cwZeroIn error:', e); }
         }
         async function setCwBreakIn(v) {
-            try { await fetch('/api/cat/cw/breakin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: v }) }); }
+            try {
+                const r = await fetch('/api/cat/cw/breakin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: v }) });
+                const j = r.ok ? await r.json() : null;
+                const el = document.getElementById('cwBreakInSelect');
+                if (j && j.mode != null && el) el.value = j.mode;
+                if (j && j.mode != null) window.cwSendPanel?.setBreakIn?.(j.mode);
+            }
             catch (e) { console.error('setCwBreakIn error:', e); }
         }
         async function setCwBreakInDelay(v) {
-            try { await fetch('/api/cat/cw/breakindelay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delayMs: parseInt(v) }) }); }
+            try {
+                // The radio holds only certain steps (30, 50, 100 ... 3000 ms);
+                // show the one it actually took.
+                const r = await fetch('/api/cat/cw/breakindelay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delayMs: parseInt(v) }) });
+                const j = r.ok ? await r.json() : null;
+                if (j && j.delayMs != null) {
+                    const s = document.getElementById('cwDelaySlider'); const l = document.getElementById('cwDelayValue');
+                    if (s) s.value = j.delayMs; if (l) l.textContent = j.delayMs;
+                }
+            }
             catch (e) { console.error('setCwBreakInDelay error:', e); }
         }
         // While a memory is playing nothing can stop it - the radio has no

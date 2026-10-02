@@ -84,6 +84,7 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
+| On the FTdx101, FTdx10 and FT-710, the break-in delay set on the CW Keyer panel never reached the radio, and the slider didn't show the radio's own setting. Choosing **Full** break-in left the radio on Semi. Both now reach the radio. The delay slider runs 30-3000 ms and moves to the nearest step the radio can hold. Full is offered on the FTdx101MP/D only for now ([§5.12](USER_MANUAL.md#512-cw-keyer-panel)) | - | *Not yet in a build* |
 | The bar for resizing the spectrum panel was hard to see, and when you reached it with Tab its thin blue outline was almost invisible against the blue VFO card. The bar is now lighter with a bigger grip mark, and keyboard focus draws a clear amber outline | [#171](https://github.com/mm5agm/Yaesu_Web_Control/issues/171) | [v2.5.3-pre2](#2026-10-01---v253-pre2-pre-release) |
 | The Range, Speed, Bright and Smooth sliders on the spectrum display had a faint track that was hard to see against the dark panel. They now draw like the Notch slider, with a clear outline | - | [v2.5.3-pre2](#2026-10-01---v253-pre2-pre-release) |
 | The Audio Filter kept showing the values it read when it opened, so a change made on the radio's own menu never appeared until it was closed and opened again. It now reads the radio again whenever you click on it or come back to its window ([§5.18](USER_MANUAL.md#518-audio-filter-popout)) | - | [v2.5.3-pre2](#2026-10-01---v253-pre2-pre-release) |
