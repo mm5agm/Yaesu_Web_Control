@@ -223,10 +223,13 @@ test('a size saved before the zoom fix goes back to the default, keeping its pla
         { width: 700, height: 420, left: 5, top: 6 });
 });
 
-test('a saved size that all but fills the screen goes back to the default', () => {
+test('a saved size bigger than the screen goes back to the default', () => {
     const scr = { availWidth: 1920, availHeight: 1040 };
-    assert.deepEqual(usableSave({ width: 1900, height: 500, left: 0, top: 0, zoomSafe: true }, scr), { left: 0, top: 0 });
-    assert.deepEqual(usableSave({ width: 900, height: 1000, zoomSafe: true }, scr), {});
+    assert.deepEqual(usableSave({ width: 2000, height: 500, left: 0, top: 0, zoomSafe: true }, scr), { left: 0, top: 0 });
+    assert.deepEqual(usableSave({ width: 900, height: 1100, zoomSafe: true }, scr), {});
+    // Tall on a short screen is a choice, not a fault.
+    const short = { availWidth: 1608, availHeight: 651 };
+    assert.deepEqual(usableSave({ width: 380, height: 600, zoomSafe: true }, short), { width: 380, height: 600 });
     assert.deepEqual(usableSave({ width: 900, height: 500, zoomSafe: true }, scr), { width: 900, height: 500 });
     assert.equal(usableSave(null, scr), null);
 });

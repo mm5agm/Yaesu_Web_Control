@@ -39,8 +39,6 @@ const FRAME_KEY      = 'popoutFrame';
 // A frame bigger than this is not a frame: the browser did not give the
 // window the size it was asked for (clamped to the screen, say).
 const MAX_FRAME      = 400;
-// A saved size above this share of the screen is not used (see usableSave).
-const NEAR_FULL      = 0.9;
 
 export const MIN_WIDTH  = 320;
 export const MIN_HEIGHT = 200;
@@ -161,9 +159,10 @@ export function pageAreaSize(win, frame) {
  * in screen units - with no `zoomSafe` mark - may have been inflated by the
  * browser's zoom at every Reattach until it filled the screen, so only its
  * position is kept and the size goes back to the default, once. So does a
- * size that all but fills the screen, however it was saved: a window that
- * big has no edges left to grab and make it smaller, and the default is a
- * size the operator can at least get hold of.
+ * page area bigger than the whole screen, however it was saved: the window
+ * round it would be bigger still, with no edges left to grab and make it
+ * smaller. Anything up to the screen is kept - on a short screen, a tall
+ * pop-out is a sensible choice.
  * Pure, so it can be tested.
  *
  * @param {object|null} saved  as read from storage
@@ -173,7 +172,7 @@ export function pageAreaSize(win, frame) {
 export function usableSave(saved, scr) {
     if (!saved || typeof saved !== 'object') return saved;
     const out = { ...saved };
-    const tooBig = (v, avail) => Number(avail) > 0 && Number(v) > NEAR_FULL * Number(avail);
+    const tooBig = (v, avail) => Number(avail) > 0 && Number(v) > Number(avail);
     if (!out.zoomSafe || tooBig(out.width, scr?.availWidth) || tooBig(out.height, scr?.availHeight)) {
         delete out.width; delete out.height;
     }
