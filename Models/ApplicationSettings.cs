@@ -26,6 +26,14 @@
         public bool AutoShutdownWhenNoBrowsers { get; set; } = true;
 
         /// <summary>
+        /// When true, the SDR workers stop about 3 s after the last browser
+        /// disconnects, so another program can open the SDR straight away,
+        /// and start again when a browser reconnects. Default false: the SDRs
+        /// keep running until the host itself exits (Discussion #171, Bruce).
+        /// </summary>
+        public bool ReleaseSdrWhenBrowsersClose { get; set; } = false;
+
+        /// <summary>
         /// When true (default), the host opens the default browser to the control
         /// panel URL once after Kestrel starts. Set false to start quietly —
         /// open the UI from the system tray / menu bar, or browse to the URL

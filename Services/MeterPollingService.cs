@@ -95,6 +95,9 @@ namespace Yaesu_Web_Control.Services
         // when a video stream of the front panel is worth watching anyway.
         private DateTime _lastTxSeenUtc = DateTime.MinValue;
         private bool _metersBorrowed = false;
+        // The MS digits currently borrowed (see TxMeterBorrow): COMP+SWR in
+        // voice modes, POW+SWR in CW/RTTY/data.
+        private string _borrowedSelection = TxMeterBorrow.CompAndSwr;
         private static readonly TimeSpan MeterReturnDelay = TimeSpan.FromSeconds(10);
 
         // Wall-clock settle window after MS13. The radio needs a moment to settle
@@ -290,23 +293,28 @@ namespace Yaesu_Web_Control.Services
                         if (useRm0Pair)
                         {
                             _lastTxSeenUtc = DateTime.UtcNow;
-                            if (!_metersBorrowed)
+                            var txMode = _stateService.TxVfo == 1 ? _stateService.ModeB : _stateService.ModeA;
+                            var wanted = TxMeterBorrow.SelectionFor(txMode);
+                            if (!_metersBorrowed || wanted != _borrowedSelection)
                             {
                                 // Flag before the write: the radio echoes MS via auto-
                                 // information, and the dispatcher must not mistake our
-                                // own MS13 for an operator choice.
+                                // own MS write for an operator choice.
                                 _stateService.MetersBorrowed = true;
                                 _metersBorrowed = true;
+                                _borrowedSelection = wanted;
                                 _borrowSettleUntilUtc = DateTime.UtcNow.Add(BorrowSettleWindow);
-                                _logger.LogDebug("[MeterPolling] TX started — borrowing front-panel meters (MS13)");
-                                await _multiplexer.SendCommandAsync(CatCommands.SetMetersCompAndSWR + ";", "MeterPoll", stoppingToken);
+                                _logger.LogDebug("[MeterPolling] TX in {Mode} — borrowing front-panel meters (MS{Sel})", txMode, wanted);
+                                await _multiplexer.SendCommandAsync($"MS{wanted};", "MeterPoll", stoppingToken);
                             }
 
                             var compSwrResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterBoth + ";", "MeterPoll", stoppingToken);
                             _logger.LogDebug("[MeterPolling][DEBUG] RM0 response: '{Raw}'", compSwrResponse);
                             int? compRaw = CatCommands.ParseRm0LeftMeter(compSwrResponse ?? "");
                             int? swrRaw  = CatCommands.ParseRm0RightMeter(compSwrResponse ?? "");
-                            compression = compRaw ?? 0;
+                            // Under MS03 the left value is PO, already read by RM5;
+                            // compression means nothing in CW/RTTY/data, so show 0.
+                            compression = TxMeterBorrow.LeftIsCompression(_borrowedSelection) ? (compRaw ?? 0) : 0;
                             swr         = swrRaw  ?? 0;
 
                             // A dropped or malformed RM0 is not a reading of zero.

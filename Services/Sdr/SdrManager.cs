@@ -38,6 +38,7 @@ public sealed class SdrManager : BackgroundService
     private readonly RadioStateService            _state;
     private readonly ICatClient                   _cat;
     private readonly ILogger<SdrManager>          _logger;
+    private readonly BrowserPresence              _presence;
 
     private const int RetryDelayMs           = 5_000;
     private const int UnconfiguredPollMs     = 10_000;
@@ -93,6 +94,17 @@ public sealed class SdrManager : BackgroundService
 
     private readonly object _activeLock = new();
 
+    // "Free the SDR when the last browser closes" (ReleaseSdrWhenBrowsersClose).
+    // A page change drops the hub connection for well under a second, so the
+    // workers are only stopped once nobody has been connected for this long;
+    // otherwise every navigation would restart both SDRs. The host's own exit
+    // (RadioHub.ShutdownGrace, 30 s) is separate and unchanged.
+    private static readonly TimeSpan ReleaseDelay = TimeSpan.FromSeconds(3);
+    private readonly object _parkLock = new();
+    private bool _parked;
+    private CancellationTokenSource? _releaseCts;
+    private CancellationTokenSource _resumeCts = new();
+
     /// <summary>
     /// Snapshot of which device keys are currently being held by SDR workers.
     /// </summary>
@@ -107,13 +119,16 @@ public sealed class SdrManager : BackgroundService
         IHubContext<RadioHub>        hub,
         RadioStateService            state,
         ICatClient                   cat,
-        ILogger<SdrManager>          logger)
+        ILogger<SdrManager>          logger,
+        BrowserPresence              presence)
     {
         _settings = settings;
         _hub      = hub;
         _state    = state;
         _cat      = cat;
         _logger   = logger;
+        _presence = presence;
+        _presence.Changed += OnPresenceChanged;
 
         // The dial moves through the IF OUT as the operator works the
         // filter (see YaesuIfOutOffset), so a cropped window has to follow
@@ -179,6 +194,70 @@ public sealed class SdrManager : BackgroundService
         }
     }
 
+    private void OnPresenceChanged(bool present)
+    {
+        lock (_parkLock)
+        {
+            _releaseCts?.Cancel();
+            _releaseCts?.Dispose();
+            _releaseCts = null;
+
+            if (present)
+            {
+                if (!_parked) return;
+                _parked = false;
+                _logger.LogInformation("[SdrManager] A browser reconnected — starting the SDRs again");
+                var old = Interlocked.Exchange(ref _resumeCts, new CancellationTokenSource());
+                old.Cancel();
+                old.Dispose();
+                return;
+            }
+
+            _releaseCts = new CancellationTokenSource();
+            _ = ReleaseAfterDelayAsync(_releaseCts.Token);
+        }
+    }
+
+    private async Task ReleaseAfterDelayAsync(CancellationToken ct)
+    {
+        try
+        {
+            var config = await _settings.GetSettingsAsync().ConfigureAwait(false);
+            if (!config.ReleaseSdrWhenBrowsersClose) return;
+            await Task.Delay(ReleaseDelay, ct).ConfigureAwait(false);
+            lock (_parkLock)
+            {
+                if (ct.IsCancellationRequested || _presence.AnyPresent || _parked) return;
+                // Set before the restart, so each supervisor finds itself
+                // parked when its session unwinds rather than respawning.
+                _parked = true;
+            }
+            _logger.LogInformation("[SdrManager] No browser connected — stopping the SDRs so other programs can use them");
+            RequestRestart();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[SdrManager] Could not release the SDRs after the last browser closed");
+        }
+    }
+
+    private async Task WaitWhileParkedAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            CancellationToken resume;
+            lock (_parkLock)
+            {
+                if (!_parked) return;
+                resume = _resumeCts.Token;
+            }
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, resume);
+            try { await Task.Delay(Timeout.Infinite, linked.Token).ConfigureAwait(false); }
+            catch (OperationCanceledException) { }
+        }
+    }
+
     private CancellationToken RestartTokenFor(string vfo) =>
         (vfo == "B" ? _restartCtsB : _restartCtsA).Token;
 
@@ -194,6 +273,9 @@ public sealed class SdrManager : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            await WaitWhileParkedAsync(stoppingToken).ConfigureAwait(false);
+            if (stoppingToken.IsCancellationRequested) break;
+
             var config       = await _settings.GetSettingsAsync().ConfigureAwait(false);
             var restartToken = RestartTokenFor(vfo);
             using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, restartToken);

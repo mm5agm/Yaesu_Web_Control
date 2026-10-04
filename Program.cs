@@ -484,6 +484,7 @@ builder.Services.AddSingleton<IBandPlanService, BandPlanService>();
 
 // Register RadioStateService and CatMessageBuffer as singletons
 builder.Services.AddSingleton<RadioStateService>();
+builder.Services.AddSingleton<BrowserPresence>();
 builder.Services.AddSingleton<CatMessageBuffer>();
 
 // Register CatMessageDispatcher as singleton

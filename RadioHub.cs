@@ -13,6 +13,7 @@ namespace Yaesu_Web_Control.Hubs
         private readonly RadioStateService _radioState;
         private readonly ISettingsService _settings;
         private readonly FilterSpectrumService _filterSpectrum;
+        private readonly BrowserPresence _presence;
 
         // Every currently open SignalR connection, and the whole of what the
         // host means by "a browser is watching". Presence used to mean a
@@ -36,8 +37,10 @@ namespace Yaesu_Web_Control.Hubs
             IHostApplicationLifetime lifetime,
             RadioStateService radioState,
             ISettingsService settings,
-            FilterSpectrumService filterSpectrum)
+            FilterSpectrumService filterSpectrum,
+            BrowserPresence presence)
         {
+            _presence = presence;
             _logger   = logger;
             _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
             _radioState = radioState;
@@ -61,6 +64,7 @@ namespace Yaesu_Web_Control.Hubs
         public override async Task OnConnectedAsync()
         {
             _connections.TryAdd(Context.ConnectionId, 0);
+            _presence.Report(true);
             CancelShutdown("browser connected");
 
             // Replay the full state snapshot to this client only. Regular
@@ -104,6 +108,7 @@ namespace Yaesu_Web_Control.Hubs
             // setting is enabled (default true).
             if (_connections.IsEmpty)
             {
+                _presence.Report(false);
                 var settings = await _settings.GetSettingsAsync();
                 // Containers must stay up as a headless CAT controller even if
                 // the user left AutoShutdown enabled in a copied settings file.

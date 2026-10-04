@@ -1085,17 +1085,17 @@
                                    aria-label="Show the VFO A receiver passband as a shaded band on the spectrum">
                             <label class="form-check-label" for="spectrumPassbandToggleA">Passband</label>
                         </div>
-                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectA" title="How tall the VFO A spectrum panel is. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectA" title="How tall the VFO A spectrum panel is, as a percentage of its normal height. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
                         <select class="form-select form-select-sm spectrum-height-select" data-vfo="A" id="spectrumHeightSelectA"
-                                style="width:auto;" title="How tall the VFO A spectrum panel is. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
+                                style="width:auto;" title="How tall the VFO A spectrum panel is, as a percentage of its normal height. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
                                 aria-label="VFO A spectrum panel height">
                             <option value="">Custom</option>
-                            <option value="120">Shortest</option>
-                            <option value="200">Short</option>
-                            <option value="280">Normal</option>
-                            <option value="400">Tall</option>
-                            <option value="560">Taller</option>
-                            <option value="900">Tallest</option>
+                            <option value="140">50%</option>
+                            <option value="210">75%</option>
+                            <option value="280">100%</option>
+                            <option value="420">150%</option>
+                            <option value="560">200%</option>
+                            <option value="840">300%</option>
                         </select>
                     </div>
                     <div class="card-body p-0 spectrum-canvas-wrap">
@@ -1162,17 +1162,17 @@
                                    aria-label="Show the VFO B receiver passband as a shaded band on the spectrum">
                             <label class="form-check-label" for="spectrumPassbandToggleB">Passband</label>
                         </div>
-                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectB" title="How tall the VFO B spectrum panel is. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectB" title="How tall the VFO B spectrum panel is, as a percentage of its normal height. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
                         <select class="form-select form-select-sm spectrum-height-select" data-vfo="B" id="spectrumHeightSelectB"
-                                style="width:auto;" title="How tall the VFO B spectrum panel is. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
+                                style="width:auto;" title="How tall the VFO B spectrum panel is, as a percentage of its normal height. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
                                 aria-label="VFO B spectrum panel height">
                             <option value="">Custom</option>
-                            <option value="120">Shortest</option>
-                            <option value="200">Short</option>
-                            <option value="280">Normal</option>
-                            <option value="400">Tall</option>
-                            <option value="560">Taller</option>
-                            <option value="900">Tallest</option>
+                            <option value="140">50%</option>
+                            <option value="210">75%</option>
+                            <option value="280">100%</option>
+                            <option value="420">150%</option>
+                            <option value="560">200%</option>
+                            <option value="840">300%</option>
                         </select>
                     </div>
                     <div class="card-body p-0 spectrum-canvas-wrap">
@@ -3665,11 +3665,17 @@
                 panel.attachResizeGrip(grip);
                 if (!select) return;
 
-                // "Custom" is what dragging produces, and it is not a height
-                // anyone can pick from the list — choosing it must not resize
-                // anything. Everything else is a straight match on the value.
+                // Heights read as a percentage of the normal 280 px. The first
+                // option is what dragging produces: it shows that height's own
+                // percentage, and it is not a height anyone can pick from the
+                // list, so choosing it must not resize anything. Everything
+                // else is a straight match on the value.
+                const customOption = select.options[0];
                 const syncSelect = (h) => {
-                    const listed = [...select.options].some(o => o.value === String(h));
+                    const listed = [...select.options].some(o => o.value && o.value === String(h));
+                    customOption.textContent = listed
+                        ? 'Custom'
+                        : `${Math.round(h / SpectrumPanel.DEFAULT_PANEL_H * 100)}%`;
                     select.value = listed ? String(h) : '';
                 };
 
@@ -4834,7 +4840,11 @@
                     if (receiver !== 'A') { seen[`mode${receiver}`] = true; return; }
                     announce('mode', 'modeA', fmtMode(mode));
                 },
-                sayTxState(isTx) {
+                sayTxState(isTx, txMode) {
+                    // In CW, break-in keys TX on and off with the Morse itself,
+                    // so "transmit, receive" would talk over every over (Rick
+                    // W2JAZ, #190). The TX timeout warning still speaks.
+                    if (/^CW/i.test(String(txMode || ''))) { seen.txState = true; return; }
                     announce('tx', 'txState', isTx ? 'transmit' : 'receive');
                 },
                 sayFrequencyEntered(hz) {
