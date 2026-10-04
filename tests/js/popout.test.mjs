@@ -7,7 +7,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    clampGeometry, featuresFor, screenShare, PopoutHost, PopoutChild, MIN_WIDTH, MIN_HEIGHT,
+    clampGeometry, featuresFor, screenShare, frameFrom, pageAreaSize, usableSave,
+    PopoutHost, PopoutChild, MIN_WIDTH, MIN_HEIGHT,
 } from '../../js/popout/popout.js';
 
 const DEF = { width: 700, height: 420 };
@@ -78,7 +79,9 @@ function stubBrowser() {
     globalThis.localStorage = {
         getItem: k => (store.has(k) ? store.get(k) : null),
         setItem: (k, v) => store.set(k, String(v)),
+        removeItem: k => store.delete(k),
     };
+    delete globalThis.sessionStorage;
     const listeners = {};
     const opened = [];
     globalThis.window = {
@@ -144,7 +147,7 @@ test('a host that starts after the child finds it by pinging', async () => {
 test('open uses a fixed window name and the saved geometry; a second click focuses', () => {
     const b = stubBrowser();
     const name = freshName();
-    b.store.set('popoutGeom_' + name, JSON.stringify({ width: 900, height: 500, left: 2100, top: 50 }));
+    b.store.set('popoutGeom_' + name, JSON.stringify({ width: 900, height: 500, left: 2100, top: 50, zoomSafe: true }));
     const host = new PopoutHost({ name, url: '/X', defaultSize: DEF });
 
     assert.equal(host.open(), true);
@@ -171,9 +174,60 @@ test('the child saves its page-area size and screen position', () => {
     const child = new PopoutChild({ name }).start();
     b.fire('pagehide');
     assert.deepEqual(JSON.parse(b.store.get('popoutGeom_' + name)),
-        { width: 640, height: 380, left: 2000, top: 100 });
+        { width: 640, height: 380, left: 2000, top: 100, zoomSafe: true });
     clearInterval(child._watch);
     child._channel.close();
+});
+
+// ── Browser zoom ─────────────────────────────────────────────────────────────
+
+test('the frame is the outer size less the size that was asked for', () => {
+    assert.deepEqual(frameFrom({ width: 716, height: 459 }, { width: 700, height: 420 }), { w: 16, h: 39 });
+});
+
+test('no request, or a window not given its size, gives no frame', () => {
+    assert.equal(frameFrom({ width: 716, height: 459 }, null), null);
+    assert.equal(frameFrom({ width: 600, height: 459 }, { width: 700, height: 420 }), null);
+    assert.equal(frameFrom({ width: 1900, height: 459 }, { width: 700, height: 420 }), null);
+    assert.equal(frameFrom({ width: 716, height: 459 }, { width: 'x', height: 420 }), null);
+});
+
+test('the saved page area ignores zoom when the frame is known', () => {
+    // 50% zoom: inner is twice the screen size, outer is not.
+    const win = { innerWidth: 1400, innerHeight: 840, outerWidth: 716, outerHeight: 459 };
+    assert.deepEqual(pageAreaSize(win, { w: 16, h: 39 }), { width: 700, height: 420 });
+    assert.deepEqual(pageAreaSize(win, null), { width: 1400, height: 840 });
+});
+
+test('at 50% zoom a pop-out reopens the size it was left, not twice it', () => {
+    const b = stubBrowser();
+    const name = freshName();
+    b.store.set('popoutGeom_' + name, JSON.stringify({ width: 700, height: 420, left: 2000, top: 100, zoomSafe: true }));
+    const host = new PopoutHost({ name, url: '/X', defaultSize: DEF });
+    host.open();
+    assert.ok(b.store.has('popoutReq_' + name));
+    Object.assign(globalThis.window, { innerWidth: 1400, innerHeight: 840, outerWidth: 716, outerHeight: 459 });
+    const child = new PopoutChild({ name }).start();
+    assert.equal(b.store.has('popoutReq_' + name), false);
+    b.fire('pagehide');
+    assert.deepEqual(JSON.parse(b.store.get('popoutGeom_' + name)),
+        { width: 700, height: 420, left: 2000, top: 100, zoomSafe: true });
+    clearInterval(child._watch);
+    child._channel.close(); host._channel?.close();
+});
+
+test('a size saved before the zoom fix goes back to the default, keeping its place', () => {
+    assert.deepEqual(usableSave({ width: 3800, height: 2100, left: 5, top: 6 }, null), { left: 5, top: 6 });
+    assert.deepEqual(clampGeometry(usableSave({ width: 3800, height: 2100, left: 5, top: 6 }, null), DEF),
+        { width: 700, height: 420, left: 5, top: 6 });
+});
+
+test('a saved size bigger than the screen is cut down so its edges can be grabbed', () => {
+    const scr = { availWidth: 1920, availHeight: 1040 };
+    assert.deepEqual(usableSave({ width: 3000, height: 2000, left: 0, top: 0, zoomSafe: true }, scr),
+        { width: 1904, height: 980, left: 0, top: 0 });
+    assert.deepEqual(usableSave({ width: 900, height: 500, zoomSafe: true }, scr), { width: 900, height: 500 });
+    assert.equal(usableSave(null, scr), null);
 });
 
 // ── screenShare ──────────────────────────────────────────────────────────────
@@ -194,7 +248,7 @@ test('a default size given as a function is asked at open, and a saved size stil
     host.open();
     assert.match(b.opened[0].features, /width=960,height=520/);
 
-    b.store.set('popoutGeom_' + name, JSON.stringify({ width: 500, height: 300, left: 10, top: 20 }));
+    b.store.set('popoutGeom_' + name, JSON.stringify({ width: 500, height: 300, left: 10, top: 20, zoomSafe: true }));
     host._open = false;
     host.open();
     assert.match(b.opened[1].features, /width=500,height=300,left=10,top=20/);
