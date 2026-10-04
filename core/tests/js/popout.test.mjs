@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    clampGeometry, featuresFor, screenShare, frameFrom, pageAreaSize, usableSave, fitSize,
+    clampGeometry, featuresFor, screenShare, frameFrom, pageAreaSize, usableSave, fitSize, inTab,
     PopoutHost, PopoutChild, MIN_WIDTH, MIN_HEIGHT,
 } from '../../js/popout/popout.js';
 
@@ -238,6 +238,29 @@ test('a saved size bigger than the screen goes back to the default', () => {
     assert.deepEqual(usableSave({ width: 380, height: 600, zoomSafe: true }, short), { width: 380, height: 600 });
     assert.deepEqual(usableSave({ width: 900, height: 500, zoomSafe: true }, scr), { width: 900, height: 500 });
     assert.equal(usableSave(null, scr), null);
+});
+
+// ── A pop-out restored as a tab ──────────────────────────────────────────────
+
+test('a page with a toolbar is in a tab; one without is a pop-out window', () => {
+    assert.equal(inTab({ toolbar: { visible: true } }), true);
+    assert.equal(inTab({ toolbar: { visible: false } }), false);
+    assert.equal(inTab({}), false);
+});
+
+test('a pop-out page in a tab gives up the pop-out window name', () => {
+    const b = stubBrowser();
+    const name = freshName();
+    Object.assign(globalThis.window, { name: 'rwc-popout-' + name, toolbar: { visible: true } });
+    const child = new PopoutChild({ name }).start();
+    assert.equal(globalThis.window.name, '');
+    clearInterval(child._watch); child._channel.close();
+
+    stubBrowser();
+    Object.assign(globalThis.window, { name: 'rwc-popout-' + name, toolbar: { visible: false } });
+    const win = new PopoutChild({ name }).start();
+    assert.equal(globalThis.window.name, 'rwc-popout-' + name);
+    clearInterval(win._watch); win._channel.close();
 });
 
 // ── Reattach carries the size back ───────────────────────────────────────────

@@ -445,6 +445,18 @@ export function attachPopout({
     };
 }
 
+/**
+ * Whether a page is in an ordinary browser tab rather than a pop-out window.
+ * Browsers hide the toolbar in a window opened with popup features and
+ * report it through window.toolbar.visible. Pure, so it can be tested.
+ *
+ * @param {{toolbar?:{visible?:boolean}}} win
+ * @returns {boolean}
+ */
+export function inTab(win) {
+    return win?.toolbar?.visible === true;
+}
+
 export class PopoutChild {
     /**
      * @param {object} opts
@@ -462,6 +474,15 @@ export class PopoutChild {
     }
 
     start() {
+        // A browser that restores its tabs after a restart brings a pop-out
+        // back as an ordinary tab, still carrying the pop-out's window name.
+        // The main page's window.open then finds that name and loads the
+        // panel into the tab - full window, no edges to resize - instead of
+        // opening a window. A tab has its toolbar; a pop-out window has not.
+        // So a tab gives the name up, and the next pop-out is a real window.
+        if (inTab(window)) {
+            try { if (window.name.startsWith(WINDOW_PREFIX)) window.name = ''; } catch { /* ignore */ }
+        }
         // The frame is measured once, on load, while the window is still the
         // size it was opened at, and kept in this window's session storage so
         // a reload - by which time it may have been resized - keeps it.
@@ -513,8 +534,14 @@ export class PopoutChild {
         window.close();
         // A window the operator opened by typing the address, rather than one
         // the main page opened, is not allowed to close itself. Go to the main
-        // page instead, so Reattach still does what it says.
-        setTimeout(() => { if (!window.closed) window.location.href = this._fallback; }, 300);
+        // page instead, so Reattach still does what it says. It drops the
+        // pop-out's window name first: a main page left holding it would be
+        // the place the next pop-out loads into, instead of a new window.
+        setTimeout(() => {
+            if (window.closed) return;
+            try { window.name = ''; } catch { /* ignore */ }
+            window.location.href = this._fallback;
+        }, 300);
     }
 
     _post(type, extra) {
