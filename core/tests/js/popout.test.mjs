@@ -168,6 +168,12 @@ test('a blocked pop-up reports false and leaves the host closed', () => {
     assert.equal(host.isOpen, false);
 });
 
+test('a small size the operator chose is kept', () => {
+    // Measured 2026-10-04 at 50% zoom: a pop-out shrunk to 154 x 91.
+    assert.deepEqual(clampGeometry({ width: 154, height: 91, left: 2288, top: 89 }, DEF),
+        { width: 154, height: 91, left: 2288, top: 89 });
+});
+
 test('the child saves its page-area size and screen position', () => {
     const b = stubBrowser();
     const name = freshName();
@@ -241,7 +247,7 @@ test('a quarter of the screen is half its width by half its height', () => {
 });
 
 test('a share of a small or missing screen never goes under the minimum', () => {
-    assert.deepEqual(screenShare(0.25, { availWidth: 400, availHeight: 300 }), { width: MIN_WIDTH, height: MIN_HEIGHT });
+    assert.deepEqual(screenShare(0.25, { availWidth: 200, availHeight: 100 }), { width: MIN_WIDTH, height: MIN_HEIGHT });
     assert.deepEqual(screenShare(0.25, undefined), { width: MIN_WIDTH, height: MIN_HEIGHT });
 });
 

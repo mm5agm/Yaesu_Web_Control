@@ -40,8 +40,12 @@ const FRAME_KEY      = 'popoutFrame';
 // window the size it was asked for (clamped to the screen, say).
 const MAX_FRAME      = 400;
 
-export const MIN_WIDTH  = 320;
-export const MIN_HEIGHT = 200;
+// Only a guard against a broken saved value, never a size anyone is held to.
+// Sizes are in screen units, which at a browser zoom below 100% hold more of
+// the page than they look: 150 across at 50% zoom shows 300 CSS pixels, and
+// an operator who shrinks a pop-out that far means it.
+export const MIN_WIDTH  = 120;
+export const MIN_HEIGHT = 80;
 // Bigger than any real monitor arrangement, small enough that a corrupt value
 // cannot ask for a window the browser will refuse outright.
 const MAX_EXTENT = 16384;
