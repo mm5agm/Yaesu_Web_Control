@@ -553,13 +553,13 @@
     <!-- Power and SWR Meters -->
     <div class="row mt-3">
         <div class="col-12">
-            <div class="card border-secondary">
+            <div class="card border-secondary" id="meterCard">
                 <div class="card-body py-2">
                     <!-- Gauges row. The id is the hook site.js uses to add
                          .meters-tx-dim while transmitting; data-meter-scope="rx"
                          on a cell marks it as one the radio stops measuring
                          during an over. -->
-                    <div id="meterGaugesRow" class="d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
+                    <div id="meterGaugesRow" class="fold-target d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
                         <!-- S-Meter rolling history strip — leftmost so the live trace
                              reads left-to-right toward the S-meter needle. Hidden
                              until the toolbar's S-hist toggle is on. Sized to match
@@ -782,6 +782,13 @@
                                 aria-label="Voice announcements settings"
                                 title="Voice announcements for band, mode, TX state etc. — useful for partially sighted operators"
                                 onclick="document.getElementById('voiceDialog').show();">Voice</button>
+                        <!-- Fold button (Discussion #171): hides the gauges only.
+                             This row and the Power/MIC controls stay, and the
+                             gauges keep updating while hidden. Last in the
+                             toolbar so it never sits on top of a gauge. -->
+                        <button type="button" id="meterFoldBtn" class="btn btn-sm ms-1 btn-outline-secondary fold-btn">
+                            <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">Hide meters</span>
+                        </button>
                     </div>
 
                 </div>
@@ -1035,7 +1042,16 @@
                      pulls that card wider than the other. -->
                 <div id="spectrumContainerA" class="card border-dark" style="flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
-                        <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
+                            <!-- Fold button (Discussion #171): hides both VFO panels so the
+                                 page can be just the spectrum. Beside the title, which always
+                                 has room, even with the panels side by side; the control bar
+                                 runs out of width there and would push it off the card. -->
+                            <button type="button" id="vfoFoldBtnA" class="btn btn-outline-light btn-sm fold-btn py-0">
+                                <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">VFOs</span>
+                            </button>
+                        </div>
                         <div class="d-flex align-items-center gap-2">
                             <div class="btn-group btn-group-sm" role="group" aria-label="VFO A spectrum span">
                                 <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzA == 1_000 ? "active" : "")" data-hz="1000" data-vfo="A" data-a11y-key="spectrum.spanA1k" aria-label="VFO A span 1 kHz" title="VFO A span 1 kHz — one CW signal, the dial in the middle; software zoom, switches instantly">1k</button>
@@ -1112,7 +1128,16 @@
                      in side-by-side layout regardless of badge text content. -->
                 <div id="spectrumContainerB" class="card border-dark" style="display:none; flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
-                        <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
+                            <!-- Fold button (Discussion #171): hides both VFO panels so the
+                                 page can be just the spectrum. Beside the title, which always
+                                 has room, even with the panels side by side; the control bar
+                                 runs out of width there and would push it off the card. -->
+                            <button type="button" id="vfoFoldBtnB" class="btn btn-outline-light btn-sm fold-btn py-0">
+                                <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">VFOs</span>
+                            </button>
+                        </div>
                         <div class="d-flex align-items-center gap-2">
                             <div class="btn-group btn-group-sm" role="group" aria-label="VFO B spectrum span">
                                 <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 1_000 ? "active" : "")" data-hz="1000" data-vfo="B" data-a11y-key="spectrum.spanB1k" aria-label="VFO B span 1 kHz" title="VFO B span 1 kHz — one CW signal, the dial in the middle; software zoom, switches instantly">1k</button>
@@ -1187,7 +1212,7 @@
         </div>
     </div>
 
-    <div class="row g-3 flex-wrap" id="vfoRow" data-radio-model="@Model.RadioModel" data-max-power="@maxPowerWatts" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
+    <div class="row g-3 flex-wrap fold-target" id="vfoRow" data-radio-model="@Model.RadioModel" data-max-power="@maxPowerWatts" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
         <!-- VFO A Panel -->
         <div class="col-lg-6 col-12" id="vfoACol">
             <div class="card border-primary h-100 receiver-card">
@@ -2066,6 +2091,7 @@
             <div class="card-body py-2 px-3">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <span class="fw-bold text-nowrap">Clarifier</span>
+                    <div id="clarControls" class="fold-target" style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                     <div class="btn-group btn-group-sm" id="clarVfoGroup" role="group" aria-label="Clarifier VFO selection">
                         <button type="button" class="btn btn-outline-primary active" id="clarVfoABtn"
                                 onclick="selectClarVfo('A')" title="Apply clarifier to VFO A"
@@ -2103,6 +2129,12 @@
                             onclick="resetClarifier()"
                             title="Reset offset to 0 Hz (mode unchanged)"
                             aria-label="Reset clarifier offset to zero">Reset</button>
+                    </div>
+                    <!-- Fold button (Discussion #171): hides everything but the
+                         word Clarifier, which stays so the strip can be found. -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm fold-btn ms-auto flex-shrink-0" id="clarFoldBtn">
+                        <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">Hide</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -2659,6 +2691,7 @@
         import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { attachPopout }         from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { attachFold }           from "/js/layout/fold-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { AudioFilterPanel }     from "/js/ui/audio-filter-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -2712,6 +2745,85 @@
             const scopeDlg = document.getElementById('radioDisplayScopeDialog');
             if (scopeDlg) window.radioScopeControls.push(new RadioScopeControl(scopeDlg));
             window.radioScopeControl = window.radioScopeControls[0] || null;
+
+            // Fold the meter gauges and the Clarifier strip away (Discussion
+            // #171), as the Radio Scope card already can. The choice is kept
+            // per browser. The Power row sits under the gauges with an inline
+            // !important pull-up and indent, so it is reset by hand when they
+            // go; a resize afterwards lets anything sized to its box redraw.
+            const powerRow = document.querySelector('#meterCard .closer-to-raw-power');
+            attachFold({
+                name: 'meters',
+                button: document.getElementById('meterFoldBtn'),
+                targets: [document.getElementById('meterGaugesRow')],
+                root: document.getElementById('meterCard'),
+                shownLabel:  { text: 'Hide meters', title: 'Hide the meter gauges (Power, MIC and the toolbar stay)', aria: 'Hide the meter gauges' },
+                foldedLabel: { text: 'Show meters', title: 'Show the meter gauges again', aria: 'Show the meter gauges' },
+                onChange: folded => {
+                    if (powerRow) {
+                        powerRow.style.setProperty('margin-top', folded ? '0' : '-18px', 'important');
+                        powerRow.style.paddingLeft  = folded ? '0' : '280px';
+                    }
+                    if (!folded) window.dispatchEvent(new Event('resize'));
+                },
+            });
+            attachFold({
+                name: 'clarifier',
+                button: document.getElementById('clarFoldBtn'),
+                targets: [document.getElementById('clarControls')],
+                shownLabel:  { text: 'Hide', title: 'Hide the clarifier controls', aria: 'Hide the clarifier controls' },
+                foldedLabel: { text: 'Show', title: 'Show the clarifier controls again', aria: 'Show the clarifier controls' },
+            });
+
+            // Fold both VFO panels away (Discussion #171), so a contest page can
+            // be just the spectrum. Each spectrum card has the button, since
+            // either may be the only one showing; A's drives the fold and B's
+            // follows it. The panels only fold while the spectrum is on screen:
+            // with no SDR there is no button, so a choice saved earlier must not
+            // leave the page with no VFO panels and no way to bring them back.
+            {
+                const vfoRow   = document.getElementById('vfoRow');
+                const specBox  = document.getElementById('spectrumContainer');
+                const btnB     = document.getElementById('vfoFoldBtnB');
+                const specOn   = () => !!specBox && getComputedStyle(specBox).display !== 'none';
+                const shown    = { text: 'VFOs', title: 'Hide the VFO A and VFO B panels, leaving the spectrum', aria: 'Hide the VFO panels' };
+                const hidden   = { text: 'VFOs', title: 'Show the VFO A and VFO B panels again', aria: 'Show the VFO panels' };
+                let fold = null;
+                // attachFold sets hidden itself before calling sync, so the row's
+                // own state can't say whether it just came back; this can.
+                let rowHidden = false;
+                const sync = folded => {
+                    const hide = folded && specOn();
+                    if (vfoRow) vfoRow.hidden = hide;
+                    if (btnB) {
+                        const l = folded ? hidden : shown;
+                        btnB.title = l.title;
+                        btnB.setAttribute('aria-label', l.aria);
+                        btnB.setAttribute('aria-expanded', String(!folded));
+                        const icon = btnB.querySelector('.bi');
+                        icon?.classList.toggle('bi-chevron-up', !folded);
+                        icon?.classList.toggle('bi-chevron-down', folded);
+                    }
+                    // Anything sized to its box redraws once the panels are back.
+                    if (rowHidden && !hide) window.dispatchEvent(new Event('resize'));
+                    rowHidden = hide;
+                };
+                fold = attachFold({
+                    name: 'vfoPanels',
+                    button: document.getElementById('vfoFoldBtnA'),
+                    targets: vfoRow ? [vfoRow] : [],
+                    shownLabel: shown,
+                    foldedLabel: hidden,
+                    onChange: sync,
+                });
+                if (fold) {
+                    btnB?.setAttribute('aria-controls', 'vfoRow');
+                    btnB?.addEventListener('click', () => fold.toggle());
+                    // The spectrum shows and hides as the SDRs come and go.
+                    if (specBox) new MutationObserver(() => sync(fold.folded))
+                        .observe(specBox, { attributes: true, attributeFilter: ['style', 'class'] });
+                }
+            }
 
             // ── UTC clock in the top bar ──────────────────────────────────────
             const utcClockEl = document.getElementById('utcClock');

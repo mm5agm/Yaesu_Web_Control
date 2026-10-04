@@ -516,6 +516,8 @@ The meter scales are calibrated to show meaningful units rather than raw ADC val
 
 The vertical axis is calibrated in S-units (S1, S5, S9, S9+30, S9+60) using the same calibration table as the analog gauge. The horizontal axis runs from **-30s** on the left to **now** on the right. The strip is purely a visual aid — none of the information is sent to the radio.
 
+**Hiding the meters.** The **Hide meters** button at the end of the toolbar under the meters folds the gauges away, so the space goes to the spectrum and VFO panels. Only the gauges go: the Power, MIC Gain and PROC controls and the toolbar itself move up and stay, and the button becomes **Show meters** to bring them back. The meters keep reading while they are hidden, so they are current the moment they come back. The choice is remembered by the browser, so each PC or tablet keeps its own.
+
 ---
 
 ### 5.3 Power, Mic Gain and Speech Processor
@@ -610,6 +612,8 @@ The height is remembered per VFO across browser reloads, and A and B are indepen
 
 > A very tall panel is more work for your browser to draw, because the waterfall has to be redrawn in full on every frame and there is simply more of it. On a desktop PC you will not notice. On a Raspberry Pi, or any low-powered machine, come down a size or two if the waterfall starts to stutter.
 
+**Hiding the VFO panels** - the **VFOs** button beside the title of each spectrum panel ("Spectrum - VFO A") hides both VFO panels (VFO A and VFO B) and shows them again, so the page can be just the spectrum, for example alongside RTTY Tune in a contest. The arrow on it points up while the panels show and down while they are hidden. Nothing on the radio changes, and keyboard shortcuts and voice control still work while the panels are hidden. The choice is remembered by the browser. If no spectrum is showing (no SDR configured, or the SDR has stopped) the VFO panels always show, so they can never be left hidden with no button to bring them back.
+
 **Resize spectrum vs waterfall** — Hover the horizontal boundary between the spectrum trace (top) and the waterfall (bottom); the cursor becomes a vertical-resize arrow. Drag up to give the spectrum more vertical room — useful when you're hunting weak signals close to the noise floor. Drag down to give the waterfall more history. The ratio is remembered per VFO across browser reloads, so the next time you open YWC the panel is back the way you left it. Two short grey grip-bars at the centre of the boundary mark the handle; they turn cyan while you're dragging.
 
 **Automatic noise floor** — you no longer set a floor level by hand. YWC tracks your band noise continuously and pins it near the bottom of the panel automatically, so the trace stays framed the same way whether the band is quiet or busy and whichever SDR you use. As conditions change the floor re-tracks on its own; there is no floor slider to chase.
@@ -660,6 +664,8 @@ On **dual-receiver radios** (FTdx101MP / FTdx101D) there are **two** S-meter gau
 Both panels have identical controls — changing a control on either panel writes to the radio.
 
 **VFO-B toggle** — the **VFO-B** button in the toolbar shows or hides the VFO B panel. The last state is remembered across sessions.
+
+**Clarifier strip** — the strip under the VFO panels holds the clarifier (RIT/XIT): which VFO it applies to, OFF / RX / TX / RX+TX, and the offset. Its **Hide** button at the right-hand end folds the controls away and leaves only the word **Clarifier** and a **Show** button. Hiding it changes nothing on the radio, and the choice is remembered by the browser.
 
 **A↔B Swap** — the **A↔B** button in the toolbar swaps the frequencies and modes between VFO A and VFO B in one click. Available on all supported radios.
 
