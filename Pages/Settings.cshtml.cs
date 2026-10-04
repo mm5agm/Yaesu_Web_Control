@@ -167,6 +167,19 @@ namespace Yaesu_Web_Control.Pages
                 return Page();
             }
 
+            // One SDR can only be open in one worker. With the same device on
+            // both VFOs, whichever worker opened it first kept it and the other
+            // VFO showed "SDR device unavailable" (#190, Rick W2JAZ).
+            if (!string.IsNullOrWhiteSpace(Settings.SdrDeviceKeyA) &&
+                string.Equals(Settings.SdrDeviceKeyA, Settings.SdrDeviceKeyB, StringComparison.Ordinal))
+            {
+                ModelState.AddModelError("Settings.SdrDeviceKeyB",
+                    "The same SDR is chosen for VFO A and VFO B. One SDR can only feed one VFO: choose (none) for the VFO it isn't wired to.");
+                StatusMessage = "❌ Settings not saved — the same SDR is chosen for VFO A and VFO B.";
+                NetworkAddresses = GetLocalIPAddresses();
+                return Page();
+            }
+
             // Remote Audio: refuse blank devices when enabled. Empty TX used to
             // open the PC speakers → browser-mic feedback into the room.
             if (Settings.AudioStreamingEnabled)
@@ -234,6 +247,7 @@ namespace Yaesu_Web_Control.Pages
                     ? Settings.HttpPort
                     : 8080;
                 current.AutoShutdownWhenNoBrowsers = Settings.AutoShutdownWhenNoBrowsers;
+                current.ReleaseSdrWhenBrowsersClose = Settings.ReleaseSdrWhenBrowsersClose;
                 current.OpenBrowserOnStartup = Settings.OpenBrowserOnStartup;
                 current.SerialPort        = Settings.SerialPort;
                 current.BaudRate          = Settings.BaudRate;

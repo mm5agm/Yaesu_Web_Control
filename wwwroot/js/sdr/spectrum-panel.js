@@ -13,6 +13,11 @@ import { tuningStep } from '../ui/tuning-step.js?v=1';
 import { formatTuningStep } from '../tuning/tuning-step-store.js?v=1';
 import { loadRttySettings, afskMidpointAudioHz } from '../rtty/rtty-settings.js?v=1';
 
+// Drag-to-tune: CSS pixels a press may wander and still count as a click,
+// and the shortest gap between frequency writes while dragging.
+const TUNE_DRAG_DEADZONE_PX = 4;
+const TUNE_DRAG_SEND_MS     = 60;
+
 export class SpectrumPanel {
 
     /**
@@ -1296,10 +1301,13 @@ export class SpectrumPanel {
                 this._splitterDragging = true;
                 e.preventDefault();
                 if (this._lastBins) this._render();
+                return;
             }
+            this._beginTuneDrag(e);
         });
 
         window.addEventListener('mousemove', (e) => {
+            if (this._tuneDrag) { this._moveTuneDrag(e); return; }
             if (!this._splitterDragging) return;
             const c = document.getElementById(this._canvasId);
             if (!c) return;
@@ -1310,6 +1318,7 @@ export class SpectrumPanel {
         });
 
         window.addEventListener('mouseup', () => {
+            if (this._tuneDrag) { this._endTuneDrag(); return; }
             if (!this._splitterDragging) return;
             this._splitterDragging = false;
             this._saveSplitRatio();
@@ -1324,9 +1333,11 @@ export class SpectrumPanel {
 
             // Swap cursor to row-resize when over the splitter so the
             // affordance is obvious before the user tries to drag.
-            canvas.style.cursor = this._isOnSplitter(this._crosshairY, canvas.height)
-                ? 'row-resize'
-                : 'crosshair';
+            canvas.style.cursor = this._tuneDrag?.moved
+                ? 'grabbing'
+                : this._isOnSplitter(this._crosshairY, canvas.height)
+                    ? 'row-resize'
+                    : 'crosshair';
 
             if (this._lastBins) this._render();
             // Announce cursor frequency to screen readers via a live region (debounced to 1 s).
@@ -1367,7 +1378,82 @@ export class SpectrumPanel {
         return Math.abs(canvasY - splitY) <= 6;
     }
 
+    // ── Drag to tune ─────────────────────────────────────────────────────────
+    //
+    // Grab the spectrum and slide it: the signals follow the pointer, the way
+    // other SDR programs do it, so dragging right tunes DOWN (Bruce VK2RT,
+    // 2026-10-01). The target is always worked out from where the drag
+    // started, never from the dial the radio has echoed back since, so the
+    // spectrum recentring under the pointer cannot make the drag run away.
+    // A press that moves less than TUNE_DRAG_DEADZONE_PX is still a click.
+    // A drag never changes mode; a click does, from the band plan.
+
+    _beginTuneDrag(e) {
+        if (e.button !== 0 || e.shiftKey) return;
+        if (!this._lastBins || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+        this._tuneDrag = {
+            startClientX: e.clientX,
+            startHz:      this._vfoHz,
+            spanHz:       this._lastSpanHz,
+            moved:        false,
+            pendingHz:    null,
+            sendTimer:    null,
+        };
+    }
+
+    _moveTuneDrag(e) {
+        const d = this._tuneDrag;
+        const canvas = document.getElementById(this._canvasId);
+        if (!canvas) return;
+        const dxCss = e.clientX - d.startClientX;
+        if (!d.moved && Math.abs(dxCss) < TUNE_DRAG_DEADZONE_PX) return;
+        if (!d.moved) {
+            d.moved = true;
+            canvas.style.cursor = 'grabbing';
+            e.preventDefault();
+        }
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const hz = Math.round((d.startHz - (dxCss / rect.width) * d.spanHz) / 10) * 10;
+        d.pendingHz = Math.max(30_000, Math.min(75_000_000, hz));
+        // At most one CAT write per TUNE_DRAG_SEND_MS; the last one wins.
+        if (!d.sendTimer) {
+            d.sendTimer = setTimeout(() => {
+                d.sendTimer = null;
+                this._sendTuneDrag(d);
+            }, TUNE_DRAG_SEND_MS);
+        }
+    }
+
+    _endTuneDrag() {
+        const d = this._tuneDrag;
+        this._tuneDrag = null;
+        if (!d.moved) return;   // a plain click; let the click handler tune
+        clearTimeout(d.sendTimer);
+        d.sendTimer = null;
+        this._sendTuneDrag(d);
+        // The browser still fires click after mouseup at the drop point. It
+        // fires before any timer, so the flag cannot outlive this mouseup and
+        // swallow a later real click when the drop was off the canvas.
+        this._suppressNextClick = true;
+        setTimeout(() => { this._suppressNextClick = false; }, 0);
+        const canvas = document.getElementById(this._canvasId);
+        if (canvas) canvas.style.cursor = 'crosshair';
+    }
+
+    _sendTuneDrag(d) {
+        if (d.pendingHz == null) return;
+        const hz = d.pendingHz;
+        d.pendingHz = null;
+        fetch(`/api/cat/frequency/${this._vfoLower}`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ frequencyHz: hz }),
+        }).catch(() => {});
+    }
+
     _onCanvasClick(e) {
+        if (this._suppressNextClick) { this._suppressNextClick = false; return; }
         if (!this._lastBins || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
 
         const canvas = document.getElementById(this._canvasId);

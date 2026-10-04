@@ -1494,7 +1494,14 @@ connection.on("RadioStateUpdate", function (update) {
         if (typeof window.handleTxStateForTimeout === 'function') {
             window.handleTxStateForTimeout(!!update.value);
         }
-        if (window.voiceAnnounce) window.voiceAnnounce.sayTxState(!!update.value);
+        if (window.voiceAnnounce) {
+            // lastMode fills on the first Mode update; the server-rendered
+            // select already holds the mode before then.
+            const txSide = txVfo === 1 ? 'B' : 'A';
+            const txMode = window.radioControl?._state?.lastMode?.[txSide]
+                || document.getElementById(`modeSelect${txSide}`)?.value;
+            window.voiceAnnounce.sayTxState(!!update.value, txMode);
+        }
     }
     if (update.property === "TxVfo") {
         txVfo = update.value;

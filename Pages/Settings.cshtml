@@ -2289,6 +2289,13 @@
                         </select>
                         <input type="hidden" asp-for="Settings.SdrDeviceKeyB" id="sdrDeviceKeyInputB" />
                         <div id="sdrDeviceKeyDisplayB" class="font-monospace small text-muted"></div>
+                        <span asp-validation-for="Settings.SdrDeviceKeyB" class="text-danger small"></span>
+                        <div id="sdrSameDeviceWarning" class="alert alert-warning small py-2 mt-2 mb-0" role="alert" hidden>
+                            <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+                            The same SDR is chosen for VFO A and VFO B. One SDR can only feed one VFO,
+                            so one panel would show "SDR device unavailable". Choose (none) for the VFO
+                            it isn't wired to. Settings won't save like this.
+                        </div>
 
                         <div id="sdrScanNotes" class="mt-2"></div>
                     </div>
@@ -2335,6 +2342,19 @@
                             this until the peak sits under the dial line; a peak that shows
                             <em>above</em> the dial needs a <em>negative</em> trim. Leave at 0 unless
                             you see the offset.
+                        </div>
+                    </div>
+                    <div class="mb-3 form-check form-switch">
+                        <input class="form-check-input" type="checkbox" asp-for="Settings.ReleaseSdrWhenBrowsersClose" />
+                        <label class="form-check-label" asp-for="Settings.ReleaseSdrWhenBrowsersClose">
+                            Free the SDR when the last browser closes
+                        </label>
+                        <div class="form-text">
+                            When on, YWC stops using the SDR about 3 seconds after you close the last
+                            YWC tab, so another program can open it straight away. Opening YWC in a
+                            browser again starts the spectrum again. When off (default), YWC keeps the
+                            SDR until it exits, which is 30 seconds after the last tab closes if
+                            "Automatically exit when no browser is connected" is on.
                         </div>
                     </div>
                     <div class="mb-3">
@@ -3216,6 +3236,15 @@
             const key = document.getElementById(cfg.inputId).value;
             const el  = document.getElementById(cfg.displayId);
             el.textContent = key ? `Saved key: ${key}` : '';
+            updateSameDeviceWarning();
+        }
+
+        // Exact key match only, the same test the server makes on save.
+        function updateSameDeviceWarning() {
+            const a = document.getElementById(sdrSlots.A.inputId)?.value || '';
+            const b = document.getElementById(sdrSlots.B.inputId)?.value || '';
+            const warn = document.getElementById('sdrSameDeviceWarning');
+            if (warn) warn.hidden = !(a && a === b);
         }
 
         // Initialise both dropdowns from saved keys on page load, then

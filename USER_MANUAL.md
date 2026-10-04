@@ -585,6 +585,8 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 > that segment’s mode either way. That is a choice you made by name, not a mode guessed
 > from a frequency.
 
+**Drag to tune** — Hold the left button on the spectrum or the waterfall and slide sideways. The signals follow the pointer, so dragging right tunes down and dragging left tunes up, and the station you grabbed stays under the pointer as the display recentres. A press that moves only a few pixels is still an ordinary click-to-tune. A drag never changes the mode, even with the automatic mode change on. The dial lands on a 10 Hz boundary.
+
 **Mouse wheel to tune** — Scroll the mouse wheel over the spectrum to tune that panel's VFO up or down by one **tuning step**. The step starts at 1 kHz and is remembered per VFO across browser reloads. Four things set it, and they all set the same thing:
 
 - **The Step box** on the spectrum's control bar, beside Smooth — anything from 1 Hz to 10 MHz.
@@ -598,8 +600,8 @@ Every change is announced to screen readers. 1 Hz is now offered everywhere, inc
 
 **Panel height** — the whole spectrum panel can be made taller. There are two ways, and they set the same thing:
 
-- **The Height box** on the control bar, beside Passband — **Shortest**, **Short**, **Normal**, **Tall**, **Taller** or **Tallest**. This is the one to use if you just want it bigger without fiddling, and it is always on screen however tall the panel has become.
-- **The grip along the bottom of the panel** — a full-width strip with a dotted marker in the middle. Drag it down for more, up for less. Anything between 40 and 1000 pixels is allowed, so you are not limited to the six presets — when you drag to a size that is not one of them the Height box reads **Custom**. **Double-click the grip** to go straight back to the default height.
+- **The Height box** on the control bar, beside Passband — **50%**, **75%**, **100%**, **150%**, **200%** or **300%**, where 100% is the normal height (280 pixels). This is the one to use if you just want it bigger without fiddling, and it is always on screen however tall the panel has become.
+- **The grip along the bottom of the panel** — a full-width strip with a dotted marker in the middle. Drag it down for more, up for less. Anything between 40 and 1000 pixels is allowed, so you are not limited to the six presets — when you drag to a size that is not one of them the Height box shows that size as a percentage, such as **137%**. **Double-click the grip** to go straight back to the default height.
 - **At the short end the frequency scale drops out.** Below about 80 pixels there is no room for both the labels and the trace, so the labels go and the trace keeps the space — which is the point of a short panel. The Height box does not go that low; dragging the grip does, and at the 40-pixel floor the whole card is about 135 pixels tall, most of which is the title bar and the control bar above the trace.
 
   The grip also takes the keyboard. Tab to it (or click it once) and use **up and down arrows** to change the height 10 pixels at a time, **Shift** with them for 50, **Page Up / Page Down** for 100, and **Home** / **End** for the smallest and largest sizes. When you reach it with Tab, an amber outline shows it has the keyboard. It works with a finger on a tablet too.
@@ -1086,7 +1088,7 @@ The feature uses your browser's built-in text-to-speech engine (Web Speech API),
 
 - **Band changes** — "forty metres" when you change band on VFO A
 - **Mode changes** — "upper sideband", "C W upper", "data lower", etc.
-- **TX / RX state** — "transmit" when you key up, "receive" when you stop
+- **TX / RX state** — "transmit" when you key up, "receive" when you stop. Not spoken while the transmit VFO is in CW: with break-in the radio keys on and off with the Morse itself, and the announcements would talk across it
 - **Manual frequency entry** — confirmation after typing a frequency on the on-screen keyboard
 - **DX watched-callsign alerts** — spelled-out callsign and frequency when a watched call appears in the DX cluster feed (in addition to the existing toast + beep)
 - **TX timeout warning** — "Warning. Transmit timeout. Check microphone."
@@ -1405,6 +1407,8 @@ If you have two SDRs (typically two SDRplay RSPs) and a dual-receiver radio (FTd
 
 If you only have one SDR, set it in the **VFO A SDR** slot and leave **VFO B SDR** as *(none)*. The main page will show only the VFO A panel exactly as in single-SDR setups before v2.3.0.
 
+One SDR can only feed one VFO. If you pick the same device for both slots, Settings shows a warning under the VFO B dropdown and won't save until you change one of them. Saved that way, whichever VFO opened the SDR first kept it, and the other panel showed *SDR device unavailable*.
+
 > **Note on SDRplay devices specifically:** the SDRplay API service only allows one device per host process. YWC works around this by launching a separate background process (`Yaesu_Sdr_Worker.exe`) for each SDR you configure — you'll see them in Task Manager when YWC is streaming. They start and stop automatically; no user action needed. See [docs/decisions/0001-dual-sdr-architecture.md](docs/decisions/0001-dual-sdr-architecture.md) on GitHub if you're curious about the why.
 
 > **If YWC can't find your SDRplay device:** YWC needs to be able to load `sdrplay_api.dll` from the SDRplay install folder. For a standard install at `C:\Program Files\SDRplay\API\x64\sdrplay_api.dll` this just works — YWC auto-detects the path on startup. If you installed SDRplay to a non-standard location and your Windows `PATH` doesn't include its `x64` folder, YWC may fail to find the DLL.
@@ -1463,6 +1467,12 @@ The Settings page Sample Rate dropdown still exists but now acts as a "reset bot
 **The window is cut around the dial, not around the SDR's centre.** On the FTdx101 the dial sits at the IF OUT frequency plus a slide the radio applies for the current mode, IF width, IF shift and CW pitch — 1.4 kHz for CW with a 3.5 kHz filter and a 700 Hz pitch. At a 1 kHz span, ignoring that would leave the dial off the screen entirely, so the worker centres its window on the slid frequency and moves it the moment you change the filter, shift or pitch. The FTdx10 and FT-710 have no measured slide and are cut around the IF OUT itself.
 
 **At 1k and 2k a CW station is a hump, not a needle.** A keyed carrier has keying sidebands, and at 7.6 Hz per bin they spread across tens of pixels. The radio's own scope at its 1k span shows exactly the same shape. If you want to see individual stations as clickable lines, **20k** is the span for that.
+
+#### Free the SDR when the last browser closes
+
+YWC normally keeps the SDR open for as long as YWC itself is running, whether or not a browser is showing the spectrum. That suits most stations, but it means no other SDR program can open the device while YWC is up. Tick **Free the SDR when the last browser closes** (Settings, SDR section; off by default) and YWC lets go of the SDR 3 seconds after the last browser tab or pop-out closes, then opens it again as soon as a browser comes back. The 3 seconds is there so that moving between YWC's own pages doesn't restart the SDR. The panel takes a few seconds to come back when you reopen the browser, just as it does at startup.
+
+This is separate from **Automatically exit when no browser is connected**, which stops YWC altogether 30 seconds after the last browser closes.
 
 #### SDR frequency trim
 
