@@ -89,10 +89,10 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
-| After the browser was closed and reopened, a pop-out could open as an ordinary tab in the main browser window - filling it, with no edges to resize - instead of a window of its own. A pop-out page restored as a tab now lets go of the pop-out's name, so the next **↗** opens a proper window ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | *Not yet in a build* |
-| **Reattach** now brings the CW Reader, CW Send and RTTY Tuner back into the main page at the size you left the pop-out window, instead of the size the panel had before ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | *Not yet in a build* |
-| A pop-out window came back bigger each time it was reattached and popped out again when the browser's zoom wasn't 100% (twice the size at 50%). It now comes back the size you left it at any zoom, however small you make it ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | *Not yet in a build* |
-| A panel dragged to one place at one browser zoom could open off the window after the zoom was changed, so its button seemed to do nothing. The CW Reader, CW Send and RTTY Tuner are now brought back into view when they open, and the first time they open across the top of the window instead of far down the page ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | *Not yet in a build* |
+| After the browser was closed and reopened, a pop-out could open as an ordinary tab in the main browser window - filling it, with no edges to resize - instead of a window of its own. A pop-out page restored as a tab now lets go of the pop-out's name, so the next **↗** opens a proper window ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | [v2.5.3-pre5](#2026-10-04---v253-pre5-pre-release) |
+| **Reattach** now brings the CW Reader, CW Send and RTTY Tuner back into the main page at the size you left the pop-out window, instead of the size the panel had before ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | [v2.5.3-pre5](#2026-10-04---v253-pre5-pre-release) |
+| A pop-out window came back bigger each time it was reattached and popped out again when the browser's zoom wasn't 100% (twice the size at 50%). It now comes back the size you left it at any zoom, however small you make it ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | [v2.5.3-pre5](#2026-10-04---v253-pre5-pre-release) |
+| A panel dragged to one place at one browser zoom could open off the window after the zoom was changed, so its button seemed to do nothing. The CW Reader, CW Send and RTTY Tuner are now brought back into view when they open, and the first time they open across the top of the window instead of far down the page ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | [v2.5.3-pre5](#2026-10-04---v253-pre5-pre-release) |
 | The CW Reader's **Tune** box was always off when the reader opened in a pop-out window, and on a fresh main page, even if you had left it on. It now comes back the way you left it ([§20](USER_MANUAL.md#20-cw-reader)) | - | [v2.5.3-pre4](#2026-10-04---v253-pre4-pre-release) |
 | The CW Reader's pop-out window opened at 720 x 480 the first time, which is tiny on a large monitor. It now opens at a quarter of the screen; a size you have set yourself is still remembered ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | [v2.5.3-pre4](#2026-10-04---v253-pre4-pre-release) |
 | The DX Spots list could open below the bottom of the window on a long page, so pressing its button seemed to do nothing. It now opens across the top of the window, and a place saved on a bigger screen is pulled back into view. A click beside the **All bands** switch now works the switch too ([§5.17](USER_MANUAL.md#517-dx-spots-list)) | - | [v2.5.3-pre4](#2026-10-04---v253-pre4-pre-release) |
@@ -427,6 +427,15 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 ---
 
 ## Release Notes
+
+## 2026-10-04 - v2.5.3-pre5 (pre-release)
+
+*Pop-out windows keep their size at any browser zoom, and panels stay on the screen. Everything in v2.5.3-pre4 is included. Install it over v2.5.2 or an earlier pre-release; your settings are kept.*
+
+- **Pop-outs keep their size at any browser zoom.** With the browser's zoom other than 100%, a pop-out window came back bigger every time it was reattached and popped out again - twice the size at 50%. It now comes back the size you left it, however small. A size saved by an earlier build is not trusted, so each pop-out opens at its first-time size once and is remembered from then on. [§5.21](USER_MANUAL.md#521-pop-out-windows).
+- **Reattach keeps the size.** The CW Reader, CW Send and RTTY Tuner come back into the main page at the size you left the pop-out window, as far as the main window has room.
+- **No more pop-outs stuck full screen.** After the browser was closed and reopened, a pop-out could open as an ordinary tab filling the main browser window, with no edges to resize. It now always opens as a window of its own. If you have such a tab open from an earlier build, close it once.
+- **Panels stay on the screen.** A panel dragged to one place at one zoom could open off the window at another, so its button seemed to do nothing; it is brought back into view when it opens, and a panel that runs off the right or bottom is moved fully on. The first time, the CW Reader, CW Send and RTTY Tuner open across the top of the window.
 
 ## 2026-10-04 - v2.5.3-pre4 (pre-release)
 
