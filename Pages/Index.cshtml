@@ -1118,6 +1118,13 @@
                             <option value="560">Taller</option>
                             <option value="900">Tallest</option>
                         </select>
+                        <!-- Fold button (Discussion #171): hides both VFO panels so the
+                             page can be just the spectrum. Here rather than on the
+                             toolbar because this is the panel that gains the space,
+                             and it stays in view while the panels are hidden. -->
+                        <button type="button" id="vfoFoldBtnA" class="btn btn-outline-light btn-sm fold-btn ms-2">
+                            <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">VFOs</span>
+                        </button>
                     </div>
                     <div class="card-body p-0 spectrum-canvas-wrap">
                         <canvas id="spectrumCanvasA" role="img" aria-hidden="true" aria-label="RF spectrum display VFO A" style="display:block; width:100%;"></canvas>
@@ -1195,6 +1202,13 @@
                             <option value="560">Taller</option>
                             <option value="900">Tallest</option>
                         </select>
+                        <!-- Fold button (Discussion #171): hides both VFO panels so the
+                             page can be just the spectrum. Here rather than on the
+                             toolbar because this is the panel that gains the space,
+                             and it stays in view while the panels are hidden. -->
+                        <button type="button" id="vfoFoldBtnB" class="btn btn-outline-light btn-sm fold-btn ms-2">
+                            <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">VFOs</span>
+                        </button>
                     </div>
                     <div class="card-body p-0 spectrum-canvas-wrap">
                         <canvas id="spectrumCanvasB" role="img" aria-hidden="true" aria-label="RF spectrum display VFO B" style="display:block; width:100%;"></canvas>
@@ -1208,7 +1222,7 @@
         </div>
     </div>
 
-    <div class="row g-3 flex-wrap" id="vfoRow" data-radio-model="@Model.RadioModel" data-max-power="@maxPowerWatts" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
+    <div class="row g-3 flex-wrap fold-target" id="vfoRow" data-radio-model="@Model.RadioModel" data-max-power="@maxPowerWatts" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
         <!-- VFO A Panel -->
         <div class="col-lg-6 col-12" id="vfoACol">
             <div class="card border-primary h-100 receiver-card">
@@ -2853,6 +2867,56 @@
                 shownLabel:  { text: 'Hide', title: 'Hide the clarifier controls', aria: 'Hide the clarifier controls' },
                 foldedLabel: { text: 'Show', title: 'Show the clarifier controls again', aria: 'Show the clarifier controls' },
             });
+
+            // Fold both VFO panels away (Discussion #171), so a contest page can
+            // be just the spectrum. Each spectrum card has the button, since
+            // either may be the only one showing; A's drives the fold and B's
+            // follows it. The panels only fold while the spectrum is on screen:
+            // with no SDR there is no button, so a choice saved earlier must not
+            // leave the page with no VFO panels and no way to bring them back.
+            {
+                const vfoRow   = document.getElementById('vfoRow');
+                const specBox  = document.getElementById('spectrumContainer');
+                const btnB     = document.getElementById('vfoFoldBtnB');
+                const specOn   = () => !!specBox && getComputedStyle(specBox).display !== 'none';
+                const shown    = { text: 'VFOs', title: 'Hide the VFO A and VFO B panels, leaving the spectrum', aria: 'Hide the VFO panels' };
+                const hidden   = { text: 'VFOs', title: 'Show the VFO A and VFO B panels again', aria: 'Show the VFO panels' };
+                let fold = null;
+                // attachFold sets hidden itself before calling sync, so the row's
+                // own state can't say whether it just came back; this can.
+                let rowHidden = false;
+                const sync = folded => {
+                    const hide = folded && specOn();
+                    if (vfoRow) vfoRow.hidden = hide;
+                    if (btnB) {
+                        const l = folded ? hidden : shown;
+                        btnB.title = l.title;
+                        btnB.setAttribute('aria-label', l.aria);
+                        btnB.setAttribute('aria-expanded', String(!folded));
+                        const icon = btnB.querySelector('.bi');
+                        icon?.classList.toggle('bi-chevron-up', !folded);
+                        icon?.classList.toggle('bi-chevron-down', folded);
+                    }
+                    // Anything sized to its box redraws once the panels are back.
+                    if (rowHidden && !hide) window.dispatchEvent(new Event('resize'));
+                    rowHidden = hide;
+                };
+                fold = attachFold({
+                    name: 'vfoPanels',
+                    button: document.getElementById('vfoFoldBtnA'),
+                    targets: vfoRow ? [vfoRow] : [],
+                    shownLabel: shown,
+                    foldedLabel: hidden,
+                    onChange: sync,
+                });
+                if (fold) {
+                    btnB?.setAttribute('aria-controls', 'vfoRow');
+                    btnB?.addEventListener('click', () => fold.toggle());
+                    // The spectrum shows and hides as the SDRs come and go.
+                    if (specBox) new MutationObserver(() => sync(fold.folded))
+                        .observe(specBox, { attributes: true, attributeFilter: ['style', 'class'] });
+                }
+            }
 
             // ── UTC clock in the top bar ──────────────────────────────────────
             const utcClockEl = document.getElementById('utcClock');
