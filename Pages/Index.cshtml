@@ -2690,7 +2690,7 @@
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { attachPopout }         from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { attachPopout, screenShare } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { attachFold }           from "/js/layout/fold-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { AudioFilterPanel }     from "/js/ui/audio-filter-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -3171,7 +3171,9 @@
             window.cwReaderOpen = attachPopout({
                 name: 'cw-reader',
                 url: '/CwReader',
-                defaultSize: { width: 720, height: 480 },
+                // A quarter of the screen: the reader has no natural size, and 720x480
+                // was a postage stamp on a 4K monitor.
+                defaultSize: () => screenShare(0.25, window.screen),
                 dialog: () => document.getElementById('cwReaderDialog'),
                 openButton: document.getElementById('cwReaderOpenBtn'),
                 popoutButton: document.getElementById('cwReaderPopoutBtn'),
