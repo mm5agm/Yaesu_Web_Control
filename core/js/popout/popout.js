@@ -39,6 +39,8 @@ const FRAME_KEY      = 'popoutFrame';
 // A frame bigger than this is not a frame: the browser did not give the
 // window the size it was asked for (clamped to the screen, say).
 const MAX_FRAME      = 400;
+// A saved size above this share of the screen is not used (see usableSave).
+const NEAR_FULL      = 0.9;
 
 export const MIN_WIDTH  = 320;
 export const MIN_HEIGHT = 200;
@@ -158,9 +160,10 @@ export function pageAreaSize(win, frame) {
  * A saved geometry fit to open with. A size saved before sizes were measured
  * in screen units - with no `zoomSafe` mark - may have been inflated by the
  * browser's zoom at every Reattach until it filled the screen, so only its
- * position is kept and the size goes back to the default, once. A size
- * bigger than the screen is cut down to it either way: a window as big as
- * the screen has no edges left to grab and make it smaller.
+ * position is kept and the size goes back to the default, once. So does a
+ * size that all but fills the screen, however it was saved: a window that
+ * big has no edges left to grab and make it smaller, and the default is a
+ * size the operator can at least get hold of.
  * Pure, so it can be tested.
  *
  * @param {object|null} saved  as read from storage
@@ -170,13 +173,10 @@ export function pageAreaSize(win, frame) {
 export function usableSave(saved, scr) {
     if (!saved || typeof saved !== 'object') return saved;
     const out = { ...saved };
-    if (!out.zoomSafe) { delete out.width; delete out.height; }
-    const cap = (k, max) => {
-        if (Number(max) > 0 && Number(out[k]) > max) out[k] = Math.round(max);
-    };
-    // Leave room for the frame, which the saved size does not include.
-    cap('width',  Number(scr?.availWidth)  - 16);
-    cap('height', Number(scr?.availHeight) - 60);
+    const tooBig = (v, avail) => Number(avail) > 0 && Number(v) > NEAR_FULL * Number(avail);
+    if (!out.zoomSafe || tooBig(out.width, scr?.availWidth) || tooBig(out.height, scr?.availHeight)) {
+        delete out.width; delete out.height;
+    }
     delete out.zoomSafe;
     return out;
 }
@@ -497,8 +497,12 @@ export class PopoutChild {
             ...pageAreaSize(window, this._frame),
             left:   window.screenX,
             top:    window.screenY,
-            zoomSafe: true,
         };
+        // Only a size measured from the frame is right at any zoom. Without
+        // the frame - storage off, or a window the browser would not make the
+        // size it was asked for - the inner size is saved unmarked, so the
+        // next open uses the default size rather than trusting it.
+        if (this._frame) g.zoomSafe = true;
         // A minimised window reports nothing useful; keep the last real one.
         if (!g.width || !g.height) return;
         const sig = JSON.stringify(g);
