@@ -72,6 +72,14 @@ export class CwReaderPanel {
         this._clearBtn = document.getElementById('cwReaderClearBtn');
         this._autoScrl = document.getElementById('cwReaderAutoScroll');
 
+        // The tuning figure. Off by default: it is a thing you reach for while
+        // hunting for a signal, not something to leave spinning all session.
+        // Found before _loadSettings, which restores it: looked up after, the
+        // remembered setting had nothing to land on, so a fresh page - the
+        // pop-out every time - always came up with Tune off.
+        this._phasorBox = document.getElementById('cwPhasorBox');
+        this._phasorTgl = document.getElementById('cwPhasorToggle');
+
         this._loadSettings();
         if (this._autoScrl) {
             this._autoScrl.addEventListener('change', () => this._saveSettings());
@@ -89,10 +97,6 @@ export class CwReaderPanel {
             this._refreshReaderMode();
         }
 
-        // The tuning figure. Off by default: it is a thing you reach for while
-        // hunting for a signal, not something to leave spinning all session.
-        this._phasorBox = document.getElementById('cwPhasorBox');
-        this._phasorTgl = document.getElementById('cwPhasorToggle');
         this._phasorTgl?.addEventListener('change', () => {
             this._applyPhasor();
             this._saveSettings();

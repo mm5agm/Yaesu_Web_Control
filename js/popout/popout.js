@@ -76,6 +76,23 @@ export function clampGeometry(saved, def) {
     return out;
 }
 
+/**
+ * A default size that is a share of the screen's area, for a panel that has
+ * no natural size of its own. 0.25 is half the width by half the height.
+ * Pure, so it can be tested: the screen is passed in.
+ *
+ * @param {number} share  fraction of the screen's area, 0-1
+ * @param {{availWidth:number,availHeight:number}} scr  usually window.screen
+ * @returns {{width:number,height:number}}
+ */
+export function screenShare(share, scr) {
+    const k = Math.sqrt(Math.min(1, Math.max(0, share)));
+    return {
+        width:  Math.max(MIN_WIDTH,  Math.round((scr?.availWidth  || 0) * k)),
+        height: Math.max(MIN_HEIGHT, Math.round((scr?.availHeight || 0) * k)),
+    };
+}
+
 /** The window.open features string for a geometry from clampGeometry. */
 export function featuresFor(geom) {
     const parts = ['popup=yes', `width=${geom.width}`, `height=${geom.height}`];
@@ -170,7 +187,9 @@ export class PopoutHost {
      * @param {object} opts
      * @param {string} opts.name   short id, e.g. 'cw-reader'; names the window, channel and storage
      * @param {string} opts.url    the pop-out page
-     * @param {{width:number,height:number}} opts.defaultSize  page-area size the first time
+     * @param {{width:number,height:number}|(() => {width:number,height:number})} opts.defaultSize
+     *        page-area size the first time; a function is asked at each open,
+     *        so a size worked out from the screen follows the screen
      * @param {(open: boolean) => void} [opts.onChange]  the pop-out opened or closed
      * @param {() => void} [opts.onReattach]  the operator asked for the panel back
      */
@@ -209,7 +228,8 @@ export class PopoutHost {
     open() {
         if (this._open) { this.focus(); return true; }
 
-        const geom = clampGeometry(readGeometry(this._name), this._default);
+        const def  = typeof this._default === 'function' ? this._default() : this._default;
+        const geom = clampGeometry(readGeometry(this._name), def);
         // A fixed name, so a second click (or a second main-page tab) finds
         // the same window instead of stacking up copies of it.
         const w = window.open(this._url, WINDOW_PREFIX + this._name, featuresFor(geom));
