@@ -173,8 +173,9 @@ test('the child saves its page-area size and screen position', () => {
     const name = freshName();
     const child = new PopoutChild({ name }).start();
     b.fire('pagehide');
+    // No request was recorded, so the frame is unknown and the size unmarked.
     assert.deepEqual(JSON.parse(b.store.get('popoutGeom_' + name)),
-        { width: 640, height: 380, left: 2000, top: 100, zoomSafe: true });
+        { width: 640, height: 380, left: 2000, top: 100 });
     clearInterval(child._watch);
     child._channel.close();
 });
@@ -222,10 +223,13 @@ test('a size saved before the zoom fix goes back to the default, keeping its pla
         { width: 700, height: 420, left: 5, top: 6 });
 });
 
-test('a saved size bigger than the screen is cut down so its edges can be grabbed', () => {
+test('a saved size bigger than the screen goes back to the default', () => {
     const scr = { availWidth: 1920, availHeight: 1040 };
-    assert.deepEqual(usableSave({ width: 3000, height: 2000, left: 0, top: 0, zoomSafe: true }, scr),
-        { width: 1904, height: 980, left: 0, top: 0 });
+    assert.deepEqual(usableSave({ width: 2000, height: 500, left: 0, top: 0, zoomSafe: true }, scr), { left: 0, top: 0 });
+    assert.deepEqual(usableSave({ width: 900, height: 1100, zoomSafe: true }, scr), {});
+    // Tall on a short screen is a choice, not a fault.
+    const short = { availWidth: 1608, availHeight: 651 };
+    assert.deepEqual(usableSave({ width: 380, height: 600, zoomSafe: true }, short), { width: 380, height: 600 });
     assert.deepEqual(usableSave({ width: 900, height: 500, zoomSafe: true }, scr), { width: 900, height: 500 });
     assert.equal(usableSave(null, scr), null);
 });
