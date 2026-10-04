@@ -3171,6 +3171,8 @@
             // the window, or closing it, gives the button back.
             window.cwReaderOpen = attachPopout({
                 name: 'cw-reader',
+                // Reattach gives the dialog the size the window was left at.
+                takeSize: true,
                 url: '/CwReader',
                 // A quarter of the screen: the reader has no natural size, and 720x480
                 // was a postage stamp on a 4K monitor.
@@ -3200,6 +3202,8 @@
             // out - which closes the dialog here - does not stop the figure.
             window.rttyTunerOpen = attachPopout({
                 name: 'rtty-tuner',
+                // Reattach gives the dialog the size the window was left at.
+                takeSize: true,
                 url: '/RttyTuner',
                 defaultSize: { width: 380, height: 520 },
                 dialog: () => document.getElementById('rttyTunerDialog'),
@@ -3318,6 +3322,8 @@
                 };
                 window.cwSendOpen = attachPopout({
                     name: 'cw-send',
+                    // Reattach gives the dialog the size the window was left at.
+                    takeSize: true,
                     url: '/CwSend',
                     defaultSize: { width: 600, height: 340 },
                     dialog: () => document.getElementById('cwSendDialog'),

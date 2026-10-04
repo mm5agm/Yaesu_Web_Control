@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    clampGeometry, featuresFor, screenShare, frameFrom, pageAreaSize, usableSave,
+    clampGeometry, featuresFor, screenShare, frameFrom, pageAreaSize, usableSave, fitSize,
     PopoutHost, PopoutChild, MIN_WIDTH, MIN_HEIGHT,
 } from '../../js/popout/popout.js';
 
@@ -238,6 +238,31 @@ test('a saved size bigger than the screen goes back to the default', () => {
     assert.deepEqual(usableSave({ width: 380, height: 600, zoomSafe: true }, short), { width: 380, height: 600 });
     assert.deepEqual(usableSave({ width: 900, height: 500, zoomSafe: true }, scr), { width: 900, height: 500 });
     assert.equal(usableSave(null, scr), null);
+});
+
+// ── Reattach carries the size back ───────────────────────────────────────────
+
+test('the panel takes the pop-out size, cut to the main window', () => {
+    const view = { width: 1600, height: 900 };
+    assert.deepEqual(fitSize({ width: 328, height: 206 }, view), { width: 328, height: 206 });
+    assert.deepEqual(fitSize({ width: 3000, height: 2000 }, view), { width: 1584, height: 884 });
+    assert.deepEqual(fitSize({ width: 40, height: 20 }, view), { width: MIN_WIDTH, height: MIN_HEIGHT });
+    assert.equal(fitSize(null, view), null);
+    assert.equal(fitSize({ width: 0, height: 300 }, view), null);
+});
+
+test('reattach hands the pop-out page size to the host', async () => {
+    const b = stubBrowser();
+    const name = freshName();
+    const sizes = [];
+    const host = new PopoutHost({ name, url: '/X', defaultSize: DEF, onReattach: s => sizes.push(s) }).start();
+    const child = new PopoutChild({ name }).start();
+    await tick();
+    child.reattach();
+    await tick();
+    assert.deepEqual(sizes, [{ width: 640, height: 380 }]);
+    clearInterval(child._watch);
+    host._channel.close(); child._channel.close();
 });
 
 // ── screenShare ──────────────────────────────────────────────────────────────

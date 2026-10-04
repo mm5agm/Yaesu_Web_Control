@@ -301,7 +301,7 @@ export class PopoutHost {
             const t = ev.data?.type;
             if (t === 'opened')   this._setOpen(true);
             if (t === 'closed')   this._setOpen(false);
-            if (t === 'reattach') { this._setOpen(false); this._onReattach(); }
+            if (t === 'reattach') { this._setOpen(false); this._onReattach(ev.data.size ?? null); }
         });
         this._channel.postMessage({ type: 'ping' });
         return this;
@@ -358,6 +358,25 @@ export class PopoutHost {
 }
 
 /**
+ * The size to give the in-page panel when it comes back from a pop-out: the
+ * pop-out's page area in CSS pixels, which is what the panel is sized in
+ * too (the browser zooms every page of one site alike), cut to fit the main
+ * window. Null for a size not worth using. Pure, so it can be tested.
+ *
+ * @param {{width:number,height:number}|null} size  the pop-out's inner size
+ * @param {{width:number,height:number}} view  the main window's inner size
+ * @returns {{width:number,height:number}|null}
+ */
+export function fitSize(size, view) {
+    const w = Math.round(Number(size?.width)), h = Math.round(Number(size?.height));
+    if (!(w > 0) || !(h > 0)) return null;
+    return {
+        width:  Math.max(MIN_WIDTH,  Math.min(w, Math.round(view.width)  - 16)),
+        height: Math.max(MIN_HEIGHT, Math.min(h, Math.round(view.height) - 16)),
+    };
+}
+
+/**
  * The main page's half of a pop-out panel, wired to its dialog and buttons:
  * the usual case, so each panel does not write it out again.
  *
@@ -374,12 +393,15 @@ export class PopoutHost {
  * @param {() => void} opts.show  opens the in-page panel
  * @param {{text:string,title:string,aria:string}} opts.closedLabel  the open button normally
  * @param {{text:string,title:string,aria:string}} opts.openLabel  the open button while popped out
+ * @param {boolean} [opts.takeSize=false]  on Reattach, give the dialog the size the
+ *        pop-out window was left at; for dialogs the operator can resize
  * @param {string} [opts.onClass='btn-outline-info'], [opts.offClass='btn-outline-secondary']
  * @returns {{ host: PopoutHost, open: () => void }} open() is what the toolbar button calls
  */
 export function attachPopout({
     name, url, defaultSize, dialog, openButton, popoutButton, show,
-    closedLabel, openLabel, onClass = 'btn-outline-info', offClass = 'btn-outline-secondary',
+    closedLabel, openLabel, takeSize = false,
+    onClass = 'btn-outline-info', offClass = 'btn-outline-secondary',
 }) {
     const label = l => {
         if (!openButton || !l) return;
@@ -395,7 +417,15 @@ export function attachPopout({
             openButton?.classList.toggle(onClass, open);
             openButton?.classList.toggle(offClass, !open);
         },
-        onReattach: () => { if (!dialog()?.open) show(); },
+        onReattach: size => {
+            const dlg = dialog();
+            const fit = takeSize && dlg ? fitSize(size, { width: window.innerWidth, height: window.innerHeight }) : null;
+            if (fit) {
+                dlg.style.width  = `${fit.width}px`;
+                dlg.style.height = `${fit.height}px`;
+            }
+            if (!dlg?.open) show();
+        },
     }).start();
 
     popoutButton?.addEventListener('click', () => {
@@ -478,7 +508,8 @@ export class PopoutChild {
     /** Hand the panel back to the main page and close this window. */
     reattach() {
         this._saveGeometry();
-        this._post('reattach');
+        // The main page can give its panel the size this window was left at.
+        this._post('reattach', { size: { width: window.innerWidth, height: window.innerHeight } });
         window.close();
         // A window the operator opened by typing the address, rather than one
         // the main page opened, is not allowed to close itself. Go to the main
@@ -486,8 +517,8 @@ export class PopoutChild {
         setTimeout(() => { if (!window.closed) window.location.href = this._fallback; }, 300);
     }
 
-    _post(type) {
-        try { this._channel?.postMessage({ type }); } catch { /* channel closed during unload */ }
+    _post(type, extra) {
+        try { this._channel?.postMessage({ type, ...extra }); } catch { /* channel closed during unload */ }
     }
 
     _saveGeometry() {

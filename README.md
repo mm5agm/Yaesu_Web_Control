@@ -89,7 +89,8 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
-| A pop-out window came back bigger each time it was reattached and popped out again when the browser's zoom wasn't 100% (twice the size at 50%). It now comes back the size you left it at any zoom ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | *Not yet in a build* |
+| **Reattach** now brings the CW Reader, CW Send and RTTY Tuner back into the main page at the size you left the pop-out window, instead of the size the panel had before ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | *Not yet in a build* |
+| A pop-out window came back bigger each time it was reattached and popped out again when the browser's zoom wasn't 100% (twice the size at 50%). It now comes back the size you left it at any zoom, however small you make it ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | *Not yet in a build* |
 | A panel dragged to one place at one browser zoom could open off the window after the zoom was changed, so its button seemed to do nothing. The CW Reader, CW Send and RTTY Tuner are now brought back into view when they open, and the first time they open across the top of the window instead of far down the page ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | *Not yet in a build* |
 | The CW Reader's **Tune** box was always off when the reader opened in a pop-out window, and on a fresh main page, even if you had left it on. It now comes back the way you left it ([§20](USER_MANUAL.md#20-cw-reader)) | - | [v2.5.3-pre4](#2026-10-04---v253-pre4-pre-release) |
 | The CW Reader's pop-out window opened at 720 x 480 the first time, which is tiny on a large monitor. It now opens at a quarter of the screen; a size you have set yourself is still remembered ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | [v2.5.3-pre4](#2026-10-04---v253-pre4-pre-release) |
