@@ -91,6 +91,13 @@ export class DxSpotsPanel {
                 this._saveSettings();
                 this._render();
             });
+            // Bootstrap's switch wrapper has a strip of its own between the
+            // switch and its label. A click there reaches neither, so it did
+            // nothing - and it looks like part of the control. Pass it on.
+            const wrap = this._allBandsChk.closest('.form-check, .form-switch');
+            if (wrap) wrap.addEventListener('click', (e) => {
+                if (e.target === wrap) this._allBandsChk.click();
+            });
         }
 
         // Sortable column headers — `data-sort` carries the column key
@@ -136,7 +143,33 @@ export class DxSpotsPanel {
     show() {
         if (!this._dialog) return;
         this._dialog.show();
+        if (this._floating) this._placeInView();
         this._render();
+    }
+
+    // With no saved place, show() leaves the dialog wherever its markup sits
+    // in the page - on a long page that is below the bottom of the window,
+    // and where the page cannot scroll the operator never sees it open at
+    // all. So it is pinned fixed (see _loadSettings for why fixed), centred
+    // across the top on its first showing, and a saved place that is now off
+    // the window - saved on a bigger screen, say - is pulled back into it.
+    _placeInView() {
+        const d = this._dialog;
+        if (d.style.position !== 'fixed') {
+            d.style.position = 'fixed';
+            d.style.margin   = '0';
+            d.style.left     = '0px';
+            d.style.top      = '0px';
+            const w = d.getBoundingClientRect().width;
+            d.style.left = `${Math.max(0, (window.innerWidth - w) / 2)}px`;
+            d.style.top  = `${Math.min(80, Math.max(0, window.innerHeight / 10))}px`;
+            return;
+        }
+        const r = d.getBoundingClientRect();
+        if (r.top < 0 || r.top > window.innerHeight - 40)
+            d.style.top = `${Math.max(0, Math.min(80, window.innerHeight - r.height))}px`;
+        if (r.right < 40 || r.left > window.innerWidth - 40)
+            d.style.left = `${Math.max(0, (window.innerWidth - r.width) / 2)}px`;
     }
 
     toggle() {

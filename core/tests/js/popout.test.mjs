@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    clampGeometry, featuresFor, PopoutHost, PopoutChild, MIN_WIDTH, MIN_HEIGHT,
+    clampGeometry, featuresFor, screenShare, PopoutHost, PopoutChild, MIN_WIDTH, MIN_HEIGHT,
 } from '../../js/popout/popout.js';
 
 const DEF = { width: 700, height: 420 };
@@ -174,4 +174,28 @@ test('the child saves its page-area size and screen position', () => {
         { width: 640, height: 380, left: 2000, top: 100 });
     clearInterval(child._watch);
     child._channel.close();
+});
+
+// ── screenShare ──────────────────────────────────────────────────────────────
+
+test('a quarter of the screen is half its width by half its height', () => {
+    assert.deepEqual(screenShare(0.25, { availWidth: 1920, availHeight: 1040 }), { width: 960, height: 520 });
+});
+
+test('a share of a small or missing screen never goes under the minimum', () => {
+    assert.deepEqual(screenShare(0.25, { availWidth: 400, availHeight: 300 }), { width: MIN_WIDTH, height: MIN_HEIGHT });
+    assert.deepEqual(screenShare(0.25, undefined), { width: MIN_WIDTH, height: MIN_HEIGHT });
+});
+
+test('a default size given as a function is asked at open, and a saved size still wins', () => {
+    const b = stubBrowser();
+    const name = freshName();
+    const host = new PopoutHost({ name, url: '/X', defaultSize: () => ({ width: 960, height: 520 }) });
+    host.open();
+    assert.match(b.opened[0].features, /width=960,height=520/);
+
+    b.store.set('popoutGeom_' + name, JSON.stringify({ width: 500, height: 300, left: 10, top: 20 }));
+    host._open = false;
+    host.open();
+    assert.match(b.opened[1].features, /width=500,height=300,left=10,top=20/);
 });
