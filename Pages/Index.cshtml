@@ -2692,6 +2692,7 @@
         import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { attachPopout, screenShare } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { attachFold }           from "/js/layout/fold-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { watchInView }          from "/js/dialogs/place-in-view.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { AudioFilterPanel }     from "/js/ui/audio-filter-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -4519,7 +4520,15 @@
                     dlg.style.position = 'fixed';
                 }
             } catch {}
+            // A place saved at another browser zoom, or on a bigger monitor,
+            // can be off the window, and then the dialog opens out of sight.
+            // The floating panels also open across the top the first time,
+            // rather than wherever their markup sits down the page.
+            watchInView(dlg, { placeFirst: ['cwSendDialog', 'rttyTunerDialog'].includes(id) });
         });
+        // The CW reader keeps its own place (cw-reader-panel.js), so it is not
+        // in the list above, but it can be left off the window the same way.
+        watchInView(document.getElementById('cwReaderDialog'), { placeFirst: true });
 
         // --- DX Watch (watched-callsign alerts) ---
         // Backed by ApplicationSettings.DxClusterWatchedCallsigns. The
