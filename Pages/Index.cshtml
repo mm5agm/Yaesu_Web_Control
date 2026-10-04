@@ -1056,7 +1056,16 @@
                      pulls that card wider than the other. -->
                 <div id="spectrumContainerA" class="card border-dark" style="flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
-                        <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
+                            <!-- Fold button (Discussion #171): hides both VFO panels so the
+                                 page can be just the spectrum. Beside the title, which always
+                                 has room, even with the panels side by side; the control bar
+                                 runs out of width there and would push it off the card. -->
+                            <button type="button" id="vfoFoldBtnA" class="btn btn-outline-light btn-sm fold-btn py-0">
+                                <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">VFOs</span>
+                            </button>
+                        </div>
                         <div class="d-flex align-items-center gap-2">
                             <div class="btn-group btn-group-sm" role="group" aria-label="VFO A spectrum span">
                                 <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzA == 1_000 ? "active" : "")" data-hz="1000" data-vfo="A" data-a11y-key="spectrum.spanA1k" aria-label="VFO A span 1 kHz" title="VFO A span 1 kHz — one CW signal, the dial in the middle; software zoom, switches instantly">1k</button>
@@ -1118,13 +1127,6 @@
                             <option value="560">Taller</option>
                             <option value="900">Tallest</option>
                         </select>
-                        <!-- Fold button (Discussion #171): hides both VFO panels so the
-                             page can be just the spectrum. Here rather than on the
-                             toolbar because this is the panel that gains the space,
-                             and it stays in view while the panels are hidden. -->
-                        <button type="button" id="vfoFoldBtnA" class="btn btn-outline-light btn-sm fold-btn ms-2">
-                            <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">VFOs</span>
-                        </button>
                     </div>
                     <div class="card-body p-0 spectrum-canvas-wrap">
                         <canvas id="spectrumCanvasA" role="img" aria-hidden="true" aria-label="RF spectrum display VFO A" style="display:block; width:100%;"></canvas>
@@ -1140,7 +1142,16 @@
                      in side-by-side layout regardless of badge text content. -->
                 <div id="spectrumContainerB" class="card border-dark" style="display:none; flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
-                        <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
+                            <!-- Fold button (Discussion #171): hides both VFO panels so the
+                                 page can be just the spectrum. Beside the title, which always
+                                 has room, even with the panels side by side; the control bar
+                                 runs out of width there and would push it off the card. -->
+                            <button type="button" id="vfoFoldBtnB" class="btn btn-outline-light btn-sm fold-btn py-0">
+                                <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">VFOs</span>
+                            </button>
+                        </div>
                         <div class="d-flex align-items-center gap-2">
                             <div class="btn-group btn-group-sm" role="group" aria-label="VFO B spectrum span">
                                 <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 1_000 ? "active" : "")" data-hz="1000" data-vfo="B" data-a11y-key="spectrum.spanB1k" aria-label="VFO B span 1 kHz" title="VFO B span 1 kHz — one CW signal, the dial in the middle; software zoom, switches instantly">1k</button>
@@ -1202,13 +1213,6 @@
                             <option value="560">Taller</option>
                             <option value="900">Tallest</option>
                         </select>
-                        <!-- Fold button (Discussion #171): hides both VFO panels so the
-                             page can be just the spectrum. Here rather than on the
-                             toolbar because this is the panel that gains the space,
-                             and it stays in view while the panels are hidden. -->
-                        <button type="button" id="vfoFoldBtnB" class="btn btn-outline-light btn-sm fold-btn ms-2">
-                            <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">VFOs</span>
-                        </button>
                     </div>
                     <div class="card-body p-0 spectrum-canvas-wrap">
                         <canvas id="spectrumCanvasB" role="img" aria-hidden="true" aria-label="RF spectrum display VFO B" style="display:block; width:100%;"></canvas>
