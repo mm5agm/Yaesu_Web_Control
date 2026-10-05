@@ -142,12 +142,13 @@ Everything fixed in the v2.5.2 pre-releases is in [v2.5.2](#2026-09-24---v252).
 | FTdx10 | 100 W | Single | Two VFOs; no rear-panel IF output for spectrum |
 | FT-710 | 100 W | Single | Two VFOs; no rear-panel IF output for spectrum |
 | FTDX3000 | 100 W | Single | Two VFOs; no memory tag (MT) command |
+| FT-991A | 100 W (50 W on 2 m / 70 cm) | Single | HF + 6 m + 2 m + 70 cm; C4FM; new in v2.5.3-pre6 — built from the 991A's CAT manual and still being tested on a real radio |
 | FTDX5000MP | 200 W | Dual | New — available to test; power meter calibration still being refined |
 | FTDX5000D | 200 W | Dual | New — available to test; power meter calibration still being refined |
 
 ## Getting your Yaesu radio added — it's easier than you think
 
-I own and test on the **FTdx101MP**; the other supported models are built from Yaesu's published CAT documentation and confirmed by the users who own them. If your Yaesu isn't listed yet — **FT-991A, FTX-1** and others are all realistic — I'll gladly add it, and **all it takes from you is ordinary operating, not programming.**
+I own and test on the **FTdx101MP**; the other supported models are built from Yaesu's published CAT documentation and confirmed by the users who own them. If your Yaesu isn't listed yet — the **FTX-1** and others are all realistic — I'll gladly add it, and **all it takes from you is ordinary operating, not programming.**
 
 "Testing" just means *using your radio normally* with YWC and telling me what happens: change bands, tune around, switch modes, key up, and drop a note on the [Discussions tab](https://github.com/mm5agm/Yaesu_Web_Control/discussions) like *"frequency and mode track fine, but the S-meter reads a bit low."* **No code, no build tools, no command line.** If you can run the installer and operate your rig, you can test — I do the programming, you just tell me what your radio does. Even a one-liner on a model that already works ("works fine on my FT-710") is useful: it tells me which radios have real users behind them.
 
