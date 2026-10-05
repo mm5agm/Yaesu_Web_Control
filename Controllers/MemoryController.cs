@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Yaesu_Web_Control.Services;
@@ -151,7 +151,7 @@ namespace Yaesu_Web_Control.Controllers
             }
             if (!string.IsNullOrEmpty(memory.IfWidthCode) && int.TryParse(memory.IfWidthCode, out int ifw))
             {
-                await _catClient.SendCommandAsync($"SH00{ifw:D2};", "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "0", ifw), "MemRecall", CancellationToken.None);
                 if (targetB) _radioStateService.IfWidthB = memory.IfWidthCode;
                 else _radioStateService.IfWidthA = memory.IfWidthCode;
             }

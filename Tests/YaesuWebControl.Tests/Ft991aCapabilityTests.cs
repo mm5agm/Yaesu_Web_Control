@@ -108,4 +108,72 @@ public sealed class Ft991aCapabilityTests
         foreach (var model in OtherModels)
             Assert.True(RadioCapabilities.FrequencyRangeHz(model).MaxHz < 100_000_000L, model);
     }
+
+    // SH widths, from the 991A manual's SH table. The Narrow and Wide columns
+    // are merged: a code in both columns means the same width in both.
+    [Theory]
+    [InlineData("USB", 1, 200)]
+    [InlineData("USB", 6, 1350)]
+    [InlineData("USB", 9, 1800)]
+    [InlineData("USB", 14, 2400)]
+    [InlineData("LSB", 21, 3200)]
+    [InlineData("CW-U", 1, 50)]
+    [InlineData("CW-U", 10, 500)]
+    [InlineData("CW-U", 11, 800)]
+    [InlineData("CW-L", 17, 3000)]
+    [InlineData("RTTY-L", 12, 1200)]
+    [InlineData("DATA-U", 16, 2400)]
+    public void IfWidth_MatchesTheManualsShTable(string mode, int code, int hz)
+        => Assert.Equal(hz, YaesuIfWidth.HzFor("FT-991A", mode, code));
+
+    [Theory]
+    [InlineData("USB", 0)]    // default: 1500 or 2400 depending on NARROW
+    [InlineData("USB", 22)]   // past the end of the SSB column
+    [InlineData("CW-U", 18)]  // past the end of the CW column
+    [InlineData("C4FM", 9)]   // no IF width in FM modes
+    public void IfWidth_IsUnknown_WhereTheManualGivesNoSingleAnswer(string mode, int code)
+        => Assert.Null(YaesuIfWidth.HzFor("FT-991A", mode, code));
+
+    // SH set: SH P1 P2P2; on the 991A, with no fixed '0' before the code.
+    [Fact]
+    public void IfWidthSet_HasNoFixedZero_OnTheFt991a()
+    {
+        Assert.Equal("SH014;", CatCommands.FormatIfWidth("FT-991A", "0", 14));
+        Assert.Equal("SH003;", CatCommands.FormatIfWidth("FT-991A", "0", 3));
+    }
+
+    [Fact]
+    public void IfWidthSet_IsUnchanged_OnEveryOtherModel()
+    {
+        foreach (var model in OtherModels)
+        {
+            Assert.Equal("SH0014;", CatCommands.FormatIfWidth(model, "0", 14));
+            Assert.Equal("SH1003;", CatCommands.FormatIfWidth(model, "1", 3));
+        }
+    }
+
+    // A tester's diagnostics log showed IfWidthA "1;": the 991A's answer was
+    // read one character too far along.
+    [Theory]
+    [InlineData("SH014;", "14")]
+    [InlineData("SH009;", "9")]
+    [InlineData("SH000;", "0")]
+    public void IfWidthAnswer_ReadsTheTwoDigitCode_OnTheFt991a(string answer, string code)
+    {
+        var (state, dispatcher) = ModeVfoRoutingTests.NewDispatcher(singleReceiver: false, activeVfo: 0);
+        state.RadioModel = "FT-991A";
+        dispatcher.DispatchMessage(answer);
+        Assert.Equal(code, state.IfWidthA);
+    }
+
+    [Theory]
+    [InlineData("SH0014;", "14")]
+    [InlineData("SH0009;", "9")]
+    [InlineData("SH0000;", "0")]
+    public void IfWidthAnswer_StillReadsTheFixedZeroForm(string answer, string code)
+    {
+        var (state, dispatcher) = ModeVfoRoutingTests.NewDispatcher(singleReceiver: false, activeVfo: 0);
+        dispatcher.DispatchMessage(answer);
+        Assert.Equal(code, state.IfWidthA);
+    }
 }

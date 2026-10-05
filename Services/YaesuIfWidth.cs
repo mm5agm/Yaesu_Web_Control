@@ -114,6 +114,31 @@
             [15] = 2000, [16] = 2400,
         };
 
+        // FT-991A, from the SH table in its CAT manual. The manual gives
+        // separate Narrow and Wide columns (the NA command switches between
+        // them), but the codes barely overlap: Narrow SSB uses 1-9, Wide SSB
+        // 9-21, and where a code is in both columns it means the same width
+        // (9 = 1800 Hz in SSB, 10 = 500 Hz in CW). So one table per mode
+        // covers both states and the width never depends on reading NA. Only
+        // code 0 differs (1500/2400 Hz SSB, 500/2400 Hz CW, 300/500 Hz
+        // RTTY-PSK), and code 0 is "do not know" here as on every model.
+        // RTTY/PSK have their own column, identical to CW in codes 1-17.
+        private static readonly Dictionary<int, int> Ft991aSsb = new()
+        {
+            [1] = 200, [2] = 400, [3] = 600, [4] = 850, [5] = 1100, [6] = 1350,
+            [7] = 1500, [8] = 1650, [9] = 1800, [10] = 1950, [11] = 2100,
+            [12] = 2200, [13] = 2300, [14] = 2400, [15] = 2500, [16] = 2600,
+            [17] = 2700, [18] = 2800, [19] = 2900, [20] = 3000, [21] = 3200,
+        };
+
+        private static readonly Dictionary<int, int> Ft991aCw = new()
+        {
+            [1] = 50, [2] = 100, [3] = 150, [4] = 200, [5] = 250, [6] = 300,
+            [7] = 350, [8] = 400, [9] = 450, [10] = 500, [11] = 800,
+            [12] = 1200, [13] = 1400, [14] = 1700, [15] = 2000, [16] = 2400,
+            [17] = 3000,
+        };
+
         private static readonly Dictionary<string, (Dictionary<int, int> Ssb, Dictionary<int, int> Cw)> Tables =
             new(StringComparer.OrdinalIgnoreCase)
             {
@@ -122,6 +147,7 @@
                 ["FTdx10"]    = (Dx10Ssb,  Dx10Cw),
                 ["FT-710"]    = (Ft710Ssb, Ft710Cw),
                 ["FTDX3000"]  = (Dx3000Ssb, Dx3000Cw),
+                ["FT-991A"]   = (Ft991aSsb, Ft991aCw),
             };
 
         /// <summary>Models this class knows, for tests and diagnostics.</summary>

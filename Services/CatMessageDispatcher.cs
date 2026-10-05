@@ -326,10 +326,14 @@
                         }
                         break;
                     case "SH":
-                        // SH{vfo}0{nn}; — vfo: 0=Main 1=Sub; [3]='0' fixed; [4-5]=2-digit code
+                        // SH{vfo}0{nn}; — vfo: 0=Main 1=Sub; [3]='0' fixed; [4-5]=2-digit code.
+                        // The FT-991A answers SH{vfo}{nn}; with no fixed '0', so its
+                        // code starts one character earlier. Reading it at [4] took
+                        // the last digit and the ';' ("1;" in a tester's log).
                         if (message.Length >= 6)
                         {
-                            var rawCode = message.Substring(4, 2).TrimStart('0');
+                            int codeAt = message.Length == 6 ? 3 : 4;
+                            var rawCode = message.Substring(codeAt, 2).TrimStart('0');
                             var code = string.IsNullOrEmpty(rawCode) ? "0" : rawCode;
                             SetPerVfo(message[2], routeB => {
                                 if (routeB) _stateService.IfWidthB = code;

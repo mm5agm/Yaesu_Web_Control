@@ -88,6 +88,19 @@
             ("7","1.65 kHz"), ("9","1.95 kHz"), ("12","2.4 kHz"), ("16","2.7 kHz"),
             ("19","3.0 kHz"), ("20","3.2 kHz"), ("21","3.5 kHz"), ("22","4.0 kHz")
         }
+        : isFt991a
+        ? new (string Value, string Label)[]
+        {
+            // FT-991A SH codes, SSB column (CAT manual). Code 0 is the radio's
+            // default: 1.5 kHz with NARROW on, 2.4 kHz with it off.
+            ("0","Default"),
+            ("1","200 Hz"), ("2","400 Hz"), ("3","600 Hz"), ("4","850 Hz"),
+            ("5","1.1 kHz"), ("6","1.35 kHz"), ("7","1.5 kHz"), ("8","1.65 kHz"),
+            ("9","1.8 kHz"), ("10","1.95 kHz"), ("11","2.1 kHz"), ("12","2.2 kHz"),
+            ("13","2.3 kHz"), ("14","2.4 kHz"), ("15","2.5 kHz"), ("16","2.6 kHz"),
+            ("17","2.7 kHz"), ("18","2.8 kHz"), ("19","2.9 kHz"), ("20","3.0 kHz"),
+            ("21","3.2 kHz")
+        }
         : isFtdx3000
         ? new (string Value, string Label)[]
         {

@@ -514,7 +514,7 @@ namespace Yaesu_Web_Control.Controllers
                 {
                     if (!string.IsNullOrEmpty(profile.IfWidthCode))
                     {
-                        await _catClient.SendCommandAsync($"SH00{int.Parse(profile.IfWidthCode):D2};", "WebUI", CancellationToken.None);
+                        await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "0", int.Parse(profile.IfWidthCode)), "WebUI", CancellationToken.None);
                         _radioStateService.IfWidthA = profile.IfWidthCode;
                     }
                     var sign = profile.IfShiftHz >= 0 ? '+' : '-';
@@ -590,7 +590,7 @@ namespace Yaesu_Web_Control.Controllers
                 {
                     if (!string.IsNullOrEmpty(profile.IfWidthCode))
                     {
-                        await _catClient.SendCommandAsync($"SH10{int.Parse(profile.IfWidthCode):D2};", "WebUI", CancellationToken.None);
+                        await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "1", int.Parse(profile.IfWidthCode)), "WebUI", CancellationToken.None);
                         _radioStateService.IfWidthB = profile.IfWidthCode;
                     }
                     var sign = profile.IfShiftHz >= 0 ? '+' : '-';
@@ -1508,7 +1508,7 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                await _catClient.SendCommandAsync($"SH{VfoP1Outgoing(receiver)}0{int.Parse(request.Code):D2};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(_radioStateService.RadioModel, VfoP1Outgoing(receiver), codeNum), "WebUI", CancellationToken.None);
                 if (VfoIsB(receiver)) _radioStateService.IfWidthB = request.Code;
                 else                  _radioStateService.IfWidthA = request.Code;
                 return Ok();

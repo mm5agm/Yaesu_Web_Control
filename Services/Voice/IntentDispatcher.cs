@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Yaesu_Web_Control.Hubs;
 using Yaesu_Web_Control.Services;
@@ -472,11 +472,16 @@ namespace Yaesu_Web_Control.Services.Voice
 
             var p1 = VfoP1;
             var raw = await SendCommand($"SH{p1};", ct);
-            if (!TryParseIntResponse(raw, "SH", out var current))
+            // The code is the last two digits of the answer. Parsing everything
+            // after "SH" read SH1012; (sub receiver) as 1012, and the FT-991A's
+            // answer has no fixed '0' before the code at all.
+            var shBody = raw?.Trim().TrimEnd(';') ?? "";
+            if (!shBody.StartsWith("SH", StringComparison.OrdinalIgnoreCase) || shBody.Length < 5
+                || !int.TryParse(shBody.AsSpan(shBody.Length - 2), out var current))
                 return new DispatchResult(false, "Filter width");
 
             var next = Math.Clamp(current + (int)direction, 0, 40);
-            await SendCommand($"SH{p1}0{next:D2};", ct);
+            await SendCommand(CatCommands.FormatIfWidth(_state.RadioModel, p1, next), ct);
             if (VfoIsB) _state.IfWidthB = next.ToString(); else _state.IfWidthA = next.ToString();
             _logger.LogInformation("[Voice] NudgeIfWidth {Dir} -> {Next} (VFO {Vfo})", direction > 0 ? "wider" : "narrower", next, CurrentVfo);
             return new DispatchResult(true, direction > 0 ? "Filter wider" : "Filter narrower");

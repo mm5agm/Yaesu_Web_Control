@@ -130,6 +130,15 @@
             return 0;
         }
 
+        /// <summary>
+        /// SH set command for an IF width code. Every model but one takes
+        /// SH{P1}0{nn}; with a fixed '0' before the two-digit code. The FT-991A
+        /// has no fixed digit - SH{P1}{nn}; - so the long form would hand it
+        /// "0n" plus a stray digit.
+        /// </summary>
+        public static string FormatIfWidth(string? radioModel, string p1, int code)
+            => radioModel == "FT-991A" ? $"SH{p1}{code:D2};" : $"SH{p1}0{code:D2};";
+
         public static string FormatMode(string mode, bool isSubVfo = false)
         {
             var modeCode = mode.ToUpper() switch
