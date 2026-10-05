@@ -190,6 +190,7 @@ Supported radios:
 | FTDX3000 | 100 W | Single |
 | FTdx10 | 100 W | Single |
 | FT-710 | 100 W | Single |
+| FT-991A | 100 W (50 W on 2 m and 70 cm) | Single |
 
 The app runs as a small host process and is accessed through any web browser — on the same machine, a tablet, or any device on your home network.
 
@@ -199,7 +200,7 @@ The application was written for operators who want a large, clean, touchscreen-f
 
 - Large, readable frequency displays with digit-by-digit mouse-wheel tuning and an on-screen frequency keyboard
 - Full dual-receiver control (VFO A and VFO B)
-- Live S-meter, power, SWR, ALC, and compression meters (plus PA temperature, IDD, and VDD on FTdx101MP, FTdx101D, and FTDX3000)
+- Live S-meter, power, SWR, ALC, and compression meters (plus PA temperature, IDD, and VDD on FTdx101MP, FTdx101D, and FTDX3000, and IDD and VDD on the FT-991A)
 - Real-time two-way sync — changes on the radio front panel appear immediately in the app, and vice versa
 - Band and segment selectors for fast QSY to CW, FT8, SSB, or RTTY
 - **Per-band memory** for IF Width, IF Shift, and Mode — switching to a band automatically restores your preferred filter and mode for that band
@@ -344,7 +345,7 @@ Before the app can communicate with your radio you need to tell it which serial 
    - **macOS:** use the menu-bar status item (Open), or check the console log.
    - **Linux / Docker:** use the URL printed at startup, or `http://<host>:8080` from another device on the LAN.
 2. Click the **Settings** link in the navigation bar.
-3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, single receiver), **FTdx10** (100 W, single receiver), or **FT-710** (100 W, single receiver).
+3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, single receiver), **FTdx10** (100 W, single receiver), **FT-710** (100 W, single receiver), or **FT-991A** (100 W, 50 W on 2 m and 70 cm, single receiver).
 4. Set **Serial Port** to the radio's **Enhanced** (CAT) virtual port — not the Standard / TX-control port if two appear:
    - **Windows:** a COM port (e.g. `COM3`). Use **Diagnostics → Ports** or Device Manager (*Silicon Labs Dual CP210x… Enhanced COM Port*).
    - **macOS:** prefer a `/dev/cu.*` device (e.g. `ls /dev/cu.usbserial-*` in Terminal). Try the other `cu.usbserial-…` node if Test Connection fails.
@@ -495,6 +496,8 @@ A scrollable row of meters is displayed above the VFO panels. The leftmost slots
 **FTDX3000** — single S-meter (VFO A) plus the same seven TX meters — FTDX3000 is a single-receiver radio, so there is no VFO B S-meter.
 
 **FTdx10, FT-710** — single S-meter (VFO A) plus four TX meters (SWR, Power, Compression, ALC). The Temp, IDD, and VDD meters are not shown because those radios have a different power amplifier design that runs on 13.8 V; the high-voltage PA meters do not apply.
+
+**FT-991A** - single S-meter (VFO A) plus SWR, Power, Compression, ALC, IDD and VDD. There is no Temp meter, because the FT-991A has no temperature reading over CAT.
 
 All meters update in real time — about five times a second at the default 200 ms **Meter Poll Interval** (Settings → Radio Connection). Not everything is read on every cycle: the S-meter(s) and transmit state are, while PA temperature, IDD, VDD and the antenna selection are read every two seconds, because they change slowly and reading them costs bus time the meters need. Meters that only apply to transmit automatically read zero when the radio is receiving. The S-meter(s) are always live.
 
@@ -683,7 +686,7 @@ Both panels have identical controls — changing a control on either panel write
 > 3. Press **Split** — you are now receiving on 20m and transmitting on 6m
 > 4. Do **not** press +5k, as that would move VFO B back to 20m + 5 kHz
 
-**RX / TX VFO selectors (single-receiver radios only).** On the single-receiver radios (**FTdx10, FT-710, FTDX3000**) a pair of small selectors — **RX [A│B]** and **TX [A│B]** — sits next to the Split and +5k buttons. They let you choose the receive VFO and the transmit VFO **independently**, instead of being limited to the fixed "VFO A receives, VFO B transmits" that the Split button gives. There is no separate split toggle here — **split is derived automatically: you are in split whenever the RX and TX VFOs are different.** That makes all four combinations available directly:
+**RX / TX VFO selectors (single-receiver radios only).** On the single-receiver radios (**FTdx10, FT-710, FTDX3000, FT-991A**) a pair of small selectors — **RX [A│B]** and **TX [A│B]** — sits next to the Split and +5k buttons. They let you choose the receive VFO and the transmit VFO **independently**, instead of being limited to the fixed "VFO A receives, VFO B transmits" that the Split button gives. There is no separate split toggle here — **split is derived automatically: you are in split whenever the RX and TX VFOs are different.** That makes all four combinations available directly:
 
 | RX | TX | Result |
 |----|----|--------|
@@ -691,6 +694,8 @@ Both panels have identical controls — changing a control on either panel write
 | A | B | Standard split (the same as the Split button) |
 | B | A | Reverse split — receive on B, transmit on A |
 | B | B | Normal — receive and transmit on VFO B |
+
+**On the FT-991A, RX B is greyed out.** The FT-991A has no CAT command to move its receiver to VFO B, so only the two rows with RX on A are available from YWC. To listen on VFO B's frequency, press **A↔B** in YWC to swap the two frequencies, or press **A/B** on the radio. TX A and TX B both work.
 
 The currently selected **RX** button is filled **green** (receiving); the selected **TX** button is filled **red** (transmitting) — the same colour convention as the radio's front panel. Unselected buttons stay outlined. The selectors follow the radio live, so if you change the receive or transmit VFO at the rig the buttons update to match.
 
@@ -843,6 +848,8 @@ Available bands depend on your band plan setting:
 
 Region 1 is the only plan that includes the 4m (70 MHz) band. Japan has no 60m secondary allocation.
 
+With **Radio Model** set to **FT-991A**, every plan also has **2m** and **70cm** buttons, and the 4m button is never shown, because the FT-991A has no 4 m band. On 2 m and 70 cm the power slider stops at 50 W, which is the radio's own maximum there.
+
 **Segment dropdown** — After selecting a band, a dropdown appears above the frequency display showing common operating segments for that band. Select a segment to jump directly to its standard frequency and set the appropriate mode:
 
 | Segment | Example (20m) | Mode set |
@@ -955,7 +962,7 @@ Click the **CW** button to open the CW Keyer pop-up panel.
 |---------|-------------|
 | Speed | Keyer speed in WPM (4–60) |
 | ZIN | CW Auto Zero In. One click sends the Yaesu `ZI` command; the radio nudges the VFO so the received CW signal sits exactly at your configured CW pitch (set via the Pitch control). Much faster than chasing the signal with the VFO knob. Targets whichever VFO is currently active on dual-receiver radios. **Also available as a per-VFO ZIN button in each VFO panel's header** — handy for Search-and-Pounce operating when you don't want to open the popout for every signal. The per-VFO buttons target their specific VFO regardless of which is currently focused. |
-| Break-in | **Off** (keyer only), **Semi** (semi break-in), or **Full** (QSK full break-in). **Full** is offered on the FTdx101MP/D only for now. On the other models it's set in the radio's own menu (CW BK-IN TYPE), and YWC shows Semi whichever type the radio uses |
+| Break-in | **Off** (keyer only), **Semi** (semi break-in), or **Full** (QSK full break-in). **Full** is offered on the FTdx101MP/D and the FT-991A only for now. On the other models it's set in the radio's own menu (CW BK-IN TYPE), and YWC shows Semi whichever type the radio uses |
 | Delay | Semi break-in delay, 30–3000 ms: how long the radio stays on transmit after the last element before it drops back to receive. The radio holds only certain steps (30, 50, 100, 150, 200, 250 ms, then every 100 ms), so the slider moves to the nearest one when you let go. Only relevant in Semi mode |
 | Pitch | CW sidetone pitch frequency (300–1050 Hz in 10 Hz steps). Also sets the CW receive offset so the radio zero-beats at this tone. Read from the radio on connect. |
 | M1–M5 buttons | Sends the corresponding memory message. See **Sending a memory message** below — there is more to it than it looks. |
@@ -1316,7 +1323,7 @@ Clicking **Restart Now** stops YWC and (when running as the installed exe) autom
 
 | Setting | Description |
 |---------|-------------|
-| Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), or **FT-710** (100 W, single RX) |
+| Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), **FT-710** (100 W, single RX), or **FT-991A** (100 W, 50 W on 2 m / 70 cm, single RX) |
 | Serial Port | Path to the radio's **Enhanced** (CAT) USB/serial port. **Windows:** `COM3`, `COM4`, … (Device Manager: *Enhanced COM Port*). **macOS:** `/dev/cu.usbserial-…` (prefer `cu.*` over `tty.*`). **Linux / Docker:** `/dev/ttyUSB0`, `/dev/ttyACM0`, or `/dev/serial/by-id/…`. If ports are missing or CAT never answers on Windows/macOS, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot — [§2.4](#24-usb-serial-driver-windows--macos--linux). Linux can normally skip that. |
 | Baud Rate | Must match the radio's CAT Rate setting. Default: 38400 |
 | Meter Poll Interval (ms) | Minimum cycle period for CAT meter polls (delay between cycle starts). Default: **200** ms. Valid range: 50–1000. The next cycle starts after this interval minus the time the previous cycle took, so the setting is a target period rather than a raw wait after each poll. Lower values give a faster S-meter update rate but increase CAT bus traffic — if you share the port with WSJT-X or rigctld, reducing this below ~100 ms raises the chance of collisions where both programs try to read the bus at the same time. Raise it (e.g. to 500) if you see erratic readings or CAT timeouts when running digital modes. |
@@ -3315,7 +3322,7 @@ The Settings page → Voice Control section has a **Diagnostics** block that sho
 
 **No mic buttons on the Index page.**
 - Did you tick "Enable voice control" in Settings *and* restart YWC? The toggle only takes effect on next launch.
-- Only one mic button (VFO A's)? That's expected on single-receiver radios (FTdx10, FT-710, FTDX3000) — there's no independent VFO B to target.
+- Only one mic button (VFO A's)? That's expected on single-receiver radios (FTdx10, FT-710, FTDX3000, FT-991A) — there's no independent VFO B to target.
 - Open the Settings page → Voice Control → Diagnostics. If the **State** is anything other than `Idle`, there's an engine error — read the **Last error** line.
 - If Diagnostics shows the active language's Windows speech pack isn't installed, install it (Windows → Settings → Time &amp; Language → Speech → Add a language) — see [§17.2](#172-enabling-voice-control).
 

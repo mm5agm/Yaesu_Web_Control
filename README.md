@@ -89,8 +89,8 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
-| WSJT-X, Log4OM and other programs using YWC's rigctld connection were told the radio was in USB whenever it was in CW, RTTY or a DATA mode, so FT8 on DATA-U read back as USB. They are now told the right mode (PKTUSB for DATA-U, CW, RTTY and so on) | - | Not yet in a build |
-| The FT-991A is now a model of its own in **Settings > Radio Model**, so it no longer has to be set up as an FT-710. It adds **2m** and **70cm** band buttons and the **C4FM** mode (which the FT-710 setting showed as PSK). It also caps power at 50 W on 2 m and 70 cm, and has the 991A's own IF widths and IF shift (the width used to show as "1;"), split, break-in, RTTY tones and memory import. Built from the 991A's CAT manual and still being tested on a real radio | [#86](https://github.com/mm5agm/Yaesu_Web_Control/discussions/86) | Not yet in a build |
+| WSJT-X, Log4OM and other programs using YWC's rigctld connection were told the radio was in USB whenever it was in CW, RTTY or a DATA mode, so FT8 on DATA-U read back as USB. They are now told the right mode (PKTUSB for DATA-U, CW, RTTY and so on) | - | [v2.5.3-pre6](#2026-10-05---v253-pre6-pre-release) |
+| The FT-991A is now a model of its own in **Settings > Radio Model**, so it no longer has to be set up as an FT-710. It adds **2m** and **70cm** band buttons and the **C4FM** mode (which the FT-710 setting showed as PSK). It also caps power at 50 W on 2 m and 70 cm, and has the 991A's own IF widths and IF shift (the width used to show as "1;"), split, break-in, RTTY tones and memory import. Built from the 991A's CAT manual and still being tested on a real radio | [#86](https://github.com/mm5agm/Yaesu_Web_Control/discussions/86) | [v2.5.3-pre6](#2026-10-05---v253-pre6-pre-release) |
 | After the browser was closed and reopened, a pop-out could open as an ordinary tab in the main browser window - filling it, with no edges to resize - instead of a window of its own. A pop-out page restored as a tab now lets go of the pop-out's name, so the next **↗** opens a proper window ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | [v2.5.3-pre5](#2026-10-04---v253-pre5-pre-release) |
 | **Reattach** now brings the CW Reader, CW Send and RTTY Tuner back into the main page at the size you left the pop-out window, instead of the size the panel had before ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | [v2.5.3-pre5](#2026-10-04---v253-pre5-pre-release) |
 | A pop-out window came back bigger each time it was reattached and popped out again when the browser's zoom wasn't 100% (twice the size at 50%). It now comes back the size you left it at any zoom, however small you make it ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | [v2.5.3-pre5](#2026-10-04---v253-pre5-pre-release) |
@@ -429,6 +429,13 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 ---
 
 ## Release Notes
+
+## 2026-10-05 - v2.5.3-pre6 (pre-release)
+
+*The FT-991A gets a model of its own, and WSJT-X and Log4OM are told the right mode. Everything in v2.5.3-pre5 is included. Install it over v2.5.2 or an earlier pre-release; your settings are kept.*
+
+- **FT-991A** ([#86](https://github.com/mm5agm/Yaesu_Web_Control/discussions/86)). Choose **FT-991A** under **Settings > Radio Model** instead of setting it up as an FT-710. It adds **2m** and **70cm** band buttons and the **C4FM** mode, which the FT-710 setting showed as PSK. The power slider stops at 50 W on 2 m and 70 cm. The IF width, IF shift, split, break-in, RTTY tones and memory import all use the 991A's own commands. The IF width used to show as "1;". All of this comes from the 991A's CAT manual and is still being tested on a real radio. [§3](USER_MANUAL.md#3-first-time-setup), [§5.5](USER_MANUAL.md#55-vfo-panels).
+- **WSJT-X and Log4OM are told the right mode.** Through YWC's rigctld connection, CW, RTTY and every DATA mode were reported as USB, so FT8 on DATA-U read back as USB. They now get PKTUSB, PKTLSB, CW, CW-R, RTTY or RTTY-R as appropriate.
 
 ## 2026-10-04 - v2.5.3-pre5 (pre-release)
 
