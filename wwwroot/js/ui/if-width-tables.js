@@ -27,7 +27,7 @@ const MODE_GROUP = {
     'RTTY-L': 'cw', 'RTTY-U': 'cw',
     'PSK': 'cw',
     'AM': null, 'AM-N': null,
-    'FM': null, 'FM-N': null,
+    'FM': null, 'FM-N': null, 'C4FM': null,
     'DATA-FM': null, 'DATA-FM-N': null,
 };
 

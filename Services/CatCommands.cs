@@ -148,39 +148,49 @@
                 "DATA-U"   => "C",
                 "AM-N"     => "D",
                 "PSK"      => "E",
+                "C4FM"     => "E",   // FT-991A: the same code, a different mode
                 "DATA-FM-N" => "F",
                 _ => "2" // Default to USB
             };
             return $"MD{(isSubVfo ? "1" : "0")}{modeCode};";
         }
 
-        public static string ParseMode(string response)
+        public static string ParseMode(string response, string? radioModel = null)
         {
             if (response.Length >= 4 && response.StartsWith("MD"))
-            {
-                var modeCode = response.Substring(3, 1);
-                return modeCode switch
-                {
-                    "1" => "LSB",
-                    "2" => "USB",
-                    "3" => "CW-U",
-                    "4" => "FM",
-                    "5" => "AM",
-                    "6" => "RTTY-L",
-                    "7" => "CW-L",
-                    "8" => "DATA-L",
-                    "9" => "RTTY-U",
-                    "A" => "DATA-FM",
-                    "B" => "FM-N",
-                    "C" => "DATA-U",
-                    "D" => "AM-N",
-                    "E" => "PSK",
-                    "F" => "DATA-FM-N",
-                    _ => "UNKNOWN"
-                };
-            }
+                return ModeFromCode(response[3], radioModel) ?? "UNKNOWN";
             return "UNKNOWN";
         }
+
+        /// <summary>
+        /// The mode name for an MD P2 code, or null for a code no model uses.
+        /// Shared by ParseMode and CatMessageDispatcher so the two cannot
+        /// disagree.
+        ///
+        /// Code E is the one that depends on the radio. On the FT-991A it is
+        /// C4FM (FT-991A CAT manual, MD table); on every other supported
+        /// model it is PSK. Reading it as PSK on a 991A labelled a C4FM
+        /// signal as a data mode.
+        /// </summary>
+        public static string? ModeFromCode(char code, string? radioModel) => code switch
+        {
+            '1' => "LSB",
+            '2' => "USB",
+            '3' => "CW-U",
+            '4' => "FM",
+            '5' => "AM",
+            '6' => "RTTY-L",
+            '7' => "CW-L",
+            '8' => "DATA-L",
+            '9' => "RTTY-U",
+            'A' => "DATA-FM",
+            'B' => "FM-N",
+            'C' => "DATA-U",
+            'D' => "AM-N",
+            'E' => radioModel == "FT-991A" ? "C4FM" : "PSK",
+            'F' => "DATA-FM-N",
+            _ => null
+        };
 
         public static int ParseSMeter(string response)
         {

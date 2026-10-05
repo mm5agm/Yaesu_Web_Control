@@ -6,7 +6,9 @@
     ViewData["BodyLabel"] = "Yaesu radio control panel";
     var allModes = new[] {
         "LSB", "USB", "CW-U", "CW-L", "FM", "FM-N", "AM", "AM-N", "RTTY-L", "RTTY-U",
-        "DATA-L", "DATA-U", "DATA-FM", "DATA-FM-N", "PSK"
+        "DATA-L", "DATA-U", "DATA-FM", "DATA-FM-N",
+        // MD code E: C4FM on the FT-991A, PSK on every other model.
+        Model.RadioModel == "FT-991A" ? "C4FM" : "PSK"
     };
     // Display label shown in the dropdown — value stays as the CAT mode string.
     string ModeLabel(string m) => m == "DATA-FM-N" ? "D-FM-N" : m;
@@ -20,10 +22,18 @@
     // — see docs/decisions/0003-single-vs-dual-receiver-ui.md.
     bool isSingleReceiver  = Yaesu_Web_Control.Services.RadioCapabilities.IsSingleReceiver(Model.RadioModel);
     bool hasAntennaSelector = Yaesu_Web_Control.Services.RadioCapabilities.HasAntennaSelector(Model.RadioModel);
+    bool canSelectRxVfo = Yaesu_Web_Control.Services.RadioCapabilities.CanSelectRxVfo(Model.RadioModel);
+    bool hasRoofingCat = Yaesu_Web_Control.Services.RadioCapabilities.HasRoofingFilterCat(Model.RadioModel);
+    bool hasPaTemp = Yaesu_Web_Control.Services.RadioCapabilities.HasPaTemperatureMeter(Model.RadioModel);
+    bool isFt991a = Model.RadioModel == "FT-991A";
     // Rated TX output. Server-rendered rather than derived in JavaScript so the
     // slider and the Power dial are right on first paint, and so the browser
     // agrees with the range check CatController.SetPower applies to the same value.
     int maxPowerWatts = Yaesu_Web_Control.Services.RadioCapabilities.MaxPowerWatts(Model.RadioModel);
+    // Upper tuning limit, for the VFO digit count and every client-side clamp
+    // (site.js maxTunableHz). 75 MHz on all but the FT-991A's 470 MHz.
+    long maxTunableHz = Yaesu_Web_Control.Services.RadioCapabilities.FrequencyRangeHz(Model.RadioModel).MaxHz;
+    string maxTunableMhz = (maxTunableHz / 1_000_000).ToString(System.Globalization.CultureInfo.InvariantCulture);
     // VDD dial, per model for the same reason: 40–55 V for the FTdx101MP's 50 V
     // PA supply, 10–16 V for the 13.8 V radios (#155). Invariant culture so a
     // German-locale host does not render 13,8 into the JavaScript.
@@ -519,7 +529,17 @@
                     <span class="small text-nowrap">RX</span>
                     <div class="btn-group btn-group-sm" role="group" aria-label="Receive VFO">
                         <button type="button" id="rxVfoA" class="btn btn-outline-secondary py-0" data-rx="A" aria-label="Receive on VFO A">A</button>
+                        @if (canSelectRxVfo)
+                        {
                         <button type="button" id="rxVfoB" class="btn btn-outline-secondary py-0" data-rx="B" aria-label="Receive on VFO B">B</button>
+                        }
+                        else
+                        {
+                        @* FT-991A: no VS or FR, so CAT cannot move the receiver to VFO B. *@
+                        <button type="button" id="rxVfoB" class="btn btn-outline-secondary py-0" data-rx="B" disabled
+                                title="The FT-991A cannot choose its receive VFO over CAT. Use Swap A/B instead."
+                                aria-label="Receive on VFO B - not available on this radio over CAT">B</button>
+                        }
                     </div>
                     <span class="small text-nowrap ms-1">TX</span>
                     <div class="btn-group btn-group-sm" role="group" aria-label="Transmit VFO">
@@ -643,13 +663,16 @@
                             </div>
                         </div>
                         @if (!isFtdx10 && !isFt710 && !isFtdx5000) {
+                        @if (hasPaTemp) {
                         <!-- PA Temperature Meter — FTdx101/FTDX3000 only (high-voltage PA board).
-                             FTDX5000 excluded: no temperature read-code in its RM meter set. -->
+                             FTDX5000 excluded: no temperature read-code in its RM meter set.
+                             FT-991A excluded: it has RM7 (ID) and RM8 (VDD) but no RM9. -->
                         <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
                             </div>
                         </div>
+                        }
                         <!-- IDD Meter — FTdx101/FTDX3000 only -->
                         <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
@@ -1212,7 +1235,7 @@
         </div>
     </div>
 
-    <div class="row g-3 flex-wrap fold-target" id="vfoRow" data-radio-model="@Model.RadioModel" data-max-power="@maxPowerWatts" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
+    <div class="row g-3 flex-wrap fold-target" id="vfoRow" data-radio-model="@Model.RadioModel" data-max-power="@maxPowerWatts" data-max-hz="@maxTunableHz" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
         <!-- VFO A Panel -->
         <div class="col-lg-6 col-12" id="vfoACol">
             <div class="card border-primary h-100 receiver-card">
@@ -1274,7 +1297,7 @@
                         <!-- Band buttons + Mode/Antenna (sized to content so the
                              scope column can sit in the leftover middle gap) -->
                         <div class="flex-shrink-0 d-flex flex-column gap-1">
-                            @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", "A", Model.SelectedBandA))
+                            @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create(Model.RadioModel ?? "", "A", Model.SelectedBandA))
                             <div class="d-flex align-items-center gap-2 mt-1">
                                 <label class="vfo-control-label" for="modeSelectA">Mode</label>
                                 <select class="form-select form-select-sm vfo-mode-select" id="modeSelectA"
@@ -1565,7 +1588,7 @@
 
                     <!-- Frequency + Roofing + AF Gain on one row -->
                     <div class="vfo-freq-row d-flex align-items-center flex-wrap gap-2 mb-1" style="margin-top: -2px;">
-                        <span id="freqA" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO A frequency" title="VFO A frequency" data-a11y-key="vfo.a.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
+                        <span id="freqA" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO A frequency" title="VFO A frequency" data-a11y-key="vfo.a.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="@maxTunableMhz" aria-valuenow="0"></span>
                         <span class="frequency-display digit-display">MHz</span>
                         <div id="freqA-controls" class="freq-step-controls" style="display:@(Model.ShowFrequencyArrowButtons ? "inline-flex" : "none");">
                             <button type="button" id="freqA-up" class="btn btn-secondary btn-sm" aria-label="Step VFO A selected digit up" title="Step VFO A selected digit up (↑)">▲</button>
@@ -1578,7 +1601,7 @@
                                 title="Keyboard — enter VFO A frequency">
                             <strong>123</strong>
                         </button>
-                        @if (!isFt710)
+                        @if (hasRoofingCat)
                         {
                         <label class="mb-0 text-nowrap ms-1 fw-bold">Roofing:</label>
                         <select class="form-select form-select-sm fw-bold flex-shrink-0" id="roofingFilterSelectA"
@@ -1727,7 +1750,7 @@
                         <!-- Band buttons + Mode/Antenna (sized to content so the
                              scope column can sit in the leftover middle gap) -->
                         <div class="flex-shrink-0 d-flex flex-column gap-1">
-                            @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", "B", Model.SelectedBandB))
+                            @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create(Model.RadioModel ?? "", "B", Model.SelectedBandB))
                             <div class="d-flex align-items-center gap-2 mt-1">
                                 <label class="vfo-control-label" for="modeSelectB">Mode</label>
                                 <select class="form-select form-select-sm vfo-mode-select" id="modeSelectB"
@@ -1983,7 +2006,7 @@
 
                     <!-- Frequency + Roofing + AF Gain on one row -->
                     <div class="vfo-freq-row d-flex align-items-center flex-wrap gap-2 mb-1" style="margin-top: -2px;">
-                        <span id="freqB" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO B frequency" title="VFO B frequency" data-a11y-key="vfo.b.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
+                        <span id="freqB" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO B frequency" title="VFO B frequency" data-a11y-key="vfo.b.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="@maxTunableMhz" aria-valuenow="0"></span>
                         <span class="frequency-display digit-display">MHz</span>
                         <div id="freqB-controls" class="freq-step-controls" style="display:@(Model.ShowFrequencyArrowButtons ? "inline-flex" : "none");">
                             <button type="button" id="freqB-up" class="btn btn-secondary btn-sm" aria-label="Step VFO B selected digit up" title="Step VFO B selected digit up (↑)">▲</button>
@@ -1996,7 +2019,7 @@
                                 title="Keyboard — enter VFO B frequency">
                             <strong>123</strong>
                         </button>
-                        @if (!isFt710)
+                        @if (hasRoofingCat)
                         {
                         <label class="mb-0 text-nowrap ms-1 fw-bold">Roofing:</label>
                         <select class="form-select form-select-sm fw-bold flex-shrink-0" id="roofingFilterSelectB"
@@ -4936,7 +4959,7 @@
                     'RTTY-L': 'RTTY lower', 'RTTY-U': 'RTTY upper',
                     'DATA-L': 'data lower', 'DATA-U': 'data upper',
                     'DATA-FM': 'data F M', 'DATA-FM-N': 'data F M narrow',
-                    'PSK': 'P S K',
+                    'PSK': 'P S K', 'C4FM': 'C 4 F M',
                 };
                 return map[String(m).toUpperCase()] || String(m);
             }

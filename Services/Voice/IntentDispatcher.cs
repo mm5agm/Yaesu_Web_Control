@@ -709,6 +709,7 @@ namespace Yaesu_Web_Control.Services.Voice
             "DATA-FM"  => "data F M",
             "DATA-FM-N"=> "data F M narrow",
             "PSK"      => "P S K",
+            "C4FM"     => "C 4 F M",
             _          => mode
         };
     }

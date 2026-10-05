@@ -4,13 +4,22 @@
 
 const STORAGE_KEY  = 'freqKeyboard.layout';
 const MIN_FREQ_HZ  = 30_000;
-const MAX_FREQ_HZ  = 75_000_000;
+
+// Upper limit and digit count follow the configured radio (#vfoRow's
+// data-max-hz, from RadioCapabilities.FrequencyRangeHz): eight digits up to
+// 99.999999 MHz, nine for the FT-991A's 470 MHz. Read on each call, not
+// imported from site.js -- two import URLs would make two module instances.
+function maxFreqHz() {
+    const v = Number(document.getElementById('vfoRow')?.dataset?.maxHz);
+    return Number.isFinite(v) && v > 0 ? v : 75_000_000;
+}
+function digitCount() { return maxFreqHz() >= 100_000_000 ? 9 : 8; }
 
 // ── State ────────────────────────────────────────────────────────────────────
 
 let _receiver = 'A';
-let _digits   = Array(8).fill('0');  // [d0..d7] → display as d0d1.d2d3d4d5d6d7 MHz
-let _cursor   = 0;                   // 0–7, current digit position
+let _digits   = Array(8).fill('0');  // [d0..d7] → d0d1.d2d3d4d5d6d7 MHz (nine digits on a 470 MHz radio)
+let _cursor   = 0;                   // current digit position, 0 to digitCount() - 1
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────
 
@@ -19,8 +28,8 @@ let _dialog, _title, _display, _error;
 // ── Frequency helpers ─────────────────────────────────────────────────────────
 
 function hzToDigits(hz) {
-    hz = Math.max(MIN_FREQ_HZ, Math.min(MAX_FREQ_HZ, Math.round(hz)));
-    return String(hz).padStart(8, '0').split('');
+    hz = Math.max(MIN_FREQ_HZ, Math.min(maxFreqHz(), Math.round(hz)));
+    return String(hz).padStart(digitCount(), '0').split('');
 }
 
 function digitsToHz() {
@@ -31,8 +40,8 @@ function digitsToHz() {
 
 function renderDisplay() {
     let html = '';
-    for (let i = 0; i < 8; i++) {
-        if (i === 2) html += '<span class="fkb-decimal">.</span>';
+    for (let i = 0; i < _digits.length; i++) {
+        if (i === _digits.length - 6) html += '<span class="fkb-decimal">.</span>';
         const cls = i === _cursor ? 'fkb-digit fkb-digit-cursor' : 'fkb-digit';
         html += `<span class="${cls}">${_digits[i]}</span>`;
     }
@@ -54,18 +63,18 @@ function showError(msg)  { _error.textContent = msg; }
 function pressDigit(d) {
     clearError();
     _digits[_cursor] = String(d);
-    if (_cursor < 7) _cursor++;
+    if (_cursor < _digits.length - 1) _cursor++;
     renderDisplay();
 }
 
 function moveCursor(delta) {
-    _cursor = Math.max(0, Math.min(7, _cursor + delta));
+    _cursor = Math.max(0, Math.min(_digits.length - 1, _cursor + delta));
     renderDisplay();
 }
 
 function pressClear() {
     clearError();
-    _digits = Array(8).fill('0');
+    _digits = Array(digitCount()).fill('0');
     _cursor = 0;
     renderDisplay();
 }
@@ -80,8 +89,8 @@ function pressBackspace() {
 async function pressEnter() {
     clearError();
     const hz = digitsToHz();
-    if (hz < MIN_FREQ_HZ || hz > MAX_FREQ_HZ) {
-        showError(`Must be between 0.030 and 75.000 MHz`);
+    if (hz < MIN_FREQ_HZ || hz > maxFreqHz()) {
+        showError(`Must be between 0.030 and ${(maxFreqHz() / 1e6).toFixed(3)} MHz`);
         return;
     }
     if (window.radioControl?.setFrequency) {
@@ -176,7 +185,7 @@ export function openKeyboard(receiver) {
     clearError();
 
     const hz = window.radioControl?._state?.lastBackendFreq?.[receiver];
-    _digits = hz ? hzToDigits(hz) : Array(8).fill('0');
+    _digits = hz ? hzToDigits(hz) : Array(digitCount()).fill('0');
     _cursor = 0;
     renderDisplay();
 

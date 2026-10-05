@@ -20,6 +20,8 @@ namespace YaesuWebControl.Tests
         [InlineData("FT-710", 650, "SD09;")]    // 600/700 tie goes to the lower
         [InlineData("FTDX3000", 700, "SD0700;")]
         [InlineData("FTDX3000", 5, "SD0030;")]  // clamped to the radio's minimum
+        [InlineData("FT-991A", 700, "SD0700;")] // FT-991A CAT manual: SD P1 x4, 0030-3000 ms
+        [InlineData("FT-991A", 9000, "SD3000;")]
         public void SetDelayCommand_uses_each_models_format(string model, int ms, string expected)
             => Assert.Equal(expected, CwBreakInCodes.SetDelayCommand(model, ms));
 
@@ -56,7 +58,12 @@ namespace YaesuWebControl.Tests
         [InlineData("FTdx10", false)]   // menu address not yet read on a radio
         [InlineData("FT-710", false)]
         [InlineData("FTDX3000", false)]
+        [InlineData("FT-991A", true)]   // EX056, from the manual; tester checking (#86)
         public void Full_break_in_only_where_the_menu_address_is_confirmed(string model, bool expected)
             => Assert.Equal(expected, CwBreakInCodes.SupportsFullBreakIn(model));
+
+        [Fact]
+        public void Ft991a_break_in_type_is_menu_056()
+            => Assert.Equal("056", CwBreakInCodes.BkInTypeExAddress("FT-991A"));
     }
 }

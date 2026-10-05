@@ -168,25 +168,7 @@
                         if (message.Length >= 5)
                         {
                             var modeCode = message[3];
-                            string? mode = modeCode switch
-                            {
-                                '1' => "LSB",
-                                '2' => "USB",
-                                '3' => "CW-U",
-                                '4' => "FM",
-                                '5' => "AM",
-                                '6' => "RTTY-L",
-                                '7' => "CW-L",
-                                '8' => "DATA-L",
-                                '9' => "RTTY-U",
-                                'A' => "DATA-FM",
-                                'B' => "FM-N",
-                                'C' => "DATA-U",
-                                'D' => "AM-N",
-                                'E' => "PSK",
-                                'F' => "DATA-FM-N",
-                                _ => null
-                            };
+                            string? mode = CatCommands.ModeFromCode(modeCode, _stateService.RadioModel);
                             if (mode != null)
                             {
                                 if (message[2] == '1') _stateService.ModeB = mode;

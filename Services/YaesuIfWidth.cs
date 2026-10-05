@@ -34,7 +34,7 @@
             "RTTY-L" or "RTTY-U"             => "cw",
             "PSK"                            => "cw",
             "AM" or "AM-N"                   => null,
-            "FM" or "FM-N"                   => null,
+            "FM" or "FM-N" or "C4FM"         => null,
             "DATA-FM" or "DATA-FM-N"         => null,
             _                                => "ssb",
         };
