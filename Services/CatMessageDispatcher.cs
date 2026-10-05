@@ -342,11 +342,14 @@
                         }
                         break;
                     case "IS":
-                        // IS{vfo}0{sign}{nnnn}; — sign '+'/'-', nnnn=absolute Hz
+                        // IS{vfo}0{sign}{nnnn}; — sign '+'/'-', nnnn=absolute Hz.
+                        // The FT-991A has no fixed '0': IS{vfo}{sign}{nnnn};, so
+                        // the sign is at [3] there. Find it rather than assume.
                         if (message.Length >= 9)
                         {
-                            var sign = message[4];
-                            if (int.TryParse(message.Substring(5, 4), out int absHz))
+                            int signAt = message[3] is '+' or '-' ? 3 : 4;
+                            var sign = message[signAt];
+                            if (int.TryParse(message.Substring(signAt + 1, 4), out int absHz))
                             {
                                 var shiftHz = sign == '-' ? -absHz : absHz;
                                 SetPerVfo(message[2], routeB => {

@@ -517,8 +517,7 @@ namespace Yaesu_Web_Control.Controllers
                         await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "0", int.Parse(profile.IfWidthCode)), "WebUI", CancellationToken.None);
                         _radioStateService.IfWidthA = profile.IfWidthCode;
                     }
-                    var sign = profile.IfShiftHz >= 0 ? '+' : '-';
-                    await _catClient.SendCommandAsync($"IS00{sign}{Math.Abs(profile.IfShiftHz):D4};", "WebUI", CancellationToken.None);
+                    await _catClient.SendCommandAsync(CatCommands.FormatIfShift(settings.RadioModel, "0", profile.IfShiftHz), "WebUI", CancellationToken.None);
                     _radioStateService.IfShiftA = profile.IfShiftHz;
                     if (!string.IsNullOrEmpty(profile.Mode))
                     {
@@ -593,8 +592,7 @@ namespace Yaesu_Web_Control.Controllers
                         await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "1", int.Parse(profile.IfWidthCode)), "WebUI", CancellationToken.None);
                         _radioStateService.IfWidthB = profile.IfWidthCode;
                     }
-                    var sign = profile.IfShiftHz >= 0 ? '+' : '-';
-                    await _catClient.SendCommandAsync($"IS10{sign}{Math.Abs(profile.IfShiftHz):D4};", "WebUI", CancellationToken.None);
+                    await _catClient.SendCommandAsync(CatCommands.FormatIfShift(settings.RadioModel, "1", profile.IfShiftHz), "WebUI", CancellationToken.None);
                     _radioStateService.IfShiftB = profile.IfShiftHz;
                     if (!string.IsNullOrEmpty(profile.Mode))
                     {
@@ -1532,9 +1530,7 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                var sign = request.ShiftHz >= 0 ? '+' : '-';
-                var abs = Math.Abs(request.ShiftHz);
-                await _catClient.SendCommandAsync($"IS{VfoP1Outgoing(receiver)}0{sign}{abs:D4};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfShift(_radioStateService.RadioModel, VfoP1Outgoing(receiver), request.ShiftHz), "WebUI", CancellationToken.None);
                 if (VfoIsB(receiver)) _radioStateService.IfShiftB = request.ShiftHz;
                 else                  _radioStateService.IfShiftA = request.ShiftHz;
                 return Ok();

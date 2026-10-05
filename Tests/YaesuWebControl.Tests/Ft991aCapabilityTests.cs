@@ -176,4 +176,46 @@ public sealed class Ft991aCapabilityTests
         dispatcher.DispatchMessage(answer);
         Assert.Equal(code, state.IfWidthA);
     }
+
+    // IS has the same missing '0' as SH; the manual's own example is IS0+1000.
+    [Fact]
+    public void IfShiftSet_HasNoFixedZero_OnTheFt991a()
+    {
+        Assert.Equal("IS0+1000;", CatCommands.FormatIfShift("FT-991A", "0", 1000));
+        Assert.Equal("IS0-0240;", CatCommands.FormatIfShift("FT-991A", "0", -240));
+    }
+
+    [Fact]
+    public void IfShiftSet_IsUnchanged_OnEveryOtherModel()
+    {
+        foreach (var model in OtherModels)
+        {
+            Assert.Equal("IS00+1000;", CatCommands.FormatIfShift(model, "0", 1000));
+            Assert.Equal("IS10-0240;", CatCommands.FormatIfShift(model, "1", -240));
+        }
+    }
+
+    [Theory]
+    [InlineData("IS0+0100;", 100)]     // FT-991A
+    [InlineData("IS0-1200;", -1200)]   // FT-991A
+    [InlineData("IS00+0100;", 100)]    // every other model
+    [InlineData("IS00-0640;", -640)]
+    public void IfShiftAnswer_IsReadInBothForms(string answer, int hz)
+    {
+        var (state, dispatcher) = ModeVfoRoutingTests.NewDispatcher(singleReceiver: false, activeVfo: 0);
+        state.IfShiftA = 12345;
+        dispatcher.DispatchMessage(answer);
+        Assert.Equal(hz, state.IfShiftA);
+    }
+
+    // RTTY tone settings: flat EX addresses from the 991A menu table.
+    [Fact]
+    public void RttyTones_AreReadFromTheFt991aMenu()
+    {
+        var a = RttyToneMap.For("FT-991A");
+        Assert.NotNull(a);
+        Assert.Equal("097", a!.PolarityRx);
+        Assert.Equal("101", a.MarkFreq);
+        Assert.Equal("100", a.ShiftFreq);
+    }
 }

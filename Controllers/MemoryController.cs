@@ -24,7 +24,8 @@ namespace Yaesu_Web_Control.Controllers
             { "LSB", '1' }, { "USB", '2' }, { "CW-U", '3' }, { "FM", '4' },
             { "AM", '5' }, { "RTTY-L", '6' }, { "CW-L", '7' }, { "DATA-L", '8' },
             { "RTTY-U", '9' }, { "DATA-FM", 'A' }, { "FM-N", 'B' }, { "DATA-U", 'C' },
-            { "AM-N", 'D' }, { "PSK", 'E' }, { "DATA-FM-N", 'F' }
+            { "AM-N", 'D' }, { "PSK", 'E' }, { "DATA-FM-N", 'F' },
+            { "C4FM", 'E' }   // FT-991A: its code E is C4FM, not PSK
         };
 
         private readonly MemoryService _memoryService;
@@ -158,8 +159,7 @@ namespace Yaesu_Web_Control.Controllers
             if (memory.IfShiftHz.HasValue)
             {
                 int shift = memory.IfShiftHz.Value;
-                char sign = shift >= 0 ? '+' : '-';
-                await _catClient.SendCommandAsync($"IS00{sign}{Math.Abs(shift):D4};", "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfShift(settings.RadioModel, "0", shift), "MemRecall", CancellationToken.None);
                 if (targetB) _radioStateService.IfShiftB = shift;
                 else _radioStateService.IfShiftA = shift;
             }
@@ -299,7 +299,9 @@ namespace Yaesu_Web_Control.Controllers
                     bool txClar = mrResp[20] == '1';
 
                     string mode = "USB";
-                    CodeToMode.TryGetValue(char.ToUpper(mrResp[21]), out mode!);
+                    char mrMode = char.ToUpper(mrResp[21]);
+                    if (mrMode == 'E' && settings.RadioModel == "FT-991A") mode = "C4FM";
+                    else CodeToMode.TryGetValue(mrMode, out mode!);
                     mode ??= "USB";
 
                     // Read label via MT{ch}; — only available on non-FTDX3000 radios.

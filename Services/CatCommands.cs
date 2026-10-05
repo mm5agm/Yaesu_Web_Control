@@ -139,6 +139,18 @@
         public static string FormatIfWidth(string? radioModel, string p1, int code)
             => radioModel == "FT-991A" ? $"SH{p1}{code:D2};" : $"SH{p1}0{code:D2};";
 
+        /// <summary>
+        /// IS set command for an IF shift in Hz. The same story as SH: other
+        /// models take IS{P1}0{sign}{nnnn}; and the FT-991A has no fixed '0',
+        /// IS{P1}{sign}{nnnn}; (its CAT manual's own example is "IS0+1000").
+        /// </summary>
+        public static string FormatIfShift(string? radioModel, string p1, int shiftHz)
+        {
+            char sign = shiftHz >= 0 ? '+' : '-';
+            string zero = radioModel == "FT-991A" ? "" : "0";
+            return $"IS{p1}{zero}{sign}{Math.Abs(shiftHz):D4};";
+        }
+
         public static string FormatMode(string mode, bool isSubVfo = false)
         {
             var modeCode = mode.ToUpper() switch

@@ -21,6 +21,7 @@ namespace Yaesu_Web_Control.Services
     ///   FTdx10       EX 01 05 07 POLARITY-RX,  15 MARK FREQUENCY, 16 SHIFT FREQUENCY
     ///   FT-710       EX 01 05    (no RX pol),  15 MARK FREQUENCY, 16 SHIFT FREQUENCY
     ///   FTDX3000     EX 094 POLARITY-RX, 097 SHIFT, 098 MARK   (flat addressing)
+    ///   FT-991A      EX 097 POLARITY-RX, 100 SHIFT, 101 MARK   (flat addressing)
     ///
     /// The FT-710 CAT manual lists only POLARITY-TX in this group, so RX
     /// polarity is left at its default there. A radio that isn't in the table
@@ -43,6 +44,7 @@ namespace Yaesu_Web_Control.Services
             ["FTdx10"]    = new("010507", "010515", "010516"),
             ["FT-710"]    = new(null,     "010515", "010516"),
             ["FTDX3000"]  = new("094",    "098",    "097"),
+            ["FT-991A"]   = new("097",    "101",    "100"),
         };
 
         /// <summary>Yaesu's own defaults: 2125 Hz mark, 170 Hz shift, normal polarity.</summary>
