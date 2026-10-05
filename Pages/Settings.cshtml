@@ -1793,6 +1793,7 @@
                                 <option value="FTDX3000">FTDX3000</option>
                                 <option value="FTDX5000MP">FTDX5000MP</option>
                                 <option value="FTDX5000D">FTDX5000D</option>
+                                <option value="FT-991A">FT-991A</option>
                             </select>
                             <div class="form-text">
                                 <strong>FTdx101MP:</strong> 200W output, dual receivers (VFO A + VFO B shown by default)<br />
@@ -1801,7 +1802,8 @@
                                 <strong>FT-710:</strong> 100W output, single receiver (VFO B for split/memory)<br />
                                 <strong>FTDX3000:</strong> 100W output, single receiver, SDR IF output available (9 MHz)<br />
                                 <strong>FTDX5000MP:</strong> 200W output, dual receivers (VFO A + VFO B shown by default); new profile, testing in progress<br />
-                                <strong>FTDX5000D:</strong> 200W output, dual receivers (VFO A + VFO B shown by default); new profile, testing in progress
+                                <strong>FTDX5000D:</strong> 200W output, dual receivers (VFO A + VFO B shown by default); new profile, testing in progress<br />
+                                <strong>FT-991A:</strong> 100W output (50W on 2 m / 70 cm), single receiver, HF + 6 m + 2 m + 70 cm; new profile, testing in progress
                             </div>
                             <span asp-validation-for="Settings.RadioModel" class="text-danger"></span>
                         </div>
@@ -1854,6 +1856,11 @@
                                 <div class="alert alert-info py-2 mb-0">
                                     The FT-710 has no roofing filter CAT command — the radio selects its filter
                                     automatically based on DSP bandwidth and mode. No configuration is needed.
+                                </div>
+                            </div>
+                            <div id="filtersFt991aSection" style="display:@(Model.Settings.RadioModel == "FT-991A" ? "block" : "none")">
+                                <div class="alert alert-info py-2 mb-0">
+                                    The FT-991A has no roofing filter CAT command, so there is nothing to configure here.
                                 </div>
                             </div>
                             <div id="filtersFtdx3000Section" style="display:@(Model.Settings.RadioModel == "FTDX3000" ? "block" : "none")">
@@ -3522,6 +3529,7 @@
             const ftdx10Section   = document.getElementById('filtersFtdx10Section');
             const ft710Section    = document.getElementById('filtersFt710Section');
             const ftdx3000Section = document.getElementById('filtersFtdx3000Section');
+            const ft991aSection   = document.getElementById('filtersFt991aSection');
             if (!modelSelect) return;
             // Only the shown section's checkboxes may post — they all share one
             // field name, and a hidden ticked box would still be submitted (#156).
@@ -3537,6 +3545,7 @@
                 show(ftdx10Section,   v === 'FTdx10');
                 show(ft710Section,    v === 'FT-710');
                 show(ftdx3000Section, v === 'FTDX3000');
+                show(ft991aSection,   v === 'FT-991A');
             });
         })();
     </script>

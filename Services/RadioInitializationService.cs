@@ -279,9 +279,15 @@ namespace Yaesu_Web_Control.Services
                     }
                 }
 
-                // Query Split mode (ST0=off, ST1=on, ST2=on+5kHz)
-                var stResponse = await multiplexer.SendCommandAsync("ST;", "Initialization", stoppingToken);
-                if (!string.IsNullOrWhiteSpace(stResponse) && stResponse.StartsWith("ST"))
+                // Query Split mode (ST0=off, ST1=on, ST2=on+5kHz). The FTDX3000
+                // and FT-991A have no ST: split there is TX on B, which FT has
+                // just told us - the same rule the Split button uses for them.
+                if (RadioCapabilities.SplitViaFtOnly(settings.RadioModel))
+                {
+                    radioStateService.SplitMode = radioStateService.TxVfo == 1 ? 1 : 0;
+                }
+                else if (await multiplexer.SendCommandAsync("ST;", "Initialization", stoppingToken) is string stResponse
+                    && !string.IsNullOrWhiteSpace(stResponse) && stResponse.StartsWith("ST"))
                 {
                     if (int.TryParse(stResponse.Substring(2, 1), out int splitMode))
                     {
@@ -294,7 +300,9 @@ namespace Yaesu_Web_Control.Services
                 // (RX) VFO. Required for the single-receiver normal-mode
                 // greying to flip when the user presses A/B on the radio's
                 // front panel. See #34 R2 / dispatcher VS case.
-                await multiplexer.SendCommandAndDispatchAsync("VS;", "Initialization", stoppingToken);
+                // The FT-991A has no VS (RadioCapabilities.CanSelectRxVfo).
+                if (RadioCapabilities.CanSelectRxVfo(settings.RadioModel))
+                    await multiplexer.SendCommandAndDispatchAsync("VS;", "Initialization", stoppingToken);
 
                 // Query RX/TX clarifier on/off state (all models)
                 var rtResponse = await multiplexer.SendCommandAsync("RT;", "Initialization", stoppingToken);
@@ -432,8 +440,10 @@ namespace Yaesu_Web_Control.Services
                 // P1=0-Fixed receive controls so YWC has both *A and *B
                 // populated. Without this, the inactive panel shows defaults
                 // (Jacek SP3L #34 pre5 — his proposed fix). Skipped on
-                // dual-receiver since FTdx101 reports per-VFO via P1.
-                if (radioStateService.IsSingleReceiver)
+                // dual-receiver since FTdx101 reports per-VFO via P1. Skipped
+                // too where there is no VS to switch with (FT-991A): the
+                // re-reads would all land in the same VFO's slot again.
+                if (radioStateService.IsSingleReceiver && RadioCapabilities.CanSelectRxVfo(settings.RadioModel))
                 {
                     var origVfo = radioStateService.ActiveVfo;
                     var otherVfo = 1 - origVfo;

@@ -168,25 +168,7 @@
                         if (message.Length >= 5)
                         {
                             var modeCode = message[3];
-                            string? mode = modeCode switch
-                            {
-                                '1' => "LSB",
-                                '2' => "USB",
-                                '3' => "CW-U",
-                                '4' => "FM",
-                                '5' => "AM",
-                                '6' => "RTTY-L",
-                                '7' => "CW-L",
-                                '8' => "DATA-L",
-                                '9' => "RTTY-U",
-                                'A' => "DATA-FM",
-                                'B' => "FM-N",
-                                'C' => "DATA-U",
-                                'D' => "AM-N",
-                                'E' => "PSK",
-                                'F' => "DATA-FM-N",
-                                _ => null
-                            };
+                            string? mode = CatCommands.ModeFromCode(modeCode, _stateService.RadioModel);
                             if (mode != null)
                             {
                                 if (message[2] == '1') _stateService.ModeB = mode;
@@ -344,10 +326,14 @@
                         }
                         break;
                     case "SH":
-                        // SH{vfo}0{nn}; — vfo: 0=Main 1=Sub; [3]='0' fixed; [4-5]=2-digit code
+                        // SH{vfo}0{nn}; — vfo: 0=Main 1=Sub; [3]='0' fixed; [4-5]=2-digit code.
+                        // The FT-991A answers SH{vfo}{nn}; with no fixed '0', so its
+                        // code starts one character earlier. Reading it at [4] took
+                        // the last digit and the ';' ("1;" in a tester's log).
                         if (message.Length >= 6)
                         {
-                            var rawCode = message.Substring(4, 2).TrimStart('0');
+                            int codeAt = message.Length == 6 ? 3 : 4;
+                            var rawCode = message.Substring(codeAt, 2).TrimStart('0');
                             var code = string.IsNullOrEmpty(rawCode) ? "0" : rawCode;
                             SetPerVfo(message[2], routeB => {
                                 if (routeB) _stateService.IfWidthB = code;
@@ -356,11 +342,14 @@
                         }
                         break;
                     case "IS":
-                        // IS{vfo}0{sign}{nnnn}; — sign '+'/'-', nnnn=absolute Hz
+                        // IS{vfo}0{sign}{nnnn}; — sign '+'/'-', nnnn=absolute Hz.
+                        // The FT-991A has no fixed '0': IS{vfo}{sign}{nnnn};, so
+                        // the sign is at [3] there. Find it rather than assume.
                         if (message.Length >= 9)
                         {
-                            var sign = message[4];
-                            if (int.TryParse(message.Substring(5, 4), out int absHz))
+                            int signAt = message[3] is '+' or '-' ? 3 : 4;
+                            var sign = message[signAt];
+                            if (int.TryParse(message.Substring(signAt + 1, 4), out int absHz))
                             {
                                 var shiftHz = sign == '-' ? -absHz : absHz;
                                 SetPerVfo(message[2], routeB => {

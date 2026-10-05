@@ -289,26 +289,9 @@ namespace Yaesu_Web_Control.Controllers
             { "160m", 1840000 }, { "80m", 3700000 }, { "60m", 5357000 },
             { "40m", 7100000 }, { "30m", 10136000 }, { "20m", 14074000 },
             { "17m", 18110000 }, { "15m", 21074000 }, { "12m", 24915000 },
-            { "10m", 28074000 }, { "6m", 50313000 }, { "4m", 70100000 }
-        };
-
-        private static readonly Dictionary<string, string> CatCodeToMode = new()
-        {
-            { "1", "LSB" },
-            { "2", "USB" },
-            { "3", "CW-U" },
-            { "4", "FM" },
-            { "5", "AM" },
-            { "6", "RTTY-L" },
-            { "7", "CW-L" },
-            { "8", "DATA-L" },
-            { "9", "RTTY-U" },
-            { "A", "DATA-FM" },
-            { "B", "FM-N" },
-            { "C", "DATA-U" },
-            { "D", "AM-N" },
-            { "E", "PSK" },
-            { "F", "DATA-FM-N" }
+            { "10m", 28074000 }, { "6m", 50313000 }, { "4m", 70100000 },
+            // FT-991A only; SetBand refuses them on a radio whose range stops short.
+            { "2m", 144300000 }, { "70cm", 432200000 }
         };
 
         public CatController(
@@ -502,6 +485,8 @@ namespace Yaesu_Web_Control.Controllers
                     return BadRequest(new { error = "Invalid band" });
 
                 var settings = await _settingsService.GetSettingsAsync();
+                if (freq > RadioCapabilities.FrequencyRangeHz(settings.RadioModel).MaxHz)
+                    return BadRequest(new { error = $"{request.Band} is outside the {settings.RadioModel}'s range" });
 
                 // Save current band profile before switching
                 var oldBand = _radioStateService.BandA;
@@ -529,11 +514,10 @@ namespace Yaesu_Web_Control.Controllers
                 {
                     if (!string.IsNullOrEmpty(profile.IfWidthCode))
                     {
-                        await _catClient.SendCommandAsync($"SH00{int.Parse(profile.IfWidthCode):D2};", "WebUI", CancellationToken.None);
+                        await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "0", int.Parse(profile.IfWidthCode)), "WebUI", CancellationToken.None);
                         _radioStateService.IfWidthA = profile.IfWidthCode;
                     }
-                    var sign = profile.IfShiftHz >= 0 ? '+' : '-';
-                    await _catClient.SendCommandAsync($"IS00{sign}{Math.Abs(profile.IfShiftHz):D4};", "WebUI", CancellationToken.None);
+                    await _catClient.SendCommandAsync(CatCommands.FormatIfShift(settings.RadioModel, "0", profile.IfShiftHz), "WebUI", CancellationToken.None);
                     _radioStateService.IfShiftA = profile.IfShiftHz;
                     if (!string.IsNullOrEmpty(profile.Mode))
                     {
@@ -576,6 +560,8 @@ namespace Yaesu_Web_Control.Controllers
                     return BadRequest(new { error = "Invalid band" });
 
                 var settings = await _settingsService.GetSettingsAsync();
+                if (freq > RadioCapabilities.FrequencyRangeHz(settings.RadioModel).MaxHz)
+                    return BadRequest(new { error = $"{request.Band} is outside the {settings.RadioModel}'s range" });
 
                 // Save current band profile before switching
                 var oldBand = _radioStateService.BandB;
@@ -603,11 +589,10 @@ namespace Yaesu_Web_Control.Controllers
                 {
                     if (!string.IsNullOrEmpty(profile.IfWidthCode))
                     {
-                        await _catClient.SendCommandAsync($"SH10{int.Parse(profile.IfWidthCode):D2};", "WebUI", CancellationToken.None);
+                        await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "1", int.Parse(profile.IfWidthCode)), "WebUI", CancellationToken.None);
                         _radioStateService.IfWidthB = profile.IfWidthCode;
                     }
-                    var sign = profile.IfShiftHz >= 0 ? '+' : '-';
-                    await _catClient.SendCommandAsync($"IS10{sign}{Math.Abs(profile.IfShiftHz):D4};", "WebUI", CancellationToken.None);
+                    await _catClient.SendCommandAsync(CatCommands.FormatIfShift(settings.RadioModel, "1", profile.IfShiftHz), "WebUI", CancellationToken.None);
                     _radioStateService.IfShiftB = profile.IfShiftHz;
                     if (!string.IsNullOrEmpty(profile.Mode))
                     {
@@ -773,10 +758,9 @@ namespace Yaesu_Web_Control.Controllers
 
                 var settings = await _settingsService.GetSettingsAsync();
                 bool isFtdx10  = settings.RadioModel == "FTdx10";
-                bool isFt710   = settings.RadioModel == "FT-710";
                 bool isFtdx3000 = settings.RadioModel == "FTDX3000";
 
-                if (isFt710)
+                if (!RadioCapabilities.HasRoofingFilterCat(settings.RadioModel))
                     return Ok(new { message = "Roofing filter is selected automatically by the radio" });
 
                 if (isFtdx10)
@@ -842,10 +826,9 @@ namespace Yaesu_Web_Control.Controllers
 
                 var settings = await _settingsService.GetSettingsAsync();
                 bool isFtdx10  = settings.RadioModel == "FTdx10";
-                bool isFt710   = settings.RadioModel == "FT-710";
                 bool isFtdx3000 = settings.RadioModel == "FTDX3000";
 
-                if (isFt710)
+                if (!RadioCapabilities.HasRoofingFilterCat(settings.RadioModel))
                     return Ok(new { message = "Roofing filter is selected automatically by the radio" });
 
                 if (isFtdx10)
@@ -977,7 +960,9 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                string displayMode = CatCodeToMode.TryGetValue(request.Mode, out var modeName) ? modeName : request.Mode;
+                string displayMode = (request.Mode?.Length == 1
+                    ? CatCommands.ModeFromCode(request.Mode[0], _radioStateService.RadioModel)
+                    : null) ?? request.Mode ?? "";
 
                 var recv = receiver.ToUpperInvariant();
                 if (recv != "A" && recv != "B")
@@ -1092,7 +1077,13 @@ namespace Yaesu_Web_Control.Controllers
                 await EnsureConnectedAsync();
 
                 var settings = await _settingsService.GetSettingsAsync();
-                int maxPower = RadioCapabilities.MaxPowerWatts(settings.RadioModel);
+                // Same rule as effectiveTxVfo() in site.js: on a single-receiver
+                // radio split moves TX to the other VFO.
+                int txVfoIdx = _radioStateService.IsSingleReceiver
+                    ? (_radioStateService.SplitMode > 0 ? 1 - _radioStateService.ActiveVfo : _radioStateService.ActiveVfo)
+                    : _radioStateService.TxVfo;
+                long txHz = txVfoIdx == 1 ? _radioStateService.FrequencyB : _radioStateService.FrequencyA;
+                int maxPower = RadioCapabilities.MaxPowerWattsAt(settings.RadioModel, txHz);
 
                 _logger.LogInformation("[API] Received SetPower request: receiver={Receiver}, Watts={Watts}, Model={Model}", receiver, request.Watts, settings.RadioModel);
                 _logger.LogInformation("[API] DEBUG: Received slider value = {Watts}", request.Watts);
@@ -1515,7 +1506,7 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                await _catClient.SendCommandAsync($"SH{VfoP1Outgoing(receiver)}0{int.Parse(request.Code):D2};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(_radioStateService.RadioModel, VfoP1Outgoing(receiver), codeNum), "WebUI", CancellationToken.None);
                 if (VfoIsB(receiver)) _radioStateService.IfWidthB = request.Code;
                 else                  _radioStateService.IfWidthA = request.Code;
                 return Ok();
@@ -1539,9 +1530,7 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                var sign = request.ShiftHz >= 0 ? '+' : '-';
-                var abs = Math.Abs(request.ShiftHz);
-                await _catClient.SendCommandAsync($"IS{VfoP1Outgoing(receiver)}0{sign}{abs:D4};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfShift(_radioStateService.RadioModel, VfoP1Outgoing(receiver), request.ShiftHz), "WebUI", CancellationToken.None);
                 if (VfoIsB(receiver)) _radioStateService.IfShiftB = request.ShiftHz;
                 else                  _radioStateService.IfShiftA = request.ShiftHz;
                 return Ok();
@@ -1797,7 +1786,7 @@ namespace Yaesu_Web_Control.Controllers
                 // / FT1 (TX=B). The other supported models (FTdx101/FTdx10/FT-710) all
                 // have ST, so they fall through to the ST path below.
                 var splitSettings = await _settingsService.GetSettingsAsync();
-                if (splitSettings.RadioModel == "FTDX3000")
+                if (RadioCapabilities.SplitViaFtOnly(splitSettings.RadioModel))
                 {
                     if (mode == 2)
                     {
@@ -1806,7 +1795,7 @@ namespace Yaesu_Web_Control.Controllers
                         if (!string.IsNullOrWhiteSpace(faQs) && faQs.StartsWith("FA") &&
                             long.TryParse(faQs.Substring(2).TrimEnd(';'), out long freqAqs))
                         {
-                            long freqBqs = Math.Min(freqAqs + 5000, 75_000_000);
+                            long freqBqs = Math.Min(freqAqs + 5000, RadioCapabilities.FrequencyRangeHz(splitSettings.RadioModel).MaxHz);
                             await _catClient.SendCommandAsync($"FB{freqBqs:D9};", "WebUI", CancellationToken.None);
                             _radioStateService.FrequencyB = freqBqs;
                         }
@@ -1822,7 +1811,7 @@ namespace Yaesu_Web_Control.Controllers
                     _radioStateService.TxVfo = ftTxVfo;
                     int ftSplitMode = ftTxVfo == 1 ? 1 : 0;
                     _radioStateService.SplitMode = ftSplitMode;
-                    _logger.LogInformation("Split (FTDX3000) via FT: TX VFO = {TxVfo}, splitMode = {Mode}",
+                    _logger.LogInformation("Split ({Model}) via FT: TX VFO = {TxVfo}, splitMode = {Mode}", splitSettings.RadioModel,
                         ftTxVfo == 1 ? "B" : "A", ftSplitMode);
                     return Ok(new { splitMode = ftSplitMode });
                 }
@@ -1837,7 +1826,7 @@ namespace Yaesu_Web_Control.Controllers
                     if (!string.IsNullOrWhiteSpace(faResponse) && faResponse.StartsWith("FA") &&
                         long.TryParse(faResponse.Substring(2).TrimEnd(';'), out long freqA))
                     {
-                        long freqB = Math.Min(freqA + 5000, 75_000_000);
+                        long freqB = Math.Min(freqA + 5000, RadioCapabilities.FrequencyRangeHz(splitSettings.RadioModel).MaxHz);
                         await _catClient.SendCommandAsync($"FB{freqB:D9};", "WebUI", CancellationToken.None);
                         _radioStateService.FrequencyB = freqB;
                     }
@@ -1964,6 +1953,11 @@ namespace Yaesu_Web_Control.Controllers
                 var rxSettings = await _settingsService.GetSettingsAsync();
                 var rx = v == "B" ? 1 : 0;
 
+                // FT-991A: no VS and no FR, so the receiver cannot be moved to
+                // VFO B over CAT. The page disables the button; this covers the API.
+                if (!RadioCapabilities.CanSelectRxVfo(rxSettings.RadioModel) && rx != _radioStateService.ActiveVfo)
+                    return BadRequest(new { error = "This radio cannot choose its receive VFO over CAT. Use Swap A/B instead." });
+
                 // Capture TX before ActiveVfo moves — EffectiveTxVfo() depends on it.
                 var wasSplit = _radioStateService.SplitMode > 0;
                 var previousTx = EffectiveTxVfo();
@@ -1975,7 +1969,7 @@ namespace Yaesu_Web_Control.Controllers
                 // VS, the same command the active-vfo endpoint already sends.
                 if (rxSettings.RadioModel == "FTDX3000")
                     await _catClient.SendCommandAsync(v == "B" ? "FR4;" : "FR0;", "WebUI", CancellationToken.None);
-                else
+                else if (RadioCapabilities.CanSelectRxVfo(rxSettings.RadioModel))
                     await _catClient.SendCommandAsync($"VS{rx};", "WebUI", CancellationToken.None);
 
                 _radioStateService.ActiveVfo = rx;
@@ -2006,7 +2000,7 @@ namespace Yaesu_Web_Control.Controllers
                             // FTdx10 / FT-710 / FT-991A: nudge FT to match so a
                             // later SetTxVfo / split derive sees a coherent value.
                             // Harmless when the radio ignores FT outside split.
-                            await _catClient.SendCommandAsync($"FT{rx};", "WebUI", CancellationToken.None);
+                            await _catClient.SendCommandAsync(FtSetCommand(rxSettings.RadioModel, rx), "WebUI", CancellationToken.None);
                         }
                     }
                     else
@@ -2016,7 +2010,7 @@ namespace Yaesu_Web_Control.Controllers
                         if (_radioStateService.SplitMode == 0)
                         {
                             // Cleared split by moving RX onto the TX VFO.
-                            if (rxSettings.RadioModel == "FTDX3000")
+                            if (RadioCapabilities.SplitViaFtOnly(rxSettings.RadioModel))
                                 await _catClient.SendCommandAsync("FT2;", "WebUI", CancellationToken.None);
                             else
                                 await _catClient.SendCommandAsync("ST0;", "WebUI", CancellationToken.None);
@@ -2044,6 +2038,12 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
+        // FT set form for "transmit on VFO A / B". The FT-991A's CAT manual
+        // documents only P1 = 2 (A) / 3 (B) for a set; its read still answers
+        // 0 / 1. The other models keep the FT0 / FT1 that #78 proved.
+        private static string FtSetCommand(string radioModel, int txVfo) =>
+            radioModel == "FT-991A" ? $"FT{txVfo + 2};" : $"FT{txVfo};";
+
         [HttpPost("tx-vfo/{vfo}")]
         public async Task<IActionResult> SetTxVfo(string vfo)
         {
@@ -2063,11 +2063,11 @@ namespace Yaesu_Web_Control.Controllers
                 // FT selects the transmit VFO: FT0; = TX on A, FT1; = TX on B.
                 // Proven on FTDX3000 for the independent TX selector (#78).
                 // (The Split button path on FTDX3000 uses FT2/FT3 instead.)
-                await _catClient.SendCommandAsync($"FT{tx};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync(FtSetCommand(txSettings.RadioModel, tx), "WebUI", CancellationToken.None);
 
-                // FTdx10 / FT-710 / FT-991A also need ST to engage/clear split;
-                // FTDX3000 has no ST (FT alone is enough for its firmware).
-                if (_radioStateService.IsSingleReceiver && txSettings.RadioModel != "FTDX3000")
+                // FTdx10 / FT-710 also need ST to engage/clear split; the
+                // FTDX3000 and FT-991A have no ST (FT alone does it).
+                if (_radioStateService.IsSingleReceiver && !RadioCapabilities.SplitViaFtOnly(txSettings.RadioModel))
                     await _catClient.SendCommandAsync(splitOn ? "ST1;" : "ST0;", "WebUI", CancellationToken.None);
 
                 _radioStateService.TxVfo = tx;

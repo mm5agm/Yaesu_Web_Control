@@ -6,8 +6,8 @@ namespace Yaesu_Web_Control.Services;
 ///
 /// FTdx101MP/D, FTdx10 and FT-710 take SD as a two-digit STEP number
 /// (00 = 30 ms, 01 = 50, 02 = 100, 03 = 150, 04 = 200, 05 = 250, 06 = 300,
-/// then 100 ms steps to 33 = 3000). The FTDX3000 takes four-digit ms
-/// (0030-3000). YWC sent four-digit ms to every model until 2026-10-02, which
+/// then 100 ms steps to 33 = 3000). The FTDX3000 and FT-991A take four-digit
+/// ms (0030-3000). YWC sent four-digit ms to every model until 2026-10-02, which
 /// the step-number radios ignored, and the two-digit answer never parsed.
 ///
 /// BI is only 0 (off) / 1 (on) on every supported model. Semi vs Full is a
@@ -29,7 +29,7 @@ public static class CwBreakInCodes
     }
 
     /// <summary>True when the model takes SD as a two-digit step number.</summary>
-    public static bool UsesStepIndex(string? radioModel) => radioModel != "FTDX3000";
+    public static bool UsesStepIndex(string? radioModel) => radioModel is not ("FTDX3000" or "FT-991A");
 
     /// <summary>The SD set command for a delay, snapped to what the radio can hold.</summary>
     public static string SetDelayCommand(string? radioModel, int delayMs)
@@ -67,10 +67,14 @@ public static class CwBreakInCodes
     /// hasn't been confirmed on a radio, in which case Full isn't offered.
     /// FTdx101MP/D: EX020111, read back 2026-10-02 on an FTdx101MP (answered
     /// 0 = SEMI, and its neighbour EX020112 answered 04, matching SD04).
+    /// FT-991A: EX056 (one digit, 0 = SEMI, 1 = FULL) from its CAT manual's
+    /// menu table. Listed ahead of a read-back because a 991A tester (BA4RTS,
+    /// #86) is checking it; drop it if the radio answers ?; to EX056;.
     /// </summary>
     public static string? BkInTypeExAddress(string? radioModel) => radioModel switch
     {
         "FTdx101MP" or "FTdx101D" => "020111",
+        "FT-991A"                 => "056",
         _ => null,
     };
 

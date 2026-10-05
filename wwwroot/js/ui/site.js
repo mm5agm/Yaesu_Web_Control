@@ -259,16 +259,40 @@ document.addEventListener('DOMContentLoaded', function () {
 const _ariaDebounceTimers = {};
 
 
+// Tunable upper limit and VFO digit count for the configured radio, from
+// RadioCapabilities.FrequencyRangeHz rendered into #vfoRow. Every model but
+// the FT-991A stops below 100 MHz and keeps the eight-digit dd.ddd.ddd
+// display; the 991A reaches 470 MHz and needs nine. The count is fixed per
+// model, never per frequency, so a selected digit keeps its place value.
+function maxTunableHz() {
+    const v = Number(document.getElementById('vfoRow')?.dataset?.maxHz);
+    return Number.isFinite(v) && v > 0 ? v : 75_000_000;
+}
+window.maxTunableHz = maxTunableHz;
+function vfoDigitCount() {
+    return maxTunableHz() >= 100_000_000 ? 9 : 8;
+}
+window.vfoDigitCount = vfoDigitCount;
+function dashedFrequencyDigits(n) {
+    let html = '';
+    for (let i = 0; i < n; i++) {
+        if (i === n - 6 || i === n - 3) html += '.';
+        html += '<span class="digit" aria-hidden="true">-</span>';
+    }
+    return html;
+}
+
 function renderFrequencyDigits(freq, selIdx) {
     // Show dashes if no valid frequency yet
+    const n = vfoDigitCount();
     if (!freq || isNaN(freq) || freq < 100) {
-        return '<span class="digit" aria-hidden="true">-</span><span class="digit" aria-hidden="true">-</span>.<span class="digit" aria-hidden="true">-</span><span class="digit" aria-hidden="true">-</span><span class="digit" aria-hidden="true">-</span>.<span class="digit" aria-hidden="true">-</span><span class="digit" aria-hidden="true">-</span><span class="digit" aria-hidden="true">-</span>';
+        return dashedFrequencyDigits(n);
     }
-    let s = freq.toString().padStart(8, "0");
+    let s = freq.toString().padStart(n, "0");
     let html = "";
     let digitIdx = 0;
-    for (let i = 0; i < 8; i++) {
-        if (i === 2 || i === 5) {
+    for (let i = 0; i < n; i++) {
+        if (i === n - 6 || i === n - 3) {
             html += '<span class="digit" aria-hidden="true">.</span>';
         }
         let selected = (selIdx === digitIdx) ? " selected" : "";
@@ -328,7 +352,7 @@ window.qmbVfo    = function () { return qmbSend('vfo',    'Returned to VFO mode'
 // Outer mode setter - called from Razor inline onchange on mode select
 window.setMode = async function (receiver, mode) {
     const modeToCatCode = {
-        "LSB": "1", "USB": "2", "CW-U": "3", "FM": "4", "AM": "5", "RTTY-L": "6", "CW-L": "7", "DATA-L": "8", "RTTY-U": "9", "DATA-FM": "A", "FM-N": "B", "DATA-U": "C", "AM-N": "D", "PSK": "E", "DATA-FM-N": "F"
+        "LSB": "1", "USB": "2", "CW-U": "3", "FM": "4", "AM": "5", "RTTY-L": "6", "CW-L": "7", "DATA-L": "8", "RTTY-U": "9", "DATA-FM": "A", "FM-N": "B", "DATA-U": "C", "AM-N": "D", "PSK": "E", "C4FM": "E", "DATA-FM-N": "F"
     };
     const catCode = modeToCatCode[mode];
     if (!catCode) {
@@ -395,10 +419,23 @@ window.getConfiguredRadioModel = getConfiguredRadioModel;
 // pages that don't render the VFO row.
 function configuredMaxPower(fallback) {
     const rendered = Number(document.getElementById('vfoRow')?.dataset?.maxPower);
-    if (Number.isFinite(rendered) && rendered > 0) return rendered;
     const model = getConfiguredRadioModel();
-    if (model) return modelMaxPower(model);
-    return typeof fallback === "number" ? fallback : 200;
+    let max;
+    if (Number.isFinite(rendered) && rendered > 0) max = rendered;
+    else if (model) max = modelMaxPower(model);
+    else max = typeof fallback === "number" ? fallback : 200;
+    return Math.min(max, vhfPowerCap(model));
+}
+
+// The FT-991A tops out at 50 W on 2 m and 70 cm (EX139 / EX140), the same
+// rule as RadioCapabilities.MaxPowerWattsAt, which SetPower validates against.
+// Keyed on the TX VFO's frequency, so the slider re-caps as the dial moves.
+function vhfPowerCap(model) {
+    if (!model || model.toLowerCase() !== 'ft-991a') return Infinity;
+    try {
+        const hz = lastVfoHz[effectiveTxVfo() === 1 ? 'B' : 'A'];
+        return hz >= 100_000_000 ? 50 : Infinity;
+    } catch { return Infinity; }
 }
 window.configuredMaxPower = configuredMaxPower;
 
@@ -1401,6 +1438,7 @@ connection.on("RadioStateUpdate", function (update) {
         // already out of band at page load would never get the red marker from
         // updateBandButton alone. Re-apply it whenever the frequency moves.
         lastVfoHz.A = update.value;
+        try { updatePowerSliderMax(); } catch (e) { console.error('updatePowerSliderMax A error:', e); }
         try { applyBandOutOfBand('A'); } catch (e) { console.error('applyBandOutOfBand A error:', e); }
         try { reconcileFrequencyEditing('A', update.value); } catch (e) { console.error('reconcileFrequencyEditing A error:', e); }
         try { window.updateFrequencyDisplay('A', update.value); } catch (e) { console.error('updateFrequencyDisplay A error:', e); }
@@ -1415,6 +1453,7 @@ connection.on("RadioStateUpdate", function (update) {
             window.radioControl._state.lastBackendFreq.B = update.value;
         }
         lastVfoHz.B = update.value;
+        try { updatePowerSliderMax(); } catch (e) { console.error('updatePowerSliderMax B error:', e); }
         try { applyBandOutOfBand('B'); } catch (e) { console.error('applyBandOutOfBand B error:', e); }
         try { reconcileFrequencyEditing('B', update.value); } catch (e) { console.error('reconcileFrequencyEditing B error:', e); }
         try { window.updateFrequencyDisplay('B', update.value); } catch (e) { console.error('updateFrequencyDisplay B error:', e); }
@@ -2290,7 +2329,7 @@ function changeSelectedDigit(receiver, delta) {
     if (newVal < 0) newVal = 9;
     freqArr[idx] = newVal;
     let newFreq = parseInt(freqArr.join(''));
-    newFreq = Math.max(30000, Math.min(75000000, newFreq));
+    newFreq = Math.max(30000, Math.min(maxTunableHz(), newFreq));
     state.localFreq[receiver] = newFreq;
     updateFrequencyDisplay(receiver, newFreq);
     const displayElem = document.getElementById('freq' + receiver);
@@ -2684,14 +2723,15 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function renderFrequencyDigits(freq, selIdx) {
+        const n = vfoDigitCount();
         if (!freq || freq < 1000) {
-            return '<span class="digit" aria-hidden="true">-</span><span class="digit" aria-hidden="true">-</span>.<span class="digit" aria-hidden="true">-</span><span class="digit" aria-hidden="true">-</span><span class="digit" aria-hidden="true">-</span>.<span class="digit" aria-hidden="true">-</span><span class="digit" aria-hidden="true">-</span><span class="digit" aria-hidden="true">-</span>';
+            return dashedFrequencyDigits(n);
         }
-        let s = freq.toString().padStart(8, "0");
+        let s = freq.toString().padStart(n, "0");
         let html = "";
         let digitIdx = 0;
-        for (let i = 0; i < 8; i++) {
-            if (i === 2 || i === 5) {
+        for (let i = 0; i < n; i++) {
+            if (i === n - 6 || i === n - 3) {
                 html += '<span class="digit" aria-hidden="true">.</span>';
             }
             let selected = (selIdx === digitIdx) ? " selected" : "";
@@ -2789,7 +2829,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             let newFreq = parseInt(freqArr.join(''));
-            newFreq = Math.max(30000, Math.min(75000000, newFreq));
+            newFreq = Math.max(30000, Math.min(maxTunableHz(), newFreq));
             state.localFreq[receiver] = newFreq;
             state.editing[receiver] = true;
             updateFrequencyDisplay(receiver, newFreq);

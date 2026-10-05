@@ -408,9 +408,13 @@ namespace Yaesu_Web_Control.Services
                         int vdd = CatCommands.ParseMeterReading(vddResponse ?? "");
                         _stateService.VDDMeter = vdd;
 
-                        var tempResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterTemp + ";", "MeterPoll", stoppingToken);
-                        int temp = CatCommands.ParseMeterReading(tempResponse ?? "");
-                        _stateService.Temperature = temp;
+                        // The FT-991A has no RM9 - see RadioCapabilities.PollsTemperature.
+                        if (RadioCapabilities.PollsTemperature(settings.RadioModel))
+                        {
+                            var tempResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterTemp + ";", "MeterPoll", stoppingToken);
+                            int temp = CatCommands.ParseMeterReading(tempResponse ?? "");
+                            _stateService.Temperature = temp;
+                        }
 
                         // Single-antenna radios have no AN command, so asking only
                         // earns a "?;" every two seconds.

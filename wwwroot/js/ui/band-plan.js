@@ -318,6 +318,8 @@ export const BAND_EDGES = {
         { name:  '10m', lo:  28000000, hi:  29700000 },
         { name:   '6m', lo:  50000000, hi:  52000000 },
         { name:   '4m', lo:  70000000, hi:  70500000 },
+        { name:   '2m', lo: 144000000, hi: 146000000 },
+        { name: '70cm', lo: 430000000, hi: 440000000 },
     ],
     Region2: [
         { name: '160m', lo:   1800000, hi:   2000000 },
@@ -332,6 +334,8 @@ export const BAND_EDGES = {
         { name:  '10m', lo:  28000000, hi:  29700000 },
         { name:   '6m', lo:  50000000, hi:  54000000 },
         // No 4m allocation in Region 2.
+        { name:   '2m', lo: 144000000, hi: 148000000 },
+        { name: '70cm', lo: 420000000, hi: 450000000 },
     ],
     Region3: [
         { name: '160m', lo:   1800000, hi:   2000000 },
@@ -346,6 +350,8 @@ export const BAND_EDGES = {
         { name:  '10m', lo:  28000000, hi:  29700000 },
         { name:   '6m', lo:  50000000, hi:  54000000 },
         // No 4m allocation in Region 3.
+        { name:   '2m', lo: 144000000, hi: 148000000 },
+        { name: '70cm', lo: 430000000, hi: 440000000 },
     ],
     Japan: [
         // 160m in Japan is fragmented: CW/narrow 1810–1825 kHz and phone
@@ -365,6 +371,8 @@ export const BAND_EDGES = {
         { name:  '10m', lo:  28000000, hi:  29700000 },
         { name:   '6m', lo:  50000000, hi:  54000000 },
         // No 4m allocation in Japan.
+        { name:   '2m', lo: 144000000, hi: 146000000 },
+        { name: '70cm', lo: 430000000, hi: 440000000 },
     ],
 };
 BAND_EDGES.UK  = BAND_EDGES.Region1;

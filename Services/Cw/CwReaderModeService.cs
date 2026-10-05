@@ -1,4 +1,4 @@
-using Yaesu_Web_Control.Models;
+﻿using Yaesu_Web_Control.Models;
 
 namespace Yaesu_Web_Control.Services.Cw
 {
@@ -223,7 +223,7 @@ namespace Yaesu_Web_Control.Services.Cw
 
             if (sh is not null && int.TryParse(sh, out int shCode))
             {
-                await _cat.SendCommandAsync($"SH{p1}0{shCode:D2};", "CwReader", ct);
+                await _cat.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, p1, shCode), "CwReader", ct);
                 _state.IfWidthA = sh;
             }
 

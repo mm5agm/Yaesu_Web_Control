@@ -121,6 +121,61 @@ public static class RadioCapabilities
     };
 
     /// <summary>
+    /// The highest power the radio will put out at <paramref name="hz"/>.
+    /// The same as <see cref="MaxPowerWatts"/> except on the FT-991A, which
+    /// is a 100 W radio on HF and 6 m but 50 W on 2 m and 70 cm (FT-991A CAT
+    /// manual, EX139 / EX140 "144M / 430M TX MAX POWER", 5 ~ 50). PC still
+    /// takes watts there, so the slider is capped rather than rescaled.
+    /// </summary>
+    public static int MaxPowerWattsAt(string radioModel, long hz) =>
+        radioModel == "FT-991A" && hz >= 100_000_000 ? 50 : MaxPowerWatts(radioModel);
+
+    /// <summary>
+    /// True when the radio has a PA temperature meter, read with RM9. The
+    /// FT-991A's RM list stops at 8 (VDD), so polling RM9 there only earns a
+    /// "?;" every two seconds. The FTdx10, FT-710 and FTDX5000 gauges were
+    /// already hidden on the main page; their polling is left as it was,
+    /// because nobody has checked what those radios answer.
+    /// </summary>
+    public static bool HasPaTemperatureMeter(string radioModel) => radioModel switch
+    {
+        "FTdx10" or "FT-710" or "FTDX5000MP" or "FTDX5000D" or "FT-991A" => false,
+        _ => true
+    };
+
+    /// <summary>
+    /// True when RM9 should be polled for temperature. Only the FT-991A is
+    /// excluded; see <see cref="HasPaTemperatureMeter"/> for why the others
+    /// still poll.
+    /// </summary>
+    public static bool PollsTemperature(string radioModel) => radioModel != "FT-991A";
+
+    /// <summary>
+    /// True when the roofing filter can be chosen over CAT (the RF command).
+    /// The FT-710 and FT-991A have no RF command; their radios choose the
+    /// roofing filter themselves.
+    /// </summary>
+    public static bool HasRoofingFilterCat(string radioModel) =>
+        radioModel is not ("FT-710" or "FT-991A");
+
+    /// <summary>
+    /// True when split is driven by FT alone (FT2 = TX on A, FT3 = TX on B),
+    /// because the radio has no ST command. The FTDX3000 and FT-991A both
+    /// lack ST; the FTDX3000 was confirmed in daily use (#78), the FT-991A
+    /// is from its CAT manual's command list.
+    /// </summary>
+    public static bool SplitViaFtOnly(string radioModel) =>
+        radioModel is "FTDX3000" or "FT-991A";
+
+    /// <summary>
+    /// True when CAT can choose which VFO the receiver listens on. The
+    /// FTDX3000 does it with FR0 / FR4, the FTdx10 and FT-710 with VS. The
+    /// FT-991A has neither (its CAT command list has no FR and no VS); its
+    /// only way to listen on B is to swap the VFOs with SV.
+    /// </summary>
+    public static bool CanSelectRxVfo(string radioModel) => radioModel != "FT-991A";
+
+    /// <summary>
     /// Nominal PA supply voltage — what the radio's own VDD meter is aligned
     /// to read. The FTdx101MP runs its 200 W final from an internal 50 V
     /// supply; the FTdx101D runs from the 13.8 V DC input, and the Technical

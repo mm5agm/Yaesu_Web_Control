@@ -13,8 +13,20 @@ import { autoModeForHz } from './band-plan.js';
 /** @typedef {{ keys: string, action: string, group: string, when?: string, reserved?: boolean }} ShortcutHelpRow */
 
 const MIN_FREQ_HZ = 30_000;
-const MAX_FREQ_HZ = 75_000_000;
+// Upper limit from #vfoRow (RadioCapabilities.FrequencyRangeHz): 75 MHz on
+// every model except the FT-991A, which reaches 470 MHz.
+function maxFreqHz() {
+    const v = Number(document.getElementById('vfoRow')?.dataset?.maxHz);
+    return Number.isFinite(v) && v > 0 ? v : 75_000_000;
+}
 const BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '4m'];
+// The band buttons actually rendered for this radio (the FT-991A swaps 4 m
+// for 2 m and 70 cm), falling back to BANDS on a page without them.
+function bandsFor(vfo) {
+    const rendered = Array.from(document.querySelectorAll(`#bandRadioGroup${vfo} label[data-band]`))
+        .map(l => l.dataset.band);
+    return rendered.length ? rendered : BANDS;
+}
 
 /**
  * Help-table rows. Keys are display labels; dispatch uses matchers below.
@@ -326,7 +338,7 @@ function announce(message) {
 }
 
 function clampHz(hz) {
-    return Math.max(MIN_FREQ_HZ, Math.min(MAX_FREQ_HZ, Math.round(hz)));
+    return Math.max(MIN_FREQ_HZ, Math.min(maxFreqHz(), Math.round(hz)));
 }
 
 function currentFrequencyHz(vfo) {
@@ -362,9 +374,10 @@ function currentBandId(vfo) {
 function cycleBand(direction) {
     const vfo = getActiveVfo();
     const cur = (currentBandId(vfo) || '').toLowerCase();
-    let idx = BANDS.findIndex(b => b.toLowerCase() === cur);
+    const bands = bandsFor(vfo);
+    let idx = bands.findIndex(b => b.toLowerCase() === cur);
     if (idx < 0) idx = direction > 0 ? -1 : 0;
-    const next = BANDS[(idx + direction + BANDS.length) % BANDS.length];
+    const next = bands[(idx + direction + bands.length) % bands.length];
     const label = document.querySelector(`#bandRadioGroup${vfo} label[data-band="${next}"]`);
     if (label) {
         label.click();

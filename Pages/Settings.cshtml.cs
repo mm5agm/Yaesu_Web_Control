@@ -296,7 +296,7 @@ namespace Yaesu_Web_Control.Pages
                         .Concat(optionalSelected.Where(f => f is "A"))
                         .Distinct().ToList();
                 }
-                else if (Settings.RadioModel == "FT-710")
+                else if (Settings.RadioModel is "FT-710" or "FT-991A")
                 {
                     current.InstalledRoofingFilters = new List<string>();
                 }

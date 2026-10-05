@@ -75,7 +75,7 @@ public sealed class ModeVfoRoutingTests
         Assert.Equal("FM", state.ModeB);
     }
 
-    private static (RadioStateService State, CatMessageDispatcher Dispatcher) NewDispatcher(
+    internal static (RadioStateService State, CatMessageDispatcher Dispatcher) NewDispatcher(
         bool singleReceiver, int activeVfo)
     {
         var persistence = new RadioStatePersistenceService(
