@@ -576,6 +576,8 @@
                             </div>
                             @if (!isFtdx10 && !isFt710 && !isFtdx5000)
                             {
+                                @if (hasPaTemp)
+                                {
                                 <div class="linear-meter-row">
                                     <span class="linear-meter-label">TEMP</span>
                                     <canvas id="tempLinearCanvas"
@@ -584,6 +586,7 @@
                                             data-a11y-key="meters.linearTemp"></canvas>
                                     <span id="tempLinearValue" class="linear-meter-value linear-meter-value--temp">--°C</span>
                                 </div>
+                                }
                                 <div class="linear-meter-row">
                                     <span class="linear-meter-label">IDD</span>
                                     <canvas id="iddLinearCanvas"

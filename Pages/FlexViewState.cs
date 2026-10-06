@@ -16,6 +16,7 @@ namespace Yaesu_Web_Control.Pages
         public bool IsFtdx101 { get; init; }
         public bool IsSingleReceiver { get; init; }
         public bool HasAntennaSelector { get; init; }
+        public bool HasPaTemp { get; init; }
         public bool HasQmb { get; init; }
         public bool HasVcTune { get; init; }
         public bool HasVcTuneSub { get; init; }
@@ -108,6 +109,7 @@ namespace Yaesu_Web_Control.Pages
                 IsFtdx101 = isFtdx101,
                 IsSingleReceiver = RadioCapabilities.IsSingleReceiver(radioModel),
                 HasAntennaSelector = RadioCapabilities.HasAntennaSelector(radioModel),
+                HasPaTemp = RadioCapabilities.HasPaTemperatureMeter(radioModel),
                 HasQmb = RadioCapabilities.SupportsQmb(radioModel),
                 HasVcTune = RadioCapabilities.SupportsVCTuneMain(radioModel)
                          && RadioCapabilities.SupportsVCTuneCat(model.RadioState.Id),
