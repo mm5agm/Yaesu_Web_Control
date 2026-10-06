@@ -1,0 +1,669 @@
+.toggle-dd {
+    position: relative;
+    display: inline-block;
+}
+
+/* Standalone Yaesu keys (PROC / MON / ATU in the operating bar) carry the
+   same custom properties without needing a .toggle-dd wrapper.
+   Face/LED/ink tokens live on :root in theme-yaesu.css. */
+.toggle-dd__btn {
+    --bs-btn-color: var(--yaesu-ink);
+    --bs-btn-hover-color: #f3f3f3;
+    --bs-btn-active-color: #f3f3f3;
+    --bs-btn-bg: transparent;
+    --bs-btn-hover-bg: transparent;
+    --bs-btn-active-bg: transparent;
+    --bs-btn-border-color: var(--yaesu-edge, #0d0d0d);
+    --bs-btn-hover-border-color: var(--yaesu-edge, #0d0d0d);
+    --bs-btn-focus-shadow-rgb: 255, 122, 24;
+    --bs-btn-focus-box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
+
+    /* LED-slot metrics — keep ::before spacers in sync with .toggle-dd__led */
+    --yaesu-led-w: 0.85rem;
+    --yaesu-led-h: 0.24rem;
+    --yaesu-led-mt: 0.02rem;
+    --yaesu-led-mb: 0.34rem;
+
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    box-sizing: border-box;
+    min-width: 7.25rem;
+    min-height: 2.65rem;
+    height: 2.65rem;
+    padding: 0.22rem 0.7rem 0.4rem;
+    overflow: visible;
+    user-select: none;
+    color: var(--yaesu-ink);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 1.1;
+    border: 1px solid var(--yaesu-edge, #0d0d0d);
+    border-radius: 0.22rem;
+    background: linear-gradient(180deg, var(--yaesu-face-hi) 0%, var(--yaesu-face) 42%, var(--yaesu-face-lo) 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.toggle-dd__btn:hover,
+.toggle-dd__btn:focus-visible {
+    color: #f3f3f3;
+    background: linear-gradient(180deg, #454545 0%, #2e2e2e 42%, #1c1c1c 100%);
+}
+
+.toggle-dd__btn:active {
+    box-shadow:
+        inset 0 2px 4px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.toggle-dd__led {
+    align-self: center;
+    width: var(--yaesu-led-w);
+    height: var(--yaesu-led-h);
+    margin: var(--yaesu-led-mt) auto var(--yaesu-led-mb);
+    border-radius: 1px;
+    background: var(--yaesu-led-off);
+    box-shadow:
+        inset 0 1px 1px rgba(0, 0, 0, 0.75),
+        0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.toggle-dd__led.is-on {
+    background: var(--yaesu-led-on);
+    box-shadow:
+        0 0 5px 1px rgba(255, 122, 24, 0.95),
+        0 0 12px 3px rgba(255, 110, 10, 0.4),
+        inset 0 0 2px #ffd39a;
+}
+
+/* No-LED / action keys: keep the same face height and label baseline as LED
+   keys so mixed rows/grids (VFO table, clarifier bar, operating columns) align.
+   Icon-only and compact clarifier nudge keys keep their own sizing. */
+.toggle-dd--no-led .toggle-dd__btn:not(.toggle-dd__btn--icon)::before,
+.toggle-dd__btn--action:not(.toggle-dd__btn--icon):not(.clar-nudge-key):not(.clar-reset-key)::before {
+    content: "";
+    display: block;
+    align-self: center;
+    width: var(--yaesu-led-w);
+    height: var(--yaesu-led-h);
+    margin: var(--yaesu-led-mt) auto var(--yaesu-led-mb);
+    flex-shrink: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.toggle-dd__label {
+    text-align: center;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.toggle-dd__menu-hint {
+    position: absolute;
+    right: 0.42rem;
+    bottom: 0.34rem;
+    width: 0.16rem;
+    height: 0.16rem;
+    border-radius: 50%;
+    background: #8d8d8d;
+    box-shadow:
+        -0.26rem 0 0 #8d8d8d,
+        0.26rem 0 0 #8d8d8d;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Left-click opens the menu (Band / Mode / Clar / Apps): same horizontal
+   three-dot row, but bottom-left instead of bottom-right. */
+.toggle-dd__menu-hint--side {
+    left: 0.42rem;
+    right: auto;
+}
+
+.toggle-dd__btn--menu:hover .toggle-dd__menu-hint,
+.toggle-dd__btn--menu:focus-visible .toggle-dd__menu-hint {
+    background: #c4c4c4;
+    box-shadow:
+        -0.26rem 0 0 #c4c4c4,
+        0.26rem 0 0 #c4c4c4;
+    opacity: 1;
+}
+
+.toggle-dd__menu {
+    --bs-dropdown-bg: var(--yaesu-face);
+    --bs-dropdown-color: var(--yaesu-ink);
+    --bs-dropdown-border-color: #0d0d0d;
+    --bs-dropdown-border-radius: 0.22rem;
+    --bs-dropdown-padding-y: 0.28rem;
+    --bs-dropdown-spacer: 0.2rem;
+    --bs-dropdown-link-color: var(--yaesu-ink);
+    --bs-dropdown-link-hover-color: #f3f3f3;
+    --bs-dropdown-link-hover-bg: transparent;
+    --bs-dropdown-link-active-color: #fff;
+    --bs-dropdown-link-active-bg: transparent;
+
+    z-index: 20;
+    min-width: 100%;
+    padding: 0.28rem;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--yaesu-face-hi) 0%, var(--yaesu-face) 40%, var(--yaesu-face-lo) 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.dropdown-item.toggle-dd__item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0.08rem 0;
+    padding: 0.4rem 0.7rem;
+    border-radius: 0.16rem;
+    color: var(--yaesu-ink);
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    background: linear-gradient(180deg, #333 0%, #242424 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.dropdown-item.toggle-dd__item:hover,
+.dropdown-item.toggle-dd__item:focus,
+.dropdown-item.toggle-dd__item:focus-visible,
+.dropdown-item.toggle-dd__item.active {
+    color: #f3f3f3;
+    background: linear-gradient(180deg, #3f3f3f 0%, #2a2a2a 100%);
+}
+
+.dropdown-item.toggle-dd__item.active {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 122, 24, 0.28);
+}
+
+.toggle-dd__menu--slider {
+    min-width: 16rem;
+    padding: 0.7rem 0.85rem 0.85rem;
+}
+
+.toggle-dd__slider-value {
+    margin-bottom: 0.45rem;
+    color: var(--yaesu-led-on);
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-align: center;
+    text-shadow: 0 0 8px rgba(255, 122, 24, 0.45);
+}
+
+.toggle-dd__slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.toggle-dd__slider-end {
+    min-width: 4.6rem;
+    color: #9a9a9a;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.toggle-dd__slider {
+    --bs-form-range-thumb-bg: var(--yaesu-led-on);
+    --bs-form-range-thumb-active-bg: #ff9a45;
+    --bs-form-range-track-bg: #141414;
+    flex: 1 1 auto;
+    height: 1.2rem;
+    padding: 0;
+    appearance: none;
+    background: transparent;
+    accent-color: var(--yaesu-led-on);
+}
+
+.toggle-dd__slider:focus {
+    outline: none;
+}
+
+.toggle-dd__slider::-webkit-slider-runnable-track {
+    height: 0.28rem;
+    border-radius: 1px;
+    background: #141414;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+.toggle-dd__slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 0.85rem;
+    height: 0.85rem;
+    margin-top: -0.28rem;
+    border: 1px solid #7a3a0a;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffd39a, var(--yaesu-led-on) 55%, #c45510);
+    box-shadow: 0 0 6px rgba(255, 122, 24, 0.7);
+}
+
+.toggle-dd__slider::-moz-range-track {
+    height: 0.28rem;
+    border: 0;
+    border-radius: 1px;
+    background: #141414;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+.toggle-dd__slider::-moz-range-thumb {
+    width: 0.85rem;
+    height: 0.85rem;
+    border: 1px solid #7a3a0a;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffd39a, var(--yaesu-led-on) 55%, #c45510);
+    box-shadow: 0 0 6px rgba(255, 122, 24, 0.7);
+}
+
+.dropdown-menu.toggle-dd__menu--grid.show {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(2.5rem, 1fr));
+    min-width: 12.5rem;
+    gap: 0.08rem;
+}
+
+.toggle-dd__menu--grid .toggle-dd__item {
+    padding: 0.32rem 0.3rem;
+    font-size: 0.75rem;
+}
+
+/* QMB in operating-controls column 4: Yaesu action-key face, full column
+   width like DX Spots / Voice. Horizontal Store / Recall / V/M menu below. */
+.qmb-toolbar-key,
+#operatingControlsRow #qmbButton.toggle-dd {
+    position: relative;
+    overflow: visible;
+}
+
+#operatingControlsRow #qmbControls,
+#operatingControlsRow #qmbButton.qmb-toolbar-key,
+#operatingControlsRow #qmbButton.toggle-dd {
+    display: block !important;
+    width: 100%;
+}
+
+#operatingControlsRow #qmbButton > .btn {
+    width: 100%;
+}
+
+.dropdown-menu.qmb-toolbar-key__menu.show {
+    display: grid;
+    grid-template-columns: repeat(3, max-content);
+    gap: 0.25rem;
+    min-width: 0;
+    padding: 0.25rem;
+    margin-top: 0.15rem;
+    background: linear-gradient(180deg, var(--yaesu-face-hi) 0%, var(--yaesu-face) 40%, var(--yaesu-face-lo) 100%);
+    border: 1px solid var(--yaesu-edge, #0d0d0d);
+    border-radius: 0.22rem;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 8px 18px rgba(0, 0, 0, 0.45);
+    z-index: 30;
+}
+
+.qmb-toolbar-key__item.dropdown-item {
+    display: inline-block;
+    width: auto;
+    margin: 0;
+    padding: 0.25rem 0.5rem;
+    color: var(--yaesu-ink);
+    font-weight: 700;
+    font-size: 0.875rem;
+    letter-spacing: normal;
+    text-align: center;
+    background: linear-gradient(180deg, #333 0%, #242424 100%);
+    border: 1px solid #555;
+    border-radius: 0.2rem;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.qmb-toolbar-key__item.dropdown-item:hover,
+.qmb-toolbar-key__item.dropdown-item:focus,
+.qmb-toolbar-key__item.dropdown-item:focus-visible {
+    color: #f3f3f3;
+    background: linear-gradient(180deg, #3f3f3f 0%, #2a2a2a 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 122, 24, 0.28);
+}
+
+/* Flex UI: menus float above dock tabs (see toggle-dropdown-button.js) so they
+   are not clipped by the tab and do not add to its scroll area. */
+.toggle-dd__menu--floating {
+    position: fixed;
+    z-index: 3000;
+    max-width: calc(100vw - 0.5rem);
+    max-height: calc(100vh - 0.5rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Compact fit for VFO key columns */
+.vfo-controls-column .toggle-dd,
+.vfo-col--band .toggle-dd,
+.vfo-col--tune .toggle-dd,
+.vfo-band-row .toggle-dd {
+    display: block;
+    width: 100%;
+}
+
+.vfo-controls-column .toggle-dd__btn,
+.vfo-col--band .toggle-dd__btn,
+.vfo-col--tune .toggle-dd__btn,
+.vfo-band-row .toggle-dd__btn {
+    --yaesu-led-w: 0.7rem;
+    --yaesu-led-h: 0.2rem;
+    --yaesu-led-mt: 0.02rem;
+    --yaesu-led-mb: 0.22rem;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.75rem;
+    height: 2.75rem;
+    padding: 0.14rem 0.45rem 0.28rem;
+}
+
+/* Action keys in the VFO columns (e.g. Audio Filter) must beat the global
+   .toggle-dd__btn--action height so they stay aligned with LED neighbours. */
+.vfo-controls-column .toggle-dd__btn--action,
+.vfo-col--band .toggle-dd__btn--action,
+.vfo-col--tune .toggle-dd__btn--action,
+.vfo-band-row .toggle-dd__btn--action {
+    min-height: 2.75rem;
+    height: 2.75rem;
+    padding: 0.14rem 0.45rem 0.28rem;
+}
+
+.vfo-controls-column .toggle-dd__label,
+.vfo-col--band .toggle-dd__label,
+.vfo-col--tune .toggle-dd__label,
+.vfo-band-row .toggle-dd__label {
+    font-size: 0.72rem;
+}
+
+.vfo-controls-column .toggle-dd__menu--slider,
+.vfo-col--band .toggle-dd__menu--slider,
+.vfo-col--tune .toggle-dd__menu--slider,
+.vfo-band-row .toggle-dd__menu--slider {
+    min-width: 14rem;
+}
+
+.vfo-control-item:has(.toggle-dd) {
+    overflow: visible;
+}
+
+/* Compact icon-only Yaesu key (Save to Mem beside the mode switch). */
+.toggle-dd__btn--icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.15rem;
+    width: 2.15rem;
+    max-width: 2.15rem;
+    min-height: 2.1rem;
+    height: 2.1rem;
+    padding: 0.14rem;
+    flex-shrink: 0;
+}
+
+.toggle-dd__btn--icon .bi {
+    font-size: 1.05rem;
+    line-height: 1;
+    color: var(--yaesu-ink);
+}
+
+.toggle-dd__btn--icon.is-busy {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.toggle-dd__btn--icon.is-saved {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(125, 255, 154, 0.65),
+        0 0 8px 1px rgba(80, 220, 120, 0.35);
+}
+
+.toggle-dd__btn--icon.is-saved .bi {
+    color: #7dff9a;
+}
+
+.toggle-dd__btn--icon.is-error {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 122, 122, 0.65),
+        0 0 8px 1px rgba(255, 90, 90, 0.3);
+}
+
+.toggle-dd__btn--icon.is-error .bi {
+    color: #ff8a8a;
+}
+
+.vfo-band-row .toggle-dd__btn--icon {
+    width: 2.15rem;
+    min-width: 2.15rem;
+    max-width: 2.15rem;
+}
+
+.toggle-dd--oob .toggle-dd__btn {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 2px #dc3545,
+        0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.toggle-dd--oob .toggle-dd__label {
+    color: #ffb4b4;
+}
+
+/* PROC / MON in the operating-controls bar: Yaesu LED key + always-visible slider. */
+.yaesu-level-key {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: nowrap;
+}
+
+.yaesu-level-key--composite {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 2.65rem;
+    height: 2.65rem;
+    padding: 0.22rem 0.45rem 0.4rem;
+    border: 1px solid var(--yaesu-edge, #0d0d0d);
+    border-radius: 0.22rem;
+    background: linear-gradient(180deg, var(--yaesu-face-hi) 0%, var(--yaesu-face) 42%, var(--yaesu-face-lo) 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.yaesu-level-key--composite:hover,
+.yaesu-level-key--composite:focus-within {
+    background: linear-gradient(180deg, #454545 0%, #2e2e2e 42%, #1c1c1c 100%);
+}
+
+.yaesu-level-key.yaesu-level-key--composite > .toggle-dd__btn {
+    flex: 0 0 4.5rem;
+    min-width: 4.5rem;
+    width: 4.5rem;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.yaesu-level-key > .toggle-dd__btn {
+    flex: 0 0 auto;
+    min-width: 5.5rem;
+    width: auto;
+}
+
+#operatingControlsRow .op-col--buttons > .toggle-dd__btn {
+    min-width: 5.5rem;
+    width: 100%;
+}
+
+/* Visual-only Yaesu action keys (Tune / FM / VOX / CW / DX / Voice): same face
+   height as LED keys — LED slot reserved via ::before above. */
+.toggle-dd__btn--action {
+    min-height: 2.65rem;
+    height: 2.65rem;
+    padding: 0.22rem 0.55rem 0.4rem;
+}
+
+.toggle-dd__btn--action .toggle-dd__label {
+    margin: 0;
+}
+
+/* Compact Yaesu keys for the top status toolbar (Mem / Gauges / Apps). */
+.toggle-dd__btn--toolbar {
+    --yaesu-led-w: 0.7rem;
+    --yaesu-led-h: 0.18rem;
+    --yaesu-led-mt: 0.02rem;
+    --yaesu-led-mb: 0.18rem;
+    min-width: 4.75rem;
+    min-height: 1.9rem;
+    height: 1.9rem;
+    padding: 0.12rem 0.45rem 0.28rem;
+}
+
+.toggle-dd__btn--toolbar .toggle-dd__label {
+    font-size: 0.75rem;
+}
+
+/* Apps launcher — one Yaesu key, menu of enabled Application Setup apps. */
+.apps-launcher {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.apps-launcher #appsButton.toggle-dd {
+    display: block;
+}
+
+.apps-launcher .toggle-dd__btn {
+    min-width: 4.75rem;
+}
+
+.apps-launcher--active .toggle-dd__btn {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 122, 24, 0.55),
+        0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.apps-launcher__tx {
+    position: absolute;
+    top: -0.35rem;
+    right: -0.4rem;
+    z-index: 2;
+    font-size: 0.65rem;
+    pointer-events: none;
+}
+
+.dropdown-menu.apps-launcher__menu.show {
+    display: grid;
+    grid-template-rows: repeat(2, auto);
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(6rem, max-content);
+    gap: 0.25rem;
+    min-width: 0;
+    padding: 0.3rem;
+}
+
+.dropdown-menu.apps-launcher__menu .toggle-dd__item {
+    width: 100%;
+    margin: 0;
+    white-space: nowrap;
+}
+
+.dropdown-menu.apps-launcher__menu .toggle-dd__item.is-running {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 122, 24, 0.4);
+    color: #ffe0b8;
+}
+
+.yaesu-level-key__level {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.yaesu-level-key__level input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 3.5rem;
+    max-width: 8rem;
+    height: 18px;
+}
+
+#operatingControlsRow .yaesu-level-key__level input[type="range"] {
+    max-width: none;
+}
+
+.yaesu-level-key__level .fw-bold {
+    min-width: 1.6rem;
+    text-align: right;
+}
+
+/* ATU Yaesu key: red face while an auto-tune cycle is running. */
+#atuBtn.is-tuning,
+#atuTuneBtn.is-tuning {
+    --bs-btn-color: #fff;
+    color: #fff;
+    background: linear-gradient(180deg, #e35d5d 0%, #c82333 42%, #8b1414 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px #8b1414,
+        0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+#atuBtn.is-tuning .toggle-dd__led {
+    background: #ffd39a;
+    box-shadow:
+        0 0 5px 1px rgba(255, 200, 100, 0.9),
+        inset 0 0 2px #fff;
+}
+
+#atuBtn.is-tuning:hover,
+#atuBtn.is-tuning:focus-visible,
+#atuTuneBtn.is-tuning:hover,
+#atuTuneBtn.is-tuning:focus-visible {
+    color: #fff;
+    background: linear-gradient(180deg, #ef7070 0%, #d32f3f 42%, #9a1818 100%);
+}
