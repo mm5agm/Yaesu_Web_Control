@@ -1,6 +1,7 @@
 @model Yaesu_Web_Control.Pages.FlexUiModel
 @{
     var isSingleReceiver = Model.View.IsSingleReceiver;
+    var canSelectRxVfo = Model.View.CanSelectRxVfo;
 }
 <div class="ywc-flex-toolbar row g-1 mb-1" style="padding-top: 2px; padding-bottom: 2px;">
     <div class="col-auto d-flex gap-2 align-items-center">
@@ -112,7 +113,17 @@
                 <span class="small text-nowrap">RX</span>
                 <div class="btn-group btn-group-sm" role="group" aria-label="Receive VFO">
                     <button type="button" id="rxVfoA" class="btn btn-outline-secondary py-0" data-rx="A" aria-label="Receive on VFO A">A</button>
+                    @if (canSelectRxVfo)
+                    {
                     <button type="button" id="rxVfoB" class="btn btn-outline-secondary py-0" data-rx="B" aria-label="Receive on VFO B">B</button>
+                    }
+                    else
+                    {
+                    @* FT-991A: no VS or FR, so CAT cannot move the receiver to VFO B. *@
+                    <button type="button" id="rxVfoB" class="btn btn-outline-secondary py-0" data-rx="B" disabled
+                            title="The FT-991A cannot choose its receive VFO over CAT. Use Swap A/B instead."
+                            aria-label="Receive on VFO B - not available on this radio over CAT">B</button>
+                    }
                 </div>
                 <span class="small text-nowrap ms-1">TX</span>
                 <div class="btn-group btn-group-sm" role="group" aria-label="Transmit VFO">

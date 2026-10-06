@@ -21,6 +21,16 @@ namespace Yaesu_Web_Control.Pages
         public bool HasVcTune { get; init; }
         public bool HasVcTuneSub { get; init; }
         public int MaxPowerWatts { get; init; }
+
+        /// <summary>Upper tuning limit in Hz (FT-991A is 470 MHz, the rest 75 MHz),
+        /// for #vfoRow's data-max-hz, which site.js and keyboard-shortcuts.js read.</summary>
+        public long MaxTunableHz { get; init; }
+
+        /// <summary>MaxTunableHz in MHz, invariant culture, for the VFO aria-valuemax.</summary>
+        public string MaxTunableMhz { get; init; } = "75";
+
+        /// <summary>False on the FT-991A, which cannot choose its receive VFO over CAT.</summary>
+        public bool CanSelectRxVfo { get; init; }
         public string ClarModeInit { get; init; } = "off";
         public int ContourMaxFreq { get; init; }
         public int ContourStep { get; init; }
@@ -47,6 +57,8 @@ namespace Yaesu_Web_Control.Pages
             bool isFtdx3000 = radioModel == "FTDX3000";
             bool isFtdx5000 = radioModel is "FTDX5000MP" or "FTDX5000D";
             bool isFtdx101 = radioModel is "FTdx101MP" or "FTdx101D";
+
+            long maxTunableHz = RadioCapabilities.FrequencyRangeHz(radioModel).MaxHz;
 
             string clarModeInit = (model.RadioState.RxClarOn, model.RadioState.TxClarOn) switch
             {
@@ -116,6 +128,9 @@ namespace Yaesu_Web_Control.Pages
                 HasVcTuneSub = RadioCapabilities.SupportsVCTuneSubStatic(radioModel)
                          && RadioCapabilities.SupportsVCTuneCat(model.RadioState.Id),
                 MaxPowerWatts = RadioCapabilities.MaxPowerWatts(radioModel),
+                MaxTunableHz = maxTunableHz,
+                MaxTunableMhz = (maxTunableHz / 1_000_000).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                CanSelectRxVfo = RadioCapabilities.CanSelectRxVfo(radioModel),
                 ClarModeInit = clarModeInit,
                 ContourMaxFreq = contourMaxFreq,
                 ContourStep = contourStep,

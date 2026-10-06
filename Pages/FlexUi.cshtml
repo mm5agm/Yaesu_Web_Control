@@ -13,6 +13,7 @@
 @* Hidden data holder so site.js's vfoRow.dataset lookups keep working. *@
 <div id="vfoRow" data-radio-model="@Model.RadioModel"
      data-max-power="@Model.View.MaxPowerWatts"
+     data-max-hz="@Model.View.MaxTunableHz"
      data-single-receiver="@(Model.View.IsSingleReceiver ? "true" : "false")"
      hidden aria-hidden="true"></div>
 

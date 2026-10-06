@@ -67,7 +67,7 @@
                         <!-- Col 1: frequency (+ filter scope), RF/AF, band/segment/mode -->
                         <div class="vfo-col vfo-col--tune">
                             <div class="vfo-freq-row">
-                                <span id="freqA" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO A frequency" title="VFO A frequency" data-a11y-key="vfo.a.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
+                                <span id="freqA" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO A frequency" title="VFO A frequency" data-a11y-key="vfo.a.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="@Model.View.MaxTunableMhz" aria-valuenow="0"></span>
                                 <span class="frequency-display digit-display">MHz</span>
                                 <div id="freqA-controls" class="freq-step-controls" style="display:@(Model.ShowFrequencyArrowButtons ? "inline-flex" : "none");">
                                     <button type="button" id="freqA-up" class="btn btn-secondary btn-sm" aria-label="Step VFO A selected digit up" title="Step VFO A selected digit up (↑)">▲</button>

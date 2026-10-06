@@ -37,6 +37,13 @@ function _memPrompt(message, defaultValue = '') {
 
 const _MODES = ['LSB','USB','CW-U','CW-L','AM','AM-N','FM','FM-N','RTTY-L','RTTY-U','DATA-L','DATA-U','DATA-FM','DATA-FM-N','PSK'];
 
+// The FT-991A carries C4FM where every other model carries PSK; both are mode
+// code E on the wire (see Pages/Memories.cshtml). Offer C4FM only on that rig,
+// so a memory cannot be written as C4FM on a radio that has no such mode.
+const _modesForRadio = () => window._radioModel === 'FT-991A'
+    ? [..._MODES, 'C4FM']
+    : _MODES;
+
 // Select dialog — like _memPrompt but with a <select>.
 function _memSelect(message, currentValue) {
     return new Promise(resolve => {
@@ -46,7 +53,7 @@ function _memSelect(message, currentValue) {
             'color:#e6e6e6', 'padding:20px 24px', 'max-width:320px', 'width:90vw',
             'z-index:10001', 'box-shadow:0 10px 40px rgba(0,0,0,0.7)'
         ].join(';');
-        const opts = _MODES.map(m =>
+        const opts = _modesForRadio().map(m =>
             `<option value="${m}"${m === currentValue ? ' selected' : ''}>${m}</option>`
         ).join('');
         dlg.innerHTML =

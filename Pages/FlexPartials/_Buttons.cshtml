@@ -74,32 +74,38 @@
                                     onclick="document.getElementById('cwDialog').show()">
                                 <span class="toggle-dd__label">CW</span>
                             </button>
+                            @* These open buttons go through the pop-out wrapper when it
+                               is wired (window.*Open), so while the panel is in a
+                               window of its own the button focuses that window
+                               instead of opening a second copy in the page. The
+                               direct toggle remains as a fallback in case the
+                               Flex ready hook never ran. *@
                             <button id="cwReaderOpenBtn" type="button"
                                     class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="CW reader - decode received Morse to text"
                                     title="Open the CW reader - decodes the received Morse to text"
-                                    onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">
+                                    onclick="window.cwReaderOpen ? window.cwReaderOpen() : (window.cwReaderPanel && window.cwReaderPanel.toggle())">
                                 <span class="toggle-dd__label">CW Read</span>
                             </button>
-                            <button type="button"
+                            <button id="cwSendOpenBtn" type="button"
                                     class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="CW send - type text and send it as Morse"
                                     title="Open CW send - type a line, press Enter, the radio keys it"
-                                    onclick="window.cwSendPanel && window.cwSendPanel.toggle()">
+                                    onclick="window.cwSendOpen ? window.cwSendOpen() : (window.cwSendPanel && window.cwSendPanel.toggle())">
                                 <span class="toggle-dd__label">CW Send</span>
                             </button>
                             <button id="rttyTunerOpenBtn" type="button"
                                     class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="RTTY tuner - crossed-ellipse tuning scope"
                                     title="Open the RTTY tuner - mark and space filters on an X-Y scope; tune for the cross"
-                                    onclick="window.rttyTuner && window.rttyTuner.toggle()">
+                                    onclick="window.rttyTunerOpen ? window.rttyTunerOpen() : (window.rttyTuner && window.rttyTuner.toggle())">
                                 <span class="toggle-dd__label">RTTY Tune</span>
                             </button>
-                            <button type="button"
+                            <button id="dxSpotsOpenBtn" type="button"
                                     class="btn toggle-dd__btn toggle-dd__btn--action"
                                     aria-label="DX spots — list of cluster spots on current band"
                                     title="Open DX spots list — see callsigns spotted on the current band"
-                                    onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">
+                                    onclick="window.dxSpotsOpen ? window.dxSpotsOpen() : (window.dxSpotsPanel && window.dxSpotsPanel.toggle())">
                                 <span class="toggle-dd__label">DX Spots</span>
                             </button>
                             <button type="button"

@@ -45,6 +45,8 @@
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { attachPopout, screenShare } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { watchInView }          from "/js/dialogs/place-in-view.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -602,6 +604,119 @@
             window.cwQsoForm.init('cwQsoForm');
             document.getElementById('cwReaderLogBtn')
                 ?.addEventListener('click', () => window.cwQsoForm.toggle());
+
+            // ── Pop-out windows ──────────────────────────────────────────────
+            // The shared panel markup carries a Pop out button inside each
+            // dialog; these wire it and the matching toolbar button to the
+            // standalone window pages. Same names as the Classic page, so both
+            // UIs share one window and one BroadcastChannel per panel.
+            window.dxSpotsOpen = attachPopout({
+                name: 'dx-spots',
+                url: '/DxSpots',
+                defaultSize: { width: 760, height: 480 },
+                dialog: () => document.getElementById('dxSpotsDialog'),
+                openButton: document.getElementById('dxSpotsOpenBtn'),
+                popoutButton: document.getElementById('dxSpotsPopoutBtn'),
+                show: () => window.dxSpotsPanel.show(),
+                closedLabel: {
+                    text: 'DX Spots',
+                    title: 'Open DX spots list — see callsigns spotted on the current band',
+                    aria: 'DX spots — list of cluster spots on current band',
+                },
+                openLabel: {
+                    text: 'DX Spots (pop-out)',
+                    title: 'The DX spots list is in its own window - click to bring it to the front',
+                    aria: 'DX spots list is in a pop-out window - bring it to the front',
+                },
+            }).open;
+
+            window.cwReaderOpen = attachPopout({
+                name: 'cw-reader',
+                // Reattach gives the dialog the size the window was left at.
+                takeSize: true,
+                url: '/CwReader',
+                // A quarter of the screen: the reader has no natural size.
+                defaultSize: () => screenShare(0.25, window.screen),
+                dialog: () => document.getElementById('cwReaderDialog'),
+                openButton: document.getElementById('cwReaderOpenBtn'),
+                popoutButton: document.getElementById('cwReaderPopoutBtn'),
+                show: () => window.cwReaderPanel.toggle(),
+                closedLabel: {
+                    text: 'CW Read',
+                    title: 'Open the CW reader - decodes the received Morse to text',
+                    aria: 'CW reader - decode received Morse to text',
+                },
+                openLabel: {
+                    text: 'CW Read (pop-out)',
+                    title: 'The CW reader is in its own window - click to bring it to the front',
+                    aria: 'CW reader is in a pop-out window - bring it to the front',
+                },
+            }).open;
+
+            window.rttyTunerOpen = attachPopout({
+                name: 'rtty-tuner',
+                takeSize: true,
+                url: '/RttyTuner',
+                defaultSize: { width: 380, height: 520 },
+                dialog: () => document.getElementById('rttyTunerDialog'),
+                openButton: document.getElementById('rttyTunerOpenBtn'),
+                popoutButton: document.getElementById('rttyTunerPopoutBtn'),
+                show: () => window.rttyTuner.toggle(),
+                closedLabel: {
+                    text: 'RTTY Tune',
+                    title: 'Open the RTTY tuner - mark and space filters on an X-Y scope; tune for the cross',
+                    aria: 'RTTY tuner - crossed-ellipse tuning scope',
+                },
+                openLabel: {
+                    text: 'RTTY Tune (pop-out)',
+                    title: 'The RTTY tuner is in its own window - click to bring it to the front',
+                    aria: 'RTTY tuner is in a pop-out window - bring it to the front',
+                },
+            }).open;
+
+            // CW Send can live in a window of its own too (/CwSend). The queue
+            // is in whichever page the line was typed in, so Pop out waits while
+            // a line from here is still going out; while the window is sending,
+            // it says so over a channel and the keyer's M1-M5 buttons here are
+            // marked busy.
+            {
+                const popoutBtn = document.getElementById('cwSendPopoutBtn');
+                const popoutTitle = popoutBtn?.title ?? '';
+                window.cwSendPanel.onBusy = busy => {
+                    if (!popoutBtn) return;
+                    popoutBtn.disabled = busy;
+                    popoutBtn.title = busy
+                        ? 'Wait for the line to finish (or press Stop) before popping CW Send out'
+                        : popoutTitle;
+                };
+                window.cwSendOpen = attachPopout({
+                    name: 'cw-send',
+                    takeSize: true,
+                    url: '/CwSend',
+                    defaultSize: { width: 600, height: 340 },
+                    dialog: () => document.getElementById('cwSendDialog'),
+                    openButton: document.getElementById('cwSendOpenBtn'),
+                    popoutButton: popoutBtn,
+                    show: () => window.cwSendPanel.show(),
+                    closedLabel: {
+                        text: 'CW Send',
+                        title: 'Open CW send - type a line, press Enter, the radio keys it',
+                        aria: 'CW send - type text and send it as Morse',
+                    },
+                    openLabel: {
+                        text: 'CW Send (pop-out)',
+                        title: 'CW Send is in its own window - click to bring it to the front',
+                        aria: 'CW send is in a pop-out window - bring it to the front',
+                    },
+                }).open;
+                try {
+                    new BroadcastChannel('ywc-cw-send-busy').addEventListener('message', ev => {
+                        // A line typed here marks the buttons itself; only
+                        // follow the window when this page is not sending.
+                        if (!window.cwSendPanel.busy) window.cwMemButtonsBusy?.(!!ev.data?.busy);
+                    });
+                } catch { /* no BroadcastChannel: the buttons are not marked */ }
+            }
 
             spectrumPipeline.onFrequencyA(hz => {
                 spectrumPanelA?.setVfoFrequency(hz);
@@ -1706,7 +1821,15 @@
                     dlg.style.position = 'fixed';
                 }
             } catch {}
+            // A place saved at another browser zoom, or on a bigger monitor,
+            // can be off the window, and then the dialog opens out of sight.
+            // The floating panels also open across the top the first time,
+            // rather than wherever their markup sits down the page.
+            watchInView(dlg, { placeFirst: ['cwSendDialog', 'rttyTunerDialog'].includes(id) });
         });
+        // The CW reader keeps its own place (cw-reader-panel.js), so it is not
+        // in the list above, but it can be left off the window the same way.
+        watchInView(document.getElementById('cwReaderDialog'), { placeFirst: true });
 
         // --- DX Watch (watched-callsign alerts) ---
         // Backed by ApplicationSettings.DxClusterWatchedCallsigns. The

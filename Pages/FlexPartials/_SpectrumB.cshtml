@@ -21,6 +21,8 @@
     var ctcssTones = Model.View.CtcssTones;
 }
 
+@* No Height select, resize grip or VFO-fold button — the dockable FlexLayout
+   tab owns panel height and show/hide (see _SpectrumA.cshtml). Deliberate. *@
                 <div id="spectrumContainerB" class="card border-dark h-100" style="flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
                         <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>

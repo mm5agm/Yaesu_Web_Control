@@ -21,6 +21,10 @@
     var ctcssTones = Model.View.CtcssTones;
 }
 
+@* No Height select and no resize grip here. Unlike the Classic page, the panel
+   height is owned by the dockable FlexLayout tab, so the spectrum simply fills
+   the panel. Likewise there is no VFO-fold button: the FlexLayout tabs already
+   show and hide whole panels. Both are deliberate omissions, not drift. *@
                 <div id="spectrumContainerA" class="card border-dark h-100" style="flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
                         <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>

@@ -20,7 +20,7 @@ const SETTLE = 2000 + 700; // core's MODE_SETTLE_MS, plus margin
 const PAGES = [
     '/', '/About', '/ApplicationSetup', '/AudioFilter', '/Calibrations',
     '/Calibration/MeterCalibration', '/MeterCalibration',
-    '/CwReader', '/CwSend', '/Diagnostics', '/DxSpots', '/Labels', '/Memories',
+    '/CwReader', '/CwSend', '/Diagnostics', '/DxSpots', '/flexui', '/Labels', '/Memories',
     '/Ports', '/RadioDisplay', '/RemoteAudio', '/RttyTuner', '/Settings', '/UserManual',
 ];
 
@@ -74,6 +74,38 @@ for (const path of PAGES) {
         } finally { await page.close(); }
     });
 }
+
+// ---------------------------------------------------------------- flex UI
+
+// The Experimental UI is a separate re-implementation of Index, so a module
+// path that drifts there (/js/ui/hub-connection.js for /js/hub/…) would show
+// up as a failed request and nothing else. This proves the page's module graph
+// resolves and the shared panel dialogs the pop-out wiring depends on are
+// present. It does not drive CAT.
+test('Experimental UI (/flexui) loads its modules and shared dialogs', async () => {
+    const page = await open('/flexui', { settleMs: 3000 });
+    try {
+        const faults = pageFaults(page);
+        expect(faults.length === 0, `failed requests:\n${faults.join('\n')}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+        // onFlexReady() swallows per-callback errors to console.error, so a
+        // broken import or a bad attachPopout wiring would not surface as a
+        // page exception - only here.
+        expect(page.consoleErrors.length === 0, `console errors:\n${page.consoleErrors.join('\n')}`);
+        const hubType = await page.eval('typeof window.rwcHubConnection');
+        expect(hubType === 'function', `window.rwcHubConnection is ${hubType}, not a function`);
+        // The pop-out wiring runs inside onFlexReady; if it threw, these would
+        // be undefined (its error is swallowed to console.error, checked above).
+        for (const g of ['dxSpotsOpen', 'cwReaderOpen', 'rttyTunerOpen', 'cwSendOpen']) {
+            const t = await page.eval(`typeof window.${g}`);
+            expect(t === 'function', `window.${g} is ${t}, not a function`);
+        }
+        for (const id of ['ywcFlexHost', 'cwReaderDialog', 'cwSendDialog', 'rttyTunerDialog', 'dxSpotsDialog', 'audioFilterDialogA', 'audioFilterDialogB']) {
+            const present = await page.eval(`!!document.getElementById(${JSON.stringify(id)})`);
+            expect(present, `#${id} is missing on /flexui`);
+        }
+    } finally { await page.close(); }
+});
 
 test('Calibrations page shows the tables, not its loading text', async () => {
     const page = await open('/Calibrations');
