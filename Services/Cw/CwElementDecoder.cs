@@ -302,6 +302,38 @@ namespace RadioWebControl.Core.Services.Cw
         public double CharacterGapDits { get; set; } = 2.0;
 
         /// <summary>
+        /// Rejoin consecutive one-element characters into the character they
+        /// were probably split out of, when the gap that separated them was
+        /// only marginally over <see cref="CharacterGapDits"/>. The value is
+        /// that margin, in dits; 0 disables the whole mechanism, which is the
+        /// default and the behaviour everything before 2026-10-06 had.
+        ///
+        /// WHY. Measured 2026-10-06 on a real 20 m QSO (YO5OED, 14.032 MHz,
+        /// bench capture cw-real-20261006-yo5oed-14032.wav). Below about 15 dB
+        /// SNR the key-up/key-down decision goes ambiguous: marks shorten,
+        /// gaps stretch, and an intra-character gap crosses the 2-dit boundary
+        /// so ONE character comes out as several. M (--) printed as "T T",
+        /// S (...) as "E E E". The radio own decoder read "SM7CBS" where this
+        /// one read "D T T7CBS", which is the independent second opinion that
+        /// pins the fault to the split rather than to the marks.
+        ///
+        /// Only one-element characters can be fragments, because a split
+        /// inside a character leaves single marks either side of it, and a
+        /// single mark is only ever E or T.
+        ///
+        /// WHY IT IS OFF BY DEFAULT, and must stay off until it is scored.
+        /// Joining E+E gives "..", which is I - and "E E" is also real,
+        /// idiomatic CW. Colin heard the dit-dit sign-off in "73 TU EE" on
+        /// that same recording with his own ears, and a rejoin that fires
+        /// there turns correct copy into a wrong character. On that file the
+        /// margin does separate the two cases - the genuine EE survives a
+        /// character gap of 3.5 dits while the fragments merge at 2.5 - but
+        /// that is ONE recording, and the ARRL set is the regression net this
+        /// has to clear before it may default to on.
+        /// </summary>
+        public double RejoinFragmentMaxGapDits { get; set; } = 0.0;
+
+        /// <summary>
         /// How long <see cref="CwElementDecoder.IsLocked"/> keeps believing the
         /// speed estimate after the marks stop looking like Morse.
         ///
@@ -477,6 +509,10 @@ namespace RadioWebControl.Core.Services.Cw
         private int _gapWindowNext;
         private int  _unknownSymbols;
 
+        // Consecutive one-element symbols awaiting a rejoin verdict. Only ever
+        // non-empty when RejoinFragmentMaxGapDits is on.
+        private readonly List<string> _joinRun = new();
+
         private readonly double[] _markWindow;
         private double _lastMarkAtMs = double.NegativeInfinity;
         private int _markWindowCount;
@@ -628,7 +664,7 @@ namespace RadioWebControl.Core.Services.Cw
                     && tMs - _edgeTimeMs >= _opt.IdleFlushMs)
                 {
                     _idleFlushed = true;
-                    return FlushCharacter();
+                    return DrainJoinRun() + FlushCharacter();
                 }
                 return string.Empty;
             }
@@ -691,7 +727,7 @@ namespace RadioWebControl.Core.Services.Cw
         /// character is not lost.
         /// </summary>
         public string Flush()
-            => _symbol.Length > 0 ? FlushCharacter() : string.Empty;
+            => DrainJoinRun() + (_symbol.Length > 0 ? FlushCharacter() : string.Empty);
 
         private string OnMark(double markMs, double peakMag, double noiseLevel)
         {
@@ -794,7 +830,9 @@ namespace RadioWebControl.Core.Services.Cw
         {
             if (gapMs < _opt.CharacterGapDits * _ditMs) return string.Empty;
 
-            var text = FlushCharacter();
+            var text = _opt.RejoinFragmentMaxGapDits > 0.0
+                ? FlushCharacterRejoining(gapMs)
+                : FlushCharacter();
 
             _gapWindow[_gapWindowNext] = gapMs;
             _gapWindowNext = (_gapWindowNext + 1) % _gapWindow.Length;
@@ -960,7 +998,17 @@ namespace RadioWebControl.Core.Services.Cw
 
             string sym = _symbol.ToString();
             _symbol.Clear();
+            return DecodeSymbol(sym);
+        }
 
+        /// <summary>
+        /// Decode one finished symbol and record it as evidence. Split out of
+        /// <see cref="FlushCharacter"/> so a rejoined symbol - which is not
+        /// what is sitting in _symbol - can be put through exactly the same
+        /// bookkeeping, rather than a second copy of it that could drift.
+        /// </summary>
+        private string DecodeSymbol(string sym)
+        {
             var decoded = MorseTable.Decode(sym);
             if (decoded is null) { _unknownSymbols++; return string.Empty; }
 
@@ -971,6 +1019,54 @@ namespace RadioWebControl.Core.Services.Cw
             if (_ditOnlyCount < _ditOnly.Length) _ditOnlyCount++;
 
             return decoded;
+        }
+
+        /// <summary>
+        /// The rejoining form of <see cref="FlushCharacter"/>. See
+        /// <see cref="CwElementDecoderOptions.RejoinFragmentMaxGapDits"/> for
+        /// the measurement this exists for and why it is off by default.
+        ///
+        /// A one-element character followed by a marginal gap is held, because
+        /// the next character may belong with it. Anything else closes the run:
+        /// a decisive gap, or a multi-element character, which cannot itself be
+        /// a fragment.
+        /// </summary>
+        private string FlushCharacterRejoining(double gapMs)
+        {
+            if (_symbol.Length == 0) return DrainJoinRun();
+
+            string sym = _symbol.ToString();
+            _symbol.Clear();
+
+            if (sym.Length == 1)
+            {
+                _joinRun.Add(sym);
+                bool marginal = gapMs < _opt.RejoinFragmentMaxGapDits * _ditMs;
+                return marginal ? string.Empty : DrainJoinRun();
+            }
+
+            return DrainJoinRun() + DecodeSymbol(sym);
+        }
+
+        /// <summary>
+        /// Settle a held run of one-element characters. The join is taken only
+        /// when it produces a real character; otherwise the fragments are
+        /// emitted exactly as they arrived, so a run this cannot explain is
+        /// passed through rather than silently dropped.
+        /// </summary>
+        private string DrainJoinRun()
+        {
+            if (_joinRun.Count == 0) return string.Empty;
+
+            string joined = string.Concat(_joinRun);
+            bool joinable = _joinRun.Count > 1 && MorseTable.Decode(joined) is not null;
+
+            var sb = new StringBuilder();
+            if (joinable) sb.Append(DecodeSymbol(joined));
+            else foreach (var s in _joinRun) sb.Append(DecodeSymbol(s));
+
+            _joinRun.Clear();
+            return sb.ToString();
         }
 
         /// <summary>

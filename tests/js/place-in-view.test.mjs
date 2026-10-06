@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pullIntoView, firstPlace, GRIP } from '../../js/dialogs/place-in-view.js';
+import { pullIntoView, firstPlace, GRIP, EDGE } from '../../js/dialogs/place-in-view.js';
 
 const VIEW = { width: 1000, height: 800 };
 const box = (left, top, width = 300, height = 200) =>
@@ -13,9 +13,16 @@ const box = (left, top, width = 300, height = 200) =>
 
 test('a dialog on the window is left alone', () => {
     assert.equal(pullIntoView(box(100, 100), VIEW), null);
-    // Partly off, but with enough left to grab, is still fine.
-    assert.equal(pullIntoView(box(VIEW.width - GRIP - 1, 100), VIEW), null);
+    // Partly off the left, with enough on to grab, is still fine.
     assert.equal(pullIntoView(box(-300 + GRIP + 1, 100), VIEW), null);
+});
+
+test('a dialog running off the right or the bottom is moved fully on', () => {
+    // Measured 2026-10-04: a panel at left 330 given the window's width.
+    assert.deepEqual(pullIntoView(box(330, 40, 1900, 600), { width: 2000, height: 700 }), { left: 100 - EDGE });
+    assert.deepEqual(pullIntoView(box(100, 300, 300, 600), VIEW), { top: 200 - EDGE });
+    // Bigger than the window: its top-left corner stays on, so its title bar can be grabbed.
+    assert.deepEqual(pullIntoView(box(100, 300, 1200, 900), VIEW), { left: 0, top: 0 });
 });
 
 test('a dialog past the right or left edge is centred', () => {

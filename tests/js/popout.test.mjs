@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    clampGeometry, featuresFor, screenShare, frameFrom, pageAreaSize, usableSave,
+    clampGeometry, featuresFor, screenShare, frameFrom, pageAreaSize, usableSave, fitSize, inTab,
     PopoutHost, PopoutChild, MIN_WIDTH, MIN_HEIGHT,
 } from '../../js/popout/popout.js';
 
@@ -168,6 +168,12 @@ test('a blocked pop-up reports false and leaves the host closed', () => {
     assert.equal(host.isOpen, false);
 });
 
+test('a small size the operator chose is kept', () => {
+    // Measured 2026-10-04 at 50% zoom: a pop-out shrunk to 154 x 91.
+    assert.deepEqual(clampGeometry({ width: 154, height: 91, left: 2288, top: 89 }, DEF),
+        { width: 154, height: 91, left: 2288, top: 89 });
+});
+
 test('the child saves its page-area size and screen position', () => {
     const b = stubBrowser();
     const name = freshName();
@@ -234,6 +240,54 @@ test('a saved size bigger than the screen goes back to the default', () => {
     assert.equal(usableSave(null, scr), null);
 });
 
+// ── A pop-out restored as a tab ──────────────────────────────────────────────
+
+test('a page with a toolbar is in a tab; one without is a pop-out window', () => {
+    assert.equal(inTab({ toolbar: { visible: true } }), true);
+    assert.equal(inTab({ toolbar: { visible: false } }), false);
+    assert.equal(inTab({}), false);
+});
+
+test('a pop-out page in a tab gives up the pop-out window name', () => {
+    const b = stubBrowser();
+    const name = freshName();
+    Object.assign(globalThis.window, { name: 'rwc-popout-' + name, toolbar: { visible: true } });
+    const child = new PopoutChild({ name }).start();
+    assert.equal(globalThis.window.name, '');
+    clearInterval(child._watch); child._channel.close();
+
+    stubBrowser();
+    Object.assign(globalThis.window, { name: 'rwc-popout-' + name, toolbar: { visible: false } });
+    const win = new PopoutChild({ name }).start();
+    assert.equal(globalThis.window.name, 'rwc-popout-' + name);
+    clearInterval(win._watch); win._channel.close();
+});
+
+// ── Reattach carries the size back ───────────────────────────────────────────
+
+test('the panel takes the pop-out size, cut to the main window', () => {
+    const view = { width: 1600, height: 900 };
+    assert.deepEqual(fitSize({ width: 328, height: 206 }, view), { width: 328, height: 206 });
+    assert.deepEqual(fitSize({ width: 3000, height: 2000 }, view), { width: 1584, height: 884 });
+    assert.deepEqual(fitSize({ width: 40, height: 20 }, view), { width: MIN_WIDTH, height: MIN_HEIGHT });
+    assert.equal(fitSize(null, view), null);
+    assert.equal(fitSize({ width: 0, height: 300 }, view), null);
+});
+
+test('reattach hands the pop-out page size to the host', async () => {
+    const b = stubBrowser();
+    const name = freshName();
+    const sizes = [];
+    const host = new PopoutHost({ name, url: '/X', defaultSize: DEF, onReattach: s => sizes.push(s) }).start();
+    const child = new PopoutChild({ name }).start();
+    await tick();
+    child.reattach();
+    await tick();
+    assert.deepEqual(sizes, [{ width: 640, height: 380 }]);
+    clearInterval(child._watch);
+    host._channel.close(); child._channel.close();
+});
+
 // ── screenShare ──────────────────────────────────────────────────────────────
 
 test('a quarter of the screen is half its width by half its height', () => {
@@ -241,7 +295,7 @@ test('a quarter of the screen is half its width by half its height', () => {
 });
 
 test('a share of a small or missing screen never goes under the minimum', () => {
-    assert.deepEqual(screenShare(0.25, { availWidth: 400, availHeight: 300 }), { width: MIN_WIDTH, height: MIN_HEIGHT });
+    assert.deepEqual(screenShare(0.25, { availWidth: 200, availHeight: 100 }), { width: MIN_WIDTH, height: MIN_HEIGHT });
     assert.deepEqual(screenShare(0.25, undefined), { width: MIN_WIDTH, height: MIN_HEIGHT });
 });
 

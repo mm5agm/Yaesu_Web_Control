@@ -40,8 +40,12 @@ const FRAME_KEY      = 'popoutFrame';
 // window the size it was asked for (clamped to the screen, say).
 const MAX_FRAME      = 400;
 
-export const MIN_WIDTH  = 320;
-export const MIN_HEIGHT = 200;
+// Only a guard against a broken saved value, never a size anyone is held to.
+// Sizes are in screen units, which at a browser zoom below 100% hold more of
+// the page than they look: 150 across at 50% zoom shows 300 CSS pixels, and
+// an operator who shrinks a pop-out that far means it.
+export const MIN_WIDTH  = 120;
+export const MIN_HEIGHT = 80;
 // Bigger than any real monitor arrangement, small enough that a corrupt value
 // cannot ask for a window the browser will refuse outright.
 const MAX_EXTENT = 16384;
@@ -297,7 +301,7 @@ export class PopoutHost {
             const t = ev.data?.type;
             if (t === 'opened')   this._setOpen(true);
             if (t === 'closed')   this._setOpen(false);
-            if (t === 'reattach') { this._setOpen(false); this._onReattach(); }
+            if (t === 'reattach') { this._setOpen(false); this._onReattach(ev.data.size ?? null); }
         });
         this._channel.postMessage({ type: 'ping' });
         return this;
@@ -354,6 +358,25 @@ export class PopoutHost {
 }
 
 /**
+ * The size to give the in-page panel when it comes back from a pop-out: the
+ * pop-out's page area in CSS pixels, which is what the panel is sized in
+ * too (the browser zooms every page of one site alike), cut to fit the main
+ * window. Null for a size not worth using. Pure, so it can be tested.
+ *
+ * @param {{width:number,height:number}|null} size  the pop-out's inner size
+ * @param {{width:number,height:number}} view  the main window's inner size
+ * @returns {{width:number,height:number}|null}
+ */
+export function fitSize(size, view) {
+    const w = Math.round(Number(size?.width)), h = Math.round(Number(size?.height));
+    if (!(w > 0) || !(h > 0)) return null;
+    return {
+        width:  Math.max(MIN_WIDTH,  Math.min(w, Math.round(view.width)  - 16)),
+        height: Math.max(MIN_HEIGHT, Math.min(h, Math.round(view.height) - 16)),
+    };
+}
+
+/**
  * The main page's half of a pop-out panel, wired to its dialog and buttons:
  * the usual case, so each panel does not write it out again.
  *
@@ -370,12 +393,15 @@ export class PopoutHost {
  * @param {() => void} opts.show  opens the in-page panel
  * @param {{text:string,title:string,aria:string}} opts.closedLabel  the open button normally
  * @param {{text:string,title:string,aria:string}} opts.openLabel  the open button while popped out
+ * @param {boolean} [opts.takeSize=false]  on Reattach, give the dialog the size the
+ *        pop-out window was left at; for dialogs the operator can resize
  * @param {string} [opts.onClass='btn-outline-info'], [opts.offClass='btn-outline-secondary']
  * @returns {{ host: PopoutHost, open: () => void }} open() is what the toolbar button calls
  */
 export function attachPopout({
     name, url, defaultSize, dialog, openButton, popoutButton, show,
-    closedLabel, openLabel, onClass = 'btn-outline-info', offClass = 'btn-outline-secondary',
+    closedLabel, openLabel, takeSize = false,
+    onClass = 'btn-outline-info', offClass = 'btn-outline-secondary',
 }) {
     const label = l => {
         if (!openButton || !l) return;
@@ -391,7 +417,15 @@ export function attachPopout({
             openButton?.classList.toggle(onClass, open);
             openButton?.classList.toggle(offClass, !open);
         },
-        onReattach: () => { if (!dialog()?.open) show(); },
+        onReattach: size => {
+            const dlg = dialog();
+            const fit = takeSize && dlg ? fitSize(size, { width: window.innerWidth, height: window.innerHeight }) : null;
+            if (fit) {
+                dlg.style.width  = `${fit.width}px`;
+                dlg.style.height = `${fit.height}px`;
+            }
+            if (!dlg?.open) show();
+        },
     }).start();
 
     popoutButton?.addEventListener('click', () => {
@@ -411,6 +445,18 @@ export function attachPopout({
     };
 }
 
+/**
+ * Whether a page is in an ordinary browser tab rather than a pop-out window.
+ * Browsers hide the toolbar in a window opened with popup features and
+ * report it through window.toolbar.visible. Pure, so it can be tested.
+ *
+ * @param {{toolbar?:{visible?:boolean}}} win
+ * @returns {boolean}
+ */
+export function inTab(win) {
+    return win?.toolbar?.visible === true;
+}
+
 export class PopoutChild {
     /**
      * @param {object} opts
@@ -428,6 +474,15 @@ export class PopoutChild {
     }
 
     start() {
+        // A browser that restores its tabs after a restart brings a pop-out
+        // back as an ordinary tab, still carrying the pop-out's window name.
+        // The main page's window.open then finds that name and loads the
+        // panel into the tab - full window, no edges to resize - instead of
+        // opening a window. A tab has its toolbar; a pop-out window has not.
+        // So a tab gives the name up, and the next pop-out is a real window.
+        if (inTab(window)) {
+            try { if (window.name.startsWith(WINDOW_PREFIX)) window.name = ''; } catch { /* ignore */ }
+        }
         // The frame is measured once, on load, while the window is still the
         // size it was opened at, and kept in this window's session storage so
         // a reload - by which time it may have been resized - keeps it.
@@ -474,16 +529,23 @@ export class PopoutChild {
     /** Hand the panel back to the main page and close this window. */
     reattach() {
         this._saveGeometry();
-        this._post('reattach');
+        // The main page can give its panel the size this window was left at.
+        this._post('reattach', { size: { width: window.innerWidth, height: window.innerHeight } });
         window.close();
         // A window the operator opened by typing the address, rather than one
         // the main page opened, is not allowed to close itself. Go to the main
-        // page instead, so Reattach still does what it says.
-        setTimeout(() => { if (!window.closed) window.location.href = this._fallback; }, 300);
+        // page instead, so Reattach still does what it says. It drops the
+        // pop-out's window name first: a main page left holding it would be
+        // the place the next pop-out loads into, instead of a new window.
+        setTimeout(() => {
+            if (window.closed) return;
+            try { window.name = ''; } catch { /* ignore */ }
+            window.location.href = this._fallback;
+        }, 300);
     }
 
-    _post(type) {
-        try { this._channel?.postMessage({ type }); } catch { /* channel closed during unload */ }
+    _post(type, extra) {
+        try { this._channel?.postMessage({ type, ...extra }); } catch { /* channel closed during unload */ }
     }
 
     _saveGeometry() {

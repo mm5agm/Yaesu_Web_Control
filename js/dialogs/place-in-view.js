@@ -22,6 +22,8 @@
 
 /** How much of a dialog must still be on the window to count as visible. */
 export const GRIP = 40;
+/** The gap left between a dialog moved in from an edge and that edge. */
+export const EDGE = 8;
 
 /**
  * Where a fixed dialog should go so the operator can see it, or null where it
@@ -35,8 +37,15 @@ export function pullIntoView(r, view) {
     const out = {};
     if (r.top < 0 || r.top > view.height - GRIP)
         out.top = Math.max(0, Math.min(80, view.height - r.height));
+    // On the window but running off the bottom - a dialog given a bigger
+    // size, say - moves up until it is all on, or its top reaches the top.
+    else if (r.top + r.height > view.height)
+        out.top = Math.max(0, view.height - r.height - EDGE);
     if (r.right < GRIP || r.left > view.width - GRIP)
         out.left = Math.max(0, (view.width - r.width) / 2);
+    // Likewise off the right-hand edge.
+    else if (r.right > view.width)
+        out.left = Math.max(0, view.width - r.width - EDGE);
     return (out.left === undefined && out.top === undefined) ? null : out;
 }
 
