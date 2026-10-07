@@ -106,6 +106,11 @@ namespace Yaesu_Web_Control.Services
         // until this deadline passes. If bench testing shows SWR coming up a beat
         // late, this is the knob.
         private DateTime _borrowSettleUntilUtc = DateTime.MinValue;
+
+        // The operator's own meters, once they have picked some in YWC (see
+        // RadioStateService.MetersPinnedByOperator). Tracked so a pick made
+        // mid-over gets the same settle window as the borrow does.
+        private string? _pinnedSelectionSeen;
         private static readonly TimeSpan BorrowSettleWindow = TimeSpan.FromMilliseconds(500);
 
         public MeterPollingService(
@@ -293,9 +298,29 @@ namespace Yaesu_Web_Control.Services
                         if (useRm0Pair)
                         {
                             _lastTxSeenUtc = DateTime.UtcNow;
+                            bool pinned = _stateService.MetersPinnedByOperator;
+                            var pinnedSel = _stateService.RadioMeterSelection;
                             var txMode = _stateService.TxVfo == 1 ? _stateService.ModeB : _stateService.ModeA;
                             var wanted = TxMeterBorrow.SelectionFor(txMode);
-                            if (!_metersBorrowed || wanted != _borrowedSelection)
+                            if (pinned)
+                            {
+                                // The operator chose these meters to watch them
+                                // on the radio, so no borrow. If one was already
+                                // running (a pick made mid-over), the pop-up has
+                                // just sent their MS; stand down without a restore.
+                                if (_metersBorrowed)
+                                {
+                                    _metersBorrowed = false;
+                                    _stateService.MetersBorrowed = false;
+                                    _logger.LogInformation("[MeterPolling] Operator picked meters MS{Sel} - no longer borrowing them in TX", pinnedSel);
+                                }
+                                if (pinnedSel != _pinnedSelectionSeen)
+                                {
+                                    _pinnedSelectionSeen = pinnedSel;
+                                    _borrowSettleUntilUtc = DateTime.UtcNow.Add(BorrowSettleWindow);
+                                }
+                            }
+                            else if (!_metersBorrowed || wanted != _borrowedSelection)
                             {
                                 // Flag before the write: the radio echoes MS via auto-
                                 // information, and the dispatcher must not mistake our
@@ -314,8 +339,18 @@ namespace Yaesu_Web_Control.Services
                             int? swrRaw  = CatCommands.ParseRm0RightMeter(compSwrResponse ?? "");
                             // Under MS03 the left value is PO, already read by RM5;
                             // compression means nothing in CW/RTTY/data, so show 0.
-                            compression = TxMeterBorrow.LeftIsCompression(_borrowedSelection) ? (compRaw ?? 0) : 0;
+                            compression = pinned || TxMeterBorrow.LeftIsCompression(_borrowedSelection) ? (compRaw ?? 0) : 0;
                             swr         = swrRaw  ?? 0;
+
+                            // On the operator's meters RM0 only means COMP / SWR
+                            // when those are what the panel shows; anything else
+                            // is TEMP or VDD or ALC and must not reach those gauges.
+                            if (pinned)
+                            {
+                                var (hasComp, hasSwr) = FrontPanelMeters.Rm0Carries(pinnedSel);
+                                if (!hasComp) { compression = 0; compRaw ??= 0; }
+                                if (!hasSwr)  { swr = 0;         swrRaw  ??= 0; }
+                            }
 
                             // A dropped or malformed RM0 is not a reading of zero.
                             // Publishing it as one made the SWR needle dip to 1.0

@@ -111,6 +111,7 @@ zone's `action` string, looked up in `ACTIONS`:
 | `scope.size` | next scope size (L/N/S or EXPAND/NORMAL — the radio's own ring) | `RadioScopeControl.cycleSize()` |
 | `scope.3dss` | W/F ↔ 3DSS | `RadioScopeControl.toggle3dss()` |
 | `scope.hold` | toggle HOLD | `RadioScopeControl.toggleHold()` |
+| `meter.select` | open the TX meter pop-up (below) | `GET` / `POST /api/cat/meters` |
 | `none` | nothing — the `hint` flashes red ("… has no CAT command — press it on the radio") | — |
 
 `hint` is the hover text; an action supplies a default, a zone can
@@ -132,6 +133,55 @@ value cycles to the first entry of the ring rather than doing nothing.
 
 Adding a radio is a new entry in `LAYOUTS` and nothing else. Adding a
 kind of control is a new `ACTIONS` entry.
+
+## The meter pop-up
+
+Touching the meter on the radio's TFT opens the radio's own meter chooser.
+No CAT command opens it: `MS` sets the meters but nothing touches the
+screen. So the `meter` zone (`meter.select`) makes YWC draw its own chooser
+inside the overlay, under the zone, and the radio's picture changes once
+`MS` lands.
+
+- **The table is server-side**, in `Services/FrontPanelMeters.cs`, and the
+  browser carries no copy. The FTdx101MP/D has two slots (left PO / COMP /
+  TEMP, right ALC / VDD / ID / SWR, sent as `MS P1 P2`). The FTdx10 and
+  FT-710 have one slot of six, with P2 fixed at 0. `GET /api/cat/meters`
+  returns the slots, the options and the current choice (a fresh `MS;`
+  read when the meters are not borrowed). `POST` takes one code per slot,
+  checks it against the table, sends `MS`, and replies in the same shape.
+- **A pick overrides the TX borrow.** The radio only drives these needles
+  in TX (OM p20, "Meter Operations during Transmission"). `MeterPollingService`
+  normally sets `MS13` in TX on the FTdx101, so a pick would never have shown
+  a live needle. The first design deferred a TX-time pick to the 10 s idle
+  restore, and on the bench it did nothing useful. So a pick now sets
+  `RadioStateService.MetersPinnedByOperator` for the session:
+  - The poller stops borrowing, and stands down at once if a borrow is running.
+  - It gives a changed pick the same 500 ms settle window.
+  - It publishes COMP / SWR from RM0 only when the pick shows them
+    (`FrontPanelMeters.Rm0Carries`: P1 = 1, P2 = 3). Otherwise it publishes 0,
+    so a TEMP reading can never land on the SWR gauge.
+  - The reply's `txGaugesLost` names what that costs, for the pop-up's note.
+  - PO, ALC and ID come from RM5 / RM4 / RM7 and are unaffected.
+  - The FTdx10 and FT-710 read COMP and SWR directly and never borrow, so
+    nothing is lost there.
+  - Bench-checked on the FTdx101MP on 2026-09-23 at 15 W CW into a dummy load:
+    TEMP + VDD showed on the radio in TX and stayed after TX, and YWC's COMP
+    and SWR read 0 while power and ALC read normally.
+- **Styles** are injected by the module (`ensureMeterPopupStyle`) and do
+  not live in `site.css`, which the theme work is changing.
+- **It follows the radio.** `ReportMeterSelection` and
+  `SetOperatorMeterSelection` broadcast `MeterSelection`, and an open pop-up
+  re-reads `/api/cat/meters` when that arrives. Without this, a meter changed
+  on the radio's own touchscreen left the pop-up showing the old choice
+  (seen on the bench, 2026-09-23).
+- **It closes once every slot has had a pick** (one on the FTdx10/FT-710, both on the FTdx101; closing after the first pick made changing both a two-visit job). It stays open when the
+  radio refuses the pick (showing the error), and for 3 s when the pick is
+  deferred, so the note can be read.
+- **Zone rect** on the FTdx101 covers both meters,
+  `[0.000, 0.095, 0.700, 0.300]`, and was bench-checked on the FTdx101MP on
+  2026-09-23. The first estimate stopped at 0.499 and cut the SWR meter in
+  half. The filter display sits to the right of it. The FTdx10 gets no meter
+  zone until a screenshot with its chooser open has been measured.
 
 ## The layout table
 
