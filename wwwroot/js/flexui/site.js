@@ -866,6 +866,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // corrected by the first SignalR update).
     setTimeout(applyVfoActiveStyling, 0);
 });
+// Flex UI: the VFO panels are cloned after DOMContentLoaded, so the call above
+// finds no #vfoACol/#vfoBCol, and the ActiveVfo/TxVfo snapshot lands before
+// they exist too. _FlexScripts calls this again when a VFO panel mounts.
+window.applyVfoActiveStyling = applyVfoActiveStyling;
 let splitMode = 0; // 0 = OFF, 1 = ON (VFO A=RX / VFO B=TX), 2 = ON+5kHz Quick Split
 
 let clarVfo = 'A';

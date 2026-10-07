@@ -142,6 +142,9 @@
             try { window.meterPanel?.ensureGauges?.(); } catch { /* create S-meter gauge if this VFO mounted late */ }
             try { window.initializeDigitInteraction?.(vfo); } catch (e) { console.error(e); }
             try { window.setupAfGainSlider?.(vfo); } catch (e) { console.error(e); }
+            // Marks the active VFO (and so the dot on its tab); the state that
+            // drives it arrived before this panel existed.
+            try { window.applyVfoActiveStyling?.(); } catch (e) { console.error(e); }
             // The state snapshot is sent once, at connect, and broadcasts only
             // fire on change — so a panel mounting later would hold page-load
             // values. Ask for the snapshot again now its widgets exist. Skip it
