@@ -274,7 +274,77 @@ export class SpectrumPanel {
 
     /** The canvas's container — the element whose height this panel occupies. */
     _panelWrap() {
-        return document.getElementById(this._canvasId)?.parentElement ?? null;
+        return this._canvasEl()?.parentElement ?? null;
+    }
+
+    // ── Which document the panel lives in ────────────────────────────────────
+    //
+    // The Experimental UI can pop a panel out into its own browser window.
+    // The canvas node itself moves into that window's document, so a lookup
+    // by id in this window's `document` finds nothing and every frame was
+    // skipped — a blank spectrum. Hold the elements instead, and when the
+    // canvas turns up in a different document, move the window-level
+    // listeners and the ResizeObserver across with it (an observer only sees
+    // elements in its own window's document).
+
+    _canvasEl() {
+        if (!this._canvas?.isConnected) {
+            this._canvas = document.getElementById(this._canvasId) ?? this._canvas ?? null;
+        }
+        const canvas = this._canvas;
+        if (canvas?.isConnected && canvas.ownerDocument !== this._homeDoc) this._rehome(canvas);
+        return this._canvas;
+    }
+
+    _containerEl() {
+        if (!this._container?.isConnected) {
+            this._container = document.getElementById(this._containerId) ?? this._container ?? null;
+        }
+        return this._container;
+    }
+
+    /** The document and window the canvas is currently in. */
+    _doc() { return this._canvas?.ownerDocument ?? document; }
+    _win() { return this._doc().defaultView ?? window; }
+
+    _rehome(canvas) {
+        const oldWin = this._homeDoc?.defaultView;
+        if (oldWin && this._onWinMouseMove) {
+            oldWin.removeEventListener('mousemove', this._onWinMouseMove);
+            oldWin.removeEventListener('mouseup',   this._onWinMouseUp);
+        }
+        this._resizeObserver?.disconnect();
+        this._closeStepMenu();
+
+        // Closing a pop-out window takes the canvas's 2D context with it:
+        // back in this window it reports isContextLost() and every draw is
+        // silently dropped, and Chrome never restores it. A fresh canvas in
+        // its place is the only way back to a working one.
+        if (canvas.getContext('2d')?.isContextLost?.()) canvas = this._replaceCanvas(canvas);
+
+        this._homeDoc = canvas.ownerDocument;
+        const win = this._homeDoc.defaultView ?? window;
+        if (this._onWinMouseMove) {
+            win.addEventListener('mousemove', this._onWinMouseMove);
+            win.addEventListener('mouseup',   this._onWinMouseUp);
+        }
+        if (this._onResize) {
+            const RO = win.ResizeObserver ?? ResizeObserver;
+            this._resizeObserver = new RO(this._onResize);
+            this._resizeObserver.observe(canvas.parentElement ?? canvas);
+        }
+        this._sizeCanvas(canvas);
+        this._waterfallData = null;
+    }
+
+    _replaceCanvas(old) {
+        const fresh = old.cloneNode(false);   // same id, classes and ARIA, no listeners
+        const hadFocus = old.ownerDocument.activeElement === old;
+        old.replaceWith(fresh);
+        this._canvas = fresh;
+        this._wireCanvas(fresh);
+        if (hadFocus) fresh.focus?.();
+        return fresh;
     }
 
     // Debounced so a drag writes once when it settles rather than on every
@@ -346,7 +416,7 @@ export class SpectrumPanel {
             try { grip.releasePointerCapture(activeId); } catch { /* already gone */ }
             activeId = null;
             grip.classList.remove('dragging');
-            document.body.classList.remove('spectrum-resizing');
+            grip.ownerDocument.body.classList.remove('spectrum-resizing');
         };
 
         grip.addEventListener('pointerdown', (e) => {
@@ -365,7 +435,7 @@ export class SpectrumPanel {
             try { grip.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
             grip.classList.add('dragging');
             // Stops the drag selecting the page text it passes over.
-            document.body.classList.add('spectrum-resizing');
+            grip.ownerDocument.body.classList.add('spectrum-resizing');
             // preventDefault below suppresses the browser's default
             // mousedown behaviour, and giving this element the focus is part
             // of that behaviour — so without this line the grip can never be
@@ -438,7 +508,7 @@ export class SpectrumPanel {
         if (!grip) return;
         const r = grip.getBoundingClientRect();
         const margin = 8;
-        if (r.bottom > window.innerHeight - margin || r.top < margin) {
+        if (r.bottom > (grip.ownerDocument.defaultView ?? window).innerHeight - margin || r.top < margin) {
             grip.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
     }
@@ -1034,7 +1104,7 @@ export class SpectrumPanel {
         this._vfoHz = hz;
         if (this._lastBins) this._render();
         // Keep data-reading on the canvas current so the hover live region can announce it.
-        const canvas = document.getElementById(this._canvasId);
+        const canvas = this._canvasEl();
         if (canvas) canvas.dataset.reading = 'centred on ' + (hz / 1e6).toFixed(6) + ' MHz';
     }
 
@@ -1245,7 +1315,7 @@ export class SpectrumPanel {
     setStatus(status) {
         this._status = status;
 
-        const container = document.getElementById(this._containerId);
+        const container = this._containerEl();
         if (!container) return;
 
         if (status === 'unconfigured') {
@@ -1260,11 +1330,12 @@ export class SpectrumPanel {
     // ── Initialisation ───────────────────────────────────────────────────────
 
     _init() {
-        const container = document.getElementById(this._containerId);
+        const container = this._containerEl();
         if (container) container.style.display = 'none';   // hidden until streaming
 
-        const canvas = document.getElementById(this._canvasId);
+        const canvas = this._canvasEl();
         if (!canvas) return;
+        this._homeDoc = canvas.ownerDocument;
 
         // Size the canvas to match its CSS layout width.
         this._sizeCanvas(canvas);
@@ -1274,15 +1345,43 @@ export class SpectrumPanel {
         // mechanism behind the resizable panel — every route to a new height
         // (the grip, the arrow keys, the preset box, the window getting
         // wider) lands here and everything downstream follows.
-        this._resizeObserver = new ResizeObserver(() => {
-            this._sizeCanvas(canvas);
+        this._onResize = () => {
+            this._sizeCanvas(this._canvas);
             this._waterfallData = null;  // force rebuild on next frame
             if (this._lastBins) this._render();
             this._queueHeightSave();
             this._syncGripAria();
-        });
+        };
+        this._resizeObserver = new ResizeObserver(this._onResize);
         this._resizeObserver.observe(canvas.parentElement ?? canvas);
 
+        // Held as fields so _rehome can move them to a pop-out window.
+        this._onWinMouseMove = (e) => {
+            if (this._tuneDrag) { this._moveTuneDrag(e); return; }
+            if (!this._splitterDragging) return;
+            const c = this._canvasEl();
+            if (!c) return;
+            const y = this._canvasYFromEvent(e, c);
+            const ratio = Math.max(0.15, Math.min(0.85, y / c.height));
+            this._splitRatio = ratio;
+            if (this._lastBins) this._render();
+        };
+        this._onWinMouseUp = () => {
+            if (this._tuneDrag) { this._endTuneDrag(); return; }
+            if (!this._splitterDragging) return;
+            this._splitterDragging = false;
+            this._saveSplitRatio();
+            if (this._lastBins) this._render();
+        };
+        window.addEventListener('mousemove', this._onWinMouseMove);
+        window.addEventListener('mouseup',   this._onWinMouseUp);
+
+        this._wireCanvas(canvas);
+    }
+
+    // Everything bound to the canvas element itself, split out of _init so a
+    // replacement canvas can be wired the same way (see _replaceCanvas).
+    _wireCanvas(canvas) {
         // Tune VFO A to the clicked frequency.
         canvas.addEventListener('click', (e) => this._onCanvasClick(e));
 
@@ -1309,25 +1408,6 @@ export class SpectrumPanel {
             this._beginTuneDrag(e);
         });
 
-        window.addEventListener('mousemove', (e) => {
-            if (this._tuneDrag) { this._moveTuneDrag(e); return; }
-            if (!this._splitterDragging) return;
-            const c = document.getElementById(this._canvasId);
-            if (!c) return;
-            const y = this._canvasYFromEvent(e, c);
-            const ratio = Math.max(0.15, Math.min(0.85, y / c.height));
-            this._splitRatio = ratio;
-            if (this._lastBins) this._render();
-        });
-
-        window.addEventListener('mouseup', () => {
-            if (this._tuneDrag) { this._endTuneDrag(); return; }
-            if (!this._splitterDragging) return;
-            this._splitterDragging = false;
-            this._saveSplitRatio();
-            if (this._lastBins) this._render();
-        });
-
         // Crosshair tracking + splitter-hover cursor change.
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
@@ -1347,7 +1427,7 @@ export class SpectrumPanel {
             if (this._lastSpanHz > 0 && this._vfoHz > 0) {
                 clearTimeout(this._announceTimer);
                 this._announceTimer = setTimeout(() => {
-                    const canvas2 = document.getElementById(this._canvasId);
+                    const canvas2 = this._canvasEl();
                     if (!canvas2) return;
                     const W = canvas2.width;
                     const leftHz = this._axisLeftHz();
@@ -1406,7 +1486,7 @@ export class SpectrumPanel {
 
     _moveTuneDrag(e) {
         const d = this._tuneDrag;
-        const canvas = document.getElementById(this._canvasId);
+        const canvas = this._canvasEl();
         if (!canvas) return;
         const dxCss = e.clientX - d.startClientX;
         if (!d.moved && Math.abs(dxCss) < TUNE_DRAG_DEADZONE_PX) return;
@@ -1440,7 +1520,7 @@ export class SpectrumPanel {
         // swallow a later real click when the drop was off the canvas.
         this._suppressNextClick = true;
         setTimeout(() => { this._suppressNextClick = false; }, 0);
-        const canvas = document.getElementById(this._canvasId);
+        const canvas = this._canvasEl();
         if (canvas) canvas.style.cursor = 'crosshair';
     }
 
@@ -1459,7 +1539,7 @@ export class SpectrumPanel {
         if (this._suppressNextClick) { this._suppressNextClick = false; return; }
         if (!this._lastBins || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
 
-        const canvas = document.getElementById(this._canvasId);
+        const canvas = this._canvasEl();
         // Clicks on the splitter handle are for resizing, not tuning.
         if (this._isOnSplitter(this._canvasYFromEvent(e, canvas), canvas.height)) return;
 
@@ -1594,20 +1674,24 @@ export class SpectrumPanel {
         this._closeStepMenu();
 
         const current = tuningStep.get(this._vfo);
+        // The window the canvas is in, which is a pop-out's when popped out.
+        const doc = this._doc();
+        const win = this._win();
+        this._stepMenuDoc = doc;
 
-        const menu = document.createElement('div');
+        const menu = doc.createElement('div');
         menu.className = 'spectrum-step-menu';
         menu.setAttribute('role', 'menu');
         menu.setAttribute('aria-label', `VFO ${this._vfo} tuning step`);
 
-        const heading = document.createElement('div');
+        const heading = doc.createElement('div');
         heading.className = 'spectrum-step-menu-title';
         heading.textContent = `VFO ${this._vfo} step`;
         menu.appendChild(heading);
 
         const items = [];
         for (const hz of tuningStep.steps) {
-            const item = document.createElement('button');
+            const item = doc.createElement('button');
             item.type = 'button';
             item.className = 'spectrum-step-menu-item' + (hz === current ? ' active' : '');
             item.setAttribute('role', 'menuitemradio');
@@ -1626,11 +1710,11 @@ export class SpectrumPanel {
         // would otherwise open a menu that runs off the screen.
         menu.style.left = `${e.clientX}px`;
         menu.style.top  = `${e.clientY}px`;
-        document.body.appendChild(menu);
+        doc.body.appendChild(menu);
 
         const rect = menu.getBoundingClientRect();
-        if (rect.right  > window.innerWidth)  menu.style.left = `${Math.max(0, window.innerWidth  - rect.width  - 4)}px`;
-        if (rect.bottom > window.innerHeight) menu.style.top  = `${Math.max(0, window.innerHeight - rect.height - 4)}px`;
+        if (rect.right  > win.innerWidth)  menu.style.left = `${Math.max(0, win.innerWidth  - rect.width  - 4)}px`;
+        if (rect.bottom > win.innerHeight) menu.style.top  = `${Math.max(0, win.innerHeight - rect.height - 4)}px`;
 
         // Keyboard: the menu takes focus so Up/Down/Escape work for anyone who
         // opened it with the context-menu key rather than a mouse.
@@ -1638,7 +1722,7 @@ export class SpectrumPanel {
         items[focusIndex]?.focus();
 
         menu.addEventListener('keydown', (ev) => {
-            const here = items.indexOf(document.activeElement);
+            const here = items.indexOf(doc.activeElement);
             if (ev.key === 'Escape') { ev.preventDefault(); this._closeStepMenu(); this._focusCanvas(); }
             else if (ev.key === 'ArrowDown') { ev.preventDefault(); items[(here + 1 + items.length) % items.length]?.focus(); }
             else if (ev.key === 'ArrowUp')   { ev.preventDefault(); items[(here - 1 + items.length) % items.length]?.focus(); }
@@ -1653,15 +1737,15 @@ export class SpectrumPanel {
             if (!menu.contains(ev.target)) this._closeStepMenu();
         };
         setTimeout(() => {
-            document.addEventListener('mousedown', this._stepMenuDismiss);
-            document.addEventListener('contextmenu', this._stepMenuDismiss);
+            this._stepMenuDoc.addEventListener('mousedown', this._stepMenuDismiss);
+            this._stepMenuDoc.addEventListener('contextmenu', this._stepMenuDismiss);
         }, 0);
     }
 
     _closeStepMenu() {
         if (this._stepMenuDismiss) {
-            document.removeEventListener('mousedown', this._stepMenuDismiss);
-            document.removeEventListener('contextmenu', this._stepMenuDismiss);
+            this._stepMenuDoc.removeEventListener('mousedown', this._stepMenuDismiss);
+            this._stepMenuDoc.removeEventListener('contextmenu', this._stepMenuDismiss);
             this._stepMenuDismiss = null;
         }
         this._stepMenu?.remove();
@@ -1669,7 +1753,7 @@ export class SpectrumPanel {
     }
 
     _focusCanvas() {
-        document.getElementById(this._canvasId)?.focus?.();
+        this._canvasEl()?.focus?.();
     }
 
     _sizeCanvas(canvas) {
@@ -1699,7 +1783,7 @@ export class SpectrumPanel {
     //   (throttled by _waterfallSpeed). The !_waterfallData guard below still lets
     //   the very first paint build the buffer regardless.
     _render(scrollWaterfall = false) {
-        const canvas = document.getElementById(this._canvasId);
+        const canvas = this._canvasEl();
         if (!canvas || !this._lastBins) return;
 
         const ctx         = canvas.getContext('2d');
@@ -2478,7 +2562,7 @@ export class SpectrumPanel {
     // ── Status overlay ───────────────────────────────────────────────────────
 
     _drawStatusOverlay(status) {
-        const canvas = document.getElementById(this._canvasId);
+        const canvas = this._canvasEl();
         if (!canvas) return;
 
         const ctx = canvas.getContext('2d');
@@ -2555,17 +2639,17 @@ export class SpectrumPanel {
 
     /** Announce text to screen readers via the shared ARIA live region in site.js. */
     _announceToScreenReader(text) {
-        let lr = document.getElementById('_sr_live');
+        let lr = this._doc().getElementById('_sr_live');
         if (!lr) {
             // Fallback: create a local live region if site.js hasn't run yet.
             // assertive (matching site.js's primary live region) so new
             // cursor announcements interrupt rather than queue.
-            lr = document.createElement('div');
+            lr = this._doc().createElement('div');
             lr.id = '_sr_live';
             lr.setAttribute('aria-live', 'assertive');
             lr.setAttribute('aria-atomic', 'true');
             lr.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;';
-            document.body.appendChild(lr);
+            this._doc().body.appendChild(lr);
         }
         lr.textContent = '';
         requestAnimationFrame(() => { lr.textContent = text; });
