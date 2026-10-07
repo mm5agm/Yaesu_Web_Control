@@ -99,7 +99,7 @@ namespace Yaesu_Web_Control.Services
 
             if (message.Length < 2) return;
 
-            var prefix = message.Substring(0, 2);
+            var prefix = ReplyKey(message);
 
             // DT messages always go to the dispatcher — never to _pendingResponses.
             // This is the only path that triggers SignalInitializationComplete.
@@ -277,12 +277,29 @@ namespace Yaesu_Web_Control.Services
             }
         }
 
+        // The key that pairs a reply with the read waiting for it. Most commands
+        // are keyed on their two letters, but the meter reads share theirs: RM0,
+        // RM5 and RM7 all start "RM", SM0 and SM1 both start "SM". Keyed on two
+        // letters, a reply that arrived after its own read had timed out was
+        // handed to the next read with the same letters, so the power gauge
+        // showed an RM0 value (bench, FTdx101MP, MS21 pinned, 2026-10-07).
+        public static string ReplyKey(string text)
+        {
+            if (text.Length >= 3
+                && (text.StartsWith("RM", StringComparison.Ordinal) || text.StartsWith("SM", StringComparison.Ordinal))
+                && char.IsDigit(text[2]))
+            {
+                return text.Substring(0, 3);
+            }
+            return text.Substring(0, 2);
+        }
+
         public async Task<string?> SendCommandAsync(string command, string clientId, CancellationToken cancellationToken = default, int timeoutMs = 150)
         {
             if (_serialPort?.IsOpen != true)
                 return null;
 
-            var prefix = command.Substring(0, 2);
+            var prefix = ReplyKey(command);
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             _pendingResponses[prefix] = tcs;
             await SendToSerialPortAsync(command, cancellationToken);
