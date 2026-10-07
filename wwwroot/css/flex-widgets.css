@@ -84,6 +84,14 @@
     box-sizing: border-box;
 }
 
+/* The panel body is the panel's only scroller. FlexLayout's own tab
+   container is overflow:auto too, and in a pop-out window it showed a second
+   scrollbar beside the panel's, scrolling only blank space. FlexLayout sets
+   that overflow as an inline style, hence !important. */
+.flexlayout__tab_moveable:has(> .ywc-flex-panel-host) {
+    overflow: hidden !important;
+}
+
 /* Radio Display panel: fill the docked tab like the pop-out page, so the
    video scales with the panel (and with tab maximise) instead of using
    Index's natural-size cap. Mirrors the inline layout on
