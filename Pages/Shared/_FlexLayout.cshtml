@@ -22,6 +22,9 @@
     <link rel="stylesheet" href="~/css/flex-widgets.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
 
+    @* First script on the page: it has to see every listener the others add,
+       so a popped-out panel gets them too. See the file's header. *@
+    <script src="~/js/flexui/flex-popout-bridge.js" asp-append-version="true"></script>
     <script src="~/lib/canvas-gauges/gauge.min.js"></script>
 
     <script type="module">

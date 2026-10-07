@@ -272,6 +272,87 @@ async function loadDefaultJson() {
  */
 const panelNodes = new Map();
 
+// ── Pop-out windows ─────────────────────────────────────────────────────────
+// Popping a tab out moves its panel node into the pop-out window's document.
+// flex-popout-bridge.js makes the pop-out part of the page for lookups and
+// page-wide listeners once it is told about the window (watchPopoutWindow).
+// Two things are left for here:
+//
+// 1. If the pop-out window is torn down with the panel still inside it, every
+//    canvas in the panel loses its 2D context for good (isContextLost() stays
+//    true, no contextrestored ever fires) and the panel is blank when it comes
+//    home. Measured: the contexts survive if the node is moved back into this
+//    document while the pop-out is closing, before the teardown -- see
+//    parkPanelsFrom, called from the Layout's onPopoutClose.
+// 2. FlexLayout moves a tab into its pop-out by moving the tab's DOM once the
+//    window has loaded, and back the same way; TemplatePanel's effect does
+//    not run again, so nothing announces either move. checkPanelDocuments()
+//    notices them and sends 'ywc-flex-panel-attached' with the panel's new
+//    document, the same event a reopened tab sends.
+const watchedPopouts = new WeakSet();
+const panelDocs = new WeakMap();
+
+function watchPopoutWindow(node) {
+    panelDocs.set(node, node.ownerDocument);
+    const win = node.ownerDocument?.defaultView;
+    if (!win || win === window || watchedPopouts.has(win)) return;
+    watchedPopouts.add(win);
+    window.ywcFlexPopouts?.add(win);
+    // Panels size themselves on this window's resize; a pop-out's own resize
+    // never reaches it.
+    win.addEventListener('resize', () => dispatchPanelResize());
+}
+
+function parkPanelsFrom(doc) {
+    window.ywcFlexPopouts?.remove(doc.defaultView);
+    const parked = [];
+    for (const node of panelNodes.values()) {
+        if (node.ownerDocument === doc) {
+            try { parkingArea().appendChild(node); parked.push(node); } catch { /* ignore */ }
+        }
+    }
+    // FlexLayout brings the tab's host back by moving it, not by remounting
+    // TemplatePanel, so nothing else puts the node back into it. The host is
+    // still in the closing window for a moment, so keep trying briefly.
+    if (parked.length) {
+        let tries = 0;
+        const timer = setInterval(() => {
+            restoreParkedPanels();
+            const area = parkingArea();
+            if (parked.every((n) => n.parentNode !== area) || ++tries > 40) clearInterval(timer);
+        }, 50);
+    }
+}
+
+/** Put a parked node back into its tab's host when the host is here and empty. */
+function restoreParkedPanels() {
+    const area = document.getElementById('ywcFlexParking');
+    if (!area) return;
+    for (const [component, node] of panelNodes) {
+        if (node.parentNode !== area) continue;
+        // No host means the tab is closed, and the node is parked on purpose.
+        const host = document.querySelector(`.ywc-flex-panel-host[data-ywc-component="${CSS.escape(component)}"]`);
+        if (host && !host.querySelector('.ywc-panel-body')) host.appendChild(node);
+    }
+}
+
+function checkPanelDocuments() {
+    restoreParkedPanels();
+    for (const [component, node] of panelNodes) {
+        if (!node.isConnected) continue;
+        const doc = node.ownerDocument;
+        if (panelDocs.get(node) === doc) continue;
+        watchPopoutWindow(node);
+        try {
+            window.dispatchEvent(new CustomEvent('ywc-flex-panel-attached', {
+                detail: { component, doc },
+            }));
+        } catch { /* ignore */ }
+        dispatchPanelResize();
+    }
+}
+setInterval(checkPanelDocuments, 250);
+
 function parkingArea() {
     let area = document.getElementById('ywcFlexParking');
     if (!area) {
@@ -319,16 +400,22 @@ function TemplatePanel(props) {
             }
             panelNodes.set(component, node);
             host.appendChild(node);
+            watchPopoutWindow(node);
             try {
                 window.dispatchEvent(new CustomEvent('ywc-flex-template-mounted', {
-                    detail: { component, nodeId },
+                    detail: { component, nodeId, doc: node.ownerDocument },
                 }));
             } catch { /* ignore */ }
         } else {
             host.appendChild(node);
+            watchPopoutWindow(node);
+            // `doc` is the document the panel now lives in: a pop-out window's
+            // when it has just been popped out, this one's when it comes home.
+            // Panels holding window-bound things (window listeners, a
+            // ResizeObserver, an animation loop) move them on this event.
             try {
                 window.dispatchEvent(new CustomEvent('ywc-flex-panel-attached', {
-                    detail: { component, nodeId },
+                    detail: { component, nodeId, doc: node.ownerDocument },
                 }));
             } catch { /* ignore */ }
         }
@@ -566,6 +653,7 @@ export function initFlexWorkspace(host, flags) {
             ref: state.layoutRef,
             realtimeResize: true,
             popoutURL: '/popout.html',
+            onPopoutClose: (_layoutWindow, _win, doc) => parkPanelsFrom(doc),
             onModelChange: () => { persist(); dispatchPanelResize(); buildPanelsMenu(); },
         });
         state.root.render(React.createElement(App));

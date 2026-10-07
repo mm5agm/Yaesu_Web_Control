@@ -346,7 +346,7 @@ export class SpectrumPanel {
             try { grip.releasePointerCapture(activeId); } catch { /* already gone */ }
             activeId = null;
             grip.classList.remove('dragging');
-            document.body.classList.remove('spectrum-resizing');
+            grip.ownerDocument.body.classList.remove('spectrum-resizing');
         };
 
         grip.addEventListener('pointerdown', (e) => {
@@ -365,7 +365,7 @@ export class SpectrumPanel {
             try { grip.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
             grip.classList.add('dragging');
             // Stops the drag selecting the page text it passes over.
-            document.body.classList.add('spectrum-resizing');
+            grip.ownerDocument.body.classList.add('spectrum-resizing');
             // preventDefault below suppresses the browser's default
             // mousedown behaviour, and giving this element the focus is part
             // of that behaviour — so without this line the grip can never be
@@ -1593,21 +1593,26 @@ export class SpectrumPanel {
         e.preventDefault();
         this._closeStepMenu();
 
+        // The canvas's own document: a popped-out panel lives in the pop-out
+        // window, and a menu opened in this window's would appear where the
+        // operator isn't looking.
+        const doc = e.target?.ownerDocument ?? document;
+        const win = doc.defaultView ?? window;
         const current = tuningStep.get(this._vfo);
 
-        const menu = document.createElement('div');
+        const menu = doc.createElement('div');
         menu.className = 'spectrum-step-menu';
         menu.setAttribute('role', 'menu');
         menu.setAttribute('aria-label', `VFO ${this._vfo} tuning step`);
 
-        const heading = document.createElement('div');
+        const heading = doc.createElement('div');
         heading.className = 'spectrum-step-menu-title';
         heading.textContent = `VFO ${this._vfo} step`;
         menu.appendChild(heading);
 
         const items = [];
         for (const hz of tuningStep.steps) {
-            const item = document.createElement('button');
+            const item = doc.createElement('button');
             item.type = 'button';
             item.className = 'spectrum-step-menu-item' + (hz === current ? ' active' : '');
             item.setAttribute('role', 'menuitemradio');
@@ -1626,11 +1631,11 @@ export class SpectrumPanel {
         // would otherwise open a menu that runs off the screen.
         menu.style.left = `${e.clientX}px`;
         menu.style.top  = `${e.clientY}px`;
-        document.body.appendChild(menu);
+        doc.body.appendChild(menu);
 
         const rect = menu.getBoundingClientRect();
-        if (rect.right  > window.innerWidth)  menu.style.left = `${Math.max(0, window.innerWidth  - rect.width  - 4)}px`;
-        if (rect.bottom > window.innerHeight) menu.style.top  = `${Math.max(0, window.innerHeight - rect.height - 4)}px`;
+        if (rect.right  > win.innerWidth)  menu.style.left = `${Math.max(0, win.innerWidth  - rect.width  - 4)}px`;
+        if (rect.bottom > win.innerHeight) menu.style.top  = `${Math.max(0, win.innerHeight - rect.height - 4)}px`;
 
         // Keyboard: the menu takes focus so Up/Down/Escape work for anyone who
         // opened it with the context-menu key rather than a mouse.
@@ -1638,7 +1643,7 @@ export class SpectrumPanel {
         items[focusIndex]?.focus();
 
         menu.addEventListener('keydown', (ev) => {
-            const here = items.indexOf(document.activeElement);
+            const here = items.indexOf(doc.activeElement);
             if (ev.key === 'Escape') { ev.preventDefault(); this._closeStepMenu(); this._focusCanvas(); }
             else if (ev.key === 'ArrowDown') { ev.preventDefault(); items[(here + 1 + items.length) % items.length]?.focus(); }
             else if (ev.key === 'ArrowUp')   { ev.preventDefault(); items[(here - 1 + items.length) % items.length]?.focus(); }
@@ -1649,19 +1654,21 @@ export class SpectrumPanel {
         // Dismiss on the next click anywhere else. Registered on the next tick
         // so the click that opened the menu doesn't immediately close it.
         this._stepMenu = menu;
+        this._stepMenuDoc = doc;
         this._stepMenuDismiss = (ev) => {
             if (!menu.contains(ev.target)) this._closeStepMenu();
         };
         setTimeout(() => {
-            document.addEventListener('mousedown', this._stepMenuDismiss);
-            document.addEventListener('contextmenu', this._stepMenuDismiss);
+            doc.addEventListener('mousedown', this._stepMenuDismiss);
+            doc.addEventListener('contextmenu', this._stepMenuDismiss);
         }, 0);
     }
 
     _closeStepMenu() {
         if (this._stepMenuDismiss) {
-            document.removeEventListener('mousedown', this._stepMenuDismiss);
-            document.removeEventListener('contextmenu', this._stepMenuDismiss);
+            const doc = this._stepMenuDoc ?? document;
+            doc.removeEventListener('mousedown', this._stepMenuDismiss);
+            doc.removeEventListener('contextmenu', this._stepMenuDismiss);
             this._stepMenuDismiss = null;
         }
         this._stepMenu?.remove();
@@ -2555,20 +2562,23 @@ export class SpectrumPanel {
 
     /** Announce text to screen readers via the shared ARIA live region in site.js. */
     _announceToScreenReader(text) {
-        let lr = document.getElementById('_sr_live');
+        // In the canvas's own document, so a screen reader reading a
+        // popped-out panel hears it; that window gets a live region of its own.
+        const doc = document.getElementById(this._canvasId)?.ownerDocument ?? document;
+        let lr = doc.getElementById('_sr_live');
         if (!lr) {
-            // Fallback: create a local live region if site.js hasn't run yet.
+            // None yet: site.js hasn't run, or this is a pop-out window.
             // assertive (matching site.js's primary live region) so new
             // cursor announcements interrupt rather than queue.
-            lr = document.createElement('div');
+            lr = doc.createElement('div');
             lr.id = '_sr_live';
             lr.setAttribute('aria-live', 'assertive');
             lr.setAttribute('aria-atomic', 'true');
             lr.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;';
-            document.body.appendChild(lr);
+            doc.body.appendChild(lr);
         }
         lr.textContent = '';
-        requestAnimationFrame(() => { lr.textContent = text; });
+        (doc.defaultView ?? window).requestAnimationFrame(() => { lr.textContent = text; });
     }
 
     // ── Color mapping ────────────────────────────────────────────────────────
