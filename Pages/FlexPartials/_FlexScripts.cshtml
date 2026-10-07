@@ -141,6 +141,10 @@
             if (nr) window[`nrCycleButton${vfo}`] = nr;
             try { window.meterPanel?.ensureGauges?.(); } catch { /* create S-meter gauge if this VFO mounted late */ }
             try { window.initializeDigitInteraction?.(vfo); } catch (e) { console.error(e); }
+            try { window.setupAfGainSlider?.(vfo); } catch (e) { console.error(e); }
+            // Marks the active VFO (and so the dot on its tab); the state that
+            // drives it arrived before this panel existed.
+            try { window.applyVfoActiveStyling?.(); } catch (e) { console.error(e); }
             // The state snapshot is sent once, at connect, and broadcasts only
             // fire on change — so a panel mounting later would hold page-load
             // values. Ask for the snapshot again now its widgets exist. Skip it
@@ -269,13 +273,20 @@
             }
         });
 
-        // Dual-receiver: clicking a cloned VFO card header makes it the active band.
+        // Dual-receiver: clicking a VFO's tab makes it the active (MAIN/SUB)
+        // band, as clicking the VFO card header does on Classic. The header
+        // has no visible content here (the tab carries the VFO name), so the
+        // tab is the thing to click. The tab name is set by flex-workspace.js
+        // as "VFO A", "VFO A ●", "VFO A ● TX"; the close/pop-out icons on the
+        // tab are excluded.
         document.addEventListener('click', (e) => {
-            const header = e.target.closest?.('#vfoACol .card-header, #vfoBCol .card-header');
-            if (!header) return;
-            if (e.target.closest('button, input, select, a, [role="button"], .badge')) return;
-            const vfo = header.closest('#vfoACol') ? 'A' : 'B';
-            window.setActiveVfo?.(vfo);
+            const tab = e.target.closest?.('.flexlayout__tab_button, .flexlayout__border_button');
+            if (!tab) return;
+            if (e.target.closest('.flexlayout__tab_button_trailing, .flexlayout__border_button_trailing')) return;
+            if (document.getElementById('vfoRow')?.dataset.singleReceiver === 'true') return;
+            const label = tab.querySelector('.flexlayout__tab_button_content, .flexlayout__border_button_content')?.textContent || '';
+            const m = /^\s*VFO ([AB])\b/.exec(label);
+            if (m) window.setActiveVfo?.(m[1]);
         });
         // loadLabels() rewrites every title from labels.json on each focus,
         // wiping the "out of band" title suffix; restore it once that has run.

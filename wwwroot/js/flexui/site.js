@@ -866,6 +866,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // corrected by the first SignalR update).
     setTimeout(applyVfoActiveStyling, 0);
 });
+// Flex UI: the VFO panels are cloned after DOMContentLoaded, so the call above
+// finds no #vfoACol/#vfoBCol, and the ActiveVfo/TxVfo snapshot lands before
+// they exist too. _FlexScripts calls this again when a VFO panel mounts.
+window.applyVfoActiveStyling = applyVfoActiveStyling;
 let splitMode = 0; // 0 = OFF, 1 = ON (VFO A=RX / VFO B=TX), 2 = ON+5kHz Quick Split
 
 let clarVfo = 'A';
@@ -2458,9 +2462,14 @@ function changeSelectedDigit(receiver, delta) {
 // Track user interaction state
 const afGainDragging = { A: false, B: false };
 
+// Flex UI: the sliders are in VFO panel templates, cloned after
+// DOMContentLoaded, so the call below finds nothing there. _FlexScripts calls
+// this again from initVfoPanel once the panel exists; the flag stops the
+// DOMContentLoaded call and that one wiring the same slider twice.
 function setupAfGainSlider(receiver) {
     const slider = document.getElementById(`afGainSlider${receiver}`);
-    if (!slider) return;
+    if (!slider || slider.dataset.ywcAfWired === '1') return;
+    slider.dataset.ywcAfWired = '1';
     const send = () => {
         fetch(`/api/cat/afgain/${receiver.toLowerCase()}`, {
             method: 'POST',
@@ -2481,6 +2490,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupAfGainSlider('A');
     setupAfGainSlider('B');
 });
+window.setupAfGainSlider = setupAfGainSlider;
 
 // IF SHIFT has no effect in AM or FM: measured on an FTdx101MP on
 // 2026-09-19 (#166) -- parked 5 kHz off a broadcast carrier, +1000 and
