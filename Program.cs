@@ -507,6 +507,10 @@ builder.Services.AddHostedService<RigctldServer>();
 // Register your settings service
 builder.Services.AddSingleton<ISettingsService, SettingsService>();
 
+// Named Flex UI workspace arrangements (flex-layouts.json). Kept out of
+// ApplicationSettings deliberately — see FlexLayoutStore for why.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Flex.IFlexLayoutStore, Yaesu_Web_Control.Services.Flex.FlexLayoutStore>();
+
 // Remote radio audio (browser ↔ USB) — opt-in; devices open only while a client is connected.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>();

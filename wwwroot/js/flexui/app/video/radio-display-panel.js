@@ -1,3 +1,6 @@
+// EXPERIMENTAL UI FORK — flex-only copy. Do not edit here expecting the
+// Classic UI to change; Classic uses the originals under wwwroot/js/.
+// Source: feature/experimental-ui @ a0467e5. See integration/experimental-ui.
 /**
  * Owns Radio Display DOM: show/hide, status badge, fit/fill, fullscreen.
  * Transport (img.src = MJPEG URL) is handled by radio-display-ui.js.
@@ -47,7 +50,25 @@ export class RadioDisplayPanel {
     return this._container?.querySelector('.radio-display-body');
   }
 
-  /** @param {'unconfigured'|'idle'|'connecting'|'streaming'|'disconnected'|'notconnected'|'error'} status */
+  _syncVisibilityToggle(visible) {
+    const btn = document.getElementById('radioDisplayShowBtn');
+    if (!btn) return;
+    const label = visible ? 'Hide Radio Scope' : 'Show Radio Scope';
+    btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+    btn.setAttribute('aria-label', label);
+    const tip = btn.closest('.radio-display-tip');
+    if (tip) {
+      tip.setAttribute('data-bs-title', label);
+      tip.setAttribute('aria-label', label);
+      if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        const instance = bootstrap.Tooltip.getInstance(tip);
+        if (instance) instance.setContent({ '.tooltip-inner': label });
+      }
+    }
+    btn.querySelector('.toggle-dd__led')?.classList.toggle('is-on', visible);
+  }
+
+  /** @param {'unconfigured'|'idle'|'connecting'|'streaming'|'disconnected'|'error'} status */
   setStatus(status, detail) {
     this._status = status || 'idle';
     if (!this._container) return;
@@ -63,8 +84,9 @@ export class RadioDisplayPanel {
       if (showRow) showRow.style.display = '';
     } else {
       this._container.style.display = '';
-      if (showRow) showRow.style.display = 'none';
+      if (showRow) showRow.style.display = '';
     }
+    this._syncVisibilityToggle(status !== 'unconfigured' && !hiddenByUser);
 
     if (this._badge) {
       const labels = {
@@ -73,7 +95,6 @@ export class RadioDisplayPanel {
         connecting: 'Connecting…',
         streaming: 'Streaming',
         disconnected: 'Disconnected',
-        notconnected: 'Not connected',
         error: 'Error'
       };
       this._badge.textContent = (status === 'streaming' && detail)
@@ -114,10 +135,11 @@ export class RadioDisplayPanel {
       localStorage.setItem('ywc.radioDisplayVisible', '1');
     }
     const showRow = document.getElementById('radioDisplayShowRow');
-    if (showRow) showRow.style.display = 'none';
+    if (showRow && this._status !== 'unconfigured') showRow.style.display = '';
     if (this._status !== 'unconfigured' && this._container) {
       this._container.style.display = '';
     }
+    this._syncVisibilityToggle(this._status !== 'unconfigured');
     this.applyFit();
   }
 
@@ -127,6 +149,7 @@ export class RadioDisplayPanel {
     if (this._container) this._container.style.display = 'none';
     const showRow = document.getElementById('radioDisplayShowRow');
     if (showRow && this._status !== 'unconfigured') showRow.style.display = '';
+    this._syncVisibilityToggle(false);
   }
 
   isHiddenByUser() {

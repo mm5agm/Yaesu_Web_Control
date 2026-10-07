@@ -1,0 +1,2621 @@
+// EXPERIMENTAL UI FORK — flex-only copy. Do not edit here expecting the
+// Classic UI to change; Classic uses the originals under wwwroot/js/.
+// Source: feature/experimental-ui @ a0467e5. See integration/experimental-ui.
+﻿// Yaesu Web Control – Spectrum Panel
+// UI module — DOM access is intentional and correct here.
+// Owns a single <canvas> element that is divided into two rendering zones:
+//   Top 45%  — spectrum trace (line graph of dBFS vs frequency)
+//   Bottom 55% — waterfall  (scrolling time–frequency heatmap)
+//
+// Frequency axis labels are computed from the VFO frequency reported by
+// SdrSpectrumPipeline so the display is always centred on the current band.
+
+// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
+import { autoModeForHz } from '/js/flexui/app/ui/band-plan.js?v=1';
+import { tuningStep } from '/js/ui/tuning-step.js?v=1';
+import { formatTuningStep } from '/js/tuning/tuning-step-store.js?v=1';
+import { loadRttySettings, afskMidpointAudioHz } from '/js/rtty/rtty-settings.js?v=1';
+
+// Drag-to-tune: CSS pixels a press may wander and still count as a click,
+// and the shortest gap between frequency writes while dragging.
+const TUNE_DRAG_DEADZONE_PX = 4;
+const TUNE_DRAG_SEND_MS     = 60;
+
+export class SpectrumPanel {
+
+    /**
+     * @param {string} canvasId       ID of the <canvas> element to render into.
+     * @param {string} containerId    ID of the wrapper element to show/hide.
+     * @param {number} initialVfoHz   Starting VFO frequency in Hz.
+     * @param {string} vfo            "A" or "B" — which VFO this panel represents.
+     *                                Click-to-tune and wheel-tune target the
+     *                                /api/cat/frequency/{a|b} endpoint accordingly.
+     */
+    constructor(canvasId, containerId, initialVfoHz = 14_074_000, vfo = 'A') {
+        this._canvasId    = canvasId;
+        this._containerId = containerId;
+        this._vfo         = (vfo === 'B') ? 'B' : 'A';   // normalise + default
+        this._vfoLower    = this._vfo.toLowerCase();      // "a"/"b" for URL paths
+        this._vfoHz       = initialVfoHz;
+        this._status      = 'unconfigured';
+
+        // The radio's CW sidetone pitch and this VFO's mode. In CW the dial is
+        // the signal frequency at the pitch, so the pitch is what maps the
+        // audio passband onto the RF axis (_passbandRfRange) -- and the mode
+        // decides the sideband sense and the click-to-tune offset
+        // (_tuneOffsetHz). Both are seeded from the radio via
+        // setCwPitchHz()/setMode(); 700 Hz is only the fallback for the
+        // moment before the first CAT update.
+        this._cwPitchHz   = 700;
+        this._modeName    = '';
+
+        // RTTY tone settings for the radio's own RTTY-L / RTTY-U. The shift
+        // and polarity place the dial half a shift off the midpoint the
+        // operator clicks; the mark frequency anchors the audio-to-RF mapping
+        // of the passband overlay. Seeded from the radio's own extended menu
+        // via setRttyTones() (GET /api/cat/rtty); Yaesu's defaults until then.
+        this._rttyMarkHz      = 2125;
+        this._rttyShiftHz     = 170;
+        this._rttyPolarityRev = false;
+
+        // Optional () => { lo, hi } supplying the current IF passband edges in
+        // AUDIO Hz — supplied by Index.cshtml from the matching FilterScopePanel,
+        // which already computes them from the SH width code, IF shift, roofing
+        // filter and mode. Reused rather than recomputed so there is one
+        // passband formula in the app, not two that can drift apart.
+        this._passbandProvider = null;
+        this._showPassband     = this._loadShowPassband();
+
+        // Optional (sdrCentreHz) => Hz | null giving the axis correction for
+        // this radio: `true RF = displayed RF + offset`, where "displayed" is
+        // the naive dial-at-centre reading. The radio's IF OUT is not at the
+        // SDR's centre, and the radio slides its LO with filter width, IF
+        // shift and CW pitch, so without this every signal is drawn 5-7 kHz
+        // from where it really is on an FTdx101 (100 kHz on the SUB before the
+        // SDR centres were split). Supplied by Index.cshtml from
+        // sdr/if-out-offset.js; null or absent means "draw the dial at the
+        // centre", the pre-correction behaviour, which is all an unmeasured
+        // radio gets. See _axisOffsetHz.
+        this._axisOffsetProvider = null;
+
+        // Waterfall state: ImageData that is scrolled down one row per frame.
+        this._waterfallData = null;
+        this._waterfallRows = 0;
+        this._waterfallCols = 0;
+
+        // Waterfall scroll speed — 1 scrolls a row every incoming FFT frame
+        // (full speed, the original fixed behaviour); higher values skip
+        // frames so the waterfall scrolls slower, e.g. 4 = one row every 4th
+        // frame. The spectrum trace above it still updates every frame — this
+        // only throttles the waterfall's fall-through rate. Requested by a
+        // reporter who found the default too fast to read at a glance.
+        // Persisted per-VFO like the split ratio.
+        this._waterfallSpeed = this._loadWaterfallSpeed();
+        this._waterfallFrameCounter = 0;
+
+        // Waterfall brightness — a dB offset added to each bin before it is
+        // mapped to a thermal colour. 0 = no lift (raw dark baseline); higher
+        // values push weak signals further up the colour scale so a dark
+        // waterfall brightens. This replaces the old "gain" slider, which drove
+        // the worker's pre-dB gain: with the trace now auto-ranging, that gain
+        // only ever brightened the waterfall, so it's now a dedicated
+        // client-side control that leaves the spectrum trace alone. Persisted
+        // per-VFO in localStorage like the scroll speed.
+        this._wfBrightDb = this._loadWaterfallBrightness();
+
+        this._errorDetail = null;
+
+        // Last received spectrum data; held so the canvas can be redrawn on resize.
+        this._lastBins    = null;
+        this._lastCentreHz = 0;
+        // True while frames come from the radio's own scope (see update()).
+        this._rfOrdered = false;
+        this._lastSpanHz   = 0;
+
+        // DX cluster spots overlaid on the spectrum. Each entry is the JSON
+        // shape from /api/dxcluster/spots — { callsign, frequencyHz, spotter,
+        // comment, receivedUtc }. Only spots within the current span are
+        // drawn; clicks within a few pixels of a spot QSY to it precisely.
+        this._spots = [];
+
+        // DX cluster connection status — shown as a small badge in the
+        // top-right of the spectrum canvas. Updated by setDxStatus().
+        this._dxStatus = 'off';
+        this._dxDetail = '';
+
+        // Crosshair state — null when mouse is outside the canvas.
+        this._crosshairX  = null;
+        this._crosshairY  = null;
+
+        // Persistent cursor: a "bookmarked" frequency the operator dropped
+        // with Shift+click. Stays on the spectrum until cleared even as
+        // the user tunes elsewhere — useful for marking a station you want
+        // to come back to. null when no cursor is set.
+        this._pinnedCursorHz = null;
+
+        // Band-plan segment data for marker overlay (CW / FT8 / SSB / RTTY etc.
+        // tick marks under the spectrum). Set via setBandPlan(); shape is the
+        // region-specific subset of BAND_PLANS, e.g. BAND_PLANS.Region1.
+        this._bandPlan = null;
+
+        this._resizeObserver = null;
+
+        // Panel height. Off until enableHeightControl() is called, so a host
+        // that sizes the container itself is left alone. See the panel-height
+        // section below.
+        this._heightPersist   = false;
+        this._heightSaveTimer = null;
+        this._onHeightChange  = null;
+
+        // The height we last asked for, which is NOT always the height the
+        // container measures: the whole panel is display:none until the SDR
+        // streams (see setStatus), and a hidden element measures 0. Without
+        // this, a saved height would read back as the default on every page
+        // load, and the preset control would say "Normal" while the panel was
+        // in fact set to 560.
+        this._panelH = null;
+
+        // The resize grip, once a page attaches one (attachResizeGrip).
+        this._grip = null;
+
+        // Spectrum/waterfall split ratio — fraction of canvas height given to
+        // the spectrum trace (top zone); remainder goes to the waterfall.
+        // Persisted per-VFO in localStorage so the operator can give the
+        // spectrum more vertical room for low-signal work without losing
+        // the setting on reload.
+        this._splitRatio = this._loadSplitRatio();
+        this._splitterDragging = false;
+
+        // dB range — vertical scale of the spectrum trace, in dBFS. These are the
+        // actual render window; with auto-floor on (below) they are recomputed
+        // every sweep. Default fallback only, used until the first frame arrives.
+        this._dbMin = -120;
+        this._dbMax = 0;
+
+        // Auto noise-floor tracking (ported from Icom Web Control). Each sweep we
+        // measure the noise floor (a low percentile of the bins) and pin it a
+        // fixed fraction up from the bottom of the trace; the operator's single
+        // "Range" control then sets how much dB of headroom sits above it
+        // (smaller Range = taller peaks). This replaces the old Low/High window:
+        // the floor now follows the noise automatically, so weak-signal work no
+        // longer needs the operator to chase the floor slider on every band.
+        //   _autoFloorDb — the EMA-smoothed measured floor (null until the first
+        //                  frame, and re-seeded — snapped, not drifted — on a
+        //                  span change, bin-count change, band jump or Gain step).
+        //   _rangeDb     — dB from the pinned floor to the top of the scale.
+        // NOTE vs IWC: YWC's worker already applies temporal EMA (SpectrumProcessor,
+        // α=0.3) before the bins reach us, so we deliberately DON'T repeat IWC's
+        // client-side temporal EMA here — that would double-smooth and lag. We keep
+        // only the spatial smoothing (grass removal) and the auto-floor.
+        this._autoFloor    = true;
+        this._autoFloorDb  = null;
+        this._rangeDb      = this._loadSpectrumRange();
+        this._avgBins      = null;   // temporal-EMA history (stage 1); re-seeded on retune
+        this._specAvgWeight = SpectrumPanel.DEFAULT_SPEC_AVG;
+        this._specSmoothRadius = this._loadSpectrumSmooth();  // spatial half-window (stage 2)
+        this._smoothOut    = null;   // reused spatial-smoothing output buffer (stage 2)
+        // Last VFO frequency the auto-floor was seeded against, so a large band
+        // jump can snap the floor instead of letting the EMA drift across.
+        this._lastFloorVfoHz = initialVfoHz;
+
+        // Garbage-collect the pre-v2.4.0 client-side dB-range persistence.
+        // The vertical scale is now the auto-floor plus the Range slider
+        // (persisted under ywc.spectrumRange); the old key would just sit
+        // forever in users' browsers otherwise. Safe to remove
+        // unconditionally — removeItem on a missing key is a no-op.
+        try { localStorage.removeItem('ywc.spectrumDbRange.' + this._vfo); }
+        catch (e) { /* localStorage may be unavailable */ }
+
+        this._init();
+    }
+
+    // Load persisted split ratio for this VFO. Clamped to a reasonable band
+    // so a corrupt value can't make either zone vanish entirely.
+    _loadSplitRatio() {
+        try {
+            const raw = localStorage.getItem('ywc.spectrumSplit.' + this._vfo);
+            const v = parseFloat(raw);
+            if (isFinite(v) && v >= 0.15 && v <= 0.85) return v;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return 0.45;
+    }
+
+    _saveSplitRatio() {
+        try {
+            localStorage.setItem('ywc.spectrumSplit.' + this._vfo, this._splitRatio.toFixed(3));
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    // ── Panel height ─────────────────────────────────────────────────────────
+    //
+    // The canvas takes its height from its container (see _sizeCanvas), so
+    // "resize the panel" means "set the container's height and let the
+    // ResizeObserver do the rest".
+    //
+    // This used CSS `resize: vertical` at first, letting the browser draw the
+    // handle. That shipped to the bench and failed there: the browser puts its
+    // handle in the bottom-right CORNER, which on a 1920x1080 window sits
+    // below the fold at the default height and moves further off-screen every
+    // time the panel is made taller — so growing the panel pushed its own
+    // control out of reach, and shrinking it again meant hunting for an almost
+    // invisible 16px triangle on a dark card. Miss it and you hit the canvas,
+    // which is click-to-tune, so a missed grab moved the radio.
+    //
+    // attachResizeGrip replaces it with a grip we draw ourselves, the full
+    // width of the panel, which can also take the keyboard. Note the verified
+    // behaviour was never the resize itself — that always worked in both
+    // directions; it was only ever reachability.
+    //
+    // Persistence is opt-in through enableHeightControl() rather than
+    // automatic, because not every host wants it: a container sized to fill
+    // its window has a height of its own already, and putting a saved pixel
+    // height back would fight it.
+
+    _clampPanelHeight(px) {
+        const v = Math.round(Number(px));
+        if (!isFinite(v)) return SpectrumPanel.DEFAULT_PANEL_H;
+        return Math.max(SpectrumPanel.MIN_PANEL_H,
+               Math.min(SpectrumPanel.MAX_PANEL_H, v));
+    }
+
+    _loadPanelHeight() {
+        try {
+            const v = parseInt(localStorage.getItem('ywc.spectrumHeight.' + this._vfo), 10);
+            if (isFinite(v) && v >= SpectrumPanel.MIN_PANEL_H && v <= SpectrumPanel.MAX_PANEL_H) return v;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return SpectrumPanel.DEFAULT_PANEL_H;
+    }
+
+    _savePanelHeight(px) {
+        try {
+            localStorage.setItem('ywc.spectrumHeight.' + this._vfo, String(this._clampPanelHeight(px)));
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    /** The canvas's container — the element whose height this panel occupies. */
+    _panelWrap() {
+        return document.getElementById(this._canvasId)?.parentElement ?? null;
+    }
+
+    // Debounced so a drag writes once when it settles rather than on every
+    // frame of the drag. 250 ms matches makeResizable in Index.cshtml.
+    _queueHeightSave() {
+        if (!this._heightPersist) return;
+        clearTimeout(this._heightSaveTimer);
+        this._heightSaveTimer = setTimeout(() => {
+            const h = this.getPanelHeight();
+            this._savePanelHeight(h);
+            try { this._onHeightChange?.(h); } catch { /* handler's problem, not ours */ }
+        }, 250);
+    }
+
+    /**
+     * Put the operator's saved height back and start persisting changes to it.
+     * Call once per panel, from the page that owns the resizable container.
+     */
+    enableHeightControl() {
+        this._heightPersist = true;
+        this.setPanelHeight(this._loadPanelHeight());
+    }
+
+    /**
+     * Notified with the new height (px) shortly after the operator changes it,
+     * however they changed it. Lets a page keep a preset control in step with
+     * a height that was reached by dragging the corner instead.
+     */
+    setHeightChangeHandler(fn) { this._onHeightChange = fn; }
+
+    /** Current panel height in px, clamped; the default if there is no container. */
+    getPanelHeight() {
+        const wrap = this._panelWrap();
+        const h = wrap ? wrap.clientHeight : 0;
+        if (h > 0) return this._clampPanelHeight(h);
+        return this._panelH ?? SpectrumPanel.DEFAULT_PANEL_H;
+    }
+
+    /**
+     * Set the panel height in px. The ResizeObserver installed in _init picks
+     * the change up and does the canvas resize, waterfall rebuild, repaint and
+     * save, so this deliberately does none of those itself.
+     */
+    setPanelHeight(px) {
+        const h = this._clampPanelHeight(px);
+        this._panelH = h;
+        const wrap = this._panelWrap();
+        if (!wrap) return;
+        wrap.style.height = h + 'px';
+    }
+
+    /**
+     * Make `grip` resize this panel: press and drag it, or focus it and use
+     * the arrow keys. The element is expected to be a full-width strip under
+     * the canvas, so there is nothing to hunt for and nothing to miss.
+     *
+     * Pointer events rather than mouse events, so a finger on a tablet works
+     * the same as a mouse; pointer capture so the drag survives the pointer
+     * leaving the strip, which it does immediately in practice.
+     */
+    attachResizeGrip(grip) {
+        if (!grip) return;
+        this._grip = grip;
+
+        let activeId = null, startY = 0, startH = 0;
+
+        const end = () => {
+            if (activeId === null) return;
+            try { grip.releasePointerCapture(activeId); } catch { /* already gone */ }
+            activeId = null;
+            grip.classList.remove('dragging');
+            document.body.classList.remove('spectrum-resizing');
+        };
+
+        grip.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            activeId = e.pointerId;
+            // pageY, not clientY. Shrinking the panel makes the document
+            // shorter, which makes the browser clamp the scroll position,
+            // which slides the whole page down under a stationary pointer.
+            // Measured in viewport coordinates each drag pixel is then partly
+            // cancelled by that slide, so the panel crawls downward and feels
+            // stuck — and only ever when shrinking, because growing the page
+            // never clamps. pageY includes the scroll offset, so it stays
+            // true no matter what the scroll position does mid-drag.
+            startY   = e.pageY;
+            startH   = this.getPanelHeight();
+            try { grip.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+            grip.classList.add('dragging');
+            // Stops the drag selecting the page text it passes over.
+            document.body.classList.add('spectrum-resizing');
+            // preventDefault below suppresses the browser's default
+            // mousedown behaviour, and giving this element the focus is part
+            // of that behaviour — so without this line the grip can never be
+            // focused by clicking it, and every key press goes to the page
+            // instead. That is what made the arrow keys look dead and
+            // PageUp/PageDown scroll the whole window.
+            // preventScroll matters: focusing a partly-visible grip would
+            // otherwise scroll it into view, and the drag maths is now tied to
+            // the scroll position, so the panel would jump the moment it was
+            // grabbed.
+            grip.focus({ preventScroll: true });
+            e.preventDefault();
+        });
+
+        grip.addEventListener('pointermove', (e) => {
+            if (e.pointerId !== activeId) return;
+            this.setPanelHeight(startH + (e.pageY - startY));
+            this._syncGripAria();
+        });
+
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
+        grip.addEventListener('lostpointercapture', end);
+
+        // Keyboard, which the browser's own handle never offered. Voice and
+        // screen-reader operators are a real part of this audience, so a
+        // mouse-only control is not good enough on its own.
+        grip.addEventListener('keydown', (e) => {
+            const step = e.shiftKey ? 50 : 10;
+            let h = null;
+            switch (e.key) {
+                case 'ArrowDown': h = this.getPanelHeight() + step; break;
+                case 'ArrowUp':   h = this.getPanelHeight() - step; break;
+                case 'PageDown':  h = this.getPanelHeight() + 100;  break;
+                case 'PageUp':    h = this.getPanelHeight() - 100;  break;
+                case 'Home':      h = SpectrumPanel.MIN_PANEL_H;    break;
+                case 'End':       h = SpectrumPanel.MAX_PANEL_H;    break;
+                default: return;
+            }
+            e.preventDefault();
+            this.setPanelHeight(h);
+            this._syncGripAria();
+            this.ensureGripVisible();
+        });
+
+        // Double-click the grip to go back to the default height — the quick
+        // way out of a size that turned out to be wrong.
+        grip.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            this.setPanelHeight(SpectrumPanel.DEFAULT_PANEL_H);
+            this._syncGripAria();
+        });
+
+        grip.setAttribute('aria-valuemin', String(SpectrumPanel.MIN_PANEL_H));
+        grip.setAttribute('aria-valuemax', String(SpectrumPanel.MAX_PANEL_H));
+        this._syncGripAria();
+    }
+
+    /**
+     * Bring the grip back into view if a height change has pushed it off the
+     * bottom of the window. A full-width grip is easy to see and easy to hit,
+     * but it still lives at the bottom EDGE of the panel, so making the panel
+     * taller moves it down — the same trap that made the browser's corner
+     * handle unusable. Only for changes the operator made from somewhere else
+     * (the preset box, the arrow keys): during a drag the pointer is already
+     * on the grip, and scrolling under a live drag would be horrible.
+     */
+    ensureGripVisible() {
+        const grip = this._grip;
+        if (!grip) return;
+        const r = grip.getBoundingClientRect();
+        const margin = 8;
+        if (r.bottom > window.innerHeight - margin || r.top < margin) {
+            grip.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+
+    /** Keep the grip's reported value in step with the height it controls. */
+    _syncGripAria() {
+        if (!this._grip) return;
+        const h = this.getPanelHeight();
+        this._grip.setAttribute('aria-valuenow', String(h));
+        this._grip.setAttribute('aria-valuetext', h + ' pixels tall');
+    }
+
+    // Valid waterfall speed divisors — 1 (full speed) through 128 (1/128
+    // speed). Index into this array (not the divisor itself) is what the
+    // UI slider in Index.cshtml drags across, since the divisors themselves
+    // aren't evenly spaced.
+    static WATERFALL_SPEEDS = [1, 2, 4, 8, 16, 32, 64, 128];
+
+    // ── Auto noise-floor / smoothing constants (ported from IWC) ──────────────
+    //   DEFAULT_SPEC_RANGE   — dB of headroom above the pinned floor (the "Range"
+    //                          slider default); ~60 dB shows band noise plus strong
+    //                          signals without clipping SSB peaks.
+    //   AUTOFLOOR_PERCENTILE — which order-statistic of the sweep is taken as the
+    //                          noise floor. Most bins are noise, so a low percentile
+    //                          lands in it while ignoring signal peaks.
+    //   AUTOFLOOR_MARGIN_FRAC— where the floor is parked, as a fraction of the trace
+    //                          height up from the bottom. A *fraction* (not a fixed
+    //                          dB) keeps the floor in the same spot at any Range.
+    //   AUTOFLOOR_SMOOTH     — EMA weight for the floor estimate; low = calm scale
+    //                          that doesn't bounce as the noise wanders sweep-to-sweep.
+    static DEFAULT_SPEC_RANGE    = 60;
+    static AUTOFLOOR_PERCENTILE  = 0.15;
+    static AUTOFLOOR_MARGIN_FRAC = 0.05;
+    static AUTOFLOOR_SMOOTH      = 0.1;
+
+    // Temporal-averaging weight for the client-side EMA (stage 1 of the two-stage
+    // smoothing, ported from IWC). Per bin: avg += w·(new − avg), so LOWER = smoother
+    // and slower, 1 = averaging off. Temporal smoothing removes frame-to-frame grass
+    // WITHOUT blunting peaks (peaks persist across frames, noise averages to zero),
+    // so it's the main knob for matching IWC's clean trace on the noisier SDR FFT.
+    // This runs ON TOP of the worker's own EMA (SpectrumProcessor α=0.3); the two
+    // cascade to a smooth result. Tune live: window.spectrumPanelA.setSpectrumAveraging(w).
+    static DEFAULT_SPEC_AVG = 0.5;
+
+    // Spatial-smoothing half-window, in bins. This flattens the noise floor's
+    // bin-to-bin grass — the SDR floor is far rougher than IWC's radio-smoothed
+    // CI-V scope, so it needs a real spatial pass. Higher = flatter floor but
+    // blunter peaks; capped by MAX_SPEC_SMOOTH, and exposed as the Smooth slider.
+    //
+    // The default was 6 — a 13-bin boxcar. That was chosen to calm the noise and
+    // it does, but it was never checked against a narrow signal. At the usual
+    // 250 kHz span on a 1024-point FFT each bin is 244 Hz, so 13 bins averages
+    // over 3.2 kHz. SSB survives that (2.7 kHz of speech is ~11 bins, about the
+    // kernel width); CW does not. A CW carrier is ONE bin, so averaging it over
+    // 13 costs ~11 dB and the peak vanishes from the trace entirely, while the
+    // waterfall still shows it because it integrates the same signal over time.
+    // Measured on 20m CW, 2026-09-02: signals plainly visible in the waterfall
+    // had no peak at all in the trace until the radius was dropped.
+    //
+    // 2 is a compromise, not a cure: a 5-bin kernel still costs a one-bin
+    // carrier a few dB. Operators working CW should pull Smooth to 0. The
+    // slider exists so that is a choice rather than a console command.
+    static DEFAULT_SPEC_SMOOTH = 2;
+    static MAX_SPEC_SMOOTH     = 8;
+
+    // A band jump larger than this (Hz) snaps the auto-floor to the new band's
+    // noise rather than letting the EMA drift across. Small tuning steps (wheel,
+    // segment nudges) stay below it so the scale doesn't twitch while tuning.
+    static AUTOFLOOR_SNAP_JUMP_HZ = 250_000;
+
+    // Height in px reserved at the bottom of the spectrum zone for the frequency-
+    // axis labels. The trace maps into the area above this; _drawFrequencyAxis
+    // paints its strip into it. One constant so the two never disagree.
+    static AXIS_H = 20;
+
+    /**
+     * How much of a spectrum zone `specH` px tall to give the frequency axis.
+     *
+     * Zero once the zone is too short to spare it. The axis is a fixed 20px,
+     * so on a very short panel it would take most of the spectrum zone and
+     * leave the trace a sliver — labels nobody asked for, crowding out the
+     * one thing the panel is for. Below twice its own height it steps aside
+     * and the trace uses the whole zone; the axis is a convenience, the trace
+     * is the point.
+     */
+    static axisHeightFor(specH) {
+        return specH < SpectrumPanel.AXIS_H * 2 ? 0 : SpectrumPanel.AXIS_H;
+    }
+
+    // Panel height limits, in CSS pixels of canvas — the whole panel, trace and
+    // waterfall together, which _splitRatio then divides between them.
+    //
+    // DEFAULT_PANEL_H is the height this panel was fixed at before it became
+    // adjustable, so an operator who never touches the control sees exactly
+    // what they saw before. MIN keeps the frequency-axis strip (AXIS_H) from
+    // crowding out the trace above it.
+    //
+    // MAX is a guard rather than a measured limit. Both waterfall costs per
+    // frame — the copyWithin row shift and the putImageData — are linear in
+    // W x wfH, so dragging the panel to four times the height is four times
+    // the per-frame pixel work. That is nothing on a desktop and may well be
+    // something on the Pi/Docker rig, which is why there is a ceiling at all.
+    // Requested by Bruce VK2RT, discussion #171.
+    // The floor was 160, then 80, and is now 40: each time because the bench
+    // found the panel would not go as short as an operator wanted, and a short
+    // panel is a legitimate thing to want when the waterfall is only there to
+    // be glanced at. What used to stop it was the frequency-axis strip — a
+    // fixed 20px out of the spectrum zone, which at a short panel is most of
+    // it. axisHeightFor now drops the axis when the zone is too small to spare
+    // it, so the trace keeps its room and the panel can keep going down.
+    static MIN_PANEL_H     = 40;
+    static MAX_PANEL_H     = 1000;
+    static DEFAULT_PANEL_H = 280;   // 126px spectrum + 154px waterfall at the default split
+
+    // Load the persisted Range (dB headroom) for this VFO, clamped to the valid
+    // slider band so a corrupt value can't produce an unusable scale.
+    _loadSpectrumRange() {
+        try {
+            const v = parseFloat(localStorage.getItem('ywc.spectrumRange.' + this._vfo));
+            if (isFinite(v) && v >= 5 && v <= 160) return v;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return SpectrumPanel.DEFAULT_SPEC_RANGE;
+    }
+
+    _saveSpectrumRange() {
+        try {
+            localStorage.setItem('ywc.spectrumRange.' + this._vfo, String(Math.round(this._rangeDb)));
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    // Load the persisted spatial-smoothing radius for this VFO. Clamped to the
+    // slider band so a corrupt value can't silently flatten every peak away.
+    _loadSpectrumSmooth() {
+        try {
+            const v = parseInt(localStorage.getItem('ywc.spectrumSmooth.' + this._vfo), 10);
+            if (isFinite(v) && v >= 0 && v <= SpectrumPanel.MAX_SPEC_SMOOTH) return v;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return SpectrumPanel.DEFAULT_SPEC_SMOOTH;
+    }
+
+    _saveSpectrumSmooth() {
+        try {
+            localStorage.setItem('ywc.spectrumSmooth.' + this._vfo, String(this._specSmoothRadius));
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    _loadWaterfallSpeed() {
+        try {
+            const v = parseInt(localStorage.getItem('ywc.waterfallSpeed.' + this._vfo), 10);
+            if (SpectrumPanel.WATERFALL_SPEEDS.includes(v)) return v;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return 1;
+    }
+
+    _saveWaterfallSpeed() {
+        try {
+            localStorage.setItem('ywc.waterfallSpeed.' + this._vfo, String(this._waterfallSpeed));
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    // Passband overlay defaults ON: its whole purpose is to show an operator
+    // where the dial actually is relative to a signal, which is not something
+    // they can be expected to switch on before they know they need it.
+    _loadShowPassband() {
+        try {
+            const v = localStorage.getItem('ywc.spectrumPassband.' + this._vfo);
+            if (v === '0') return false;
+            if (v === '1') return true;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return true;
+    }
+
+    _saveShowPassband() {
+        try {
+            localStorage.setItem('ywc.spectrumPassband.' + this._vfo,
+                                 this._showPassband ? '1' : '0');
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    /**
+     * Show or hide the IF passband overlay.
+     * @param {boolean} on
+     */
+    setShowPassband(on) {
+        this._showPassband = !!on;
+        this._saveShowPassband();
+        if (this._lastBins) this._render();
+    }
+
+    /** Whether the IF passband overlay is currently drawn. */
+    getShowPassband() { return this._showPassband; }
+
+    /**
+     * Set how many incoming FFT frames the waterfall waits between scrolling
+     * a new row — 1 = every frame (full speed), 4 = one row every 4th frame
+     * (1/4 speed), etc. The spectrum trace is unaffected; it always updates
+     * on every frame. Invalid values are ignored.
+     * @param {number} divisor  One of SpectrumPanel.WATERFALL_SPEEDS.
+     */
+    setWaterfallSpeed(divisor) {
+        const d = parseInt(divisor, 10);
+        if (!SpectrumPanel.WATERFALL_SPEEDS.includes(d)) return;
+        this._waterfallSpeed = d;
+        this._waterfallFrameCounter = 0;
+        this._saveWaterfallSpeed();
+    }
+
+    /** Returns the current waterfall speed divisor (1 = full speed). */
+    getWaterfallSpeed() { return this._waterfallSpeed; }
+
+    // Waterfall brightness range, in dB of lift. 0 = off; MAX chosen so a
+    // signal sitting on the noise floor can be pushed near full colour.
+    static WATERFALL_BRIGHT_MAX = 60;
+
+    // dB above the tracked noise floor that maps black → full red in the
+    // waterfall colour scale (see _dbToColor). Keeping this floor-relative
+    // (rather than an absolute dBFS window) is what makes the noise floor render
+    // dark regardless of YWC's absolute signal levels.
+    static WATERFALL_COLOR_SPAN_DB = 70;
+
+    _loadWaterfallBrightness() {
+        try {
+            const v = parseInt(localStorage.getItem('ywc.waterfallBright.' + this._vfo), 10);
+            if (isFinite(v) && v >= 0 && v <= SpectrumPanel.WATERFALL_BRIGHT_MAX) return v;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return 0;
+    }
+
+    _saveWaterfallBrightness() {
+        try {
+            localStorage.setItem('ywc.waterfallBright.' + this._vfo, String(this._wfBrightDb));
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    /**
+     * Set the waterfall brightness lift, in dB (0 … WATERFALL_BRIGHT_MAX).
+     * Only the waterfall's colour mapping is affected — the spectrum trace is
+     * unchanged. Takes effect on the next scrolled-in rows (history keeps its
+     * existing colours, same as a scroll-speed change).
+     * @param {number} db  dB of lift; clamped to the valid range.
+     */
+    setWaterfallBrightness(db) {
+        const v = parseInt(db, 10);
+        if (!isFinite(v)) return;
+        this._wfBrightDb = Math.max(0, Math.min(SpectrumPanel.WATERFALL_BRIGHT_MAX, v));
+        this._saveWaterfallBrightness();
+    }
+
+    /** Returns the current waterfall brightness lift in dB (0 = off). */
+    getWaterfallBrightness() { return this._wfBrightDb; }
+
+    /**
+     * Set the spectrum dB range. Called by the Low/High slider handler in
+     * Index.cshtml whenever the user moves a slider. Persistence is handled
+     * server-side via /api/sdr/dsp/{vfo}; this method just rescales the
+     * canvas y-axis so the visual change is immediate.
+     * @param {number} dbMax  Top of the scale (High slider value).
+     * @param {number} dbMin  Bottom of the scale (Low slider value).
+     */
+    setDbRange(dbMax, dbMin) {
+        if (!isFinite(dbMax) || !isFinite(dbMin) || dbMax <= dbMin) return;
+        this._dbMax = dbMax;
+        this._dbMin = dbMin;
+        if (this._lastBins) this._render();
+    }
+
+    // ── Auto noise-floor / Range control ──────────────────────────────────────
+
+    /**
+     * Set the vertical-scale height in dB — the "Range" control — while auto-floor
+     * keeps the noise pinned near the bottom. Smaller = taller peaks (more gain);
+     * larger = flatter. The floor never moves as a result — that's the whole point
+     * of auto-floor. Persisted per-VFO in localStorage. Out-of-range values ignored.
+     * @param {number} db  dB of headroom above the tracked noise floor.
+     */
+    setSpectrumRange(db) {
+        const r = parseFloat(db);
+        if (!isFinite(r) || r < 5 || r > 160) return;
+        this._rangeDb = r;
+        this._saveSpectrumRange();
+        // Re-apply against the current floor so the change is visible immediately,
+        // without waiting for the next sweep.
+        if (this._autoFloorDb != null) this._applyAutoFloorWindow();
+        if (this._lastBins) this._render();
+    }
+
+    /** Returns the current vertical-scale height in dB (the Range control). */
+    getSpectrumRange() { return this._rangeDb; }
+
+    /**
+     * Re-seed the auto-floor on the next sweep — the floor snaps to the freshly
+     * measured noise rather than drifting to it over ~1–2 s. Called on a big band
+     * jump and on a Gain change, both of which shift the whole dBFS floor.
+     */
+    snapAutoFloor() { this._autoFloorDb = null; }
+
+    /**
+     * Track the noise floor from a smoothed sweep and set the render window to
+     * [floor − margin, floor − margin + range]. A low percentile of the bins is a
+     * robust noise-floor estimate (most bins are noise); it is EMA-smoothed so the
+     * scale stays calm as the noise wanders. No-op when auto-floor is off.
+     * @param {ArrayLike<number>} bins  The smoothed sweep.
+     */
+    _updateAutoFloor(bins) {
+        if (!this._autoFloor || !bins || !bins.length) return;
+        // Float32Array.sort() is numeric by default (unlike Array.prototype.sort).
+        const sorted = Float32Array.from(bins).sort();
+        const idx = Math.min(sorted.length - 1,
+            Math.max(0, Math.floor(sorted.length * SpectrumPanel.AUTOFLOOR_PERCENTILE)));
+        const measured = sorted[idx];
+        if (this._autoFloorDb == null) this._autoFloorDb = measured;
+        else this._autoFloorDb += SpectrumPanel.AUTOFLOOR_SMOOTH * (measured - this._autoFloorDb);
+        this._applyAutoFloorWindow();
+    }
+
+    // Set the render window [dbMin, dbMax] from the tracked floor and Range so the
+    // floor lands at a *fixed screen fraction* (AUTOFLOOR_MARGIN_FRAC) up from the
+    // bottom, independent of Range. Because the trace height fraction is
+    // (v − dbMin)/range, parking the floor at fraction f means dbMin = floor − f·range;
+    // Range then only stretches the peaks above it, never the floor's position.
+    _applyAutoFloorWindow() {
+        this._dbMin = this._autoFloorDb - SpectrumPanel.AUTOFLOOR_MARGIN_FRAC * this._rangeDb;
+        this._dbMax = this._dbMin + this._rangeDb;
+    }
+
+    /**
+     * Stage 1 — temporal averaging (EMA) across frames. Per bin:
+     * avg += w·(new − avg), so the trace settles toward the running average at a
+     * rate set by _specAvgWeight (lower = smoother/slower). Re-seeds (copies the
+     * raw sweep) on the first frame, a weight of ≥1 (averaging off), or a bin-count
+     * change; _avgBins is also nulled by update() on a span change and by
+     * setVfoFrequency() on a frequency change, so the average doesn't drag the
+     * old band across. Peaks survive because they recur every frame while noise
+     * averages out — this is the main grass-removal stage.
+     * @param {ArrayLike<number>} bins  The raw (worker-EMA'd) sweep.
+     * @returns {Float32Array} The temporally-averaged trace.
+     */
+    _applyAveraging(bins) {
+        const a = this._specAvgWeight;
+        if (a >= 1 || !this._avgBins || this._avgBins.length !== bins.length) {
+            this._avgBins = Float32Array.from(bins);
+            return this._avgBins;
+        }
+        const avg = this._avgBins;
+        for (let i = 0; i < bins.length; i++) avg[i] += a * (bins[i] - avg[i]);
+        return avg;
+    }
+
+    /**
+     * Set the temporal-averaging weight (0 < w ≤ 1). Lower = smoother/slower;
+     * 1 disables averaging (raw sweeps). Out-of-range values are ignored. Exposed
+     * for live tuning via the console, e.g. window.spectrumPanelA.setSpectrumAveraging(0.3).
+     * @param {number} weight
+     */
+    setSpectrumAveraging(weight) {
+        const w = parseFloat(weight);
+        if (!isFinite(w) || w <= 0 || w > 1) return;
+        this._specAvgWeight = w;
+    }
+
+    /** Returns the current temporal-averaging weight (1 = averaging off). */
+    getSpectrumAveraging() { return this._specAvgWeight; }
+
+    /**
+     * Set the spatial-smoothing half-window in bins (stage 2). Higher = flatter
+     * noise floor but blunter peaks; 0 passes through (no spatial smoothing).
+     * Clamped to [0, MAX_SPEC_SMOOTH]. Exposed for live tuning via the console,
+     * e.g. window.spectrumPanelA.setSpectrumSmooth(4).
+     * @param {number} radius
+     */
+    setSpectrumSmooth(radius) {
+        const r = parseInt(radius, 10);
+        if (!isFinite(r) || r < 0) return;
+        this._specSmoothRadius = Math.min(SpectrumPanel.MAX_SPEC_SMOOTH, r);
+        this._saveSpectrumSmooth();
+        // Repaint from the held bins so the change is visible at once rather
+        // than on the next sweep - matters most when Hold is on, where there
+        // is no next sweep.
+        if (this._lastBins) this._render();
+    }
+
+    /** Returns the current spatial-smoothing half-window in bins. */
+    getSpectrumSmooth() { return this._specSmoothRadius; }
+
+    /**
+     * Spatial smoothing — a moving average of half-window _specSmoothRadius across
+     * adjacent bins, into a reused output buffer. Higher radius flattens the noise
+     * floor (removes bin-to-bin grass) at the cost of blunting narrow peaks; radius
+     * 0 passes through. This is the second of the two smoothing stages — temporal
+     * (_applyAveraging) runs first and calms flicker over time; this one flattens
+     * the instantaneous floor.
+     * @param {ArrayLike<number>} src  The temporally-averaged bins.
+     * @returns {ArrayLike<number>} The spatially-smoothed trace.
+     */
+    _spatialSmooth(src) {
+        const n = src.length;
+        const r = this._specSmoothRadius;
+        if (!n || r <= 0) return src;
+        let out = this._smoothOut;
+        if (!out || out.length !== n) out = this._smoothOut = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+            const lo = i - r < 0 ? 0 : i - r;
+            const hi = i + r >= n ? n - 1 : i + r;
+            let sum = 0;
+            for (let j = lo; j <= hi; j++) sum += src[j];
+            out[i] = sum / (hi - lo + 1);
+        }
+        return out;
+    }
+
+    // ── Public API ───────────────────────────────────────────────────────────
+
+    /** Update the spectrum/waterfall with a new frame of FFT data. */
+    update({ bins, centreHz, spanHz, rfOrdered = false }) {
+        // Hold mode (set via setHold(true)) freezes the display at the
+        // last received frame so the operator can inspect a fleeting signal
+        // without it scrolling off the waterfall. Incoming frames are
+        // dropped — _lastBins / _lastCentreHz / _lastSpanHz are not
+        // updated so a forced re-render shows the frozen frame.
+        if (this._hold) return;
+
+        // The radio's 9 MHz IF tap is spectrally inverted with respect to RF:
+        // bin 0 — the most negative IF frequency — carries the HIGHEST radio
+        // frequency in the span. Flipping the frame here, once, is what lets
+        // every mapping below stay in its natural form. After the flip the
+        // panel's own leftHz + ((i + 0.5) / N) * span expands to exactly the
+        // measured vfo + hzPerBin * (i - (N-1)/2), so the axis, band plan,
+        // DX spots, crosshair and click-to-tune all become correct without
+        // touching any of them.
+        //
+        // Measured on the FTdx101MP on 2026-09-03 by stepping VFO A a known
+        // amount and cross-correlating the whole spectrum before and after: a
+        // +10 kHz step moved the trace +41 bins where correct behaviour needs
+        // -41. Confirmed at 1.13 MHz and again at 14.118 MHz — either side of
+        // the 9 MHz IF — so the sign does not change with the LO injection
+        // side and one flip covers every band. No other Yaesu model has been
+        // measured; if one turns out not to be inverted, this is where the
+        // per-model switch belongs.
+        //
+        // rfOrdered frames are the exception: the FT-710's own scope, read
+        // from the radio over USB, arrives LOW to HIGH frequency already, and
+        // centred on the dial rather than on an IF (see Ft710ScopeFrame.cs).
+        this._rfOrdered = !!rfOrdered;
+        bins = this._rfOrdered
+            ? Array.prototype.slice.call(bins)
+            : Array.prototype.slice.call(bins).reverse();
+
+        // A span change (span buttons restart the worker at a new sample rate) or
+        // a bin-count change means the previous band/scale no longer applies —
+        // snap the auto-floor so it seeds fresh instead of drifting across.
+        // Named for what it actually detects: a frequency change never reaches
+        // here (the worker keeps streaming the same span), and is handled in
+        // setVfoFrequency instead.
+        const scaleChanged = (spanHz !== this._lastSpanHz)
+            || (this._lastBins && this._lastBins.length !== bins.length);
+        if (scaleChanged) { this._autoFloorDb = null; this._avgBins = null; }
+
+        // Two-stage smoothing (ported from IWC). Stage 1 — temporal EMA: averages
+        // each bin across frames, removing grass without blunting peaks. Stage 2 —
+        // spatial moving average: knocks off any residual single-bin spikes. Doing
+        // temporal first (and keeping spatial light) is what gives IWC's clean floor
+        // with sharp peaks on the noisier SDR FFT. The trace, waterfall and crosshair
+        // readout all consume this same calmed data.
+        const averaged     = this._applyAveraging(bins);
+        this._lastBins     = this._spatialSmooth(averaged);
+        this._lastCentreHz = centreHz;
+        this._lastSpanHz   = spanHz;
+
+        // Auto noise-floor: recompute the vertical window from the tracked floor.
+        this._updateAutoFloor(this._lastBins);
+
+        // Only scroll the waterfall every Nth frame per _waterfallSpeed;
+        // the spectrum trace above it still redraws every frame regardless.
+        const shouldScrollWaterfall = (this._waterfallFrameCounter % this._waterfallSpeed) === 0;
+        this._waterfallFrameCounter++;
+
+        this._render(shouldScrollWaterfall);
+    }
+
+    /**
+     * Freeze (true) or resume (false) the display. While held the spectrum
+     * and waterfall stop scrolling and the panel ignores incoming SDR frames.
+     * Click-to-tune, wheel-tune, and cursor tracking still work — only
+     * automatic updates are paused.
+     * @param {boolean} hold
+     */
+    setHold(hold) {
+        this._hold = !!hold;
+        // Force a re-render so the "Held" overlay (if any) shows immediately.
+        if (this._lastBins) this._render();
+    }
+
+    /** Returns the current hold state (true = frozen, false = streaming live). */
+    isHeld() { return !!this._hold; }
+
+    /** Store the latest error detail string for display alongside status overlays. */
+    setError(detail) {
+        this._errorDetail = detail;
+        // The detail can arrive just after the status it explains; redraw so
+        // it is not left off until the next status heartbeat.
+        if (this._status === 'noft4222' || this._status === 'scopeplacement' || this._status === 'disconnected') {
+            this._drawStatusOverlay(this._status);
+        }
+    }
+
+    /**
+     * Update the DX cluster connection status. Drives the small badge in
+     * the top-right of the spectrum canvas.
+     * @param {string} status  "off" | "connecting" | "connected" | "disconnected"
+     * @param {string} detail  Optional human-readable detail / error message
+     */
+    setDxStatus(status, detail) {
+        this._dxStatus = status || 'off';
+        this._dxDetail = detail || '';
+        if (this._lastBins) this._render();
+    }
+
+    /**
+     * Provide the region-specific band plan so the spectrum can draw marker
+     * ticks at the standard CW / FT8 / SSB / RTTY activity centres. The data
+     * is the region subset of BAND_PLANS (e.g. BAND_PLANS.Region1), keyed by
+     * band name → { CW: {freq, label}, FT8: ..., ... }.
+     */
+    setBandPlan(planForRegion) {
+        this._bandPlan = planForRegion || null;
+        if (this._lastBins) this._render();
+    }
+
+    /**
+     * Provide region-specific band edges (lo/hi frequency limits per band).
+     * Used to draw the red dashed guard-rail lines on the spectrum.
+     * Falls back to the class-static SpectrumPanel.BAND_EDGES (worldwide
+     * broadest envelope) if not set.
+     * @param {Array<{name:string, lo:number, hi:number}>} edgesForRegion
+     */
+    setBandEdges(edgesForRegion) {
+        this._bandEdges = Array.isArray(edgesForRegion) ? edgesForRegion : null;
+        if (this._lastBins) this._render();
+    }
+
+    /**
+     * Force a re-render with the existing spectrum/state — used when an
+     * external setting (e.g. the "only watched" filter toggle in the DX Watch
+     * popup) changes and we want the overlay to update immediately rather
+     * than wait for the next FFT frame.
+     */
+    redraw() {
+        if (this._lastBins) this._render();
+    }
+
+    /** Replace the full DX spots array (used on page load when fetching /api/dxcluster/spots). */
+    setSpots(spots) {
+        this._spots = Array.isArray(spots) ? spots.slice() : [];
+        if (this._lastBins) this._render();
+    }
+
+    /** Add or update a single spot — used when SignalR pushes a new DxSpot. */
+    addSpot(spot) {
+        if (!spot || !spot.callsign) return;
+        // De-duplicate by callsign + frequency: a re-spot replaces the older entry.
+        const i = this._spots.findIndex(s =>
+            s.callsign === spot.callsign && Math.abs(s.frequencyHz - spot.frequencyHz) < 100);
+        if (i >= 0) this._spots[i] = spot;
+        else        this._spots.unshift(spot);
+        // Cap memory: don't accumulate more than 500 spots client-side.
+        if (this._spots.length > 500) this._spots.length = 500;
+        if (this._lastBins) this._render();
+    }
+
+    /** Receive the current VFO frequency so the axis labels stay accurate. */
+    setVfoFrequency(hz) {
+        // A large jump (band change) shifts what the IF carries; snap the
+        // auto-floor to the new band's noise rather than drifting to it. Small
+        // tuning steps stay below the threshold so the scale doesn't twitch.
+        if (Math.abs(hz - this._lastFloorVfoHz) >= SpectrumPanel.AUTOFLOOR_SNAP_JUMP_HZ) {
+            this.snapAutoFloor();
+            this._lastFloorVfoHz = hz;
+        }
+        // The SDR watches a fixed IF, so changing the VFO slides the whole
+        // spectrum across the bins — bin i no longer holds the frequency it held
+        // on the previous frame. The temporal EMA has to be reseeded or it drags
+        // the old band's trace across the new one for its entire time constant,
+        // which is how a peak can appear to fade out just after it is tuned.
+        // The threshold is half a bin so it scales with span rather than being a
+        // fixed number, and dial movements too small to shift content between
+        // bins keep their smoothing.
+        const binCount = this._lastBins ? this._lastBins.length : 0;
+        if (binCount > 0 && this._lastSpanHz > 0
+            && Math.abs(hz - this._vfoHz) >= this._lastSpanHz / binCount / 2) {
+            this._avgBins = null;
+        }
+
+        this._vfoHz = hz;
+        if (this._lastBins) this._render();
+        // Keep data-reading on the canvas current so the hover live region can announce it.
+        const canvas = document.getElementById(this._canvasId);
+        if (canvas) canvas.dataset.reading = 'centred on ' + (hz / 1e6).toFixed(6) + ' MHz';
+    }
+
+    /**
+     * The radio's CW sidetone pitch in Hz — what the operator is listening
+     * FOR. Sourced from the radio's own KP setting (RadioStateService.CwPitch,
+     * 300 + code x 10), so it follows the Pitch slider on the CW panel rather
+     * than assuming a value.
+     * @param {number} hz
+     */
+    setCwPitchHz(hz) {
+        const v = Number(hz);
+        if (Number.isFinite(v) && v > 0) this._cwPitchHz = v;
+    }
+
+    /**
+     * This VFO's current mode, e.g. "CW-U" / "CW-L" / "USB". Used only to
+     * decide the click-to-tune CW offset and its sign.
+     * @param {string} mode
+     */
+    setMode(mode) {
+        this._modeName = typeof mode === 'string' ? mode : '';
+    }
+
+    /**
+     * The radio's RTTY tone settings, read from its extended menu by
+     * GET /api/cat/rtty. Only the values actually supplied are taken, so a
+     * partial answer leaves the rest at the Yaesu defaults. The click offset
+     * needs only shift and polarity (see _tuneOffsetHz); markHz is used by the
+     * passband overlay (see _passbandRfRange). None of it applies in DATA-L,
+     * where the tones are the software's, not the radio's.
+     * @param {{markHz?: number, shiftHz?: number, polarityRev?: boolean}} tones
+     */
+    setRttyTones(tones) {
+        if (!tones) return;
+        const mark = Number(tones.markHz);
+        if (Number.isFinite(mark) && mark > 0) this._rttyMarkHz = mark;
+        const shift = Number(tones.shiftHz);
+        if (Number.isFinite(shift) && shift > 0) this._rttyShiftHz = shift;
+        if (typeof tones.polarityRev === 'boolean') this._rttyPolarityRev = tones.polarityRev;
+    }
+
+    /**
+     * Supply the current IF passband, in AUDIO Hz, as {lo, hi}. The provider is
+     * called on every repaint so it always reflects the live filter settings.
+     * Pass null to remove it.
+     * @param {(() => ({lo: number, hi: number} | null)) | null} provider
+     */
+    setPassbandProvider(provider) {
+        this._passbandProvider = typeof provider === 'function' ? provider : null;
+    }
+
+    /**
+     * Supply the axis correction for this radio and VFO, in Hz: how far the
+     * true RF of a signal is above the frequency the naive dial-at-centre
+     * axis would label it with. Called with the SDR's actual centre frequency
+     * on every mapping so it always reflects the live filter settings. Pass
+     * null to remove it.
+     * @param {((sdrCentreHz: number) => number | null) | null} provider
+     */
+    setAxisOffsetProvider(provider) {
+        this._axisOffsetProvider = typeof provider === 'function' ? provider : null;
+    }
+
+    /**
+     * The current axis correction in Hz — see setAxisOffsetProvider. Zero
+     * without a provider, and zero if the provider throws or answers with
+     * anything that is not a finite number: a bad correction must degrade to
+     * the old picture, never take the panel down.
+     * @returns {number}
+     */
+    _axisOffsetHz() {
+        // The radio's own scope is centred where the server says (the dial
+        // when the frame was sent), with no IF slide to correct for.
+        if (this._rfOrdered) {
+            const v = this._lastCentreHz - this._vfoHz;
+            return Number.isFinite(v) ? v : 0;
+        }
+        if (!this._axisOffsetProvider) return 0;
+        try {
+            const v = this._axisOffsetProvider(this._lastCentreHz);
+            return Number.isFinite(v) ? v : 0;
+        } catch {
+            return 0;
+        }
+    }
+
+    /**
+     * The RF frequency at the left edge of the canvas. Every Hz-to-pixel
+     * mapping in this panel goes through here so the axis correction is
+     * applied exactly once, in one place. The centre bin is the dial PLUS the
+     * correction; the dial itself is drawn wherever that puts it.
+     * @param {number} [spanHz]  defaults to the span of the last frame
+     * @returns {number}
+     */
+    _axisLeftHz(spanHz = this._lastSpanHz) {
+        return this._vfoHz + this._axisOffsetHz() - spanHz / 2;
+    }
+
+    /**
+     * Whether this mode puts audio BELOW the dial frequency in RF terms, i.e.
+     * the audio tone moves opposite to the dial. Same rule and the same mode
+     * names as CwReaderService.IsLowerSideband, extended to the other
+     * lower-sideband modes the radios report.
+     * @param {string} mode
+     */
+    _isLowerSideband(mode) {
+        return mode === 'LSB'    || mode === 'CW-L'  || mode === 'CW-R'
+            || mode === 'DATA-L' || mode === 'RTTY-L'
+            || mode === 'FSK'    || mode === 'PKT-L';
+    }
+
+    /**
+     * Whether this mode is centred on the dial rather than offset to one side
+     * of it — AM and every FM variant, where the carrier sits in the middle of
+     * the passband and clicking straight onto a signal is already correct.
+     * @param {string} mode
+     */
+    _isCarrierCentred(mode) {
+        return mode === 'AM' || mode === 'AM-N' || mode.includes('FM');
+    }
+
+    /**
+     * How far, and which way, the VFO must be moved off a clicked signal for
+     * the operator to actually hear or decode it, in Hz. Zero in the modes
+     * where the dial already sits on the signal.
+     *
+     * CW: zero. On the FTdx101 the dial in CW IS the frequency of the signal
+     * you hear at the sidetone pitch -- the receiver's BFO is already a pitch
+     * away from the dial, on the CW-U or CW-L side. Measured on 2026-09-11
+     * against Radio Scotland's 810 kHz carrier: the tone is RF - dial + pitch
+     * on CW-U, and the axis offsets that fall out of that model on both
+     * receivers are the manual's IF OUT frequencies plus a per-dongle ppm
+     * residual (60 Hz and 16 Hz), which they could not be if the dial were a
+     * pitch off the signal. So once the axis is corrected (see
+     * setAxisOffsetProvider), tuning the dial straight onto the clicked
+     * frequency is exactly right.
+     *
+     * The previous -pitch here (48e6866, 2026-09-10) was a misreading of the
+     * same symptom. Clicking a peak set the dial to the DISPLAYED frequency,
+     * which on the uncorrected axis was 5-7 kHz from the true one: silence,
+     * and the peak "vanished" because a dial at the displayed frequency puts
+     * that peak on the centre bin, where the DC blocker cancels it. That
+     * looked like zero beat and was diagnosed as such. The pitch offset moved
+     * the dial 700 Hz further and the peak 700 Hz off the notch, and left the
+     * signal just as inaudible; it was never confirmed by ear.
+     *
+     * RTTY-L / RTTY-U: like CW, the dial IS the signal -- the mark tone.
+     * Measured on the FTdx101MP on 2026-09-23 against Radio Scotland's 810 kHz
+     * carrier: in RTTY-L a dial of 810.000 gives a steady tone and 812.210
+     * gives nothing. This used to add the whole mark frequency (+2210 Hz),
+     * read from the manual's "align the peak with the mark and shift markers"
+     * as if the dial were the suppressed carrier; that put every clicked RTTY
+     * signal 2.2 kHz outside the 500 Hz RTTY filter, in silence. All that is
+     * left is half the shift: the eye clicks the MIDPOINT of the two-tone
+     * blob, and the dial belongs on mark, which POLARITY-RX NOR puts above
+     * space in RF (REV below). Stepping the RTTY-L dial across the same
+     * carrier showed it is lower sideband about mark: the carrier at the dial
+     * comes out at 2125 Hz audio and 50 Hz lower in RF comes out 50 Hz higher,
+     * so a 2295 Hz space tone is 170 Hz below mark in RF. RTTY-U, stepped
+     * across the same carrier on 2026-09-24 (#178), is upper sideband about
+     * mark + shift: the carrier at the dial comes out at 2295 Hz and 200 Hz
+     * higher in RF at 2495. So the two tones sit at dial - 170 and dial in
+     * RTTY-U too, and the same +85 lands them. Only POLARITY-RX NOR was
+     * measured.
+     *
+     * DATA-L is different: it is plain lower sideband with the dial on the
+     * suppressed carrier, and on HF it is how AFSK RTTY is run -- the software
+     * makes the tones (discussion #169: Bruce VK2RT runs all his RTTY this
+     * way). So there the dial goes above the clicked midpoint by the audio
+     * midpoint of the software's tones, which are the Mark / Shift / Rev set
+     * in the RTTY tuner: 2210 Hz for the 2125 / 170 default, 1500 Hz for the
+     * 1415 Hz mark Bruce actually runs, which sits the pair in the middle of
+     * the SSB passband. Read at click time, so a change in the tuner applies
+     * to the next click. That is deliberately NOT the radio's RTTY MARK /
+     * SHIFT / POLARITY menus: in DATA-L the software makes the tones and
+     * those menus play no part. DATA-U stays at zero -- that is FT8 and friends, where
+     * tuning the dial onto the click is the convention.
+     *
+     * @param {string} mode
+     * @returns {number} Hz to add to the clicked frequency.
+     */
+    _tuneOffsetHz(mode) {
+        if (mode === 'RTTY-L' || mode === 'RTTY-U') {
+            // Dial on mark; the click was on the midpoint (see above).
+            const half = this._rttyShiftHz / 2;
+            return this._rttyPolarityRev ? -half : half;
+        }
+        if (mode === 'DATA-L') {
+            return afskMidpointAudioHz(loadRttySettings());
+        }
+
+        // CW needs none (see above). SSB, the DATA modes, AM and FM are left
+        // alone deliberately: the dial is still offset from the signal in the
+        // sideband modes, but the passband is wide enough that the operator
+        // compensates by eye -- and every other panadapter tunes the dial to
+        // the clicked frequency, so silently changing it would break a
+        // convention rather than fix a bug. AM and FM genuinely need no
+        // offset: the carrier is centred.
+        return 0;
+    }
+
+    /**
+     * Respond to SDR lifecycle state changes.
+     * @param {string} status  One of: "unconfigured" | "connecting" | "streaming"
+     *                                 | "disconnected" | "nodll"
+     */
+    setStatus(status) {
+        this._status = status;
+
+        const container = document.getElementById(this._containerId);
+        if (!container) return;
+
+        if (status === 'unconfigured') {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = '';
+        this._drawStatusOverlay(status);
+    }
+
+    // ── Initialisation ───────────────────────────────────────────────────────
+
+    _init() {
+        const container = document.getElementById(this._containerId);
+        if (container) container.style.display = 'none';   // hidden until streaming
+
+        const canvas = document.getElementById(this._canvasId);
+        if (!canvas) return;
+
+        // Size the canvas to match its CSS layout width.
+        this._sizeCanvas(canvas);
+
+        // Rebuild waterfall buffer whenever the canvas is resized. This fires
+        // for height changes as readily as width ones, which is the whole
+        // mechanism behind the resizable panel — every route to a new height
+        // (the grip, the arrow keys, the preset box, the window getting
+        // wider) lands here and everything downstream follows.
+        this._resizeObserver = new ResizeObserver(() => {
+            this._sizeCanvas(canvas);
+            this._waterfallData = null;  // force rebuild on next frame
+            if (this._lastBins) this._render();
+            this._queueHeightSave();
+            this._syncGripAria();
+        });
+        this._resizeObserver.observe(canvas.parentElement ?? canvas);
+
+        // Tune VFO A to the clicked frequency.
+        canvas.addEventListener('click', (e) => this._onCanvasClick(e));
+
+        // Mouse-wheel tunes this VFO up/down by the current tuning step.
+        // { passive: false } required so preventDefault() suppresses page scroll.
+        canvas.addEventListener('wheel', (e) => this._onCanvasWheel(e), { passive: false });
+
+        // Right-click picks the step size. The browser's own context menu is
+        // no use over a canvas, and this is the only place the wheel step is
+        // discoverable without hunting the DSP bar.
+        canvas.addEventListener('contextmenu', (e) => this._onCanvasContextMenu(e));
+
+        // Splitter drag — mousedown on the handle starts a drag; subsequent
+        // mousemove updates while the button is held are tracked on window
+        // so the drag continues even if the cursor leaves the canvas.
+        canvas.addEventListener('mousedown', (e) => {
+            const y = this._canvasYFromEvent(e, canvas);
+            if (this._isOnSplitter(y, canvas.height)) {
+                this._splitterDragging = true;
+                e.preventDefault();
+                if (this._lastBins) this._render();
+                return;
+            }
+            this._beginTuneDrag(e);
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (this._tuneDrag) { this._moveTuneDrag(e); return; }
+            if (!this._splitterDragging) return;
+            const c = document.getElementById(this._canvasId);
+            if (!c) return;
+            const y = this._canvasYFromEvent(e, c);
+            const ratio = Math.max(0.15, Math.min(0.85, y / c.height));
+            this._splitRatio = ratio;
+            if (this._lastBins) this._render();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (this._tuneDrag) { this._endTuneDrag(); return; }
+            if (!this._splitterDragging) return;
+            this._splitterDragging = false;
+            this._saveSplitRatio();
+            if (this._lastBins) this._render();
+        });
+
+        // Crosshair tracking + splitter-hover cursor change.
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            this._crosshairX = (e.clientX - rect.left) * (canvas.width  / rect.width);
+            this._crosshairY = (e.clientY - rect.top)  * (canvas.height / rect.height);
+
+            // Swap cursor to row-resize when over the splitter so the
+            // affordance is obvious before the user tries to drag.
+            canvas.style.cursor = this._tuneDrag?.moved
+                ? 'grabbing'
+                : this._isOnSplitter(this._crosshairY, canvas.height)
+                    ? 'row-resize'
+                    : 'crosshair';
+
+            if (this._lastBins) this._render();
+            // Announce cursor frequency to screen readers via a live region (debounced to 1 s).
+            if (this._lastSpanHz > 0 && this._vfoHz > 0) {
+                clearTimeout(this._announceTimer);
+                this._announceTimer = setTimeout(() => {
+                    const canvas2 = document.getElementById(this._canvasId);
+                    if (!canvas2) return;
+                    const W = canvas2.width;
+                    const leftHz = this._axisLeftHz();
+                    const cx = this._crosshairX;
+                    if (cx == null) return;
+                    const freqHz = leftHz + (cx / W) * this._lastSpanHz;
+                    const freqLabel = (freqHz / 1e6).toFixed(6) + ' MHz';
+                    this._announceToScreenReader('Spectrum cursor at ' + freqLabel);
+                }, 1000);
+            }
+        });
+        canvas.addEventListener('mouseleave', () => {
+            this._crosshairX = null;
+            this._crosshairY = null;
+            clearTimeout(this._announceTimer);
+            if (this._lastBins) this._render();
+        });
+
+        canvas.style.cursor = 'crosshair';
+    }
+
+    // Convert a mouse event's clientY to internal-canvas pixel coordinates.
+    _canvasYFromEvent(e, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        return (e.clientY - rect.top) * (canvas.height / rect.height);
+    }
+
+    // Hit test for the splitter — ±6 internal pixels of the boundary.
+    _isOnSplitter(canvasY, canvasH) {
+        const splitY = Math.floor(canvasH * this._splitRatio);
+        return Math.abs(canvasY - splitY) <= 6;
+    }
+
+    // ── Drag to tune ─────────────────────────────────────────────────────────
+    //
+    // Grab the spectrum and slide it: the signals follow the pointer, the way
+    // other SDR programs do it, so dragging right tunes DOWN (Bruce VK2RT,
+    // 2026-10-01). The target is always worked out from where the drag
+    // started, never from the dial the radio has echoed back since, so the
+    // spectrum recentring under the pointer cannot make the drag run away.
+    // A press that moves less than TUNE_DRAG_DEADZONE_PX is still a click.
+    // A drag never changes mode; a click does, from the band plan.
+
+    _beginTuneDrag(e) {
+        if (e.button !== 0 || e.shiftKey) return;
+        if (!this._lastBins || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+        this._tuneDrag = {
+            startClientX: e.clientX,
+            startHz:      this._vfoHz,
+            spanHz:       this._lastSpanHz,
+            moved:        false,
+            pendingHz:    null,
+            sendTimer:    null,
+        };
+    }
+
+    _moveTuneDrag(e) {
+        const d = this._tuneDrag;
+        const canvas = document.getElementById(this._canvasId);
+        if (!canvas) return;
+        const dxCss = e.clientX - d.startClientX;
+        if (!d.moved && Math.abs(dxCss) < TUNE_DRAG_DEADZONE_PX) return;
+        if (!d.moved) {
+            d.moved = true;
+            canvas.style.cursor = 'grabbing';
+            e.preventDefault();
+        }
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const hz = Math.round((d.startHz - (dxCss / rect.width) * d.spanHz) / 10) * 10;
+        d.pendingHz = Math.max(30_000, Math.min(75_000_000, hz));
+        // At most one CAT write per TUNE_DRAG_SEND_MS; the last one wins.
+        if (!d.sendTimer) {
+            d.sendTimer = setTimeout(() => {
+                d.sendTimer = null;
+                this._sendTuneDrag(d);
+            }, TUNE_DRAG_SEND_MS);
+        }
+    }
+
+    _endTuneDrag() {
+        const d = this._tuneDrag;
+        this._tuneDrag = null;
+        if (!d.moved) return;   // a plain click; let the click handler tune
+        clearTimeout(d.sendTimer);
+        d.sendTimer = null;
+        this._sendTuneDrag(d);
+        // The browser still fires click after mouseup at the drop point. It
+        // fires before any timer, so the flag cannot outlive this mouseup and
+        // swallow a later real click when the drop was off the canvas.
+        this._suppressNextClick = true;
+        setTimeout(() => { this._suppressNextClick = false; }, 0);
+        const canvas = document.getElementById(this._canvasId);
+        if (canvas) canvas.style.cursor = 'crosshair';
+    }
+
+    _sendTuneDrag(d) {
+        if (d.pendingHz == null) return;
+        const hz = d.pendingHz;
+        d.pendingHz = null;
+        fetch(`/api/cat/frequency/${this._vfoLower}`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ frequencyHz: hz }),
+        }).catch(() => {});
+    }
+
+    _onCanvasClick(e) {
+        if (this._suppressNextClick) { this._suppressNextClick = false; return; }
+        if (!this._lastBins || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+
+        const canvas = document.getElementById(this._canvasId);
+        // Clicks on the splitter handle are for resizing, not tuning.
+        if (this._isOnSplitter(this._canvasYFromEvent(e, canvas), canvas.height)) return;
+
+        const rect   = canvas.getBoundingClientRect();
+        const x      = e.clientX - rect.left;
+        const W      = canvas.width;
+
+        // Click-to-tune is active across the whole panel — both the live
+        // spectrum (top ~45%) and the waterfall (bottom ~55%). Clicking a
+        // signal trail in the waterfall QSYs to that column's frequency.
+
+        // Convert canvas-relative x (CSS pixels) to canvas-internal pixels.
+        const canvasX = x * (W / rect.width);
+        const leftHz  = this._axisLeftHz();
+        const clickHz = Math.round(leftHz + (canvasX / W) * this._lastSpanHz);
+
+        // Shift+click → drop / toggle a persistent cursor at the click freq
+        // instead of tuning. The operator can mark a station to come back to
+        // while tuning around with normal clicks.
+        if (e.shiftKey) {
+            // If shift-click lands within 8 internal-pixels of the existing
+            // pinned cursor, treat that as "remove the cursor". Otherwise
+            // (re-)pin at the click frequency.
+            if (this._pinnedCursorHz != null) {
+                const px = ((this._pinnedCursorHz - leftHz) / this._lastSpanHz) * W;
+                if (Math.abs(px - canvasX) <= 8) {
+                    this._pinnedCursorHz = null;
+                    if (this._lastBins) this._render();
+                    return;
+                }
+            }
+            this._pinnedCursorHz = clickHz;
+            if (this._lastBins) this._render();
+            return;
+        }
+
+        // If the click is within 8 internal-pixels of a spot's marker, snap
+        // to that spot's exact frequency. Otherwise tune to the click x.
+        let targetHz = clickHz;
+        for (const s of this._spots) {
+            const sx = ((s.frequencyHz - leftHz) / this._lastSpanHz) * W;
+            if (Math.abs(sx - canvasX) <= 8) {
+                targetHz = s.frequencyHz;
+                break;
+            }
+        }
+
+        // The band plan is asked about the SIGNAL's frequency, not the corrected
+        // dial frequency, so the CW offset below can never shift the lookup
+        // across a segment boundary.
+        //
+        // Follow the click with a best-guess mode change. Most operators expect
+        // jumping from 14.074 (FT8) to 14.284 (SSB) to also flip the radio to
+        // USB rather than leave it stuck in DATA-U. window.setMode is defined
+        // by site.js and uses the same CAT path the mode buttons use.
+        //
+        // autoModeForHz returns null when the operator has turned that
+        // off (Settings > Band Plan, discussion #169). Everything below
+        // already handles null, because it is also what an out-of-band
+        // click returns: no setMode call, and the tune offset falls back
+        // to the radio's current mode -- which is the point. Off, a click
+        // on a RTTY signal above 14.100 keeps his RTTY tone offset instead
+        // of taking the band plan's USB and tuning zero-offset onto it.
+        const targetMode = autoModeForHz(targetHz);
+
+        // In CW and RTTY, tune the tone offset away from the signal instead of
+        // onto it. The mode this click is about to select wins over the mode
+        // the radio is in, so clicking into the CW segment from USB is
+        // corrected on the same click rather than the one after it.
+        const tuneHz = targetHz + this._tuneOffsetHz(targetMode || this._modeName);
+
+        fetch(`/api/cat/frequency/${this._vfoLower}`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ frequencyHz: tuneHz }),
+        }).catch(() => { /* ignore network errors */ });
+
+        if (targetMode && window.setMode) {
+            try { window.setMode(this._vfo, targetMode); } catch { /* ignore */ }
+        }
+
+        // Snap the live crosshair to where the clicked signal will sit once the
+        // spectrum recentres on the new VFO. Without this the user's mouse
+        // hasn't moved but the frequency under it has shifted left/right, so
+        // the crosshair label would briefly show the wrong frequency until the
+        // next mousemove. That landing spot is the new dial's position on the
+        // corrected axis (the centre bin is dial + correction, so the dial is
+        // left of centre by the correction) plus whatever tuning offset the
+        // mode added — so derive it from the tune rather than assuming the
+        // middle. The next real mousemove resets _crosshairX to wherever the
+        // mouse actually is, so this is a one-shot visual fixup, not
+        // persistent.
+        this._crosshairX = Math.floor(
+            W / 2 + ((targetHz - tuneHz - this._axisOffsetHz()) / this._lastSpanHz) * W);
+    }
+
+    _onCanvasWheel(e) {
+        e.preventDefault();   // stop the page from scrolling
+        if (!this._lastBins || this._vfoHz <= 0) return;
+
+        // One tuning step per notch — accumulate on _wheelTargetHz so rapid
+        // scrolling compounds correctly before the radio confirms the new
+        // frequency. The step is whatever this VFO is currently set to (1 kHz
+        // until the operator changes it), shared with the frequency display's
+        // selected digit and the voice nudge step — see ui/tuning-step.js.
+        const step = tuningStep.get(this._vfo);
+        const direction = e.deltaY > 0 ? -1 : 1;   // scroll up = higher freq
+        this._wheelTargetHz = Math.max(30_000, Math.min(75_000_000,
+            (this._wheelTargetHz ?? this._vfoHz) + direction * step));
+
+        // Debounce: send once scrolling pauses for 60 ms.
+        clearTimeout(this._wheelTimer);
+        this._wheelTimer = setTimeout(() => {
+            const hz = this._wheelTargetHz;
+            this._wheelTargetHz = null;
+            fetch(`/api/cat/frequency/${this._vfoLower}`, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ frequencyHz: hz }),
+            }).catch(() => {});
+        }, 60);
+    }
+
+    // ── Step-size context menu ───────────────────────────────────────────────
+
+    // Right-click anywhere on the spectrum to pick how far one wheel notch
+    // moves the dial. Built on demand rather than rendered into the page: two
+    // panels would otherwise mean two hidden menus in the DOM for a control
+    // most sessions never open.
+    _onCanvasContextMenu(e) {
+        e.preventDefault();
+        this._closeStepMenu();
+
+        const current = tuningStep.get(this._vfo);
+
+        const menu = document.createElement('div');
+        menu.className = 'spectrum-step-menu';
+        menu.setAttribute('role', 'menu');
+        menu.setAttribute('aria-label', `VFO ${this._vfo} tuning step`);
+
+        const heading = document.createElement('div');
+        heading.className = 'spectrum-step-menu-title';
+        heading.textContent = `VFO ${this._vfo} step`;
+        menu.appendChild(heading);
+
+        const items = [];
+        for (const hz of tuningStep.steps) {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'spectrum-step-menu-item' + (hz === current ? ' active' : '');
+            item.setAttribute('role', 'menuitemradio');
+            item.setAttribute('aria-checked', hz === current ? 'true' : 'false');
+            item.textContent = formatTuningStep(hz);
+            item.addEventListener('click', () => {
+                tuningStep.set(this._vfo, hz);
+                this._closeStepMenu();
+            });
+            menu.appendChild(item);
+            items.push(item);
+        }
+
+        // Positioned against the viewport, then nudged back inside it once the
+        // real size is known — a right-click near the bottom of a short window
+        // would otherwise open a menu that runs off the screen.
+        menu.style.left = `${e.clientX}px`;
+        menu.style.top  = `${e.clientY}px`;
+        document.body.appendChild(menu);
+
+        const rect = menu.getBoundingClientRect();
+        if (rect.right  > window.innerWidth)  menu.style.left = `${Math.max(0, window.innerWidth  - rect.width  - 4)}px`;
+        if (rect.bottom > window.innerHeight) menu.style.top  = `${Math.max(0, window.innerHeight - rect.height - 4)}px`;
+
+        // Keyboard: the menu takes focus so Up/Down/Escape work for anyone who
+        // opened it with the context-menu key rather than a mouse.
+        const focusIndex = Math.max(0, tuningStep.steps.indexOf(current));
+        items[focusIndex]?.focus();
+
+        menu.addEventListener('keydown', (ev) => {
+            const here = items.indexOf(document.activeElement);
+            if (ev.key === 'Escape') { ev.preventDefault(); this._closeStepMenu(); this._focusCanvas(); }
+            else if (ev.key === 'ArrowDown') { ev.preventDefault(); items[(here + 1 + items.length) % items.length]?.focus(); }
+            else if (ev.key === 'ArrowUp')   { ev.preventDefault(); items[(here - 1 + items.length) % items.length]?.focus(); }
+            else if (ev.key === 'Home')      { ev.preventDefault(); items[0]?.focus(); }
+            else if (ev.key === 'End')       { ev.preventDefault(); items[items.length - 1]?.focus(); }
+        });
+
+        // Dismiss on the next click anywhere else. Registered on the next tick
+        // so the click that opened the menu doesn't immediately close it.
+        this._stepMenu = menu;
+        this._stepMenuDismiss = (ev) => {
+            if (!menu.contains(ev.target)) this._closeStepMenu();
+        };
+        setTimeout(() => {
+            document.addEventListener('mousedown', this._stepMenuDismiss);
+            document.addEventListener('contextmenu', this._stepMenuDismiss);
+        }, 0);
+    }
+
+    _closeStepMenu() {
+        if (this._stepMenuDismiss) {
+            document.removeEventListener('mousedown', this._stepMenuDismiss);
+            document.removeEventListener('contextmenu', this._stepMenuDismiss);
+            this._stepMenuDismiss = null;
+        }
+        this._stepMenu?.remove();
+        this._stepMenu = null;
+    }
+
+    _focusCanvas() {
+        document.getElementById(this._canvasId)?.focus?.();
+    }
+
+    _sizeCanvas(canvas) {
+        const parent = canvas.parentElement;
+        const w = parent ? parent.clientWidth || 800 : 800;
+
+        // Height follows the container, the same way the width always has, so
+        // the operator can make the panel taller by dragging it or by picking
+        // a size. A container with no height of its own falls back to the
+        // height this panel was fixed at before, so nothing that does not opt
+        // in changes at all.
+        const h = (parent && parent.clientHeight)
+                  || this._panelH
+                  || SpectrumPanel.DEFAULT_PANEL_H;
+
+        canvas.width  = w;
+        canvas.height = h;
+    }
+
+    // ── Rendering ────────────────────────────────────────────────────────────
+
+    // @param {boolean} scrollWaterfall  Whether to advance the waterfall by
+    //   one row this frame. Defaults to FALSE so the many cosmetic forced redraws
+    //   (crosshair on mousemove, cursor, hold, resize, Range change) repaint the
+    //   spectrum WITHOUT scrolling the waterfall — moving the mouse must not make
+    //   the waterfall march. Only update(), fed by a real FFT frame, passes true
+    //   (throttled by _waterfallSpeed). The !_waterfallData guard below still lets
+    //   the very first paint build the buffer regardless.
+    _render(scrollWaterfall = false) {
+        const canvas = document.getElementById(this._canvasId);
+        if (!canvas || !this._lastBins) return;
+
+        const ctx         = canvas.getContext('2d');
+        const W           = canvas.width;
+        const H           = canvas.height;
+        const specH       = Math.max(1, Math.floor(H * this._splitRatio));
+        const wfH         = Math.max(1, H - specH);
+        const bins        = this._lastBins;
+        const centreHz    = this._lastCentreHz;
+        const spanHz      = this._lastSpanHz;
+
+        this._drawSpectrum(ctx, bins, W, specH);
+        this._drawPassband(ctx, W, specH);
+        this._drawFrequencyAxis(ctx, bins, W, specH, centreHz, spanHz);
+        this._drawBandEdges(ctx, W, specH);
+        this._drawBandMarkers(ctx, W, specH);
+        this._drawSpots(ctx, W, specH);
+        this._drawDxBadge(ctx, W);
+        if (scrollWaterfall || !this._waterfallData) this._scrollWaterfall(ctx, bins, W, specH, wfH);
+        this._drawPinnedCursor(ctx, W, specH);
+        this._drawCrosshair(ctx, W, specH, spanHz);
+        this._drawHoldOverlay(ctx, W, specH);
+        this._drawSplitterHandle(ctx, W, specH);
+    }
+
+    // Horizontal handle the user can grab to resize the spectrum vs waterfall.
+    // Drawn on top of everything so it stays visible against the waterfall.
+    _drawSplitterHandle(ctx, W, specH) {
+        ctx.save();
+        ctx.fillStyle = this._splitterDragging ? 'rgba(0, 200, 255, 0.85)'
+                                                : 'rgba(120, 140, 160, 0.55)';
+        ctx.fillRect(0, specH - 1, W, 2);
+        // Centre grip indicator — two short bars so the affordance is obvious.
+        const gripW = 28, gripH = 2, cx = Math.floor(W / 2);
+        ctx.fillStyle = this._splitterDragging ? 'rgba(0, 200, 255, 1)'
+                                                : 'rgba(200, 210, 220, 0.85)';
+        ctx.fillRect(cx - gripW / 2,     specH - 3, gripW, gripH);
+        ctx.fillRect(cx - gripW / 2,     specH + 1, gripW, gripH);
+        ctx.restore();
+    }
+
+    // ── Persistent (pinned) cursor ───────────────────────────────────────────
+    //
+    // A "bookmark" cursor the operator dropped with Shift+click. Distinct
+    // visual from the live mouse crosshair: solid cyan vertical line plus a
+    // boxed frequency label so it stands out. Shift+click on or very near
+    // the existing cursor clears it.
+    _drawPinnedCursor(ctx, W, specH) {
+        if (this._pinnedCursorHz == null || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+        const leftHz = this._axisLeftHz();
+        const rightHz = leftHz + this._lastSpanHz;
+        if (this._pinnedCursorHz < leftHz || this._pinnedCursorHz > rightHz) return;
+
+        const x = ((this._pinnedCursorHz - leftHz) / this._lastSpanHz) * W;
+        // Through the helper, not a hardcoded 20: on a short panel the axis
+        // strip is not drawn at all, and the cursor has to reach the bottom
+        // of the zone rather than stopping 20px short of it.
+        const specTop = specH - SpectrumPanel.axisHeightFor(specH);
+
+        ctx.save();
+
+        // Solid cyan vertical line spanning the whole panel (spectrum + waterfall)
+        // so the marker is visible even when the operator is studying the waterfall.
+        ctx.strokeStyle = '#00d4ff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, specH);
+        ctx.stroke();
+
+        // Frequency label in a boxed background near the top of the spectrum.
+        const label = (this._pinnedCursorHz / 1e6).toFixed(6) + ' MHz';
+        ctx.font = 'bold 11px monospace';
+        const padX = 4, padY = 2;
+        const textWidth = ctx.measureText(label).width;
+        const boxW = textWidth + padX * 2;
+        const boxH = 16;
+        // Prefer the label to the right of the cursor; flip to left near the right edge.
+        const boxX = (x + boxW + 8 < W) ? x + 4 : x - boxW - 4;
+        const boxY = 24;
+
+        ctx.fillStyle = 'rgba(0, 60, 90, 0.9)';
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+        ctx.strokeStyle = '#00d4ff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, boxH - 1);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(label, boxX + padX, boxY + padY);
+
+        ctx.restore();
+    }
+
+    // ── Hold overlay ─────────────────────────────────────────────────────────
+    //
+    // When setHold(true) freezes the spectrum, paint a subtle banner so the
+    // operator sees the display isn't live. The status badge in the panel
+    // header also says "Hold" (yellow), and the canvas is intentionally
+    // not faded — operators want to study what's frozen, not look at
+    // greyed-out data.
+    _drawHoldOverlay(ctx, W, specH) {
+        if (!this._hold) return;
+        ctx.save();
+        ctx.font         = 'bold 12px sans-serif';
+        ctx.textAlign    = 'left';
+        ctx.textBaseline = 'top';
+        const label = 'HOLD';
+        const padX = 6, padY = 3;
+        const textWidth = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(200, 140, 0, 0.85)';
+        ctx.fillRect(4, 4, textWidth + padX * 2, 20);
+        ctx.fillStyle = '#000000';
+        ctx.fillText(label, 4 + padX, 4 + padY);
+        ctx.restore();
+    }
+
+    // ── Band-edge guard rails ────────────────────────────────────────────────
+    // Vertical red lines at the lower and upper edges of each amateur band
+    // visible in the current spectrum window. Makes it visually obvious if
+    // the operator tunes (deliberately or accidentally) outside the amateur
+    // allocation. Edges are the broadest amateur envelopes (worldwide), so a
+    // line at e.g. 7.300 MHz on 40m might be lenient in a Region 1 country
+    // where the band ends at 7.200 — but it's never wrong (no transmission
+    // is legal beyond these limits in any region).
+    // ── IF passband overlay ──────────────────────────────────────────────────
+    // Shades the slice of RF the receiver is actually listening to.
+    //
+    // This answers, visually, the question that click-to-tune answers
+    // arithmetically: where is the dial relative to the signal? In every
+    // product-detected mode the dial sits at the edge of the passband rather
+    // than in it, so "tune to the frequency I clicked" and "let me hear what I
+    // clicked" are different requests. With the band drawn, the operator can
+    // see the difference instead of having to know it -- and it makes the
+    // per-mode tuning offsets self-checking: if the offset is right, the
+    // signal ends up inside the shaded band.
+    //
+    // The edges come from the FilterScopePanel for this VFO via
+    // _passbandProvider, so the width tables, IF shift and roofing filter are
+    // all accounted for without a second copy of that logic living here.
+    _drawPassband(ctx, W, specH) {
+        if (!this._showPassband || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+
+        const range = this._passbandRfRange();
+        if (!range) return;
+
+        const leftHz = this._axisLeftHz();
+        const xOf    = hz => ((hz - leftHz) / this._lastSpanHz) * W;
+
+        let x0 = xOf(range.loHz);
+        let x1 = xOf(range.hiHz);
+        if (x1 < 0 || x0 > W) return;   // scrolled off the current span
+
+        // A 300 Hz CW filter on a 2 MHz span is a fifth of a pixel wide. Widen
+        // it to a visible sliver rather than letting the overlay quietly draw
+        // nothing at exactly the spans where finding the dial matters most.
+        if (x1 - x0 < 2) {
+            const centre = (x0 + x1) / 2;
+            x0 = centre - 1;
+            x1 = centre + 1;
+        }
+
+        // Clamp AFTER the width check so a partially visible passband still
+        // draws the edge that is on screen.
+        const cx0 = Math.max(0, x0);
+        const cx1 = Math.min(W, x1);
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 255, 140, 0.13)';
+        ctx.fillRect(cx0, 0, cx1 - cx0, specH - 2);
+
+        ctx.strokeStyle = 'rgba(60, 255, 160, 0.9)';
+        ctx.lineWidth   = 1;
+        ctx.beginPath();
+        for (const x of [x0, x1]) {
+            if (x < 0 || x > W) continue;
+            const px = Math.round(x) + 0.5;   // crisp 1px line
+            ctx.moveTo(px, 0);
+            ctx.lineTo(px, specH - 2);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /**
+     * Converts the audio passband from the provider into RF frequencies,
+     * applying this mode's sideband sense.
+     * @returns {{loHz: number, hiHz: number} | null}
+     */
+    _passbandRfRange() {
+        let pb = null;
+        try {
+            pb = this._passbandProvider ? this._passbandProvider() : null;
+        } catch (e) {
+            return null;   // a broken provider must not take the whole panel down
+        }
+        if (!pb || !Number.isFinite(pb.lo) || !Number.isFinite(pb.hi)) return null;
+        if (pb.hi <= pb.lo) return null;
+
+        const mode = (this._modeName || '').toUpperCase();
+
+        // AM and FM are detected around the carrier, so the passband straddles
+        // the dial. The filter scope plots one half of it on the audio axis,
+        // { lo: 0, hi: w/2 } -- IF SHIFT does not move the filter in these
+        // modes on the FTdx101MP (measured 2026-09-19, #166) -- so mirror
+        // that half-width about the dial. Kept general in lo so a provider
+        // that does offset the low edge is honoured.
+        if (this._isCarrierCentred(mode)) {
+            const half = pb.hi - pb.lo;
+            if (half <= 0) return null;
+            const centreHz = this._vfoHz + pb.lo;
+            return { loHz: centreHz - half, hiHz: centreHz + half };
+        }
+
+        // CW: the dial IS the signal frequency at the sidetone pitch (RF =
+        // dial + tone - pitch on CW-U, dial + pitch - tone on CW-L -- measured
+        // on the FTdx101MP, see _tuneOffsetHz), so the audio passband maps to
+        // RF through the pitch, not straight onto the dial. Without this the
+        // shaded band sits a whole pitch to one side of where the radio is
+        // actually listening.
+        if (mode === 'CW-U' || mode === 'CW-L' || mode === 'CW-R') {
+            const pitch = this._cwPitchHz;
+            return this._isLowerSideband(mode)
+                ? { loHz: this._vfoHz + pitch - pb.hi, hiHz: this._vfoHz + pitch - pb.lo }
+                : { loHz: this._vfoHz - pitch + pb.lo, hiHz: this._vfoHz - pitch + pb.hi };
+        }
+
+        // The radio's RTTY modes: the dial is on a tone, not the suppressed
+        // carrier, so audio maps to RF through that tone. Measured on the
+        // FTdx101MP against the 810 kHz carrier (2026-09-23/24, #178): RTTY-L
+        // is lower sideband about mark (the dial comes out at the mark
+        // frequency, 2125 Hz), RTTY-U upper sideband about mark + shift (the
+        // dial comes out at 2295 Hz). The filter is centred on 2210 Hz audio
+        // in both, so the shaded band straddles the two tones at dial - 170
+        // and dial. Treating RTTY-L as plain LSB drew it 1.2-1.8 kHz below.
+        if (mode === 'RTTY-L') {
+            const a = this._rttyMarkHz;
+            return { loHz: this._vfoHz + a - pb.hi, hiHz: this._vfoHz + a - pb.lo };
+        }
+        if (mode === 'RTTY-U') {
+            const a = this._rttyMarkHz + this._rttyShiftHz;
+            return { loHz: this._vfoHz - a + pb.lo, hiHz: this._vfoHz - a + pb.hi };
+        }
+
+        // Lower sideband inverts: the highest audio frequency is the LOWEST RF.
+        if (this._isLowerSideband(mode)) {
+            return { loHz: this._vfoHz - pb.hi, hiHz: this._vfoHz - pb.lo };
+        }
+
+        return { loHz: this._vfoHz + pb.lo, hiHz: this._vfoHz + pb.hi };
+    }
+
+    _drawBandEdges(ctx, W, specH) {
+        if (this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+        const leftHz  = this._axisLeftHz();
+        const rightHz = leftHz + this._lastSpanHz;
+
+        // Per-region edges (set by Index.cshtml from BAND_EDGES[region]) take
+        // priority over the class-static worldwide envelope. Fall back if no
+        // region-specific data has been supplied.
+        const edges = this._bandEdges ?? SpectrumPanel.BAND_EDGES;
+
+        ctx.save();
+        ctx.strokeStyle = '#ff4040';
+        ctx.lineWidth   = 1.5;
+        ctx.setLineDash([4, 3]);   // dashed so it's clearly a "guard" not a "marker"
+
+        for (const edge of edges) {
+            for (const hz of [edge.lo, edge.hi]) {
+                if (hz < leftHz || hz > rightHz) continue;
+                const x = ((hz - leftHz) / this._lastSpanHz) * W;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, specH - 2);
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
+    }
+
+    // ── Band-plan marker ticks ───────────────────────────────────────────────
+    // Vertical ticks at the standard CW / FT8 / FT4 / RTTY / SSB activity
+    // frequencies for the current region's band plan. Helps orient newer
+    // operators who don't yet have the watering holes memorised.
+    //
+    // Labels are staggered across up to three rows when they would overlap
+    // (e.g. FT8 at 14.074 and RTTY at 14.080 are only 6 kHz apart and would
+    // collide at any reasonable span).
+    _drawBandMarkers(ctx, W, specH) {
+        if (!this._bandPlan || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+
+        const leftHz  = this._axisLeftHz();
+        const rightHz = leftHz + this._lastSpanHz;
+
+        // Collect all in-window markers with their pixel x and label width.
+        const markers = [];
+        for (const bandName in this._bandPlan) {
+            const segments = this._bandPlan[bandName];
+            for (const segKey in segments) {
+                const seg = segments[segKey];
+                if (!seg || typeof seg.freq !== 'number') continue;
+                if (seg.freq < leftHz || seg.freq > rightHz) continue;
+                const x     = ((seg.freq - leftHz) / this._lastSpanHz) * W;
+                const label = seg.label || segKey;
+                markers.push({ x, label });
+            }
+        }
+        if (markers.length === 0) return;
+        markers.sort((a, b) => a.x - b.x);
+
+        ctx.save();
+        // Band-plan segment marker font: bumped from 11px → 13px for
+        // accessibility (Colin 2026-06-13 — the original size required a
+        // magnifying glass to read the FT8/CW/SSB labels above the
+        // spectrum).
+        ctx.font        = '13px sans-serif';
+        ctx.textAlign   = 'center';
+        ctx.lineWidth   = 1;
+        ctx.strokeStyle = '#80c0ff';
+        ctx.fillStyle   = '#80c0ff';
+
+        // Stagger labels across up to three rows so closely-spaced markers
+        // (FT8 + RTTY on 20m being the worst case) remain readable.
+        const rowGap       = 12;   // vertical spacing between label rows
+        const maxRows      = 3;
+        const minLabelGap  = 4;
+        const rowRightEdge = new Array(maxRows).fill(-Infinity);
+
+        for (const m of markers) {
+            const halfWidth = ctx.measureText(m.label).width / 2;
+            const leftEdge  = m.x - halfWidth;
+            const rightEdge = m.x + halfWidth;
+
+            let row = 0;
+            for (let r = 0; r < maxRows; r++) {
+                if (leftEdge >= rowRightEdge[r] + minLabelGap) { row = r; break; }
+                row = r;
+            }
+            rowRightEdge[row] = rightEdge;
+
+            // Tick mark — same position regardless of which row the label is on.
+            ctx.beginPath();
+            ctx.moveTo(m.x, specH - 18);
+            ctx.lineTo(m.x, specH - 4);
+            ctx.stroke();
+
+            // Label — rendered above the tick, pushed up by `row` × rowGap
+            // so overlapping labels stack vertically instead of overwriting.
+            const labelY = specH - 20 - row * rowGap;
+            ctx.fillText(m.label, m.x, labelY);
+        }
+        ctx.restore();
+    }
+
+    // ── DX cluster status badge ──────────────────────────────────────────────
+    _drawDxBadge(ctx, W) {
+        const label = `DX: ${this._dxStatus}`;
+        let bg, fg;
+        switch (this._dxStatus) {
+            case 'connected':    bg = '#1e7e34'; fg = '#ffffff'; break;
+            case 'connecting':   bg = '#b58900'; fg = '#000000'; break;
+            case 'disconnected': bg = '#a03030'; fg = '#ffffff'; break;
+            default:             bg = '#3a3a3a'; fg = '#aaaaaa'; break;
+        }
+
+        ctx.save();
+        ctx.font         = 'bold 14px sans-serif';
+        ctx.textBaseline = 'top';
+        const padX = 8;
+        const padY = 5;
+        const textWidth = ctx.measureText(label).width;
+        const w = textWidth + padX * 2;
+        const h = 24;
+        const x = W - w - 4;
+        const y = 4;
+        ctx.fillStyle = bg;
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = fg;
+        ctx.textAlign = 'left';
+        ctx.fillText(label, x + padX, y + padY);
+        ctx.restore();
+    }
+
+    // ── DX cluster spot overlay ──────────────────────────────────────────────
+    //
+    // Draws a small downward-pointing tick at each spot's frequency with the
+    // callsign label above. Spots outside the current span are skipped. When
+    // multiple spots fall within ~50 px of each other their labels are
+    // staggered vertically so they don't overlap.
+    _drawSpots(ctx, W, specH) {
+        if (!this._spots.length || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+
+        const leftHz  = this._axisLeftHz();
+        const rightHz = leftHz + this._lastSpanHz;
+        // When the user has ticked "Show only watched callsigns" in the DX
+        // Watch popup, hide every spot that isn't flagged isWatched. The flag
+        // is set by DxClusterService on the backend, so we just respect it.
+        const onlyWatched = !!window.dxOnlyWatched;
+
+        // Build a list of (x, spot) for spots in range, sorted left-to-right.
+        const drawList = [];
+        for (const s of this._spots) {
+            if (s.frequencyHz < leftHz || s.frequencyHz > rightHz) continue;
+            if (onlyWatched && !s.isWatched) continue;
+            const x = ((s.frequencyHz - leftHz) / this._lastSpanHz) * W;
+            drawList.push({ x, spot: s });
+        }
+        if (drawList.length === 0) return;
+        drawList.sort((a, b) => a.x - b.x);
+
+        ctx.save();
+        ctx.font      = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.lineWidth   = 1.5;
+
+        // Stagger labels across multiple rows so they don't overlap. For each
+        // candidate label, measure its actual rendered width and find the
+        // first row whose previous label's right edge is far enough left.
+        // If no row has space, drop the label rather than overlap. Newer
+        // spots are drawn last so they win when crowded — drawList is sorted
+        // by x but spots are most-recent-first within the same x.
+        //
+        // Watched callsigns are drawn in bright red instead of yellow so the
+        // operator can spot them at a glance amongst the regular cluster
+        // traffic.
+        const rowHeight    = 16;
+        const maxRows      = 5;
+        const minLabelGap  = 4;   // px between adjacent labels in the same row
+        const rowRightEdge = new Array(maxRows).fill(-Infinity);
+
+        for (const { x, spot } of drawList) {
+            const halfWidth = ctx.measureText(spot.callsign).width / 2;
+            const leftEdge  = x - halfWidth;
+            const rightEdge = x + halfWidth;
+
+            let row = -1;
+            for (let r = 0; r < maxRows; r++) {
+                if (leftEdge >= rowRightEdge[r] + minLabelGap) { row = r; break; }
+            }
+            if (row < 0) continue; // crowded — skip this label rather than overlap
+            rowRightEdge[row] = rightEdge;
+            const labelY = 14 + row * rowHeight;
+
+            // Colour per spot — bright red for watched callsigns, yellow otherwise.
+            const colour = spot.isWatched ? '#ff4040' : '#ffcc33';
+            ctx.fillStyle   = colour;
+            ctx.strokeStyle = colour;
+
+            // Callsign label.
+            ctx.fillText(spot.callsign, x, labelY);
+
+            // Tick mark dropping from the label to mid-spectrum.
+            const tickTop = labelY + 2;
+            const tickBot = tickTop + 6;
+            ctx.beginPath();
+            ctx.moveTo(x, tickTop);
+            ctx.lineTo(x, tickBot);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    // ── Spectrum trace ───────────────────────────────────────────────────────
+
+    _drawSpectrum(ctx, bins, W, specH) {
+        const N      = bins.length;
+        const dbMin  = this._dbMin;
+        const dbMax  = this._dbMax;
+        const range  = dbMax - dbMin;
+
+        // The bottom AXIS_H px of the spectrum zone are reserved for the frequency
+        // labels (drawn later by _drawFrequencyAxis). Map the trace, grid and dB
+        // scale into the area *above* that strip so the noise floor can sit right on
+        // top of the labels instead of hiding behind them — that's what removes the
+        // dead space between the floor and the waterfall.
+        const H = Math.max(1, specH - SpectrumPanel.axisHeightFor(specH));
+
+        // Background — fill the whole zone (incl. the axis strip's backing) so no
+        // gap shows; the axis strip repaints its own darker band over the bottom.
+        ctx.fillStyle = '#0a0a14';
+        ctx.fillRect(0, 0, W, specH);
+
+        // Horizontal grid lines at a "nice" dB step chosen for the current range,
+        // aligned to round multiples so the scale reads cleanly at any Range.
+        const dbStep = this._niceDbStep(range);
+        ctx.strokeStyle = '#1e2030';
+        ctx.lineWidth   = 1;
+        for (let db = Math.ceil(dbMin / dbStep) * dbStep; db <= dbMax; db += dbStep) {
+            const y = H - ((db - dbMin) / range) * H;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(W, y);
+            ctx.stroke();
+        }
+
+        // Build the trace path
+        ctx.beginPath();
+        for (let i = 0; i < N; i++) {
+            const x = (i / N) * W;
+            const y = H - Math.max(0, Math.min(1, (bins[i] - dbMin) / range)) * H;
+            if (i === 0) ctx.moveTo(x, y);
+            else         ctx.lineTo(x, y);
+        }
+
+        // Close path to the bottom of the trace area (top of the axis strip) to fill
+        ctx.lineTo(W, H);
+        ctx.lineTo(0, H);
+        ctx.closePath();
+
+        ctx.fillStyle = 'rgba(0, 140, 255, 0.18)';
+        ctx.fill();
+
+        // Redraw the outline on top of the fill
+        ctx.beginPath();
+        for (let i = 0; i < N; i++) {
+            const x = (i / N) * W;
+            const y = H - Math.max(0, Math.min(1, (bins[i] - dbMin) / range)) * H;
+            if (i === 0) ctx.moveTo(x, y);
+            else         ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = '#00aaff';
+        ctx.lineWidth   = 1.5;
+        ctx.stroke();
+
+        // dB scale down the right edge — shows the exact values the Range window
+        // spans, including the true top and bottom, so the vertical scale is
+        // readable at a glance. Confined to the trace area (above the axis strip).
+        this._drawDbScale(ctx, W, H, dbMin, dbMax, range, dbStep);
+
+        // Centre frequency label
+        if (this._vfoHz > 0) {
+            const label = (this._vfoHz / 1e6).toFixed(6) + ' MHz';
+            ctx.font      = '12px monospace';
+            ctx.fillStyle = '#44aaff';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, W / 2, 14);
+        }
+    }
+
+    // Pick a "nice" dB grid step (5/10/20/25/50/100) that yields roughly half a
+    // dozen gridlines across the current vertical range, so the scale stays
+    // legible whether the Range slider is at 20 dB or 140 dB.
+    _niceDbStep(range) {
+        const steps = [5, 10, 20, 25, 50, 100];
+        const target = 6;
+        return steps.find(s => range / s <= target) ?? steps[steps.length - 1];
+    }
+
+    // Draw the dB scale down the right edge: a label at each nice gridline level
+    // plus the exact top and bottom of the window, each on a dark backing strip so
+    // it stays readable over the trace. This is the "what dB is it set to" readout.
+    _drawDbScale(ctx, W, H, dbMin, dbMax, range, step) {
+        if (range <= 0) return;
+
+        // Nice multiples inside the window, plus the true endpoints.
+        const levels = new Set();
+        for (let db = Math.ceil(dbMin / step) * step; db <= dbMax; db += step)
+            levels.add(db);
+        levels.add(dbMin);
+        levels.add(dbMax);
+
+        ctx.save();
+        ctx.font         = '12px monospace';
+        ctx.textAlign    = 'right';
+        ctx.textBaseline = 'alphabetic';
+        for (const db of levels) {
+            // Clamp so the top/bottom labels sit fully on-screen rather than being
+            // clipped at the very edge.
+            let y = H - ((db - dbMin) / range) * H;
+            y = Math.max(12, Math.min(H - 3, y));
+
+            const text = db === dbMax ? `${Math.round(db)} dB` : `${Math.round(db)}`;
+            const tw   = ctx.measureText(text).width;
+
+            ctx.fillStyle = 'rgba(6, 8, 16, 0.72)';
+            ctx.fillRect(W - tw - 10, y - 12, tw + 10, 14);
+
+            ctx.strokeStyle = 'rgba(120, 140, 170, 0.55)';
+            ctx.lineWidth   = 1;
+            ctx.beginPath();
+            ctx.moveTo(W - tw - 12, y - 5);
+            ctx.lineTo(W - tw - 7,  y - 5);
+            ctx.stroke();
+
+            ctx.fillStyle = '#9fb3cc';
+            ctx.fillText(text, W - 4, y - 2);
+        }
+        ctx.restore();
+    }
+
+    // ── Frequency axis ───────────────────────────────────────────────────────
+
+    _drawFrequencyAxis(ctx, bins, W, specH, centreHz, spanHz) {
+        const axisH  = SpectrumPanel.axisHeightFor(specH);
+        if (!axisH) return;                 // too short to spare the strip
+        const tickY0 = specH - axisH;       // top of axis strip
+        const labelY = specH - 4;           // baseline for text
+
+        ctx.fillStyle = '#111118';
+        ctx.fillRect(0, tickY0, W, axisH);
+
+        // Left edge of the axis, through _axisLeftHz so the axis correction
+        // is applied: the centre bin is dial + correction, not the dial.
+        const leftHz  = this._axisLeftHz(spanHz);
+
+        // VFO dial marker. This is the single most important line on the panel
+        // — it is where the radio actually is — and it used to be drawn in
+        // rgba(0,170,255,0.4), which is the same blue as the trace it sits on
+        // top of at less than half opacity. Amber is unused elsewhere in this
+        // panel, and the dark halo underneath keeps it readable where it
+        // crosses a strong signal instead of vanishing into the peak.
+        //
+        // It is drawn at the dial's place on the corrected axis, which on a
+        // corrected radio is a few kHz left of the canvas centre: the centre
+        // is where the SDR is looking, not where the radio is tuned.
+        const dialX = (spanHz > 0 && this._vfoHz > 0)
+            ? Math.round(((this._vfoHz - leftHz) / spanHz) * W) + 0.5   // crisp 1px line
+            : Math.round(W / 2) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(dialX, 0);
+        ctx.lineTo(dialX, tickY0);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.lineWidth   = 3;
+        ctx.stroke();
+        ctx.strokeStyle = '#ffd24a';
+        ctx.lineWidth   = 1;
+        ctx.stroke();
+
+        // Only skip labels when FrequencyA has never been set (C# long default = 0).
+        // Any non-zero persisted frequency is treated as valid; FTdx101MP range is 30 kHz–75 MHz.
+        if (this._vfoHz <= 0) {
+            ctx.fillStyle = '#667799';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('No VFO frequency available', W / 2, labelY);
+            return;
+        }
+
+        // Choose a "nice" tick interval that gives roughly 6–12 ticks across the span.
+        // Candidate steps in Hz: 100, 200, 250, 500, 1k, 2k, 5k, 10k, 20k, 25k,
+        // 50k, 100k, 200k, 250k, 500k, 1M, 2M, 5M, 10M. The list used to start at
+        // 50k, which gave a 62.5 kHz span a single tick; the sub-kHz steps are
+        // for the 2.5 and 5 kHz software-zoom spans.
+        const steps = [100, 200, 250, 500, 1e3, 2e3, 5e3, 10e3, 20e3, 25e3, 50e3, 100e3, 200e3, 250e3, 500e3, 1e6, 2e6, 5e6, 10e6];
+        const targetTicks = 8;
+        const stepHz = steps.find(s => spanHz / s <= targetTicks) ?? steps[steps.length - 1];
+
+        // First tick at the next multiple of stepHz above the left edge
+        const firstHz = Math.ceil(leftHz / stepHz) * stepHz;
+
+        // Frequency-axis tick label font: bumped from 10px → 13px for
+        // accessibility (Colin 2026-06-13 — the MHz numbers under the
+        // tick marks were unreadable without a magnifying glass).
+        // 13px fits within the existing 20px axisH (label baseline at
+        // specH-4 leaves room for glyphs above).
+        ctx.font      = '13px monospace';
+        ctx.textAlign = 'center';
+
+        for (let tickHz = firstHz; tickHz <= leftHz + spanHz; tickHz += stepHz) {
+            const x = ((tickHz - leftHz) / spanHz) * W;
+
+            // Tick line
+            const isVfo = Math.abs(tickHz - this._vfoHz) < stepHz * 0.01;
+            ctx.strokeStyle = isVfo ? 'rgba(0,170,255,0.8)' : '#334466';
+            ctx.lineWidth   = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, tickY0);
+            ctx.lineTo(x, tickY0 + 4);
+            ctx.stroke();
+
+            // Label — skip if too close to edge or below 0 Hz
+            if (x < 24 || x > W - 24 || tickHz <= 0) continue;
+
+            const mhz    = tickHz / 1e6;
+            const label  = mhz.toFixed(6);
+
+            ctx.fillStyle = isVfo ? '#44aaff' : '#8899bb';
+            ctx.fillText(label, x, labelY);
+        }
+    }
+
+    // ── Crosshair overlay ────────────────────────────────────────────────────
+
+    _drawCrosshair(ctx, W, specH, spanHz) {
+        if (this._crosshairX === null || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+
+        const x = this._crosshairX;
+        const y = this._crosshairY;
+
+        // Only draw inside the spectrum area (above the axis strip), and
+        // through the helper because on a short panel there is no strip.
+        const specTop = specH - SpectrumPanel.axisHeightFor(specH);
+        if (y < 0 || y > specTop) return;
+
+        // Vertical line
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth   = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, specTop);
+        ctx.stroke();
+
+        // Horizontal line
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Frequency at cursor
+        const leftHz  = this._axisLeftHz(spanHz);
+        const freqHz  = leftHz + (x / W) * spanHz;
+        const label   = (freqHz / 1e6).toFixed(6) + ' MHz';
+
+        // Crosshair frequency readout font: bumped from 11px → 14px for
+        // accessibility (Colin 2026-06-13, same release as the axis-label
+        // bumps). Background box height grew from 16px → 20px and the
+        // y-offset from -12 to -15 to fit the larger glyphs cleanly.
+        ctx.font      = '14px monospace';
+        const pad     = 4;
+        const tw      = ctx.measureText(label).width;
+
+        // Position label to the right of cursor, flip left near the right edge.
+        const lx = (x + tw + pad * 2 + 6 < W) ? x + pad : x - tw - pad * 2;
+        const ly = Math.max(17, Math.min(y - pad, specTop - 4));
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(lx, ly - 15, tw + pad * 2, 20);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, lx + pad, ly);
+
+        ctx.restore();
+    }
+
+    // ── Waterfall ────────────────────────────────────────────────────────────
+
+    _scrollWaterfall(ctx, bins, W, specH, wfH) {
+        // Lazily allocate or reallocate when the canvas size changes.
+        if (!this._waterfallData || this._waterfallCols !== W || this._waterfallRows !== wfH) {
+            this._waterfallCols = W;
+            this._waterfallRows = wfH;
+            this._waterfallData = ctx.createImageData(W, wfH);
+            // Initialise to black.
+            this._waterfallData.data.fill(0);
+            for (let p = 3; p < this._waterfallData.data.length; p += 4)
+                this._waterfallData.data[p] = 255;   // alpha = 255
+        }
+
+        const data = this._waterfallData.data;
+        const N    = bins.length;
+
+        // Shift all existing rows down by one pixel (4 bytes per pixel, W pixels per row).
+        const rowBytes = W * 4;
+        data.copyWithin(rowBytes, 0, data.length - rowBytes);
+
+        // Draw new row at the top.
+        for (let x = 0; x < W; x++) {
+            const binIdx = Math.floor((x / W) * N);
+            const [r, g, b] = this._dbToColor(bins[binIdx]);
+            const p = x * 4;
+            data[p + 0] = r;
+            data[p + 1] = g;
+            data[p + 2] = b;
+            data[p + 3] = 255;
+        }
+
+        ctx.putImageData(this._waterfallData, 0, specH);
+    }
+
+    // ── Status overlay ───────────────────────────────────────────────────────
+
+    _drawStatusOverlay(status) {
+        const canvas = document.getElementById(this._canvasId);
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        const W   = canvas.width;
+        const H   = canvas.height;
+
+        if (status === 'streaming') {
+            // Clear any previous overlay; the next data frame will paint correctly.
+            return;
+        }
+
+        // If we have a previous frame and this is just a brief transition
+        // (span change, SDR restart), keep the existing spectrum visible
+        // instead of wiping to a "connecting…" message. The status badge in
+        // the panel header carries the state info; blanking out a working
+        // spectrum for a 3-second reconnect is jarring.
+        if ((status === 'connecting' || status === 'disconnected') && this._lastBins) {
+            this._render();
+            return;
+        }
+
+        const messages = {
+            connecting:   'Connecting to SDR device…',
+            disconnected: 'SDR device unavailable — retrying every 5 s',
+            nodll:        'SoapySDR.dll not found — install SoapySDR + device driver',
+            noft4222:     "FTDI's FT4222 libraries are not installed",
+            scopeplacement: "Can't place the radio's scope on the axis",
+        };
+
+        const withDetail = status === 'disconnected' || status === 'noft4222' || status === 'scopeplacement';
+        const line1 = messages[status] ?? `SDR status: ${status}`;
+        const line2 = withDetail && this._errorDetail
+            ? this._errorDetail
+            : null;
+
+        ctx.fillStyle = '#0a0a14';
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = '#8899bb';
+        ctx.textAlign = 'center';
+
+        // The detail can be a paragraph (the FTDI install instructions), so
+        // it is wrapped to the canvas rather than run off both edges.
+        ctx.font = '11px sans-serif';
+        const detailLines = line2 ? this._wrapText(ctx, line2, W - 24) : [];
+
+        const top = H / 2 - (detailLines.length * 14) / 2 - (line2 ? 10 : 0);
+        ctx.font = '14px sans-serif';
+        ctx.fillText(line1, W / 2, top);
+
+        ctx.font      = '11px sans-serif';
+        ctx.fillStyle = '#cc6655';
+        detailLines.forEach((text, i) => ctx.fillText(text, W / 2, top + 22 + i * 14));
+    }
+
+    /** Split text into lines no wider than maxWidth in the context's current font. */
+    _wrapText(ctx, text, maxWidth) {
+        const lines = [];
+        let line = '';
+        for (const word of String(text).split(/\s+/)) {
+            const next = line ? `${line} ${word}` : word;
+            if (line && ctx.measureText(next).width > maxWidth) {
+                lines.push(line);
+                line = word;
+            } else {
+                line = next;
+            }
+        }
+        if (line) lines.push(line);
+        return lines;
+    }
+
+    // ── Accessibility ────────────────────────────────────────────────────────
+
+    /** Announce text to screen readers via the shared ARIA live region in site.js. */
+    _announceToScreenReader(text) {
+        let lr = document.getElementById('_sr_live');
+        if (!lr) {
+            // Fallback: create a local live region if site.js hasn't run yet.
+            // assertive (matching site.js's primary live region) so new
+            // cursor announcements interrupt rather than queue.
+            lr = document.createElement('div');
+            lr.id = '_sr_live';
+            lr.setAttribute('aria-live', 'assertive');
+            lr.setAttribute('aria-atomic', 'true');
+            lr.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;';
+            document.body.appendChild(lr);
+        }
+        lr.textContent = '';
+        requestAnimationFrame(() => { lr.textContent = text; });
+    }
+
+    // ── Color mapping ────────────────────────────────────────────────────────
+
+    /**
+     * Maps a dBFS value to an RGB thermal colour: black → blue → cyan →
+     * green → yellow → red.
+     *
+     * Colour is keyed to height ABOVE the auto-tracked noise floor, not an
+     * absolute dBFS window: the floor maps to black and WATERFALL_COLOR_SPAN_DB
+     * above it maps to full red. YWC's absolute signal levels sit higher in
+     * dBFS than IWC's scope, so IWC's fixed −120…0 window left even the noise
+     * coloured here — keying to the floor keeps the noise dark on any radio.
+     * The Bright slider (_wfBrightDb) adds lift so weak signals can be pushed up
+     * the scale; at "Off" (0) the noise floor is the dark baseline. Independent
+     * of the Range slider, which scales only the trace. Instance method (not
+     * static) so it can read the per-panel floor and brightness.
+     */
+    _dbToColor(db) {
+        const floor = (this._autoFloorDb != null) ? this._autoFloorDb : -120;
+        const t = Math.max(0, Math.min(1,
+            (db - floor + this._wfBrightDb) / SpectrumPanel.WATERFALL_COLOR_SPAN_DB));
+        if (t < 0.2)  return [0,                   0,                   Math.round(t * 5 * 180)];
+        if (t < 0.4)  return [0,                   Math.round((t - 0.2) * 5 * 200), 180];
+        if (t < 0.6)  return [0,                   200,                 Math.round(180 - (t - 0.4) * 5 * 180)];
+        if (t < 0.8)  return [Math.round((t - 0.6) * 5 * 255), 200,    0];
+        return               [255,                 Math.round(200 - (t - 0.8) * 5 * 200), 0];
+    }
+}
+
+// Amateur band envelopes in Hz — the broadest worldwide limits, used to draw
+// red guard-rail lines at the edges of each band on the spectrum. These are
+// not per-region; a Region-1 operator may see a guard rail at 7.300 MHz where
+// the legal limit is actually 7.200, but the inverse is never true (no region
+// permits TX beyond these envelopes).
+SpectrumPanel.BAND_EDGES = [
+    { name: '160m', lo:   1800000, hi:   2000000 },
+    { name:  '80m', lo:   3500000, hi:   4000000 },
+    { name:  '60m', lo:   5250000, hi:   5450000 },
+    { name:  '40m', lo:   7000000, hi:   7300000 },
+    { name:  '30m', lo:  10100000, hi:  10150000 },
+    { name:  '20m', lo:  14000000, hi:  14350000 },
+    { name:  '17m', lo:  18068000, hi:  18168000 },
+    { name:  '15m', lo:  21000000, hi:  21450000 },
+    { name:  '12m', lo:  24890000, hi:  24990000 },
+    { name:  '10m', lo:  28000000, hi:  29700000 },
+    { name:   '6m', lo:  50000000, hi:  54000000 },
+    { name:   '4m', lo:  70000000, hi:  70500000 },
+    { name:   '2m', lo: 144000000, hi: 148000000 },
+];

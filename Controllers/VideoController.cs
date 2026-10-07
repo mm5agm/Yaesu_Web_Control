@@ -150,6 +150,9 @@ namespace Yaesu_Web_Control.Controllers
             if (!string.IsNullOrEmpty(key) && !VideoDeviceKey.IsPersistableKey(key))
                 return BadRequest(new { error = "Invalid device key." });
 
+            // Save what the device is, not where it happened to be in the list.
+            key = VideoDeviceKey.Upgrade(key);
+
             var s = await _settings.GetSettingsAsync();
             if (!s.VideoDisplayEnabled)
                 return StatusCode(StatusCodes.Status403Forbidden, new { error = "Radio Display is disabled in Settings." });

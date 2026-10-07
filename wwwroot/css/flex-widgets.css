@@ -1,0 +1,637 @@
+/* Flex UI (/flexui) — host chrome and panel scoping.
+   The classic page is untouched; these rules only match the flex host and the
+   cloned panel bodies. The op-col block below is site.css's #operatingControlsRow
+   rules re-scoped to .ywc-panel-body, because the cloned panels no longer live
+   inside that row. */
+
+.ywc-flex-body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--yaesu-face-lo, #1a1a1a);
+    color: var(--yaesu-ink, #e6e6e6);
+}
+
+.ywc-flex-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.25rem 0.75rem;
+    background: #111;
+    border-bottom: 1px solid #333;
+    z-index: 20;
+}
+
+.ywc-flex-brand {
+    font-weight: 700;
+    color: #ffe066;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.ywc-flex-nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.ywc-flex-nav-links a {
+    color: #cfe3ff;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.ywc-flex-nav-links a[aria-current="page"] {
+    color: #fff;
+    font-weight: 700;
+}
+
+.ywc-flex-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0.25rem 0.5rem 0.5rem;
+}
+
+.ywc-flex-toolbar {
+    flex: 0 0 auto;
+}
+
+#ywcFlexHost {
+    flex: 1 1 auto;
+    min-height: 60vh;
+    width: 100%;
+    /* FlexLayout's root is position:absolute; inset:0. Without a positioned
+       containing block it anchors to the viewport and covers the toolbar. */
+    position: relative;
+    overflow: hidden;
+}
+
+.ywc-flex-panel-host,
+.ywc-panel-body {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.ywc-panel-body {
+    overflow: auto;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* Radio Display panel: fill the docked tab like the pop-out page, so the
+   video scales with the panel (and with tab maximise) instead of using
+   Index's natural-size cap. Mirrors the inline layout on
+   Pages/RadioDisplay.cshtml. Only the Flex UI renders this component. */
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer {
+    height: 100%;
+    margin: 0;
+    max-width: 100%;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer > .col-12 {
+    height: 100%;
+    padding: 0;
+    max-width: 100%;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .card {
+    height: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .card-header {
+    flex: 0 0 auto;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .card-body {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0 !important;
+    max-height: none !important;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .radio-display-body {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .radio-display-body.controls-docked {
+    flex-direction: row;
+    height: 100%;
+    min-height: 0;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .radio-display-video-pane {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayContainer .radio-display-body.controls-docked #radioDisplayScopeDialog {
+    max-height: none;
+    align-self: stretch;
+}
+
+.ywc-panel-body[data-ywc-component="radioDisplay"] #radioDisplayImg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center center;
+    background: #000;
+}
+
+/* Standalone Radio Scope panel. Its markup is rendered flat (no collapsible
+   card header), so just keep it inside the docked panel; the controls use the
+   shared .radio-scope-controls rules in site.css. The same controls also dock
+   inside the Radio Display panel — this is a second host. */
+.ywc-panel-body[data-ywc-component="radioScope"] #radioScopeCard {
+    margin: 0;
+    max-width: 100%;
+}
+
+/* Buttons and level key grids reflow with width — see the responsive rules
+   after the .op-col base rule below. */
+
+/* Linear meters panel: give rows a sensible min width. */
+.ywc-panel-body .linear-meter-canvas,
+.ywc-panel-body .linear-meter-row canvas {
+    min-width: 0;
+}
+
+#ywcFlexParking {
+    position: absolute;
+    left: -10000px;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+/* FlexLayout chrome tweaks for the shack-dark look. */
+.ywc-flex-body .flexlayout__layout {
+    background: #1a1a1a;
+}
+
+.ywc-flex-body .flexlayout__tab_button {
+    font-size: 0.8rem;
+}
+
+.ywc-panel-body {
+    margin: 0;
+}
+
+.ywc-panel-body .op-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+}
+
+/* Buttons panel — a responsive key grid. Columns appear and disappear with
+   width: one column when the panel is compacted, more as it widens, so the
+   keys never overflow a docked panel. */
+.ywc-panel-body .op-col--buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+    grid-auto-rows: minmax(2.65rem, auto);
+    align-content: start;
+    align-items: stretch;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.ywc-panel-body .op-col--buttons > .btn,
+.ywc-panel-body .op-col--buttons > .toggle-dd,
+.ywc-panel-body .op-col--buttons > .toggle-dd > .toggle-dd__btn,
+.ywc-panel-body .op-col--buttons > #qmbControls {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* QMB keeps its full-cell width inside the buttons grid (its full-width rule
+   on the classic page is scoped to #operatingControlsRow, not the flex body). */
+.ywc-panel-body .op-col--buttons #qmbButton.toggle-dd {
+    display: block;
+    width: 100%;
+}
+
+.ywc-panel-body .op-col--buttons #qmbButton > .btn {
+    width: 100%;
+}
+
+/* The TX level keys form a key grid that reflows with width: two columns at
+   the natural operating width, collapsing to one when the panel is compacted.
+   Keys keep a stable face — their labels carry changing numeric values, so the
+   grid (not the label) decides each width. */
+.ywc-panel-body .op-col--levels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    grid-auto-rows: minmax(2.65rem, auto);
+    align-items: stretch;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.ywc-panel-body .op-col--levels > .toggle-dd,
+.ywc-panel-body .op-col--levels > .toggle-dd > .toggle-dd__btn,
+.ywc-panel-body .op-col--levels > .toggle-dd__btn {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* Compact linear SWR / Power bars — leftmost column of the
+   operating-controls row. */
+.ywc-panel-body .op-col--linear-meters {
+    min-width: 0;
+    gap: 0.35rem;
+}
+
+.ywc-panel-body .linear-meter-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.ywc-panel-body .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--yaesu-ink, #e6e6e6);
+    line-height: 1;
+}
+
+.ywc-panel-body .linear-meter-row canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+.ywc-panel-body .linear-meter-value {
+    flex: 0 0 3.6rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #dc3545;
+    color: #fff;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+.ywc-panel-body .linear-meter-value--comp {
+    background: #ffc107;
+    color: #000;
+}
+
+.ywc-panel-body .linear-meter-value--alc {
+    background: #0dcaf0;
+    color: #000;
+}
+
+/* Per-VFO linear S-meter (between frequency row and RF/AF stack). */
+.linear-meter-row--vfo {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+    width: 100%;
+    margin: 0.15rem 0 0.25rem;
+    transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+.linear-meter-row--vfo .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--yaesu-ink, #e6e6e6);
+    line-height: 1;
+}
+
+.linear-meter-row--vfo canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+.linear-meter-row--vfo .linear-meter-value {
+    flex: 0 0 3.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #198754;
+    color: #fff;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+/* Single-receiver: inactive VFO's S-meter is not a live reading for that
+   panel — grey it the same way TX freezes the radial S-meters. */
+.linear-meter-row--vfo.linear-smeter-inactive {
+    filter: grayscale(1);
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+/* TX freeze dimming for VFO linear S-meters (class toggled on the row). */
+.linear-meter-row--vfo.meters-tx-dim {
+    filter: grayscale(1);
+    opacity: 0.3;
+}
+
+.ywc-panel-body .op-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: nowrap;
+}
+
+.ywc-panel-body .op-slider-row input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 4.5rem;
+    height: 18px;
+}
+
+/* VFO A/B actions — same key grid as the Levels panel (auto-fit columns,
+   a 2.65rem row, 0.4rem gap) so the two panels read as one control surface.
+   Falls back to a single column when the panel is compacted. */
+.ywc-panel-body .op-col--vfo-actions {
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    grid-auto-rows: minmax(2.65rem, auto);
+    align-items: stretch;
+    gap: 0.4rem;
+}
+
+.ywc-panel-body .op-col--vfo-actions > .btn {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex: 0 0 auto;
+}
+
+/* These keys carry the toolbar face (1.9rem) because the markup is shared
+   with the top nav. Inside the panel they take the standard operating-bar
+   key size, so their rows line up with the Levels keys beside them. */
+.ywc-panel-body .op-col--vfo-actions .toggle-dd__btn--toolbar {
+    --yaesu-led-w: 0.85rem;
+    --yaesu-led-h: 0.24rem;
+    --yaesu-led-mt: 0.02rem;
+    --yaesu-led-mb: 0.34rem;
+    min-width: 0;
+    min-height: 2.65rem;
+    height: 2.65rem;
+    padding: 0.22rem 0.55rem 0.4rem;
+}
+
+.ywc-panel-body .op-col--vfo-actions .toggle-dd__btn--toolbar .toggle-dd__label {
+    font-size: 0.8rem;
+}
+
+/* .col in the markup, capped: the Remote Audio and Clarifier panels stay on the
+   same number of lines as the key columns beside them down to about 32rem, and
+   wrap into a taller block below that. Letting the column grow past the cap only
+   spreads the same controls over more width. */
+.ywc-panel-body .op-col--remote-audio,
+.ywc-panel-body .op-col--clarifier {
+    max-width: 34rem;
+    min-width: 0;
+}
+
+.ywc-panel-body .op-extras-block {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.45rem;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.ywc-panel-body .op-extras-meters {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 12rem;
+    flex: 1 1 12rem;
+}
+
+.remote-audio-meter-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.remote-audio-meter-row .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--yaesu-ink, #e6e6e6);
+    line-height: 1;
+}
+
+.remote-audio-meter-canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+.remote-audio-meter-value {
+    flex: 0 0 3.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #0dcaf0;
+    color: #000;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+.remote-audio-meter-value--tx {
+    background: #ffc107;
+}
+
+.remote-audio-popout-meters {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 18rem;
+}
+
+.remote-audio-popout-meters .remote-audio-meter-row {
+    flex: 1 1 9rem;
+}
+
+.ywc-panel-body #clarifierRow {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.ywc-panel-body #clarifierRow .toggle-dd {
+    flex: 0 0 auto;
+}
+
+.ywc-panel-body #clarifierRow .toggle-dd__btn {
+    min-height: 2.65rem;
+    height: 2.65rem;
+    padding: 0.22rem 0.7rem 0.4rem;
+    box-sizing: border-box;
+}
+
+.ywc-panel-body #clarifierRow .toggle-dd__btn--toolbar {
+    min-width: 4.75rem;
+}
+
+.ywc-panel-body #clarVfoButton .toggle-dd__btn {
+    width: 5.5rem;
+}
+
+.ywc-panel-body #clarModeButton .toggle-dd__btn {
+    width: 7rem;
+}
+
+.ywc-panel-body #clarOffsetButton .toggle-dd__btn {
+    width: 10rem;
+}
+
+.ywc-panel-body #clarifierRow .toggle-dd__label {
+    font-size: 0.8rem;
+}
+
+.remote-audio-status-row {
+    flex: 0 0 100%;
+    line-height: 1;
+}
+
+/* ── Squared corners (flex theme only) ───────────────────────────────────────
+   Rounded corners waste space on a dense control surface; the flex host is
+   a dockable grid, so corners are squared to save screen estate. Circles
+   (the toggle LEDs, spinners) are deliberately left round. */
+.ywc-flex-body {
+    --bs-border-radius: 0;
+    --bs-border-radius-sm: 0;
+    --bs-border-radius-lg: 0;
+    --bs-border-radius-pill: 0;
+    --bs-card-border-radius: 0;
+    --bs-btn-border-radius: 0;
+    --bs-btn-border-radius-sm: 0;
+    --bs-btn-border-radius-lg: 0;
+    --bs-badge-border-radius: 0;
+    --bs-modal-border-radius: 0;
+    --bs-toast-border-radius: 0;
+    --bs-dropdown-border-radius: 0;
+    /* FlexLayout alpha_dark theme radii (tab buttons, tab dividers, border
+       buttons) resolve through these two variables. */
+    --flexlayout-tab-button-radius: 0;
+    --flexlayout-border-button-radius: 0;
+}
+
+.ywc-flex-body .card,
+.ywc-flex-body .btn,
+.ywc-flex-body .form-control,
+.ywc-flex-body .form-select,
+.ywc-flex-body .form-check-input,
+.ywc-flex-body .dropdown-menu,
+.ywc-flex-body .dropdown-item,
+.ywc-flex-body .badge,
+.ywc-flex-body .list-group-item,
+.ywc-flex-body .modal-content,
+.ywc-flex-body .toast,
+.ywc-flex-body .toggle-dd__btn,
+.ywc-flex-body .toggle-dd__menu,
+.ywc-flex-body .linear-meter-value,
+.ywc-flex-body .remote-audio-meter-value,
+.ywc-flex-body .apps-launcher__menu,
+.ywc-flex-body .flexlayout__tab,
+.ywc-flex-body .flexlayout__tab_button,
+.ywc-flex-body .flexlayout__tab_button_content,
+.ywc-flex-body .flexlayout__tab_button_leading,
+.ywc-flex-body .flexlayout__tab_button_trailing,
+.ywc-flex-body .flexlayout__tab_toolbar,
+.ywc-flex-body .flexlayout__tabset,
+.ywc-flex-body .flexlayout__splitter,
+.ywc-flex-body .flexlayout__splitter_drag_handle,
+.ywc-flex-body .flexlayout__border,
+.ywc-flex-body .flexlayout__border_button,
+.ywc-flex-body .flexlayout__popup_menu,
+.ywc-flex-body .flexlayout__popup_menu_item,
+.ywc-flex-body .flexlayout__tabset_tab_divider_inner,
+.ywc-flex-body .flexlayout__tab_toolbar_button,
+.ywc-flex-body .flexlayout__tab_toolbar_button-min,
+.ywc-flex-body .flexlayout__tab_toolbar_button-max,
+.ywc-flex-body .flexlayout__tab_button_overflow,
+.ywc-flex-body .flexlayout__splitter_handle,
+.ywc-flex-body .flexlayout__drag_rect {
+    border-radius: 0;
+}
+
+/* Panel content that carries its own corners. */
+.ywc-flex-body .frequency-display .digit.selected,
+.ywc-flex-body #freqA.frequency-display,
+.ywc-flex-body #freqB.frequency-display,
+.ywc-flex-body .filter-scope-vfo-slot canvas,
+.ywc-flex-body .radio-display-hotspots .rdh-label,
+.ywc-flex-body .utc-clock {
+    border-radius: 0;
+}
+
+/* ── Saved-layouts manager dialog ─────────────────────────────────────────
+   A modal dialog: dim and blur what is behind it so the panel workspace
+   recedes, and make the header a drag handle like the other floating
+   Flex UI dialogs (frequency keyboard, memories, radio display). */
+.flex-layouts-dialog {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+}
+
+.flex-layouts-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.45);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+}
+
+.flex-layouts-dialog__header {
+    cursor: grab;
+    user-select: none;
+}
+
+.flex-layouts-dialog__header:active {
+    cursor: grabbing;
+}
+
