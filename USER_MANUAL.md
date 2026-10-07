@@ -34,6 +34,7 @@
    - 5.19 [VC Tune Preselector (FTdx101MP)](#519-vc-tune-preselector-ftdx101mp)
    - 5.20 [Radio Scope — the radio's own display (FTdx101MP/D and FTdx10)](#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
    - 5.21 [Pop-out windows](#521-pop-out-windows)
+   - 5.22 [Experimental UI](#522-experimental-ui)
 6. [Settings Page](#6-settings-page)
    - 6.1 [Radio Connection](#61-radio-connection)
    - 6.2 [Web Server Settings](#62-web-server-settings)
@@ -1298,6 +1299,21 @@ A panel on the main page can be dragged around and resized, but it can't leave t
 - **A blocked pop-up.** If your browser blocks the window, YWC says so. Allow pop-ups for YWC's address (usually `http://localhost:8080`) and press **↗** again.
 - **Reloading the main page** while a panel is popped out is fine. The main page still knows the window is open.
 - **Pop-out windows belong to this computer.** A tablet or a second PC using YWC at the same time keeps its own panels and doesn't see your pop-out.
+
+### 5.22 Experimental UI
+
+**Experimental UI** in the top bar opens a second way of working the radio, at `http://localhost:8080/flexui`. It was written by Fabio Valente (CR7CDC). The Classic page described in the rest of §5 is unchanged and is still where YWC opens; you can go back to it with **Classic Home** in the Experimental UI's top bar, and both can be open in different tabs at once.
+
+The Experimental UI is a dark workspace made of panels: **VFO A**, **VFO B**, **VFO Actions**, **Buttons**, **Levels**, **Linear Meters**, **Clarifier**, **Spectrum A**, **Spectrum B**, **Radio Display**, **Radio Scope** and **Remote Audio**. They control the radio exactly as the Classic page does; what is different is how they are laid out.
+
+- **Arranging panels.** Drag a panel by its tab to move it. Drop it on the edge of another panel to dock it beside it, or in the middle to put the two together as tabs. Drag the dividers between panels to resize them.
+- **Showing and hiding panels.** The **Panels** menu in the toolbar shows or hides each one, so a panel you have closed can be brought back.
+- **UI size.** The **Size** box (Extra small to Large) changes the size of the text and controls without moving the panels.
+- **Layouts.** The layouts menu in the toolbar, which shows the name of the layout in use, holds named arrangements. **Save current as…** saves what is on screen under a name, and **Manage layouts…** renames or deletes them. Layouts are saved in YWC itself, not in the browser, so another browser or PC using the same YWC sees the same list. Once a named layout is chosen, changes to it are saved as you make them. **Default** is the built-in arrangement and is never overwritten: changes made to it are kept by this browser only, until you save them under a name.
+- **Reset layout** puts the panels back where the Default arrangement has them.
+- **RX and TX.** The **RX A/B** and **TX A/B** buttons in the toolbar choose the receive and transmit VFOs separately; split is on whenever they are different. On the FT-991A, **RX B** is greyed out because the radio can't choose its receive VFO over CAT; use Swap A/B instead.
+
+It is called experimental for a reason. It is a separate copy of the page's code, so a fix made to the Classic page doesn't reach it automatically and the two can behave a little differently. If something works on the Classic page and not here, please report it and say which page you were on.
 
 ---
 

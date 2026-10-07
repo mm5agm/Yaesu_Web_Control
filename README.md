@@ -23,6 +23,7 @@ Yaesu Web Control (**YWC**) is a continuation of my FTdx101_WebApp with more Yae
 - **Hide the VFO panels, the meters and the Clarifier** *(v2.5.3-pre4)* ([#171](https://github.com/mm5agm/Yaesu_Web_Control/discussions/171)). A **VFOs** button beside each spectrum title hides both VFO panels, so the page can be just the spectrum; **Hide meters** and the Clarifier's **Hide** fold those away too. The browser remembers each one. [§5.4](USER_MANUAL.md#54-spectrum-display).
 - **Drag the spectrum to tune** *(v2.5.3-pre4)*: hold the left button and slide, and the signals follow the pointer. A click still tunes to the point clicked. [§5.4](USER_MANUAL.md#54-spectrum-display).
 - **Free the SDR when the last browser closes** *(v2.5.3-pre4)*, a new setting under Settings > SDR, off by default, so another program can use the SDR while YWC is still running.
+- **An Experimental UI, beside the Classic one** *(v2.5.3-pre7, Fabio Valente, CR7CDC)*. **Experimental UI** in the top bar opens a dark, dockable workspace: the VFOs, spectrum, meters, Radio Display and the rest are panels you can drag, dock, tab together and resize, and save as named layouts. The Classic page is unchanged and is still the default. [§5.22](USER_MANUAL.md#522-experimental-ui).
 
 **New in v2.5.2:**
 
@@ -89,8 +90,8 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
-| A meter reading could occasionally show a different meter's value: a reply that arrived late was given to the next reading of the same kind, so the power gauge could show the compression/SWR reading, or VFO B's S-meter VFO A's. Each reading now only accepts its own reply | - | *Not yet in a build* |
-| With two capture dongles of the same model - one per radio - Radio Display could open the wrong radio's screen after a replug, because it remembered the dongle by its place in the list. It now remembers the dongle itself, as long as it goes back into the same USB socket, and the two are told apart in the device list. If the chosen dongle is not plugged in when the stream starts, the panel now says **Not connected** instead of disappearing, and the picture comes up when the dongle is plugged in ([§6.9](USER_MANUAL.md#69-radio-display)) | - | *Not yet in a build* |
+| A meter reading could occasionally show a different meter's value: a reply that arrived late was given to the next reading of the same kind, so the power gauge could show the compression/SWR reading, or VFO B's S-meter VFO A's. Each reading now only accepts its own reply | - | [v2.5.3-pre7](#2026-10-07---v253-pre7-pre-release) |
+| With two capture dongles of the same model - one per radio - Radio Display could open the wrong radio's screen after a replug, because it remembered the dongle by its place in the list. It now remembers the dongle itself, as long as it goes back into the same USB socket, and the two are told apart in the device list. If the chosen dongle is not plugged in when the stream starts, the panel now says **Not connected** instead of disappearing, and the picture comes up when the dongle is plugged in ([§6.9](USER_MANUAL.md#69-radio-display)) | - | [v2.5.3-pre7](#2026-10-07---v253-pre7-pre-release) |
 | WSJT-X, Log4OM and other programs using YWC's rigctld connection were told the radio was in USB whenever it was in CW, RTTY or a DATA mode, so FT8 on DATA-U read back as USB. They are now told the right mode (PKTUSB for DATA-U, CW, RTTY and so on) | - | [v2.5.3-pre6](#2026-10-05---v253-pre6-pre-release) |
 | The FT-991A is now a model of its own in **Settings > Radio Model**, so it no longer has to be set up as an FT-710. It adds **2m** and **70cm** band buttons and the **C4FM** mode (which the FT-710 setting showed as PSK). It also caps power at 50 W on 2 m and 70 cm, and has the 991A's own IF widths and IF shift (the width used to show as "1;"), split, break-in, RTTY tones and memory import. Built from the 991A's CAT manual and still being tested on a real radio | [#86](https://github.com/mm5agm/Yaesu_Web_Control/discussions/86) | [v2.5.3-pre6](#2026-10-05---v253-pre6-pre-release) |
 | After the browser was closed and reopened, a pop-out could open as an ordinary tab in the main browser window - filling it, with no edges to resize - instead of a window of its own. A pop-out page restored as a tab now lets go of the pop-out's name, so the next **↗** opens a proper window ([§5.21](USER_MANUAL.md#521-pop-out-windows)) | - | [v2.5.3-pre5](#2026-10-04---v253-pre5-pre-release) |
@@ -432,6 +433,14 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 ---
 
 ## Release Notes
+
+## 2026-10-07 - v2.5.3-pre7 (pre-release)
+
+*An Experimental UI beside the Classic one, meter readings that stay with their own meter, and capture dongles remembered by device instead of by their place in the list. Everything in v2.5.3-pre6 is included. Install it over v2.5.2 or an earlier pre-release; your settings are kept.*
+
+- **Experimental UI** (Fabio Valente, CR7CDC). A new **Experimental UI** link in the top bar opens a dark, dockable workspace at `/flexui`. The VFOs, spectrum, meters, Radio Display, Radio Scope and the other controls are panels that can be dragged, docked, tabbed together and resized, and an arrangement can be saved as a named layout. The Classic page is unchanged and is still where YWC opens. The one change Classic users will see is the top bar: its links have been reordered and have icons, and none has been removed. It is experimental: a fix made to the Classic page doesn't automatically reach it. I've tested it on my FTdx101MP on receive and transmit, on both receivers. [§5.22](USER_MANUAL.md#522-experimental-ui).
+- **Meter readings stay with their own meter.** A reply from the radio that arrived late was given to the next reading of the same kind, so the power gauge could briefly show the compression or SWR reading instead, and VFO B's S-meter could show VFO A's. Each reading now only accepts its own reply.
+- **Two capture dongles of the same model** - one per radio - are told apart by the dongle itself, not by their place in the device list, so Radio Display no longer opens the wrong radio's screen after a replug or a reboot. Keep each dongle in the same USB socket: these dongles have no serial number, so the socket is what identifies them, and a dongle moved to another socket has to be chosen again. If the chosen dongle isn't plugged in when the stream starts, the panel says **Not connected** instead of disappearing. The first time you pick a device after installing, the setting moves to the new form; until then it works as before. [§6.9](USER_MANUAL.md#69-radio-display).
 
 ## 2026-10-05 - v2.5.3-pre6 (pre-release)
 
