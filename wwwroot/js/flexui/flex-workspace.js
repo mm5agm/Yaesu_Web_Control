@@ -536,8 +536,15 @@ export function initFlexWorkspace(host, flags) {
         json.global = json.global || {};
         json.global.tabEnableClose = true;
         json.global.tabSetEnableMaximize = true;
-        json.global.tabEnablePopout = true;
-        json.global.tabEnablePopoutFloatIcon = true;
+        // Pop-out windows are off until the panels support them. A popped-out
+        // panel's elements move into the pop-out's document, where the panel
+        // code's document.getElementById lookups cannot find them, so the
+        // S-meter, filter display and spectrum drew nothing; and closing the
+        // pop-out lost their canvases' 2D contexts, so they stayed blank
+        // back in the main window too. A layout saved while a panel was
+        // popped out is brought home first - see bringPopoutsHome.
+        json.global.tabEnablePopout = false;
+        json.global.tabEnablePopoutFloatIcon = false;
         // Mount every panel in the layout, not just the selected tab of each
         // tabset — see applyTabRenderPolicy. Per-tab overrides (Radio Display)
         // still win over this.
@@ -545,9 +552,39 @@ export function initFlexWorkspace(host, flags) {
         return json;
     }
 
+    // A layout saved while a panel was popped out would reopen the pop-out
+    // window. Put those panels back in the main layout instead, in the first
+    // tabset, so nothing goes missing.
+    function bringPopoutsHome(rawJson) {
+        const json = structuredClone(rawJson);
+        const tabs = [];
+        const collect = (node) => {
+            if (!node) return;
+            if (node.type === 'tab') { tabs.push(node); return; }
+            (node.children || []).forEach(collect);
+        };
+        for (const key of ['popouts', 'subLayouts']) {
+            Object.values(json[key] || {}).forEach(sub => collect(sub.layout));
+            delete json[key];
+        }
+        if (!tabs.length) return json;
+        const findTabset = (node) => {
+            if (!node) return null;
+            if (node.type === 'tabset') return node;
+            for (const child of node.children || []) {
+                const found = findTabset(child);
+                if (found) return found;
+            }
+            return null;
+        };
+        const home = findTabset(json.layout);
+        if (home) home.children = [...(home.children || []), ...tabs];
+        return json;
+    }
+
     function mountJson(rawJson) {
         state.droppedTabs = [];
-        const json = applyGlobals(filterLayoutJson(rawJson, state.flags, state.droppedTabs));
+        const json = applyGlobals(filterLayoutJson(bringPopoutsHome(rawJson), state.flags, state.droppedTabs));
         state.model = FL.Model.fromJson(json);
         state.mountSeq += 1;
         state.model.addChangeListener(() => { persist(); dispatchPanelResize(); buildPanelsMenu(); });
