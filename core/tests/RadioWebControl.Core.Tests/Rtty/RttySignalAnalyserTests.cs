@@ -378,14 +378,33 @@ namespace RadioWebControl.Core.Tests.Rtty
             Assert.Equal(50.0, RttySignalAnalyser.SnapBaud(49.9));
             Assert.Equal(100.0, RttySignalAnalyser.SnapBaud(100.4));
 
-            // 74.2 and 75 are 1.1% apart, which is the tightest pair in the table
-            // and the reason the default tolerance is 1.5% rather than anything
-            // looser.
+            // 74.2 and 75 are 1.1% apart, the tightest pair in the table, and
+            // they are still told apart by a tolerance twice that gap - because
+            // the nearest is chosen before the tolerance is consulted, so a
+            // looser one cannot pick the wrong neighbour, only accept a worse
+            // fit to the right one.
             Assert.Equal(74.2, RttySignalAnalyser.SnapBaud(74.3));
             Assert.Equal(75.0, RttySignalAnalyser.SnapBaud(74.9));
 
             Assert.Null(RttySignalAnalyser.SnapBaud(68.3));
             Assert.Null(RttySignalAnalyser.SnapBaud(38.0));
+        }
+
+        [Fact]
+        public void A_station_on_a_named_speed_is_recognised_every_time_not_most_times()
+        {
+            // The four figures Auto actually produced from DDK9 - a published 50
+            // baud station - across four presses on 2026-10-08. At the original
+            // 1.5% tolerance the last of them was rejected and the operator was
+            // told a 50 baud station was running 50.79: the same signal described
+            // two different ways depending on which four seconds were listened to.
+            //
+            // This is the regression test for the tolerance, so it is written as
+            // the measurements rather than as a number. If the analyser is ever
+            // made more precise the tolerance can come back down, but it must
+            // never again be set below what the analyser can actually deliver.
+            foreach (var measured in new[] { 49.61, 49.71, 50.65, 50.79 })
+                Assert.Equal(50.0, RttySignalAnalyser.SnapBaud(measured));
         }
 
         // --- one tone louder than the other ----------------------------------

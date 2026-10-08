@@ -255,8 +255,21 @@ namespace RadioWebControl.Core.Services.Rtty
         /// a speed that is not in the table, and the measured figure is the one to
         /// use and to show.
         /// </summary>
-        /// <param name="tolerance">As a fraction. 1.5% separates every named speed.</param>
-        public static double? SnapBaud(double measured, double tolerance = 0.015)
+        /// <param name="tolerance">
+        /// As a fraction, and it has to be wider than the analyser's own error,
+        /// not merely wide enough to keep the named speeds apart. Keeping them
+        /// apart is not this number's job: the nearest is picked first, so the
+        /// tolerance only ever decides accept-or-reject, never which one.
+        ///
+        /// <para>Set at 1.5% it was narrower than the measurement it was judging.
+        /// Four presses on DDK9, a published 50 baud station, on 2026-10-08 gave
+        /// 49.61, 49.71, 50.65 and 50.79 - a spread of +/-1.6%, so the same
+        /// station was recognised as 50 on three presses and reported as an odd
+        /// speed on the fourth. 2.5% covers that spread with room to spare and
+        /// still rejects anything genuinely off the list: the nearest neighbours
+        /// to the test cases that must stay unrecognised are 8% and 16% away.</para>
+        /// </param>
+        public static double? SnapBaud(double measured, double tolerance = 0.025)
         {
             var nearest = StandardBauds.OrderBy(b => Math.Abs(b - measured)).First();
             return Math.Abs(nearest - measured) <= nearest * tolerance ? nearest : null;
