@@ -44,6 +44,15 @@ namespace RadioWebControl.Core.Services.Rtty
     /// How nearly every measured tone-reversal came out a whole number of bits
     /// long at the chosen speed, 0 to 1. The strongest part of the estimate.
     /// </param>
+    /// <param name="Agreement">
+    /// How nearly the same answer came out of the first half of the audio and the
+    /// second, 0 to 1, from <see cref="RttySignalAnalyser.AnalyseAgreed"/>. 1 when
+    /// both halves measured the same speed exactly, 0 at the limit of what counts
+    /// as agreement at all. <see cref="RttySignalAnalyser.Analyse"/> leaves it at
+    /// 1 because it has not checked: an unchecked answer and a checked one that
+    /// agreed perfectly are the same number here, and the difference between them
+    /// is which method was called.
+    /// </param>
     public sealed record RttySignalEstimate(
         double MarkHz,
         double SpaceHz,
@@ -51,7 +60,25 @@ namespace RadioWebControl.Core.Services.Rtty
         double Baud,
         double Confidence,
         double ToneMargin,
-        double BaudFit);
+        double BaudFit,
+        double Agreement = 1.0);
+
+    /// <summary>
+    /// Why <see cref="RttySignalAnalyser.AnalyseAgreed"/> did or did not return an
+    /// estimate. The two failures want different things from the operator - tune
+    /// the signal in, or wait for it to steady - so they are not one value.
+    /// </summary>
+    public enum RttyAgreement
+    {
+        /// <summary>Both halves of the audio found the same signal.</summary>
+        Agreed,
+
+        /// <summary>Nothing in the audio looked like a pair of keyed tones.</summary>
+        NothingHeard,
+
+        /// <summary>Something was found, but it did not measure the same twice.</summary>
+        DidNotRepeat,
+    }
 
     /// <summary>
     /// Listens to a few seconds of audio and works out what the signal in it is:
@@ -247,6 +274,105 @@ namespace RadioWebControl.Core.Services.Rtty
             var confidence = prominence * fit;
 
             return new RttySignalEstimate(markHz, spaceHz, shift, baud, confidence, margin, fit);
+        }
+
+        /// <summary>
+        /// How far apart the two halves' speeds may be and still count as the same
+        /// answer, as a fraction. Far looser than <see cref="SnapBaud"/>'s
+        /// tolerance on purpose: each half holds half the keying, so its speed is
+        /// the noisier measurement, and this is not trying to tell 50 from 50.8.
+        /// It is trying to tell 50 from 31.
+        /// </summary>
+        public const double SpeedAgreement = 0.10;
+
+        /// <summary>
+        /// The same for the tone pair, and looser again because it is nearly always
+        /// met - the pair is the robust half of the estimate and held to within a
+        /// hertz through the fade that sent the speed to 31 baud. A disagreement
+        /// this large means the halves locked onto different peaks, so they are not
+        /// two measurements of one station at all.
+        /// </summary>
+        public const double ShiftAgreement = 0.15;
+
+        /// <summary>
+        /// <see cref="Analyse"/>, with the answer checked against itself: the same
+        /// audio is analysed again in two halves, and an estimate is returned only
+        /// if the halves agree about the speed and the tone pair.
+        ///
+        /// <para><b>Why this is not just a higher confidence threshold.</b>
+        /// <see cref="RttySignalEstimate.Confidence"/> says how well the winning
+        /// speed fitted the keying it was shown. Whether the same answer would come
+        /// out again is a different question, and the two came apart exactly where
+        /// it mattered: as a 50 baud station faded, three successive analyses gave
+        /// 47.54, 49.99 and 31.03 baud while the shift held at 444, 445 and 444.
+        /// The 31.03 was no harmonic of anything - it was a spurious fit to keying
+        /// the fade had chewed - and it scored 0.54 against the good reading's
+        /// 0.77, nowhere near a wide enough gap to protect anyone. A spurious fit
+        /// cannot be recognised from inside the window that produced it. It can
+        /// only be caught by making the measurement repeat itself.</para>
+        ///
+        /// <para><b>It costs no extra listening.</b> The halves come out of the
+        /// audio already captured, so the operator waits exactly as long as before.
+        /// What it costs is precision in the check: half the keying measures the
+        /// speed less exactly, so two halves of even a clean signal differ by a
+        /// percent or two, which is why <see cref="SpeedAgreement"/> is 10% and not
+        /// the 2.5% that decides whether a speed has a name. If a tighter check is
+        /// ever wanted, the way to buy it is two overlapping full-length windows -
+        /// six seconds of audio, not eight.</para>
+        ///
+        /// <para>The estimate returned is the whole-block one, which is the most
+        /// precise of the three. Only its
+        /// <see cref="RttySignalEstimate.Confidence"/> changes, scaled by how well
+        /// the halves agreed, and that scaling is also reported on its own as
+        /// <see cref="RttySignalEstimate.Agreement"/>.</para>
+        /// </summary>
+        public static (RttySignalEstimate? Estimate, RttyAgreement Outcome) AnalyseAgreed(
+            ReadOnlySpan<float> audio,
+            int sampleRate,
+            double lowHz = 300,
+            double highHz = 3000,
+            double lowBaud = 30,
+            double highBaud = 120)
+        {
+            var whole = Analyse(audio, sampleRate, lowHz, highHz, lowBaud, highBaud);
+            if (whole is null) return (null, RttyAgreement.NothingHeard);
+
+            var half = audio.Length / 2;
+            var early = Analyse(audio[..half], sampleRate, lowHz, highHz, lowBaud, highBaud);
+            var late = Analyse(audio[half..], sampleRate, lowHz, highHz, lowBaud, highBaud);
+
+            // A half that finds nothing is a disagreement, not a silence: the whole
+            // block did find a signal, so one half carried it and the other did
+            // not. Reporting "nothing heard" there would be false.
+            if (early is null || late is null) return (null, RttyAgreement.DidNotRepeat);
+
+            var speedGap = RelativeGap(early.Baud, late.Baud);
+            var shiftGap = RelativeGap(early.ShiftHz, late.ShiftHz);
+            if (speedGap > SpeedAgreement || shiftGap > ShiftAgreement)
+                return (null, RttyAgreement.DidNotRepeat);
+
+            // Linear from 1 at exact agreement to 0 at the limit, so an answer that
+            // only just scraped in reads as the half-certain thing it is instead of
+            // passing at full confidence.
+            var agreement = Clamp01(1 - speedGap / SpeedAgreement);
+
+            return (whole with
+            {
+                Confidence = whole.Confidence * agreement,
+                Agreement = agreement,
+            }, RttyAgreement.Agreed);
+        }
+
+        /// <summary>
+        /// The gap between two measurements of one thing, as a fraction of the
+        /// smaller of them - so 31 against 50 is 0.61 rather than 0.38, and a
+        /// spurious fit well below the true speed is not flattered by being divided
+        /// by the larger number.
+        /// </summary>
+        private static double RelativeGap(double a, double b)
+        {
+            var smaller = Math.Min(Math.Abs(a), Math.Abs(b));
+            return smaller < 1e-9 ? double.PositiveInfinity : Math.Abs(a - b) / smaller;
         }
 
         /// <summary>
