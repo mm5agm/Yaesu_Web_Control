@@ -70,6 +70,8 @@ export class RttyTuner {
         this._autoBusy  = false;     // an Auto analysis is outstanding
         this._pushBusy    = false;   // a radio-tones write is outstanding
         this._pushPending = null;    // the newest tones to write once it finishes
+        this._pushQuiet   = false;   // hand the note back rather than post it
+        this._pushNote    = null;    // what the radio took, for the caller to fold in
         this._statusHold  = 0;       // Date.now() until which _draw must not overwrite
         this._restartAt   = 0;       // Date.now() of the last automatic restart
         this._paused      = false;   // a pop-out waiting out a mode the tuner has no use in
@@ -382,22 +384,42 @@ export class RttyTuner {
                 return;
             }
 
+            // The recognised figure where there is one, the raw measurement
+            // where there is not - and then the same numbers are what the status
+            // line reports, so the operator is never told two things about one
+            // result. Measuring a 50 baud station at 50.65 is a 1.3% error, not a
+            // discovery: SnapBaud's tolerance is the analyser saying it knows
+            // which speed that is, and showing "50.65 measured" would claim it
+            // had found an odd one. The measured figure still wins whenever
+            // nothing on the list fits, which is the case the label is for.
+            const shiftHz = r.snappedShiftHz ?? r.shiftHz;
+            const baudHz  = r.snappedBaud    ?? r.baud;
+
             this._settings.markHz  = Math.round(r.markHz);
-            this._settings.shiftHz = r.shiftHz;
-            this._settings.baud    = r.baud;
+            this._settings.shiftHz = shiftHz;
+            this._settings.baud    = baudHz;
             this._settings.reverse = !!r.reverse;
             this._showSettings();
             this._saveSettings();
             this._send('start');
 
-            // The radio's menu goes with it where it can; _pushToRadio says so
-            // when there is no rung, and clears _radioApplied either way so the
-            // four-second sync does not drag any of this back.
+            // The radio's menu goes with it where it can, and clears
+            // _radioApplied either way so the four-second sync does not drag any
+            // of this back.
+            //
+            // Awaited, and asked to stay quiet, because there is one status line
+            // and two things to say. Left to post its own note it would land a
+            // few hundred ms after the summary below, overwrite it, and reset the
+            // hold to its own - and the part of the summary worth reading is the
+            // one it was wiping: the warning about which tone is mark, which is
+            // the only part the operator has to act on.
             this._radioApplied = null;
-            this._pushToRadio();
+            this._pushNote = null;
+            this._pushQuiet = true;
+            try { await this._pushToRadio(); } finally { this._pushQuiet = false; }
 
-            const shift = r.snappedShiftHz == null ? `${r.shiftHz} Hz measured` : `${r.shiftHz} Hz`;
-            const baud  = r.snappedBaud   == null ? `${r.baud} baud measured`  : `${r.baud} baud`;
+            const shift = r.snappedShiftHz == null ? `${shiftHz} Hz measured` : `${shiftHz} Hz`;
+            const baud  = r.snappedBaud    == null ? `${baudHz} baud measured`  : `${baudHz} baud`;
             const parts = [`mark ${Math.round(r.markHz)} Hz`, `shift ${shift}`, baud];
             if (r.reverse) parts.push('reversed');
 
@@ -408,7 +430,11 @@ export class RttyTuner {
             const doubt = r.toneMargin <= 0.08
                 ? ' Which tone is mark is a guess here - if it does not copy, try Rev.'
                 : '';
-            this._setStatus(`Auto: ${parts.join(', ')}.${doubt}`, 9000);
+            const note = this._pushNote ? ` ${this._pushNote}` : '';
+
+            // Longer than the usual hold: this is three clauses, and the one that
+            // asks the operator to do something is at the end of them.
+            this._setStatus(`Auto: ${parts.join(', ')}.${note}${doubt}`, 12000);
         } catch {
             this._setStatus('Cannot reach the server.', 5000);
         } finally {
@@ -530,6 +556,16 @@ export class RttyTuner {
     // ends up on the one they stopped at, not that it visits the others.
     async _pushToRadio() {
         if (!this._radioEl) return;                  // this app has no radio endpoint
+
+        // Quiet mode hands the note back in _pushNote instead of posting it, so a
+        // caller with its own one-line summary can fold this into it. A field
+        // rather than an argument because the latest-wins continuation at the end
+        // of this function re-enters with none, and it has to stay quiet too.
+        const say = text => {
+            if (this._pushQuiet) this._pushNote = text;
+            else this._setStatus(text, 4000);
+        };
+
         const want = { markHz: this._settings.markHz, shiftHz: this._settings.shiftHz };
         if (this._pushBusy) { this._pushPending = want; return; }
         this._pushBusy = true;
@@ -540,10 +576,10 @@ export class RttyTuner {
                 body:    JSON.stringify(want)
             });
             if (res.status === 404) return;          // older server: nothing to say
-            if (!res.ok) { this._setStatus(`Radio: HTTP ${res.status}`, 4000); return; }
+            if (!res.ok) { say(`Radio: HTTP ${res.status}`); return; }
             const r = await res.json();
 
-            if (!r.ok) { this._setStatus(r.reason || 'The radio would not take those tones.', 4000); return; }
+            if (!r.ok) { say(r.reason || 'The radio would not take those tones.'); return; }
 
             // Only the parts the radio actually took. A null is a value with no
             // rung on this radio, and the tuner goes on using it regardless,
@@ -564,14 +600,12 @@ export class RttyTuner {
             // the value the operator chose.
             this._radioApplied = missed.length ? null : { ...want };
 
-            this._setStatus(
-                missed.length
-                    ? (took.length ? `Radio set to ${took.join(', ')}; it has no ${missed.join(' or ')}.`
-                                   : `The radio has no ${missed.join(' or ')} - tuner only.`)
-                    : `Radio set to ${took.join(', ')}.`,
-                4000);
+            say(missed.length
+                ? (took.length ? `Radio set to ${took.join(', ')}; it has no ${missed.join(' or ')}.`
+                               : `The radio has no ${missed.join(' or ')} - tuner only.`)
+                : `Radio set to ${took.join(', ')}.`);
         } catch {
-            this._setStatus('Cannot reach the server.', 4000);
+            say('Cannot reach the server.');
         } finally {
             this._pushBusy = false;
             const next = this._pushPending;
