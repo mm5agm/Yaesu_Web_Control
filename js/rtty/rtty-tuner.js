@@ -375,14 +375,19 @@ export class RttyTuner {
             }
             if (!res.ok) { this._setStatus(`Auto: HTTP ${res.status}`, 5000); return; }
             const r = await res.json();
-            if (!r.ok) { this._setStatus(r.reason || 'Nothing to measure.', 5000); return; }
 
             // The server's note about anything it knows that the analyser could
             // not - today only that the IF filter is too narrow for a wide shift
             // to have been in the audio at all. It is appended rather than
-            // substituted, on both the give-up path and the answer below, because
-            // it explains a result instead of replacing one.
+            // substituted, on every one of the three paths below, because it
+            // explains a result instead of replacing one - and on a refusal it is
+            // the more useful half of what the operator is told.
             const advice = r.advice ? ` ${r.advice}` : '';
+
+            if (!r.ok) {
+                this._setStatus((r.reason || 'Nothing to measure.') + advice, 8000);
+                return;
+            }
 
             if (r.confidence < 0.4) {
                 this._setStatus(

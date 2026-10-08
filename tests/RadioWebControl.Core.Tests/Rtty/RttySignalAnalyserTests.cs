@@ -626,16 +626,28 @@ namespace RadioWebControl.Core.Tests.Rtty
             var audio = Signal(2125, 450, 50, noiseSigma: 0.05);
 
             var whole = RttySignalAnalyser.Analyse(audio, Rate);
-            var (agreed, outcome) = RttySignalAnalyser.AnalyseAgreed(audio, Rate);
+            var checked_ = RttySignalAnalyser.AnalyseAgreed(audio, Rate);
+            var agreed = checked_.Estimate;
 
-            Assert.Equal(RttyAgreement.Agreed, outcome);
+            Assert.Equal(RttyAgreement.Agreed, checked_.Outcome);
             Assert.NotNull(agreed);
+
+            // Both halves are handed back whether they agreed or not, so a bench
+            // log can say what happened rather than only that something did.
+            Assert.NotNull(checked_.Early);
+            Assert.NotNull(checked_.Late);
 
             // The answer is the whole-block one, not either half's: the halves are
             // the check, and a check that also degraded the figures it passed would
             // be paying for certainty with precision.
             Assert.Equal(whole!.MarkHz, agreed!.MarkHz);
             Assert.Equal(whole.Baud, agreed.Baud);
+
+            // The confidence especially: scaling it by the agreement was tried, and
+            // it put a real station under the threshold the browser gives up at
+            // while nothing about the signal had changed. The gate is what
+            // disagreement costs; the confidence answers a different question.
+            Assert.Equal(whole.Confidence, agreed.Confidence);
             Assert.Equal(50.0, RttySignalAnalyser.SnapBaud(agreed.Baud));
 
             // Two halves of one clean signal do not measure identically, so this is
@@ -665,10 +677,17 @@ namespace RadioWebControl.Core.Tests.Rtty
             fast.AsSpan(0, n).CopyTo(audio);
             slow.AsSpan(0, n).CopyTo(audio.AsSpan(n));
 
-            var (agreed, outcome) = RttySignalAnalyser.AnalyseAgreed(audio, Rate);
+            var checked_ = RttySignalAnalyser.AnalyseAgreed(audio, Rate);
 
-            Assert.Equal(RttyAgreement.DidNotRepeat, outcome);
-            Assert.Null(agreed);
+            Assert.Equal(RttyAgreement.DidNotRepeat, checked_.Outcome);
+            Assert.Null(checked_.Estimate);
+
+            // The figures that disagreed come back, which is the whole point of
+            // returning them: one half near 50, the other near 31.
+            Assert.NotNull(checked_.Early);
+            Assert.NotNull(checked_.Late);
+            Assert.True(checked_.Early!.Baud > 40, $"early {checked_.Early.Baud:F2}");
+            Assert.True(checked_.Late!.Baud < 40, $"late {checked_.Late.Baud:F2}");
         }
 
         [Fact]
@@ -677,10 +696,10 @@ namespace RadioWebControl.Core.Tests.Rtty
             // Too short for even one analysis window. The outcome has to be the one
             // that tells the operator to tune the signal in, because there is no
             // measurement here to disagree with itself.
-            var (agreed, outcome) = RttySignalAnalyser.AnalyseAgreed(new float[4096], Rate);
+            var checked_ = RttySignalAnalyser.AnalyseAgreed(new float[4096], Rate);
 
-            Assert.Equal(RttyAgreement.NothingHeard, outcome);
-            Assert.Null(agreed);
+            Assert.Equal(RttyAgreement.NothingHeard, checked_.Outcome);
+            Assert.Null(checked_.Estimate);
         }
 
         [Fact]
