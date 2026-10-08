@@ -10,40 +10,68 @@
 // Stateless: every call reads storage afresh, so a page that imports this by
 // two different URLs (two module instances) still sees one set of settings.
 
-// Every shift in ordinary RTTY use. This is the fallback, not a radio table:
-// which of these a given rig can actually be set to is a per-radio fact, so
-// the host page says so by the options it puts in its Shift control and the
-// tuner reads them from there. Nothing here knows about any one radio.
+// The shifts and speeds with a name, for a host page that wants to offer a set
+// and for recognising a measured figure. Not a limit: see normaliseRttySettings.
+//
+// Which of these a given rig can be *set* to is a per-radio fact and nothing
+// here knows about any one radio - the host page says so by the options it puts
+// in its Shift control.
 export const RTTY_SHIFTS = [170, 200, 425, 450, 850];
-export const DEFAULT_RTTY_SETTINGS = Object.freeze({ markHz: 2125, shiftHz: 170, reverse: false });
+export const RTTY_BAUDS  = [45.45, 50, 56.9, 74.2, 75, 100];
+export const DEFAULT_RTTY_SETTINGS = Object.freeze({
+    markHz: 2125, shiftHz: 170, reverse: false, baud: 45.45,
+});
+
+// What a shift and a speed may be at all, as opposed to which ones have names.
+// Wide, deliberately: the tuner is two filters and a decoder is arithmetic, and
+// between them they can work on any station that fits in the receiver's audio.
+const SHIFT_MIN = 20,  SHIFT_MAX = 1200;
+const BAUD_MIN  = 20,  BAUD_MAX  = 300;
 
 const LS_KEY = 'rttyTuner';
 
-/** A valid settings object from anything; whatever is missing or out of range takes the default. */
-export function normaliseRttySettings(s, allowed = RTTY_SHIFTS) {
-    const shifts = (Array.isArray(allowed) && allowed.length) ? allowed : RTTY_SHIFTS;
+/**
+ * A valid settings object from anything; whatever is missing or out of range
+ * takes the default.
+ *
+ * Any shift and any speed inside the limits above are kept, named or not.
+ *
+ * This used to take the host's list of shifts and snap anything else onto it,
+ * on the reasoning that a shift the radio cannot be set to is a shift the
+ * operator cannot use. That is the wrong way round, and Colin settled it on
+ * 2026-10-08: the decoder is the authority, not the radio's own. A listener
+ * meets 450 Hz on the German weather stations and 850 on aviation circuits
+ * daily, and the tuner and the decoder can both work on them; only the radio's
+ * built-in decoder cannot, and nothing here depends on it.
+ *
+ * The problem the snapping did solve is real, though - a shift with no rung
+ * leaves a <select> of rungs showing nothing. It is solved where it belongs, in
+ * the dialog, which shows such a figure as a measurement instead of silently
+ * substituting a different one.
+ */
+export function normaliseRttySettings(s) {
     const out = { ...DEFAULT_RTTY_SETTINGS };
-    // The default shift need not be one this radio has.
-    if (!shifts.includes(out.shiftHz)) out.shiftHz = shifts[0];
     if (!s || typeof s !== 'object') return out;
-    const mark = Number(s.markHz);
+    const mark  = Number(s.markHz);
     const shift = Number(s.shiftHz);
+    const baud  = Number(s.baud);
     if (Number.isFinite(mark) && mark >= 300 && mark <= 3000) out.markHz = Math.round(mark);
-    if (shifts.includes(shift)) out.shiftHz = shift;
+    if (Number.isFinite(shift) && shift >= SHIFT_MIN && shift <= SHIFT_MAX) out.shiftHz = Math.round(shift);
+    if (Number.isFinite(baud) && baud >= BAUD_MIN && baud <= BAUD_MAX) out.baud = Math.round(baud * 100) / 100;
     out.reverse = s.reverse === true;
     return out;
 }
 
-export function loadRttySettings(storage = globalThis.localStorage, allowed = RTTY_SHIFTS) {
+export function loadRttySettings(storage = globalThis.localStorage) {
     try {
-        return normaliseRttySettings(JSON.parse(storage?.getItem(LS_KEY) || 'null'), allowed);
+        return normaliseRttySettings(JSON.parse(storage?.getItem(LS_KEY) || 'null'));
     } catch {
-        return normaliseRttySettings(null, allowed);   // private window, blocked storage
+        return normaliseRttySettings(null);   // private window, blocked storage
     }
 }
 
-export function saveRttySettings(settings, storage = globalThis.localStorage, allowed = RTTY_SHIFTS) {
-    try { storage?.setItem(LS_KEY, JSON.stringify(normaliseRttySettings(settings, allowed))); } catch { /* ignore */ }
+export function saveRttySettings(settings, storage = globalThis.localStorage) {
+    try { storage?.setItem(LS_KEY, JSON.stringify(normaliseRttySettings(settings))); } catch { /* ignore */ }
 }
 
 /**

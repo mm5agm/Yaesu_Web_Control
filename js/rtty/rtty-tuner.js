@@ -47,8 +47,10 @@ export class RttyTuner {
             status:  'rttyTunerStatus',
             mark:      'rttyTunerMark',
             shift:     'rttyTunerShift',
+            baud:      'rttyTunerBaud',
             reverse:   'rttyTunerReverse',
             fromRadio: 'rttyTunerFromRadio',
+            auto:      'rttyTunerAutoBtn',
             paused:    'rttyTunerPaused',
             compact:   'rttyTunerCompactBtn',
         }, ids);
@@ -65,6 +67,7 @@ export class RttyTuner {
         this._want    = null;        // settings we have POSTed but not yet seen come back
         this._wantAt  = 0;
         this._radioBusy = false;     // a radio-tones read is outstanding
+        this._autoBusy  = false;     // an Auto analysis is outstanding
         this._pushBusy    = false;   // a radio-tones write is outstanding
         this._pushPending = null;    // the newest tones to write once it finishes
         this._statusHold  = 0;       // Date.now() until which _draw must not overwrite
@@ -87,8 +90,10 @@ export class RttyTuner {
         this._status  = $('status');
         this._markEl  = $('mark');
         this._shiftEl = $('shift');
+        this._baudEl  = $('baud');
         this._revEl   = $('reverse');
         this._radioEl = $('fromRadio');
+        this._autoEl  = $('auto');
         if (!this._dialog || !this._canvas) return false;
 
         this._ctx = this._canvas.getContext('2d');
@@ -109,7 +114,10 @@ export class RttyTuner {
         };
         this._markEl?.addEventListener('change', changed);
         this._shiftEl?.addEventListener('change', changed);
+        this._baudEl?.addEventListener('change', changed);
         this._revEl?.addEventListener('change', changed);
+
+        this._autoEl?.addEventListener('click', () => this._auto());
 
         // The audio is held only while the dialog is open. Closing it by any
         // route - the X, Escape, or the page's own code - lets the host go.
@@ -226,10 +234,7 @@ export class RttyTuner {
 
     // Shared with click-to-tune, which reads them for AFSK modes.
     _loadSettings() {
-        // Read against this radio's set, so a shift stored by an older build that
-        // offered more rungs snaps to one this radio has rather than leaving the
-        // Shift control showing nothing.
-        this._settings = loadRttySettings(undefined, this._shifts());
+        this._settings = loadRttySettings();
 
         // Storage does not record whether the saved tones were typed or taken
         // from the radio, and on a reload that is exactly what the sync needs
@@ -242,12 +247,18 @@ export class RttyTuner {
         this._radioApplied = untouched ? { ...this._settings } : null;
     }
 
-    _saveSettings() { saveRttySettings(this._settings, undefined, this._shifts()); }
+    _saveSettings() { saveRttySettings(this._settings); }
 
-    // Which shifts this radio has, taken from the options the host page put in
-    // its Shift control. The IC-7300 offers three (170/200/425, CI-V 00 40);
-    // another rig offers another set, and neither list belongs in shared code.
-    // Falls back to the standard set when the control is missing.
+    // Which shifts this radio can be SET to, taken from the options the host page
+    // put in its Shift control. The IC-7300 offers three (170/200/425, CI-V
+    // 00 40); another rig offers another set, and neither list belongs in shared
+    // code. Falls back to the standard set when the control is missing.
+    //
+    // It is not a limit on what the tuner will run on. Every shift on the air is
+    // two filters to this panel and arithmetic to a decoder, and the ones no menu
+    // offers - 450 on the German weather stations, 850 on aviation - are ordinary
+    // listening. This list only decides whether the dropdown has a rung to select
+    // or has to show the figure as a measurement; see _setChoice.
     _shifts() {
         const opts = this._shiftEl?.options;
         if (!opts || !opts.length) return SHIFTS;
@@ -255,17 +266,51 @@ export class RttyTuner {
         return list.length ? list : SHIFTS;
     }
 
+    /**
+     * Show `value` in a <select> of named figures, which may not contain it.
+     *
+     * A measured shift or speed is very often not one of the names - 450 Hz has no
+     * rung on this radio, 56.9 baud is on no list anywhere - and the dropdown must
+     * then say what was measured rather than quietly select a different number.
+     * So an option carrying the figure is inserted at the top, labelled as
+     * measured so it cannot be mistaken for a setting the operator chose, and it
+     * is taken out again the moment the value is one of the names.
+     *
+     * One at most, reused, because Auto can be pressed all afternoon.
+     */
+    _setChoice(el, value, label) {
+        if (!el) return;
+        const named = Array.from(el.options).filter(o => !o.dataset.measured);
+        let extra   = Array.from(el.options).find(o => o.dataset.measured);
+        if (named.some(o => Number(o.value) === value)) {
+            extra?.remove();
+        } else {
+            if (!extra) {
+                extra = document.createElement('option');
+                extra.dataset.measured = '1';
+                el.insertBefore(extra, el.firstChild);
+            }
+            extra.value = String(value);
+            extra.textContent = label;
+        }
+        el.value = String(value);
+    }
+
     _showSettings() {
-        if (this._markEl)  this._markEl.value    = String(this._settings.markHz);
-        if (this._shiftEl) this._shiftEl.value   = String(this._settings.shiftHz);
-        if (this._revEl)   this._revEl.checked   = this._settings.reverse;
+        if (this._markEl) this._markEl.value  = String(this._settings.markHz);
+        if (this._revEl)  this._revEl.checked = this._settings.reverse;
+        this._setChoice(this._shiftEl, this._settings.shiftHz, `${this._settings.shiftHz} measured`);
+        this._setChoice(this._baudEl,  this._settings.baud,    `${this._settings.baud} measured`);
     }
 
     _readSettings() {
         const mark  = Number(this._markEl?.value);
         const shift = Number(this._shiftEl?.value);
+        const baud  = Number(this._baudEl?.value);
         if (Number.isFinite(mark) && mark >= 300 && mark <= 3000) this._settings.markHz = Math.round(mark);
-        if (this._shifts().includes(shift)) this._settings.shiftHz = shift;
+        // Whatever the control offers, including a measured option Auto put there.
+        if (Number.isFinite(shift) && shift >= 20 && shift <= 1200) this._settings.shiftHz = Math.round(shift);
+        if (Number.isFinite(baud) && baud >= 20 && baud <= 300) this._settings.baud = baud;
         this._settings.reverse = !!this._revEl?.checked;
     }
 
@@ -294,6 +339,84 @@ export class RttyTuner {
             if (what === 'start') this._sweeps.length = 0;
         } catch {
             this._setStatus('Cannot reach the server.', 4000);
+        }
+    }
+
+    // ── Auto: work out what is being sent ───────────────────────────────────
+    //
+    // Optional, like the radio-tones pair: an app whose backend has no
+    // /api/rtty/auto hides the button after the first 404, so this ships before
+    // every app implements it.
+    //
+    // The host listens for about four seconds and measures the two tones, the
+    // shift, which way round they are and the speed. All four are then applied -
+    // including a shift or a speed that no menu anywhere offers, because what the
+    // decoder needs is what is on the air.
+    //
+    // A weak answer is NOT applied. The operator presses this when they cannot
+    // tell what they are listening to, which is exactly when a confident-looking
+    // wrong answer does most harm: it would overwrite the settings they already
+    // had, and they would have nothing to go back to. So below the threshold the
+    // analyser itself documents, it says it could not tell and changes nothing.
+    async _auto() {
+        if (!this._autoEl || this._autoBusy) return;
+        this._autoBusy = true;
+        const label = this._autoEl.textContent;
+        this._autoEl.disabled = true;
+        this._autoEl.textContent = 'Listening';
+        this._setStatus('Listening for a few seconds...', 8000);
+        try {
+            const res = await fetch('/api/rtty/auto', { method: 'POST' });
+            if (res.status === 404) {        // this app cannot answer: stop offering
+                this._autoEl.hidden = true;
+                return;
+            }
+            if (!res.ok) { this._setStatus(`Auto: HTTP ${res.status}`, 5000); return; }
+            const r = await res.json();
+            if (!r.ok) { this._setStatus(r.reason || 'Nothing to measure.', 5000); return; }
+
+            if (r.confidence < 0.4) {
+                this._setStatus(
+                    `Could not make sense of it - that may not be RTTY, or another ` +
+                    `signal in the passband is louder. Tune it in and try again.`, 6000);
+                return;
+            }
+
+            this._settings.markHz  = Math.round(r.markHz);
+            this._settings.shiftHz = r.shiftHz;
+            this._settings.baud    = r.baud;
+            this._settings.reverse = !!r.reverse;
+            this._showSettings();
+            this._saveSettings();
+            this._send('start');
+
+            // The radio's menu goes with it where it can; _pushToRadio says so
+            // when there is no rung, and clears _radioApplied either way so the
+            // four-second sync does not drag any of this back.
+            this._radioApplied = null;
+            this._pushToRadio();
+
+            const shift = r.snappedShiftHz == null ? `${r.shiftHz} Hz measured` : `${r.shiftHz} Hz`;
+            const baud  = r.snappedBaud   == null ? `${r.baud} baud measured`  : `${r.baud} baud`;
+            const parts = [`mark ${Math.round(r.markHz)} Hz`, `shift ${shift}`, baud];
+            if (r.reverse) parts.push('reversed');
+
+            // Two different uncertainties, and the second one is the operator's to
+            // act on: a station using a one-bit stop element can be measured
+            // perfectly except for which of its two tones is mark, and then the
+            // only thing to do is try Rev and see which copies.
+            const doubt = r.toneMargin <= 0.08
+                ? ' Which tone is mark is a guess here - if it does not copy, try Rev.'
+                : '';
+            this._setStatus(`Auto: ${parts.join(', ')}.${doubt}`, 9000);
+        } catch {
+            this._setStatus('Cannot reach the server.', 5000);
+        } finally {
+            this._autoBusy = false;
+            if (this._autoEl) {
+                this._autoEl.disabled = false;
+                this._autoEl.textContent = label;
+            }
         }
     }
 
@@ -425,8 +548,8 @@ export class RttyTuner {
             // Only the parts the radio actually took. A null is a value with no
             // rung on this radio, and the tuner goes on using it regardless,
             // because it is a receive aid and the radio's menu is not what makes
-            // it work. With the Shift control now offering only rungs the radio
-            // has, a null shift means a mark the menu cannot express, not a shift.
+            // it work. A null shift is the ordinary case after Auto has measured
+            // one of the shifts the menu has never offered.
             const took = [];
             if (r.markHz  != null) took.push(`mark ${r.markHz} Hz`);
             if (r.shiftHz != null) took.push(`shift ${r.shiftHz} Hz`);
@@ -545,7 +668,11 @@ export class RttyTuner {
         }
 
         let changed = false;
-        if (this._shifts().includes(f.shiftHz) && f.shiftHz !== s.shiftHz) { s.shiftHz = f.shiftHz; changed = true; }
+        // Any shift the host accepted, not just the ones this radio's menu has:
+        // the other tab may have pressed Auto and measured 450, and this tab has
+        // to follow it rather than sit on 170 looking right.
+        if (Number.isFinite(f.shiftHz) && f.shiftHz !== s.shiftHz) { s.shiftHz = f.shiftHz; changed = true; }
+        if (Number.isFinite(f.baud) && f.baud !== s.baud) { s.baud = f.baud; changed = true; }
         if (typeof f.reverse === 'boolean' && f.reverse !== s.reverse) { s.reverse = f.reverse; changed = true; }
         if (Number.isFinite(f.markHz) && Math.round(f.markHz) !== s.markHz) { s.markHz = Math.round(f.markHz); changed = true; }
 
