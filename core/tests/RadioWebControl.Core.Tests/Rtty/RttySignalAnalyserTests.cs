@@ -619,5 +619,80 @@ namespace RadioWebControl.Core.Tests.Rtty
             Hz(2125, got!.MarkHz);
             Baud(45.45, got.Baud);
         }
+
+        [Fact]
+        public void A_steady_signal_agrees_with_itself_and_keeps_the_whole_blocks_figures()
+        {
+            var audio = Signal(2125, 450, 50, noiseSigma: 0.05);
+
+            var whole = RttySignalAnalyser.Analyse(audio, Rate);
+            var (agreed, outcome) = RttySignalAnalyser.AnalyseAgreed(audio, Rate);
+
+            Assert.Equal(RttyAgreement.Agreed, outcome);
+            Assert.NotNull(agreed);
+
+            // The answer is the whole-block one, not either half's: the halves are
+            // the check, and a check that also degraded the figures it passed would
+            // be paying for certainty with precision.
+            Assert.Equal(whole!.MarkHz, agreed!.MarkHz);
+            Assert.Equal(whole.Baud, agreed.Baud);
+            Assert.Equal(50.0, RttySignalAnalyser.SnapBaud(agreed.Baud));
+
+            // Two halves of one clean signal do not measure identically, so this is
+            // deliberately not an assertion of 1.0 - only that the agreement is
+            // nowhere near the refusal line.
+            Assert.True(agreed.Agreement > 0.7, $"agreement {agreed.Agreement:F2}");
+        }
+
+        [Fact]
+        public void A_speed_that_will_not_repeat_is_refused_rather_than_reported()
+        {
+            // The defect this guard exists for, built deliberately: one tone pair
+            // throughout, so the shift agrees perfectly, but a speed that changes
+            // halfway. On the bench it was a fade that produced it - three analyses
+            // of a 50 baud station gave 47.54, 49.99 and 31.03 baud while the shift
+            // held within a hertz - and the 31.03 scored 0.54, high enough to be
+            // reported as if it meant something.
+            //
+            // The halves are trimmed to the same length so the midpoint falls
+            // exactly on the join; otherwise each half would carry some of both
+            // speeds and the test would be measuring the wrong thing.
+            var fast = Signal(2125, 450, 50);
+            var slow = Signal(2125, 450, 31);
+            var n = Math.Min(fast.Length, slow.Length);
+
+            var audio = new float[n * 2];
+            fast.AsSpan(0, n).CopyTo(audio);
+            slow.AsSpan(0, n).CopyTo(audio.AsSpan(n));
+
+            var (agreed, outcome) = RttySignalAnalyser.AnalyseAgreed(audio, Rate);
+
+            Assert.Equal(RttyAgreement.DidNotRepeat, outcome);
+            Assert.Null(agreed);
+        }
+
+        [Fact]
+        public void Nothing_to_analyse_is_reported_as_nothing_heard_not_as_disagreement()
+        {
+            // Too short for even one analysis window. The outcome has to be the one
+            // that tells the operator to tune the signal in, because there is no
+            // measurement here to disagree with itself.
+            var (agreed, outcome) = RttySignalAnalyser.AnalyseAgreed(new float[4096], Rate);
+
+            Assert.Equal(RttyAgreement.NothingHeard, outcome);
+            Assert.Null(agreed);
+        }
+
+        [Fact]
+        public void Analyse_on_its_own_still_reports_full_agreement()
+        {
+            // Agreement defaults to 1 so that the field means "nothing known
+            // against it" rather than "unchecked", and a caller that reads it
+            // without calling AnalyseAgreed is not silently told the signal is bad.
+            var got = RttySignalAnalyser.Analyse(Signal(2125, 170, 45.45), Rate);
+
+            Assert.NotNull(got);
+            Assert.Equal(1.0, got!.Agreement);
+        }
     }
 }

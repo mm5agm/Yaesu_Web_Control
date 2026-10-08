@@ -377,10 +377,18 @@ export class RttyTuner {
             const r = await res.json();
             if (!r.ok) { this._setStatus(r.reason || 'Nothing to measure.', 5000); return; }
 
+            // The server's note about anything it knows that the analyser could
+            // not - today only that the IF filter is too narrow for a wide shift
+            // to have been in the audio at all. It is appended rather than
+            // substituted, on both the give-up path and the answer below, because
+            // it explains a result instead of replacing one.
+            const advice = r.advice ? ` ${r.advice}` : '';
+
             if (r.confidence < 0.4) {
                 this._setStatus(
                     `Could not make sense of it - that may not be RTTY, or another ` +
-                    `signal in the passband is louder. Tune it in and try again.`, 6000);
+                    `signal in the passband is louder. Tune it in and try again.` +
+                    advice, 8000);
                 return;
             }
 
@@ -432,9 +440,9 @@ export class RttyTuner {
                 : '';
             const note = this._pushNote ? ` ${this._pushNote}` : '';
 
-            // Longer than the usual hold: this is three clauses, and the one that
-            // asks the operator to do something is at the end of them.
-            this._setStatus(`Auto: ${parts.join(', ')}.${note}${doubt}`, 12000);
+            // Longer than the usual hold: this is up to four clauses, and the ones
+            // that ask the operator to do something are at the end of them.
+            this._setStatus(`Auto: ${parts.join(', ')}.${note}${advice}${doubt}`, 14000);
         } catch {
             this._setStatus('Cannot reach the server.', 5000);
         } finally {
