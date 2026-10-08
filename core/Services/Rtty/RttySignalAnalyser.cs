@@ -48,7 +48,10 @@ namespace RadioWebControl.Core.Services.Rtty
     /// How nearly the same answer came out of the first half of the audio and the
     /// second, 0 to 1, from <see cref="RttySignalAnalyser.AnalyseAgreed"/>. 1 when
     /// both halves measured the same speed exactly, 0 at the limit of what counts
-    /// as agreement at all. <see cref="RttySignalAnalyser.Analyse"/> leaves it at
+    /// as agreement at all. It does not touch
+    /// <see cref="RttySignalEstimate.Confidence"/> - the two answer different
+    /// questions, and an answer that is here at all has already passed the
+    /// agreement gate. <see cref="RttySignalAnalyser.Analyse"/> leaves it at
     /// 1 because it has not checked: an unchecked answer and a checked one that
     /// agreed perfectly are the same number here, and the difference between them
     /// is which method was called.
@@ -62,6 +65,29 @@ namespace RadioWebControl.Core.Services.Rtty
         double ToneMargin,
         double BaudFit,
         double Agreement = 1.0);
+
+    /// <summary>
+    /// What <see cref="RttySignalAnalyser.AnalyseAgreed"/> made of the audio,
+    /// including the two half-block estimates it compared.
+    ///
+    /// <para>The halves are returned, and not just the verdict, because a refusal
+    /// that explains nothing cannot be worked on. A bench session produces a
+    /// handful of refusals and the only question worth asking of them is what
+    /// disagreed - a speed that halved while the tones held is a fade, two
+    /// different tone pairs are two stations, and one half finding nothing at all
+    /// is a signal that came and went. Each app logs these in its own voice.</para>
+    /// </summary>
+    /// <param name="Estimate">
+    /// The whole-block answer, or null when the halves did not agree or there was
+    /// nothing to measure.
+    /// </param>
+    /// <param name="Early">The first half's estimate, if it found anything.</param>
+    /// <param name="Late">The second half's estimate, if it found anything.</param>
+    public sealed record RttyAgreementResult(
+        RttySignalEstimate? Estimate,
+        RttyAgreement Outcome,
+        RttySignalEstimate? Early = null,
+        RttySignalEstimate? Late = null);
 
     /// <summary>
     /// Why <see cref="RttySignalAnalyser.AnalyseAgreed"/> did or did not return an
@@ -320,13 +346,13 @@ namespace RadioWebControl.Core.Services.Rtty
         /// ever wanted, the way to buy it is two overlapping full-length windows -
         /// six seconds of audio, not eight.</para>
         ///
-        /// <para>The estimate returned is the whole-block one, which is the most
-        /// precise of the three. Only its
-        /// <see cref="RttySignalEstimate.Confidence"/> changes, scaled by how well
-        /// the halves agreed, and that scaling is also reported on its own as
-        /// <see cref="RttySignalEstimate.Agreement"/>.</para>
+        /// <para>The estimate returned is the whole-block one, unaltered, which is
+        /// the most precise of the three. How well the halves agreed is reported
+        /// alongside it as <see cref="RttySignalEstimate.Agreement"/> and is
+        /// deliberately not folded into the confidence - see the note where it is
+        /// computed for the bench reading that settled that.</para>
         /// </summary>
-        public static (RttySignalEstimate? Estimate, RttyAgreement Outcome) AnalyseAgreed(
+        public static RttyAgreementResult AnalyseAgreed(
             ReadOnlySpan<float> audio,
             int sampleRate,
             double lowHz = 300,
@@ -335,7 +361,7 @@ namespace RadioWebControl.Core.Services.Rtty
             double highBaud = 120)
         {
             var whole = Analyse(audio, sampleRate, lowHz, highHz, lowBaud, highBaud);
-            if (whole is null) return (null, RttyAgreement.NothingHeard);
+            if (whole is null) return new RttyAgreementResult(null, RttyAgreement.NothingHeard);
 
             var half = audio.Length / 2;
             var early = Analyse(audio[..half], sampleRate, lowHz, highHz, lowBaud, highBaud);
@@ -344,23 +370,28 @@ namespace RadioWebControl.Core.Services.Rtty
             // A half that finds nothing is a disagreement, not a silence: the whole
             // block did find a signal, so one half carried it and the other did
             // not. Reporting "nothing heard" there would be false.
-            if (early is null || late is null) return (null, RttyAgreement.DidNotRepeat);
+            if (early is null || late is null)
+                return new RttyAgreementResult(null, RttyAgreement.DidNotRepeat, early, late);
 
             var speedGap = RelativeGap(early.Baud, late.Baud);
             var shiftGap = RelativeGap(early.ShiftHz, late.ShiftHz);
             if (speedGap > SpeedAgreement || shiftGap > ShiftAgreement)
-                return (null, RttyAgreement.DidNotRepeat);
+                return new RttyAgreementResult(null, RttyAgreement.DidNotRepeat, early, late);
 
-            // Linear from 1 at exact agreement to 0 at the limit, so an answer that
-            // only just scraped in reads as the half-certain thing it is instead of
-            // passing at full confidence.
+            // Reported, not applied. Scaling the confidence by this was tried and
+            // taken out within the hour of writing it, because it punished a signal
+            // twice for one thing: the halves have already had to agree or there
+            // would be no answer here at all, so the gate above is where
+            // disagreement is paid for. On the bench it cost a real station its
+            // answer - DDK9, properly tuned in RTTY-L, read 0.67 before the guard
+            // and 0.40 after, which is the exact threshold the browser gives up at,
+            // and the only thing that had changed was the arithmetic. A caller that
+            // wants to weigh agreement can: it is right here.
             var agreement = Clamp01(1 - speedGap / SpeedAgreement);
 
-            return (whole with
-            {
-                Confidence = whole.Confidence * agreement,
-                Agreement = agreement,
-            }, RttyAgreement.Agreed);
+            return new RttyAgreementResult(
+                whole with { Agreement = agreement },
+                RttyAgreement.Agreed, early, late);
         }
 
         /// <summary>
