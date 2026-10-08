@@ -169,13 +169,25 @@ export class FilterScopePanel {
             this._render();
         });
         this._resizeObserver.observe(canvas.parentElement ?? canvas);
+        this._canvas = canvas;
         this._startAnimation();
+        // Popping the panel out moves this canvas into another window. The
+        // loop runs on the canvas's own window -- this one's stops while it
+        // is minimised -- so restart it there, and again when it comes home,
+        // since a closed pop-out never runs the frame it was waiting on.
+        this._onPanelMoved = () => {
+            if (this._animFrame && this._canvas.ownerDocument.defaultView !== this._animWin) this._startAnimation();
+        };
+        window.addEventListener('ywc-flex-panel-attached', this._onPanelMoved);
     }
 
     _startAnimation() {
+        this._cancelAnimation();
+        const win = this._canvas?.ownerDocument.defaultView ?? window;
+        this._animWin = win;
         let frameCount = 0;
         const loop = () => {
-            this._animFrame = requestAnimationFrame(loop);
+            this._animFrame = win.requestAnimationFrame(loop);
             // Only the bars move, and only when something is feeding them.
             // Everything else here repaints from setState. Without this the
             // panel redrew 20 times a second, on every open tab, for ever,
@@ -183,7 +195,14 @@ export class FilterScopePanel {
             if (!this._activeSpectrumProvider()) return;
             if (++frameCount % 3 === 0) this._render();  // ~20 fps
         };
-        this._animFrame = requestAnimationFrame(loop);
+        this._animFrame = win.requestAnimationFrame(loop);
+    }
+
+    _cancelAnimation() {
+        if (this._animFrame) {
+            try { this._animWin.cancelAnimationFrame(this._animFrame); } catch { /* window gone */ }
+            this._animFrame = null;
+        }
     }
 
     /**
@@ -193,9 +212,10 @@ export class FilterScopePanel {
      * to call multiple times.
      */
     stop() {
-        if (this._animFrame) {
-            try { cancelAnimationFrame(this._animFrame); } catch { /* ignore */ }
-            this._animFrame = null;
+        this._cancelAnimation();
+        if (this._onPanelMoved) {
+            window.removeEventListener('ywc-flex-panel-attached', this._onPanelMoved);
+            this._onPanelMoved = null;
         }
         if (this._resizeObserver) {
             try { this._resizeObserver.disconnect(); } catch { /* ignore */ }
