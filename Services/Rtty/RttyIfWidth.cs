@@ -3,61 +3,111 @@ using System;
 namespace RadioWebControl.Core.Services.Rtty
 {
     /// <summary>
-    /// How much IF passband an FSK signal actually needs.
+    /// How much IF passband an FSK signal actually needs, given where the radio
+    /// puts that passband.
     ///
     /// <para>This exists to answer one narrow question - <i>is the filter the
     /// radio is already using too narrow to have carried this signal at all?</i> -
     /// and it is used in one direction only. A caller may widen the filter to the
-    /// figure this returns. <b>Nothing may narrow a filter to it.</b></para>
+    /// figure this returns. <b>Nothing may narrow a filter to it.</b> A narrow
+    /// filter is how a RTTY operator digs a signal out of a crowded band, and the
+    /// width they chose is evidence about the band this software does not have.</para>
     ///
-    /// <para>The asymmetry is not timidity, it is the state of the evidence. A
-    /// filter wider than the signal cannot remove anything the signal needed; a
-    /// filter narrowed to a computed figure can, and whether it does depends on
-    /// where the radio centres its RTTY passband relative to the mark pitch -
-    /// which has never been measured on the bench here. Get that wrong and the
-    /// space tone is attenuated at the edge of the passband, which is exactly the
-    /// unequal-amplitude failure that <see cref="RttyMarkCentre"/> was written to
-    /// cure. There is also an operator in this: a narrow filter is how a RTTY
-    /// operator digs a signal out of a crowded band, and the width they chose is
-    /// evidence about the band this software does not have.</para>
+    /// <para><b>The passband does not follow the tones, so the shift alone cannot
+    /// answer this.</b> An earlier version of this class returned
+    /// <c>shift + 2 * baud</c> - the textbook occupied bandwidth - and its own
+    /// documentation admitted the figure depended on "where the radio centres its
+    /// RTTY passband relative to the mark pitch, which has never been measured on
+    /// the bench here". It has now been measured, on both radios, and the textbook
+    /// figure is wrong on both:</para>
     ///
-    /// <para>The sum itself is the ordinary one. Keying a carrier between two tones
-    /// at <paramref name="baud"/> transitions a second puts sidebands either side
-    /// of each tone at roughly the keying rate, so the occupied bandwidth is the
-    /// shift plus about twice the baud rate. For the classic 170 Hz / 45.45 baud
-    /// amateur signal that comes to 261 Hz, which is why every RTTY rig ever built
-    /// offers a filter near 250-300 Hz: the arithmetic agreeing with eighty years
-    /// of practice is the only confirmation available for a formula like this.</para>
+    /// <list type="bullet">
+    ///   <item><description><b>IC-7300 MkII</b> centres the passband on the
+    ///   <i>mark</i> tone. At 450 Hz shift and 50 baud a 550 Hz filter - exactly
+    ///   what the old sum asked for - put the space tone 33 dB down and decoded
+    ///   <i>zero</i> characters. 1200 Hz decoded cleanly.</description></item>
+    ///   <item><description><b>FTdx101MP</b> holds the passband at a fixed audio
+    ///   frequency near 1800 Hz, following neither tone. The same signal needed
+    ///   1700 Hz with the pair at 2125/2575, and only 800 Hz with the identical
+    ///   pair moved down to 1675/2125 - a factor of two from the audio placement
+    ///   alone, with the shift and the speed unchanged.</description></item>
+    /// </list>
+    ///
+    /// <para>So the floor is set by whichever tone sits <i>furthest from the
+    /// centre of the passband</i>, not by the gap between the tones. A tone at
+    /// audio frequency f survives a passband of width W centred on C while
+    /// |f - C| &lt;= W/2, and each tone carries keying sidebands out to roughly
+    /// the baud rate either side, which gives the sum below. Fourteen bench
+    /// points across those two radios and two tone placements all agree with it;
+    /// the old sum agreed with three of them.</para>
+    ///
+    /// <para><b>The centre is radio-specific and the caller supplies it</b> -
+    /// that is the seam. Core does the geometry; which audio frequency a given
+    /// radio centres its RTTY passband on is a fact about that radio and belongs
+    /// in the app that talks to it. Both tone frequencies are passed in rather
+    /// than a shift, because the tuner already knows both and deriving space from
+    /// mark would mean re-deriving the sideband sign that
+    /// <see cref="RttyMarkCentre"/> owns.</para>
     /// </summary>
     public static class RttyIfWidth
     {
         /// <summary>
-        /// The narrowest passband, in Hz, that could have carried a signal of this
-        /// shift and speed.
+        /// The narrowest passband, in Hz, that could have carried both tones -
+        /// or null when the geometry given cannot support an answer.
         ///
         /// <para>Read it as a floor and nothing more: a filter narrower than this
-        /// was certainly clipping the signal, while a filter wider than it may
-        /// still be the wrong choice for the band. The radio's own filter widths
-        /// are quoted at -6 dB and its skirts are not vertical, so this is the
-        /// point below which the loss is certain, not the point above which there
-        /// is none.</para>
+        /// was certainly clipping one of the tones, while a filter wider than it
+        /// may still be the wrong choice for the band. The radio's own filter
+        /// widths are quoted at -6 dB and its skirts are not vertical, so this is
+        /// the point below which the loss is certain, not the point above which
+        /// there is none.</para>
+        ///
+        /// <para>Null means "cannot say", and a caller must not substitute a
+        /// guess. Writing a width on no evidence is the failure this whole class
+        /// is here to avoid.</para>
         /// </summary>
-        /// <param name="shiftHz">Mark-to-space separation in Hz.</param>
+        /// <param name="markHz">Mark tone, in Hz of audio.</param>
+        /// <param name="spaceHz">Space tone, in Hz of audio. May be above or
+        /// below the mark; only the distance from the centre matters.</param>
         /// <param name="baud">Keying speed in transitions per second.</param>
-        public static int MinimumHz(double shiftHz, double baud)
+        /// <param name="passbandCentreHz">
+        /// The audio frequency this radio centres its IF passband on. For a
+        /// mark-centred radio that is the mark tone itself; for one with a fixed
+        /// passband it is that fixed frequency.
+        /// </param>
+        public static int? MinimumHz(double markHz, double spaceHz, double baud, double passbandCentreHz)
         {
-            if (double.IsNaN(shiftHz) || shiftHz <= 0) shiftHz = 0;
-            if (double.IsNaN(baud)    || baud    <= 0) baud    = 0;
+            if (!Usable(markHz) || !Usable(spaceHz) || !Usable(passbandCentreHz)) return null;
+            if (double.IsNaN(baud) || double.IsInfinity(baud) || baud < 0) return null;
+
+            double furthest = Math.Max(
+                Math.Abs(markHz  - passbandCentreHz),
+                Math.Abs(spaceHz - passbandCentreHz));
 
             // Rounded up, because this is a floor: rounding a floor down would
             // quietly return a width that clips.
-            return (int)Math.Ceiling(shiftHz + 2.0 * baud);
+            return (int)Math.Ceiling(2.0 * furthest + 2.0 * baud);
         }
 
         /// <summary>
-        /// The width to ask the radio for, given what it is already using: the
-        /// current width when that is already enough, otherwise the floor. Null
-        /// when nothing should be written.
+        /// Whether a passband of this width, centred where this radio centres it,
+        /// actually passes both tones.
+        ///
+        /// <para>For telling the operator the truth when the answer is no and
+        /// widening cannot fix it. If the tone pair sits far enough off the centre
+        /// of the passband, the radio's <i>widest</i> filter may still clip a tone,
+        /// and then the thing to change is the dial, not the filter - so a caller
+        /// that only ever widened would report success and leave the operator
+        /// watching an empty screen.</para>
+        /// </summary>
+        public static bool Passes(int widthHz, double markHz, double spaceHz, double baud, double passbandCentreHz)
+            => widthHz > 0
+               && MinimumHz(markHz, spaceHz, baud, passbandCentreHz) is { } needed
+               && widthHz >= needed;
+
+        /// <summary>
+        /// The width to ask the radio for, given what it is already using: null
+        /// when nothing should be written, otherwise the floor.
         ///
         /// <para>Returning null rather than the unchanged width is what keeps the
         /// widen-only rule honest at the call site. A caller handed a number will
@@ -73,14 +123,21 @@ namespace RadioWebControl.Core.Services.Rtty
         /// width is not evidence of a problem, and guessing at one would be
         /// writing on no evidence at all.
         /// </param>
-        /// <param name="shiftHz">Mark-to-space separation in Hz.</param>
+        /// <param name="markHz">Mark tone, in Hz of audio.</param>
+        /// <param name="spaceHz">Space tone, in Hz of audio.</param>
         /// <param name="baud">Keying speed in transitions per second.</param>
-        public static int? WidenToHz(int currentWidthHz, double shiftHz, double baud)
+        /// <param name="passbandCentreHz">
+        /// The audio frequency this radio centres its IF passband on.
+        /// </param>
+        public static int? WidenToHz(
+            int currentWidthHz, double markHz, double spaceHz, double baud, double passbandCentreHz)
         {
             if (currentWidthHz <= 0) return null;
-            var needed = MinimumHz(shiftHz, baud);
+            if (MinimumHz(markHz, spaceHz, baud, passbandCentreHz) is not { } needed) return null;
             if (needed <= 0) return null;
             return currentWidthHz >= needed ? null : needed;
         }
+
+        private static bool Usable(double hz) => !double.IsNaN(hz) && !double.IsInfinity(hz) && hz > 0;
     }
 }
