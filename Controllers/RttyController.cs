@@ -13,11 +13,15 @@ namespace Yaesu_Web_Control.Controllers
     public class RttyController : ControllerBase
     {
         private readonly RttyTunerService _tuner;
+        private readonly RttyReaderService _reader;
         private readonly ILogger<RttyController> _logger;
 
-        public RttyController(RttyTunerService tuner, ILogger<RttyController> logger)
+        public RttyController(RttyTunerService tuner,
+                              RttyReaderService reader,
+                              ILogger<RttyController> logger)
         {
             _tuner = tuner;
+            _reader = reader;
             _logger = logger;
         }
 
@@ -74,5 +78,96 @@ namespace Yaesu_Web_Control.Controllers
         [HttpGet("tuner")]
         public IActionResult Tuner([FromQuery] int points = 500, [FromQuery] string? client = null)
             => Ok(_tuner.Frame(Math.Clamp(points, 0, 4800), ClientId(client)));
+
+        // ---- The reader --------------------------------------------------
+        //
+        // Polled like the CW reader and for the same reason: RTTY arrives at
+        // six characters a second, so asking twice a second reads as live and
+        // costs nothing. Each poll sends back the cursor from the previous
+        // reply and gets only what is new.
+        //
+        // The reader takes mark, shift, reverse and speed from the tuner, so
+        // none of them appear here. That is the point of the one panel - the
+        // operator tunes the cross and the decoder is already listening in the
+        // right place.
+        //
+        // There is no client id on these, unlike the tuner's: the tuner draws
+        // a figure per window and so holds the audio per window, while the
+        // reader decodes one stream of text that every window reads the same
+        // copy of.
+
+        public sealed class ReaderStartRequest
+        {
+            /// <summary>
+            /// Which figures table to print above the shift: "Ita2" or
+            /// "UsTty". Omitted keeps what the operator last chose.
+            /// </summary>
+            public string? Figures { get; set; }
+
+            /// <summary>Unshift on space. Omitted keeps the current setting.</summary>
+            public bool? Usos { get; set; }
+        }
+
+        /// <summary>Start decoding, or re-apply the alphabet to a running decoder.</summary>
+        [HttpPost("reader/start")]
+        public async Task<IActionResult> ReaderStart([FromBody] ReaderStartRequest? req = null)
+        {
+            RadioWebControl.Core.Services.Rtty.RttyFigureSet? set = null;
+            if (!string.IsNullOrWhiteSpace(req?.Figures))
+            {
+                if (!Enum.TryParse<RadioWebControl.Core.Services.Rtty.RttyFigureSet>(
+                        req!.Figures, ignoreCase: true, out var parsed))
+                    return BadRequest(new { error = $"Unknown figures table \"{req.Figures}\"." });
+                set = parsed;
+            }
+
+            try
+            {
+                await _reader.StartAsync(set, req?.Usos, HttpContext.RequestAborted);
+                return Ok(_reader.Snapshot(0));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to start the RTTY reader");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Stop decoding and let the audio go. The text stays, so the operator
+        /// can read the bulletin they just stopped.
+        /// </summary>
+        [HttpPost("reader/stop")]
+        public async Task<IActionResult> ReaderStop()
+        {
+            try
+            {
+                await _reader.StopAsync(HttpContext.RequestAborted);
+                return Ok(_reader.Snapshot(long.MaxValue));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to stop the RTTY reader");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>Throw the text away, leaving the decoder running.</summary>
+        [HttpPost("reader/clear")]
+        public IActionResult ReaderClear()
+        {
+            _reader.ClearText();
+            // The cursor the caller should carry on from, so the next poll asks
+            // for what comes after the clear rather than replaying the buffer.
+            return Ok(_reader.Snapshot(long.MaxValue));
+        }
+
+        /// <summary>
+        /// What has been decoded since <paramref name="since"/>, plus
+        /// everything the panel's status line needs.
+        /// </summary>
+        [HttpGet("reader")]
+        public IActionResult Reader([FromQuery] long since = 0)
+            => Ok(_reader.Snapshot(Math.Max(0, since)));
     }
 }

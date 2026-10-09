@@ -532,6 +532,11 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderModeService>
 // lose that the moment they reloaded the page.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyTunerModeService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyTunerService>();
+// The RTTY reader. A singleton for the same reason the CW reader is: one
+// decoder, one capture hold, one piece of decoded text however many browser
+// tabs are open. It takes mark, shift, reverse and speed from the tuner above
+// rather than keeping a second copy of them.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyReaderService>();
 // Radio Display (USB UVC / HDMI capture → MJPEG) — opt-in; capture opens while viewers connect.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoCaptureService>();

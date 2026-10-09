@@ -1,4 +1,4 @@
-@model Yaesu_Web_Control.Pages.FlexUiModel
+﻿@model Yaesu_Web_Control.Pages.FlexUiModel
 @{
     var maxPowerWatts = Model.View.MaxPowerWatts;
     var isSingleReceiver = Model.View.IsSingleReceiver;
@@ -44,6 +44,7 @@
         import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RttyReader }           from "/js/rtty/rtty-reader.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { attachPopout, screenShare } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { watchInView }          from "/js/dialogs/place-in-view.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -565,6 +566,25 @@
             // it runs with or without the CW reader.
             window.rttyTuner = new RttyTuner();
             window.rttyTuner.init();
+
+            // The reader in the same panel, taking Mark, Shift, Speed and Rev
+            // from the tuner above rather than keeping a second copy of them.
+            // It takes its own hold on the bridge as well, so tuning, decoding
+            // and the CW reader can all run at once.
+            //
+            // Unless Contest Mode (Settings) is on, which hides the Decode
+            // section and the reader's Start/Stop button with it: nothing would
+            // show the text, and a decode still running on the server from an
+            // earlier session would have no button anywhere to stop it. So: do
+            // not start it, and stop the server once on load. The flag is read
+            // off the class the partial put on the dialog, so this page and the
+            // pop-out cannot disagree about it. See
+            // ApplicationSettings.RttyContestMode.
+            if (document.getElementById('rttyTunerDialog')?.classList.contains('rtty-contest')) {
+                fetch('/api/rtty/reader/stop', { method: 'POST' }).catch(() => { });
+            } else {
+                window.rttyReader = new RttyReader().init();
+            }
 
             // Close the CW reader and the RTTY tuner once the radio has
             // settled in a mode neither is any use in, so an RTTY tuner is not
