@@ -127,6 +127,7 @@ export class RttyTuner {
         // The radio sync goes with it: it costs CI-V traffic and there is
         // nothing to keep in step with once the figure is gone.
         this._dialog.addEventListener('close', () => {
+            this._holdMode(false);
             this._stopPolling();
             this._stopRadioSync();
             this._send('stop');
@@ -173,6 +174,28 @@ export class RttyTuner {
         return true;
     }
 
+    /**
+     * Claim the mode while the figure is running, and let it go when it stops.
+     *
+     * The tuner exists to be watched while the operator tunes around, so for as
+     * long as it is open the radio's mode belongs to it rather than to the host
+     * page's band plan - otherwise the click that moves the dial also writes
+     * whatever mode the plan has for that slice of band, which on an RTTY
+     * segment of a CW band is CW, and the panel is shut by its own host two
+     * seconds later.
+     *
+     * A Set of reasons rather than a flag: a CW reader holding CW wants the same
+     * promise, and both panels can be open at once. The host page decides what
+     * to do about it - this only states the claim.
+     */
+    _holdMode(on) {
+        try {
+            globalThis.radioModeHolds ??= new Set();
+            if (on) globalThis.radioModeHolds.add('rtty-tuner');
+            else    globalThis.radioModeHolds.delete('rtty-tuner');
+        } catch { /* a host without it simply keeps its old behaviour */ }
+    }
+
     toggle() {
         if (!this._dialog) return;
         if (this._dialog.open) { this._dialog.close(); return; }
@@ -192,6 +215,7 @@ export class RttyTuner {
             this._radioProbed = true;
             this._radioEl.addEventListener('click', () => this._syncFromRadio(true));
         }
+        this._holdMode(true);
         this._send('start');
         this._startPolling();
         this._startRadioSync();
@@ -214,6 +238,7 @@ export class RttyTuner {
         this._paused = paused;
         if (paused) {
             const wasRunning = !!this._timer;
+            this._holdMode(false);
             this._stopPolling();
             this._stopRadioSync();
             if (wasRunning) this._send('stop');
