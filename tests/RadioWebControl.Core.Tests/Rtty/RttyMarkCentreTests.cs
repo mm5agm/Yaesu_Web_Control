@@ -1,0 +1,121 @@
+using RadioWebControl.Core.Services.Rtty;
+using Xunit;
+
+namespace RadioWebControl.Core.Tests.Rtty
+{
+    /// <summary>
+    /// Two things are pinned down here, and both of them are things a comment
+    /// cannot hold on to: the sign, which if wrong moves the radio away from the
+    /// signal by twice the error, and the three refusals, which are the difference
+    /// between a feature that tunes the radio and a feature that grabs it.
+    /// </summary>
+    public class RttyMarkCentreTests
+    {
+        // The dial reads the mark, and RTTY normal on this radio is the
+        // lower-sideband case: audio rises as the dial rises. So a mark heard
+        // above where it is wanted means the dial is above the signal, and the
+        // dial has to come down.
+        [Fact]
+        public void Moves_the_dial_down_when_the_mark_is_heard_high()
+        {
+            var offset = RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 2191, wantedMarkHz: 2125, lowerSideband: true);
+
+            Assert.Equal(-66, offset);
+        }
+
+        [Fact]
+        public void Moves_the_dial_up_when_the_mark_is_heard_low()
+        {
+            var offset = RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 1950, wantedMarkHz: 2125, lowerSideband: true);
+
+            Assert.Equal(175, offset);
+        }
+
+        [Fact]
+        public void Reverses_on_the_upper_sideband()
+        {
+            var offset = RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 2191, wantedMarkHz: 2125, lowerSideband: false);
+
+            Assert.Equal(66, offset);
+        }
+
+        // DDK9 as Colin left it on 2026-10-08: dial 10.100647 against a proper
+        // 10.100998, mark heard at 2191 instead of 2125. A 350 Hz error on the
+        // dial and a 66 Hz error in the audio are the same error - the rest of
+        // the 350 is the tuner having been started on a mark the signal was never
+        // sent on - so this checks only the part the analyser can see.
+        [Fact]
+        public void Corrects_the_bench_mistuning_on_DDK9()
+        {
+            var offset = RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 2191, wantedMarkHz: 2125,
+                lowerSideband: true, confidence: 0.67);
+
+            Assert.NotNull(offset);
+            Assert.Equal(10_100_647 - 66, 10_100_647 + offset!.Value);
+        }
+
+        [Fact]
+        public void Does_nothing_when_the_mark_is_already_close_enough()
+        {
+            // 20 Hz is under two analyser bins, so it is as likely to be
+            // measurement error as mistuning.
+            Assert.Null(RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 2145, wantedMarkHz: 2125, lowerSideband: true));
+        }
+
+        [Fact]
+        public void Does_nothing_when_the_measurement_is_not_confident()
+        {
+            Assert.Null(RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 1800, wantedMarkHz: 2125,
+                lowerSideband: true, confidence: 0.39));
+        }
+
+        [Fact]
+        public void Does_nothing_when_the_signal_is_too_far_away_to_be_the_same_one()
+        {
+            Assert.Null(RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 1200, wantedMarkHz: 2125, lowerSideband: true));
+        }
+
+        [Fact]
+        public void Does_nothing_with_a_tone_that_is_not_a_tone()
+        {
+            Assert.Null(RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 0, wantedMarkHz: 2125, lowerSideband: true));
+            Assert.Null(RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: double.NaN, wantedMarkHz: 2125, lowerSideband: true));
+        }
+
+        [Theory]
+        [InlineData("RTTY-L", true)]
+        [InlineData("rtty-l", true)]
+        [InlineData("RTTY", true)]
+        [InlineData("RTTY-U", false)]
+        public void Knows_the_two_FSK_modes_and_which_way_each_inverts(string mode, bool lower)
+        {
+            Assert.Equal(lower, RttyMarkCentre.SidebandForFskMode(mode));
+        }
+
+        // AFSK is a supported way to run the tuner and deliberately not a
+        // supported way to have the VFO moved: the operator's own software is
+        // making the tones and has its own tuning indicator.
+        [Theory]
+        [InlineData("DATA-L")]
+        [InlineData("DATA-U")]
+        [InlineData("USB")]
+        [InlineData("LSB")]
+        [InlineData("CW-U")]
+        [InlineData("FM")]
+        [InlineData("")]
+        [InlineData(null)]
+        public void Refuses_every_mode_that_is_not_the_radios_own_FSK(string? mode)
+        {
+            Assert.Null(RttyMarkCentre.SidebandForFskMode(mode));
+        }
+    }
+}
