@@ -86,5 +86,40 @@ namespace Yaesu_Web_Control.Services
             "3" => 850,
             _   => null,
         };
+
+        // ---- the same two tables, run backwards -------------------------
+        //
+        // For the tuner pushing its Mark and Shift into the radio, so the
+        // radio's own decoder does not have to be set twice from the front
+        // panel. Both return null for a figure the menu has no rung for, and
+        // that is the interesting half of the answer rather than an error: the
+        // menu items are one-byte indexes into a short fixed list, and the
+        // tuner deliberately offers figures that are not on it. 450 Hz is the
+        // one that matters - the DWD weather stations send it all day and the
+        // decoder here copies it perfectly - and a mark anywhere but 1275 or
+        // 2125 has nowhere to go at all.
+        //
+        // The caller reports a null rather than snapping to the nearest rung.
+        // Snapping would quietly set the radio's decoder to a shift the
+        // operator is not copying, which is worse than leaving it where the
+        // operator put it and saying so.
+
+        /// <summary>MARK FREQUENCY: the answer code for an audio mark, or null for no rung.</summary>
+        public static string? CodeForMarkHz(int markHz) => markHz switch
+        {
+            1275 => "0",
+            2125 => "1",
+            _    => null,
+        };
+
+        /// <summary>SHIFT FREQUENCY: the answer code for a shift, or null for no rung.</summary>
+        public static string? CodeForShiftHz(int shiftHz) => shiftHz switch
+        {
+            170 => "0",
+            200 => "1",
+            425 => "2",
+            850 => "3",
+            _   => null,
+        };
     }
 }

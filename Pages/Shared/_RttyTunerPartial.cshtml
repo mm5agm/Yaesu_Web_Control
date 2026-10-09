@@ -292,6 +292,24 @@
                         <label class="form-check-label" for="rttyTunerReverse"
                                title="The other station is sending reversed. The radio's own RTTY-L / RTTY-U setting is followed automatically - this is on top of it.">Rev</label>
                     </div>
+                    @* The shared tuner re-reads the radio's own RTTY menu every few
+                       seconds while this panel is open - there is no CAT event for a
+                       menu change, so polling is the only way to notice one - and it
+                       only ever overwrites figures it put there itself. So in RTTY the
+                       button is mostly for taking the radio's numbers back after you
+                       have typed your own. It stays because it is also the only way to
+                       read the menu in an AFSK mode, where the sync deliberately keeps
+                       its hands off. Note that this button existing is what turns the
+                       polling on at all - see _startRadioSync in rtty-tuner.js. *@
+                    <button type="button" id="rttyTunerFromRadio" class="btn btn-sm btn-outline-secondary"
+                            title="Read Mark and Shift from the radio's own RTTY menu. In RTTY the tuner already follows that menu on its own; press this to take the radio's numbers back after typing your own, or to read them in an AFSK mode.">From radio</button>
+                    @* Listens for about four seconds and fills in all four settings
+                       from what it hears. The shared tuner hides this button by itself
+                       if the backend has no /api/rtty/auto, so it cost nothing while
+                       this app had no Auto. *@
+                    <button type="button" id="rttyTunerAutoBtn" class="btn btn-sm btn-outline-secondary"
+                            title="Listen for a few seconds and work out the tones, the shift, which way round they are and the speed. Needs the signal tuned in well enough to hear the two tones; it changes nothing if it cannot make sense of what it hears."
+                            aria-label="Work out the RTTY settings by listening">Auto</button>
                 </div>
                 <div class="rtty-scope-box">
                     <canvas id="rttyTunerCanvas" width="320" height="320"

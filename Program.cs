@@ -537,6 +537,14 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyTunerService>(
 // tabs are open. It takes mark, shift, reverse and speed from the tuner above
 // rather than keeping a second copy of them.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyReaderService>();
+// The radio's own RTTY MARK/SHIFT menu items, read and written over CAT.
+// Used by the tuner's "From radio" button and by the push the other way, and
+// kept out of CatController because both the tuner and Auto need it.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyRadioToneService>();
+// RTTY Auto: four seconds of receive audio, measured. A singleton because it
+// owns a one-at-a-time lock over the shared capture - two presses would both
+// hear the same audio and both move the same dial.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyAutoService>();
 // Radio Display (USB UVC / HDMI capture → MJPEG) — opt-in; capture opens while viewers connect.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoCaptureService>();
