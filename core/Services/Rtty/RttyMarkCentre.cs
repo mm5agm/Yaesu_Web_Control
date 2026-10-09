@@ -41,14 +41,31 @@ namespace RadioWebControl.Core.Services.Rtty
     public static class RttyMarkCentre
     {
         /// <summary>
-        /// The furthest this will move the dial in one go.
+        /// The smallest cap this will ever use, and the one it uses when the
+        /// caller cannot say how wide the receiver's passband is.
         ///
         /// A tone measurement is only ever evidence about the signal the analyser
         /// happened to pick, and the further that signal sits from where the
         /// operator was listening, the likelier it is a different station
-        /// altogether. Half a kilohertz is wider than any mistuning that still
-        /// leaves a signal in the passband at all, so a figure beyond it is better
-        /// refused than acted on.
+        /// altogether. So there is a limit on how far one press may move the dial.
+        ///
+        /// <para><b>This was the whole cap until 2026-10-09, on the reasoning that
+        /// half a kilohertz is "wider than any mistuning that still leaves a signal
+        /// in the passband at all". The bench disproved that the same day.</b>
+        /// DDK9 was copying at a 5% character error rate with its mark 619 Hz away
+        /// from the 2125 Hz the tuner was set to, through a 1200 Hz filter - well
+        /// inside the passband, decoding, and refused twice by this cap with
+        /// "dial left alone" in the log. The operator then had to move the VFO by
+        /// hand, which is the one thing this feature exists to save.</para>
+        ///
+        /// <para>The honest bound is not a constant at all: <b>it is the width of
+        /// the filter the signal arrived through</b>. A tone further from the
+        /// wanted mark than the passband is wide cannot have been audible, so it
+        /// was some other signal; a tone nearer than that came through the same
+        /// filter the operator is listening to and is fair game. Callers that know
+        /// the IF width pass it as <c>maxOffsetHz</c>; this constant remains the
+        /// floor, so the behaviour can never become more restrictive than it was
+        /// when it was the only rule.</para>
         /// </summary>
         public const double MaxOffsetHz = 500.0;
 
@@ -94,17 +111,33 @@ namespace RadioWebControl.Core.Services.Rtty
         /// radio. From <see cref="SidebandForFskMode"/>.
         /// </param>
         /// <param name="confidence">The analyser's confidence, 0-1.</param>
+        /// <param name="maxOffsetHz">
+        /// The receiver's IF passband width in Hz, when the caller knows it: a tone
+        /// further away than the passband is wide was never audible and so was a
+        /// different signal. Null, zero or anything below
+        /// <see cref="MaxOffsetHz"/> uses <see cref="MaxOffsetHz"/> instead, which
+        /// makes this parameter incapable of tightening the guard - only of letting
+        /// a wide filter say honestly how wide it is.
+        /// </param>
         public static long? ComputeOffsetHz(
-            double measuredMarkHz,
-            double wantedMarkHz,
-            bool   lowerSideband,
-            double confidence = 1.0)
+            double  measuredMarkHz,
+            double  wantedMarkHz,
+            bool    lowerSideband,
+            double  confidence   = 1.0,
+            double? maxOffsetHz  = null)
         {
+            // Max, not coalesce: a caller reporting a 250 Hz CW filter must not be
+            // able to make this stricter than the constant it is replacing. The
+            // narrow-filter case is already handled where it belongs, by the
+            // advisory that tells the operator their filter is too narrow to have
+            // seen the shift at all.
+            var cap = maxOffsetHz is { } m && m > MaxOffsetHz ? m : MaxOffsetHz;
+
             var offset = CwZeroIn.ComputeOffsetWholeHz(
                 measuredToneHz: measuredMarkHz,
                 targetPitchHz:  wantedMarkHz,
                 lowerSideband:  lowerSideband,
-                maxOffsetHz:    MaxOffsetHz,
+                maxOffsetHz:    cap,
                 confidence:     confidence,
                 minConfidence:  MinConfidence);
 

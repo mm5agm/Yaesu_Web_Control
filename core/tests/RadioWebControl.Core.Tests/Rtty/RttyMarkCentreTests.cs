@@ -117,5 +117,91 @@ namespace RadioWebControl.Core.Tests.Rtty
         {
             Assert.Null(RttyMarkCentre.SidebandForFskMode(mode));
         }
+
+        // ─── the passband cap ────────────────────────────────────────────────
+        //
+        // Added after the bench on 2026-10-09, where a 619 Hz offset through a
+        // 1200 Hz filter was refused by the flat 500 Hz limit while the signal
+        // was audibly decoding. These pin the shape of the replacement: a wide
+        // filter may ask for more, and nothing may ask for less.
+
+        [Fact]
+        public void A_wide_filter_allows_a_move_the_old_flat_cap_refused()
+        {
+            // The real case: DDK9 at 2744 against 2125 wanted, 619 Hz away,
+            // through the 1200 Hz filter it was decoding through.
+            Assert.Null(RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 2744, wantedMarkHz: 2125, lowerSideband: true));
+
+            Assert.Equal(-619, RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 2744, wantedMarkHz: 2125, lowerSideband: true,
+                maxOffsetHz: 1200));
+        }
+
+        // The guard can only ever be loosened by this parameter. A caller
+        // reporting a narrow filter must not be able to make the function
+        // stricter than it was when 500 Hz was the only rule - that case is
+        // answered by advising the operator, not by quietly giving up.
+        [Theory]
+        [InlineData(null)]
+        [InlineData(0.0)]
+        [InlineData(-1.0)]
+        [InlineData(50.0)]
+        [InlineData(250.0)]
+        [InlineData(500.0)]
+        public void Nothing_can_tighten_the_guard_below_the_old_constant(double? cap)
+        {
+            // 400 Hz: inside the old constant, so it must still be allowed
+            // however narrow the caller claims its filter is.
+            Assert.Equal(-400, RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 2525, wantedMarkHz: 2125, lowerSideband: true,
+                maxOffsetHz: cap));
+        }
+
+        [Fact]
+        public void Still_refuses_a_tone_further_off_than_the_passband_is_wide()
+        {
+            // 1300 Hz away through a 1200 Hz filter: it cannot have been the
+            // signal in the passband, so it was something else.
+            Assert.Null(RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 3425, wantedMarkHz: 2125, lowerSideband: true,
+                maxOffsetHz: 1200));
+        }
+
+        // Widening the cap must not weaken either of the other two refusals.
+        [Fact]
+        public void A_wide_filter_does_not_excuse_a_poor_measurement()
+        {
+            Assert.Null(RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 2744, wantedMarkHz: 2125, lowerSideband: true,
+                confidence: 0.2, maxOffsetHz: 2400));
+        }
+
+        [Fact]
+        public void A_wide_filter_does_not_make_it_chase_a_tone_already_on_target()
+        {
+            Assert.Null(RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 2135, wantedMarkHz: 2125, lowerSideband: true,
+                maxOffsetHz: 2400));
+        }
+
+        [Fact]
+        public void Keeps_the_sign_right_at_the_wider_distances_too()
+        {
+            // Heard high through a wide filter: still comes down.
+            Assert.Equal(-900, RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 3025, wantedMarkHz: 2125, lowerSideband: true,
+                maxOffsetHz: 2400));
+
+            // Heard low through a wide filter: still goes up.
+            Assert.Equal(900, RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 1225, wantedMarkHz: 2125, lowerSideband: true,
+                maxOffsetHz: 2400));
+
+            // And the upper-sideband case inverts, as before.
+            Assert.Equal(900, RttyMarkCentre.ComputeOffsetHz(
+                measuredMarkHz: 3025, wantedMarkHz: 2125, lowerSideband: false,
+                maxOffsetHz: 2400));
+        }
     }
 }
