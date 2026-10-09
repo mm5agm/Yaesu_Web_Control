@@ -72,6 +72,7 @@ export class RttyTuner {
         this._pushPending = null;    // the newest tones to write once it finishes
         this._pushQuiet   = false;   // hand the note back rather than post it
         this._pushNote    = null;    // what the radio took, for the caller to fold in
+        this._modeNoteShown = null;  // the host's last note about the radio, once said
         this._statusHold  = 0;       // Date.now() until which _draw must not overwrite
         this._restartAt   = 0;       // Date.now() of the last automatic restart
         this._paused      = false;   // a pop-out waiting out a mode the tuner has no use in
@@ -368,7 +369,17 @@ export class RttyTuner {
         this._autoEl.textContent = 'Listening';
         this._setStatus('Listening for a few seconds...', 8000);
         try {
-            const res = await fetch('/api/rtty/auto', { method: 'POST' });
+            // The mark goes up with the request. The server cannot know it -
+            // it is this dialog's setting, and the host's copy is only as fresh
+            // as the last start - and it is what the answer gets centred on: an
+            // app that reads it moves the dial so the signal arrives on our mark
+            // filter instead of leaving it on the slope of the IF. An app that
+            // does not read it ignores the body and answers as before.
+            const res = await fetch('/api/rtty/auto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ markHz: this._settings.markHz }),
+            });
             if (res.status === 404) {        // this app cannot answer: stop offering
                 this._autoEl.hidden = true;
                 return;
@@ -445,9 +456,23 @@ export class RttyTuner {
                 : '';
             const note = this._pushNote ? ` ${this._pushNote}` : '';
 
+            // Said plainly, because the radio has just retuned itself and an
+            // operator who is not told why has a radio that moved on its own.
+            // Both numbers are given: the mark their filters are now on, and the
+            // one that was heard, which together explain the move. Absent on
+            // every path that did not move anything - an app without the feature,
+            // the setting off, a mode it refuses, or a signal already centred -
+            // and absent rather than "moved by 0 Hz".
+            const centre = r.centreOffsetHz
+                ? ` Moved the dial ${Math.abs(Math.round(r.centreOffsetHz))} Hz ` +
+                  `${r.centreOffsetHz < 0 ? 'down' : 'up'} to put the mark on ` +
+                  `${Math.round(r.markHz)} Hz - it was arriving at ` +
+                  `${Math.round(r.measuredMarkHz)} Hz.`
+                : '';
+
             // Longer than the usual hold: this is up to four clauses, and the ones
             // that ask the operator to do something are at the end of them.
-            this._setStatus(`Auto: ${parts.join(', ')}.${note}${advice}${doubt}`, 14000);
+            this._setStatus(`Auto: ${parts.join(', ')}.${centre}${note}${advice}${doubt}`, 14000);
         } catch {
             this._setStatus('Cannot reach the server.', 5000);
         } finally {
@@ -668,6 +693,20 @@ export class RttyTuner {
             // stopped when another window kept it running but this window's
             // own hold lapsed, so this starts us again and we are counted.
             if (!f.running && this._active()) this._restart();
+
+            // What the host changed about the radio so that the figure could be
+            // believed - a mode switch, a widened filter. Once per note, not once
+            // per frame: _draw rewrites this line twenty times a second, so it is
+            // posted with a hold, and a note that is still the same note on the
+            // next frame must not keep re-arming that hold or nothing else could
+            // ever be read.
+            if (f.modeNote && f.modeNote !== this._modeNoteShown) {
+                this._modeNoteShown = f.modeNote;
+                this._setStatus(f.modeNote, 8000);
+            } else if (!f.modeNote) {
+                this._modeNoteShown = null;
+            }
+
             this._last = f;
             this._adoptServerSettings(f);
             this._push(f);
