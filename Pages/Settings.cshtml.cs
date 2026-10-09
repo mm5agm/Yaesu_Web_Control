@@ -320,6 +320,18 @@ namespace Yaesu_Web_Control.Pages
                 current.CwReaderFilterHz = Math.Clamp(Settings.CwReaderFilterHz, 50, 1000);
                 current.CwReaderUseApf   = Settings.CwReaderUseApf;
 
+                // RTTY. These three have to be copied here like everything
+                // else: this handler writes field by field onto the stored
+                // settings, so a property with no line in it is thrown away on
+                // save while the page still says "saved successfully" and the
+                // old value is what comes back. All three were added with
+                // their checkboxes and without their copies, which is exactly
+                // how that looks from the outside - a switch that will not
+                // stay where it is put.
+                current.RttyContestMode    = Settings.RttyContestMode;
+                current.RttyTunerSetMode   = Settings.RttyTunerSetMode;
+                current.RttyAutoCentreMark = Settings.RttyAutoCentreMark;
+
                 // DX cluster settings — copy through. Normalise callsign to upper case.
                 current.DxClusterEnabled         = Settings.DxClusterEnabled;
                 current.DxClusterHost            = (Settings.DxClusterHost ?? "").Trim();
