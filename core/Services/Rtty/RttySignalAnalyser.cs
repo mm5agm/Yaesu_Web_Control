@@ -56,6 +56,30 @@ namespace RadioWebControl.Core.Services.Rtty
     /// agreed perfectly are the same number here, and the difference between them
     /// is which method was called.
     /// </param>
+    /// <param name="ToneBalanceDb">
+    /// How far the weaker of the two peaks sits below the stronger one, in dB.
+    ///
+    /// <para><b>This is the number that tells a tone pair from a fragment.</b>
+    /// Both tones of a RTTY signal are keyed for roughly the same share of the
+    /// time, so in an averaged spectrum they stand at roughly the same height -
+    /// 1.6 dB apart on the crossed-ellipse bench check, within 4 dB on every
+    /// synthesised pair that measured correctly. A figure far larger than that
+    /// means the second peak is not the other tone: it is the skirt of the first
+    /// one, or a noise peak that happened to be the tallest thing left once the
+    /// real second tone had fallen outside the scanned range.</para>
+    ///
+    /// <para>Reported rather than acted on, because a wide gap is not always a
+    /// wrong answer - selective fading really can leave one tone 10 dB down on
+    /// the other for seconds at a time. See
+    /// <see cref="RttySignalEstimate.MeasuredAFragment"/>.</para>
+    /// </param>
+    /// <param name="AtScanEdge">
+    /// True when the energy centre of one of the two peaks fell outside the
+    /// frequency range the analyser was told to search, which happens only when
+    /// that peak is truncated by the edge of the range rather than complete
+    /// within it. A truncated peak has its centre dragged inwards, so its
+    /// frequency - and with it the shift - is measured short.
+    /// </param>
     public sealed record RttySignalEstimate(
         double MarkHz,
         double SpaceHz,
@@ -64,7 +88,33 @@ namespace RadioWebControl.Core.Services.Rtty
         double Confidence,
         double ToneMargin,
         double BaudFit,
-        double Agreement = 1.0);
+        double ToneBalanceDb,
+        bool AtScanEdge,
+        double Agreement = 1.0)
+    {
+        /// <summary>
+        /// Whether this estimate is a measurement of half a signal.
+        ///
+        /// <para>Bench-found 2026-10-09 and reproduced in the test suite: detune a
+        /// RTTY signal until one of its tones leaves the scanned range and the
+        /// analyser measures what is left, reporting a <i>confident</i> answer that
+        /// is wrong about both the shift and the speed. A true 450 Hz shift at 50
+        /// baud came back as 425 at confidence 0.97, and as 115 Hz at 100 baud at
+        /// confidence 0.92. Neither the 0.4 confidence gate nor
+        /// <see cref="RttySignalAnalyser.AnalyseAgreed"/>'s half-to-half check
+        /// catches it, because the fragment is measured consistently - the two
+        /// halves agree about the same wrong answer.</para>
+        ///
+        /// <para><b>The mark is still worth having when this is true; the shift and
+        /// the speed are not.</b> The louder peak is the real tone - the dial
+        /// correction computed from it moves the signal towards the middle of the
+        /// passband, which is what let the bench recover on a second press. So the
+        /// useful response is to keep the dial move and refuse the figures, not to
+        /// throw the whole answer away.</para>
+        /// </summary>
+        public bool MeasuredAFragment =>
+            AtScanEdge || ToneBalanceDb > RttySignalAnalyser.ToneBalanceLimitDb;
+    }
 
     /// <summary>
     /// What <see cref="RttySignalAnalyser.AnalyseAgreed"/> made of the audio,
@@ -284,6 +334,21 @@ namespace RadioWebControl.Core.Services.Rtty
             var toneB = second.Value.hz;
             var shift = Math.Abs(toneA - toneB);
 
+            // Two tones, or one tone and whatever was next tallest? Both halves of
+            // a keyed pair are on air for roughly the same share of the time, so in
+            // an averaged spectrum they stand at roughly the same height, and a
+            // large gap here means the second peak is not the other tone at all.
+            var louder = Math.Max(first.Value.level, second.Value.level);
+            var quieter = Math.Min(first.Value.level, second.Value.level);
+            var balanceDb = quieter > 0 ? 20.0 * Math.Log10(louder / quieter) : double.PositiveInfinity;
+
+            // A peak whose energy centre lies outside the range searched was
+            // truncated by the edge of that range, which drags the centre inwards
+            // and measures the frequency - and so the shift - short. A peak
+            // complete within the range cannot do this, however close to the edge
+            // it sits, because the energy either side of it is symmetrical.
+            var atEdge = toneA < lowHz || toneA > highHz || toneB < lowHz || toneB > highHz;
+
             // How much the two peaks stand above the general level of the
             // passband. A signal gives tens of dB; noise alone gives a few.
             var prominence = Clamp01(Math.Log10((first.Value.level + second.Value.level) / (2 * floor + 1e-30)) / 1.5);
@@ -299,7 +364,8 @@ namespace RadioWebControl.Core.Services.Rtty
             // see the note on RttySignalEstimate.Confidence.
             var confidence = prominence * fit;
 
-            return new RttySignalEstimate(markHz, spaceHz, shift, baud, confidence, margin, fit);
+            return new RttySignalEstimate(
+                markHz, spaceHz, shift, baud, confidence, margin, fit, balanceDb, atEdge);
         }
 
         /// <summary>
@@ -310,6 +376,27 @@ namespace RadioWebControl.Core.Services.Rtty
         /// It is trying to tell 50 from 31.
         /// </summary>
         public const double SpeedAgreement = 0.10;
+
+        /// <summary>
+        /// How far the weaker of the two peaks may sit below the stronger one, in
+        /// dB, before the pair is treated as one tone and something that is not the
+        /// other one.
+        ///
+        /// <para>Ten decibels, which is two and a half times the widest gap any
+        /// correctly measured pair has shown here and a third of the narrowest gap
+        /// any wrong one has. The synthesised sweep that reproduces the bench
+        /// failure measures 3.9 dB on every pair it gets right and 13 to 28 dB on
+        /// every pair it gets wrong, so there is no threshold in between that
+        /// behaves differently and a round number is honest about the precision.
+        /// </para>
+        ///
+        /// <para>It is deliberately generous, because a gap this wide can also be
+        /// honest: selective fading on HF leaves one tone well down on the other
+        /// for seconds at a time. What hangs on it is whether the measured shift
+        /// and speed are written anywhere, not whether the operator is shown them,
+        /// so erring towards trusting the signal costs little.</para>
+        /// </summary>
+        public const double ToneBalanceLimitDb = 10.0;
 
         /// <summary>
         /// The same for the tone pair, and looser again because it is nearly always
