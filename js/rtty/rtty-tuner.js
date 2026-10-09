@@ -425,6 +425,31 @@ export class RttyTuner {
                 return;
             }
 
+            // Half a signal: one of the two tones was outside what the analyser
+            // could see, so the mark is sound and the shift and the speed are not.
+            // This is not a low-confidence answer and cannot be caught as one -
+            // bench-measured at 0.92 and 0.97 - so it is tested before the
+            // confidence gate and answered on its own terms.
+            //
+            // Nothing is written. The dial has already moved on the strength of
+            // the tone that was real, which brings the rest of the signal into
+            // view, so pressing Auto again measures it properly; what must not
+            // happen is the working shift and speed in the dialog being replaced
+            // by figures measured from a fragment, which is what used to happen
+            // silently. The settings are left exactly as the operator had them.
+            if (r.halfSignal) {
+                const moved = r.centreOffsetHz
+                    ? `Moved the dial ${Math.abs(Math.round(r.centreOffsetHz))} Hz ` +
+                      `${r.centreOffsetHz < 0 ? 'down' : 'up'} towards it - press Auto ` +
+                      `again to measure it.`
+                    : `Tune it closer to the middle of the passband and try again.`;
+                this._setStatus(
+                    `Auto: only one of the two tones was in range, so the shift and ` +
+                    `speed could not be measured and have been left alone. ${moved}` +
+                    advice, 12000);
+                return;
+            }
+
             if (r.confidence < 0.4) {
                 this._setStatus(
                     `Could not make sense of it - that may not be RTTY, or another ` +
