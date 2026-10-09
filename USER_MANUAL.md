@@ -143,7 +143,8 @@
 22. [RTTY Tuner](#22-rtty-tuner)
     - 22.1 [Reading the figure](#221-reading-the-figure)
     - 22.2 [Mark, Shift and Rev](#222-mark-shift-and-rev)
-    - 22.3 [Troubleshooting](#223-troubleshooting)
+    - 22.3 [Contest Mode: the tuner on its own](#223-contest-mode-the-tuner-on-its-own)
+    - 22.4 [Troubleshooting](#224-troubleshooting)
 
 ---
 
@@ -4054,7 +4055,34 @@ In every mode the space filter goes above mark, at 2125 and 2295 Hz unless you c
 
 These settings are remembered in the browser. In **DATA-L**, click-to-tune on the spectrum uses them as well, to put a clicked signal's tones where your software is listening ([§5.4](#54-spectrum-display)). So set **Mark** to your software's mark tone even if you never use the tuner.
 
-### 22.3 Troubleshooting
+### 22.3 Contest Mode: the tuner on its own
+
+If you are contesting you almost certainly have a decoder already — MMTTY,
+2Tone, or the one built into your logger — and the thing those cannot draw is
+the crossed figure. **RTTY Contest Mode**, on the Settings page under **RTTY
+Tuner**, trims the panel to just that.
+
+The tuner here is already only the tuner, so what the switch actually does is
+small and specific:
+
+- **The hint under the figure goes.** It is there to teach you the picture, and
+  by the time you are contesting with it you have learnt it.
+- **The panel stops changing size.** The two lines under the figure are the
+  readouts and the status line, and their text changes length as the tuner
+  reports — *"Stopped."* one moment, *"Mark 2125, shift 450"* the next. Each
+  change used to reflow the panel and shift the scope under the mouse that was
+  tuning it. In Contest Mode both lines keep two lines' worth of height
+  whatever they say.
+
+Everything else is unchanged: **Tones only** still shrinks it to the figure
+alone, and the panel still pops out into a window of its own
+([§5.21](#521-pop-out-windows)) at whatever size you leave it.
+
+The same switch, under the same name, is in Icom Web Control. There the RTTY
+panel also has a decode pane and a send box, and Contest Mode leaves those out
+too — so if you run both apps, expect the Icom one to change rather more.
+
+### 22.4 Troubleshooting
 
 | Symptom | What to try |
 |---|---|

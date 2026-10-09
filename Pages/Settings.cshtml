@@ -2739,6 +2739,35 @@
         </div>
     </details>
 
+    <!-- RTTY Tuner -->
+    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
+        <summary><i class="bi bi-activity" aria-hidden="true"></i>&nbsp;RTTY Tuner</summary>
+        <div class="section-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="rttyContestMode"
+                               name="Settings.RttyContestMode" value="true"
+                               @(Model.Settings.RttyContestMode ? "checked" : "") />
+                        <input type="hidden" name="Settings.RttyContestMode" value="false" />
+                        <label class="form-check-label" for="rttyContestMode">RTTY Contest Mode</label>
+                    </div>
+                    <div class="form-text">
+                        Leaves the tuner with just the tone controls, the crossed figure and
+                        its readouts. The hint under the scope goes, and the two message
+                        lines keep their height, so the panel stops changing size while you
+                        are tuning.
+                    </div>
+                    <div class="form-text">
+                        For contesting, where the logger already has a decoder and what it
+                        cannot draw is the figure. The same switch is in Icom Web Control,
+                        where it also leaves out that app's decode and send panels.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </details>
+
     @{ var isSaveSuccess = !string.IsNullOrEmpty(Model.StatusMessage) && (Model.StatusMessage.Contains("success") || Model.StatusMessage.Contains("✓")); }
 
     @* Placed right next to the Save button rather than at the top of the

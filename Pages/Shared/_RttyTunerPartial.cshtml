@@ -1,4 +1,5 @@
 @model bool
+@inject Yaesu_Web_Control.Services.ISettingsService SettingsSvc
 @{
     // The RTTY tuner's markup and CSS, shared by the main page's floating
     // dialog and the /RttyTuner pop-out window. RttyTuner (core) finds its
@@ -7,6 +8,11 @@
     // Model: true for the pop-out, which swaps the Pop out button for
     // Reattach; its close button closes the window rather than the dialog.
     var popout = Model;
+
+    // RTTY Contest Mode (Settings). Read here rather than passed in, so the
+    // main page's dialog and the pop-out window cannot end up disagreeing
+    // about it.
+    var contest = (await SettingsSvc.GetSettingsAsync()).RttyContestMode;
 }
 <style>
     #rttyTunerDialog { width:340px; min-width:220px; min-height:200px; max-width:95vw; max-height:95vh; resize:both; overflow:auto; }
@@ -26,6 +32,19 @@
     #rttyTunerDialog.rtty-compact .rtty-hint { display:none !important; }
     #rttyTunerDialog.rtty-compact .rtty-body { padding:0.25rem !important; }
     #rttyTunerDialog.rtty-compact { min-width:160px; min-height:160px; }
+    /* Contest Mode: the tuner and nothing else. The hint is there to teach the
+       figure, and an operator in a contest has long since learnt it.
+
+       The second rule is the one Bruce VK2RT asked for and did not get. Both
+       lines are live regions whose text changes length as the tuner reports -
+       "Stopped." to "Mark 2125, shift 450" and back - and every reflow moved
+       the scope under a mouse that was tuning. Two lines' worth of room is
+       reserved so the text grows into it instead of pushing. min-height, not
+       height: a long message still wraps rather than being clipped, and it is
+       only the common case that has to stop jumping. */
+    #rttyTunerDialog.rtty-contest .rtty-hint { display:none !important; }
+    #rttyTunerDialog.rtty-contest #rttyTunerInfo,
+    #rttyTunerDialog.rtty-contest #rttyTunerStatus { min-height:2.4em; }
     /* Shown only in the pop-out, which stays open when the mode changes
        rather than vanishing off a second monitor. */
     #rttyTunerPaused {
@@ -42,7 +61,7 @@
 <!-- RTTY tuner: the mark filter on X, the space filter on Y, as a terminal unit
      used to drive an oscilloscope. Non-modal so the VFO stays in reach. -->
 <dialog id="rttyTunerDialog" open="@popout"
-        class="@(popout ? "rtty-popout user-sized" : null)"
+        class="@(string.Join(" ", new[] { popout ? "rtty-popout user-sized" : null, contest ? "rtty-contest" : null }.Where(c => c is not null)))"
         style="@(popout ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0;")"
         aria-labelledby="rttyTunerTitle">
     <div class="rtty-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">

@@ -1,4 +1,4 @@
-
+﻿
 # Yaesu Web Control
 
 ![Latest release](https://img.shields.io/badge/Latest%20release-v2.5.2-blue?style=flat-square)
@@ -23,6 +23,7 @@ Yaesu Web Control (**YWC**) is a continuation of my FTdx101_WebApp with more Yae
 - **Hide the VFO panels, the meters and the Clarifier** *(v2.5.3-pre4)* ([#171](https://github.com/mm5agm/Yaesu_Web_Control/discussions/171)). A **VFOs** button beside each spectrum title hides both VFO panels, so the page can be just the spectrum; **Hide meters** and the Clarifier's **Hide** fold those away too. The browser remembers each one. [§5.4](USER_MANUAL.md#54-spectrum-display).
 - **Drag the spectrum to tune** *(v2.5.3-pre4)*: hold the left button and slide, and the signals follow the pointer. A click still tunes to the point clicked. [§5.4](USER_MANUAL.md#54-spectrum-display).
 - **Free the SDR when the last browser closes** *(v2.5.3-pre4)*, a new setting under Settings > SDR, off by default, so another program can use the SDR while YWC is still running.
+- **RTTY Contest Mode** *(not yet in a build)*. A switch on the Settings page under **RTTY Tuner** that trims the tuner to the figure and its controls: the hint under the scope goes, and the two lines under it keep their height instead of reflowing the panel under your mouse every time the status changes. That last part is what Bruce VK2RT asked for after CQ WW RTTY. The same switch, under the same name, is in Icom Web Control, where it also leaves out that app's decode and send panels. [§22.3](USER_MANUAL.md#223-contest-mode-the-tuner-on-its-own).
 - **An Experimental UI, beside the Classic one** *(v2.5.3-pre7, Fabio Valente, CR7CDC)*. **Experimental UI** in the top bar opens a dark, dockable workspace: the VFOs, spectrum, meters, Radio Display and the rest are panels you can drag, dock, tab together and resize, and save as named layouts. The Classic page is unchanged and is still the default. [§5.22](USER_MANUAL.md#522-experimental-ui).
 
 **New in v2.5.2:**

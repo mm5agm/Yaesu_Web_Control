@@ -266,6 +266,28 @@
         // FTdx10 has fixed roofing filters and ignores this setting.
         public List<string> InstalledRoofingFilters { get; set; } = new() { "6", "7", "8", "9", "A" };
 
+        // ── RTTY ──────────────────────────────────────────────────────────
+        // Whether the RTTY tuner shows only what you need to tune a signal
+        // in: the tone controls and the crossed figure with its readouts,
+        // without the hint text, and with the two message lines holding a
+        // fixed height so the panel stops changing size as they report.
+        //
+        // Named for what asks for it. A contest operator already has a
+        // decoder - MMTTY, 2Tone, N1MM's own - and what they want from here
+        // is the one thing their logger cannot draw: the crossed figure,
+        // small, on a second monitor, next to everything else fighting for
+        // that screen.
+        //
+        // In this app the tuner is already only the tuner, so this does less
+        // than its name suggests: there is no decode panel here to leave out
+        // (that is IWC's RTTY reader, and the shared panel for it has not
+        // landed here yet). What it does do is the one thing Bruce VK2RT
+        // asked for after CQ WW RTTY 2026 and did not get - a panel that
+        // holds still while he is working it. The setting exists under the
+        // same name in both apps so an operator who runs both finds the same
+        // switch, and it grows teeth here the day the reader arrives.
+        public bool RttyContestMode { get; set; } = false;
+
         // ── Accessibility ─────────────────────────────────────────────────
         // When true, the VFO frequency displays show up/down arrow buttons
         // alongside the digit display so users who can't use a mouse wheel
