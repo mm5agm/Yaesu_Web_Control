@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -527,6 +527,10 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwQsoLogService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderModeService>();
 // RTTY tuning scope: takes its own capture hold on the bridge while its dialog is open.
+// The mode service is a singleton for the reason CwReaderModeService is - it holds
+// what the operator had before the tuner touched it, and a per-request copy would
+// lose that the moment they reloaded the page.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyTunerModeService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyTunerService>();
 // Radio Display (USB UVC / HDMI capture → MJPEG) — opt-in; capture opens while viewers connect.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoSessionManager>();

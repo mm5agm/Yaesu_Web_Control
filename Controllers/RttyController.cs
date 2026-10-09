@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Yaesu_Web_Control.Services.Rtty;
 
 namespace Yaesu_Web_Control.Controllers
@@ -26,6 +26,7 @@ namespace Yaesu_Web_Control.Controllers
             public double MarkHz  { get; set; } = RttyTunerService.DefaultMarkHz;
             public int    ShiftHz { get; set; } = RttyTunerService.DefaultShiftHz;
             public bool   Reverse { get; set; }
+            public double Baud    { get; set; } = RttyTunerService.DefaultBaud;
         }
 
         /// <summary>
@@ -44,7 +45,7 @@ namespace Yaesu_Web_Control.Controllers
             req ??= new StartRequest();
             try
             {
-                var error = await _tuner.StartAsync(req.MarkHz, req.ShiftHz, req.Reverse, id);
+                var error = await _tuner.StartAsync(req.MarkHz, req.ShiftHz, req.Reverse, req.Baud, id);
                 if (error != null) return BadRequest(new { error });
                 return Ok(_tuner.Frame(0, id));
             }

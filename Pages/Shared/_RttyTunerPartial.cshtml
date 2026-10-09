@@ -1,4 +1,4 @@
-@model bool
+﻿@model bool
 @inject Yaesu_Web_Control.Services.ISettingsService SettingsSvc
 @{
     // The RTTY tuner's markup and CSS, shared by the main page's floating
@@ -96,13 +96,31 @@
             <input id="rttyTunerMark" type="number" min="300" max="3000" step="5" value="2125"
                    class="form-control form-control-sm" style="width:5.5rem;"
                    title="Mark tone in the receive audio, Hz. 2125 unless your RTTY setup says otherwise.">
+            @* 450 is not one of this radio's own RTTY Shift Width rungs - that menu
+               offers 170, 200, 425 and 850 - but the DWD weather stations use it all
+               day and the decoder here can copy it. Auto adds an entry of its own
+               when it measures a shift that is none of these; see _setChoice in
+               rtty-tuner.js. *@
             <label for="rttyTunerShift">Shift</label>
-            <select id="rttyTunerShift" class="form-select form-select-sm" style="width:auto;">
+            <select id="rttyTunerShift" class="form-select form-select-sm" style="width:auto;"
+                    title="Shift between the two tones, Hz. 170 is amateur RTTY. 450 and 850 are ordinary on utility stations; the radio's own RTTY Shift Width menu has no 450 rung but YWC can still copy it.">
                 <option value="170">170</option>
                 <option value="200">200</option>
                 <option value="425">425</option>
                 <option value="450">450</option>
                 <option value="850">850</option>
+            </select>
+            @* The scope does not use the speed - it is two filters and speed
+               means nothing to them. The reader does: it is the one setting on
+               this panel that only matters to the decoder. Kept on the server
+               with Mark and Shift so a page reload does not lose it. *@
+            <label for="rttyTunerBaud">Speed</label>
+            <select id="rttyTunerBaud" class="form-select form-select-sm" style="width:auto;"
+                    title="Sending speed in baud, and what the decoder reads at. 45.45 is amateur RTTY and the only speed the radio's own decoder reads; 50 is most European weather and commercial traffic. The scope itself does not need this.">
+                <option value="45.45">45.45</option>
+                <option value="50">50</option>
+                <option value="75">75</option>
+                <option value="100">100</option>
             </select>
             <div class="form-check mb-0">
                 <input class="form-check-input" type="checkbox" id="rttyTunerReverse">

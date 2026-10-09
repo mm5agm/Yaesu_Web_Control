@@ -288,6 +288,31 @@
         // switch, and it grows teeth here the day the reader arrives.
         public bool RttyContestMode { get; set; } = false;
 
+        // Whether starting the RTTY tuner puts the radio into RTTY first.
+        //
+        // The tuner opens on whatever the radio was last doing, and a CW filter
+        // cannot carry an RTTY tone pair - so the figure draws a convincing
+        // ellipse out of one tone and the skirt of the other, which is worse than
+        // drawing nothing. On by default for that reason. Switchable because an
+        // operator running AFSK from their own software owns their radio's mode,
+        // and because anyone who would rather the software never touched the mode
+        // is entitled to that. RttyTunerModeService only ever switches out of the
+        // modes RTTY cannot be copied in at all, and only ever widens a filter.
+        public bool RttyTunerSetMode { get; set; } = true;
+
+        // Whether a confident Auto answer also moves the VFO so the measured mark
+        // lands on the tuner's mark.
+        //
+        // Measured on the bench on 2026-10-08: with the dial 350 Hz out, Auto got
+        // the 450 Hz shift right on eight presses out of eight and the speed right
+        // on three, because a tone pair off-centre in the IF arrives with one tone
+        // attenuated and keying with unequal halves cannot be timed. Correcting
+        // the tuning is therefore what a confident tone measurement is worth
+        // spending. Switchable because it moves the operator's VFO, which is
+        // their property; and refused anyway unless the radio is in its own FSK
+        // mode - see RttyMarkCentre.
+        public bool RttyAutoCentreMark { get; set; } = true;
+
         // ── Accessibility ─────────────────────────────────────────────────
         // When true, the VFO frequency displays show up/down arrow buttons
         // alongside the digit display so users who can't use a mouse wheel
