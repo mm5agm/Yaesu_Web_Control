@@ -1,4 +1,4 @@
-// RTTY crossed-ellipse tuning scope.
+﻿// RTTY crossed-ellipse tuning scope.
 //
 // How RTTY was tuned before anything had a waterfall: the terminal unit's mark
 // filter went to the X plates of an oscilloscope and its space filter to the Y
@@ -469,9 +469,16 @@ export class RttyTuner {
             const shiftHz = r.snappedShiftHz ?? r.shiftHz;
             const baudHz  = r.snappedBaud    ?? r.baud;
 
+            // The speed is the one field that can arrive uncorroborated on an
+            // otherwise good answer. Both halves of the capture found the same
+            // two tones and agreed which was the mark, and one of them read the
+            // keying at a different speed - which is what a fade does to that
+            // measurement, not evidence that the station changed speed. The
+            // operator's speed is nearly always 45.45 and nearly always right,
+            // so it is kept; everything the halves did agree on is applied.
             this._settings.markHz  = Math.round(r.markHz);
             this._settings.shiftHz = shiftHz;
-            this._settings.baud    = baudHz;
+            if (!r.speedUnmeasured) this._settings.baud = baudHz;
             this._settings.reverse = !!r.reverse;
             this._showSettings();
             this._saveSettings();
@@ -493,7 +500,9 @@ export class RttyTuner {
             try { await this._pushToRadio(); } finally { this._pushQuiet = false; }
 
             const shift = r.snappedShiftHz == null ? `${shiftHz} Hz measured` : `${shiftHz} Hz`;
-            const baud  = r.snappedBaud    == null ? `${baudHz} baud measured`  : `${baudHz} baud`;
+            const baud  = r.speedUnmeasured
+                ? `speed left at ${this._settings.baud} - it did not measure twice`
+                : r.snappedBaud == null ? `${baudHz} baud measured` : `${baudHz} baud`;
             const parts = [`mark ${Math.round(r.markHz)} Hz`, `shift ${shift}`, baud];
             if (r.reverse) parts.push('reversed');
 

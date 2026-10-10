@@ -435,7 +435,10 @@ namespace Yaesu_Web_Control.Services.Rtty
                     ? got.AtScanEdge
                         ? " - HALF A SIGNAL (a tone is outside the scanned range)"
                         : " - HALF A SIGNAL (the second peak is not the other tone)"
-                    : "");
+                    : got.SpeedMeasured
+                        ? ""
+                        : " - SPEED NOT CORROBORATED (the halves disagreed about "
+                          + "it; the tones agreed and are being used)");
 
             return new RttyAutoResult
             {
@@ -446,7 +449,15 @@ namespace Yaesu_Web_Control.Services.Rtty
                 ShiftHz         = shift,
                 SnappedShiftHz  = RttySignalAnalyser.SnapShift(got.ShiftHz),
                 Baud            = Math.Round(got.Baud, 2),
-                SnappedBaud     = RttySignalAnalyser.SnapBaud(got.Baud),
+
+                // No standard speed is claimed for a speed that only one of the
+                // two halves measured. The figure itself is still reported - it
+                // is what was measured, and hiding it would make the refusal
+                // unexaminable - but offering it as a rung would say the
+                // analyser knows which speed this is, and here it does not.
+                SnappedBaud     = got.SpeedMeasured
+                                      ? RttySignalAnalyser.SnapBaud(got.Baud)
+                                      : null,
                 Reverse         = reverse,
                 Confidence      = Math.Round(got.Confidence, 2),
                 ToneMargin      = Math.Round(got.ToneMargin, 2),
@@ -455,6 +466,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                                       ? 99
                                       : Math.Round(got.ToneBalanceDb, 1),
                 HalfSignal      = got.MeasuredAFragment,
+                SpeedUnmeasured = !got.SpeedMeasured,
                 Advice          = Advisories(),
             };
         }
@@ -716,6 +728,20 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// figures reported alongside it are wrong and confident.</para>
         /// </summary>
         public bool HalfSignal { get; set; }
+
+        /// <summary>
+        /// True when the two halves of the capture found the same tone pair and
+        /// disagreed about the speed - <see cref="RttyAgreement.SpeedDidNotRepeat"/>.
+        ///
+        /// <para><b>The mark, the shift and Rev stand; the speed must not be
+        /// written anywhere.</b> Unlike <see cref="HalfSignal"/> this is not a
+        /// fragment: both halves measured both tones and agreed on them, so the
+        /// dial move and the filter settings are as good as on a full agreement.
+        /// Only the speed is uncorroborated, and the operator's existing speed is
+        /// nearly always 45.45 and nearly always right - so it is left alone
+        /// rather than replaced by the one figure here that did not repeat.</para>
+        /// </summary>
+        public bool SpeedUnmeasured { get; set; }
 
         /// <summary>
         /// How nearly the first and second halves of the capture measured the same
