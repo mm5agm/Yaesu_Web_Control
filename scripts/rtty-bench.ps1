@@ -240,7 +240,18 @@ $Stations = @{
         # six characters a second; 4 leaves room for the RYRY idle and the
         # line breaks.
         MinCharsPerSecond = 4.0
-        MaxFramingPercent = 5
+
+        # Set from the measured spread, not from taste. On the FTdx101MP on
+        # 2026-10-10, with the settings known to be right, two back-to-back
+        # 110-second windows on this station gave 3.4 percent and 9.0 percent
+        # - that difference is fading, nothing else. A wrong shift or speed
+        # gives 40 percent and up. So the job of this threshold is to separate
+        # 5 from 40, and it has to clear a bad stretch of QSB to do it: 5
+        # would have failed a correct run on propagation alone.
+        #
+        # Framing is the stop bit, below the alphabet, so nothing about the
+        # figures table or unshift-on-space moves this number.
+        MaxFramingPercent = 15
 
         # Activity separates a station from the noise it is sitting in: a
         # clean one reads near 0.8 and noise alone near 0.33. Used twice -
