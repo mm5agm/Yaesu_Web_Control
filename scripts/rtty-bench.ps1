@@ -115,6 +115,13 @@
     50.5 baud against a true 50, moved the dial 417 Hz onto the tones, and
     the IF filter went from code 2 to code 15 - 1700 Hz, the narrowest rung
     at or above the computed 1650 Hz floor.
+
+    Run again on the committed file half an hour later: 27 passed, 0 failed.
+    That window landed on the station's RYRY idle and header cycle rather
+    than bulletin text and measured 6.1 percent framing errors - a complete,
+    token-correct decode that the original 5 percent threshold would have
+    failed. Two runs, two different stretches of the same station, both
+    green, is the thing to reproduce.
 #>
 [CmdletBinding()]
 param(
