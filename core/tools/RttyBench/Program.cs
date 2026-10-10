@@ -146,10 +146,21 @@ internal static class Program
     private const string Header =
         "  score   known/tok   chars  framing   config";
 
-    private sealed record Result(string Text, long Framing, int Chars, int Tokens, int Known)
+    private sealed record Result(
+        string Text, long Framing, int Chars, long Considered, int Tokens, int Known)
     {
         public double Score => Tokens == 0 ? 0 : 100.0 * Known / Tokens;
-        public double FramingPercent => Chars == 0 ? 0 : 100.0 * Framing / Chars;
+
+        // Against Considered, not Chars. The demodulator counts a framing error
+        // and the character it belongs to on the same side of the squelch gate -
+        // both before it - while Chars is what survived the gate and got
+        // printed. Dividing one population by the other made the percentage
+        // read over 100% whenever the squelch threw most of the copy away, so
+        // raising the squelch always looked like a catastrophic regression and
+        // lowering it always looked like a win. It is not a copy-quality score:
+        // use score (known/tok) for that.
+        public double FramingPercent =>
+            Considered == 0 ? 0 : 100.0 * Framing / Considered;
 
         public string Row(string label) =>
             string.Format(CultureInfo.InvariantCulture,
@@ -175,7 +186,8 @@ internal static class Program
 
         string text = sb.ToString();
         (int tokens, int known) = ScoreText(text);
-        return new Result(text, d.FramingErrors, text.Length, tokens, known);
+        return new Result(
+            text, d.FramingErrors, text.Length, d.Characters, tokens, known);
     }
 
     // ---- the score -------------------------------------------------------
