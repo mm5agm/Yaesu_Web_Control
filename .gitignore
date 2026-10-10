@@ -163,6 +163,8 @@ docs/design/*
 !docs/adding-a-radio.md
 # …and the Raspberry Pi Docker testing runbook.
 !docs/pi-docker-testing.md
+# …and the build-from-source guide the README points at.
+!docs/BUILDING.md
 # …and the step-by-step plan handed to FT-991A testers (#86). The rest of
 # docs/testing/ (old test plans, captured logs) stays local.
 !docs/testing/
