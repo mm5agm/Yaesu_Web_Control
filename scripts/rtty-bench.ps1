@@ -485,6 +485,27 @@ try {
     $narrowed = $false
     if ((-not $NoNarrow) -and (-not $SkipTune)) {
         Write-Step '2b. Narrowing the filter so that step 5 has work to do'
+        #
+        # AN OPEN BROWSER TAB WILL OVERWRITE THIS MODE, ABOUT A SECOND LATE.
+        # Measured 2026-10-10, after this mode write appeared to vanish eight
+        # times in a row. Step 2's retune can cross into another band; a tab
+        # that is watching notices and posts api/cat/band/a, and that endpoint
+        # applies the whole stored profile for the new band - IF width, IF
+        # shift, mode and antenna. It lands roughly a second after the tune,
+        # which is to say after this mode write, and the profile wins. On this
+        # radio 20 m is stored as AM and 30 m as DATA-U, which is why the mode
+        # kept being found as DATA-U with the narrow width attached to it.
+        #
+        # So the waiting belongs BEFORE the mode write rather than after it.
+        #
+        # And do not try to confirm it by reading api/cat/status. That field is
+        # written through optimistically by the endpoint that sent the command
+        # (CatController.SetMode) and is otherwise only refreshed from the
+        # radio at start-up, so it reports what was asked for within about
+        # 20 ms whether or not the radio complied. An earlier version of this
+        # block polled it for up to six seconds and returned on the first
+        # sample every time, which is a sleep wearing a check's clothes.
+        Start-Sleep -Milliseconds 1800
         [void](Invoke-Api -Route 'api/cat/mode/a' -Method POST -Body @{ mode = 'RTTY-L' })
         Start-Sleep -Milliseconds 600
         [void](Invoke-Api -Route 'api/cat/ifwidth/a' -Method POST -Body @{ code = $NarrowCode })
@@ -519,7 +540,7 @@ try {
     $status  = Invoke-Api -Route 'api/cat/status'
     $modeNow = [string]$status.vfoA.mode
     $isRtty  = $modeNow -match 'RTTY'
-    Add-Check -Step '4' -What 'the radio is in an RTTY mode' -Ok $isRtty -Detail ("mode reads {0} (was {1}). The tuner sets RTTY-L unless the Settings switch says not to." -f $modeNow, $savedMode)
+    Add-Check -Step '4' -What 'the radio is in an RTTY mode' -Ok $isRtty -Detail ("mode reads {0} (was {1}). The tuner only switches from CW, AM, FM and DATA-FM - it leaves DATA-L, DATA-U, LSB and USB alone on purpose, because in those the tones come from the operator's software and switching would break a working arrangement. Step 2b sets RTTY-L itself, but the tuner saves whatever mode it found and restores it on stop, so starting this test from DATA-U gets DATA-U back here. That is the app being right and the test having an unstated precondition: start in RTTY, CW, AM or FM." -f $modeNow, $savedMode)
 
     # -- 5. the IF filter ---------------------------------------------------
     #

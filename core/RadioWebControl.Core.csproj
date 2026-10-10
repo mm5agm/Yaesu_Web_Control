@@ -38,6 +38,15 @@
          Theory/InlineData. It also matters in the consuming apps: they reference
          core\RadioWebControl.Core.csproj directly, so this project must not drag
          the test sources into their build either. -->
+    <!-- tools/ holds the offline benches (their own .csproj, their own Main).
+         Same reasoning as tests/ below, and one more: a console Main compiled
+         into a library that two web applications reference is an entry point
+         nobody asked for. -->
+    <Compile Remove="tools\**" />
+    <Content Remove="tools\**" />
+    <None Remove="tools\**" />
+    <EmbeddedResource Remove="tools\**" />
+
     <Compile Remove="tests\**" />
     <Content Remove="tests\**" />
     <None Remove="tests\**" />
