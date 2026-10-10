@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -527,7 +527,24 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwQsoLogService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderModeService>();
 // RTTY tuning scope: takes its own capture hold on the bridge while its dialog is open.
+// The mode service is a singleton for the reason CwReaderModeService is - it holds
+// what the operator had before the tuner touched it, and a per-request copy would
+// lose that the moment they reloaded the page.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyTunerModeService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyTunerService>();
+// The RTTY reader. A singleton for the same reason the CW reader is: one
+// decoder, one capture hold, one piece of decoded text however many browser
+// tabs are open. It takes mark, shift, reverse and speed from the tuner above
+// rather than keeping a second copy of them.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyReaderService>();
+// The radio's own RTTY MARK/SHIFT menu items, read and written over CAT.
+// Used by the tuner's "From radio" button and by the push the other way, and
+// kept out of CatController because both the tuner and Auto need it.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyRadioToneService>();
+// RTTY Auto: four seconds of receive audio, measured. A singleton because it
+// owns a one-at-a-time lock over the shared capture - two presses would both
+// hear the same audio and both move the same dial.
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Rtty.RttyAutoService>();
 // Radio Display (USB UVC / HDMI capture → MJPEG) — opt-in; capture opens while viewers connect.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Video.VideoCaptureService>();

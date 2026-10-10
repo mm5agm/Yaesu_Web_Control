@@ -13,9 +13,20 @@ namespace Yaesu_Web_Control.Services.Cw
     /// same codec either fails outright or fights the first one for buffers,
     /// and the operator listening to the radio would be the one who noticed.
     ///
-    /// The consequence is that the decoder only hears anything while an audio
-    /// session is live, because that is when the bridge opens the devices.
-    /// CwReaderService reports that rather than looking silently broken.
+    /// It does not follow that an operator has to start an audio session first.
+    /// This asks the bridge for capture itself, through
+    /// RadioAudioBridgeService.AcquireCaptureAsync, which opens the devices
+    /// capture-only - no TX endpoint is held - and refcounts the hold against any
+    /// listening session, so the decoder and a listening operator can each come and
+    /// go without cutting the other off. Verified on 2026-10-09 with no browser
+    /// attached at all: the devices opened and the capture reported no error.
+    /// (This comment used to say the decoder "only hears anything while an audio
+    /// session is live". That was true of an earlier version and is worth
+    /// correcting rather than deleting, because requiring a click on the Remote
+    /// Audio bar before the reader would work was a prerequisite with no technical
+    /// reason behind it, and the note is what made it look intended.)
+    /// CwReaderService still reports a capture failure rather than looking
+    /// silently broken.
     ///
     /// The bridge raises frames on the PortAudio callback thread, where the
     /// decoder's tone analysis has no business running. So frames are copied

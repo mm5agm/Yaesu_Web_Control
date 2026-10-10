@@ -72,6 +72,7 @@ export class RttyTuner {
         this._pushPending = null;    // the newest tones to write once it finishes
         this._pushQuiet   = false;   // hand the note back rather than post it
         this._pushNote    = null;    // what the radio took, for the caller to fold in
+        this._modeNoteShown = null;  // the host's last note about the radio, once said
         this._statusHold  = 0;       // Date.now() until which _draw must not overwrite
         this._restartAt   = 0;       // Date.now() of the last automatic restart
         this._paused      = false;   // a pop-out waiting out a mode the tuner has no use in
@@ -126,6 +127,7 @@ export class RttyTuner {
         // The radio sync goes with it: it costs CI-V traffic and there is
         // nothing to keep in step with once the figure is gone.
         this._dialog.addEventListener('close', () => {
+            this._holdMode(false);
             this._stopPolling();
             this._stopRadioSync();
             this._send('stop');
@@ -172,6 +174,28 @@ export class RttyTuner {
         return true;
     }
 
+    /**
+     * Claim the mode while the figure is running, and let it go when it stops.
+     *
+     * The tuner exists to be watched while the operator tunes around, so for as
+     * long as it is open the radio's mode belongs to it rather than to the host
+     * page's band plan - otherwise the click that moves the dial also writes
+     * whatever mode the plan has for that slice of band, which on an RTTY
+     * segment of a CW band is CW, and the panel is shut by its own host two
+     * seconds later.
+     *
+     * A Set of reasons rather than a flag: a CW reader holding CW wants the same
+     * promise, and both panels can be open at once. The host page decides what
+     * to do about it - this only states the claim.
+     */
+    _holdMode(on) {
+        try {
+            globalThis.radioModeHolds ??= new Set();
+            if (on) globalThis.radioModeHolds.add('rtty-tuner');
+            else    globalThis.radioModeHolds.delete('rtty-tuner');
+        } catch { /* a host without it simply keeps its old behaviour */ }
+    }
+
     toggle() {
         if (!this._dialog) return;
         if (this._dialog.open) { this._dialog.close(); return; }
@@ -191,6 +215,7 @@ export class RttyTuner {
             this._radioProbed = true;
             this._radioEl.addEventListener('click', () => this._syncFromRadio(true));
         }
+        this._holdMode(true);
         this._send('start');
         this._startPolling();
         this._startRadioSync();
@@ -213,6 +238,7 @@ export class RttyTuner {
         this._paused = paused;
         if (paused) {
             const wasRunning = !!this._timer;
+            this._holdMode(false);
             this._stopPolling();
             this._stopRadioSync();
             if (wasRunning) this._send('stop');
@@ -368,7 +394,17 @@ export class RttyTuner {
         this._autoEl.textContent = 'Listening';
         this._setStatus('Listening for a few seconds...', 8000);
         try {
-            const res = await fetch('/api/rtty/auto', { method: 'POST' });
+            // The mark goes up with the request. The server cannot know it -
+            // it is this dialog's setting, and the host's copy is only as fresh
+            // as the last start - and it is what the answer gets centred on: an
+            // app that reads it moves the dial so the signal arrives on our mark
+            // filter instead of leaving it on the slope of the IF. An app that
+            // does not read it ignores the body and answers as before.
+            const res = await fetch('/api/rtty/auto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ markHz: this._settings.markHz }),
+            });
             if (res.status === 404) {        // this app cannot answer: stop offering
                 this._autoEl.hidden = true;
                 return;
@@ -386,6 +422,31 @@ export class RttyTuner {
 
             if (!r.ok) {
                 this._setStatus((r.reason || 'Nothing to measure.') + advice, 8000);
+                return;
+            }
+
+            // Half a signal: one of the two tones was outside what the analyser
+            // could see, so the mark is sound and the shift and the speed are not.
+            // This is not a low-confidence answer and cannot be caught as one -
+            // bench-measured at 0.92 and 0.97 - so it is tested before the
+            // confidence gate and answered on its own terms.
+            //
+            // Nothing is written. The dial has already moved on the strength of
+            // the tone that was real, which brings the rest of the signal into
+            // view, so pressing Auto again measures it properly; what must not
+            // happen is the working shift and speed in the dialog being replaced
+            // by figures measured from a fragment, which is what used to happen
+            // silently. The settings are left exactly as the operator had them.
+            if (r.halfSignal) {
+                const moved = r.centreOffsetHz
+                    ? `Moved the dial ${Math.abs(Math.round(r.centreOffsetHz))} Hz ` +
+                      `${r.centreOffsetHz < 0 ? 'down' : 'up'} towards it - press Auto ` +
+                      `again to measure it.`
+                    : `Tune it closer to the middle of the passband and try again.`;
+                this._setStatus(
+                    `Auto: only one of the two tones was in range, so the shift and ` +
+                    `speed could not be measured and have been left alone. ${moved}` +
+                    advice, 12000);
                 return;
             }
 
@@ -445,9 +506,23 @@ export class RttyTuner {
                 : '';
             const note = this._pushNote ? ` ${this._pushNote}` : '';
 
+            // Said plainly, because the radio has just retuned itself and an
+            // operator who is not told why has a radio that moved on its own.
+            // Both numbers are given: the mark their filters are now on, and the
+            // one that was heard, which together explain the move. Absent on
+            // every path that did not move anything - an app without the feature,
+            // the setting off, a mode it refuses, or a signal already centred -
+            // and absent rather than "moved by 0 Hz".
+            const centre = r.centreOffsetHz
+                ? ` Moved the dial ${Math.abs(Math.round(r.centreOffsetHz))} Hz ` +
+                  `${r.centreOffsetHz < 0 ? 'down' : 'up'} to put the mark on ` +
+                  `${Math.round(r.markHz)} Hz - it was arriving at ` +
+                  `${Math.round(r.measuredMarkHz)} Hz.`
+                : '';
+
             // Longer than the usual hold: this is up to four clauses, and the ones
             // that ask the operator to do something are at the end of them.
-            this._setStatus(`Auto: ${parts.join(', ')}.${note}${advice}${doubt}`, 14000);
+            this._setStatus(`Auto: ${parts.join(', ')}.${centre}${note}${advice}${doubt}`, 14000);
         } catch {
             this._setStatus('Cannot reach the server.', 5000);
         } finally {
@@ -668,6 +743,20 @@ export class RttyTuner {
             // stopped when another window kept it running but this window's
             // own hold lapsed, so this starts us again and we are counted.
             if (!f.running && this._active()) this._restart();
+
+            // What the host changed about the radio so that the figure could be
+            // believed - a mode switch, a widened filter. Once per note, not once
+            // per frame: _draw rewrites this line twenty times a second, so it is
+            // posted with a hold, and a note that is still the same note on the
+            // next frame must not keep re-arming that hold or nothing else could
+            // ever be read.
+            if (f.modeNote && f.modeNote !== this._modeNoteShown) {
+                this._modeNoteShown = f.modeNote;
+                this._setStatus(f.modeNote, 8000);
+            } else if (!f.modeNote) {
+                this._modeNoteShown = null;
+            }
+
             this._last = f;
             this._adoptServerSettings(f);
             this._push(f);
