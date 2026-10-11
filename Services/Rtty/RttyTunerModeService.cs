@@ -370,32 +370,70 @@ namespace Yaesu_Web_Control.Services.Rtty
         // ---- the filter ----------------------------------------------------
 
         /// <summary>
-        /// Where this radio centres its RTTY IF passband, in Hz of audio: at a
-        /// fixed point near 1800 Hz, following neither tone.
+        /// Where this radio centres its receive passband, in Hz of audio:
+        /// a fixed point per model, <b>plus the IF SHIFT</b>, following neither
+        /// tone.
         ///
-        /// <para>Bench-measured on the FTdx101MP on 2026-10-09 and not a guess.
-        /// The decisive experiment was the same signal - DDK9, 450 Hz shift, 50
-        /// baud - at two audio placements, with the dial moved and nothing else
-        /// touched. With mark 2125 / space 2575 the copy survived down to a
-        /// 1700 Hz filter and was dead at 1200; with mark 1675 / space 2125 it
-        /// survived down to <b>800 Hz</b> and was dead at 600. A factor of two
-        /// from the audio placement alone, at identical shift and speed, is the
-        /// proof that no formula in shift and baud can be right: both columns fit
-        /// one fixed centre, C = 1725-1875. Both survival figures also land
-        /// exactly on a rung of this radio's own CW/RTTY ladder (1700 and 800),
-        /// which is where the measurement and the table agree.</para>
+        /// <para>Measured on the FTdx101MP with a <b>noise sweep</b> on
+        /// 2026-10-10 - no signal and no decode involved, which is why it
+        /// settled in seconds what a week of survival sweeps could not. Band
+        /// noise through a narrow filter has the shape of that filter, so a
+        /// Welch FFT of the receive audio draws the passband directly. Five
+        /// widths, three modes and two sessions all put the -6 dB centre at
+        /// <b>1485 Hz +/- 17</b> with IF SHIFT at zero, and the mode does not
+        /// matter (DATA-U 1486, RTTY-L 1484, USB 1485).</para>
         ///
-        /// <para><b>Measured, not explained.</b> 1800 Hz is suspiciously close to
-        /// this radio's own RTTY menu centre if that menu is set to mark 1275 with
-        /// an 850 Hz shift, but the menu was not read, so the figure stands on the
-        /// measurement alone - and an operator with different RTTY menu settings
-        /// may well sit somewhere else. It is a method rather than a constant for
-        /// that reason, and because Icom Web Control answers differently: the
-        /// IC-7300 MkII centres its RTTY passband on the <i>mark</i>, which is why
-        /// <see cref="RttyIfWidth"/> takes the centre as a parameter and assumes
-        /// neither behaviour.</para>
+        /// <para><b>It tracks IF SHIFT one for one.</b> Measured 1482 / 1781 /
+        /// 1201 / 1482 Hz for shifts of 0 / +300 / -300 / 0, against a written
+        /// prediction of 1485 / 1785 / 1185, with the width unchanged
+        /// throughout and the two zero runs agreeing to 0 Hz. No constant can
+        /// therefore be right, which is the whole reason this is a method.</para>
+        ///
+        /// <para><b>This replaces a figure of 1800 Hz that was wrong.</b> That
+        /// came from a 2026-10-09 survival sweep whose conclusion does not
+        /// survive its own text: re-run under an A-B-A control, every rung of
+        /// both audio placements produced one to thirty-four characters of hash
+        /// with no known token in any of them, and the analyser refused seven
+        /// attempts out of eight. There was no copy there to compare, so the
+        /// "factor of two from placement alone" it reported was a difference in
+        /// character throughput through noise. 1800 is also reachable
+        /// innocently as 1485 + 315, an IF shift of about +300, and nothing in
+        /// this app logs IF SHIFT, so the old session cannot be re-examined.</para>
+        ///
+        /// <para>The centring is what makes a narrow filter possible at all.
+        /// Proved on the air on 2026-10-11 against a live contest station: with
+        /// the pair left where the dial put it, 970 Hz above centre, the floor
+        /// was about 2200 Hz and nothing below a 1700 Hz filter copied; moved
+        /// on to the measured centre - the pair landed within 4 Hz of 1485 -
+        /// the floor fell to 268 Hz and every rung down to <b>250 Hz</b>
+        /// copied. That is a step in kind, not a score to argue over.</para>
+        ///
+        /// <para>Icom Web Control answers differently - the IC-7300 MkII looks
+        /// mark-centred - which is why <see cref="RttyIfWidth"/> takes the
+        /// centre as a parameter and assumes neither behaviour. That Icom
+        /// finding rests on signal evidence and has never had a noise sweep of
+        /// its own, so it may yet turn out to be this same artefact.</para>
+        ///
+        /// <para><paramref name="markHz"/> is unused and kept so the signature
+        /// still says what the answer is allowed to depend on: on this radio,
+        /// not the tones.</para>
         /// </summary>
-        private static double PassbandCentreHz(double markHz) => 1800.0;
+        private double PassbandCentreHz(double markHz)
+            => ModelCentreHz(_state.RadioModel) + _state.IfShiftA;
+
+        /// <summary>
+        /// The audio centre with IF SHIFT at zero. Only the FTdx101MP has been
+        /// swept; anything else gets Yaesu's published DATA carrier point, which
+        /// is the right kind of answer rather than this one radio's measurement
+        /// pretending to be universal. A model added here wants its own noise
+        /// sweep, not a guess - the recipe is six seconds of recorded audio per
+        /// width and a Welch FFT.
+        /// </summary>
+        private static double ModelCentreHz(string? model) => model switch
+        {
+            "FTdx101MP" or "FTdx101D" => 1485.0,   // swept 2026-10-10
+            _                         => 1500.0,
+        };
 
         private async Task<string?> WidenIfNeededAsync(
             ApplicationSettings settings, double markHz, int shiftHz, double baud,
