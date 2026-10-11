@@ -191,7 +191,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                 // for the mode the radio is about to leave. The mode change also
                 // brings the radio's own stored RTTY width with it, which is the
                 // width this then judges.
-                var widened = await WidenIfNeededAsync(settings, markHz, shiftHz, baud, ct);
+                var sized = await SizeFilterAsync(settings, markHz, shiftHz, baud, ct);
                 _sizedFor = (markHz, shiftHz, baud);
 
                 // What to hold. The mode the radio is in now, if it is one of
@@ -203,7 +203,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                     ? _state.ModeA
                     : null;
 
-                return Join(switched, widened);
+                return Join(switched, sized);
             }
             finally { _gate.Release(); }
         }
@@ -435,7 +435,7 @@ namespace Yaesu_Web_Control.Services.Rtty
             _                         => 1500.0,
         };
 
-        private async Task<string?> WidenIfNeededAsync(
+        private async Task<string?> SizeFilterAsync(
             ApplicationSettings settings, double markHz, int shiftHz, double baud,
             CancellationToken ct)
         {
@@ -477,7 +477,39 @@ namespace Yaesu_Web_Control.Services.Rtty
                      + "and this radio's filter widths are not known here - set it by hand.";
             }
 
-            if (RttyIfWidth.WidenToHz(current, markHz, worstSpace, baud, centre) is not { } want)
+            // The floor, then the narrowest rung that clears it - and that rung
+            // is written whether it is wider OR narrower than what the radio is
+            // using. This was widen-only until 2026-10-11, on the honest grounds
+            // that no evidence said narrow beat wide: the live sweep that tried to
+            // show it scored the same 2400 Hz rung 90.9% and then 53.3% six
+            // minutes later, so the band was moving more than the filter.
+            //
+            // The evidence now exists, and it came from ten minutes of one
+            // recorded contest station decoded many times with a simulated filter
+            // (RttyBench --sweep width, five 120 s captures pooled, scored on
+            // known tokens):
+            //
+            //   added noise   as recorded, 2400 Hz   best rung      gain
+            //   none          69.4% (129 known)      350 -> 71.1%   +1.7
+            //   12 dB         68.1% (128)            300 -> 71.5%   +3.4
+            //    6 dB         67.0% (124)            300 -> 70.8%   +3.8
+            //    3 dB         66.5% (119)            300 -> 68.9%   +2.4
+            //    0 dB         61.6% (106 known)      250 -> 66.7%   +5.1, +14 tokens
+            //
+            // Two things in that table matter more than the sizes. The benefit
+            // GROWS as the signal weakens, which is the physical prediction and
+            // not something a fluke does in order; and framing errors fall at
+            // every single noise level, 29.5-30.6% wide against 26.7-27.8%
+            // narrow. The floor for that pair computed to 269 Hz - rung 300 - and
+            // 300 is best or joint-best at three of the five levels. The formula
+            // picks the right rung, so there is nothing here to tune, only a
+            // direction to stop refusing.
+            //
+            // The simulated filter is steeper than this radio's, so the sizes are
+            // an upper bound rather than a promise. The direction is not: on the
+            // air the same morning, with the pair centred, every rung down to
+            // 250 Hz copied.
+            if (RttyIfWidth.MinimumHz(markHz, worstSpace, baud, centre) is not { } want)
                 return null;
 
             // Should not happen once the width above read in Hz, since both go
@@ -487,6 +519,13 @@ namespace Yaesu_Web_Control.Services.Rtty
                 return $"The IF filter needs to be at least {want} Hz for a {shiftHz} Hz shift, "
                      + "and this radio's filter widths are not known here - set it by hand.";
 
+            // Already on the right rung: write nothing. A no-op write still costs
+            // a CI-V exchange on a bus the scope and the meters are sharing, and
+            // still has to be undone on the way out.
+            if (rung.Hz == current) return null;
+
+            bool narrowing = rung.Hz < current;
+
             string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
             await _cat.SendCommandAsync(
                 CatCommands.FormatIfWidth(settings.RadioModel, p1, rung.Code), "RttyTuner", ct);
@@ -495,9 +534,10 @@ namespace Yaesu_Web_Control.Services.Rtty
             int got = await ReadWidthBackAsync(settings, mode, ct) ?? rung.Hz;
 
             _logger.LogInformation(
-                "RTTY tuner: IF width {Current} Hz is too narrow for a {Shift} Hz shift at {Baud} baud "
-                + "with the mark at {Mark} Hz, widened to {Actual} Hz",
-                current, shiftHz, baud, markHz, got);
+                "RTTY tuner: IF width {Current} Hz {Verb} for a {Shift} Hz shift at {Baud} baud "
+                + "with the mark at {Mark} Hz and the passband centred on {Centre} Hz, {Verb2} to {Actual} Hz",
+                current, narrowing ? "passes but is wider than it needs to be" : "is too narrow",
+                shiftHz, baud, markHz, centre, narrowing ? "narrowed" : "widened", got);
 
             // The widest filter the radio has may still not reach, if the pair sits
             // far enough off the centre of the passband. Saying "widened to 500 Hz"
@@ -508,7 +548,10 @@ namespace Yaesu_Web_Control.Services.Rtty
                      + "which is still not enough for this tone pair - move the dial to bring the tones "
                      + "closer to the middle of the passband.";
 
-            return $"IF width {current} Hz was too narrow for {shiftHz} Hz shift; widened to {got} Hz.";
+            return narrowing
+                ? $"IF width narrowed from {current} Hz to {got} Hz, the narrowest that carries a "
+                  + $"{shiftHz} Hz shift at {baud:N2} baud here."
+                : $"IF width {current} Hz was too narrow for {shiftHz} Hz shift; widened to {got} Hz.";
         }
 
         /// <summary>
