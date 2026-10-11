@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text;
 
 namespace RadioWebControl.Core.Services.Rtty
@@ -108,6 +108,30 @@ namespace RadioWebControl.Core.Services.Rtty
             // and in bit times because otherwise it is not: measured in seconds,
             // a half-second attack swallowed the opening word at 75 and 100 baud
             // while behaving perfectly at 45.45.
+            //
+            // One average, the same rate up and down. An asymmetric version -
+            // opening over three bit times and closing over twelve, on the
+            // reasoning that the first characters of a burst are lost while the
+            // average catches up - was built and measured on 2026-10-11 against
+            // five 60 s captures of a real RTTY contest run. It recovered
+            // nothing: known tokens were identical on four of the five files and
+            // gained one on the fifth, while junk tokens roughly tripled
+            // (10 -> 25, 21 -> 30, 22 -> 31, 22 -> 31, 18 -> 29) and the score
+            // fell from 77-91% to 35-64%. Three bit times of hiss simply varies
+            // more than twelve and crosses the squelch. Do not rebuild it; if
+            // you doubt this, the captures are in the corpus and RttyBench
+            // scores them in seconds.
+            //
+            // A fast RELEASE - the opposite asymmetry, aimed at the one junk
+            // character that lands at the end of each burst as the carrier
+            // drops - was measured the same day on the same files and is worse
+            // still: it halves the copy, because a fade inside a transmission
+            // drops the gate and takes real characters with it. Known tokens
+            // 9 -> 5, 17 -> 11, 15 -> 8, 20 -> 8, 15 -> 10.
+            //
+            // Three plausible changes to this one line, all measured, all
+            // losses. The symmetric twelve-bit-time average is where it should
+            // be in both directions.
             _activityRate = 1.0 / (_samplesPerBit * 12);
 
             _mark = new RttyToneMagnitude(window, markHz, sampleRate);
@@ -276,6 +300,20 @@ namespace RadioWebControl.Core.Services.Rtty
                         if (_n >= _edge + (long)(_samplesPerBit * 6.5))
                         {
                             if (difference <= 0) FramingErrors++;
+
+                            // A failed stop bit is NOT a reason to withhold the
+                            // character. Suppressing the append on framing - the
+                            // obvious reading of "the decoder already knows this
+                            // one is wrong" - was measured on 2026-10-11 and is a
+                            // wash that costs copy where it is scarcest. On five
+                            // captures of one strong contest station it was free:
+                            // known tokens identical (9/17/15/20/15) and four or
+                            // five junk characters gone. On the weaker and utility
+                            // files it took real text with it - known tokens
+                            // 34 -> 31 on afsk2-7041 and 29 -> 27 on
+                            // corpus-7050-w17 - because a marginal stop bit on a
+                            // fading signal still sits over a correct character.
+                            // Flat score, worse copy on weak signals: left alone.
 
                             // The shift state is tracked even while squelched, so
                             // that a station opening the gate mid-transmission is
