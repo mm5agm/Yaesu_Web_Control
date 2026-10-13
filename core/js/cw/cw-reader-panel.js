@@ -46,6 +46,7 @@ export class CwReaderPanel {
         this._running  = false;
         this._text     = '';
         this._readerMode = false;
+        this._autoNote   = null;   // { text, problem, until } - Auto's answer, held on the status line a while
         this._standalone = false;
         this._paused   = false;
         this._pausedEl = null;
@@ -96,6 +97,12 @@ export class CwReaderPanel {
             this._modeBtn.addEventListener('click', () => this._toggleReaderMode());
             this._refreshReaderMode();
         }
+
+        // Auto finds the station the reader is copying, puts it on pitch and
+        // sets the filter for its speed. Optional, like Reader Mode: it needs
+        // a server that can move the dial and the filter.
+        this._autoBtn = document.getElementById('cwReaderAutoBtn');
+        this._autoBtn?.addEventListener('click', () => this._runAuto());
 
         this._phasorTgl?.addEventListener('change', () => {
             this._applyPhasor();
@@ -250,6 +257,34 @@ export class CwReaderPanel {
               + `Press again to restore ${status.restoresMode ?? 'your mode'}`
               + `${status.restoresWidth ? ` and IF width code ${status.restoresWidth}` : ''}.`
             : 'Set CW mode, a narrow filter and APF for decoding. Your current settings are put back when you stop.';
+    }
+
+    // ── Auto ────────────────────────────────────────────────────────────────
+    //
+    // The server waits for a readable lock, moves the dial onto pitch, then
+    // narrows - in that order, or the narrowing throws the station away. Its
+    // answer is held on the status line for a while, because the next poll
+    // would otherwise overwrite it before anyone could read it.
+
+    async _runAuto() {
+        if (!this._autoBtn) return;
+        const label = this._autoBtn.textContent;
+        this._autoBtn.disabled = true;
+        this._autoBtn.textContent = 'Auto: looking...';
+        try {
+            const res = await fetch('/api/cw/auto', { method: 'POST' });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) { this._showError(body.error || `HTTP ${res.status}`); return; }
+            if (body.readerMode) this._applyReaderMode(body.readerMode);
+            this._autoNote = { text: body.message || '', problem: !body.ok, until: Date.now() + 12000 };
+            this._setStatus(this._autoNote.text, null, this._autoNote.problem ? 'problem' : null);
+            this._startPolling();   // Auto starts the reader if it was stopped
+        } catch (e) {
+            this._showError(e.message);
+        } finally {
+            this._autoBtn.disabled = false;
+            this._autoBtn.textContent = label;
+        }
     }
 
     // ── Polling ─────────────────────────────────────────────────────────────
@@ -474,6 +509,12 @@ export class CwReaderPanel {
         if (Number.isFinite(snap.snrDb)) bits.push(`SNR ${snap.snrDb.toFixed(0)} dB`);
         if (snap.droppedFrames)  bits.push(`${snap.droppedFrames} frames dropped`);
 
+        const auto = this._autoNote;
+        if (auto && Date.now() < auto.until) {
+            this._setStatus(`${auto.text}  |  ${bits.join('  |  ')}`, null, auto.problem ? 'problem' : null);
+            return;
+        }
+        this._autoNote = null;
         this._setStatus(bits.join('  |  '));
     }
 

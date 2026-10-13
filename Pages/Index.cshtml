@@ -2725,6 +2725,7 @@
         import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RttyReader }           from "/js/rtty/rtty-reader.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { attachPopout, screenShare } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { attachFold }           from "/js/layout/fold-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -3205,6 +3206,17 @@
             // that window to the front instead of opening the dialog, and the
             // dialog stays shut so the two are not both polling. Reattach in
             // the window, or closing it, gives the button back.
+            // Opening the CW reader puts the radio in CW, as opening the RTTY
+            // panel puts it in RTTY (that one on the server - see
+            // RttyTunerModeService). Only on opening, not when the button
+            // brings a pop-out to the front, and not if it is already CW.
+            let readerModeA = '@Model.RadioState.ModeA';
+            const openCwReaderInCw = () => {
+                const dlg = document.getElementById('cwReaderDialog');
+                if (!dlg?.open && !readerModeA.startsWith('CW')) window.setMode('A', 'CW-U');
+                window.cwReaderPanel.toggle();
+            };
+
             window.cwReaderOpen = attachPopout({
                 name: 'cw-reader',
                 // Reattach gives the dialog the size the window was left at.
@@ -3216,7 +3228,7 @@
                 dialog: () => document.getElementById('cwReaderDialog'),
                 openButton: document.getElementById('cwReaderOpenBtn'),
                 popoutButton: document.getElementById('cwReaderPopoutBtn'),
-                show: () => window.cwReaderPanel.toggle(),
+                show: openCwReaderInCw,
                 closedLabel: {
                     text: 'CW Read',
                     title: 'Open the CW reader - decodes the received Morse to text',
@@ -3233,6 +3245,18 @@
             // it runs with or without the CW reader.
             window.rttyTuner = new RttyTuner();
             window.rttyTuner.init();
+            // The Decode half of that same panel. Its markup comes in with the
+            // partial whether or not anything drives it, so without this the
+            // pane sits there looking functional and prints nothing: Start has
+            // no listener and no poll ever runs. Contest Mode hides the
+            // section, so there it is left alone and the server is stopped
+            // once, exactly as the Flex page does it - otherwise a decode left
+            // running from an earlier session would have no button to stop it.
+            if (document.getElementById('rttyTunerDialog')?.classList.contains('rtty-contest')) {
+                fetch('/api/rtty/reader/stop', { method: 'POST' }).catch(() => { });
+            } else {
+                window.rttyReader = new RttyReader().init();
+            }
             // The tuner can live in a window of its own (/RttyTuner) too. Each
             // window holds the radio's audio under its own lease, so popping
             // out - which closes the dialog here - does not stop the figure.
@@ -3424,6 +3448,7 @@
             });
             spectrumPipeline.onModeA(mode => {
                 spectrumPanelA?.setMode(mode);
+                readerModeA = mode || '';
                 modePanelGuards.forEach(g => g.setMode(mode));
                 ensureRttyTones(mode);
                 readDataShift(mode);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using RadioWebControl.Core.Services.Spectrum;
@@ -56,6 +56,51 @@ namespace RadioWebControl.Core.Services.Rtty
     /// agreed perfectly are the same number here, and the difference between them
     /// is which method was called.
     /// </param>
+    /// <param name="ToneBalanceDb">
+    /// How far the weaker of the two peaks sits below the stronger one, in dB.
+    ///
+    /// <para><b>This is the number that tells a tone pair from a fragment.</b>
+    /// Both tones of a RTTY signal are keyed for roughly the same share of the
+    /// time, so in an averaged spectrum they stand at roughly the same height -
+    /// 1.6 dB apart on the crossed-ellipse bench check, within 4 dB on every
+    /// synthesised pair that measured correctly. A figure far larger than that
+    /// means the second peak is not the other tone: it is the skirt of the first
+    /// one, or a noise peak that happened to be the tallest thing left once the
+    /// real second tone had fallen outside the scanned range.</para>
+    ///
+    /// <para>Reported rather than acted on, because a wide gap is not always a
+    /// wrong answer - selective fading really can leave one tone 10 dB down on
+    /// the other for seconds at a time. See
+    /// <see cref="RttySignalEstimate.MeasuredAFragment"/>.</para>
+    /// </param>
+    /// <param name="AtScanEdge">
+    /// True when the energy centre of one of the two peaks fell outside the
+    /// frequency range the analyser was told to search, which happens only when
+    /// that peak is truncated by the edge of the range rather than complete
+    /// within it. A truncated peak has its centre dragged inwards, so its
+    /// frequency - and with it the shift - is measured short.
+    /// </param>
+    /// <param name="SpeedMeasured">
+    /// False when <see cref="RttySignalAnalyser.AnalyseAgreed"/> found the tone
+    /// pair twice but not the speed, so <see cref="Baud"/> is a measurement
+    /// nothing has corroborated and must not be written to a decoder.
+    ///
+    /// <para>The tones and the speed are not equally robust, and a bench run on
+    /// 2026-10-10 put numbers on it. A hundred and twenty seconds of one steady
+    /// contest station, cut into four-second blocks: on the blocks where the two
+    /// halves disagreed, the mark and the shift matched to one or two hertz while
+    /// the speeds came out 45.47 against 109.61, and 44.83 against 34.27. The
+    /// speed is fitted to the lengths of the keying runs and half a block holds
+    /// half of them, so a fade or a collision takes the speed out first. The tone
+    /// pair is a peak in an averaged spectrum and survives both.</para>
+    ///
+    /// <para>So this is the same answer as
+    /// <see cref="MeasuredAFragment"/> gives to a different question: keep the
+    /// part that was measured twice, refuse the part that was not. There the
+    /// mark survives alone; here the mark and the shift do, and only the speed
+    /// is withheld - which is worth having, because the operator already has a
+    /// speed set and it is nearly always the right one.</para>
+    /// </param>
     public sealed record RttySignalEstimate(
         double MarkHz,
         double SpaceHz,
@@ -64,7 +109,34 @@ namespace RadioWebControl.Core.Services.Rtty
         double Confidence,
         double ToneMargin,
         double BaudFit,
-        double Agreement = 1.0);
+        double ToneBalanceDb,
+        bool AtScanEdge,
+        double Agreement = 1.0,
+        bool SpeedMeasured = true)
+    {
+        /// <summary>
+        /// Whether this estimate is a measurement of half a signal.
+        ///
+        /// <para>Bench-found 2026-10-09 and reproduced in the test suite: detune a
+        /// RTTY signal until one of its tones leaves the scanned range and the
+        /// analyser measures what is left, reporting a <i>confident</i> answer that
+        /// is wrong about both the shift and the speed. A true 450 Hz shift at 50
+        /// baud came back as 425 at confidence 0.97, and as 115 Hz at 100 baud at
+        /// confidence 0.92. Neither the 0.4 confidence gate nor
+        /// <see cref="RttySignalAnalyser.AnalyseAgreed"/>'s half-to-half check
+        /// catches it, because the fragment is measured consistently - the two
+        /// halves agree about the same wrong answer.</para>
+        ///
+        /// <para><b>The mark is still worth having when this is true; the shift and
+        /// the speed are not.</b> The louder peak is the real tone - the dial
+        /// correction computed from it moves the signal towards the middle of the
+        /// passband, which is what let the bench recover on a second press. So the
+        /// useful response is to keep the dial move and refuse the figures, not to
+        /// throw the whole answer away.</para>
+        /// </summary>
+        public bool MeasuredAFragment =>
+            AtScanEdge || ToneBalanceDb > RttySignalAnalyser.ToneBalanceLimitDb;
+    }
 
     /// <summary>
     /// What <see cref="RttySignalAnalyser.AnalyseAgreed"/> made of the audio,
@@ -104,6 +176,15 @@ namespace RadioWebControl.Core.Services.Rtty
 
         /// <summary>Something was found, but it did not measure the same twice.</summary>
         DidNotRepeat,
+
+        /// <summary>
+        /// The tone pair measured the same twice and the speed did not, so there
+        /// is an estimate but its <see cref="RttySignalEstimate.Baud"/> is not
+        /// corroborated. The mark, the shift and the polarity are as good as on
+        /// <see cref="Agreed"/>; see
+        /// <see cref="RttySignalEstimate.SpeedMeasured"/>.
+        /// </summary>
+        SpeedDidNotRepeat,
     }
 
     /// <summary>
@@ -237,6 +318,62 @@ namespace RadioWebControl.Core.Services.Rtty
         private const double PolarityMargin = 0.08;
 
         /// <summary>
+        /// The bottom of the frequency range searched for tones, unless a caller
+        /// says otherwise.
+        ///
+        /// <para><b>Why it is not 300, which it was.</b> 300 Hz is where a
+        /// receiver's audio response starts, so it looks like the honest answer,
+        /// and on the 2026-10-10 bench recording it was the single biggest thing
+        /// wrong with this analyser. That recording is 120 s of one steady contest
+        /// station through an 800 Hz IF with its tones at 1724 and 1554 Hz.
+        /// Scanning from 300 Hz, one half of six separate four-second blocks
+        /// locked onto a peak between 261 and 503 Hz and reported shifts of 1217
+        /// to 1436 Hz. The half's partner had the real pair, to a hertz - so the
+        /// two disagreed, and the operator was told the signal was fading on audio
+        /// that decoded. Below about 550 Hz is where the mains hum, its
+        /// harmonics and the receiver's own rumble live, and no RTTY tone lives
+        /// there at all: the standards are 1275 and 1445 for the low pair, 2125
+        /// and 2295 for the high one, and 1275 with 2125 for an 850 shift.</para>
+        ///
+        /// <para><b>Why it is not higher, which was tried.</b> 1000 Hz was the
+        /// first choice and is measurably worse than 700, in two ways that point
+        /// the same direction. On the bench it let through an eighth block at
+        /// confidence 0.40 - the exact value of the gate downstream, which admits
+        /// it - whose two halves agreed that the mark was 1555 Hz when the
+        /// station's mark was 1720. At 700 that block is refused at 0.28 and the
+        /// seven blocks that are accepted all have the mark right. And a 1000 Hz
+        /// floor puts the test suite's own low-tone cases on the boundary: a mark
+        /// at 1000 Hz with a 425 or 450 Hz shift, which is a listener on the
+        /// weather and press stations, stopped being identified at all.</para>
+        ///
+        /// <para><b>What it costs.</b> A pair tuned so low in the audio that its
+        /// bottom tone is under 700 Hz is half a signal rather than a measurement
+        /// - <see cref="RttySignalEstimate.AtScanEdge"/> sees to it that this is
+        /// said rather than guessed at, and the dial correction from the tone that
+        /// was in range is what brings the other one into it. That is a real
+        /// narrowing of "it does not need you to be anywhere near tuned", and it is
+        /// the price of not measuring the hum.</para>
+        /// </summary>
+        public const double DefaultLowHz = 700;
+
+        /// <summary>
+        /// The top of the range, and this one really is the audio passband's edge.
+        ///
+        /// <para><b>Do not narrow it to the IF filter.</b> It was tried, on the
+        /// reasoning that the tones cannot be outside the filter they arrived
+        /// through, and the bench refused it: the same recording scanned 1400 to
+        /// 2200 Hz - its own 800 Hz passband - found no extra blocks and dropped
+        /// the confidence on the five it already had from 0.83-0.92 to 0.42-0.73,
+        /// one half landing on 0.42 against a gate at 0.40. The reason is in
+        /// <see cref="Analyse"/>: confidence is how far the peaks stand above the
+        /// noise floor <em>of the scanned range</em>, so a range that is nearly all
+        /// signal has no floor left to measure. The top of the range is where the
+        /// evidence for the signal comes from, not a constraint on where the signal
+        /// is.</para>
+        /// </summary>
+        public const double DefaultHighHz = 3000;
+
+        /// <summary>
         /// Analyse a block of audio. Null when there is nothing in it that looks
         /// like two tones - too short, silent, or only one peak in the passband.
         /// </summary>
@@ -249,8 +386,8 @@ namespace RadioWebControl.Core.Services.Rtty
         public static RttySignalEstimate? Analyse(
             ReadOnlySpan<float> audio,
             int sampleRate,
-            double lowHz = 300,
-            double highHz = 3000,
+            double lowHz = DefaultLowHz,
+            double highHz = DefaultHighHz,
             double lowBaud = 30,
             double highBaud = 120)
         {
@@ -284,6 +421,21 @@ namespace RadioWebControl.Core.Services.Rtty
             var toneB = second.Value.hz;
             var shift = Math.Abs(toneA - toneB);
 
+            // Two tones, or one tone and whatever was next tallest? Both halves of
+            // a keyed pair are on air for roughly the same share of the time, so in
+            // an averaged spectrum they stand at roughly the same height, and a
+            // large gap here means the second peak is not the other tone at all.
+            var louder = Math.Max(first.Value.level, second.Value.level);
+            var quieter = Math.Min(first.Value.level, second.Value.level);
+            var balanceDb = quieter > 0 ? 20.0 * Math.Log10(louder / quieter) : double.PositiveInfinity;
+
+            // A peak whose energy centre lies outside the range searched was
+            // truncated by the edge of that range, which drags the centre inwards
+            // and measures the frequency - and so the shift - short. A peak
+            // complete within the range cannot do this, however close to the edge
+            // it sits, because the energy either side of it is symmetrical.
+            var atEdge = toneA < lowHz || toneA > highHz || toneB < lowHz || toneB > highHz;
+
             // How much the two peaks stand above the general level of the
             // passband. A signal gives tens of dB; noise alone gives a few.
             var prominence = Clamp01(Math.Log10((first.Value.level + second.Value.level) / (2 * floor + 1e-30)) / 1.5);
@@ -299,7 +451,8 @@ namespace RadioWebControl.Core.Services.Rtty
             // see the note on RttySignalEstimate.Confidence.
             var confidence = prominence * fit;
 
-            return new RttySignalEstimate(markHz, spaceHz, shift, baud, confidence, margin, fit);
+            return new RttySignalEstimate(
+                markHz, spaceHz, shift, baud, confidence, margin, fit, balanceDb, atEdge);
         }
 
         /// <summary>
@@ -312,6 +465,27 @@ namespace RadioWebControl.Core.Services.Rtty
         public const double SpeedAgreement = 0.10;
 
         /// <summary>
+        /// How far the weaker of the two peaks may sit below the stronger one, in
+        /// dB, before the pair is treated as one tone and something that is not the
+        /// other one.
+        ///
+        /// <para>Ten decibels, which is two and a half times the widest gap any
+        /// correctly measured pair has shown here and a third of the narrowest gap
+        /// any wrong one has. The synthesised sweep that reproduces the bench
+        /// failure measures 3.9 dB on every pair it gets right and 13 to 28 dB on
+        /// every pair it gets wrong, so there is no threshold in between that
+        /// behaves differently and a round number is honest about the precision.
+        /// </para>
+        ///
+        /// <para>It is deliberately generous, because a gap this wide can also be
+        /// honest: selective fading on HF leaves one tone well down on the other
+        /// for seconds at a time. What hangs on it is whether the measured shift
+        /// and speed are written anywhere, not whether the operator is shown them,
+        /// so erring towards trusting the signal costs little.</para>
+        /// </summary>
+        public const double ToneBalanceLimitDb = 10.0;
+
+        /// <summary>
         /// The same for the tone pair, and looser again because it is nearly always
         /// met - the pair is the robust half of the estimate and held to within a
         /// hertz through the fade that sent the speed to 31 baud. A disagreement
@@ -319,6 +493,33 @@ namespace RadioWebControl.Core.Services.Rtty
         /// two measurements of one station at all.
         /// </summary>
         public const double ShiftAgreement = 0.15;
+
+        /// <summary>
+        /// How far apart the two halves' <i>marks</i> may be and still be the same
+        /// tone, as a fraction of the measured shift.
+        ///
+        /// <para>This exists because of one specific way of being wrong, and it is
+        /// not hypothetical: the analyser can get the two tones right and their
+        /// polarity the wrong way round, and it can do it on one half of a block
+        /// and not the other. On the 2026-10-10 bench recording that happened on
+        /// two of the nine blocks that held the signal - one half reporting mark
+        /// 1721 space 1551, the other mark 1550 space 1721. Both halves agree
+        /// about the <em>shift</em> there, to a hertz, because the shift is the
+        /// distance between the peaks and does not care which is which. So
+        /// <see cref="ShiftAgreement"/> cannot catch it, and the answer handed to
+        /// the operator would put their mark 170 Hz from the signal - which on the
+        /// measured copy window of about +/-20 Hz is not a near miss, it is
+        /// silence.</para>
+        ///
+        /// <para>A quarter of the shift, so the test scales with the signal
+        /// instead of being a figure in hertz that is strict on 850 and useless on
+        /// 170. It has to be well under 1.0, which is what a swap measures, and
+        /// well over what two honest measurements of the same tone differ by: the
+        /// bench pairs agreed to 1 or 2 Hz, under 1.5% of a 170 Hz shift, so there
+        /// are two decimal orders of margin either side and no reason to tune
+        /// it.</para>
+        /// </summary>
+        public const double MarkAgreement = 0.25;
 
         /// <summary>
         /// <see cref="Analyse"/>, with the answer checked against itself: the same
@@ -346,6 +547,17 @@ namespace RadioWebControl.Core.Services.Rtty
         /// ever wanted, the way to buy it is two overlapping full-length windows -
         /// six seconds of audio, not eight.</para>
         ///
+        /// <para><b>The two halves of the check are paid for separately.</b> A
+        /// tone pair that did not repeat is a refusal, because nothing in that
+        /// answer stands up. A <i>speed</i> that did not repeat is
+        /// <see cref="RttyAgreement.SpeedDidNotRepeat"/>: the estimate comes back
+        /// with everything except the speed, which is marked unmeasured. The speed
+        /// is the fragile measurement - it is fitted to the lengths of the keying
+        /// runs, and half a block holds half of them - and refusing a whole answer
+        /// because of it threw away four of the nine blocks of a steady station
+        /// whose halves agreed about the mark to within a hertz. See the note at
+        /// the gate for that bench run.</para>
+        ///
         /// <para>The estimate returned is the whole-block one, unaltered, which is
         /// the most precise of the three. How well the halves agreed is reported
         /// alongside it as <see cref="RttySignalEstimate.Agreement"/> and is
@@ -355,8 +567,8 @@ namespace RadioWebControl.Core.Services.Rtty
         public static RttyAgreementResult AnalyseAgreed(
             ReadOnlySpan<float> audio,
             int sampleRate,
-            double lowHz = 300,
-            double highHz = 3000,
+            double lowHz = DefaultLowHz,
+            double highHz = DefaultHighHz,
             double lowBaud = 30,
             double highBaud = 120)
         {
@@ -375,8 +587,117 @@ namespace RadioWebControl.Core.Services.Rtty
 
             var speedGap = RelativeGap(early.Baud, late.Baud);
             var shiftGap = RelativeGap(early.ShiftHz, late.ShiftHz);
-            if (speedGap > SpeedAgreement || shiftGap > ShiftAgreement)
+
+            // The tone pair first, and on its own. Two halves that found peaks a
+            // different distance apart did not hear one station, and nothing in
+            // such an answer is worth keeping.
+            if (shiftGap > ShiftAgreement)
                 return new RttyAgreementResult(null, RttyAgreement.DidNotRepeat, early, late);
+
+            // The speed on its own, because losing it is not the same as losing
+            // the answer. This used to be one test with the line above it and the
+            // cost was measured on 2026-10-10: of nine four-second blocks of one
+            // steady contest station, five agreed and four were refused outright
+            // while their two halves were reporting the same mark and the same
+            // shift to within a hertz or two. The operator was told the signal was
+            // "probably fading" and nothing moved - on audio that decoded.
+            //
+            // So a speed that did not repeat withholds the speed. The mark, the
+            // shift and the polarity have each been measured twice and are handed
+            // over; the dial still moves, which is the part the operator cannot
+            // do by eye; and the speed they already have is left alone, which is
+            // nearly always 45.45 and nearly always right.
+            //
+            // The mark has to agree AS THE MARK, not merely as one of the pair.
+            // See MarkAgreement: a half-to-half polarity swap keeps the shift
+            // exact and moves the mark by the whole shift, and it is the one
+            // failure that would make this fix worse than the refusal it
+            // replaces. Two of those same nine blocks are swapped, and they are
+            // still refused - the fix is worth two blocks, not four.
+            if (speedGap > SpeedAgreement)
+            {
+                var markGap = Math.Abs(early.MarkHz - late.MarkHz);
+                var allowed = MarkAgreement * Math.Min(early.ShiftHz, late.ShiftHz);
+                if (markGap > allowed)
+                    return new RttyAgreementResult(null, RttyAgreement.DidNotRepeat, early, late);
+
+                // AND THE SHIFT HAS TO BE A STANDARD ONE, because with the
+                // speed withheld it is the only evidence left that this is a
+                // RTTY signal at all.
+                //
+                // The two halves agreeing about the mark and the shift says the
+                // measurement REPEATED. It does not say what it measured: two
+                // stable peaks in the noise repeat perfectly well, and over a
+                // four-second look they are as steady as a station. Of the three
+                // things that vouch for a RTTY signal - a repeatable tone pair, a
+                // coherent keying speed, a shift people actually use - this path
+                // has already given up the second. Requiring the third is what
+                // stops it reporting the first on its own.
+                //
+                // Measured 2026-10-10 on a 180 s off-air recording whose station
+                // was at mark 2,601 Hz: one block came through here at mark 761,
+                // shift 242, with the halves agreeing to 3 Hz on the mark and 4 Hz
+                // on the shift - and half-speeds of 30.00 and 68.70 baud, which is
+                // not a speed that failed to repeat so much as no keying at all.
+                // Its confidence was 0.40, exactly the browser's gate, so it would
+                // have been shown to the operator as a station. Shift 242 Hz snaps
+                // to nothing (nearest standard 200, 21% away, against SnapShift's
+                // 8% tolerance) and it is now refused.
+                //
+                // This costs nothing real: across five recordings every other
+                // block on this path measured 167, 169, 170, 171 or 425 Hz, all of
+                // which snap. A speed-ratio test was tried first and is the wrong
+                // instrument - it would have refused two plausible stations at
+                // shift 167 and 169 to catch this one.
+                if (SnapShift(whole.ShiftHz) is null)
+                    return new RttyAgreementResult(null, RttyAgreement.DidNotRepeat, early, late);
+
+                // The polarity comes down with the speed, because they are one
+                // measurement and not two - see the class note: the speed and
+                // which tone is mark both fall out of the same sweep over the
+                // keying runs. So a block whose speed did not repeat has a
+                // polarity that was not corroborated either, and on the bench
+                // recording exactly one block proved it: at 108 s both halves
+                // agreed that mark was 1,555 Hz when the station's mark was
+                // 1,720, and they agreed at confidence 0.40, which is the wrong
+                // side of every gate downstream of here by one hundredth.
+                //
+                // It is reported rather than refused, and through the number that
+                // already exists to say it: ToneMargin is what the browser reads
+                // to tell the operator that which tone is mark is a guess and to
+                // try Rev. Handing on the worst of the three margins puts that
+                // block at 0.03, which trips the existing warning, and leaves the
+                // two blocks that were measured right at 0.39 and 0.29, which do
+                // not. No new threshold, and nothing fitted to one recording: the
+                // rule is that an uncorroborated keying fit does not get to
+                // report a confident polarity.
+                var margin = Math.Min(whole.ToneMargin,
+                                 Math.Min(early.ToneMargin, late.ToneMargin));
+
+                // And where the whole and the halves disagree about the polarity,
+                // the halves win, because it is two measurements against one. The
+                // figures handed over come from the whole - it is the longer look
+                // and its tone frequencies are the better ones - but the whole is
+                // the single analysis that straddles the speed change, and the
+                // keying runs it reads the polarity from are a blend of both
+                // speeds. The synthetic 50-then-31-baud case shows it plainly:
+                // both halves put the mark at 2,125 Hz and the whole puts it at
+                // 2,574, a clean shift away. So the pair is taken from the whole
+                // and which of them is the mark from the halves.
+                var halvesMark = (early.MarkHz + late.MarkHz) / 2;
+                var swap = Math.Abs(whole.MarkHz - halvesMark) > allowed;
+
+                return new RttyAgreementResult(
+                    whole with
+                    {
+                        MarkHz = swap ? whole.SpaceHz : whole.MarkHz,
+                        SpaceHz = swap ? whole.MarkHz : whole.SpaceHz,
+                        Agreement = 0,
+                        SpeedMeasured = false,
+                        ToneMargin = margin,
+                    },
+                    RttyAgreement.SpeedDidNotRepeat, early, late);
+            }
 
             // Reported, not applied. Scaling the confidence by this was tried and
             // taken out within the hour of writing it, because it punished a signal

@@ -1,4 +1,4 @@
-@page
+﻿@page
 @model Yaesu_Web_Control.Pages.RttyTunerModel
 @{
     Layout = null;
@@ -55,6 +55,7 @@
     <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
     <script type="module">
         import { RttyTuner }      from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RttyReader }     from "/js/rtty/rtty-reader.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { startModePausedPopout } from "/js/popout/popout-mode-pause.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
@@ -65,6 +66,34 @@
 
         const tuner = new RttyTuner();
         tuner.init();
+
+        // The reader in the same panel. The dialog is open from the moment this
+        // page loads and never closes, so the reader starts polling on init and
+        // only the pause below ever stops it.
+        //
+        // Unless Contest Mode (Settings) is on, which hides the Decode section
+        // and the reader's Start/Stop button with it: nothing would show the
+        // text, and a decode still running on the server from an earlier
+        // session would have no button left to stop it. The flag is read off
+        // the class the partial put on the dialog, so this window and the main
+        // page cannot disagree about it. See ApplicationSettings.RttyContestMode.
+        const contest = document.getElementById('rttyTunerDialog')
+            ?.classList.contains('rtty-contest');
+        let reader = null;
+        if (contest) {
+            fetch('/api/rtty/reader/stop', { method: 'POST' }).catch(() => { });
+        } else {
+            reader = new RttyReader();
+            reader.init();
+        }
+
+        // One panel as far as the mode watcher is concerned: pausing the window
+        // has to stop both pollers, or the reader would keep asking for text
+        // from a decoder listening to a radio that has left RTTY.
+        const panel = {
+            get isPaused() { return tuner.isPaused; },
+            setPaused(paused, text) { tuner.setPaused(paused, text); reader?.setPaused(paused); },
+        };
 
         // The same modes the main page keeps its tuner open in: RTTY, and the
         // AFSK modes it also works in.
@@ -78,11 +107,11 @@
         // startModePausedPopout (core) does the pausing and the resuming,
         // and starts at once only if the window opened in one of its modes.
         const modePause = startModePausedPopout({
-            name: 'RTTY tuner',
-            panel: tuner,
+            name: 'RTTY panel',
+            panel,
             belongs,
             pausedText: m =>
-                `Not in an RTTY or data mode (the radio is in ${m}), so the tuner is paused. ` +
+                `Not in an RTTY or data mode (the radio is in ${m}), so the panel is paused. ` +
                 'It starts again when you go back to RTTY, DATA, LSB or USB.',
             startNow: () => tuner.start(),
             initialMode: '@Model.ModeA',

@@ -2739,6 +2739,91 @@
         </div>
     </details>
 
+    <!-- RTTY Tuner -->
+    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
+        <summary><i class="bi bi-activity" aria-hidden="true"></i>&nbsp;RTTY Tuner</summary>
+        <div class="section-body">
+            <p class="text-muted small mb-3">
+                The RTTY tuner draws the crossed figure that shows when a teleprinter
+                signal is tuned in, it decodes the text, and its Auto button listens
+                for a few seconds and works out the tones, the shift, the speed and
+                which way round they are. All three depend on the receiver passing
+                both tones equally, which is what the first two settings are about.
+                The third is about how much of the panel you want on screen.
+            </p>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="rttyTunerSetMode"
+                               name="Settings.RttyTunerSetMode" value="true"
+                               @(Model.Settings.RttyTunerSetMode ? "checked" : "") />
+                        <input type="hidden" name="Settings.RttyTunerSetMode" value="false" />
+                        <label class="form-check-label" for="rttyTunerSetMode">Set RTTY mode when the tuner starts</label>
+                    </div>
+                    <div class="form-text">
+                        Only from the modes RTTY cannot be received in at all - CW, AM and
+                        FM - and your mode and filter are put back when the tuner closes.
+                        SSB, DATA and PSK are left alone, because that is how AFSK software
+                        works.
+                    </div>
+                    <div class="form-text">
+                        It also opens the IF filter if it is too narrow to carry the shift
+                        you are set to. It never narrows one: a narrow filter is how you dig
+                        a signal out of a crowded band, and only you know the band. Changing
+                        to RTTY brings your own stored RTTY filter width with it, which is
+                        better evidence about your band than any formula.
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="rttyAutoCentreMark"
+                               name="Settings.RttyAutoCentreMark" value="true"
+                               @(Model.Settings.RttyAutoCentreMark ? "checked" : "") />
+                        <input type="hidden" name="Settings.RttyAutoCentreMark" value="false" />
+                        <label class="form-check-label" for="rttyAutoCentreMark">Auto also tunes the signal in</label>
+                    </div>
+                    <div class="form-text">
+                        When Auto is sure of what it heard, the dial moves so the mark tone
+                        arrives on the tuner's mark - by as much as your IF filter is wide,
+                        and never less than 500 Hz, in RTTY only and never while
+                        transmitting. Auto says what it moved and by how much.
+                    </div>
+                    <div class="form-text">
+                        This is worth having on: a signal sitting off-centre in the IF arrives
+                        with one tone quieter than the other, and the speed cannot be measured
+                        from keying whose two halves are unequal. Tuning it in fixes the figure,
+                        the speed and anything decoding it, all at once.
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="rttyContestMode"
+                               name="Settings.RttyContestMode" value="true"
+                               @(Model.Settings.RttyContestMode ? "checked" : "") />
+                        <input type="hidden" name="Settings.RttyContestMode" value="false" />
+                        <label class="form-check-label" for="rttyContestMode">RTTY Contest Mode</label>
+                    </div>
+                    <div class="form-text">
+                        Leaves the tuner with just the tone controls, the crossed figure and
+                        its readouts. The hint under the scope goes, and the two message
+                        lines keep their height, so the panel stops changing size while you
+                        are tuning.
+                    </div>
+                    <div class="form-text">
+                        For contesting, where the logger already has a decoder and what it
+                        cannot draw is the figure. The same switch is in Icom Web Control,
+                        where it also leaves out that app's decode and send panels.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </details>
+
     @{ var isSaveSuccess = !string.IsNullOrEmpty(Model.StatusMessage) && (Model.StatusMessage.Contains("success") || Model.StatusMessage.Contains("✓")); }
 
     @* Placed right next to the Save button rather than at the top of the

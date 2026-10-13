@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using RadioWebControl.Core.Services.Rtty;
 using Xunit;
@@ -656,16 +656,24 @@ namespace RadioWebControl.Core.Tests.Rtty
             Assert.True(agreed.Agreement > 0.7, $"agreement {agreed.Agreement:F2}");
         }
 
+        /// <summary>
+        /// One tone pair throughout, so the shift agrees perfectly, but a speed
+        /// that changes halfway - which is what a fade does to this measurement.
+        /// On the bench three analyses of a 50 baud station gave 47.54, 49.99 and
+        /// 31.03 baud while the shift held within a hertz, and the 31.03 scored
+        /// 0.54, high enough to be reported as if it meant something.
+        ///
+        /// <para><b>The speed is withheld and the rest is not,</b> which is the
+        /// 2026-10-10 change. Refusing the whole answer here was measured and it
+        /// was expensive: of nine four-second blocks of one steady contest
+        /// station, four were thrown away with their two halves reporting the same
+        /// mark and the same shift to within a hertz or two. The operator was told
+        /// the signal was probably fading, on audio that decoded, and the dial
+        /// correction they could not make by eye was not made either.</para>
+        /// </summary>
         [Fact]
-        public void A_speed_that_will_not_repeat_is_refused_rather_than_reported()
+        public void A_speed_that_will_not_repeat_withholds_the_speed_and_keeps_the_tones()
         {
-            // The defect this guard exists for, built deliberately: one tone pair
-            // throughout, so the shift agrees perfectly, but a speed that changes
-            // halfway. On the bench it was a fade that produced it - three analyses
-            // of a 50 baud station gave 47.54, 49.99 and 31.03 baud while the shift
-            // held within a hertz - and the 31.03 scored 0.54, high enough to be
-            // reported as if it meant something.
-            //
             // The halves are trimmed to the same length so the midpoint falls
             // exactly on the join; otherwise each half would carry some of both
             // speeds and the test would be measuring the wrong thing.
@@ -679,8 +687,21 @@ namespace RadioWebControl.Core.Tests.Rtty
 
             var checked_ = RttySignalAnalyser.AnalyseAgreed(audio, Rate);
 
-            Assert.Equal(RttyAgreement.DidNotRepeat, checked_.Outcome);
-            Assert.Null(checked_.Estimate);
+            Assert.Equal(RttyAgreement.SpeedDidNotRepeat, checked_.Outcome);
+            Assert.NotNull(checked_.Estimate);
+
+            // The tones, which both halves measured and which are what the dial
+            // and the filters are set from.
+            Hz(2125, checked_.Estimate!.MarkHz);
+            Hz(2575, checked_.Estimate.SpaceHz);
+            Hz(450, checked_.Estimate.ShiftHz);
+
+            // And the one thing that is not handed over. The figure is still
+            // there - it is a measurement, and refusing to report it would make
+            // the refusal unexaminable - but it is marked as uncorroborated, and
+            // the contract is that a caller writes nothing to a decoder from it.
+            Assert.False(checked_.Estimate.SpeedMeasured);
+            Assert.Equal(0, checked_.Estimate.Agreement);
 
             // The figures that disagreed come back, which is the whole point of
             // returning them: one half near 50, the other near 31.
@@ -688,6 +709,92 @@ namespace RadioWebControl.Core.Tests.Rtty
             Assert.NotNull(checked_.Late);
             Assert.True(checked_.Early!.Baud > 40, $"early {checked_.Early.Baud:F2}");
             Assert.True(checked_.Late!.Baud < 40, $"late {checked_.Late.Baud:F2}");
+        }
+
+        /// <summary>
+        /// The failure that stops the test above from being a free win: two halves
+        /// that found the same two tones and disagreed about which of them is the
+        /// mark.
+        ///
+        /// <para>It is not hypothetical. On the 2026-10-10 bench recording it
+        /// happened on two of the nine blocks that held the signal - one half
+        /// reporting mark 1721 space 1551, the other mark 1550 space 1721 - and
+        /// the shift is identical in both, to a hertz, because the shift is a
+        /// distance and does not care which end is which. So the shift check
+        /// cannot see it, and handing the answer over would put the operator's
+        /// mark filter a whole shift from the signal: 170 Hz, against a copy
+        /// window measured at about +/-20 Hz. That is not a near miss.</para>
+        /// </summary>
+        /// <summary>Two speeds end to end, cut so the join is at the midpoint.</summary>
+        private static float[] SpeedChange(double markHz, double shiftHz)
+        {
+            var fast = Signal(markHz, shiftHz, 50);
+            var slow = Signal(markHz, shiftHz, 31);
+            var n = Math.Min(fast.Length, slow.Length);
+            var audio = new float[n * 2];
+            fast.AsSpan(0, n).CopyTo(audio);
+            slow.AsSpan(0, n).CopyTo(audio.AsSpan(n));
+            return audio;
+        }
+
+        [Fact]
+        public void A_half_measured_speed_on_a_nonstandard_shift_is_refused()
+        {
+            // The tones repeat and the speed does not, which on its own is the
+            // SpeedDidNotRepeat path - but the shift is 300 Hz, which nobody
+            // keys. With the speed withheld there is then nothing left saying
+            // this is RTTY rather than two steady peaks, so it is refused. 300
+            // is 50% from the nearest standard shift (200) and does not snap.
+            var got = RttySignalAnalyser.AnalyseAgreed(SpeedChange(1500, 300), Rate);
+
+            Assert.Equal(RttyAgreement.DidNotRepeat, got.Outcome);
+            Assert.Null(got.Estimate);
+        }
+
+        [Fact]
+        public void A_half_measured_speed_on_a_standard_shift_still_reports_its_tones()
+        {
+            // The same block at 170 Hz is kept, which is the point of the path:
+            // the shift vouches for the signal where the speed could not.
+            var got = RttySignalAnalyser.AnalyseAgreed(SpeedChange(2125, 170), Rate);
+
+            Assert.Equal(RttyAgreement.SpeedDidNotRepeat, got.Outcome);
+            Assert.NotNull(got.Estimate);
+            Assert.False(got.Estimate!.SpeedMeasured);
+            Hz(170, got.Estimate.ShiftHz);
+        }
+
+        [Fact]
+        public void Two_halves_that_disagree_about_which_tone_is_mark_are_refused()
+        {
+            // Same pair, same join, but the second half sends with the polarity
+            // the other way round as well as at a different speed - so the speed
+            // gate opens and the mark check is the only thing standing between
+            // this and an answer.
+            var fast = Signal(2125, 170, 50);
+            var slow = Signal(2125, 170, 31, reversed: true);
+            var n = Math.Min(fast.Length, slow.Length);
+
+            var audio = new float[n * 2];
+            fast.AsSpan(0, n).CopyTo(audio);
+            slow.AsSpan(0, n).CopyTo(audio.AsSpan(n));
+
+            var checked_ = RttySignalAnalyser.AnalyseAgreed(audio, Rate);
+
+            Assert.Equal(RttyAgreement.DidNotRepeat, checked_.Outcome);
+            Assert.Null(checked_.Estimate);
+
+            // The halves did find the same pair - this is a polarity
+            // disagreement and not two different stations, which is exactly why
+            // the shift check was blind to it.
+            Assert.NotNull(checked_.Early);
+            Assert.NotNull(checked_.Late);
+            Hz(170, checked_.Early!.ShiftHz);
+            Hz(170, checked_.Late!.ShiftHz);
+            Assert.True(
+                Math.Abs(checked_.Early.MarkHz - checked_.Late.MarkHz) > 100,
+                $"marks {checked_.Early.MarkHz:F0} and {checked_.Late.MarkHz:F0} " +
+                "should be a whole shift apart");
         }
 
         [Fact]
@@ -702,6 +809,106 @@ namespace RadioWebControl.Core.Tests.Rtty
             Assert.Null(checked_.Estimate);
         }
 
+
+        // --- half a signal ---------------------------------------------------
+
+        // Bench-found on 2026-10-09: detune a real RTTY signal far enough that one
+        // of its tones leaves the 300-3000 Hz range the analyser scans, and it
+        // measures what is left and calls the answer confident. DDK9 - a true 450
+        // Hz shift at 50 baud - came back as a 425 Hz shift at confidence 0.97 and
+        // then as a 115 Hz shift at 100 baud at confidence 0.92. Both the browser's
+        // 0.4 confidence gate and AnalyseAgreed's half-to-half check passed it,
+        // because a fragment measured twice is measured the same way twice.
+        //
+        // These rows are that failure reproduced: the same 450 Hz pair at 50 baud,
+        // walked up the audio passband until the space tone crosses 3000 Hz. The
+        // mark stays where it is put every time; it is the shift and the speed that
+        // go. The point of the theory is not that the analyser now refuses - it
+        // still answers - but that the answer now says it is half a signal.
+        [Theory]
+        [InlineData(2400, false)]  // both tones comfortably inside
+        [InlineData(2500, false)]  // space at 2950, still inside
+        [InlineData(2600, true)]   // space at 3050: measured 422 Hz at confidence 0.99
+        [InlineData(2700, true)]   // measured 106 Hz at 45 baud
+        [InlineData(2800, true)]   // measured 101 Hz at 105 baud
+        public void Says_when_it_has_measured_half_a_signal(double markHz, bool expectFragment)
+        {
+            var got = RttySignalAnalyser.Analyse(Signal(markHz, 450, 50.0, noiseSigma: 0.2), Rate);
+
+            Assert.NotNull(got);
+            Assert.Equal(expectFragment, got!.MeasuredAFragment);
+
+            // And the reason it matters: on the flagged rows the figures really are
+            // wrong, so a caller that writes them has destroyed a working setting.
+            if (expectFragment)
+                Assert.True(Math.Abs(got.ShiftHz - 450) > 20,
+                    $"mark {markHz}: shift came out {got.ShiftHz:F0}, which is close enough to "
+                    + "450 that this row is no longer reproducing the failure it was written for.");
+            else
+                Hz(450, got.ShiftHz);
+        }
+
+        [Fact]
+        public void A_truncated_peak_is_recognised_by_where_its_energy_centre_lands()
+        {
+            // The 2600 row is the subtle one and the only one caught by the scan
+            // edge rather than by the balance: both peaks are strong and only 13 dB
+            // apart, but the upper one is cut in half by the top of the scanned
+            // range, so its centre is dragged down to about 3022 Hz - outside the
+            // range it was found in, which cannot happen to a complete peak.
+            var got = RttySignalAnalyser.Analyse(Signal(2600, 450, 50.0, noiseSigma: 0.2), Rate);
+
+            Assert.NotNull(got);
+            Assert.True(got!.AtScanEdge);
+            Assert.True(got.Confidence > 0.9,
+                "this row is the whole problem: the analyser is confident and wrong, so a "
+                + "confidence threshold was never going to catch it.");
+        }
+
+        [Fact]
+        public void A_tone_and_the_skirt_of_the_other_one_are_recognised_by_their_levels()
+        {
+            // The 2700 and 2800 rows. Here the real second tone is gone entirely
+            // and the tallest thing left inside the range is a point on the first
+            // tone's own skirt, about 100 Hz away - past the 80 Hz the second-peak
+            // search excludes, and 27 dB down, which no keyed pair ever is.
+            var got = RttySignalAnalyser.Analyse(Signal(2800, 450, 50.0, noiseSigma: 0.2), Rate);
+
+            Assert.NotNull(got);
+            Assert.True(got!.ToneBalanceDb > RttySignalAnalyser.ToneBalanceLimitDb,
+                $"the two peaks came out {got.ToneBalanceDb:F1} dB apart, which is inside the "
+                + "limit, so this row is no longer reproducing what it was written for.");
+        }
+
+        [Theory]
+        [InlineData(0.0)]
+        [InlineData(6.0)]
+        [InlineData(-6.0)]
+        public void Selective_fading_is_not_half_a_signal(double spaceDbLouder)
+        {
+            // The limit has to clear the fading a real HF signal shows, or the one
+            // case the operator most needs help with is the case that gets refused.
+            // Six dB either way is what the rest of this file already treats as
+            // normal, and the limit is ten.
+            var got = RttySignalAnalyser.Analyse(Lopsided(2125, 450, 50.0, spaceDbLouder), Rate);
+
+            Assert.NotNull(got);
+            Assert.False(got!.MeasuredAFragment);
+            Assert.True(got.ToneBalanceDb < RttySignalAnalyser.ToneBalanceLimitDb);
+        }
+
+        [Fact]
+        public void A_clean_pair_stands_level()
+        {
+            // The claim the limit rests on: both tones are keyed for roughly the
+            // same share of the time, so they stand at roughly the same height.
+            var got = RttySignalAnalyser.Analyse(Signal(2125, 450, 50.0), Rate);
+
+            Assert.NotNull(got);
+            Assert.False(got!.AtScanEdge);
+            Assert.True(got.ToneBalanceDb < 6.0,
+                $"a matched pair came out {got.ToneBalanceDb:F1} dB apart.");
+        }
         [Fact]
         public void Analyse_on_its_own_still_reports_full_agreement()
         {

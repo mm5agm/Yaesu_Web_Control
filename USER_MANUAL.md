@@ -140,10 +140,16 @@
     - 21.5 [Stopping](#215-stopping)
     - 21.6 [The panel](#216-the-panel)
     - 21.7 [Troubleshooting](#217-troubleshooting)
-22. [RTTY Tuner](#22-rtty-tuner)
+22. [RTTY](#22-rtty)
     - 22.1 [Reading the figure](#221-reading-the-figure)
-    - 22.2 [Mark, Shift and Rev](#222-mark-shift-and-rev)
-    - 22.3 [Troubleshooting](#223-troubleshooting)
+    - 22.2 [Mark, Shift, Speed and Rev](#222-mark-shift-speed-and-rev)
+    - 22.3 [Auto: working out what you are listening to](#223-auto-working-out-what-you-are-listening-to)
+    - 22.4 [Your first session, step by step](#224-your-first-session-step-by-step)
+    - 22.5 [Decoding the text](#225-decoding-the-text)
+    - 22.6 [Sending](#226-sending)
+    - 22.7 [Contest Mode: the tuner on its own](#227-contest-mode-the-tuner-on-its-own)
+    - 22.8 [What the tuner changes on your radio](#228-what-the-tuner-changes-on-your-radio)
+    - 22.9 [Troubleshooting](#229-troubleshooting)
 
 ---
 
@@ -170,7 +176,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | CW Reader ([§20](#20-cw-reader)) | Yes | Yes | Yes |
 | CW Send ([§21](#21-cw-send)) | Yes | Yes | Yes |
-| RTTY Tuner ([§22](#22-rtty-tuner)) | Yes | Yes | Yes |
+| RTTY tuner and reader ([§22](#22-rtty)) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
 | USB serial driver | **Windows / macOS:** if the radio's COM / `/dev/cu.*` ports are missing or CAT never answers, install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** usually skip — the kernel already includes CP210x support. |
@@ -580,7 +586,7 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 > usual mode for AFSK RTTY where your software makes the tones, the dial is the suppressed
 > carrier, so a click puts it above the signal with the two tones where your RTTY
 > software is listening. YWC takes those tones from the **Mark**, **Shift** and **Rev** in
-> the RTTY Tuner ([§22.2](#222-mark-shift-and-rev)): 2125 Hz and 2295 Hz unless you change
+> the RTTY Tuner ([§22.2](#222-mark-shift-speed-and-rev)): 2125 Hz and 2295 Hz unless you change
 > them, which is the default in most RTTY software. If your software uses a different
 > mark, 1415 Hz for example, which puts the pair in the middle of the SSB passband, open
 > the tuner once and type it into **Mark**. Every click after that uses it, whether the
@@ -1288,7 +1294,7 @@ Every button and the level slider carry labels that screen readers announce, and
 
 ### 5.21 Pop-out windows
 
-A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. The CW Reader, CW Send and the RTTY Tuner open across the top of the window the first time, and after that where you last dragged them. If that place is now off the window, because you have changed the browser's zoom or moved to a smaller screen, the panel is brought back into view when it opens. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)), **CW Send** ([§21](#21-cw-send)), the **RTTY Tuner** ([§22](#22-rtty-tuner)), each VFO's **Audio Filter** ([§5.18](#518-audio-filter-popout)) and the **DX Spots** list ([§5.17](#517-dx-spots-list)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
+A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. The CW Reader, CW Send and the RTTY Tuner open across the top of the window the first time, and after that where you last dragged them. If that place is now off the window, because you have changed the browser's zoom or moved to a smaller screen, the panel is brought back into view when it opens. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)), **CW Send** ([§21](#21-cw-send)), the **RTTY Tuner** ([§22](#22-rtty)), each VFO's **Audio Filter** ([§5.18](#518-audio-filter-popout)) and the **DX Spots** list ([§5.17](#517-dx-spots-list)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
 
 - **To pop a panel out**, press the **↗** button in its title bar. The panel closes in the main page and opens in its own window. Its button on the main page changes to show that it's popped out, for example **CW Read (pop-out)**, and pressing that button brings the window to the front instead of opening a second copy.
 - **To put it back**, press **Reattach** in the pop-out window. The window closes and the panel opens in the main page again. The CW Reader, CW Send and the RTTY Tuner come back at the size you left the window, as far as the main window has room. Closing the window with **×** also works, but leaves the panel closed.
@@ -4007,19 +4013,29 @@ The panel is non-modal: it can stay open while you work the rest of the page, an
 
 ---
 
-## 22. RTTY Tuner
+## 22. RTTY
 
-The **RTTY Tune** button on the main control panel opens a tuning scope for RTTY, the kind that sat beside every RTTY terminal unit before anything had a waterfall. The receive audio goes through two narrow filters, one on the mark tone and one on the space tone. The mark filter drives the scope sideways and the space filter drives it up and down, so a signal shifting between the two tones draws a cross. You tune for the cross.
+The **RTTY Tune** button on the main control panel opens one panel with three parts in it: the **decoded text** and a **send** box down the left, and the **tuning scope** and its settings in a column on the right. One panel, because tuning a RTTY signal and reading it are the same job — you watch the cross and the text together, and what you change on one side you see on the other.
 
-It does not decode anything; the radio's own RTTY decoder, or your RTTY software, does that. It only shows you when the signal is sitting where the decoder expects it.
+The scope is the kind that sat beside every RTTY terminal unit before anything had a waterfall. The receive audio goes through two narrow filters, one on the mark tone and one on the space tone. The mark filter drives the scope sideways and the space filter drives it up and down, so a signal shifting between the two tones draws a cross. You tune for the cross.
 
-Nothing here transmits. The tuner only listens.
+Drag the panel narrower than about 640 pixels and the two columns fold into one, scope on top, so it still works on a phone or squeezed into a corner of the screen.
 
-It uses the same capture device as the CW Reader: set the **RX device** to the radio's USB codec under Settings → Remote Audio ([§6.8](#68-remote-audio)). Remote Audio itself does not need to be switched on. The device is held open only while the tuner is open, and let go a couple of seconds after you close it. The CW Reader and the tuner can run together.
+**It decodes RTTY into text.** That is the Decode pane, and [§22.5](#225-decoding-the-text) is all of it. The decoder has no Mark, Shift, Speed or Rev of its own: it uses the ones in the Tune column beside it, so getting the cross upright is the whole of putting the decoder on the signal. **Sending is not built** — the Send box is there so you can see where it will go, and [§22.6](#226-sending) says why it is empty.
 
-The tuner closes itself if MAIN leaves the modes it works in and stays out for two seconds, for example a move to CW, AM or FM. It stays open in RTTY-L, RTTY-U, the DATA modes, PSK, LSB and USB, because in the DATA modes and SSB the tones come from your RTTY software. A screen reader hears "RTTY tuner closed, mode is now ...". Nothing opens on its own: moving to CW does not open the CW Reader.
+Nothing here transmits. It does change things on the receiver — the mode, the IF filter and, after **Auto**, the dial — all of them so that the figure can be believed, and the first two put back when you close it. [§22.8](#228-what-the-tuner-changes-on-your-radio) is the whole of that, and both of the automatic ones can be switched off on the Settings page.
 
-**Size, tones only and its own window.** Drag the tuner's bottom-right corner to make it bigger or smaller; the scope stays square and fills the space, and the size is remembered. Once **Mark** is set, the **Tones only** button in the title bar hides Mark, Shift, Rev and the text lines, leaving just the scope, so the tuner can be made very small. Press it again to bring them back. The **↗** button opens the tuner in a window of its own, which you can put on a second monitor ([§5.21](#521-pop-out-windows)). That window doesn't close when the mode changes. It says it is paused, lets go of the audio, and starts again when you go back to RTTY, DATA, LSB or USB.
+It will also put the radio's own **RTTY MARK FREQUENCY** and **SHIFT FREQUENCY** menu in step with what you choose, so its built-in decoder does not have to be set twice ([§22.2](#222-mark-shift-speed-and-rev)).
+
+**You probably have a second decoder, in the radio.** The supported Yaesu radios decode RTTY themselves, onto their own screen, with no PC involved — your radio's manual will say where. That is worth having as well as this one, and not only as a spare: when the two agree you can believe the copy, and when they disagree you are looking at a marginal signal and should trust neither very far. What the browser gives you is the figure and the text together in front of you, instead of leaning over to read the radio's display. PC software such as MMTTY or fldigi is tuned in exactly the same way.
+
+The scope and the decoder are both shared with my Icom app, so the two draw an identical figure and read identical text from identical audio. What differs is only where the audio comes from, and what the radio does with its filter.
+
+It uses the same capture device as the CW Reader: set the **RX device** to the radio's USB codec under Settings → Remote Audio ([§6.8](#68-remote-audio)). Remote Audio itself does not need to be switched on. The device is held open only while something is using it, and let go a couple of seconds after the last thing stops. The CW Reader, the RTTY figure and the RTTY decoder can all run at once.
+
+The panel closes itself if MAIN leaves the modes it works in and stays out for two seconds, which is what happens when you change mode yourself while it is open. It stays open in RTTY-L, RTTY-U, the DATA modes, PSK, LSB and USB, because in the DATA modes and SSB the tones come from your RTTY software. A screen reader hears "RTTY tuner closed, mode is now ...". Nothing opens on its own: moving to CW does not open the CW Reader. **Closing the panel does not stop the decoder** — it keeps running on the server, and the text is still there when you open it again.
+
+**Size, tones only and its own window.** Drag the tuner's bottom-right corner to make it bigger or smaller; the scope stays square and fills the space, and the size is remembered. Once **Mark** is set, the **Tones only** button in the title bar hides the settings, the buttons, the status lines and the whole decode-and-send column, leaving just the scope, so the panel can be made very small. Press it again to bring them back. The **↗** button opens the tuner in a window of its own, which you can put on a second monitor ([§5.21](#521-pop-out-windows)). That window doesn't close when the mode changes. It says it is paused, lets go of the audio, and starts again when you go back to RTTY, DATA, LSB or USB.
 
 The tuner can be open in more than one place at once, for example the main page and a pop-out window, or a PC and a tablet. Closing it in one leaves it running in the others, and the audio is let go only when the last one closes.
 
@@ -4040,11 +4056,16 @@ The figure grows to fill the face whatever the signal level. So that plain noise
 
 Under the scope, a line gives the two filter frequencies and three levels in dBFS: mark filter (**M**), space filter (**S**) and everything the receiver is passing (**in**). The line under that says in words which of the cases above you are looking at.
 
-### 22.2 Mark, Shift and Rev
+### 22.2 Mark, Shift, Speed and Rev
 
-- **Mark** is the mark tone in the receive audio. In the radio's RTTY-L and RTTY-U that is the radio's own RTTY MARK setting, **2125 Hz** unless you have changed it. In DATA-L it is whatever your RTTY software uses: many operators run **1415 Hz**, which puts the two tones in the middle of the SSB passband.
+Four controls, and for ordinary amateur RTTY you will not touch any of them. If you would rather not set them by hand at all, **Auto** will work all four out from the signal ([§22.3](#223-auto-working-out-what-you-are-listening-to)).
+
+- **Mark** is the mark tone in the receive audio. In the radio's RTTY-L and RTTY-U that is the radio's own MARK FREQUENCY setting, **2125 Hz** unless you have changed it. In DATA-L it is whatever your RTTY software uses: many operators run **1415 Hz**, which puts the two tones in the middle of the SSB passband.
 - **Shift** is the station's shift. Amateur RTTY is **170 Hz**; 200, 425, 450 and 850 are there for everything else. 450 is the shift of the German weather service broadcasts (DDK9 on 10.1008 MHz, among others), which run all day and are the easiest real RTTY to find when the amateur bands are quiet.
-- **Rev** puts the space filter below mark instead of above it. Tick it only if you have **POLARITY RX** set to **REV** on the radio, or, in the DATA modes, if your RTTY software puts space below mark. A station sending reversed does not need it: its two tones land in the same places, and the cross looks the same either way round.
+- **Speed** is how fast the station is sending. **45.45 baud** is amateur RTTY; **50** is most European weather and commercial traffic, with **75** and **100** on faster circuits. The figure does not use it — two narrow filters listening for two tones do not care how fast they are being keyed, and the cross draws just as cleanly on a 75-baud utility station. It is what the decoder works from, and what **Auto** measures.
+- **Rev** puts the space filter below mark instead of above it. It is for when **the other station** is sending reversed; leave it unticked otherwise. The radio's own RTTY-L / RTTY-U setting is followed for you, so a change of mode needs nothing here. A station sending reversed does not land its tones in different places from one sending normally — that is what Rev is for, and it is the one case the mode cannot tell you about.
+
+> **A figure in a box labelled "measured"** is one **Auto** worked out that is on no list — 452 Hz rather than 450, or 56.9 baud on a press circuit. It is used exactly as a standard one is. There is nothing to correct; it is what the station is actually doing, and rounding it to a familiar number would be the error.
 
 In every mode the space filter goes above mark, at 2125 and 2295 Hz unless you change **Mark**:
 
@@ -4054,7 +4075,125 @@ In every mode the space filter goes above mark, at 2125 and 2295 Hz unless you c
 
 These settings are remembered in the browser. In **DATA-L**, click-to-tune on the spectrum uses them as well, to put a clicked signal's tones where your software is listening ([§5.4](#54-spectrum-display)). So set **Mark** to your software's mark tone even if you never use the tuner.
 
-### 22.3 Troubleshooting
+#### Keeping the radio in step, and the **From radio** button
+
+**In RTTY, Mark and Shift are kept in step with the radio both ways round.**
+
+*Radio to tuner:* while the tuner is open it re-reads the radio's **MARK FREQUENCY** and **SHIFT FREQUENCY** menu items every four seconds, so changing the shift on the radio changes the tuner with it and the two never quietly disagree. There is no CAT message for a menu change, so re-reading is the only way to notice; it costs two short reads every four seconds, and only while the tuner is open.
+
+*Tuner to radio:* change Mark or Shift here and the radio's menu changes with you, so its built-in decoder does not have to be set a second time by hand. The menu is a short list of fixed choices rather than a pair of numbers, so some of what the tuner offers has nowhere to go:
+
+| | The radio's menu has | The tuner also offers |
+|---|---|---|
+| **Mark** | 1275 and 2125 Hz | anything you type, and anything **Auto** measures |
+| **Shift** | 170, 200, 425 and 850 Hz | **450**, and anything **Auto** measures |
+
+Pick one the radio does not have and the tuner uses it, the radio keeps its own setting, and the status line tells you which of the two it could set — *"Radio set to mark 2125 Hz; it has no shift 450 Hz."* Nothing is lost by this: the figure is two filters and the decoding is arithmetic, and neither goes anywhere near that menu. The only thing that cannot be told about a 450 Hz station is the radio's *built-in* decoder, and nothing here depends on it. **Rev writes nothing**, because it is a statement about the station you are listening to and the radio has no setting for it.
+
+**It follows, but it does not argue.** The moment you type your own Mark or Shift, the tuner stops replacing it and leaves your figure alone — for the rest of the session and across a page reload. That matters more than it sounds. The radio's menu describes the radio's own decoder, and it is routinely the wrong description of what you are listening to: a utility station on 425 Hz shift while the menu still says 170 is the ordinary case, not an exotic one, and a tuner that dragged you back to 170 every four seconds would be useless for exactly the signals this scope is best at.
+
+**From radio** is how you hand control back. Press it and the tuner takes the radio's numbers again, and goes on following from there. (Typing a figure of your own is not undone by this — it is written to the radio, but the *following* stops until you press the button.) It tells you what it read, and says so when the two already match. It is also the only way to read the menu in an AFSK mode, where nothing is synced for you.
+
+Two things about the reading itself are worth knowing:
+
+- **It only describes FSK.** Those menu items belong to the radio's own RTTY mode. If you are running AFSK — DATA-L, DATA-U, PSK, LSB or USB, with MMTTY or fldigi making the tones — the radio's menu has nothing to do with what is arriving, which is why nothing is synced automatically in those modes and **nothing is written to the radio there either**. Those items also govern how the radio *transmits* RTTY, and a receive-side tuning aid has no business changing that on behalf of someone who is not using it. Pressing the button there is not refused: it reports the radio's values along with a note that you are not in FSK, and leaves the decision to you.
+- **Rev is not read from the radio**, and that is deliberate. The obvious candidate, **POLARITY RX**, is about the radio's own decoder rather than about the station, and which way up a received signal arrives depends on the mode, which the tuner already follows. If you have POLARITY RX set to REV on the radio, that is the one case where ticking **Rev** matches it.
+
+### 22.3 Auto: working out what you are listening to
+
+Press **Auto** and the tuner listens for about four seconds, then fills in all four settings from the signal itself — the two tones, the shift between them, which way round they are, and the speed. It is the quickest way onto an unfamiliar station, and it is the only practical way onto one whose parameters you have no way of knowing, which outside the amateur bands is most of them.
+
+It needs the signal tuned in well enough that both tones are inside the receiver's audio, and not much better than that. It does **not** need a signal strong enough to read: it is measuring the timing of the keying, not copying the text, so a station too weak and ragged for a decoder is usually still well within its reach.
+
+**If it cannot make sense of what it hears, it says so and changes nothing.** That is deliberate, and it is the behaviour to rely on: you press Auto exactly when you cannot tell what you are listening to, which is when a confident-looking wrong answer would do the most harm — it would overwrite the settings you had and leave you nothing to go back to. So pressing it on an empty band, on SSB, or on a data mode that is not RTTY costs you nothing but the four seconds.
+
+There are four different kinds of answer, and the status line distinguishes them because they call for different things:
+
+| What it says | What to do |
+|---|---|
+| It could not make sense of it | Nothing was changed. Tune the signal in better, narrow the IF, and try again. If it keeps refusing, what you are hearing is probably not RTTY — PSK and the FT modes will never satisfy it. |
+| It says **only one of the two tones was in range** | Nothing was changed. You are tuned so far off that one tone has fallen outside the audio the measurement works in, so there is no pair to measure. If it moved the dial towards the signal, press **Auto** again and it will measure it properly; otherwise tune closer first. |
+| It gives you figures, and adds that **which tone is mark is a guess** | The speed and both tones are measured; only which of the two is mark is uncertain. Try it, and if the text does not come out, tick **Rev**. |
+| It gives you figures with no warning | Use them. |
+
+> **How it does it, for the curious.** Every RTTY character ends with a stop element one and a half bits long, and that element is always mark. So runs of *space* are always a whole number of bits and runs of mark never quite are — and that one asymmetry gives up both answers at once. Measuring which yardstick divides the space runs most exactly gives the speed, to about a percent; whether the tones have to be swapped to make that work gives which one is mark. A station that sends a one-bit stop element instead is still measured correctly for speed, but the asymmetry it leans on is then simply absent, and that is the case where it warns you about mark.
+
+> **Why one tone out of range gets its own answer.** It is the one failure that does not look like one. With both tones present, a signal Auto cannot read gives a low score and is refused. With only one tone present, it measures that tone against the loudest thing left beside it — which is a piece of the same tone's own skirt — and the keying in it fits a speed beautifully, so the answer comes back *confident* and wrong: on the bench a true 450 Hz shift at 50 baud was reported as 115 Hz at 100 baud, and scored 0.92 out of 1. It no longer writes anything at all in this case, and says which case it is, because the dial correction it makes from the tone it can hear is usually enough that a second press gets it right.
+
+Auto measures rather than choosing from a list, so a station on no standard shift or speed is reported as it is, shown in the box labelled *measured*, and used that way. It will also tick or untick **Rev** for you, and push the mark and shift into the radio's menu where there is a rung for them, exactly as if you had typed them ([§22.2](#222-mark-shift-speed-and-rev)).
+
+**And when it is sure of what it heard, it tunes the signal in.** The dial moves so that the mark tone arrives on the tuner's **Mark** — 2125 Hz unless you have changed it — and the status line says which way it went and by how much: *"Moved the dial 66 Hz down to put the mark on 2125 Hz - it was arriving at 2191 Hz."* The figure then redraws upright, because the signal is now where the filters are.
+
+This is the most useful thing Auto does, and it is not only about saving you the tuning. A signal sitting off-centre in the receiver's filter arrives with one tone quieter than the other, and the speed cannot be measured from keying whose two halves are unequal — which is why a badly tuned station can give a steady, correct shift and a different speed on every press. Putting the signal in the middle of the filter fixes the figure, the speed and anything decoding it, all at once.
+
+What it will not do: move the mark further than your **IF filter is wide**, and never less than **500 Hz** whatever the filter is set to — beyond the passband it is more likely a different station than a mistuning. It will not move at all unless it is sure, or if the answer is within about 25 Hz, which is the limit of what it can measure; move while you are transmitting; or move the dial in **LSB, USB, PSK or the DATA modes**, where your own RTTY software is making the tones and has its own tuning indicator. Turn it off altogether with *Auto also tunes the signal in* on the Settings page.
+
+### 22.4 Your first session, step by step
+
+1. **Set the audio device first.** The tuner uses the Remote Audio **RX device** on the Settings page, which is the same one the CW Reader uses — on a USB-connected radio that is the radio's own USB codec ([§6.8](#68-remote-audio)). If the CW Reader works, so will this.
+2. **Tune roughly onto a signal.** RTTY lives just below the FT8 frequencies on most bands — 14.080–14.099 on 20 m is the usual hunting ground. You do not have to put the radio in RTTY first: if you are in CW, AM or FM, pressing **RTTY Tune** does it for you and puts your mode back when you close the panel ([§22.8](#228-what-the-tuner-changes-on-your-radio)).
+3. **The filter looks after itself, within reason.** The tuner opens the IF if it is too narrow for the shift you are set to, but it will not narrow a wide one — a 2.4 kHz SSB filter puts half the band into the tuner at once and the figure will never settle, so if you are in SSB or DATA, narrow it yourself ([§5.8](#58-if-width-audio-filter-if-shift-and-af-gain)).
+4. **Press RTTY Tune.** The figure starts drawing within a second or so.
+5. **If you do not know the station's shift or speed, press Auto** and let it work them out ([§22.3](#223-auto-working-out-what-you-are-listening-to)). On amateur RTTY you can skip this — the defaults are already right.
+6. **Tune slowly** — 10 Hz steps are about right — until the cross stands upright. On a strong signal this is unmistakable; on a weak one, aim for the most upright you can get and the most equal arm lengths. If you pressed **Auto** and it was sure, this is already done: it moves the dial itself and tells you it has.
+7. **Press Start in the Decode pane** and read the text ([§22.5](#225-decoding-the-text)). You can do this at any point — before tuning, even — but it has the best chance once the cross is upright.
+8. **Close the panel when you are done.** Your mode and filter go back, and the audio device is let go a couple of seconds later.
+
+The panel can be dragged by its title bar, like the others.
+
+### 22.5 Decoding the text
+
+The **Decode** pane prints what the software is making of the two tones. Press **Start** and the text begins to arrive; press **Stop** and it stops. It keeps running while the panel is closed, so shutting the panel and opening it again does not lose the copy, and a second browser or a tablet sees the same text.
+
+There is no Mark, Shift, Speed or Rev in the Decode pane, and that is deliberate. It uses the ones in the **Tune** column next to it. Get the cross upright, or press **Auto** and let it work them out ([§22.3](#223-auto-working-out-what-you-are-listening-to)), and the decoder is already listening in the right place. Change the radio's mode between **RTTY-L** and **RTTY-U** and it follows that too, with nothing for you to press. One set of settings is one thing to get right, instead of two that can disagree.
+
+The counters beside the text are worth a glance when nothing is arriving. **Activity** is how much of the audio is landing in the two tone filters; **characters** is how many it has tried to assemble; and **framing errors** is how many of those did not have their stop element where a character of that speed should have put it. Text with a low error count is good copy. A lot of characters and a lot of errors together means it is being fed something that is nearly right — the commonest causes are the wrong speed, or **Rev** the wrong way round. Nothing arriving at all, with activity near zero, is an audio or tuning problem rather than a decoding one.
+
+### 22.6 Sending
+
+The **Send** box is in the panel, and it does nothing. It is disabled, and it is there so that the shape of the panel is the shape it will keep.
+
+Receive came first on purpose. RTTY transmit needs more than a text box — AFSK through the radio's data input or FSK keying, the right data mode, drive level, and a PTT path — and each of those is a way to put a badly set-up signal on the air. There is a working decoder here now, which is useful on its own, so it ships on its own.
+
+### 22.7 Contest Mode: the tuner on its own
+
+If you are contesting you almost certainly have a decoder already — MMTTY,
+2Tone, or the one built into your logger — and the thing those cannot draw is
+the crossed figure. **RTTY Contest Mode**, on the Settings page under **RTTY
+Tuner**, trims the panel to just that.
+
+- **The decode and send panes go**, leaving the figure and its controls.
+- **The hint under the figure goes.** It is there to teach you the picture, and
+  by the time you are contesting with it you have learnt it.
+- **The panel stops changing size.** The two lines under the figure are the
+  readouts and the status line, and their text changes length as the tuner
+  reports — *"Stopped."* one moment, *"Mark 2125, shift 450"* the next. Each
+  change used to reflow the panel and shift the scope under the mouse that was
+  tuning it. In Contest Mode both lines keep two lines' worth of height
+  whatever they say.
+
+Everything else is unchanged: **Tones only** still shrinks it to the figure
+alone, and the panel still pops out into a window of its own
+([§5.21](#521-pop-out-windows)) at whatever size you leave it. The same switch,
+under the same name, is in Icom Web Control.
+
+### 22.8 What the tuner changes on your radio
+
+Three things, and two of them are put back. Both of the automatic ones can be switched off on the Settings page under **RTTY Tuner**.
+
+**The mode**, and only from the modes RTTY cannot be received in at all — CW, AM, FM and DATA-FM. Open the tuner in one of those and it goes to **RTTY-L**, and your mode comes back when you close it. SSB, DATA and PSK are left exactly as they are, because that is a working AFSK arrangement and switching out of it would break it.
+
+The reason it does this rather than just warning you is worth knowing: the tuner opens on whatever the radio was last doing, and what the radio was last doing is often CW with a 250 Hz filter. A passband that narrow cannot carry a 170 Hz shift's keying sidebands, let alone a 450 Hz shift's — and the figure then draws a perfectly convincing ellipse out of one tone and the skirt of the other, which looks exactly like a correctly tuned signal. **A tuning indicator that lies is worse than none**, so the conditions it needs are set rather than hoped for.
+
+**The IF filter**, and only ever wider. Changing to RTTY brings your own stored RTTY filter width with it, which is better evidence about your band than any formula, and it is touched only if it is too narrow to have carried the shift you are set to. Narrowing is left to you: a narrow filter is how you dig a signal out of a crowded band, and only you know the band.
+
+> **How much filter a shift needs is not the shift.** On the FTdx101MP the RTTY passband sits at a **fixed place in the audio, about 1800 Hz** — it does not follow the mark tone. I measured that on 2026-10-09. So with the standard 2125 Hz mark the tones sit *above* the middle of the filter, and it is the space tone that falls off the edge as the shift grows. The width asked for is twice the distance from 1800 Hz to the further of the two tones, plus twice the baud rate for the keying sidebands, which comes out at about **1100 Hz** for a 170 Hz shift at 45.45 baud, **1650 Hz** at 450 Hz and 50 baud, and **2450 Hz** at 850 Hz. Those are a good deal wider than the shift alone suggests, and that is the placement rather than the signal: the same tones sitting centred in the filter would need far less.
+>
+> If even the widest filter cannot reach both tones, the status line says so and asks you to move the dial, which is the only thing that can fix it. On my Icom the same radio-level question has a different answer — that one centres its RTTY passband on the mark tone — which is why the two apps compute this differently from the same shared arithmetic.
+
+**The dial**, after **Auto**, and only when it is sure of what it heard. [§22.3](#223-auto-working-out-what-you-are-listening-to) has the limits: never further than your IF filter is wide, never less than 500 Hz, never in an AFSK mode and never while transmitting. It always says what it moved and by how much. This one is not put back, because it is a correction rather than a borrowing — you asked it to tune the signal in.
+
+### 22.9 Troubleshooting
 
 | Symptom | What to try |
 |---|---|
@@ -4063,7 +4202,10 @@ These settings are remembered in the browser. In **DATA-L**, click-to-tune on th
 | Both arms there but they swap over | That is harmless: the picture is the same either way round. |
 | A perfect cross but the radio's decoder prints rubbish | Check the mode. In RTTY-U the radio decodes amateur RTTY reversed; switch to **RTTY-L** at the same dial frequency. **Rev** does not help: it only moves the tuner's filter, and it will break the cross. |
 | The cross broke when I changed between RTTY-U and RTTY-L | Untick **Rev**. Before this was fixed, RTTY-U needed Rev to draw a cross. |
-
+| The cross is upright but the Decode pane prints nothing | Check **Speed** — 45.45 for amateur RTTY, 50 for most weather and commercial traffic — and press **Auto** if you do not know it. A lot of characters with a lot of framing errors means nearly-right settings; nothing at all, with activity near zero, means the audio is not arriving. |
+| The text comes out as runs of the same wrong letter | **Rev** is the wrong way round for this station. Tick it, or untick it. |
+| **Auto** keeps saying it cannot make sense of it | It needs both tones inside the receiver's audio. Tune closer, and narrow the IF if it is wide open. If it refuses on everything, what you are listening to is probably not RTTY. |
+| **Auto** says the filter cannot carry the signal | Move the dial rather than widening further — see the note in [§22.8](#228-what-the-tuner-changes-on-your-radio). The tones are sitting too far from the middle of the passband for any width to reach both. |
 ---
 
 
