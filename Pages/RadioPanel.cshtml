@@ -1,0 +1,41 @@
+@page "/radio"
+@model Yaesu_Web_Control.Pages.RadioPanelModel
+@{
+    Layout = null;
+}
+@* The radio panel draws its own page: no Bootstrap, no site nav, and by
+   Colin's choice (2026-10-13) no external-program launcher links and no
+   accessibility layer - Classic keeps both. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Radio - Yaesu Web Control</title>
+    <link rel="icon" href="~/favicon.ico" />
+    <style>html, body { margin: 0; height: 100%; background: #0b0d10; }</style>
+</head>
+<body>
+    <div id="radioPanel"></div>
+
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script type="module">
+        import { startYaesuRadioPanel } from '/js/ui/radio-panel-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current';
+        // Layout = null, so no site.js: this connection is what tells the host
+        // a browser is still here. The adapter uses it for live state too.
+        const conn = window.rwcHubConnection('/radioHub');
+        startYaesuRadioPanel(document.getElementById('radioPanel'), {
+            conn,
+            model: '@Model.RadioModel',
+            dual: @(Model.IsDual ? "true" : "false"),
+            maxPowerW: @Model.MaxPower,
+            views: [
+                { label: 'Classic', href: '/' },
+                { label: 'Experimental', href: '/flexui' },
+                { label: 'Radio', href: '/radio', on: true },
+            ],
+        });
+    </script>
+</body>
+</html>
