@@ -138,8 +138,11 @@ export class RttyTuner {
         // the figure used to sit on "Stopped." until the dialog was reopened.
         // Coming back to the tab starts it again at once; _poll covers the
         // cases this event does not see.
+        // The restart itself is left to the next poll, a frame away, because
+        // only the frame can say whether another window is running the host -
+        // and if one is, this window must take its settings, not impose its own.
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && this._active()) this._restart();
+            if (document.visibilityState === 'visible') this._restartAt = 0;
         });
 
         // A tab or pop-out window closing fires no dialog close, and the host
@@ -727,10 +730,30 @@ export class RttyTuner {
     // Start the host again after it stopped without being asked to - see the
     // visibilitychange handler in init. Rate-limited, so a host that cannot
     // start (no audio device, say) is not asked twenty times a second.
-    _restart() {
+    //
+    // Never from a hidden page. Chrome polls a background tab about once a
+    // minute, so its lease lapses between polls; restarting from there sent
+    // that tab's settings, minutes old, over whatever the window in front had
+    // just set - on the bench, Auto's centred mark replaced by the old one
+    // nineteen seconds later, and the tuner stopping and starting every minute.
+    //
+    // And when another window is running the host, this one rejoins on what
+    // it is running: the host has one set of tones, and they are the newest.
+    _restart(f) {
+        if (document.hidden) return;
         const now = Date.now();
         if (now - this._restartAt < RESTART_MS) return;
         this._restartAt = now;
+        if (f?.hostRunning) {
+            const s = this._settings;
+            if (Number.isFinite(f.markHz))  s.markHz  = Math.round(f.markHz);
+            if (Number.isFinite(f.shiftHz)) s.shiftHz = f.shiftHz;
+            if (Number.isFinite(f.baud))    s.baud    = f.baud;
+            if (typeof f.reverse === 'boolean') s.reverse = f.reverse;
+            this._radioApplied = null;
+            this._showSettings();
+            this._saveSettings();
+        }
         this._send('start');
     }
 
@@ -751,7 +774,7 @@ export class RttyTuner {
             // stop, or the app restarted underneath it. The host also says
             // stopped when another window kept it running but this window's
             // own hold lapsed, so this starts us again and we are counted.
-            if (!f.running && this._active()) this._restart();
+            if (!f.running && this._active()) this._restart(f);
 
             // What the host changed about the radio so that the figure could be
             // believed - a mode switch, a widened filter. Once per note, not once

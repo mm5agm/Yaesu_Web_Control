@@ -149,6 +149,28 @@ namespace RadioWebControl.Core.Services.Rtty
         }
 
         /// <summary>
+        /// The mark that puts the middle of a measured tone pair on
+        /// <paramref name="passbandCentreHz"/>: the measured mark moved by however
+        /// far the pair's midpoint is from the centre. Pass the result to
+        /// <see cref="ComputeOffsetHz"/> as the wanted mark.
+        ///
+        /// <para>Centring the pair rather than the mark is what lets the filter be
+        /// narrow. The width a pair needs is set by whichever tone is furthest from
+        /// the passband centre (see <see cref="RttyIfWidth"/>), so it is smallest -
+        /// shift plus twice the baud - when the two tones sit either side of it at
+        /// equal distance. Works the same whichever tone is the higher one, so a
+        /// reversed signal needs nothing special here.</para>
+        /// </summary>
+        /// <returns>Null when any input is not a usable positive frequency.</returns>
+        public static double? MarkForCentredPair(double markHz, double spaceHz, double passbandCentreHz)
+        {
+            if (!(markHz > 0) || !(spaceHz > 0) || !(passbandCentreHz > 0)) return null;
+            if (double.IsInfinity(markHz) || double.IsInfinity(spaceHz) || double.IsInfinity(passbandCentreHz))
+                return null;
+            return markHz + (passbandCentreHz - (markHz + spaceHz) / 2.0);
+        }
+
+        /// <summary>
         /// Whether <paramref name="mode"/> is one of the radio's own FSK modes and,
         /// if it is, which way it inverts. Null for everything else.
         ///
