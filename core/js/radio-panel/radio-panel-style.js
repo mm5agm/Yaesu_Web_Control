@@ -48,7 +48,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-soft[disabled]{cursor:default}
 .rp-chip{font:600 17px ${SANS};letter-spacing:.08em;padding:4px 11px;border-radius:4px;border:1px solid ${v('chip-border')};color:${v('chip-fg')};white-space:nowrap}
 .rp-chip:empty{display:none}
-.rp-chip.mode{color:${v('soft-on-fg')};border-color:${v('highlight')}}
+.rp-chip.mode{color:${v('freq')};border-color:${v('highlight')}}
 .rp-chip.rx{border-color:${v('rx')};color:${v('rx-fg')}}
 .rp-chip.tx{background:${v('tx')};color:${v('tx-fg')};border-color:${v('tx')}}
 .rp-chip.dim{border-color:${v('chip-dim-border')};color:${v('chip-dim-fg')}}

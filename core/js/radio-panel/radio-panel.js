@@ -14,7 +14,7 @@
 // scratch; Classic keeps the screen-reader and voice work.
 
 import { injectRadioPanelStyle } from './radio-panel-style.js';
-import { applyTheme, themeIds, resolveTheme, DEFAULT_THEME } from './radio-panel-themes.js';
+import { applyTheme, themeIds, resolveTheme, DEFAULT_THEME, SYSTEM_THEME } from './radio-panel-themes.js';
 import { SpectrumView } from './spectrum-view.js';
 import {
     formatFrequency, sMeterFraction, sMeterText, meterGeometry, LOWER_SCALES,
@@ -347,6 +347,12 @@ export function mountRadioPanel(root, opts = {}) {
         spectrum.setTheme(st.theme);
     }
     themeSel.addEventListener('change', () => setTheme(themeSel.value));
+    // "Match computer" redraws when Windows (or the browser) flips light/dark.
+    try {
+        window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+            if (st.theme?.id === SYSTEM_THEME) { setTheme(SYSTEM_THEME); drawMeterFace(); }
+        });
+    } catch { /* no matchMedia: nothing to follow */ }
     sizeSel.value = SIZES.includes(store.get(prefix + 'size', 'fit')) ? store.get(prefix + 'size', 'fit') : 'fit';
     sizeSel.addEventListener('change', () => { store.set(prefix + 'size', sizeSel.value); rescale(); });
     window.addEventListener('resize', rescale);

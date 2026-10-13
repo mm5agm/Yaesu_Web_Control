@@ -148,3 +148,18 @@ test('TX meter fractions land on their legends', async () => {
     assert.equal(txMeterFraction('IDD', 40), 1);
     assert.equal(txMeterFraction('NOPE', 5), 0);
 });
+
+test('every theme defines every colour, so none falls back half-drawn', async () => {
+    const { THEMES, themeIds, resolveTheme } = await import('../../js/radio-panel/radio-panel-themes.js');
+    const keys = Object.keys(THEMES.console.vars);
+    for (const [id, t] of Object.entries(THEMES)) {
+        const missing = keys.filter(k => !(k in t.vars));
+        assert.deepEqual(missing, [], `${id} is missing ${missing.join(', ')}`);
+        assert.ok(t.waterfall.length >= 2, `${id} waterfall`);
+    }
+    assert.equal(themeIds().at(-1), 'system');
+    assert.equal(resolveTheme('system', true).applied, 'console');
+    assert.equal(resolveTheme('system', false).applied, 'daylight');
+    assert.equal(resolveTheme('system', false).id, 'system');
+    assert.equal(resolveTheme('nope').id, 'console');
+});
