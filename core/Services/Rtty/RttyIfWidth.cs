@@ -6,12 +6,12 @@ namespace RadioWebControl.Core.Services.Rtty
     /// How much IF passband an FSK signal actually needs, given where the radio
     /// puts that passband.
     ///
-    /// <para>This exists to answer one narrow question - <i>is the filter the
-    /// radio is already using too narrow to have carried this signal at all?</i> -
-    /// and it is used in one direction only. A caller may widen the filter to the
-    /// figure this returns. <b>Nothing may narrow a filter to it.</b> A narrow
-    /// filter is how a RTTY operator digs a signal out of a crowded band, and the
-    /// width they chose is evidence about the band this software does not have.</para>
+    /// <para>It answers one question - <i>what is the narrowest filter that
+    /// still carries both tones and their keying sidebands?</i> - and callers use
+    /// the answer as a floor: the rung at or above it is the filter to use. That
+    /// was widen-only until the measurements below existed; once the centre was
+    /// measured, a narrow filter sized from it copied better than a wide one, and
+    /// better still as the signal weakened.</para>
     ///
     /// <para><b>The passband does not follow the tones, so the shift alone cannot
     /// answer this.</b> An earlier version of this class returned
@@ -22,24 +22,22 @@ namespace RadioWebControl.Core.Services.Rtty
     /// figure is wrong on both:</para>
     ///
     /// <list type="bullet">
-    ///   <item><description><b>IC-7300 MkII</b> centres the passband on the
-    ///   <i>mark</i> tone. At 450 Hz shift and 50 baud a 550 Hz filter - exactly
-    ///   what the old sum asked for - put the space tone 33 dB down and decoded
-    ///   <i>zero</i> characters. 1200 Hz decoded cleanly.</description></item>
-    ///   <item><description><b>FTdx101MP</b> holds the passband at a fixed audio
-    ///   frequency near 1800 Hz, following neither tone. The same signal needed
-    ///   1700 Hz with the pair at 2125/2575, and only 800 Hz with the identical
-    ///   pair moved down to 1675/2125 - a factor of two from the audio placement
-    ///   alone, with the shift and the speed unchanged.</description></item>
+    ///   <item><description><b>IC-7300 MkII</b> centres its RTTY passband on
+    ///   the middle of the pair set in its own menu: C = menu mark + menu
+    ///   shift / 2, moved by Twin PBT (about +/-100 Hz for +/-30 steps at 800 Hz
+    ///   wide). Noise sweep, 2026-10-13, four menu settings all within 20 Hz.
+    ///   An earlier reading of "mark-centred" came from a signal sitting the
+    ///   other way round from the menu pair.</description></item>
+    ///   <item><description><b>FTdx101MP</b> centres it at 1485 Hz plus IF
+    ///   SHIFT, whatever the tones and the mode. Noise sweep,
+    ///   2026-10-10.</description></item>
     /// </list>
     ///
     /// <para>So the floor is set by whichever tone sits <i>furthest from the
     /// centre of the passband</i>, not by the gap between the tones. A tone at
     /// audio frequency f survives a passband of width W centred on C while
     /// |f - C| &lt;= W/2, and each tone carries keying sidebands out to roughly
-    /// the baud rate either side, which gives the sum below. Fourteen bench
-    /// points across those two radios and two tone placements all agree with it;
-    /// the old sum agreed with three of them.</para>
+    /// the baud rate either side, which gives the sum below.</para>
     ///
     /// <para><b>The centre is radio-specific and the caller supplies it</b> -
     /// that is the seam. Core does the geometry; which audio frequency a given

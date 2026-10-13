@@ -203,5 +203,41 @@ namespace RadioWebControl.Core.Tests.Rtty
                 measuredMarkHz: 3025, wantedMarkHz: 2125, lowerSideband: false,
                 maxOffsetHz: 2400));
         }
+
+        // IC-7300 menu 2125/425 puts the passband centre at 2337.5. A 450 Hz
+        // pair heard at 2200/2650 has its middle at 2425, 87.5 Hz high, so the
+        // mark has to come down by the same amount.
+        [Fact]
+        public void Centres_the_pair_not_the_mark()
+        {
+            var mark = RttyMarkCentre.MarkForCentredPair(2200, 2650, 2337.5);
+
+            Assert.Equal(2112.5, mark);
+        }
+
+        // Reversed: space below mark. The midpoint is still what moves.
+        [Fact]
+        public void Centres_a_reversed_pair_the_same_way()
+        {
+            var mark = RttyMarkCentre.MarkForCentredPair(2400, 2230, 1485);
+
+            Assert.Equal(1570, mark);
+        }
+
+        [Fact]
+        public void A_centred_pair_is_left_where_it_is()
+        {
+            Assert.Equal(1400, RttyMarkCentre.MarkForCentredPair(1400, 1570, 1485));
+        }
+
+        [Theory]
+        [InlineData(0, 2295, 2210)]
+        [InlineData(2125, -1, 2210)]
+        [InlineData(2125, 2295, 0)]
+        [InlineData(double.NaN, 2295, 2210)]
+        public void Refuses_unusable_inputs(double mark, double space, double centre)
+        {
+            Assert.Null(RttyMarkCentre.MarkForCentredPair(mark, space, centre));
+        }
     }
 }
