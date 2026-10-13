@@ -526,6 +526,7 @@ builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.BridgeCwAudioSource>
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwQsoLogService>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwReaderModeService>();
+builder.Services.AddSingleton<Yaesu_Web_Control.Services.Cw.CwAutoService>();
 // RTTY tuning scope: takes its own capture hold on the bridge while its dialog is open.
 // The mode service is a singleton for the reason CwReaderModeService is - it holds
 // what the operator had before the tuner touched it, and a per-request copy would

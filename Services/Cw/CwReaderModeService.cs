@@ -84,17 +84,7 @@ namespace Yaesu_Web_Control.Services.Cw
                 var settings = await _settings.GetSettingsAsync();
                 await EnsureConnectedAsync(settings);
 
-                // Read the radio rather than trusting the cached state. Mode
-                // and filter are not on the meter poll's fast tier, so if the
-                // operator has just turned the filter knob the cached values
-                // can be a second or two stale - and a stale value here is not
-                // a stale display, it is what gets put back afterwards.
-                await ReadCurrentAsync(settings, ct);
-
-                _saved = new Saved(_state.ModeA, _state.IfWidthA, _state.ApfOnA, _state.ApfFreqA);
-                _logger.LogInformation(
-                    "Reader Mode on: saving mode {Mode}, IF width code {Width}, APF {Apf}",
-                    _saved.Mode, _saved.IfWidthCode, _saved.ApfOn ? "on" : "off");
+                await SaveCurrentAsync(settings, ct);
 
                 int wantedHz = filterHz ?? settings.CwReaderFilterHz;
                 await ApplyAsync(settings,
@@ -108,6 +98,71 @@ namespace Yaesu_Web_Control.Services.Cw
                 return Describe("Reader Mode on.");
             }
             finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// What the CW reader's Auto button asks for once it has a station
+        /// locked and the dial moved onto it: the filter at
+        /// <paramref name="widthHz"/> and APF as the settings say, in the mode
+        /// the radio is already in. Auto only runs in CW, so there is no mode
+        /// to change.
+        ///
+        /// Goes through Reader Mode's save and restore on purpose. If Reader
+        /// Mode was off, what is there now is saved first, exactly as the
+        /// button would, so Stop puts the operator's own filter back; if it was
+        /// on, the settings it already holds are the operator's and are kept.
+        /// The dial is not saved: Auto moved it onto the station, and putting
+        /// it back on Stop would take the operator off the station they were
+        /// reading.
+        /// </summary>
+        public async Task<CwReaderModeStatus> ApplyForAutoAsync(int widthHz, CancellationToken ct = default)
+        {
+            await _gate.WaitAsync(ct);
+            try
+            {
+                var settings = await _settings.GetSettingsAsync();
+                await EnsureConnectedAsync(settings);
+
+                if (_saved is null) await SaveCurrentAsync(settings, ct);
+
+                await ApplyAsync(settings,
+                                 mode:      null,
+                                 widthHz:   widthHz,
+                                 widthCode: null,
+                                 apfOn:     settings.CwReaderUseApf,
+                                 apfHz:     _saved!.ApfFreqHz,
+                                 modeForWidth: _state.ModeA,
+                                 ct: ct);
+
+                // Read the width back: the panel reports it, and an Auto that
+                // says "250 Hz" because it sent 250 is the shape of the 3500 Hz
+                // report that started this.
+                string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
+                await _mux.SendCommandAndDispatchAsync($"SH{p1};", "CwReader", ct);
+
+                return Describe("Reader Mode on.", settings);
+            }
+            finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// Reads the radio and records what Reader Mode will put back. Caller
+        /// holds _gate.
+        ///
+        /// Read rather than taken from the cache. Mode and filter are not on
+        /// the meter poll's fast tier, so if the operator has just turned the
+        /// filter knob the cached values can be a second or two stale - and a
+        /// stale value here is not a stale display, it is what gets put back
+        /// afterwards.
+        /// </summary>
+        private async Task SaveCurrentAsync(ApplicationSettings settings, CancellationToken ct)
+        {
+            await ReadCurrentAsync(settings, ct);
+
+            _saved = new Saved(_state.ModeA, _state.IfWidthA, _state.ApfOnA, _state.ApfFreqA);
+            _logger.LogInformation(
+                "Reader Mode on: saving mode {Mode}, IF width code {Width}, APF {Apf}",
+                _saved.Mode, _saved.IfWidthCode, _saved.ApfOn ? "on" : "off");
         }
 
         /// <summary>
@@ -190,7 +245,8 @@ namespace Yaesu_Web_Control.Services.Cw
                                       string? widthCode,
                                       bool apfOn,
                                       int apfHz,
-                                      CancellationToken ct)
+                                      CancellationToken ct,
+                                      string? modeForWidth = null)
         {
             string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
 
@@ -203,7 +259,7 @@ namespace Yaesu_Web_Control.Services.Cw
             string? sh = widthCode;
             if (sh is null && widthHz is { } hz)
             {
-                int? found = YaesuIfWidth.CodeForHz(settings.RadioModel, mode, hz);
+                int? found = YaesuIfWidth.CodeForHz(settings.RadioModel, mode ?? modeForWidth, hz);
 
                 // Null means the table does not know this radio, not that the
                 // radio has no narrow filter. Leaving the filter alone is the
@@ -213,7 +269,7 @@ namespace Yaesu_Web_Control.Services.Cw
                 {
                     _logger.LogWarning(
                         "Reader Mode: no IF width table for {Model} in {Mode}, leaving the filter alone",
-                        settings.RadioModel, mode);
+                        settings.RadioModel, mode ?? modeForWidth);
                 }
                 else
                 {
