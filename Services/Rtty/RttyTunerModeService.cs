@@ -26,20 +26,17 @@ namespace Yaesu_Web_Control.Services.Rtty
     /// <para><b>Two deliberate restraints</b>, both narrower than the CW
     /// equivalent:</para>
     ///
-    /// <para>1. <i>Only from the modes RTTY cannot be copied in at all</i> - see
-    /// <see cref="NeedsSwitching"/>. The tuner's own documentation supports AFSK:
-    /// in DATA-L, DATA-U, LSB or USB the tones are made by the operator's software
-    /// and the radio is a plain SSB transceiver, which is a working arrangement
-    /// that this switching would break. So the switch fires from CW, AM, FM and
-    /// DATA-FM, and leaves every mode that can actually pass an audio tone pair
-    /// where it is.</para>
+    /// <para>1. <i>Opening the tuner puts the radio in RTTY</i> from any mode
+    /// that is not already one of its FSK modes - see <see cref="NeedsSwitching"/>.
+    /// Until 2026-10-13 SSB and DATA were left alone for AFSK; Colin asked for
+    /// RTTY on open, and an AFSK operator who wants the radio left alone turns
+    /// <see cref="ApplicationSettings.RttyTunerSetMode"/> off.</para>
     ///
-    /// <para>2. <i>The filter is only ever widened.</i> Changing to RTTY brings
-    /// the radio's own stored RTTY filter width with it, which is whatever that
-    /// operator normally uses for RTTY and is better evidence about their band
-    /// than any formula. The width is touched only when it is too narrow to have
-    /// carried the shift the tuner is set to, and then only up to the floor
-    /// <see cref="RttyIfWidth"/> computes. Narrowing is left to the operator.</para>
+    /// <para>2. <i>The filter is sized to the signal.</i> The narrowest rung
+    /// at or above the floor <see cref="RttyIfWidth"/> computes, wider or
+    /// narrower than what was there. Auto opens it to
+    /// <see cref="ListenWidthHz"/> while it listens, so no tone is hidden from
+    /// the measurement.</para>
     ///
     /// <para><b>This is Icom Web Control's service, ported.</b> The structure, the
     /// comments and the status strings are deliberately kept word for word so the
@@ -48,7 +45,7 @@ namespace Yaesu_Web_Control.Services.Rtty
     /// than through IWC's <c>IRadioController</c> seam; the saved width is kept as
     /// an SH <i>code</i> rather than in Hz, because that is what this radio speaks
     /// and a code put back is exactly the filter that was there; and
-    /// <see cref="PassbandCentreHz"/> answers differently, which is the one
+    /// <see cref="PassbandCentreAsync"/> answers differently, which is the one
     /// difference that is about physics rather than plumbing.</para>
     /// </summary>
     public sealed class RttyTunerModeService
@@ -64,6 +61,12 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// </summary>
         public const string RttyMode = "RTTY-L";
 
+        /// <summary>
+        /// How wide Auto listens. A filter left narrow from the last signal - or
+        /// a CW filter's worth - cannot show Auto a station it has not yet found.
+        /// </summary>
+        public const int ListenWidthHz = 2400;
+
         private readonly ICatClient _cat;
 
         // Reads go through the multiplexer, not through ICatClient, for the
@@ -75,6 +78,7 @@ namespace Yaesu_Web_Control.Services.Rtty
 
         private readonly RadioStateService _state;
         private readonly ISettingsService _settings;
+        private readonly RttyRadioToneService _tones;
         private readonly ILogger<RttyTunerModeService> _logger;
 
         // One at a time. Ensuring and restoring both read the radio, decide from
@@ -95,18 +99,20 @@ namespace Yaesu_Web_Control.Services.Rtty
         // the filter width would put two CAT round trips in front of every one
         // of them. Nothing about the radio can need looking at twice for the
         // same signal, so a repeat start asks it nothing.
-        private (double Mark, int Shift, double Baud)? _sizedFor;
+        private (double Mark, int Shift, double Baud, bool Reverse)? _sizedFor;
 
         public RttyTunerModeService(ICatClient cat,
                                     CatMultiplexerService mux,
                                     RadioStateService state,
                                     ISettingsService settings,
+                                    RttyRadioToneService tones,
                                     ILogger<RttyTunerModeService> logger)
         {
             _cat = cat;
             _mux = mux;
             _state = state;
             _settings = settings;
+            _tones = tones;
             _logger = logger;
         }
 
@@ -142,11 +148,16 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// <param name="markHz">
         /// The mark tone, in Hz of audio. Needed as well as the shift because
         /// where the tones sit in the audio is what decides whether this radio's
-        /// passband reaches them - see <see cref="PassbandCentreHz"/>.
+        /// passband reaches them - see <see cref="PassbandCentreAsync"/>.
         /// </param>
         /// <param name="shiftHz">The shift the tuner's filters are set to.</param>
         /// <param name="baud">The speed the tuner's filters are set for.</param>
-        public async Task<string?> EnsureAsync(double markHz, int shiftHz, double baud,
+        /// <param name="reverse">
+        /// Which side of the mark the space sits on. Needed because Auto centres
+        /// the pair, so the mark is off-centre by half a shift on a known side;
+        /// sizing for the far placement would be wider by a whole shift.
+        /// </param>
+        public async Task<string?> EnsureAsync(double markHz, int shiftHz, double baud, bool reverse,
                                                CancellationToken ct = default)
         {
             var settings = await _settings.GetSettingsAsync();
@@ -156,7 +167,7 @@ namespace Yaesu_Web_Control.Services.Rtty
             try
             {
                 if (!_cat.IsConnected) return null;
-                if (_saved is not null && _sizedFor == (markHz, shiftHz, baud)) return null;
+                if (_saved is not null && _sizedFor == (markHz, shiftHz, baud, reverse)) return null;
 
                 string? switched = null;
                 if (_saved is null)
@@ -182,7 +193,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                         await SetModeAsync(RttyMode, ct);
                         switched = $"Mode set to {RttyMode}.";
                         _logger.LogInformation(
-                            "RTTY tuner: mode {From} cannot carry RTTY, set to {To}", mode, RttyMode);
+                            "RTTY tuner: mode {From} set to {To}", mode, RttyMode);
                     }
                 }
 
@@ -191,8 +202,8 @@ namespace Yaesu_Web_Control.Services.Rtty
                 // for the mode the radio is about to leave. The mode change also
                 // brings the radio's own stored RTTY width with it, which is the
                 // width this then judges.
-                var sized = await SizeFilterAsync(settings, markHz, shiftHz, baud, ct);
-                _sizedFor = (markHz, shiftHz, baud);
+                var sized = await SizeFilterAsync(settings, markHz, shiftHz, baud, reverse, ct);
+                _sizedFor = (markHz, shiftHz, baud, reverse);
 
                 // What to hold. The mode the radio is in now, if it is one of
                 // the radio's own FSK modes - which is either the one just
@@ -206,6 +217,73 @@ namespace Yaesu_Web_Control.Services.Rtty
                 return Join(switched, sized);
             }
             finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// Open the filter to <see cref="ListenWidthHz"/> for Auto's listen.
+        /// Returns the SH code it was at, for <see cref="EndListeningAsync"/>, or
+        /// null when nothing was changed - the tuner is not running, the radio is
+        /// not in RTTY, or the filter is already wide enough.
+        /// </summary>
+        public async Task<string?> BeginListeningAsync(CancellationToken ct = default)
+        {
+            if (_saved is null) return null;
+            await _gate.WaitAsync(ct);
+            try
+            {
+                if (_saved is null || !_cat.IsConnected) return null;
+                string mode = _state.ModeA ?? "";
+                if (RttyMarkCentre.SidebandForFskMode(mode) is null) return null;
+
+                var settings = await _settings.GetSettingsAsync();
+                string? was = _state.IfWidthA;
+                if (WidthHz(settings, mode, was) is not { } current || current >= ListenWidthHz) return null;
+                if (RungAtOrAbove(settings, mode, ListenWidthHz) is not { } rung || rung.Hz <= current) return null;
+
+                string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
+                await _cat.SendCommandAsync(
+                    CatCommands.FormatIfWidth(settings.RadioModel, p1, rung.Code), "RttyTuner", ct);
+                _state.IfWidthA = rung.Code.ToString();
+                int got = await ReadWidthBackAsync(settings, mode, ct) ?? rung.Hz;
+                _sizedFor = null;
+                _logger.LogInformation("RTTY Auto: IF width {From} Hz opened to {To} Hz to listen",
+                                       current, got);
+                return was;
+            }
+            finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// Put back the width <see cref="BeginListeningAsync"/> replaced, when
+        /// Auto found nothing it could size a filter for.
+        /// </summary>
+        public async Task EndListeningAsync(string code, CancellationToken ct = default)
+        {
+            await _gate.WaitAsync(ct);
+            try
+            {
+                if (_saved is null || !_cat.IsConnected || !int.TryParse(code, out int c)) return;
+                var settings = await _settings.GetSettingsAsync();
+                string p1 = RadioCapabilities.VfoP1(_state.IsSingleReceiver, "A");
+                await _cat.SendCommandAsync(
+                    CatCommands.FormatIfWidth(settings.RadioModel, p1, c), "RttyTuner", ct);
+                _state.IfWidthA = code;
+                _sizedFor = null;
+            }
+            finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// Where Auto should put the middle of the tone pair: this radio's
+        /// passband centre, or null when the tuner is not holding an FSK mode.
+        /// Also lets the next start size the filter afresh for the moved pair.
+        /// </summary>
+        public async Task<double?> CentreForAutoAsync(CancellationToken ct = default)
+        {
+            string? mode = _state.ModeA;
+            if (_saved is null || RttyMarkCentre.SidebandForFskMode(mode) is null) return null;
+            _sizedFor = null;
+            return await PassbandCentreAsync(mode, ct);
         }
 
         /// <summary>
@@ -319,8 +397,7 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// narrow FM or AM to name.</para>
         /// </summary>
         public static bool NeedsSwitching(string? mode) =>
-            mode is "CW-U" or "CW-L" or "AM" or "AM-N" or "FM" or "FM-N"
-                 or "C4FM" or "DATA-FM" or "DATA-FM-N";
+            RttyMarkCentre.SidebandForFskMode(mode) is null;
 
         // ---- the radio -----------------------------------------------------
 
@@ -370,90 +447,76 @@ namespace Yaesu_Web_Control.Services.Rtty
         // ---- the filter ----------------------------------------------------
 
         /// <summary>
-        /// Where this radio centres its receive passband, in Hz of audio:
-        /// a fixed point per model, <b>plus the IF SHIFT</b>, following neither
-        /// tone.
+        /// Where this radio centres its receive passband, in Hz of audio, plus
+        /// the IF SHIFT.
         ///
-        /// <para>Measured on the FTdx101MP with a <b>noise sweep</b> on
-        /// 2026-10-10 - no signal and no decode involved, which is why it
-        /// settled in seconds what a week of survival sweeps could not. Band
-        /// noise through a narrow filter has the shape of that filter, so a
-        /// Welch FFT of the receive audio draws the passband directly. Five
-        /// widths, three modes and two sessions all put the -6 dB centre at
-        /// <b>1485 Hz +/- 17</b> with IF SHIFT at zero, and the mode does not
-        /// matter (DATA-U 1486, RTTY-L 1484, USB 1485).</para>
+        /// <para><b>In RTTY it is the radio's own RTTY menu</b>: MARK FREQUENCY
+        /// plus half the SHIFT FREQUENCY in RTTY-L - the middle of the pair the
+        /// radio itself would expect. Measured on the FTdx101MP on 2026-10-13
+        /// against DDK9 at 600 Hz, receive only. With the menu at 2125/170 the
+        /// pair balanced with its middle on <b>2208 Hz</b> (2125 + 85 = 2210)
+        /// and was 20 dB and more down when centred on 1485; then, with the dial
+        /// untouched, the menu alone set to 1275/425 swapped the two - the pair
+        /// on 1483 balanced within 0.5 dB and the one on 2208 was lost. The menu
+        /// is the cause, not the band.</para>
         ///
-        /// <para><b>It tracks IF SHIFT one for one.</b> Measured 1482 / 1781 /
-        /// 1201 / 1482 Hz for shifts of 0 / +300 / -300 / 0, against a written
-        /// prediction of 1485 / 1785 / 1185, with the width unchanged
-        /// throughout and the two zero runs agreeing to 0 Hz. No constant can
-        /// therefore be right, which is the whole reason this is a method.</para>
+        /// <para>That is what the 2026-10-10 noise sweep's 1485 was: 1275 +
+        /// 425/2 = 1487, the menu that evening, read as a constant of the radio.
+        /// It did hold for DATA-U and USB as well, which have no RTTY menu - so
+        /// outside RTTY the model figure below still stands - and it tracked IF
+        /// SHIFT one for one there (1482 / 1781 / 1201 for 0 / +300 / -300),
+        /// which is why the shift is still added. That IF SHIFT moves the RTTY
+        /// filter the same way is assumed, not measured.</para>
         ///
-        /// <para><b>This replaces a figure of 1800 Hz that was wrong.</b> That
-        /// came from a 2026-10-09 survival sweep whose conclusion does not
-        /// survive its own text: re-run under an A-B-A control, every rung of
-        /// both audio placements produced one to thirty-four characters of hash
-        /// with no known token in any of them, and the analyser refused seven
-        /// attempts out of eight. There was no copy there to compare, so the
-        /// "factor of two from placement alone" it reported was a difference in
-        /// character throughput through noise. 1800 is also reachable
-        /// innocently as 1485 + 315, an IF shift of about +300, and nothing in
-        /// this app logs IF SHIFT, so the old session cannot be re-examined.</para>
+        /// <para>RTTY-U is taken as the mirror, mark minus half the shift, and
+        /// is not measured. Nor is the menu's POLARITY item: the 2026-10-13
+        /// proof ran with it as the radio had it.</para>
         ///
-        /// <para>The centring is what makes a narrow filter possible at all.
-        /// Proved on the air on 2026-10-11 against a live contest station: with
-        /// the pair left where the dial put it, 970 Hz above centre, the floor
-        /// was about 2200 Hz and nothing below a 1700 Hz filter copied; moved
-        /// on to the measured centre - the pair landed within 4 Hz of 1485 -
-        /// the floor fell to 268 Hz and every rung down to <b>250 Hz</b>
-        /// copied. That is a step in kind, not a score to argue over.</para>
-        ///
-        /// <para>Icom Web Control answers differently - the IC-7300 MkII looks
-        /// mark-centred - which is why <see cref="RttyIfWidth"/> takes the
-        /// centre as a parameter and assumes neither behaviour. That Icom
-        /// finding rests on signal evidence and has never had a noise sweep of
-        /// its own, so it may yet turn out to be this same artefact.</para>
-        ///
-        /// <para><paramref name="markHz"/> is unused and kept so the signature
-        /// still says what the answer is allowed to depend on: on this radio,
-        /// not the tones.</para>
+        /// <para>The IC-7300 follows the same rule (Icom Web Control, 2026-10-13),
+        /// so the two radios no longer disagree. Read live rather than cached:
+        /// the operator can change that menu at the front panel, and the tuner's
+        /// own "To radio" button writes it.</para>
         /// </summary>
-        private double PassbandCentreHz(double markHz)
-            => ModelCentreHz(_state.RadioModel) + _state.IfShiftA;
+        private async Task<double> PassbandCentreAsync(string? mode, CancellationToken ct)
+        {
+            if (RttyMarkCentre.SidebandForFskMode(mode) is not null
+                && await _tones.ReadAsync(ct) is { } menu)
+            {
+                double half = menu.ShiftHz / 2.0;
+                double c = string.Equals(mode, "RTTY-U", StringComparison.OrdinalIgnoreCase)
+                    ? menu.MarkHz - half
+                    : menu.MarkHz + half;
+                return c + _state.IfShiftA;
+            }
+            return ModelCentreHz(_state.RadioModel) + _state.IfShiftA;
+        }
 
         /// <summary>
-        /// The audio centre with IF SHIFT at zero. Only the FTdx101MP has been
-        /// swept; anything else gets Yaesu's published DATA carrier point, which
-        /// is the right kind of answer rather than this one radio's measurement
-        /// pretending to be universal. A model added here wants its own noise
-        /// sweep, not a guess - the recipe is six seconds of recorded audio per
-        /// width and a Welch FFT.
+        /// The audio centre outside RTTY, with IF SHIFT at zero, or in RTTY when
+        /// the menu could not be read. Only the FTdx101MP has been swept (DATA-U
+        /// and USB, 2026-10-10); anything else gets Yaesu's published DATA
+        /// carrier point.
         /// </summary>
         private static double ModelCentreHz(string? model) => model switch
         {
-            "FTdx101MP" or "FTdx101D" => 1485.0,   // swept 2026-10-10
+            "FTdx101MP" or "FTdx101D" => 1485.0,   // swept 2026-10-10, DATA-U/USB
             _                         => 1500.0,
         };
 
         private async Task<string?> SizeFilterAsync(
-            ApplicationSettings settings, double markHz, int shiftHz, double baud,
+            ApplicationSettings settings, double markHz, int shiftHz, double baud, bool reverse,
             CancellationToken ct)
         {
             string mode = _state.ModeA ?? "";
-            double centre = PassbandCentreHz(markHz);
+            double centre = await PassbandCentreAsync(mode, ct);
 
-            // The worse of the two places the space tone can sit, not the one the
-            // current mode puts it in. Reverse is a toggle the operator can flip at
-            // any moment, and the mode can change under us too, while this widen
-            // runs once at the start of a session; sizing for the nearer placement
-            // would mean a filter that silently clips the moment they press
-            // Reverse. On this radio the centre is fixed rather than pinned to the
-            // mark, so the two placements really are different distances from it
-            // and this choice is doing work that the Icom's never has to.
-            double worstSpace =
-                Math.Abs((markHz + shiftHz) - centre) >= Math.Abs((markHz - shiftHz) - centre)
-                    ? markHz + shiftHz
-                    : markHz - shiftHz;
+            // The space where this mode and Reverse put it. This used to size for
+            // the worse of the two placements, so that flipping Reverse could not
+            // clip; it no longer needs to, because a Reverse flip is a start with
+            // new figures and is sized again (it is part of _sizedFor). And it
+            // must not: with Auto centring the pair, the far placement is a whole
+            // shift further out and the filter would come out a shift too wide.
+            double worstSpace = RttyTunerService.TonesFor(mode, markHz, shiftHz, reverse).SpaceHz;
 
             // The width this radio reports is an SH code, so turning it into Hz
             // needs the table - and that is the step IWC does not have, where the

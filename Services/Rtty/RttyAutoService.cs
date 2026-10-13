@@ -73,14 +73,18 @@ namespace Yaesu_Web_Control.Services.Rtty
                                RadioStateService state,
                                ICatClient cat,
                                ISettingsService settings,
+                               RttyTunerModeService tunerMode,
                                ILogger<RttyAutoService> logger)
         {
             _bridge = bridge;
             _state = state;
             _cat = cat;
             _settings = settings;
+            _tunerMode = tunerMode;
             _logger = logger;
         }
+
+        private readonly RttyTunerModeService _tunerMode;
 
         /// <summary>Whether an analysis is running, for the button's state.</summary>
         public bool IsBusy => _one.CurrentCount == 0;
@@ -97,8 +101,17 @@ namespace Yaesu_Web_Control.Services.Rtty
             if (!await _one.WaitAsync(0, ct))
                 return RttyAutoResult.Failed("Already listening - wait for that to finish.");
 
+            // The filter the tuner left is sized for the last signal, or is the
+            // operator's CW filter: it may hide one tone of a station that has
+            // not been found yet. Opened for the listen and put back below unless
+            // this press ends with the pair centred, when the next start sizes it
+            // for the new one.
+            string? listenedFrom = null;
+            bool centred = false;
             try
             {
+                listenedFrom = await _tunerMode.BeginListeningAsync(ct);
+
                 var (audio, captureError) = await ListenAsync(ct);
                 if (captureError != null)
                     return RttyAutoResult.Failed(captureError);
@@ -147,11 +160,16 @@ namespace Yaesu_Web_Control.Services.Rtty
                 // Inside the semaphore, so two presses cannot both decide to move
                 // the same radio, and after Describe so the figures reported are
                 // the ones the decision was taken on.
-                await CentreAsync(result, wantedMarkHz, ct);
+                centred = await CentreAsync(result, wantedMarkHz, ct);
                 return result;
             }
             finally
             {
+                if (listenedFrom is { } code && !centred)
+                {
+                    try { await _tunerMode.EndListeningAsync(code, CancellationToken.None); }
+                    catch (Exception ex) { _logger.LogWarning(ex, "RTTY Auto: could not put the IF width back"); }
+                }
                 _one.Release();
             }
         }
@@ -501,23 +519,44 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// radio is transmitting, because retuning a transmitter mid-transmission
         /// is not something software should do on its own initiative.</para>
         /// </summary>
-        private async Task CentreAsync(RttyAutoResult result, double? wantedMarkHz,
-                                       CancellationToken ct)
+        /// <returns>
+        /// Whether the measured pair was handed on for the tuner to size its
+        /// filter for - true once the answer is good enough to apply, whether or
+        /// not the dial had to move.
+        /// </returns>
+        private async Task<bool> CentreAsync(RttyAutoResult result, double? wantedMarkHz,
+                                             CancellationToken ct)
         {
-            if (wantedMarkHz is not { } wanted || wanted <= 0) return;
-
             var settings = await _settings.GetSettingsAsync();
-            if (!settings.RttyAutoCentreMark) return;
+            if (!settings.RttyAutoCentreMark) return false;
 
             if (RttyMarkCentre.SidebandForFskMode(result.Mode) is not { } lowerSideband)
             {
                 // Not logged as a refusal. The mode advisory has already told the
                 // operator that the radio is not in RTTY, which is the useful
                 // half, and an AFSK operator has not asked for this at all.
-                return;
+                return false;
             }
 
-            if (!_cat.IsConnected || _state.IsTransmitting) return;
+            if (!_cat.IsConnected || _state.IsTransmitting) return false;
+            if (result.Confidence < RttyMarkCentre.MinConfidence) return false;
+
+            // The middle of the PAIR goes on the passband centre, not the mark on
+            // the dialog's mark: that is what lets the filter come down to the
+            // signal's own width (proved on air 2026-10-11, and on the IC-7300
+            // 2026-10-13). Without a tuner holding an FSK mode there is no centre
+            // to aim at, and the old target - the dialog's mark - stands.
+            bool prepared = false;
+            double? target = wantedMarkHz;
+            if (await _tunerMode.CentreForAutoAsync(ct) is { } centre)
+            {
+                prepared = true;
+                target = RttyMarkCentre.MarkForCentredPair(result.MarkHz, result.SpaceHz, centre) ?? target;
+                _logger.LogInformation(
+                    "RTTY Auto: passband centre {Centre:F0} Hz, pair {Mark:F0}/{Space:F0} - mark wanted at {Target:F0} Hz",
+                    centre, result.MarkHz, result.SpaceHz, target);
+            }
+            if (target is not { } wanted || wanted <= 0) return prepared;
 
             var offset = RttyMarkCentre.ComputeOffsetHz(
                 measuredMarkHz: result.MarkHz,
@@ -531,7 +570,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                     "RTTY Auto: mark {Measured:F0} Hz against {Wanted:F0} Hz wanted, " +
                     "confidence {Conf:F2}, passband {Cap:F0} Hz - dial left alone",
                     result.MarkHz, wanted, result.Confidence, PassbandCapHz());
-                return;
+                return prepared;
             }
 
             try
@@ -541,7 +580,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                 // stale value here would not be a stale display - it would move the
                 // radio somewhere it has already been.
                 long from = await _cat.QueryFrequencyAAsync("RttyAuto", ct);
-                if (from <= 0) return;
+                if (from <= 0) return prepared;
 
                 long to = from + offset.Value;
                 await _cat.SetFrequencyAAsync(to);
@@ -572,6 +611,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                 // an unmoved dial, which is the state they were already in.
                 _logger.LogWarning(ex, "RTTY Auto: could not move the VFO");
             }
+            return prepared;
         }
 
         /// <summary>

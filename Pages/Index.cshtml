@@ -3206,6 +3206,17 @@
             // that window to the front instead of opening the dialog, and the
             // dialog stays shut so the two are not both polling. Reattach in
             // the window, or closing it, gives the button back.
+            // Opening the CW reader puts the radio in CW, as opening the RTTY
+            // panel puts it in RTTY (that one on the server - see
+            // RttyTunerModeService). Only on opening, not when the button
+            // brings a pop-out to the front, and not if it is already CW.
+            let readerModeA = '@Model.RadioState.ModeA';
+            const openCwReaderInCw = () => {
+                const dlg = document.getElementById('cwReaderDialog');
+                if (!dlg?.open && !readerModeA.startsWith('CW')) window.setMode('A', 'CW-U');
+                window.cwReaderPanel.toggle();
+            };
+
             window.cwReaderOpen = attachPopout({
                 name: 'cw-reader',
                 // Reattach gives the dialog the size the window was left at.
@@ -3217,7 +3228,7 @@
                 dialog: () => document.getElementById('cwReaderDialog'),
                 openButton: document.getElementById('cwReaderOpenBtn'),
                 popoutButton: document.getElementById('cwReaderPopoutBtn'),
-                show: () => window.cwReaderPanel.toggle(),
+                show: openCwReaderInCw,
                 closedLabel: {
                     text: 'CW Read',
                     title: 'Open the CW reader - decodes the received Morse to text',
@@ -3437,6 +3448,7 @@
             });
             spectrumPipeline.onModeA(mode => {
                 spectrumPanelA?.setMode(mode);
+                readerModeA = mode || '';
                 modePanelGuards.forEach(g => g.setMode(mode));
                 ensureRttyTones(mode);
                 readDataShift(mode);

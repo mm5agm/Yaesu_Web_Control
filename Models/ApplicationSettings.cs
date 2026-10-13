@@ -296,8 +296,9 @@
         // drawing nothing. On by default for that reason. Switchable because an
         // operator running AFSK from their own software owns their radio's mode,
         // and because anyone who would rather the software never touched the mode
-        // is entitled to that. RttyTunerModeService only ever switches out of the
-        // modes RTTY cannot be copied in at all, and only ever widens a filter.
+        // is entitled to that. RttyTunerModeService switches out of any mode that
+        // is not already RTTY, sizes the filter to the signal Auto measured, and
+        // puts mode and filter back when the tuner closes.
         public bool RttyTunerSetMode { get; set; } = true;
 
         // Whether a confident Auto answer also moves the VFO so the measured mark
