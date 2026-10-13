@@ -251,7 +251,9 @@ export function startYaesuRadioPanel(root, cfg) {
     fetch('/api/dxcluster/spots').then(x => (x.ok ? x.json() : [])).then(list => { for (const sp of list ?? []) addSpot(sp); }).catch(() => {});
     fetch('/api/dxcluster/status').then(x => (x.ok ? x.json() : null)).then(s => { if (s) handlers.DxClusterStatus(s); }).catch(() => {});
 
-    const conn = window.rwcHubConnection('/radioHub');
+    // The page opens this and passes it in, so the page itself visibly holds
+    // the host open (HostPresenceTests reads the .cshtml, not this file).
+    const conn = cfg.conn ?? window.rwcHubConnection('/radioHub');
     conn.on('RadioStateUpdate', msg => {
         const fn = handlers[msg?.property];
         if (!fn) return;

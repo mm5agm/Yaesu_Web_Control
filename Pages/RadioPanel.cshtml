@@ -22,7 +22,11 @@
     <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
     <script type="module">
         import { startYaesuRadioPanel } from '/js/ui/radio-panel-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current';
+        // Layout = null, so no site.js: this connection is what tells the host
+        // a browser is still here. The adapter uses it for live state too.
+        const conn = window.rwcHubConnection('/radioHub');
         startYaesuRadioPanel(document.getElementById('radioPanel'), {
+            conn,
             model: '@Model.RadioModel',
             dual: @(Model.IsDual ? "true" : "false"),
             maxPowerW: @Model.MaxPower,
