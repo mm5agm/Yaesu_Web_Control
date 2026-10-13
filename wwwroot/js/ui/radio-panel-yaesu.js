@@ -35,6 +35,7 @@ export function startYaesuRadioPanel(root, cfg) {
     const dual = !!cfg.dual;
     const maxPowerW = num(cfg.maxPowerW) || 100;
 
+    let radioScreen = null;     // set just after mount; the panel may call onScreenView during it
     const panel = mountRadioPanel(root, {
         brandShort: 'YWC',
         brandName: 'Yaesu Web Control',
@@ -61,9 +62,13 @@ export function startYaesuRadioPanel(root, cfg) {
             { id: 'speed', label: 'Key Speed' }, { id: 'power', label: 'RF Power' }, { id: 'mic', label: 'Mic Gain' },
             { id: 'procl', label: 'Proc Level' }, { id: 'mon', label: 'Monitor' },
         ],
+        screenViews: [{ id: 'tft', label: 'Radio screen' }],
+        onScreenView: id => { if (id === 'tft') radioScreen?.show(); },
         storagePrefix: 'ywc.radioPanel.',
         fontBase: '/lib/fonts',
     });
+    radioScreen = startRadioScreen(panel.screenSlot('tft'));
+    if (panel.screenView() === 'tft') radioScreen.show();
 
     // ---- the slice of radio state the panel derives things from ----------
     const r = {
@@ -258,4 +263,74 @@ export function startYaesuRadioPanel(root, cfg) {
     conn.start().catch(() => panel.setLamp('cat', 'bad'));
 
     return panel;
+}
+
+// ---- Radio screen: the radio's own TFT, through the HDMI capture device ----
+//
+// The same MJPEG stream the Radio Display panel shows (/api/video/*). The
+// server opens the capture for its first viewer and closes it after its last,
+// and some USB HDMI dongles crash natively if the capture is closed and
+// reopened quickly - so once this page has started the stream it keeps it
+// for as long as the page is open, even while the SDR view is showing.
+function startRadioScreen(slot) {
+    if (!slot) return null;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none';
+    const msg = document.createElement('div');
+    msg.className = 'rp-spec-empty';
+    msg.style.cssText = 'flex-direction:column;gap:14px;text-align:center;padding:0 30px';
+    const msgText = document.createElement('div');
+    const startBtn = document.createElement('button');
+    startBtn.type = 'button';
+    startBtn.className = 'rp-viewtab on';
+    startBtn.textContent = 'Start';
+    startBtn.style.cssText = 'position:static;font-size:16px;padding:6px 18px';
+    startBtn.style.display = 'none';
+    msg.append(msgText, startBtn);
+    slot.append(img, msg);
+
+    let streaming = false, retryMs = 2000, retryTimer = null;
+    const say = (text, offerStart = false) => {
+        msgText.textContent = text;
+        startBtn.style.display = offerStart ? '' : 'none';
+        msg.style.display = text ? 'flex' : 'none';
+    };
+
+    async function attach() {
+        clearTimeout(retryTimer); retryTimer = null;
+        let st;
+        try {
+            const res = await fetch('/api/video/status');
+            st = res.ok ? await res.json() : null;
+        } catch { st = null; }
+        if (!st) { say('Cannot reach Radio Display'); return retry(); }
+        if (!st.enabled) return say('Radio Display is off. Turn it on in Settings, and choose the capture device on the Classic page.');
+        if (!st.deviceKey) return say('No capture device chosen. Choose it in the Radio Display panel on the Classic page.');
+        if (st.halted) return say(st.error || 'The capture device disconnected.', true);
+        say('Connecting…');
+        streaming = true;
+        img.src = '/api/video/stream?t=' + Date.now();
+    }
+    function retry() {
+        if (retryTimer) return;
+        retryTimer = setTimeout(attach, retryMs);
+        retryMs = Math.min(retryMs * 1.5, 15000);
+    }
+    img.onload = () => { retryMs = 2000; img.style.display = ''; say(''); };
+    img.onerror = () => {
+        streaming = false;
+        img.style.display = 'none';
+        img.removeAttribute('src');
+        say('Lost the picture - retrying');
+        retry();
+    };
+    startBtn.addEventListener('click', async () => {
+        try { await fetch('/api/video/start', { method: 'POST' }); } catch { /* attach() reports it */ }
+        attach();
+    });
+
+    return {
+        show() { if (!streaming && !retryTimer) attach(); },
+    };
 }
