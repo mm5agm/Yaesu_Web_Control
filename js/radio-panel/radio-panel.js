@@ -14,7 +14,7 @@
 // scratch; Classic keeps the screen-reader and voice work.
 
 import { injectRadioPanelStyle } from './radio-panel-style.js';
-import { applyTheme, themeIds, resolveTheme, DEFAULT_THEME } from './radio-panel-themes.js';
+import { applyTheme, themeIds, resolveTheme, DEFAULT_THEME, SYSTEM_THEME } from './radio-panel-themes.js';
 import { SpectrumView } from './spectrum-view.js';
 import {
     formatFrequency, sMeterFraction, sMeterText, meterGeometry, LOWER_SCALES,
@@ -68,6 +68,11 @@ function knobSvg(size) {
  *   vfoKeys:[{ id, label }]                under the dial, three per row
  *   bands:  [{ id, label }]   modes: [{ id, label }]
  *   knobs:  [{ id, label }]
+ *   screenViews: [{ id, label }]         optional: what the centre screen can show
+ *                                          instead of the spectrum. The spectrum is
+ *                                          always 'sdr'; each other view gets an empty
+ *                                          slot (screenSlot(id)) for the adapter to fill
+ *   onScreenView(id)                       told when the operator switches view
  *   storagePrefix, fontBase
  *   onAction(kind, id)                     kind: 'key' | 'band' | 'mode' | 'step' | 'vfoKey'
  */
@@ -206,6 +211,31 @@ export function mountRadioPanel(root, opts = {}) {
     const axis = h('div', 'rp-axis');
     const wf = h('div', 'rp-waterfall');
 
+    // The spectrum and any other view share the space between the VFOs and
+    // the band keys; the switch sits in the waterfall's corner, which is the
+    // one place DX spots never land.
+    const screenViewList = [{ id: 'sdr', label: 'SDR' }, ...(opts.screenViews ?? []).filter(x => x.id !== 'sdr')];
+    const viewArea = h('div', 'rp-viewarea');
+    const sdrView = h('div', 'rp-sdrview');
+    sdrView.append(spec, axis, wf);
+    viewArea.append(sdrView);
+    const slots = {};
+    const viewTabs = h('div', 'rp-viewtabs');
+    const viewTabEls = {};
+    for (const vw of screenViewList) {
+        if (vw.id !== 'sdr') {
+            slots[vw.id] = h('div', 'rp-altview');
+            slots[vw.id].style.display = 'none';
+            viewArea.append(slots[vw.id]);
+        }
+        const t = h('button', 'rp-viewtab', vw.label);
+        t.type = 'button';
+        t.addEventListener('click', () => setScreenView(vw.id));
+        viewTabs.append(t);
+        viewTabEls[vw.id] = t;
+    }
+    if (screenViewList.length > 1) viewArea.append(viewTabs);
+
     const bandsRow = h('div', 'rp-bands');
     const bandEls = {};
     for (const b of opts.bands ?? []) { const el = button('rp-soft', 'band', b.id); el.textContent = b.label; bandsRow.append(el); bandEls[b.id] = el; }
@@ -213,7 +243,7 @@ export function mountRadioPanel(root, opts = {}) {
     const modeEls = {};
     for (const m of opts.modes ?? []) { const el = button('rp-soft', 'mode', m.id); el.textContent = m.label; modesRow.append(el); modeEls[m.id] = el; }
 
-    screen.append(vfos, spec, axis, wf, bandsRow, modesRow);
+    screen.append(vfos, viewArea, bandsRow, modesRow);
 
     // right: dial and VFO keys
     const rightCol = h('div', 'rp-right');
@@ -346,12 +376,28 @@ export function mountRadioPanel(root, opts = {}) {
         store.set(prefix + 'theme', st.theme.id);
         spectrum.setTheme(st.theme);
     }
+    function setScreenView(id) {
+        if (!screenViewList.some(x => x.id === id)) id = 'sdr';
+        st.screenView = id;
+        sdrView.style.display = id === 'sdr' ? '' : 'none';
+        for (const [k, el] of Object.entries(slots)) el.style.display = k === id ? '' : 'none';
+        for (const [k, el] of Object.entries(viewTabEls)) el.classList.toggle('on', k === id);
+        store.set(prefix + 'screen', id);
+        opts.onScreenView?.(id);
+    }
     themeSel.addEventListener('change', () => setTheme(themeSel.value));
+    // "Match computer" redraws when Windows (or the browser) flips light/dark.
+    try {
+        window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+            if (st.theme?.id === SYSTEM_THEME) { setTheme(SYSTEM_THEME); drawMeterFace(); }
+        });
+    } catch { /* no matchMedia: nothing to follow */ }
     sizeSel.value = SIZES.includes(store.get(prefix + 'size', 'fit')) ? store.get(prefix + 'size', 'fit') : 'fit';
     sizeSel.addEventListener('change', () => { store.set(prefix + 'size', sizeSel.value); rescale(); });
     window.addEventListener('resize', rescale);
 
     setTheme(store.get(prefix + 'theme', DEFAULT_THEME));
+    setScreenView(store.get(prefix + 'screen', 'sdr'));
     drawMeterFace();
     rescale();
     if (document.fonts?.ready) document.fonts.ready.then(rescale);
@@ -439,5 +485,9 @@ export function mountRadioPanel(root, opts = {}) {
         setSpots(list) { st.spots = list ?? []; drawOverlays(); },
         setTheme,
         rescale,
+        // The empty element for a screenViews entry; the adapter owns its content.
+        screenSlot(id) { return slots[id] ?? null; },
+        screenView() { return st.screenView; },
+        setScreenView,
     };
 }

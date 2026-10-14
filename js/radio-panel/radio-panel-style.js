@@ -48,7 +48,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-soft[disabled]{cursor:default}
 .rp-chip{font:600 17px ${SANS};letter-spacing:.08em;padding:4px 11px;border-radius:4px;border:1px solid ${v('chip-border')};color:${v('chip-fg')};white-space:nowrap}
 .rp-chip:empty{display:none}
-.rp-chip.mode{color:${v('soft-on-fg')};border-color:${v('highlight')}}
+.rp-chip.mode{color:${v('freq')};border-color:${v('highlight')}}
 .rp-chip.rx{border-color:${v('rx')};color:${v('rx-fg')}}
 .rp-chip.tx{background:${v('tx')};color:${v('tx-fg')};border-color:${v('tx')}}
 .rp-chip.dim{border-color:${v('chip-dim-border')};color:${v('chip-dim-fg')}}
@@ -121,6 +121,12 @@ html,body{margin:0;background:${v('page')}}
 .rp-spec-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 22px ${SANS};letter-spacing:.14em;text-transform:uppercase;color:${v('spec-label')}}
 .rp-axis{display:flex;justify-content:space-between;font:400 15px ${MONO};color:${v('axis')};margin-top:-4px;min-height:15px}
 .rp-waterfall{height:128px;position:relative;border:1px solid ${v('screen-line')};border-radius:4px;overflow:hidden;background:${v('spec-bg')}}
+.rp-viewarea{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+.rp-sdrview{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px}
+.rp-altview{flex:1;min-height:360px;position:relative;border:1px solid ${v('screen-line')};border-radius:4px;overflow:hidden;background:${v('spec-bg')}}
+.rp-viewtabs{position:absolute;right:6px;bottom:6px;display:flex;gap:2px;padding:2px;border-radius:5px;background:${v('bar-bg')};border:1px solid ${v('well-border')};z-index:3}
+.rp-viewtab{font:600 13px ${SANS};letter-spacing:.1em;text-transform:uppercase;color:${v('legend-dim')};background:none;border:0;border-radius:3px;padding:3px 9px;cursor:pointer}
+.rp-viewtab.on{background:${v('bar-on')};color:${v('title')}}
 .rp-bands{display:grid;grid-template-columns:repeat(11,minmax(0,1fr));gap:8px}
 .rp-modes{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
 
