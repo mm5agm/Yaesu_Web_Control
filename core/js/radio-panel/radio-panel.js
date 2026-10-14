@@ -76,8 +76,16 @@ function knobSvg(size) {
  *                                          slot (screenSlot(id)) for the adapter to fill
  *   onScreenView(id)                       told when the operator switches view
  *   storagePrefix, fontBase
- *   onAction(kind, id)                     kind: 'key' | 'band' | 'mode' | 'step' | 'vfoKey'
+ *   onAction(kind, id, vfo)                kind: 'key' | 'band' | 'mode' | 'step' | 'vfoKey'
  *                                          | 'vfo' (the operator clicked VFO 'A' or 'B')
+ *                                          | 'width' | 'agc' (picked from a VFO box chip)
+ *                                          | 'tune' (id = signed Hz, from the wheel over a
+ *                                            frequency digit). `vfo` is set when the
+ *                                          action came from inside a VFO box and names
+ *                                          that box; otherwise it is undefined.
+ *   choices(kind, vfo)                     kind 'mode' | 'width' | 'agc': the list a click
+ *                                          on that chip offers, [{ id, label, on }], or
+ *                                          null for a chip that does nothing
  *
  * The selected receiver (setSelected) is the one the meter needle, the mode
  * keys and - in the adapter - the keys follow. The spectrum stays VFO A's.
@@ -212,6 +220,54 @@ export function mountRadioPanel(root, opts = {}) {
         vfos.classList.add('pick');
         main.addEventListener('click', () => act('vfo', 'A'));
         sub.addEventListener('click', () => act('vfo', 'B'));
+    }
+
+    // Inside a VFO box: mode, width and AGC chips open a list, a flag chip
+    // is pressed like its key, and the wheel over a frequency digit moves
+    // that digit. All of it works the box's own VFO without selecting it,
+    // so the chip clicks do not reach the box's own click.
+    const picker = h('div', 'rp-picker');
+    picker.hidden = true;
+    vfos.append(picker);
+    function closePicker() { picker.hidden = true; picker.dataset.for = ''; }
+    function openPicker(chipEl, kind, vfo) {
+        if (!picker.hidden && picker.dataset.for === kind + vfo) return closePicker();
+        const list = opts.choices?.(kind, vfo);
+        if (!list?.length) return closePicker();
+        picker.textContent = '';
+        for (const c of list) {
+            const b = h('button', 'rp-chipbtn' + (c.on ? ' on' : ''), c.label);
+            b.type = 'button';
+            b.addEventListener('click', e => { e.stopPropagation(); closePicker(); act(kind, c.id, vfo); });
+            picker.append(b);
+        }
+        picker.dataset.for = kind + vfo;
+        picker.hidden = false;
+        // Board pixels, not screen pixels: the board is scaled by a transform.
+        const vr = vfos.getBoundingClientRect(), cr = chipEl.getBoundingClientRect();
+        const k = vfos.offsetWidth / (vr.width || 1);
+        const left = (cr.left - vr.left) * k;
+        picker.style.left = Math.max(0, Math.min(left, vfos.offsetWidth - picker.offsetWidth)) + 'px';
+        picker.style.top = ((cr.bottom - vr.top) * k + 4) + 'px';
+    }
+    if (act) {
+        document.addEventListener('click', e => { if (!picker.hidden && !picker.contains(e.target)) closePicker(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closePicker(); });
+        for (const [chips, vfo] of [[chipsA, 'A'], [chipsB, 'B']])
+            for (const kind of ['mode', 'width', 'agc']) {
+                const el = chips[kind];
+                el.classList.add('act');
+                el.addEventListener('click', e => { e.stopPropagation(); openPicker(el, kind, vfo); });
+            }
+        for (const [freqEl, vfo] of [[mainFreq, 'A'], [subFreq, 'B']]) {
+            freqEl.classList.add('wheel');
+            freqEl.addEventListener('wheel', e => {
+                const step = Number(e.target?.dataset?.step);
+                if (!step) return;
+                e.preventDefault();
+                if (e.deltaY) act('tune', String(e.deltaY < 0 ? step : -step), vfo);
+            }, { passive: false });
+        }
     }
 
     const spec = h('div', 'rp-spectrum');
@@ -368,8 +424,28 @@ export function mountRadioPanel(root, opts = {}) {
 
     function setVfoText(vfo) {
         const f = formatFrequency(st.freq[vfo]);
-        if (vfo === 'A') { mainBig.textContent = f.big; mainSmall.textContent = f.small; }
-        else { subBig.textContent = f.big; subSmall.textContent = f.small; }
+        if (!st.freq[vfo]) {
+            if (vfo === 'A') { mainBig.textContent = '-.---'; mainSmall.textContent = '.---'; }
+            else { subBig.textContent = '-.---'; subSmall.textContent = '.---'; }
+            return;
+        }
+        if (vfo === 'A') { digits(mainBig, f.big, 1000); digits(mainSmall, f.small, 1); }
+        else { digits(subBig, f.big, 1000); digits(subSmall, f.small, 1); }
+    }
+
+    // One span per character; each digit carries the Hz it is worth, for the
+    // wheel. `unitHz` is what the last digit of `text` is worth.
+    function digits(el, text, unitHz) {
+        if (el.textContent === text) return;
+        el.textContent = '';
+        let step = unitHz;
+        const out = [];
+        for (let i = text.length - 1; i >= 0; i--) {
+            const span = h('span', null, text[i]);
+            if (text[i] >= '0' && text[i] <= '9') { span.dataset.step = String(step); step *= 10; }
+            out.unshift(span);
+        }
+        el.append(...out);
     }
 
     // ---- scaling, theme ------------------------------------------------
@@ -441,10 +517,20 @@ export function mountRadioPanel(root, opts = {}) {
             if (vfo === 'A') drawOverlays();
         },
         setAgc(vfo, text) { flagsFor(vfo).agc.textContent = text ? 'AGC ' + text : ''; },
+        // Each flag is its text, or { id, label }: one with an id is pressed
+        // like key `id`, for this VFO.
         setFlags(vfo, list) {
             const c = flagsFor(vfo);
             c.flags.textContent = '';
-            for (const f of list ?? []) c.flags.append(h('span', 'rp-chip' + (vfo === 'B' ? ' dim' : ''), f));
+            for (const f of list ?? []) {
+                const label = typeof f === 'string' ? f : f.label;
+                const el = h('span', 'rp-chip' + (vfo === 'B' ? ' dim' : ''), label);
+                if (act && f?.id) {
+                    el.classList.add('act');
+                    el.addEventListener('click', e => { e.stopPropagation(); act('key', f.id, vfo); });
+                }
+                c.flags.append(el);
+            }
         },
         setSMeter(vfo, sValue) {
             st.s[vfo] = st.tx ? 0 : Number(sValue) || 0;

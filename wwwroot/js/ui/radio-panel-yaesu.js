@@ -28,9 +28,10 @@ const MODES = ['LSB', 'USB', 'CW-U', 'CW-L', 'AM', 'FM', 'RTTY-L', 'DATA-U'];
 const MODE_CAT = { 'LSB': '1', 'USB': '2', 'CW-U': '3', 'FM': '4', 'AM': '5', 'RTTY-L': '6', 'CW-L': '7', 'DATA-U': 'C' };
 const AGC = { '0': 'OFF', '1': 'FAST', '2': 'MID', '3': 'SLOW', '4': 'AUTO', '5': 'AUTO', '6': 'AUTO' };
 const IPO = { '0': 'IPO', '1': 'AMP1', '2': 'AMP2' };
-// What a press moves to next. AGC skips OFF on purpose: OFF pins the S-meter
-// at zero and looks exactly like a deaf receiver.
-const AGC_NEXT = { '1': '2', '2': '3', '3': '4', '4': '1', '5': '1', '6': '1', '0': '1' };
+// What a press moves to next: FAST > MID > SLOW > AUTO > OFF > FAST. OFF is
+// in the cycle because the radio's own screen offers it; it pins the S-meter
+// at zero, so the chip shows OFF while it is set.
+const AGC_NEXT = { '1': '2', '2': '3', '3': '4', '4': '0', '5': '0', '6': '0', '0': '1' };
 const IPO_NEXT = { '0': '1', '1': '2', '2': '0' };
 const ATT_NEXT = { '00': '06', '06': '12', '12': '18', '18': '00' };
 const STEPS_HZ = [10, 50, 100, 500, 1000, 5000, 10000];
@@ -87,7 +88,8 @@ export function startYaesuRadioPanel(root, cfg) {
         ],
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
         onScreenView: id => { if (id === 'tft') radioScreen?.show(); },
-        onAction: (kind, id) => act(kind, id),
+        onAction: (kind, id, vfo) => act(kind, id, vfo),
+        choices: (kind, vfo) => choices(kind, vfo),
         storagePrefix: 'ywc.radioPanel.',
         fontBase: '/lib/fonts',
     });
@@ -126,12 +128,13 @@ export function startYaesuRadioPanel(root, cfg) {
 
     function refreshFlags(vfo) {
         const f = [];
-        if (r.ipo[vfo] && r.ipo[vfo] !== '0') f.push(IPO[r.ipo[vfo]] ?? 'AMP');
-        if (on(r.att[vfo])) f.push('ATT ' + parseInt(r.att[vfo], 10));
-        if (on(r.nb[vfo])) f.push('NB');
-        if (on(r.nr[vfo])) f.push('DNR');
-        if (on(r.dnf[vfo])) f.push('DNF');
-        if (on(r.notch[vfo])) f.push('NOTCH');
+        const flag = (id, label) => f.push(boxLive(vfo) ? { id, label } : label);
+        if (r.ipo[vfo] && r.ipo[vfo] !== '0') flag('ipo', IPO[r.ipo[vfo]] ?? 'AMP');
+        if (on(r.att[vfo])) flag('att', 'ATT ' + parseInt(r.att[vfo], 10));
+        if (on(r.nb[vfo])) flag('nb', 'NB');
+        if (on(r.nr[vfo])) flag('nr', 'DNR');
+        if (on(r.dnf[vfo])) flag('dnf', 'DNF');
+        if (on(r.notch[vfo])) flag('notch', 'NOTCH');
         panel.setFlags(vfo, f);
         if (vfo === r.sel) refreshKeys();
     }
@@ -155,10 +158,40 @@ export function startYaesuRadioPanel(root, cfg) {
     // Every receiver write names the selected receiver in lower case, as
     // Classic does; the server routes it (on single-receiver radios it goes
     // to the active VFO whatever the URL says).
-    function act(kind, id) {
-        const v = r.sel, rx = v.toLowerCase();
+    //
+    // A chip in a VFO box names its own VFO (`vfo`). On a dual-receiver
+    // radio that is written to directly, without changing the selection. A
+    // single-receiver radio routes receiver writes to the active VFO, so
+    // there only the selected box's chips take settings (boxLive).
+    const boxLive = vfo => dual || vfo === r.sel;
+
+    function choices(kind, vfo) {
+        if (!boxLive(vfo)) return null;
+        switch (kind) {
+            case 'mode':
+                return MODES.map(m => ({ id: m, label: m, on: m === r.mode[vfo] }));
+            case 'width': {
+                const cur = String(parseInt(r.widthCode[vfo], 10));
+                return ifWidthOptionsFor(model, r.mode[vfo])?.map(o => ({ id: o.code, label: o.label, on: o.code === cur })) ?? null;
+            }
+            case 'agc':
+                // OFF is offered here, as on the radio's own screen.
+                return ['0', '1', '2', '3', '4'].map(c => ({ id: c, label: AGC[c], on: AGC[c] === r.agc[vfo] }));
+        }
+        return null;
+    }
+
+    function act(kind, id, vfo) {
+        if (vfo && kind !== 'tune' && !boxLive(vfo)) return;
+        const v = vfo || r.sel, rx = v.toLowerCase();
         const flip = x => (on(x) ? '0' : '1');
         switch (kind) {
+            case 'width':
+                return post(`/api/cat/ifwidth/${rx}`, { code: String(id) });
+            case 'agc':
+                return post(`/api/cat/agc/${rx}`, { code: String(id) });
+            case 'tune':
+                return wheelTune(v, num(id));
             case 'vfo':
                 if (id !== r.sel) post(`/api/cat/active-vfo/${id}`);
                 return;
@@ -207,6 +240,35 @@ export function startYaesuRadioPanel(root, cfg) {
         panel.setFrequency(v, next);
         post(`/api/cat/frequency/${v.toLowerCase()}`, { frequencyHz: next });
     }
+
+    // The wheel over a frequency digit. Notches that come while a write is in
+    // flight are folded into the next write, so a fast spin lands where the
+    // operator stopped; the radio's FA/FB echo is held off until it has.
+    const wheel = { A: { to: null, busy: false, until: 0 }, B: { to: null, busy: false, until: 0 } };
+    async function wheelTune(vfo, deltaHz) {
+        const w = wheel[vfo];
+        const from = w.to ?? r.freq[vfo];
+        if (!from || !deltaHz) return;
+        const to = from + deltaHz;
+        if (to < 30000 || to > 75000000) return;
+        w.to = to;
+        w.until = Date.now() + 700;
+        r.freq[vfo] = to;
+        panel.setFrequency(vfo, to);
+        if (w.busy) return;
+        w.busy = true;
+        try {
+            let sent = null;
+            while (w.to !== sent) {
+                sent = w.to;
+                await post(`/api/cat/frequency/${vfo.toLowerCase()}`, { frequencyHz: sent });
+            }
+        } finally {
+            w.busy = false;
+            setTimeout(() => { if (!w.busy && Date.now() >= w.until) w.to = null; }, 700);
+        }
+    }
+    const wheelHolds = vfo => wheel[vfo].busy || Date.now() < wheel[vfo].until;
 
     function refreshClar() {
         const hz = r.clarHz[r.sel];
@@ -269,8 +331,8 @@ export function startYaesuRadioPanel(root, cfg) {
     // ---- one hub, one router ---------------------------------------------
     const handlers = {
         IsConnected: v => panel.setLamp('cat', on(v) ? 'on' : 'bad'),
-        FrequencyA: v => { r.freq.A = num(v); panel.setFrequency('A', r.freq.A); },
-        FrequencyB: v => { r.freq.B = num(v); panel.setFrequency('B', r.freq.B); },
+        FrequencyA: v => { if (wheelHolds('A')) return; r.freq.A = num(v); panel.setFrequency('A', r.freq.A); },
+        FrequencyB: v => { if (wheelHolds('B')) return; r.freq.B = num(v); panel.setFrequency('B', r.freq.B); },
         BandA: v => { if (v !== r.band.A) { r.band.A = v; panel.clearSpectrum(); } panel.setBand(r.band[r.sel]); },
         BandB: v => { r.band.B = v; panel.setBand(r.band[r.sel]); },
         ModeA: v => { r.mode.A = String(v ?? ''); panel.setMode('A', r.mode.A); refreshWidth('A'); readDataShift(r.mode.A); },
@@ -281,7 +343,7 @@ export function startYaesuRadioPanel(root, cfg) {
         IfShiftB: v => { r.shift.B = num(v); },
         AgcA: v => { r.agcCode.A = String(v); r.agc.A = AGC[String(v)] ?? ''; panel.setAgc('A', r.agc.A); refreshFlags('A'); },
         AgcB: v => { r.agcCode.B = String(v); r.agc.B = AGC[String(v)] ?? ''; panel.setAgc('B', r.agc.B); refreshFlags('B'); },
-        ActiveVfo: v => { r.sel = num(v) === 1 ? 'B' : 'A'; panel.setSelected(r.sel); panel.setBand(r.band[r.sel]); refreshKeys(); refreshClar(); },
+        ActiveVfo: v => { r.sel = num(v) === 1 ? 'B' : 'A'; panel.setSelected(r.sel); panel.setBand(r.band[r.sel]); refreshKeys(); refreshClar(); if (!dual) { refreshFlags('A'); refreshFlags('B'); } },
         IpoA: v => { r.ipo.A = String(v); refreshFlags('A'); },
         IpoB: v => { r.ipo.B = String(v); refreshFlags('B'); },
         AttA: v => { r.att.A = String(v); refreshFlags('A'); },
@@ -388,7 +450,7 @@ function startRadioScreen(slot, { model, dual, scopeCat } = {}) {
     if (!slot) return null;
     const img = document.createElement('img');
     img.alt = '';
-    img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none';
+    img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:fill;display:none';
     const msg = document.createElement('div');
     msg.className = 'rp-spec-empty';
     msg.style.cssText = 'flex-direction:column;gap:14px;text-align:center;padding:0 30px';
@@ -453,7 +515,7 @@ function startRadioScreen(slot, { model, dual, scopeCat } = {}) {
         scope = new RadioScopeControl(root);
     }
     ensureHotspotStyle();
-    const hotspots = new RadioDisplayHotspots(img, { radioModel: model, dualReceiver: dual, getScopeControl: () => scope });
+    const hotspots = new RadioDisplayHotspots(img, { debug: false, radioModel: model, dualReceiver: dual, getScopeControl: () => scope });
 
     return {
         show() {

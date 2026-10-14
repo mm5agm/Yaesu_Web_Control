@@ -111,6 +111,7 @@ const ACTIONS = {
     'scope.3dss':      { hint: 'W/F ↔ 3DSS',            call: sc => sc.toggle3dss?.() },
     'scope.hold':      { hint: 'HOLD',                  call: sc => sc.toggleHold?.() },
     'meter.select':    { hint: 'Choose the TX meters',  popup: 'meters' },
+    'freq.digit':      { hint: 'Mouse wheel over a digit moves that digit up or down' },
     'none':            { hint: 'No CAT command — press it on the radio' },
 };
 
@@ -147,6 +148,33 @@ const CONDITIONS = {
 // Add a radio by adding an entry: the zones it has, what each does, and
 // rects once someone has measured them (a zone with no rect is inert but
 // still listed by measure()).
+// The big frequency readout, one cell per digit: [id, left, right, step Hz].
+// Measured 2026-10-14 on an 800x600 FTdx101MP frame reading 14.057.330: the
+// glyphs are y 0.335-0.388, between the meters (end 0.300) and the ANT..AGC
+// row (0.416). The font is italic, so each dot goes to the digit before it.
+// The cells are fixed: below 10 MHz the 10 MHz cell is taken to be blank
+// (right-aligned digits). Not yet seen on a frame below 10 MHz.
+const FTDX101_DIGITS = [
+    ['f10M',  0.088, 0.130, 10_000_000],
+    ['f1M',   0.130, 0.190, 1_000_000],
+    ['f100k', 0.190, 0.240, 100_000],
+    ['f10k',  0.240, 0.286, 10_000],
+    ['f1k',   0.286, 0.340, 1_000],
+    ['f100',  0.340, 0.394, 100],
+    ['f10',   0.394, 0.440, 10],
+    ['f1',    0.440, 0.492, 1],
+];
+
+function digitZones(digits, top, bottom) {
+    const out = {};
+    for (const [id, l, r, step] of digits)
+        out[id] = { rect: [l, top, r, bottom], action: 'freq.digit', step };
+    return out;
+}
+
+const FREQ_MIN_HZ = 30_000;
+const FREQ_MAX_HZ = 75_000_000;
+
 const LAYOUTS = {
     // FTdx101MP / FTdx101D, MONO layout, W/F display. Measured from
     // pictures/Radio_Display_Docked.png and bench-confirmed 2026-09-12.
@@ -174,7 +202,7 @@ const LAYOUTS = {
                 lit: ['declvl', 'decoff'], min: 2,
                 dark: ['dss3', 'mono', 'multi', 'expand', 'hold'],
             },
-            keep: ['ant', 'att', 'ipo', 'rfil', 'agc', 'multifn'],
+            keep: ['ant', 'att', 'ipo', 'rfil', 'agc', 'multifn', ...FTDX101_DIGITS.map(d => d[0])],
             zones: {
                 declvl: { rect: [0.003, 0.847, 0.124, 0.902], action: 'none',
                           hint: 'DEC LVL has no CAT command — touch it on the radio, then turn MULTI to set the decode threshold' },
@@ -188,6 +216,7 @@ const LAYOUTS = {
             // (0.499 had cut the SWR meter in half). Right of it is the
             // filter display.
             meter:  { rect: [0.000, 0.095, 0.700, 0.300], action: 'meter.select' },
+            ...digitZones(FTDX101_DIGITS, 0.325, 0.400),
             ant:    { rect: [0.003, 0.416, 0.196, 0.476], action: 'readout.ant' },
             att:    { rect: [0.199, 0.416, 0.392, 0.476], action: 'readout.att' },
             ipo:    { rect: [0.395, 0.416, 0.591, 0.476], action: 'readout.ipo' },
@@ -269,9 +298,14 @@ function normalizeLayout(raw, builtin) {
         if (!zone.action && base?.action) zone.action = base.action;
         if (!zone.hint && base?.hint) zone.hint = base.hint;
         if (!zone.hideWhen && base?.hideWhen) zone.hideWhen = base.hideWhen;
+        if (zone.step === undefined && base?.step !== undefined) zone.step = base.step;
         if (!zone.action) zone.action = 'none';
         out.zones[id] = zone;
     }
+    // Zones added to the built-in table after an override was saved (the
+    // frequency digits, 2026-10-14) still appear.
+    for (const [id, z] of Object.entries(builtin?.zones || {}))
+        if (!out.zones[id]) out.zones[id] = { ...z };
     return out;
 }
 
@@ -361,6 +395,12 @@ function setPath(obj, path, value) {
     o[parts[parts.length - 1]] = value;
 }
 
+function formatStep(hz) {
+    if (hz >= 1_000_000) return `${hz / 1_000_000} MHz`;
+    if (hz >= 1_000) return `${hz / 1_000} kHz`;
+    return `${hz} Hz`;
+}
+
 function formatHz(hz) {
     const s = String(Math.round(hz)).padStart(7, '0');
     return `${s.slice(0, -6)}.${s.slice(-6, -3)}.${s.slice(-3)}`;
@@ -404,6 +444,12 @@ function ensureMeterPopupStyle() {
 .radio-display-hotspots .rdh-meters-col button.rdh-on { background: #0d6efd; border-color: #0d6efd; }
 .radio-display-hotspots .rdh-meters-note { margin-top: 6px; font-size: 11px; color: #f5c46b; max-width: 16em; }
 .radio-display-hotspots .rdh-meters-note:empty { display: none; }
+.radio-display-hotspots .rdh-digit {
+    position: absolute; box-sizing: border-box; pointer-events: none;
+    border: 1px solid rgba(255, 210, 90, 0.9); border-radius: 2px;
+    background: rgba(255, 210, 90, 0.12);
+}
+.radio-display-hotspots .rdh-digit[hidden] { display: none; }
 `;
     document.head.appendChild(st);
 }
@@ -441,7 +487,10 @@ export class RadioDisplayHotspots {
         this._screen = { at: 0, name: 'scope' };
         this._busy = false;
         this._lastScopeRefresh = 0;
-        this._debug = localStorage.getItem(DEBUG_KEY) === '1';
+        // opts.debug === false keeps the zone outlines off whatever the shared
+        // localStorage flag says - the Radio panel page never wants them.
+        this._noDebug = opts.debug === false;
+        this._debug = !this._noDebug && localStorage.getItem(DEBUG_KEY) === '1';
         this._measureQueue = [];
         this._measureDrag = null;
 
@@ -478,7 +527,7 @@ export class RadioDisplayHotspots {
     }
 
     debug(on) {
-        this._debug = !!on;
+        this._debug = !!on && !this._noDebug;
         localStorage.setItem(DEBUG_KEY, on ? '1' : '0');
         this._drawDebug();
     }
@@ -564,17 +613,22 @@ export class RadioDisplayHotspots {
         ov.innerHTML =
             '<canvas class="rdh-debug"></canvas>' +
             '<div class="rdh-cursor"></div>' +
+            '<div class="rdh-digit" hidden></div>' +
             '<div class="rdh-label"></div>';
         this.pane.appendChild(ov);
         this.overlay = ov;
         this.debugCanvas = ov.querySelector('.rdh-debug');
         this.cursorEl = ov.querySelector('.rdh-cursor');
         this.labelEl = ov.querySelector('.rdh-label');
+        this.digitEl = ov.querySelector('.rdh-digit');
+        ensureMeterPopupStyle();
 
         ov.addEventListener('pointerdown', e => this._onDown(e));
         ov.addEventListener('pointermove', e => this._onMove(e));
         ov.addEventListener('pointerup', e => this._onUp(e));
+        ov.addEventListener('wheel', e => this._onWheel(e), { passive: false });
         ov.addEventListener('pointerleave', () => {
+            this._showDigit(null);
             if (!this._measureDrag) this._hideCursor();
         });
         ov.addEventListener('click', e => this._onClick(e));
@@ -593,6 +647,11 @@ export class RadioDisplayHotspots {
         const nw = this.img.naturalWidth, nh = this.img.naturalHeight;
         if (!(nw > 0 && nh > 0) || box.width <= 0 || box.height <= 0) return null;
         const fit = getComputedStyle(this.img).objectFit || 'contain';
+        // 'fill' stretches the frame to the box (the Radio panel page);
+        // zones are fractions of the frame, so they stretch with it.
+        if (fit === 'fill') {
+            return { left: box.left, top: box.top, width: box.width, height: box.height };
+        }
         const scale = fit === 'cover'
             ? Math.max(box.width / nw, box.height / nh)
             : Math.min(box.width / nw, box.height / nh);
@@ -711,6 +770,7 @@ export class RadioDisplayHotspots {
 
         const hit = this._hit(f.fx, f.fy);
         this.overlay.style.cursor = hit ? (hit.kind === 'scope' ? 'crosshair' : 'pointer') : 'default';
+        this._showDigit(hit?.zone?.action === 'freq.digit' ? hit.zone : null);
 
         if (!hit) {
             // Say why nothing is clickable, rather than going quiet.
@@ -725,6 +785,64 @@ export class RadioDisplayHotspots {
             return;
         }
         this._showCursor(null, this._describe(hit));
+    }
+
+    // ── frequency digits ─────────────────────────────────────────────────────
+
+    /** Wheel over a digit: up a notch adds that digit's step, down takes it off. */
+    _onWheel(e) {
+        if (this._measureQueue.length || this._meterPopup) return;
+        const f = this._frac(e);
+        if (!f) return;
+        const zone = this._hit(f.fx, f.fy)?.zone;
+        if (zone?.action !== 'freq.digit' || !(zone.step > 0)) return;
+        e.preventDefault();
+        if (!e.deltaY) return;
+        const vfo = this._vfo();
+        const from = this._digitTarget?.vfo === vfo ? this._digitTarget.hz : this.state[vfo].hz;
+        if (!(from > 0)) { this._flash('Frequency not known yet'); return; }
+        const to = from + (e.deltaY < 0 ? zone.step : -zone.step);
+        if (to < FREQ_MIN_HZ || to > FREQ_MAX_HZ) { this._flash(`${formatHz(to)} is out of range`); return; }
+        this._digitTarget = { vfo, hz: to };
+        this._showCursor(null, this._describe({ zone }));
+        this._sendDigitTarget();
+    }
+
+    /**
+     * Send the latest wheel target. Notches that arrive while a write is in
+     * flight are folded into the next write rather than dropped, so a fast
+     * spin lands where the operator stopped.
+     */
+    async _sendDigitTarget() {
+        if (this._digitSending) return;
+        this._digitSending = true;
+        try {
+            while (this._digitTarget && this._digitTarget.sent !== this._digitTarget.hz) {
+                const t = this._digitTarget;
+                t.sent = t.hz;
+                // Never overlap another of this overlay's writes (a click-to-tune).
+                while (this._busy) await new Promise(r => setTimeout(r, 20));
+                await this._post(`/api/cat/frequency/${t.vfo.toLowerCase()}`, { frequencyHz: t.hz });
+            }
+        } finally {
+            this._digitSending = false;
+            // Once the spin stops, the radio's own FA/FB echo takes over again.
+            clearTimeout(this._digitIdle);
+            this._digitIdle = setTimeout(() => { if (!this._digitSending) this._digitTarget = null; }, 600);
+        }
+    }
+
+    /** Box the digit under the pointer, or hide the box. */
+    _showDigit(zone) {
+        const el = this.digitEl;
+        if (!el) return;
+        if (!zone) { el.hidden = true; return; }
+        const [l, t, r, b] = zone.rect;
+        Object.assign(el.style, {
+            left: `${l * 100}%`, top: `${t * 100}%`,
+            width: `${(r - l) * 100}%`, height: `${(b - t) * 100}%`,
+        });
+        el.hidden = false;
     }
 
     _onUp(e) {
@@ -805,6 +923,10 @@ export class RadioDisplayHotspots {
         if (action.key) {
             const s = this.state[this._vfo()];
             return `${action.label} ${s[action.key] || '?'} — click to cycle`;
+        }
+        if (zone?.action === 'freq.digit') {
+            const hz = this._digitTarget?.hz ?? this.state[this._vfo()].hz;
+            return `${hz > 0 ? formatHz(hz) + ' — ' : ''}wheel ± ${formatStep(zone.step)}`;
         }
         return zone?.hint || action.hint || hit.id;
     }

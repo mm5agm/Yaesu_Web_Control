@@ -93,7 +93,13 @@ html,body{margin:0;background:${v('page')}}
 
 .rp-screen-well{border-radius:12px;background:${v('well')};padding:10px;border:1px solid ${v('well-border')};box-shadow:inset 0 2px 8px rgba(0,0,0,.9);min-width:0;display:flex}
 .rp-screen{flex:1;min-width:0;border-radius:6px;background:${v('screen')};border:1px solid ${v('screen-line')};padding:14px 18px;display:flex;flex-direction:column;gap:11px}
-.rp-vfos{display:flex;gap:20px;align-items:stretch;height:196px}
+.rp-vfos{position:relative;display:flex;gap:20px;align-items:stretch;height:196px}
+.rp-chip.act{cursor:pointer}
+.rp-chip.act:hover{outline:1px solid ${v('highlight')};outline-offset:1px}
+.rp-picker{position:absolute;z-index:20;display:flex;flex-wrap:wrap;gap:6px;max-width:440px;padding:8px;border-radius:6px;background:${v('screen')};border:1px solid ${v('highlight')};box-shadow:0 6px 18px rgba(0,0,0,.55)}
+.rp-picker[hidden]{display:none}
+.rp-picker .rp-chipbtn{font-size:17px;padding:7px 12px;min-width:64px}
+.rp-freq.wheel span[data-step]:hover,.rp-subfreq.wheel span[data-step]:hover{background:${v('accent-bg')};border-radius:4px;cursor:ns-resize}
 .rp-main{flex:1;min-width:0;container-type:inline-size;display:flex;flex-direction:column;justify-content:space-between;border-right:1px solid ${v('screen-line')};padding-right:16px}
 .rp-main.single{border-right:0;padding-right:0}
 .rp-main.sel,.rp-subvfo.sel{outline:2px solid ${v('highlight')};outline-offset:6px;border-radius:3px}
