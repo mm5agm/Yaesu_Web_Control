@@ -139,7 +139,7 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *   keys:   [{ id, label, inert }]         left column, two per row; `inert` keeps
  *                                          one key display-only even with onAction
  *                                          (e.g. anything that would transmit)
- *   vfoKeys:[{ id, label, inert }]         under the dial, vfoKeyColumns per row (default 3)
+ *   vfoKeys:[{ id, label, inert, title }]  under the dial, vfoKeyColumns per row (default 3)
  *   dualDial (bool)                        on a dual-receiver radio, the dial is an outer
  *                                          ring (MAIN, VFO-A) round an inner knob (SUB,
  *                                          VFO-B), each tagged, the selected one glowing.
@@ -701,6 +701,7 @@ export function mountRadioPanel(root, opts = {}) {
         const b = button('rp-key', 'vfoKey', k.id, k.inert);
         const led = h('span', 'rp-led');
         b.append(led, h('span', null, k.label));
+        if (k.title) b.title = k.title;
         vfoKeys.append(b);
         keyEls[k.id] = { b, led, sub: null };
     }
