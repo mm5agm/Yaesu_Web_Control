@@ -156,6 +156,7 @@ export function startYaesuRadioPanel(root, cfg) {
         onWindowPanel: (g, p, shown) => win?.onShow(g, p, shown),
         frequencyEntry: true,
         clock: true,
+        fullscreenKey: true,
         vfoChips: ['seg', ...(antennas.length ? ['ant'] : []), ...(roofing.length ? ['roof'] : [])],
         onScreenView: id => { if (id === 'tft') radioScreen?.show(); },
         // The spectrum's own window, for a second screen: /RadioSpectrum.
