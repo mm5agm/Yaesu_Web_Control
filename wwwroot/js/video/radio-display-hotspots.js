@@ -184,8 +184,11 @@ const LAYOUTS = {
     // EXPAND here is the vertical expand, not L/N/S.
     FTdx101: {
         scope: {
-            plot:   [0.003, 0.520, 0.986, 0.812],
-            marker: [0.003, 0.540, 0.986, 0.720],
+            // The plot's sides are the scope grid's outer lines, x = 1 and 798
+            // on an 800x600 frame of the '101MP (2026-10-14, ten 20 kHz
+            // divisions at 200 kHz span); 0.986 had the scale 1.3 % long.
+            plot:   [0.001, 0.520, 0.998, 0.812],
+            marker: [0.001, 0.540, 0.998, 0.720],
             // Measured 2026-09-26 on the FTdx101MP: 3DSS..HOLD are 8-12 %
             // bright pixels on the scope screen and exactly 0 % on both the
             // RTTY and CW decode screens, whose button row is empty there.
