@@ -53,6 +53,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-chip.tx{background:${v('tx')};color:${v('tx-fg')};border-color:${v('tx')}}
 .rp-chip.dim{border-color:${v('chip-dim-border')};color:${v('chip-dim-fg')}}
 .rp-chip.hidden{display:none}
+.rp-chip.sel{background:${v('highlight')};border-color:${v('highlight')};color:${v('screen')}}
 .rp-chipbtn{appearance:none;border:1px solid ${v('key-border')};background:${v('chipbtn-bg')};color:${v('chipbtn-fg')};border-radius:5px;height:40px;font:600 16px ${SANS};letter-spacing:.1em;cursor:pointer;padding:0}
 .rp-chipbtn.on{background:${v('accent-bg')};border-color:${v('accent')};color:${v('accent-soft')}}
 .rp-lamp{width:12px;height:12px;border-radius:50%;background:${v('lamp-off')};display:inline-block}
@@ -95,6 +96,8 @@ html,body{margin:0;background:${v('page')}}
 .rp-vfos{display:flex;gap:20px;align-items:stretch;height:196px}
 .rp-main{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;border-right:1px solid ${v('screen-line')};padding-right:16px}
 .rp-main.single{border-right:0;padding-right:0}
+.rp-main.sel,.rp-subvfo.sel{outline:2px solid ${v('highlight')};outline-offset:6px;border-radius:3px}
+.rp-vfos.pick .rp-main,.rp-vfos.pick .rp-subvfo{cursor:pointer}
 .rp-vfo-head{display:flex;align-items:center;gap:8px}
 .rp-vfo-name{font:700 19px ${SANS};letter-spacing:.16em;color:${v('accent')}}
 .rp-freq{display:flex;align-items:baseline;font-family:${MONO};color:${v('freq')};line-height:1;white-space:nowrap}
