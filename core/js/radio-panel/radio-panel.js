@@ -463,10 +463,11 @@ export function mountRadioPanel(root, opts = {}) {
         const spec = h('div', 'rp-spectrum');
         const pb = h('div', 'rp-passband');
         const spotsEl = h('div');
+        const marksEl = h('div');
         const label = h('div', 'rp-spec-label', '');
         const empty = h('div', 'rp-spec-empty', 'No SDR');
         const oob = h('div', 'rp-spec-oob', 'OUT OF BAND');
-        spec.append(pb, h('div', 'rp-cursor'), spotsEl, label, oob, empty);
+        spec.append(pb, marksEl, h('div', 'rp-cursor'), spotsEl, label, oob, empty);
         const axis = h('div', 'rp-axis');
         const wf = h('div', 'rp-waterfall');
         // The span picker, HOLD and the settings key sit in the waterfall's
@@ -555,7 +556,7 @@ export function mountRadioPanel(root, opts = {}) {
             el.addEventListener('pointerleave', xHide);
         }
         sdrView.append(box);
-        panes[d.id] = { box, spec, pb, spots: spotsEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '' };
+        panes[d.id] = { box, spec, pb, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '' };
     }
 
     // A pane's drawing settings - the classic spectrum's Range, Speed,
@@ -880,7 +881,7 @@ export function mountRadioPanel(root, opts = {}) {
     const st = {
         freq: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null },
         s: { A: 0, B: 0 }, tx: false, meter: store.get(prefix + 'meter', 'PO'),
-        txMeters: {}, spanHz: { A: 0, B: 0 }, theme: null, spots: [], sel: 'A',
+        txMeters: {}, spanHz: { A: 0, B: 0 }, theme: null, spots: [], marks: { edges: [], ticks: [] }, sel: 'A',
         specView: specViews[0],
     };
     if (!meterList.includes(st.meter)) st.meter = 'PO';
@@ -928,6 +929,7 @@ export function mountRadioPanel(root, opts = {}) {
         else pn.pb.style.display = 'none';
         pn.axis.textContent = '';
         if (span > 0 && f > 0) for (const t of axisLabels(f, span)) pn.axis.append(h('span', null, t));
+        drawMarks(pn, f, span);
         pn.spots.textContent = '';
         if (span > 0 && f > 0) {
             let row = 0;
@@ -939,6 +941,39 @@ export function mountRadioPanel(root, opts = {}) {
                 el.style.top = (30 + (row++ % 4) * 28) + 'px';
                 pn.spots.append(el);
             }
+        }
+    }
+    // Band edges are dashed lines the full height of the trace; band-plan
+    // marks are short ticks along the bottom, their labels stacked up to three
+    // rows deep where they would overlap, as the classic spectrum draws them.
+    function drawMarks(pn, f, span) {
+        pn.marks.textContent = '';
+        if (!(span > 0 && f > 0)) return;
+        const pos = hz => 50 + (hz - f) / span * 100;
+        for (const hz of st.marks.edges) {
+            const x = pos(hz);
+            if (x < 0 || x > 100) continue;
+            const el = h('div', 'rp-edge');
+            el.style.left = x + '%';
+            pn.marks.append(el);
+        }
+        const width = pn.spec.offsetWidth || 1000;
+        const ends = [-Infinity, -Infinity, -Infinity];
+        const ticks = st.marks.ticks.map(t => ({ ...t, x: pos(t.hz) })).filter(t => t.x >= 0 && t.x <= 100).sort((a, b) => a.x - b.x);
+        for (const t of ticks) {
+            const px = t.x / 100 * width, half = String(t.label).length * 4.5 + 2;
+            let row = ends.findIndex(e => px - half >= e + 4);
+            if (row < 0) row = ends.length - 1;
+            ends[row] = px + half;
+            const tick = h('div', 'rp-mark');
+            tick.style.left = t.x + '%';
+            const lab = h('div', 'rp-mark-label', t.label);
+            lab.style.left = t.x + '%';
+            // Near either side the label hangs inward, so it is not cut off.
+            if (px < half) lab.style.transform = 'none';
+            else if (px > width - half) lab.style.transform = 'translateX(-100%)';
+            lab.style.bottom = (20 + row * 14) + 'px';
+            pn.marks.append(tick, lab);
         }
     }
     // "MAIN · SDR A · SPAN 100k": the pane's name, then the adapter's source
@@ -1252,6 +1287,8 @@ export function mountRadioPanel(root, opts = {}) {
         // One pane, or every pane when `vfo` is left out.
         clearSpectrum(vfo) { for (const [id, pn] of Object.entries(panes)) if (!vfo || id === vfo) pn.view.clear(); },
         setSpots(list) { st.spots = list ?? []; drawOverlays(); },
+        // Band edges in Hz, and band-plan marks as { hz, label }, drawn on every pane.
+        setBandMarks({ edges, ticks } = {}) { st.marks = { edges: edges ?? [], ticks: ticks ?? [] }; drawOverlays(); },
         spectrumView() { return st.specView; },
         setSpectrumView: id => setSpecView(id),
         setTheme,
