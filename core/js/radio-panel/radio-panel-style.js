@@ -129,6 +129,11 @@ html,body{margin:0;background:${v('page')}}
 .rp-wkey.on{background:${v('soft-on-bg')};border-color:${v('highlight')};color:${v('soft-on-fg')}}
 .rp-wkey:disabled{opacity:.45;cursor:default}
 .rp-wkey.warn{border-color:${v('accent')};color:${v('accent-soft')}}
+/* A key that transmits, and the note that says so. Armed: one more press keys the radio. */
+.rp-wnote.tx{color:${v('tx')};font-weight:600}
+.rp-wkey.tx{border-color:${v('tx')};color:${v('tx')}}
+.rp-wkey.tx.armed{background:${v('tx')};color:${v('tx-fg')}}
+.rp-wval.tx{color:${v('tx')}}
 .rp-wbar{display:grid;grid-template-columns:62px 1fr 92px;align-items:center;gap:8px}
 .rp-wbar .lbl{font:600 13px ${SANS};letter-spacing:.12em;color:${v('sub-label')}}
 .rp-wbar .track{height:10px;background:${v('sbar-track')};border-radius:2px;overflow:hidden}

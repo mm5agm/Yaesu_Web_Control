@@ -19,12 +19,19 @@
 // Remote Audio, the radio's own scope and the audio filter are framed pages
 // too: /RemoteAudio, /RadioScope and /AudioFilter.
 //
-// Nothing here transmits, except the Remote Audio page's own TX key, which is
-// the same page and key as its pop-out. Sending (CW, RTTY) and TX setup come later.
+// CW send is the /CwSend page in a frame, the same page and queue as its
+// pop-out. TX SETUP's VOX and ATU keys use the endpoints the main page's own
+// keys use. The TX timeout is core's (tx-timeout.js), sharing the main page's
+// limit; it only warns.
+//
+// What transmits: the Remote Audio page's TX key, CW send's Send and keyer
+// memories, and the ATU's TUNE, which asks for a second press before it keys
+// a carrier. Each says so in red.
 
 import { calibrateNumeric } from '/js/calibration/calibration-engine.js';
 import { sMeterFraction, sMeterText, txMeterFraction } from '/js/radio-panel/panel-math.js';
 import { SMeterHistoryPanel } from '/js/guages/smeter-history-panel.js';
+import { TxTimeout, stepTimeout, timeoutText } from '/js/radio-panel/tx-timeout.js';
 
 const LATER = 'Comes in a later build.';
 
@@ -32,7 +39,7 @@ export const YAESU_WINDOWS = [
     { id: 'cw', key: 'CW', title: 'CW', pos: [330, 230, 980, 340], panels: [
         { id: 'keyer', title: 'KEYER', w: 230 },
         { id: 'cwReader', title: 'READER', dpos: [380, 560, 760, 320] },
-        { id: 'cwSend', title: 'SEND', w: 230 },
+        { id: 'cwSend', title: 'SEND', w: 320, dpos: [420, 300, 520, 400] },
     ] },
     { id: 'rtty', key: 'RTTY', title: 'RTTY', pos: [330, 380, 1040, 420], panels: [
         { id: 'rttyReader', title: 'TUNER · READER', dpos: [360, 380, 820, 420] },
@@ -65,7 +72,7 @@ export const YAESU_WINDOWS = [
         { id: 'rxShift', title: 'SHIFT · NOTCH', w: 240 },
         { id: 'rxFm', title: 'FM · REPEATER', w: 220 },
     ] },
-    { id: 'tx', key: 'TX SETUP', title: 'TX SETUP', pos: [340, 560, 920, 300], panels: [
+    { id: 'tx', key: 'TX SETUP', title: 'TX SETUP', pos: [340, 500, 920, 400], panels: [
         { id: 'txVox', title: 'VOX' },
         { id: 'txTimeout', title: 'TX TIMEOUT' },
         { id: 'txAtu', title: 'ATU', w: 230 },
@@ -115,8 +122,9 @@ function mhzText(hz) {
  * Fill the window panels. Each panel's body is handed out once and kept for
  * the page's life.
  * @param {object} windows  the panel's windows API (panel-windows.js)
- * @param {object} ctx      { model, dual, maxPowerW, maxHz, post(url, body), selected() -> 'A'|'B', freq(vfo), showScreen() }
- * @returns {{ onShow(g, p, shown), onRadioState(msg), entry(vfo) }}
+ * @param {object} ctx      { model, dual, maxPowerW, maxHz, post(url, body), selected() -> 'A'|'B', freq(vfo), showScreen(),
+ *                            onTxTimeout(state) - optional, the TX timeout's state on every change }
+ * @returns {{ onShow(g, p, shown), onRadioState(msg), entry(vfo), txTimeout }}
  */
 export function startYaesuWindows(windows, ctx) {
     const slot = (g, p) => windows.slot(g, p);
@@ -163,7 +171,7 @@ export function startYaesuWindows(windows, ctx) {
     framed('scope', 'scCat', '/RadioScope', "The radio's own scope");
     const rxName = v => (ctx.dual ? (v === 'B' ? 'SUB' : 'MAIN') : 'VFO-' + v);
     const filterFrame = framed('rx', 'rxFilter', () => '/AudioFilter?vfo=' + ctx.selected(), 'Audio filter');
-    for (const [g, p] of [['cw', 'cwSend'], ['rtty', 'rttySend']]) note(slot(g, p), 'Sending comes with the TX windows, in a later build.');
+    framed('cw', 'cwSend', '/CwSend', 'CW send');
 
     // ---- CW keyer --------------------------------------------------------
     const keyer = (() => {
@@ -478,6 +486,144 @@ export function startYaesuWindows(windows, ctx) {
         };
     })();
 
+    // ---- TX setup: VOX, TX timeout, ATU ----------------------------------
+    // Each row's value changes as soon as a key is pressed and is put right
+    // by the radio's own value when it comes back over the hub. Anti-VOX has
+    // no CAT command: the main page keeps it in the app only, and so does this.
+    const txRow = (body, label) => {
+        const out = h('span', 'rp-wval', '--');
+        const r = h('div', 'rp-wrow');
+        r.append(h('span', 'rp-wlabel', label), out);
+        body.append(r);
+        return out;
+    };
+    const txKeys = (body, list) => {
+        const b = h('div', 'rp-wbtns');
+        for (const [label, fn, cls] of list) b.append(key(label, fn, cls));
+        body.append(b);
+        return b;
+    };
+
+    const vox = (() => {
+        const body = slot('tx', 'txVox');
+        const val = { VoxOn: null, VoxGain: null, VoxDelay: null, AntiVoxGain: null };
+        const onOff = txKeys(body, [['VOX ON', () => setOn(true)], ['VOX OFF', () => setOn(false)]]);
+        const gain = txRow(body, 'GAIN');
+        txKeys(body, [['−5', () => step('VoxGain', -5)], ['+5', () => step('VoxGain', 5)]]);
+        const delay = txRow(body, 'DELAY');
+        txKeys(body, [['−100', () => step('VoxDelay', -100)], ['+100', () => step('VoxDelay', 100)]]);
+        const anti = txRow(body, 'ANTI-VOX');
+        txKeys(body, [['−5', () => step('AntiVoxGain', -5)], ['+5', () => step('AntiVoxGain', 5)]]);
+        note(body, 'VOX keys the radio when it hears the microphone.');
+        const LIMIT = { VoxGain: [0, 100], VoxDelay: [0, 2500], AntiVoxGain: [0, 100] };
+        const URL = { VoxGain: ['/api/cat/vox/gain', 'gain'], VoxDelay: ['/api/cat/vox/delay', 'delay'], AntiVoxGain: ['/api/cat/vox/antivox', 'gain'] };
+        function setOn(x) {
+            val.VoxOn = x;
+            ctx.post('/api/cat/vox', { on: x });
+            draw();
+        }
+        function step(k, d) {
+            if (val[k] == null) return;      // nothing from the radio yet
+            const [lo, hi] = LIMIT[k];
+            const n = Math.max(lo, Math.min(hi, num(val[k]) + d));
+            if (n === num(val[k])) return;
+            val[k] = n;
+            ctx.post(URL[k][0], { [URL[k][1]]: n });
+            draw();
+        }
+        function draw() {
+            const o = val.VoxOn == null ? null : on(val.VoxOn);
+            onOff.children[0].classList.toggle('on', o === true);
+            onOff.children[1].classList.toggle('on', o === false);
+            gain.textContent = val.VoxGain == null ? '--' : String(num(val.VoxGain));
+            delay.textContent = val.VoxDelay == null ? '--' : num(val.VoxDelay) + ' ms';
+            anti.textContent = val.AntiVoxGain == null ? '--' : String(num(val.AntiVoxGain));
+        }
+        draw();
+        const out = {};
+        for (const k of Object.keys(val)) out[k] = x => { val[k] = x; draw(); };
+        return out;
+    })();
+
+    // The timer is core's and only warns; the banner across the board is the
+    // panel's (ctx.onTxTimeout). The limit is shared with the main page.
+    const txTimer = (() => {
+        const body = slot('tx', 'txTimeout');
+        const limitOut = txRow(body, 'LIMIT');
+        txKeys(body, [['−', () => { tt.limit = stepTimeout(tt.limit, -1); }], ['+', () => { tt.limit = stepTimeout(tt.limit, 1); }]]);
+        const nowOut = txRow(body, 'TX FOR');
+        const dismissKey = txKeys(body, [['DISMISS', () => tt.dismiss()]]).children[0];
+        note(body, 'A banner across the top warns when TX has been on longer than this. It does not unkey the radio.');
+        const draw = s => {
+            limitOut.textContent = timeoutText(s.limit);
+            nowOut.textContent = s.tx ? timeoutText(s.txSeconds) : 'RX';
+            nowOut.classList.toggle('tx', s.tripped);
+            dismissKey.disabled = !s.tripped;
+        };
+        const tt = new TxTimeout({
+            onChange: s => {
+                draw(s);
+                try { ctx.onTxTimeout?.(s); } catch (e) { console.warn('radio panel: tx timeout', e); }
+            },
+        });
+        draw({ tx: false, tripped: false, txSeconds: 0, limit: tt.limit });
+        return { tt, IsTransmitting: x => tt.setTransmitting(on(x)) };
+    })();
+
+    // TUNE keys a carrier: the first press arms it, a second within a few
+    // seconds sends it. The radio says nothing over CAT while it tunes (AC's
+    // P2 is fixed at 0), so, as on the main page, "tuning" is a fixed window
+    // after which the settled ATU state is read back. Pressed again while
+    // tuning, the same AC002 stops it.
+    const atu = (() => {
+        const body = slot('tx', 'txAtu');
+        const ARM_MS = 4000, TUNE_MS = 8000;
+        const onOff = txKeys(body, [['ATU ON', () => setAtu(true)], ['THRU', () => setAtu(false)]]);
+        const tuneKey = txKeys(body, [['TUNE', () => tune(), 'tx']]).children[0];
+        body.append(h('div', 'rp-wnote tx', 'TUNE transmits a carrier. Press it twice.'));
+        let enabled = null, armed = false, armTimer = null, tuning = false, tuneTimer = null;
+        function setAtu(x) {
+            enabled = x;
+            ctx.post('/api/cat/atu', { enabled: x });
+            draw();
+        }
+        function disarm() { armed = false; clearTimeout(armTimer); draw(); }
+        function tune() {
+            if (tuning) {
+                ctx.post('/api/cat/atu/tune');
+                clearTimeout(tuneTimer);
+                tuneTimer = setTimeout(settle, 500);
+                return;
+            }
+            if (!armed) {
+                armed = true;
+                clearTimeout(armTimer);
+                armTimer = setTimeout(disarm, ARM_MS);
+                draw();
+                return;
+            }
+            disarm();
+            tuning = true;
+            ctx.post('/api/cat/atu/tune');
+            tuneTimer = setTimeout(settle, TUNE_MS);
+            draw();
+        }
+        async function settle() {
+            tuning = false;
+            const d = await getJson('/api/cat/atu');
+            if (d && typeof d.atuEnabled === 'boolean') enabled = d.atuEnabled;
+            draw();
+        }
+        function draw() {
+            onOff.children[0].classList.toggle('on', enabled === true);
+            onOff.children[1].classList.toggle('on', enabled === false);
+            tuneKey.classList.toggle('armed', armed || tuning);
+            tuneKey.textContent = tuning ? 'TUNING · STOP' : armed ? 'PRESS AGAIN' : 'TUNE';
+        }
+        draw();
+        return { AtuEnabled: x => { enabled = on(x); draw(); } };
+    })();
+
     // ---- radio screen (video): status, and where to see it ----------------
     (() => {
         const body = slot('scope', 'scScreen');
@@ -603,7 +749,7 @@ export function startYaesuWindows(windows, ctx) {
     };
     rxFollow();
 
-    const handlers = [keyer, meters, shiftNotch, fm];
+    const handlers = [keyer, meters, shiftNotch, fm, vox, txTimer, atu];
     return {
         onShow(g, p, shown) { try { shows[g + '/' + p]?.(shown); } catch (e) { console.warn('radio panel window:', g, p, e); } },
         onRadioState(msg) {
@@ -618,5 +764,6 @@ export function startYaesuWindows(windows, ctx) {
             if (prop === 'ActiveVfo') rxFollow();
         },
         entry: vfo => entry.open(vfo),
+        txTimeout: txTimer.tt,
     };
 }
