@@ -218,6 +218,28 @@ html,body{margin:0;background:${v('page')}}
 .rp-dial{width:300px;height:300px;border-radius:50%;background:repeating-conic-gradient(${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg);box-shadow:0 10px 24px rgba(0,0,0,.7),inset 0 0 0 1px ${v('dial-rim')};display:flex;align-items:center;justify-content:center}
 .rp-dial-inner{width:250px;height:250px;border-radius:50%;background:${v('dial-inner')};box-shadow:inset 0 2px 0 rgba(255,255,255,.07),inset 0 -6px 14px rgba(0,0,0,.45);position:relative}
 .rp-dial-dimple{position:absolute;width:52px;height:52px;border-radius:50%;left:154px;top:42px;background:${v('dial-dimple')};box-shadow:inset 0 3px 6px rgba(0,0,0,.7)}
+.rp-dial.dual{background:repeating-conic-gradient(${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg)}
+.rp-dial-well{width:204px;height:204px;border-radius:50%;background:${v('dial-b')};box-shadow:inset 0 3px 8px rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center}
+.rp-dial-knob{width:168px;height:168px;border-radius:50%;background:repeating-conic-gradient(${v('dial-a')} 0deg 3deg,${v('dial-b')} 3deg 6deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.7)}
+.rp-dial-knob .rp-dial-inner{width:130px;height:130px}
+.rp-dial-knob .rp-dial-dimple{width:36px;height:36px;left:78px;top:22px}
+.rp-dial.sel-a{box-shadow:0 10px 24px rgba(0,0,0,.7),inset 0 0 0 1px ${v('dial-rim')},0 0 0 3px ${v('accent')},0 0 22px ${v('accent')}}
+.rp-dial.sel-b .rp-dial-knob{box-shadow:0 4px 10px rgba(0,0,0,.7),0 0 0 3px ${v('accent')},0 0 22px ${v('accent')}}
+.rp-dial-tags{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%}
+.rp-dial-tag{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:6px;font:600 15px ${SANS};letter-spacing:.12em;border:1px solid ${v('key-border')};background:${v('key-bg')};color:${v('legend-dim')}}
+.rp-dial-tag.on{border-color:${v('accent')};background:${v('accent-bg')};color:${v('accent-soft')}}
+.rp-dial-tag-vfo{font:400 14px ${MONO};letter-spacing:0}
+.rp-right.dual{gap:12px}
+.rp-vfokeys.dense{gap:6px}
+.rp-vfokeys.dense .rp-key{font-size:15px;height:52px}
+.rp-mem{width:100%;display:flex;flex-direction:column;gap:6px}
+.rp-mem-head{display:flex;align-items:center;gap:8px}
+.rp-mem-head .rp-legend{font-size:14px}
+.rp-mem-on{font:400 13px ${MONO};color:${v('sub-label')}}
+.rp-mem-keys{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.rp-mem-keys .rp-skey[disabled]{cursor:default;opacity:.55}
+.rp-clar-row{display:flex;gap:6px;align-items:center}
+.rp-clar-key{height:30px;padding:0 9px}
 .rp-step{display:grid;grid-template-columns:70px minmax(0,1fr) 70px;gap:10px;width:100%;align-items:center}
 .rp-step .big{font-size:26px}
 .rp-step .rp-sub{color:${v('lcd-fg')}}

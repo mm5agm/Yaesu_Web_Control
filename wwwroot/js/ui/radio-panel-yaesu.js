@@ -103,9 +103,24 @@ export function startYaesuRadioPanel(root, cfg) {
             { id: 'micproc', label: 'MIC / PROC' }, { id: 'powermon', label: 'POWER / MONI' },
             { id: 'speedpitch', label: 'SPEED / PITCH' },
         ],
+        // The dial: on the FTdx101 the outer ring tunes MAIN and the inner
+        // knob SUB, as on the radio.
+        dualDial: true,
         vfoKeys: [
-            { id: 'split', label: 'SPLIT' }, { id: 'rxclar', label: 'RX CLAR' }, { id: 'txclar', label: 'TX CLAR' },
+            { id: 'ab', label: 'A▸B' }, { id: 'ba', label: 'B▸A' }, { id: 'swap', label: 'A⇄B' },
+            { id: 'split', label: 'SPLIT' }, { id: 'qsplit', label: 'Q.SPLIT' },
         ],
+        vfoKeyColumns: 5,
+        // M▸VFO and VFO▸M would read and overwrite the radio's own memory
+        // channels; they stay display-only until that has been bench-checked.
+        memKeys: [
+            { id: 'vm', label: 'V/M' },
+            { id: 'mtovfo', label: 'M▸VFO', inert: true, title: 'Not wired yet' },
+            { id: 'vfotom', label: 'VFO▸M', inert: true, title: 'Not wired yet' },
+            { id: 'qmbsto', label: 'QMB STO' }, { id: 'qmbrcl', label: 'QMB RCL' },
+            { id: 'mstore', label: 'M.STORE', sub: 'app', title: "Save the selected receiver to YWC's memories" },
+        ],
+        clarKeys: [{ id: 'rxclar', label: 'RX' }, { id: 'txclar', label: 'TX' }],
         bands: BANDS.map(b => ({ id: b, label: b.replace('m', '') })),
         modes: MODES.map(m => ({ id: m, label: m })),
         // One spectrum per SDR, as on Classic and the pop-out: SDR A follows
@@ -326,6 +341,8 @@ export function startYaesuRadioPanel(root, cfg) {
                 return post(`/api/cat/agc/${rx}`, { code: String(id) });
             case 'tune':
                 return wheelTune(v, num(id));
+            case 'dial':
+                return dialTune(v, id === 'up' ? 1 : -1);
             case 'vfo':
                 if (id !== r.sel) post(`/api/cat/active-vfo/${id}`);
                 return;
@@ -359,8 +376,22 @@ export function startYaesuRadioPanel(root, cfg) {
             case 'vfoKey':
                 switch (id) {
                     case 'split': return post(`/api/cat/split/${r.split ? 0 : 1}`);
+                    case 'qsplit': return post('/api/cat/split/2');
+                    case 'ab': return post('/api/cat/copy-vfo/ab');
+                    case 'ba': return post('/api/cat/copy-vfo/ba');
+                    case 'swap': return post('/api/cat/swap-vfo');
                     case 'rxclar': return post('/api/cat/clarifier', { vfo: v, rxOn: !r.rxClar, txOn: r.txClar, offsetHz: r.clarHz[v] });
                     case 'txclar': return post('/api/cat/clarifier', { vfo: v, rxOn: r.rxClar, txOn: !r.txClar, offsetHz: r.clarHz[v] });
+                }
+                return;
+            case 'memKey':
+                // The radio's memory keys act on the selected receiver; M.STORE
+                // saves it to YWC's own memories (the Memories page).
+                switch (id) {
+                    case 'vm': return post('/api/cat/qmb/vfo');
+                    case 'qmbsto': return post('/api/cat/qmb/store');
+                    case 'qmbrcl': return post('/api/cat/qmb/recall');
+                    case 'mstore': return post(`/api/memory/save-vfo/${rx}`, { label: '' });
                 }
         }
     }
@@ -374,6 +405,16 @@ export function startYaesuRadioPanel(root, cfg) {
         r.freq[v] = next;
         panel.setFrequency(v, next);
         post(`/api/cat/frequency/${v.toLowerCase()}`, { frequencyHz: next });
+    }
+
+    // The dial: one STEP per notch, landing on the step grid as the radio's
+    // dial does. Folded into the digit wheel's writes, so a fast spin and an
+    // FA/FB echo cannot fight.
+    function dialTune(vfo, dir) {
+        const cur = wheel[vfo].to ?? r.freq[vfo];
+        if (!cur) return;
+        const next = dir > 0 ? Math.floor(cur / stepHz) * stepHz + stepHz : Math.ceil(cur / stepHz) * stepHz - stepHz;
+        return wheelTune(vfo, next - cur);
     }
 
     // The wheel over a frequency digit. Notches that come while a write is in

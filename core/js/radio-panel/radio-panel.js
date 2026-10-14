@@ -82,7 +82,17 @@ function knob2Svg(size) {
  *   keys:   [{ id, label, inert }]         left column, two per row; `inert` keeps
  *                                          one key display-only even with onAction
  *                                          (e.g. anything that would transmit)
- *   vfoKeys:[{ id, label, inert }]         under the dial, three per row
+ *   vfoKeys:[{ id, label, inert }]         under the dial, vfoKeyColumns per row (default 3)
+ *   dualDial (bool)                        on a dual-receiver radio, the dial is an outer
+ *                                          ring (MAIN, VFO-A) round an inner knob (SUB,
+ *                                          VFO-B), each tagged, the selected one glowing.
+ *                                          The wheel over either acts as
+ *                                          act('dial', 'up' | 'down', vfo); without it the
+ *                                          wheel over the dial acts with vfo undefined
+ *   memKeys:[{ id, label, sub, inert, title }]  a Memory group under the VFO keys,
+ *                                          "acts on" the selected receiver: act('memKey', id)
+ *   clarKeys:[{ id, label }]               small keys beside the clarifier readout,
+ *                                          act('vfoKey', id); lit through setKey(id, { on })
  *   bands:  [{ id, label }]   modes: [{ id, label }]
  *   knobs:  [{ id, label }]                the knob row, used when rxGroups is not given
  *   rxGroups: { keys: [{ id, label }], knobs: [{ id, label }] }
@@ -408,10 +418,42 @@ export function mountRadioPanel(root, opts = {}) {
 
     // right: dial and VFO keys
     const rightCol = h('div', 'rp-right');
-    const dial = h('div', 'rp-dial');
+    const dualDial = dual && !!opts.dualDial;
+    const dial = h('div', 'rp-dial' + (dualDial ? ' dual' : ''));
     const dialInner = h('div', 'rp-dial-inner');
     dialInner.append(h('div', 'rp-dial-dimple'));
-    dial.append(dialInner);
+    let dialKnob = null;
+    if (dualDial) {
+        // The well between the ring and the knob, then the knob itself.
+        const well = h('div', 'rp-dial-well');
+        dialKnob = h('div', 'rp-dial-knob');
+        dialKnob.append(dialInner);
+        well.append(dialKnob);
+        dial.append(well);
+    } else dial.append(dialInner);
+    const dialTags = {};
+    const dialTagRow = h('div', 'rp-dial-tags');
+    if (dualDial)
+        for (const [vfo, part, name] of [['A', 'OUTER RING', 'MAIN · VFO-A'], ['B', 'INNER KNOB', 'SUB · VFO-B']]) {
+            const t = h('div', 'rp-dial-tag');
+            const lamp = h('span', 'rp-lamp');
+            t.append(lamp, h('span', null, part), h('span', 'rp-dial-tag-vfo', name));
+            dialTagRow.append(t);
+            dialTags[vfo] = { t, lamp };
+        }
+    // The wheel over the dial tunes; with a dual dial, the inner knob tunes SUB.
+    if (act)
+        dial.addEventListener('wheel', e => {
+            if (!e.deltaY) return;
+            e.preventDefault();
+            let vfo;
+            if (dualDial) {
+                const rc = dial.getBoundingClientRect(), kc = dialKnob.getBoundingClientRect();
+                const dx = e.clientX - (rc.left + rc.width / 2), dy = e.clientY - (rc.top + rc.height / 2);
+                vfo = Math.hypot(dx, dy) <= kc.width / 2 ? 'B' : 'A';
+            }
+            act('dial', e.deltaY < 0 ? 'up' : 'down', vfo);
+        }, { passive: false });
     const stepRow = h('div', 'rp-step');
     const down = button('rp-key', 'step', 'down'); down.append(h('span', 'big', '−'));
     const stepKey = button('rp-key', 'step', 'cycle'); const stepTxt = h('span', 'rp-sub', '');
@@ -419,6 +461,10 @@ export function mountRadioPanel(root, opts = {}) {
     const up = button('rp-key', 'step', 'up'); up.append(h('span', 'big', '+'));
     stepRow.append(down, stepKey, up);
     const vfoKeys = h('div', 'rp-vfokeys');
+    if (opts.vfoKeyColumns) {
+        vfoKeys.style.gridTemplateColumns = `repeat(${opts.vfoKeyColumns},minmax(0,1fr))`;
+        vfoKeys.classList.add('dense');
+    }
     for (const k of opts.vfoKeys ?? []) {
         const b = button('rp-key', 'vfoKey', k.id, k.inert);
         const led = h('span', 'rp-led');
@@ -426,13 +472,45 @@ export function mountRadioPanel(root, opts = {}) {
         vfoKeys.append(b);
         keyEls[k.id] = { b, led, sub: null };
     }
+    // Memory keys act on the selected receiver, as the radio's own do.
+    let memBox = null, memOn = null;
+    if (opts.memKeys?.length) {
+        memBox = h('div', 'rp-mem');
+        const head = h('div', 'rp-mem-head');
+        memOn = h('span', 'rp-mem-on', '');
+        head.append(h('span', 'rp-legend', 'Memory'), memOn);
+        const grid = h('div', 'rp-mem-keys');
+        for (const k of opts.memKeys) {
+            const b = button('rp-skey', 'memKey', k.id, k.inert);
+            if (k.title) b.title = k.title;
+            const led = h('span', 'rp-led'), sub = h('span', 'rp-sub', k.sub ?? '');
+            b.append(led, h('span', 'rp-skey-label', k.label), sub);
+            grid.append(b);
+            keyEls['mem:' + k.id] = { b, led, sub };
+        }
+        memBox.append(head, grid);
+    }
     const clar = h('div', 'rp-clar');
-    const clarKnob = knobSvg(88);
+    const clarKnob = knobSvg(dualDial ? 76 : 88);
     const clarBox = h('div');
     const clarTxt = h('span', 'rp-lcd', '+0 Hz');
-    clarBox.append(h('span', 'rp-legend', 'Clarifier'), clarTxt);
+    const clarName = h('span', 'rp-legend', 'Clarifier');
+    const clarRow = h('div', 'rp-clar-row');
+    clarRow.append(clarTxt);
+    for (const k of opts.clarKeys ?? []) {
+        const b = button('rp-chipbtn rp-clar-key', 'vfoKey', k.id);
+        b.textContent = k.label;
+        clarRow.append(b);
+        keyEls[k.id] = { b, led: null, sub: null };
+    }
+    clarBox.append(clarName, clarRow);
     clar.append(clarKnob.svg, clarBox);
-    rightCol.append(h('span', 'rp-legend', 'Main dial'), dial, stepRow, vfoKeys, clar);
+    rightCol.append(h('span', 'rp-legend', 'Main dial'), dial);
+    if (dualDial) rightCol.append(dialTagRow);
+    rightCol.append(stepRow, vfoKeys);
+    if (memBox) rightCol.append(memBox);
+    rightCol.append(clar);
+    if (dualDial) rightCol.classList.add('dual');
 
     body.append(left, well, rightCol);
 
@@ -756,6 +834,16 @@ export function mountRadioPanel(root, opts = {}) {
             }
             if (!dual && groupEls.A) groupEls.A.name.textContent = 'RECEIVER · VFO-' + st.sel;
             for (const [id, pn] of Object.entries(panes)) pn.box.classList.toggle('sel', st.specView === 'both' && id === st.sel);
+            // The dial part that tunes the selected receiver glows.
+            dial.classList.toggle('sel-a', dualDial && st.sel === 'A');
+            dial.classList.toggle('sel-b', dualDial && st.sel === 'B');
+            for (const [id, t] of Object.entries(dialTags)) {
+                t.t.classList.toggle('on', id === st.sel);
+                t.lamp.classList.toggle('on', id === st.sel);
+            }
+            const selName = dual ? (st.sel === 'A' ? 'MAIN' : 'SUB') : 'VFO-' + st.sel;
+            if (memOn) memOn.textContent = 'acts on ' + selName;
+            if (opts.clarKeys?.length || dualDial) clarName.textContent = 'Clarifier · ' + selName;
             markModeKeys();
             drawNeedle();
         },
@@ -767,6 +855,7 @@ export function mountRadioPanel(root, opts = {}) {
         setKey(id, { on = false, tx = false, sub } = {}, vfo) {
             const k = keyEls[vfo ? vfo + ':' + id : id];
             if (!k) return;
+            if (!k.led) { k.b.classList.toggle('on', on || tx); return; }
             k.led.className = 'rp-led' + (tx ? ' tx' : on ? ' on' : '');
             if (k.sub && sub !== undefined) k.sub.textContent = sub ?? '';
         },
