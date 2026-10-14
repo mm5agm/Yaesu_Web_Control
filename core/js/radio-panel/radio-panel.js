@@ -186,6 +186,7 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *                                          BRING BACK key shown while setSpectrumAway(true)
  *   frequencyEntry (bool)                  show an ENT chip in each VFO box
  *   clock (bool)                           a UTC clock in the top bar, from the PC's clock
+ *   fullscreenKey (bool)                   bare F goes full screen (not while typing)
  *   vfoChips: ['ant', 'roof', ...]         optional: more picker chips in each VFO box,
  *                                          after AGC; filled with setChip(vfo, kind,
  *                                          text) and listed by choices(kind, vfo)
@@ -255,6 +256,18 @@ export function mountRadioPanel(root, opts = {}) {
 
     const right = h('div', 'rp-top-right');
     const lamps = h('div', 'rp-lamps rp-legend');
+    // Bare F goes full screen, as on the classic page; Esc leaves (the
+    // browser's own). Not while typing, and never with a modifier, so
+    // Ctrl+F still finds in the page.
+    if (opts.fullscreenKey)
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'f' && e.key !== 'F') return;
+            if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || document.fullscreenElement) return;
+            const t = e.target;
+            if (t?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
+            document.documentElement.requestFullscreen?.()?.catch?.(() => {});
+            e.preventDefault();
+        });
     // UTC from this computer's clock, as on the classic page.
     if (opts.clock) {
         const clock = h('span', 'rp-clock', '--:--:--Z');
