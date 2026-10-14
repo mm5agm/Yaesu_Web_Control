@@ -27,7 +27,7 @@
 import { mountRadioPanel } from '/js/radio-panel/radio-panel.js';
 import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
 import { alignBins, txMeterFraction, rangeLegends } from '/js/radio-panel/panel-math.js';
-import { BAND_EDGES, nearestBandForHz, loadBandPlanFromServer, autoModeForHz } from '/js/ui/band-plan.js';
+import { BAND_EDGES, nearestBandForHz, loadBandPlanFromServer, autoModeForHz, getSegments, segmentForHz } from '/js/ui/band-plan.js';
 import { loadRttySettings, afskMidpointAudioHz } from '/js/rtty/rtty-settings.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
@@ -152,7 +152,7 @@ export function startYaesuRadioPanel(root, cfg) {
         windows: YAESU_WINDOWS,
         onWindowPanel: (g, p, shown) => win?.onShow(g, p, shown),
         frequencyEntry: true,
-        vfoChips: [...(antennas.length ? ['ant'] : []), ...(roofing.length ? ['roof'] : [])],
+        vfoChips: ['seg', ...(antennas.length ? ['ant'] : []), ...(roofing.length ? ['roof'] : [])],
         onScreenView: id => { if (id === 'tft') radioScreen?.show(); },
         // The spectrum's own window, for a second screen: /RadioSpectrum.
         onSpectrumPopout: () => {
@@ -233,6 +233,23 @@ export function startYaesuRadioPanel(root, cfg) {
 
     const pitchHz = () => 300 + num(r.pitchCode) * 10;
     const widthHz = vfo => (r.widthCode[vfo] == null ? null : ifWidthHzFor(model, r.mode[vfo], parseInt(r.widthCode[vfo], 10)));
+
+    // Classic's Segment select: the chip names the segment the VFO is in, and
+    // picking one sets its mode and then tunes to it, as Classic does.
+    function refreshSeg(vfo) {
+        const segs = getSegments(cfg.bandPlan, r.band[vfo]);
+        const hz = r.freq[vfo];
+        if (!segs || !hz) return panel.setChip(vfo, 'seg', '');
+        const k = segmentForHz(cfg.bandPlan, r.band[vfo], hz);
+        panel.setChip(vfo, 'seg', k ? 'SEG ' + (segs[k]?.label ?? k) : 'SEGMENT');
+    }
+    async function segmentJump(vfo, key) {
+        const sg = getSegments(cfg.bandPlan, r.band[vfo])?.[key];
+        if (!sg) return;
+        const rx = vfo.toLowerCase();
+        if (MODE_CAT[sg.mode] && sg.mode !== r.mode[vfo]) await post(`/api/cat/mode/${rx}`, { mode: MODE_CAT[sg.mode] });
+        return post(`/api/cat/frequency/${rx}`, { frequencyHz: sg.freq });
+    }
 
     function setAnt(vfo, v) {
         r.ant[vfo] = String(v ?? '');
@@ -359,6 +376,12 @@ export function startYaesuRadioPanel(root, cfg) {
             case 'agc':
                 // OFF is offered here, as on the radio's own screen.
                 return ['0', '1', '2', '3', '4'].map(c => ({ id: c, label: AGC[c], on: AGC[c] === r.agc[vfo] }));
+            case 'seg': {
+                const segs = getSegments(cfg.bandPlan, r.band[vfo]);
+                if (!segs) return null;
+                const cur = segmentForHz(cfg.bandPlan, r.band[vfo], r.freq[vfo]);
+                return Object.entries(segs).map(([k, sg]) => ({ id: k, label: sg.label ?? k, on: k === cur }));
+            }
             case 'ant':
                 return antennas.map(a => ({ id: a, label: 'ANT ' + a, on: a === r.ant[vfo] }));
             case 'roof':
@@ -378,6 +401,8 @@ export function startYaesuRadioPanel(root, cfg) {
                 return post(`/api/cat/ifwidth/${rx}`, { code: String(id) });
             case 'agc':
                 return post(`/api/cat/agc/${rx}`, { code: String(id) });
+            case 'seg':
+                return segmentJump(v, id);
             case 'ant':
                 return antennas.includes(String(id)) ? post(`/api/cat/antenna/${rx}`, { antenna: String(id) }) : undefined;
             case 'roof':
@@ -575,7 +600,7 @@ export function startYaesuRadioPanel(root, cfg) {
         const near = inside ? null : nearestBandForHz(hz, edges);
         panel.setOutOfBand(v, inside ? null : 'Outside every amateur band' + (near ? ' - nearest ' + near : ''));
     }
-    loadBandPlanFromServer().then(() => { checkBand('A'); checkBand('B'); });
+    loadBandPlanFromServer().then(() => { for (const v of ['A', 'B']) { checkBand(v); refreshSeg(v); } });
 
     function tuneBy(deltaHz) {
         const v = r.sel;
@@ -698,10 +723,10 @@ export function startYaesuRadioPanel(root, cfg) {
     // ---- one hub, one router ---------------------------------------------
     const handlers = {
         IsConnected: v => panel.setLamp('cat', on(v) ? 'on' : 'bad'),
-        FrequencyA: v => { if (wheelHolds('A')) return; r.freq.A = num(v); panel.setFrequency('A', r.freq.A); checkBand('A'); },
-        FrequencyB: v => { if (wheelHolds('B')) return; r.freq.B = num(v); panel.setFrequency('B', r.freq.B); checkBand('B'); },
-        BandA: v => { if (v !== r.band.A) { r.band.A = v; panel.clearSpectrum('A'); } panel.setBand(r.band[r.sel]); },
-        BandB: v => { if (v !== r.band.B) { r.band.B = v; panel.clearSpectrum('B'); } panel.setBand(r.band[r.sel]); },
+        FrequencyA: v => { if (wheelHolds('A')) return; r.freq.A = num(v); panel.setFrequency('A', r.freq.A); checkBand('A'); refreshSeg('A'); },
+        FrequencyB: v => { if (wheelHolds('B')) return; r.freq.B = num(v); panel.setFrequency('B', r.freq.B); checkBand('B'); refreshSeg('B'); },
+        BandA: v => { if (v !== r.band.A) { r.band.A = v; panel.clearSpectrum('A'); } panel.setBand(r.band[r.sel]); refreshSeg('A'); },
+        BandB: v => { if (v !== r.band.B) { r.band.B = v; panel.clearSpectrum('B'); } panel.setBand(r.band[r.sel]); refreshSeg('B'); },
         ModeA: v => { r.mode.A = String(v ?? ''); panel.setMode('A', r.mode.A); refreshWidth('A'); readDataShift(r.mode.A); askRttyTones(r.mode.A); },
         ModeB: v => { r.mode.B = String(v ?? ''); panel.setMode('B', r.mode.B); refreshWidth('B'); readDataShift(r.mode.B); askRttyTones(r.mode.B); },
         IfWidthA: v => { r.widthCode.A = v; refreshWidth('A'); },
