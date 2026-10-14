@@ -64,8 +64,10 @@ function knobSvg(size) {
  *   brandShort, brandName, model, dual (bool),
  *   views:  [{ label, href, on }]          layout switch in the top strip
  *   lamps:  [{ id, label }]
- *   keys:   [{ id, label }]                left column, two per row
- *   vfoKeys:[{ id, label }]                under the dial, three per row
+ *   keys:   [{ id, label, inert }]         left column, two per row; `inert` keeps
+ *                                          one key display-only even with onAction
+ *                                          (e.g. anything that would transmit)
+ *   vfoKeys:[{ id, label, inert }]         under the dial, three per row
  *   bands:  [{ id, label }]   modes: [{ id, label }]
  *   knobs:  [{ id, label }]
  *   screenViews: [{ id, label }]         optional: what the centre screen can show
@@ -75,6 +77,10 @@ function knobSvg(size) {
  *   onScreenView(id)                       told when the operator switches view
  *   storagePrefix, fontBase
  *   onAction(kind, id)                     kind: 'key' | 'band' | 'mode' | 'step' | 'vfoKey'
+ *                                          | 'vfo' (the operator clicked VFO 'A' or 'B')
+ *
+ * The selected receiver (setSelected) is the one the meter needle, the mode
+ * keys and - in the adapter - the keys follow. The spectrum stays VFO A's.
  */
 export function mountRadioPanel(root, opts = {}) {
     injectRadioPanelStyle(document, opts.fontBase);
@@ -89,10 +95,10 @@ export function mountRadioPanel(root, opts = {}) {
     const panel = h('div', 'rp-panel');
     sizer.append(scaler); scaler.append(panel); root.append(sizer);
 
-    const button = (cls, kind, id) => {
+    const button = (cls, kind, id, inert = false) => {
         const b = h('button', cls);
         b.type = 'button';
-        if (act && kind) b.addEventListener('click', () => act(kind, id));
+        if (act && kind && !inert) b.addEventListener('click', () => act(kind, id));
         else if (kind) b.disabled = true;
         return b;
     };
@@ -151,7 +157,7 @@ export function mountRadioPanel(root, opts = {}) {
     const keysGrid = h('div', 'rp-keys');
     const keyEls = {};
     for (const k of opts.keys ?? []) {
-        const b = button('rp-key', 'key', k.id);
+        const b = button('rp-key', 'key', k.id, k.inert);
         const led = h('span', 'rp-led'), sub = h('span', 'rp-sub', '');
         b.append(led, h('span', null, k.label), sub);
         keysGrid.append(b);
@@ -170,7 +176,8 @@ export function mountRadioPanel(root, opts = {}) {
     const mainName = h('span', 'rp-vfo-name', dual ? 'MAIN · VFO-A' : 'VFO-A');
     const rxtx = h('span', 'rp-chip rx', 'RX');
     const splitChip = h('span', 'rp-chip hidden', 'SPLIT');
-    mainHead.append(mainName, rxtx, splitChip);
+    const selA = h('span', 'rp-chip sel hidden', 'SELECTED');
+    mainHead.append(mainName, rxtx, splitChip, selA);
     const mainFreq = h('div', 'rp-freq');
     const mainBig = h('span', 'big', '-.---'), mainSmall = h('span', 'small', '.---');
     mainFreq.append(mainBig, mainSmall);
@@ -185,7 +192,8 @@ export function mountRadioPanel(root, opts = {}) {
     const subHead = h('div', 'rp-vfo-head');
     const subName = h('span', 'rp-vfo-name', dual ? 'SUB · VFO-B' : 'VFO-B');
     const subRx = h('span', 'rp-chip dim', dual ? 'RX' : '');
-    subHead.append(subName, subRx);
+    const selB = h('span', 'rp-chip sel hidden', 'SELECTED');
+    subHead.append(subName, subRx, selB);
     const subFreq = h('div', 'rp-subfreq');
     const subBig = h('span', 'big', '-.---'), subSmall = h('span', 'small', '.---');
     subFreq.append(subBig, subSmall);
@@ -200,6 +208,11 @@ export function mountRadioPanel(root, opts = {}) {
     sub.append(subHead, subFreq, subChips);
     if (dual) sub.append(sbar);
     vfos.append(main, sub);
+    if (act) {
+        vfos.classList.add('pick');
+        main.addEventListener('click', () => act('vfo', 'A'));
+        sub.addEventListener('click', () => act('vfo', 'B'));
+    }
 
     const spec = h('div', 'rp-spectrum');
     const pb = h('div', 'rp-passband');
@@ -259,7 +272,7 @@ export function mountRadioPanel(root, opts = {}) {
     stepRow.append(down, stepKey, up);
     const vfoKeys = h('div', 'rp-vfokeys');
     for (const k of opts.vfoKeys ?? []) {
-        const b = button('rp-key', 'vfoKey', k.id);
+        const b = button('rp-key', 'vfoKey', k.id, k.inert);
         const led = h('span', 'rp-led');
         b.append(led, h('span', null, k.label));
         vfoKeys.append(b);
@@ -293,7 +306,7 @@ export function mountRadioPanel(root, opts = {}) {
     const st = {
         freq: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null },
         s: { A: 0, B: 0 }, tx: false, meter: store.get(prefix + 'meter', 'PO'),
-        txMeters: {}, spanHz: 0, theme: null, spots: [],
+        txMeters: {}, spanHz: 0, theme: null, spots: [], sel: 'A',
     };
     if (!METERS.includes(st.meter)) st.meter = 'PO';
 
@@ -321,7 +334,7 @@ export function mountRadioPanel(root, opts = {}) {
         drawNeedle();
     }
     function drawNeedle() {
-        const frac = st.tx ? (st.txMeters[st.meter] ?? 0) : sMeterFraction(st.s.A);
+        const frac = st.tx ? (st.txMeters[st.meter] ?? 0) : sMeterFraction(st.s[st.sel]);
         const n = meterGeometry(frac).needle;
         needle.setAttribute('x1', n.x1); needle.setAttribute('y1', n.y1);
         needle.setAttribute('x2', n.x2); needle.setAttribute('y2', n.y2);
@@ -347,6 +360,10 @@ export function mountRadioPanel(root, opts = {}) {
                 spots.append(el);
             }
         }
+    }
+
+    function markModeKeys() {
+        for (const [id, el] of Object.entries(modeEls)) el.classList.toggle('on', id === st.mode[st.sel]);
     }
 
     function setVfoText(vfo) {
@@ -414,10 +431,8 @@ export function mountRadioPanel(root, opts = {}) {
         setMode(vfo, mode) {
             st.mode[vfo] = String(mode ?? '');
             flagsFor(vfo).mode.textContent = st.mode[vfo];
-            if (vfo === 'A') {
-                for (const [id, el] of Object.entries(modeEls)) el.classList.toggle('on', id === st.mode.A);
-                drawOverlays();
-            }
+            if (vfo === st.sel) markModeKeys();
+            if (vfo === 'A') drawOverlays();
         },
         // `hz` null means the mode has no settable width (AM/FM): no chip, no passband.
         setWidth(vfo, hz) {
@@ -433,8 +448,8 @@ export function mountRadioPanel(root, opts = {}) {
         },
         setSMeter(vfo, sValue) {
             st.s[vfo] = st.tx ? 0 : Number(sValue) || 0;
-            if (vfo === 'A') drawNeedle();
-            else { sFill.style.width = (sMeterFraction(st.s.B) * 100) + '%'; sTxt.textContent = sMeterText(st.s.B); }
+            if (vfo === st.sel) drawNeedle();
+            if (vfo === 'B') { sFill.style.width = (sMeterFraction(st.s.B) * 100) + '%'; sTxt.textContent = sMeterText(st.s.B); }
         },
         setTxMeter(name, frac) { st.txMeters[name] = Math.max(0, Math.min(1, Number(frac) || 0)); if (st.tx) drawNeedle(); },
         setTx(on) {
@@ -444,6 +459,19 @@ export function mountRadioPanel(root, opts = {}) {
             if (st.tx) { st.s.A = 0; st.s.B = 0; sFill.style.width = '0%'; sTxt.textContent = 'S0'; }
             drawNeedle();
         },
+        // 'A' | 'B': outlines that VFO, tags it SELECTED, and points the
+        // needle and mode keys at it. The adapter decides what it means for
+        // its radio (YWC: the VS state).
+        setSelected(vfo) {
+            st.sel = vfo === 'B' ? 'B' : 'A';
+            main.classList.toggle('sel', st.sel === 'A');
+            sub.classList.toggle('sel', st.sel === 'B');
+            selA.classList.toggle('hidden', st.sel !== 'A');
+            selB.classList.toggle('hidden', st.sel !== 'B');
+            markModeKeys();
+            drawNeedle();
+        },
+        selected() { return st.sel; },
         setSplit(on) { splitChip.classList.toggle('hidden', !on); },
         setBand(id) { for (const [b, el] of Object.entries(bandEls)) el.classList.toggle('on', b === id); },
         setKey(id, { on = false, tx = false, sub } = {}) {

@@ -5,8 +5,11 @@
 // properties drive which setters, the SH-code-to-Hz width table, the IF OUT
 // axis correction and the calibration tables.
 //
-// Stage 1 is DISPLAY ONLY. No onAction is passed, so the panel disables every
-// key, band and mode button and nothing on this page writes to the radio.
+// Stage 2: keys, bands, modes, step and the VFO keys write to the radio
+// through the same /api/cat endpoints Classic uses, aimed at the SELECTED
+// receiver (the radio's VS state - click a VFO to change it). Nothing here may
+// transmit: TUNE (atu/tune keys the radio) and VOX (room noise can key it) are
+// inert, display-only keys.
 //
 // No WSJT-X / JTAlert / Log4OM launcher links on this page, and no
 // accessibility layer: both were Colin's call on 2026-10-13. Classic keeps them.
@@ -19,12 +22,30 @@ import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 
 const BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
 const MODES = ['LSB', 'USB', 'CW-U', 'CW-L', 'AM', 'FM', 'RTTY-L', 'DATA-U'];
+// Classic's mode-to-MD-code table (site.js setMode), for the modes above.
+const MODE_CAT = { 'LSB': '1', 'USB': '2', 'CW-U': '3', 'FM': '4', 'AM': '5', 'RTTY-L': '6', 'CW-L': '7', 'DATA-U': 'C' };
 const AGC = { '0': 'OFF', '1': 'FAST', '2': 'MID', '3': 'SLOW', '4': 'AUTO', '5': 'AUTO', '6': 'AUTO' };
 const IPO = { '0': 'IPO', '1': 'AMP1', '2': 'AMP2' };
+// What a press moves to next. AGC skips OFF on purpose: OFF pins the S-meter
+// at zero and looks exactly like a deaf receiver.
+const AGC_NEXT = { '1': '2', '2': '3', '3': '4', '4': '1', '5': '1', '6': '1', '0': '1' };
+const IPO_NEXT = { '0': '1', '1': '2', '2': '0' };
+const ATT_NEXT = { '00': '06', '06': '12', '12': '18', '18': '00' };
+const STEPS_HZ = [10, 50, 100, 500, 1000, 5000, 10000];
+const STEP_KEY = 'ywc.radioPanel.stepHz';
 const SPOT_MAX_AGE_MS = 30 * 60 * 1000;
 
 const on = v => v === true || v === 'true' || v === 1 || (typeof v === 'string' && v !== '' && v !== '0' && v !== '00' && v !== 'false');
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const stepText = hz => (hz >= 1000 ? hz / 1000 + ' kHz' : hz + ' Hz');
+
+function post(url, body) {
+    const init = { method: 'POST' };
+    if (body !== undefined) { init.headers = { 'Content-Type': 'application/json' }; init.body = JSON.stringify(body); }
+    return fetch(url, init)
+        .then(res => { if (!res.ok) console.warn('radio panel:', url, res.status); return res; })
+        .catch(e => console.warn('radio panel:', url, e));
+}
 
 /**
  * @param {HTMLElement} root
@@ -49,7 +70,7 @@ export function startYaesuRadioPanel(root, cfg) {
             { id: 'nr', label: 'DNR' }, { id: 'dnf', label: 'DNF' },
             { id: 'notch', label: 'NOTCH' }, { id: 'contour', label: 'CONTOUR' },
             { id: 'apf', label: 'APF' }, { id: 'proc', label: 'PROC' },
-            { id: 'vox', label: 'VOX' }, { id: 'tune', label: 'TUNE' },
+            { id: 'vox', label: 'VOX', inert: true }, { id: 'tune', label: 'TUNE', inert: true },
         ],
         vfoKeys: [
             { id: 'split', label: 'SPLIT' }, { id: 'rxclar', label: 'RX CLAR' }, { id: 'txclar', label: 'TX CLAR' },
@@ -64,6 +85,7 @@ export function startYaesuRadioPanel(root, cfg) {
         ],
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
         onScreenView: id => { if (id === 'tft') radioScreen?.show(); },
+        onAction: (kind, id) => act(kind, id),
         storagePrefix: 'ywc.radioPanel.',
         fontBase: '/lib/fonts',
     });
@@ -73,12 +95,17 @@ export function startYaesuRadioPanel(root, cfg) {
     // ---- the slice of radio state the panel derives things from ----------
     const r = {
         freq: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthCode: { A: null, B: null },
-        shift: { A: 0, B: 0 }, pitchCode: 30, dataShiftHz: 1500, band: '',
+        shift: { A: 0, B: 0 }, pitchCode: 30, dataShiftHz: 1500, band: { A: '', B: '' },
         att: { A: '00', B: '00' }, ipo: { A: '0', B: '0' }, nb: { A: '0', B: '0' }, nr: { A: '0', B: '0' },
         dnf: { A: '0', B: '0' }, notch: { A: '0', B: '0' }, contour: { A: false, B: false }, apf: { A: false, B: false },
-        agc: { A: '', B: '' }, rxClar: false, txClar: false, clarHz: { A: 0, B: 0 },
-        tx: false, txMeterRaw: {},
+        agc: { A: '', B: '' }, agcCode: { A: '', B: '' }, rxClar: false, txClar: false, clarHz: { A: 0, B: 0 },
+        contourHz: { A: 800, B: 800 }, apfHz: { A: 0, B: 0 },
+        tx: false, txMeterRaw: {}, sel: 'A', split: 0, proc: false,
     };
+    let stepHz = (() => { try { return num(localStorage.getItem(STEP_KEY)); } catch { return 0; } })();
+    if (!STEPS_HZ.includes(stepHz)) stepHz = 100;
+    panel.setStep(stepText(stepHz));
+    panel.setSelected('A');
     const spots = new Map();       // callsign -> { call, hz, at }
 
     const pitchHz = () => 300 + num(r.pitchCode) * 10;
@@ -104,19 +131,83 @@ export function startYaesuRadioPanel(root, cfg) {
         if (on(r.dnf[vfo])) f.push('DNF');
         if (on(r.notch[vfo])) f.push('NOTCH');
         panel.setFlags(vfo, f);
-        if (vfo !== 'A') return;
-        panel.setKey('ipo', { on: r.ipo.A !== '0', sub: IPO[r.ipo.A] ?? '' });
-        panel.setKey('att', { on: on(r.att.A), sub: on(r.att.A) ? parseInt(r.att.A, 10) + ' dB' : 'OFF' });
-        panel.setKey('nb', { on: on(r.nb.A) });
-        panel.setKey('nr', { on: on(r.nr.A) });
-        panel.setKey('dnf', { on: on(r.dnf.A) });
-        panel.setKey('notch', { on: on(r.notch.A) });
-        panel.setKey('contour', { on: !!r.contour.A });
-        panel.setKey('apf', { on: !!r.apf.A });
+        if (vfo === r.sel) refreshKeys();
+    }
+
+    // The receiver keys show the selected receiver, because that is the one
+    // a press changes.
+    function refreshKeys() {
+        const v = r.sel;
+        panel.setKey('ipo', { on: r.ipo[v] !== '0', sub: IPO[r.ipo[v]] ?? '' });
+        panel.setKey('att', { on: on(r.att[v]), sub: on(r.att[v]) ? parseInt(r.att[v], 10) + ' dB' : 'OFF' });
+        panel.setKey('agc', { on: !!r.agc[v] && r.agc[v] !== 'OFF', sub: r.agc[v] });
+        panel.setKey('nb', { on: on(r.nb[v]) });
+        panel.setKey('nr', { on: on(r.nr[v]) });
+        panel.setKey('dnf', { on: on(r.dnf[v]) });
+        panel.setKey('notch', { on: on(r.notch[v]) });
+        panel.setKey('contour', { on: !!r.contour[v] });
+        panel.setKey('apf', { on: !!r.apf[v] });
+    }
+
+    // ---- writes ----------------------------------------------------------
+    // Every receiver write names the selected receiver in lower case, as
+    // Classic does; the server routes it (on single-receiver radios it goes
+    // to the active VFO whatever the URL says).
+    function act(kind, id) {
+        const v = r.sel, rx = v.toLowerCase();
+        const flip = x => (on(x) ? '0' : '1');
+        switch (kind) {
+            case 'vfo':
+                if (id !== r.sel) post(`/api/cat/active-vfo/${id}`);
+                return;
+            case 'band':
+                return post(`/api/cat/band/${rx}`, { band: id });
+            case 'mode':
+                return MODE_CAT[id] ? post(`/api/cat/mode/${rx}`, { mode: MODE_CAT[id] }) : undefined;
+            case 'step':
+                if (id === 'cycle') {
+                    stepHz = STEPS_HZ[(STEPS_HZ.indexOf(stepHz) + 1) % STEPS_HZ.length];
+                    try { localStorage.setItem(STEP_KEY, String(stepHz)); } catch { /* private window */ }
+                    panel.setStep(stepText(stepHz));
+                    return;
+                }
+                return tuneBy(id === 'up' ? stepHz : -stepHz);
+            case 'key':
+                switch (id) {
+                    case 'ipo': return post(`/api/cat/ipo/${rx}`, { code: IPO_NEXT[r.ipo[v]] ?? '0' });
+                    case 'att': return post(`/api/cat/attenuator/${rx}`, { code: ATT_NEXT[r.att[v]] ?? '00' });
+                    case 'agc': return post(`/api/cat/agc/${rx}`, { code: AGC_NEXT[r.agcCode[v]] ?? '2' });
+                    case 'nb': return post(`/api/cat/noiseblanker/${rx}`, { enabled: flip(r.nb[v]) });
+                    case 'nr': return post(`/api/cat/nr/${rx}`, { code: flip(r.nr[v]) });
+                    case 'dnf': return post(`/api/cat/autonotch/${rx}`, { code: flip(r.dnf[v]) });
+                    case 'notch': return post(`/api/cat/manualnotch/${rx}`, { enabled: flip(r.notch[v]) });
+                    case 'contour': return post(`/api/cat/contour/${rx}`, { on: !r.contour[v], freqHz: r.contourHz[v] || 800 });
+                    case 'apf': return post(`/api/cat/apf/${rx}`, { on: !r.apf[v], freqHz: r.apfHz[v] });
+                    case 'proc': return post('/api/cat/proc', { enabled: !r.proc });
+                }
+                return;    // vox and tune are inert
+            case 'vfoKey':
+                switch (id) {
+                    case 'split': return post(`/api/cat/split/${r.split ? 0 : 1}`);
+                    case 'rxclar': return post('/api/cat/clarifier', { vfo: v, rxOn: !r.rxClar, txOn: r.txClar, offsetHz: r.clarHz[v] });
+                    case 'txclar': return post('/api/cat/clarifier', { vfo: v, rxOn: r.rxClar, txOn: !r.txClar, offsetHz: r.clarHz[v] });
+                }
+        }
+    }
+
+    function tuneBy(deltaHz) {
+        const v = r.sel;
+        const cur = r.freq[v];
+        if (!cur) return;
+        // Land on the step grid, as a radio's dial does.
+        const next = deltaHz > 0 ? Math.floor(cur / stepHz) * stepHz + stepHz : Math.ceil(cur / stepHz) * stepHz - stepHz;
+        r.freq[v] = next;
+        panel.setFrequency(v, next);
+        post(`/api/cat/frequency/${v.toLowerCase()}`, { frequencyHz: next });
     }
 
     function refreshClar() {
-        const hz = r.clarHz.A;
+        const hz = r.clarHz[r.sel];
         const txt = (hz >= 0 ? '+' : '') + hz + ' Hz';
         panel.setClarifier(r.rxClar || r.txClar ? txt : 'OFF ' + txt, 0.5 + hz / 19980);
         panel.setKey('rxclar', { on: r.rxClar });
@@ -178,15 +269,17 @@ export function startYaesuRadioPanel(root, cfg) {
         IsConnected: v => panel.setLamp('cat', on(v) ? 'on' : 'bad'),
         FrequencyA: v => { r.freq.A = num(v); panel.setFrequency('A', r.freq.A); },
         FrequencyB: v => { r.freq.B = num(v); panel.setFrequency('B', r.freq.B); },
-        BandA: v => { if (v !== r.band) { r.band = v; panel.setBand(v); panel.clearSpectrum(); } },
+        BandA: v => { if (v !== r.band.A) { r.band.A = v; panel.clearSpectrum(); } panel.setBand(r.band[r.sel]); },
+        BandB: v => { r.band.B = v; panel.setBand(r.band[r.sel]); },
         ModeA: v => { r.mode.A = String(v ?? ''); panel.setMode('A', r.mode.A); refreshWidth('A'); readDataShift(r.mode.A); },
         ModeB: v => { r.mode.B = String(v ?? ''); panel.setMode('B', r.mode.B); refreshWidth('B'); },
         IfWidthA: v => { r.widthCode.A = v; refreshWidth('A'); },
         IfWidthB: v => { r.widthCode.B = v; refreshWidth('B'); },
         IfShiftA: v => { r.shift.A = num(v); panel.setKnob('shift', 0.5 + r.shift.A / 2000, (r.shift.A > 0 ? '+' : '') + r.shift.A); },
         IfShiftB: v => { r.shift.B = num(v); },
-        AgcA: v => { r.agc.A = AGC[String(v)] ?? ''; panel.setAgc('A', r.agc.A); panel.setKey('agc', { on: r.agc.A && r.agc.A !== 'OFF', sub: r.agc.A }); },
-        AgcB: v => { r.agc.B = AGC[String(v)] ?? ''; panel.setAgc('B', r.agc.B); },
+        AgcA: v => { r.agcCode.A = String(v); r.agc.A = AGC[String(v)] ?? ''; panel.setAgc('A', r.agc.A); refreshFlags('A'); },
+        AgcB: v => { r.agcCode.B = String(v); r.agc.B = AGC[String(v)] ?? ''; panel.setAgc('B', r.agc.B); refreshFlags('B'); },
+        ActiveVfo: v => { r.sel = num(v) === 1 ? 'B' : 'A'; panel.setSelected(r.sel); panel.setBand(r.band[r.sel]); refreshKeys(); refreshClar(); },
         IpoA: v => { r.ipo.A = String(v); refreshFlags('A'); },
         IpoB: v => { r.ipo.B = String(v); refreshFlags('B'); },
         AttA: v => { r.att.A = String(v); refreshFlags('A'); },
@@ -200,14 +293,21 @@ export function startYaesuRadioPanel(root, cfg) {
         ManualNotchA: v => { r.notch.A = String(v); refreshFlags('A'); },
         ManualNotchB: v => { r.notch.B = String(v); refreshFlags('B'); },
         ContourOnA: v => { r.contour.A = on(v); refreshFlags('A'); },
+        ContourOnB: v => { r.contour.B = on(v); refreshFlags('B'); },
         ApfOnA: v => { r.apf.A = on(v); refreshFlags('A'); },
-        SplitMode: v => { panel.setSplit(on(v)); panel.setKey('split', { on: on(v) }); },
+        ApfOnB: v => { r.apf.B = on(v); refreshFlags('B'); },
+        ContourFreqA: v => { r.contourHz.A = num(v); },
+        ContourFreqB: v => { r.contourHz.B = num(v); },
+        ApfFreqA: v => { r.apfHz.A = num(v); },
+        ApfFreqB: v => { r.apfHz.B = num(v); },
+        SplitMode: v => { r.split = num(v); panel.setSplit(r.split !== 0); panel.setKey('split', { on: r.split !== 0 }); },
         RxClarOn: v => { r.rxClar = on(v); refreshClar(); },
         TxClarOn: v => { r.txClar = on(v); refreshClar(); },
         ClarifierOffsetA: v => { r.clarHz.A = num(v); refreshClar(); },
+        ClarifierOffsetB: v => { r.clarHz.B = num(v); refreshClar(); },
         IsTransmitting: v => { r.tx = on(v); panel.setTx(r.tx); },
         AtuTuning: v => panel.setKey('tune', { tx: on(v) }),
-        ProcEnabled: v => panel.setKey('proc', { on: on(v) }),
+        ProcEnabled: v => { r.proc = on(v); panel.setKey('proc', { on: r.proc }); },
         VoxOn: v => panel.setKey('vox', { on: on(v) }),
         AfGainA: v => panel.setKnob('af', num(v) / 255, String(num(v))),
         RfGainA: v => panel.setKnob('rf', num(v) / 255, String(num(v))),
