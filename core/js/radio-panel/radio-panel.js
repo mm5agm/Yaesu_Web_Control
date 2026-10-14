@@ -193,10 +193,13 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *                                            frequency digit)
  *                                          | 'entry' (the ENT chip in a VFO box: the
  *                                            operator wants to type a frequency)
+ *                                          | 'spectrum' (id = the Hz clicked on a spectrum
+ *                                            or waterfall, vfo the pane)
  *                                          | 'span' (id the span in Hz, vfo the pane;
  *                                            with opts.spectrumSpans [{ hz, label? }])
  *                                          | 'dial' (id 'up' | 'down'; vfo names the
- *                                            ring or knob of a dual dial)
+ *                                            ring or knob of a dual dial, or the
+ *                                            spectrum pane the wheel was over)
  *                                          | 'knob' (a turned knob, id 'afrf:inner' etc.
  *                                            or 'clar'; a fourth argument, +1 or -1, is
  *                                            the direction; only knobs given `turn: true`,
@@ -456,6 +459,33 @@ export function mountRadioPanel(root, opts = {}) {
             wf.append(spanSel);
         }
         box.append(spec, axis, wf);
+        // A click on the spectrum or waterfall names the frequency under it,
+        // or a DX spot's own frequency when the click is within 8 px of its
+        // marker: act('spectrum', Hz, pane id). The pane's centre is its dial.
+        if (act)
+            for (const el of [spec, wf]) {
+                el.classList.add('rp-tunable');
+                el.addEventListener('click', e => {
+                    if (e.target.closest('select, button')) return;
+                    const span = st.spanHz[d.id], f = st.freq[d.id];
+                    const rc = el.getBoundingClientRect();
+                    if (!(span > 0 && f > 0) || !rc.width) return;
+                    let hz = Math.round(f + ((e.clientX - rc.left) / rc.width - 0.5) * span);
+                    const near = 8 / rc.width * span;
+                    let best = near;
+                    for (const sp of st.spots) {
+                        const gap = Math.abs(sp.hz - hz);
+                        if (gap <= best) { best = gap; hz = sp.hz; }
+                    }
+                    act('spectrum', String(hz), d.id);
+                });
+                // The wheel tunes that pane's VFO one step a notch, as the dial does.
+                el.addEventListener('wheel', e => {
+                    if (!e.deltaY || e.target.closest('select')) return;
+                    e.preventDefault();
+                    act('dial', e.deltaY < 0 ? 'up' : 'down', d.id);
+                }, { passive: false });
+            }
         sdrView.append(box);
         panes[d.id] = { box, spec, pb, spots: spotsEl, label, empty, oob, spanSel, axis, wf, name: d.name ?? '', text: '' };
     }

@@ -20,6 +20,7 @@
 
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script>window.ywcAutoModeChangeOnTune = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AutoModeChangeOnTune));</script>
     <script type="module">
         import { startYaesuRadioPanel } from '/js/ui/radio-panel-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current';
         // Layout = null, so no site.js: this connection is what tells the host

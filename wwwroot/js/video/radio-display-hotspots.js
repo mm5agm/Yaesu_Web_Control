@@ -40,7 +40,9 @@
 //
 // holds in all three without needing to know where the axis starts. The
 // marker is found by drawing the current frame to an off-screen canvas and
-// looking for the tallest red vertical run inside the spectrum rows. When no
+// looking first for the small red triangle the FTdx101 draws at the top of
+// the marker line (the line itself is WHITE - a frame grabbed 2026-10-14),
+// then for the tallest red vertical run inside the spectrum rows. When no
 // marker is visible (FIX placement with the VFO off the edge) CENTER falls
 // back to the box centre and the other placements report "no marker".
 //
@@ -993,7 +995,8 @@ export class RadioDisplayHotspots {
     }
 
     /**
-     * Fractional x of the VFO marker, or null. Scans the spectrum rows for the
+     * Fractional x of the VFO marker, or null. First the red triangle at the
+     * top of the plot (see _findMarkerTriangle); failing that, scans the spectrum rows for the
      * column holding the longest contiguous run of saturated red; the marker
      * has to span at least half the scanned band to count, so a red trace or
      * a red waterfall streak does not pass for it. Cached for 250 ms — this is
@@ -1007,6 +1010,8 @@ export class RadioDisplayHotspots {
 
         if (!this._grabFrame()) return null;
         const { nw, nh } = this._nat();
+        const tri = this._findMarkerTriangle(nw, nh);
+        if (tri !== null) return (this._marker.x = tri);
         const z = normalizeZone(this.layout?.scope?.marker, nw, nh);
         if (!z) return null;
         const W = this._canvas.width, H = this._canvas.height;
@@ -1030,6 +1035,37 @@ export class RadioDisplayHotspots {
         if (bestRun < h * 0.5) return null;
         this._marker.x = (x0 + bestX + 0.5) / W;
         return this._marker.x;
+    }
+
+    /**
+     * Fractional x of the red triangle the radio draws on top of the VFO
+     * marker, in the strip at the top of the plot, or null. On the FTdx101's
+     * 800x600 frame it is ~9 px wide and ~35 saturated-red pixels; anything
+     * spread wider than 3% of the plot is not it. This is what makes CURSOR
+     * and FIX placement clickable: there the marker is not at the centre,
+     * and the white line under the triangle cannot be told from the trace.
+     */
+    _findMarkerTriangle(nw, nh) {
+        const plot = normalizeZone(this.layout?.scope?.plot, nw, nh);
+        if (!plot) return null;
+        const W = this._canvas.width, H = this._canvas.height;
+        const x0 = Math.round(plot[0] * W), x1 = Math.round(plot[2] * W);
+        const y0 = Math.round(plot[1] * H), y1 = Math.round((plot[1] + 0.035) * H);
+        const w = x1 - x0, h = y1 - y0;
+        if (w <= 0 || h <= 0) return null;
+        const px = this._ctx.getImageData(x0, y0, w, h).data;
+        let n = 0, sum = 0, lo = w, hi = -1;
+        for (let y = 0; y < h; y++)
+            for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                if (px[i] > 150 && px[i + 1] < 90 && px[i + 2] < 90) {
+                    n++; sum += x;
+                    if (x < lo) lo = x;
+                    if (x > hi) hi = x;
+                }
+            }
+        if (n < 8 || hi - lo > w * 0.03) return null;
+        return (x0 + sum / n + 0.5) / W;
     }
 
     /**

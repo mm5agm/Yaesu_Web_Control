@@ -27,7 +27,8 @@
 import { mountRadioPanel } from '/js/radio-panel/radio-panel.js';
 import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
 import { alignBins, txMeterFraction, rangeLegends } from '/js/radio-panel/panel-math.js';
-import { BAND_EDGES, nearestBandForHz, loadBandPlanFromServer } from '/js/ui/band-plan.js';
+import { BAND_EDGES, nearestBandForHz, loadBandPlanFromServer, autoModeForHz } from '/js/ui/band-plan.js';
+import { loadRttySettings, afskMidpointAudioHz } from '/js/rtty/rtty-settings.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
@@ -345,7 +346,8 @@ export function startYaesuRadioPanel(root, cfg) {
 
     function act(kind, id, vfo, dir) {
         if (kind === 'entry') return win.entry(id);
-        if (vfo && kind !== 'tune' && !boxLive(vfo)) return;
+        // The digit wheel, the dial and the spectrum panes tune either VFO.
+        if (vfo && !['tune', 'dial', 'spectrum', 'span'].includes(kind) && !boxLive(vfo)) return;
         const v = vfo || r.sel, rx = v.toLowerCase();
         const flip = x => (on(x) ? '0' : '1');
         switch (kind) {
@@ -364,6 +366,8 @@ export function startYaesuRadioPanel(root, cfg) {
                 return;
             case 'span':
                 return post(`/api/sdr/span?hz=${id}&sdrId=${vfo}`);
+            case 'spectrum':
+                return spectrumTune(v, num(id));
             case 'band':
                 return post(`/api/cat/band/${rx}`, { band: id });
             case 'mode':
@@ -496,6 +500,36 @@ export function startYaesuRadioPanel(root, cfg) {
                 return turn('clar' + v, r.clarHz[v], 10, -9990, 9990, x => { r.clarHz[v] = x; refreshClar(); },
                     x => post('/api/cat/clarifier', { vfo: v, rxOn: r.rxClar, txOn: r.txClar, offsetHz: x }));
         }
+    }
+
+    // ---- click-to-tune on the SDR spectrum ---------------------------------
+    // Classic's rules (spectrum-panel.js): the band plan may pick the mode
+    // (unless Settings turns that off), and in RTTY / DATA-L the dial goes
+    // the tone offset away from the clicked signal, which is the midpoint.
+    const rttyTones = { shiftHz: 170, polarityRev: false, asked: false };
+    function askRttyTones(mode) {
+        if (rttyTones.asked || !String(mode).startsWith('RTTY')) return;
+        rttyTones.asked = true;
+        fetch('/api/cat/rtty').then(res => res.ok ? res.json() : null).then(t => {
+            if (Number(t?.shiftHz) > 0) rttyTones.shiftHz = Number(t.shiftHz);
+            if (typeof t?.polarityRev === 'boolean') rttyTones.polarityRev = t.polarityRev;
+        }).catch(() => { rttyTones.asked = false; });
+    }
+    function toneOffsetHz(mode) {
+        if (mode === 'RTTY-L' || mode === 'RTTY-U') return (rttyTones.polarityRev ? -1 : 1) * rttyTones.shiftHz / 2;
+        if (mode === 'DATA-L') return afskMidpointAudioHz(loadRttySettings());
+        return 0;
+    }
+    function spectrumTune(v, hz) {
+        if (!(hz > 0)) return;
+        const auto = autoModeForHz(hz);
+        const mode = auto && MODE_CAT[auto] ? auto : null;
+        const to = Math.round(hz + toneOffsetHz(mode || r.mode[v]));
+        r.freq[v] = to;
+        panel.setFrequency(v, to);
+        checkBand(v);
+        post(`/api/cat/frequency/${v.toLowerCase()}`, { frequencyHz: to });
+        if (mode && mode !== r.mode[v]) post(`/api/cat/mode/${v.toLowerCase()}`, { mode: MODE_CAT[mode] });
     }
 
     // ---- out of band ------------------------------------------------------
@@ -636,8 +670,8 @@ export function startYaesuRadioPanel(root, cfg) {
         FrequencyB: v => { if (wheelHolds('B')) return; r.freq.B = num(v); panel.setFrequency('B', r.freq.B); checkBand('B'); },
         BandA: v => { if (v !== r.band.A) { r.band.A = v; panel.clearSpectrum('A'); } panel.setBand(r.band[r.sel]); },
         BandB: v => { if (v !== r.band.B) { r.band.B = v; panel.clearSpectrum('B'); } panel.setBand(r.band[r.sel]); },
-        ModeA: v => { r.mode.A = String(v ?? ''); panel.setMode('A', r.mode.A); refreshWidth('A'); readDataShift(r.mode.A); },
-        ModeB: v => { r.mode.B = String(v ?? ''); panel.setMode('B', r.mode.B); refreshWidth('B'); readDataShift(r.mode.B); },
+        ModeA: v => { r.mode.A = String(v ?? ''); panel.setMode('A', r.mode.A); refreshWidth('A'); readDataShift(r.mode.A); askRttyTones(r.mode.A); },
+        ModeB: v => { r.mode.B = String(v ?? ''); panel.setMode('B', r.mode.B); refreshWidth('B'); readDataShift(r.mode.B); askRttyTones(r.mode.B); },
         IfWidthA: v => { r.widthCode.A = v; refreshWidth('A'); },
         IfWidthB: v => { r.widthCode.B = v; refreshWidth('B'); },
         IfShiftA: v => { r.shift.A = num(v); refreshRxKnobs('A'); },
