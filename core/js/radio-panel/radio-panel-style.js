@@ -223,6 +223,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-dial.dual{background:repeating-conic-gradient(from var(--rp-ring-rot,0deg),${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg)}
 .rp-turn{cursor:grab;touch-action:none;user-select:none}
 .rp-turn.turning{cursor:grabbing}
+.rp-group.pick{cursor:pointer}
 .rp-dial[data-hot=A],.rp-dial[data-hot=all]{outline:3px solid ${v('accent')};outline-offset:3px}
 .rp-dial[data-hot=B] .rp-dial-knob{outline:3px solid ${v('accent')};outline-offset:3px}
 .rp-dial-well{width:204px;height:204px;border-radius:50%;background:${v('dial-b')};box-shadow:inset 0 3px 8px rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center}

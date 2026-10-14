@@ -658,6 +658,14 @@ export function mountRadioPanel(root, opts = {}) {
         }
         row.append(grid);
         box.append(head, row);
+        // A click on the group (not on one of its keys or knobs, which do
+        // their own job) selects that receiver, like clicking its VFO box.
+        if (act && dual) {
+            box.classList.add('pick');
+            box.addEventListener('click', e => {
+                if (!e.target.closest('button, .rp-turn')) act('vfo', vfo);
+            });
+        }
         groupEls[vfo] = g;
         return box;
     }
