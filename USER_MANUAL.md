@@ -4147,6 +4147,10 @@ The **Decode** pane prints what the software is making of the two tones. Press *
 
 There is no Mark, Shift, Speed or Rev in the Decode pane, and that is deliberate. It uses the ones in the **Tune** column next to it. Get the cross upright, or press **Auto** and let it work them out ([§22.3](#223-auto-working-out-what-you-are-listening-to)), and the decoder is already listening in the right place. Change the radio's mode between **RTTY-L** and **RTTY-U** and it follows that too, with nothing for you to press. One set of settings is one thing to get right, instead of two that can disagree.
 
+![The RTTY panel decoding real off-air contest exchanges in RTTY-L through a 400 Hz IF filter, with Mark 2131 Space 2301 Hz, M -28, S -26, in -23 dBFS and a clean cross](pictures/RTTY-Tuner-400Hz-IF.png)
+
+That is real copy off the air on my FTdx101MP in RTTY-L, with the radio's IF filter at 400 Hz. The cross is clean and the two arms are within 2 dB of each other, so both tones are well inside the filter. The odd wrong letter is ordinary RTTY in a crowded band, not the filter.
+
 The counters beside the text are worth a glance when nothing is arriving. **Activity** is how much of the audio is landing in the two tone filters; **characters** is how many it has tried to assemble; and **framing errors** is how many of those did not have their stop element where a character of that speed should have put it. Text with a low error count is good copy. A lot of characters and a lot of errors together means it is being fed something that is nearly right — the commonest causes are the wrong speed, or **Rev** the wrong way round. Nothing arriving at all, with activity near zero, is an audio or tuning problem rather than a decoding one.
 
 ### 22.6 Sending
