@@ -15,6 +15,7 @@
 // accessibility layer: both were Colin's call on 2026-10-13. Classic keeps them.
 
 import { mountRadioPanel } from '/js/radio-panel/radio-panel.js';
+import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
 import { alignBins, txMeterFraction } from '/js/radio-panel/panel-math.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
@@ -60,6 +61,7 @@ export function startYaesuRadioPanel(root, cfg) {
     const maxPowerW = num(cfg.maxPowerW) || 100;
 
     let radioScreen = null;     // set just after mount; the panel may call onScreenView during it
+    let onWindowPanel = () => {};   // likewise: windows restored from last time report during mount
     const panel = mountRadioPanel(root, {
         brandShort: 'YWC',
         brandName: 'Yaesu Web Control',
@@ -87,6 +89,8 @@ export function startYaesuRadioPanel(root, cfg) {
             { id: 'procl', label: 'Proc Level' }, { id: 'mon', label: 'Monitor' },
         ],
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
+        windows: YAESU_WINDOWS,
+        onWindowPanel: (g, p, shown) => onWindowPanel(g, p, shown),
         onScreenView: id => { if (id === 'tft') radioScreen?.show(); },
         onAction: (kind, id, vfo) => act(kind, id, vfo),
         choices: (kind, vfo) => choices(kind, vfo),
@@ -95,6 +99,7 @@ export function startYaesuRadioPanel(root, cfg) {
     });
     radioScreen = startRadioScreen(panel.screenSlot('tft'), { model, dual, scopeCat: !!cfg.scopeCat });
     if (panel.screenView() === 'tft') radioScreen.show();
+    onWindowPanel = startYaesuWindows(panel.windows);
 
     // ---- the slice of radio state the panel derives things from ----------
     const r = {

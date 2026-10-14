@@ -20,6 +20,7 @@ import {
     formatFrequency, sMeterFraction, sMeterText, meterGeometry, LOWER_SCALES,
     passbandPercent, axisLabels, spanText, widthText, knobAngle,
 } from './panel-math.js';
+import { mountPanelWindows } from './panel-windows.js';
 
 const DESIGN_WIDTH = 1600;
 const SIZES = ['fit', '50', '67', '75', '90', '100', '110', '125', '150'];
@@ -75,6 +76,11 @@ function knobSvg(size) {
  *                                          always 'sdr'; each other view gets an empty
  *                                          slot (screenSlot(id)) for the adapter to fill
  *   onScreenView(id)                       told when the operator switches view
+ *   windows: [{ id, key, title, pos, panels }]  optional: the launcher keys and the
+ *                                          windows they open - see panel-windows.js.
+ *                                          The adapter fills each panel through
+ *                                          api.windows.slot(groupId, panelId)
+ *   onWindowPanel(groupId, panelId, shown) told when a window panel shows or hides
  *   storagePrefix, fontBase
  *   onAction(kind, id, vfo)                kind: 'key' | 'band' | 'mode' | 'step' | 'vfoKey'
  *                                          | 'vfo' (the operator clicked VFO 'A' or 'B')
@@ -171,7 +177,8 @@ export function mountRadioPanel(root, opts = {}) {
         keysGrid.append(b);
         keyEls[k.id] = { b, led, sub };
     }
-    left.append(meterWell, meterBtns, keysGrid);
+    const launcher = h('div', 'rp-launcher');
+    left.append(meterWell, meterBtns, keysGrid, launcher);
 
     // centre: the screen
     const well = h('div', 'rp-screen-well');
@@ -489,6 +496,12 @@ export function mountRadioPanel(root, opts = {}) {
     sizeSel.addEventListener('change', () => { store.set(prefix + 'size', sizeSel.value); rescale(); });
     window.addEventListener('resize', rescale);
 
+    // Windows (CW, RTTY, Memories ...) sit on the board, so they scale with it.
+    const windows = mountPanelWindows({
+        board: panel, launcher, groups: opts.windows ?? [], store, prefix,
+        onShow: opts.onWindowPanel,
+    });
+
     setTheme(store.get(prefix + 'theme', DEFAULT_THEME));
     setScreenView(store.get(prefix + 'screen', 'sdr'));
     drawMeterFace();
@@ -603,5 +616,7 @@ export function mountRadioPanel(root, opts = {}) {
         screenSlot(id) { return slots[id] ?? null; },
         screenView() { return st.screenView; },
         setScreenView,
+        // The windows: slot(groupId, panelId) is a panel's body for the adapter to fill.
+        windows,
     };
 }
