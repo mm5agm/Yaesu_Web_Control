@@ -35,6 +35,7 @@
    - 5.20 [Radio Scope — the radio's own display (FTdx101MP/D and FTdx10)](#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
    - 5.21 [Pop-out windows](#521-pop-out-windows)
    - 5.22 [Experimental UI](#522-experimental-ui)
+   - 5.23 [Radio panel](#523-radio-panel)
 6. [Settings Page](#6-settings-page)
    - 6.1 [Radio Connection](#61-radio-connection)
    - 6.2 [Web Server Settings](#62-web-server-settings)
@@ -1322,6 +1323,37 @@ The Experimental UI is a dark workspace made of panels: **VFO A**, **VFO B**, **
 - **RX and TX.** On the single-receiver radios (FTdx10, FT-710, FTDX3000, FT-991A), the **RX A/B** and **TX A/B** buttons in the toolbar choose the receive and transmit VFOs separately; split is on whenever they are different. The FTdx101MP and FTdx101D don't show them: there, **Split** in the **VFO Actions** panel moves transmit to VFO B, as on the Classic page. On the FT-991A, **RX B** is greyed out because the radio can't choose its receive VFO over CAT; use Swap A/B instead.
 
 It is called experimental for a reason. It is a separate copy of the page's code, so a fix made to the Classic page doesn't reach it automatically and the two can behave a little differently. If something works on the Classic page and not here, please report it and say which page you were on.
+
+### 5.23 Radio panel
+
+**Radio** in the top bar, on both the Classic page and the Experimental UI, opens a third way of working the radio, at `http://localhost:8080/radio`. It is laid out like the front of a transceiver: the meter and the keys down the left, a screen in the middle with the VFOs, the spectrum and the band and mode keys, the main dial on the right, and a row of knobs along the bottom. The **Classic**, **Experimental** and **Radio** buttons in its top strip move between the three, and they can all be open in different tabs at once.
+
+It is still being built. What is described here works now. The knobs only show the radio's settings so far; turning them, and turning the main dial, is the next stage.
+
+**The screen.**
+
+- **MAIN · VFO-A** on the left and **SUB · VFO-B** on the right show each VFO's frequency, mode, IF width, AGC, and anything switched on such as IPO, ATT, NB, DNR, DNF or NOTCH. On the FTdx101MP and FTdx101D, SUB has its own small S-meter bar as well. **SPLIT** appears beside MAIN when split is on.
+- **The spectrum** is VFO A's SDR ([§5.4](#54-spectrum-display)), with the passband shaded, the frequency along the bottom and DX cluster spots ([§5.17](#517-dx-spots-list)) marked on it. With no SDR set up, it says so.
+- **Radio screen.** The **SDR / Radio screen** switch in the corner of the waterfall swaps the spectrum for the picture of the radio's own display, the same one the Radio Display panel shows ([§19](#19-radio-display)). It needs a capture device chosen in that panel on the Classic page first.
+- **The lamps** in the top strip show the connection to the radio (**CAT**), the SDR and the DX cluster: green is working, amber is connecting, red is a fault.
+
+**The selected receiver.** One VFO is outlined and tagged **SELECTED**. That is the receiver the radio is on (MAIN or SUB on the FTdx101MP and FTdx101D), and it is the one the panel works on: the meter needle, the mode keys and the keys down the left all show it, and a press changes it. **Click the other VFO to select it**, which changes the radio over as clicking a VFO's heading does on the Classic page. If you change it on the radio itself, the outline follows.
+
+**The keys.** Each key's light shows whether that function is on for the selected receiver, and the small text under some of them shows the setting.
+
+- **IPO** steps through IPO, AMP1 and AMP2. **ATT** steps through off, 6, 12 and 18 dB.
+- **AGC** steps through FAST, MID, SLOW and AUTO. It never goes to OFF, because AGC off pins the S-meter at zero and the receiver looks deaf. Use the Classic page if you really want it off.
+- **NB**, **DNR**, **DNF**, **NOTCH**, **CONTOUR**, **APF** and **PROC** switch on and off. CONTOUR and APF keep the frequency they were last set to.
+- **SPLIT**, **RX CLAR** and **TX CLAR** under the dial switch split and the clarifier on and off. The clarifier offset is shown beside the knob under them.
+- **VOX** and **TUNE** only show the radio's state, and pressing them does nothing. Both can make the radio transmit, so on this page they are left alone deliberately.
+
+**Bands, modes and the step.** The band keys under the spectrum change band on the selected receiver, and the mode keys change its mode; the lit mode key is the one it is in. The **−** and **+** keys under the dial tune the selected receiver down or up by one step, landing on a whole step as a radio's dial does. Press **STEP** to go through 10 Hz, 50 Hz, 100 Hz, 500 Hz, 1 kHz, 5 kHz and 10 kHz; this browser remembers it.
+
+**The meter.** On receive, the needle shows the selected receiver's S-meter. On transmit, the **PO**, **SWR**, **ALC**, **COMP** and **IDD** buttons under it choose what the lower scale and the needle show.
+
+**Theme and size.** The two boxes at the right of the top strip choose the colours and the size. **Dark console** is the usual look; **Night (red)**, **Silver classic**, **Daylight**, **Green display** and **High contrast** are the others, and **Match computer** follows Windows' light or dark setting. **Fit** makes the whole panel fit the window; the percentages fix its size and let you scroll. Both are remembered by this browser, so a tablet and a PC can each have their own.
+
+The Radio panel has none of the screen-reader or voice-control work of the Classic page, and no launch buttons for WSJT-X or other programs. Those stay on the Classic page.
 
 ---
 
