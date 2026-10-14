@@ -258,7 +258,9 @@ export function startYaesuRadioPanel(root, cfg) {
         const nOn = on(r.notch[vfo]), cOn = !!r.contour[vfo];
         panel.setGroupKnob(g, 'notchcont', {
             inner: frac(r.notchHz[vfo], 3200), outer: frac(r.contourHz[vfo], 3200),
-            text: (nOn && r.notchHz[vfo] != null ? r.notchHz[vfo] : 'off') + ' · ' + (cOn ? r.contourHz[vfo] : 'off'),
+            // The frequencies show whether or not the filter is on (the NOTCH
+            // and CONTOUR keys light for that), so turning a knob always shows.
+            text: val(r.notchHz[vfo]) + '·' + val(r.contourHz[vfo]),
             title: `Notch ${nOn ? 'on' : 'off'} ${val(r.notchHz[vfo])} Hz · contour ${cOn ? 'on' : 'off'} ${r.contourHz[vfo]} Hz`,
         });
     }

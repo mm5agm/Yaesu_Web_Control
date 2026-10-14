@@ -223,6 +223,8 @@ html,body{margin:0;background:${v('page')}}
 .rp-dial.dual{background:repeating-conic-gradient(from var(--rp-ring-rot,0deg),${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg)}
 .rp-turn{cursor:grab;touch-action:none;user-select:none}
 .rp-turn.turning{cursor:grabbing}
+.rp-dial[data-hot=A],.rp-dial[data-hot=all]{outline:3px solid ${v('accent')};outline-offset:3px}
+.rp-dial[data-hot=B] .rp-dial-knob{outline:3px solid ${v('accent')};outline-offset:3px}
 .rp-dial-well{width:204px;height:204px;border-radius:50%;background:${v('dial-b')};box-shadow:inset 0 3px 8px rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center}
 .rp-dial-knob{width:168px;height:168px;border-radius:50%;background:repeating-conic-gradient(from var(--rp-knob-rot,0deg),${v('dial-a')} 0deg 3deg,${v('dial-b')} 3deg 6deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.7)}
 .rp-dial-knob .rp-dial-inner{width:130px;height:130px}
@@ -267,6 +269,8 @@ html,body{margin:0;background:${v('page')}}
 .rp-group{min-width:0;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:8px;border:2px solid ${v('well-border')}}
 .rp-group.sel{border-color:${v('highlight')}}
 .rp-group.sel .rp-knobsvg .m{stroke:${v('highlight')}}
+.rp-knobsvg[data-hot=outer] circle.o:first-of-type,.rp-knobsvg[data-hot=all] circle.o:first-of-type{stroke:${v('accent')};stroke-width:2}
+.rp-knobsvg[data-hot=inner] .c.ring{stroke:${v('accent')};stroke-width:2.5}
 .rp-group-head{display:flex;align-items:center;gap:8px;height:18px}
 .rp-group-name{font:700 15px ${SANS};letter-spacing:.16em;color:${v('sub-label')};white-space:nowrap}
 .rp-group.sel .rp-group-name{color:${v('highlight')}}
