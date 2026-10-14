@@ -192,6 +192,11 @@ export function startYaesuWindows(windows, ctx) {
         const r = h('div', 'rp-wrow');
         r.append(h('span', 'rp-wlabel', 'BREAK-IN'), bk);
         body.append(r);
+        // Classic's ZIN: the radio nudges the selected receiver so the CW
+        // signal sits on the pitch. It tunes; it does not transmit.
+        const zin = h('div', 'rp-wbtns');
+        zin.append(key('ZERO IN', () => ctx.post(`/api/cat/cw/zin/${ctx.selected().toLowerCase()}`)));
+        body.append(zin);
         function setSpeed(d) {
             const wpm = Math.max(4, Math.min(60, num(state.CwSpeed) + d));
             if (!state.CwSpeed || wpm === num(state.CwSpeed)) return;
