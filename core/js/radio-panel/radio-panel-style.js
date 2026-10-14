@@ -54,6 +54,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-chip.dim{border-color:${v('chip-dim-border')};color:${v('chip-dim-fg')}}
 .rp-chip.hidden{display:none}
 .rp-chip.sel{background:${v('highlight')};border-color:${v('highlight')};color:${v('screen')}}
+.rp-chip.oob{background:${v('tx')};border-color:${v('tx')};color:${v('tx-fg')}}
 .rp-chipbtn{appearance:none;border:1px solid ${v('key-border')};background:${v('chipbtn-bg')};color:${v('chipbtn-fg')};border-radius:5px;height:40px;font:600 16px ${SANS};letter-spacing:.1em;cursor:pointer;padding:0}
 .rp-chipbtn.on{background:${v('accent-bg')};border-color:${v('accent')};color:${v('accent-soft')}}
 .rp-lamp{width:12px;height:12px;border-radius:50%;background:${v('lamp-off')};display:inline-block}
@@ -199,6 +200,9 @@ html,body{margin:0;background:${v('page')}}
 .rp-cursor{position:absolute;top:0;bottom:0;left:50%;width:1px;background:${v('cursor')}}
 .rp-spot{position:absolute;transform:translateX(-50%);font:600 16px ${SANS};letter-spacing:.06em;color:${v('spot-fg')};background:${v('spot-bg')};border-radius:3px;padding:2px 7px;white-space:nowrap}
 .rp-spec-label{position:absolute;left:10px;top:8px;font:400 15px ${MONO};color:${v('spec-label')}}
+.rp-spec-oob{display:none;position:absolute;left:50%;top:8px;transform:translateX(-50%);padding:2px 10px;border-radius:4px;background:${v('tx')};color:${v('tx-fg')};font:600 14px ${SANS};letter-spacing:.12em;z-index:2}
+.rp-spec-oob.on{display:block}
+.rp-spec-span{position:absolute;left:6px;bottom:6px;z-index:3;font-size:13px;padding:3px 8px;border-radius:5px;background:${v('bar-bg')};border:1px solid ${v('well-border')}}
 .rp-spec-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 22px ${SANS};letter-spacing:.14em;text-transform:uppercase;color:${v('spec-label')}}
 .rp-axis{display:flex;justify-content:space-between;font:400 15px ${MONO};color:${v('axis')};margin-top:-4px;min-height:15px}
 .rp-waterfall{height:128px;position:relative;border:1px solid ${v('screen-line')};border-radius:4px;overflow:hidden;background:${v('spec-bg')}}

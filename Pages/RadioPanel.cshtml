@@ -32,6 +32,7 @@
             maxPowerW: @Model.MaxPower,
             maxHz: @Model.MaxHz,
             scopeCat: @(Model.HasScopeCat ? "true" : "false"),
+            bandPlan: '@Model.BandPlan',
             vdd: @(Model.HasVdd ? Html.Raw($"{{ min: {Model.VddDial.Min}, max: {Model.VddDial.Max} }}") : Html.Raw("null")),
             paTemp: @(Model.HasPaTemp ? "true" : "false"),
             views: [

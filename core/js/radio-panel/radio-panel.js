@@ -193,6 +193,8 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *                                            frequency digit)
  *                                          | 'entry' (the ENT chip in a VFO box: the
  *                                            operator wants to type a frequency)
+ *                                          | 'span' (id the span in Hz, vfo the pane;
+ *                                            with opts.spectrumSpans [{ hz, label? }])
  *                                          | 'dial' (id 'up' | 'down'; vfo names the
  *                                            ring or knob of a dual dial)
  *                                          | 'knob' (a turned knob, id 'afrf:inner' etc.
@@ -322,7 +324,9 @@ export function mountRadioPanel(root, opts = {}) {
     const selA = h('span', 'rp-chip sel hidden', 'SELECTED');
     // ENT: type a frequency into this VFO (the adapter opens its keypad).
     const entA = h('span', 'rp-chip ent hidden', 'ENT'), entB = h('span', 'rp-chip ent hidden', 'ENT');
-    mainHead.append(mainName, rxtx, splitChip, selA, entA);
+    // OUT OF BAND: the adapter says when a VFO is outside every band.
+    const oobA = h('span', 'rp-chip oob hidden', 'OUT OF BAND'), oobB = h('span', 'rp-chip oob hidden', 'OUT OF BAND');
+    mainHead.append(mainName, rxtx, splitChip, selA, oobA, entA);
     const mainFreq = h('div', 'rp-freq');
     const mainBig = h('span', 'big', '-.---'), mainSmall = h('span', 'small', '.---');
     mainFreq.append(mainBig, mainSmall);
@@ -338,7 +342,7 @@ export function mountRadioPanel(root, opts = {}) {
     const subName = h('span', 'rp-vfo-name', dual ? 'SUB · VFO-B' : 'VFO-B');
     const subRx = h('span', 'rp-chip dim', dual ? 'RX' : '');
     const selB = h('span', 'rp-chip sel hidden', 'SELECTED');
-    subHead.append(subName, subRx, selB, entB);
+    subHead.append(subName, subRx, selB, oobB, entB);
     const subFreq = h('div', 'rp-subfreq');
     const subBig = h('span', 'big', '-.---'), subSmall = h('span', 'small', '.---');
     subFreq.append(subBig, subSmall);
@@ -426,12 +430,34 @@ export function mountRadioPanel(root, opts = {}) {
         const spotsEl = h('div');
         const label = h('div', 'rp-spec-label', '');
         const empty = h('div', 'rp-spec-empty', 'No SDR');
-        spec.append(pb, h('div', 'rp-cursor'), spotsEl, label, empty);
+        const oob = h('div', 'rp-spec-oob', 'OUT OF BAND');
+        spec.append(pb, h('div', 'rp-cursor'), spotsEl, label, oob, empty);
         const axis = h('div', 'rp-axis');
         const wf = h('div', 'rp-waterfall');
+        // The span picker sits in the waterfall's bottom-left corner (the
+        // view tabs have the right): act('span', hz, pane id).
+        let spanSel = null;
+        if (act && opts.spectrumSpans?.length) {
+            spanSel = h('select', 'rp-select rp-spec-span');
+            spanSel.title = 'Spectrum span';
+            // Until the SDR reports its span.
+            const unknown = h('option', null, 'SPAN');
+            unknown.value = '';
+            unknown.disabled = unknown.hidden = true;
+            spanSel.append(unknown);
+            for (const sp of opts.spectrumSpans) {
+                const o = h('option', null, 'SPAN ' + (sp.label ?? spanText(sp.hz)));
+                o.value = String(sp.hz);
+                spanSel.append(o);
+            }
+            spanSel.value = '';
+            for (const ev of ['pointerdown', 'click', 'wheel']) spanSel.addEventListener(ev, e => e.stopPropagation());
+            spanSel.addEventListener('change', () => act('span', spanSel.value, d.id));
+            wf.append(spanSel);
+        }
         box.append(spec, axis, wf);
         sdrView.append(box);
-        panes[d.id] = { box, spec, pb, spots: spotsEl, label, empty, axis, wf, name: d.name ?? '', text: '' };
+        panes[d.id] = { box, spec, pb, spots: spotsEl, label, empty, oob, spanSel, axis, wf, name: d.name ?? '', text: '' };
     }
 
     // The spectrum and any other view share the space between the VFOs and
@@ -1018,7 +1044,17 @@ export function mountRadioPanel(root, opts = {}) {
         setSpectrumSource({ label, spanHz, status } = {}, vfo = 'A') {
             const pn = panes[vfo];
             if (!pn) return;
-            if (spanHz != null && Number(spanHz) !== st.spanHz[vfo]) { st.spanHz[vfo] = Number(spanHz) || 0; drawOverlays(vfo); }
+            if (spanHz != null && Number(spanHz) !== st.spanHz[vfo]) {
+                st.spanHz[vfo] = Number(spanHz) || 0;
+                drawOverlays(vfo);
+                // The nearest listed span: a cropped span arrives a few Hz off.
+                if (pn.spanSel && st.spanHz[vfo] > 0 && document.activeElement !== pn.spanSel) {
+                    let best = null;
+                    for (const sp of opts.spectrumSpans)
+                        if (!best || Math.abs(Math.log(sp.hz / st.spanHz[vfo])) < Math.abs(Math.log(best.hz / st.spanHz[vfo]))) best = sp;
+                    pn.spanSel.value = String(best.hz);
+                }
+            }
             if (label !== undefined) pn.text = label ?? '';
             paneLabel(vfo);
             if (status !== undefined) {
@@ -1028,6 +1064,15 @@ export function mountRadioPanel(root, opts = {}) {
             }
         },
         pushSpectrum(bins, vfo = 'A') { panes[vfo]?.view.push(bins); },
+        /** VFO `vfo` is outside every band: `text` is the hover note, or
+         *  null when it is back inside one. */
+        setOutOfBand(vfo, text) {
+            const c = vfo === 'B' ? oobB : oobA;
+            c.classList.toggle('hidden', !text);
+            c.title = text ?? '';
+            const pn = panes[vfo];
+            if (pn) { pn.oob.classList.toggle('on', !!text); pn.oob.title = text ?? ''; }
+        },
         /** The spectrum is in its own window (true) or back on the board. */
         setSpectrumAway(away) {
             specAway?.classList.toggle('on', !!away);

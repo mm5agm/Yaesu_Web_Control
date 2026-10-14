@@ -27,6 +27,7 @@
 import { mountRadioPanel } from '/js/radio-panel/radio-panel.js';
 import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
 import { alignBins, txMeterFraction, rangeLegends } from '/js/radio-panel/panel-math.js';
+import { BAND_EDGES, nearestBandForHz, loadBandPlanFromServer } from '/js/ui/band-plan.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
@@ -137,6 +138,8 @@ export function startYaesuRadioPanel(root, cfg) {
         spectrumPanes: dual
             ? [{ id: 'A', tab: 'Main', name: 'MAIN · SDR A' }, { id: 'B', tab: 'Sub', name: 'SUB · SDR B' }]
             : [{ id: 'A', tab: 'VFO-A', name: 'VFO-A · SDR A' }, { id: 'B', tab: 'VFO-B', name: 'VFO-B · SDR B' }],
+        // The spans Classic offers (SpectrumSpanPlan.ValidSpans).
+        spectrumSpans: [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6].map(hz => ({ hz })),
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
         windows: YAESU_WINDOWS,
         onWindowPanel: (g, p, shown) => win?.onShow(g, p, shown),
@@ -359,6 +362,8 @@ export function startYaesuRadioPanel(root, cfg) {
             case 'vfo':
                 if (id !== r.sel) post(`/api/cat/active-vfo/${id}`);
                 return;
+            case 'span':
+                return post(`/api/sdr/span?hz=${id}&sdrId=${vfo}`);
             case 'band':
                 return post(`/api/cat/band/${rx}`, { band: id });
             case 'mode':
@@ -493,6 +498,19 @@ export function startYaesuRadioPanel(root, cfg) {
         }
     }
 
+    // ---- out of band ------------------------------------------------------
+    // Classic's test: outside every band edge of the configured region
+    // (the band plan JSON can move them, so it is looked up each time).
+    function checkBand(v) {
+        const hz = r.freq[v];
+        if (!hz) return;
+        const edges = BAND_EDGES[cfg.bandPlan] || BAND_EDGES.Region1;
+        const inside = edges.some(b => hz >= b.lo && hz <= b.hi);
+        const near = inside ? null : nearestBandForHz(hz, edges);
+        panel.setOutOfBand(v, inside ? null : 'Outside every amateur band' + (near ? ' - nearest ' + near : ''));
+    }
+    loadBandPlanFromServer().then(() => { checkBand('A'); checkBand('B'); });
+
     function tuneBy(deltaHz) {
         const v = r.sel;
         const cur = r.freq[v];
@@ -501,6 +519,7 @@ export function startYaesuRadioPanel(root, cfg) {
         const next = deltaHz > 0 ? Math.floor(cur / stepHz) * stepHz + stepHz : Math.ceil(cur / stepHz) * stepHz - stepHz;
         r.freq[v] = next;
         panel.setFrequency(v, next);
+        checkBand(v);
         post(`/api/cat/frequency/${v.toLowerCase()}`, { frequencyHz: next });
     }
 
@@ -528,6 +547,7 @@ export function startYaesuRadioPanel(root, cfg) {
         w.until = Date.now() + 700;
         r.freq[vfo] = to;
         panel.setFrequency(vfo, to);
+        checkBand(vfo);
         if (w.busy) return;
         w.busy = true;
         try {
@@ -612,8 +632,8 @@ export function startYaesuRadioPanel(root, cfg) {
     // ---- one hub, one router ---------------------------------------------
     const handlers = {
         IsConnected: v => panel.setLamp('cat', on(v) ? 'on' : 'bad'),
-        FrequencyA: v => { if (wheelHolds('A')) return; r.freq.A = num(v); panel.setFrequency('A', r.freq.A); },
-        FrequencyB: v => { if (wheelHolds('B')) return; r.freq.B = num(v); panel.setFrequency('B', r.freq.B); },
+        FrequencyA: v => { if (wheelHolds('A')) return; r.freq.A = num(v); panel.setFrequency('A', r.freq.A); checkBand('A'); },
+        FrequencyB: v => { if (wheelHolds('B')) return; r.freq.B = num(v); panel.setFrequency('B', r.freq.B); checkBand('B'); },
         BandA: v => { if (v !== r.band.A) { r.band.A = v; panel.clearSpectrum('A'); } panel.setBand(r.band[r.sel]); },
         BandB: v => { if (v !== r.band.B) { r.band.B = v; panel.clearSpectrum('B'); } panel.setBand(r.band[r.sel]); },
         ModeA: v => { r.mode.A = String(v ?? ''); panel.setMode('A', r.mode.A); refreshWidth('A'); readDataShift(r.mode.A); },
