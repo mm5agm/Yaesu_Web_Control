@@ -519,6 +519,28 @@ export function mountRadioPanel(root, opts = {}) {
                     act('dial', e.deltaY < 0 ? 'up' : 'down', d.id);
                 }, { passive: false });
             }
+        // A hairline and readout follow the pointer over the spectrum and
+        // waterfall, naming the frequency under it, as the classic spectrum does.
+        const xRead = h('div', 'rp-xread');
+        const xLines = [spec, wf].map(el => { const x = h('div', 'rp-xhair'); el.append(x); return x; });
+        spec.append(xRead);
+        const xHide = () => { xRead.style.display = 'none'; for (const x of xLines) x.style.display = 'none'; };
+        xHide();
+        for (const el of [spec, wf]) {
+            el.addEventListener('pointermove', e => {
+                const span = st.spanHz[d.id], f = st.freq[d.id];
+                const rc = el.getBoundingClientRect();
+                if (!(span > 0 && f > 0) || !rc.width || e.target.closest('select, button, .rp-spec-tools')) return xHide();
+                const frac = Math.max(0, Math.min(1, (e.clientX - rc.left) / rc.width));
+                const fr = formatFrequency(f + (frac - 0.5) * span);
+                for (const x of xLines) { x.style.left = frac * 100 + '%'; x.style.display = 'block'; }
+                xRead.textContent = fr.big + fr.small;
+                xRead.style.display = 'block';
+                xRead.classList.toggle('left', frac > 0.75);
+                xRead.style.left = frac * 100 + '%';
+            });
+            el.addEventListener('pointerleave', xHide);
+        }
         sdrView.append(box);
         panes[d.id] = { box, spec, pb, spots: spotsEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '' };
     }
