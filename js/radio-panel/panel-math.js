@@ -50,7 +50,15 @@ export const LOWER_SCALES = {
     ALC:  ['0', '', '', '', 'MAX'],
     COMP: ['0', '5', '10', '15', '20'],
     IDD:  ['0', '10', '20', '30', '40'],
+    TEMP: ['0', '25', '50', '75', '100'],
 };
+
+// Legends for a meter whose dial is a range rather than from zero (a PA
+// supply, 40-55 V or 10-16 V): the ends and the middle, blanks between.
+export function rangeLegends(min, max) {
+    const f = x => String(Math.round(x * 10) / 10);
+    return [f(min), '', f((min + max) / 2), '', f(max)];
+}
 
 // SVG geometry for the analogue meter face (viewBox 0 0 250 145). `frac` is
 // the needle position 0..1; `lower` is a five-entry legend list.
@@ -225,12 +233,15 @@ export function alignBins(bins, offsetHz, spanHz) {
 }
 
 // Needle positions for the TX meters, matching LOWER_SCALES' five legends at
-// 0, 1/4, 1/2, 3/4 and full scale.
-export function txMeterFraction(meter, value) {
+// 0, 1/4, 1/2, 3/4 and full scale. VDD takes its dial as `range`, matching
+// rangeLegends(range.min, range.max).
+export function txMeterFraction(meter, value, range) {
     const v = Number(value);
     if (!Number.isFinite(v) || v <= 0) return 0;
     const clamp = x => Math.max(0, Math.min(1, x));
     switch (meter) {
+        case 'TEMP': return clamp(v / 100);          // degrees C
+        case 'VDD':  return range && range.max > range.min ? clamp((v - range.min) / (range.max - range.min)) : 0;
         case 'PO':   return clamp(v / 200);          // watts
         case 'COMP': return clamp(v / 20);           // dB
         case 'IDD':  return clamp(v / 40);           // amps

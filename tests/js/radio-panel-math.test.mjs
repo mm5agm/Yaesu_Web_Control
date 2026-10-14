@@ -151,6 +151,17 @@ test('TX meter fractions land on their legends', async () => {
     assert.equal(txMeterFraction('COMP', 10), 0.5);
     assert.equal(txMeterFraction('IDD', 40), 1);
     assert.equal(txMeterFraction('NOPE', 5), 0);
+    assert.equal(txMeterFraction('TEMP', 50), 0.5);
+    assert.equal(txMeterFraction('VDD', 47.5, { min: 40, max: 55 }), 0.5);
+    assert.equal(txMeterFraction('VDD', 13, { min: 10, max: 16 }), 0.5);
+    assert.equal(txMeterFraction('VDD', 30, { min: 40, max: 55 }), 0);
+    assert.equal(txMeterFraction('VDD', 13), 0);
+});
+
+test('a range dial is labelled at its ends and middle', async () => {
+    const { rangeLegends } = await import('../../js/radio-panel/panel-math.js');
+    assert.deepEqual(rangeLegends(40, 55), ['40', '', '47.5', '', '55']);
+    assert.deepEqual(rangeLegends(10, 16), ['10', '', '13', '', '16']);
 });
 
 test('every theme defines every colour, so none falls back half-drawn', async () => {
