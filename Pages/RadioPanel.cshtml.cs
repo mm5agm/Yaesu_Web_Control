@@ -14,6 +14,7 @@ namespace Yaesu_Web_Control.Pages
         public int MaxPower => RadioCapabilities.MaxPowerWatts(RadioModel);
         // Click-to-tune on the Radio screen needs the radio's scope span (SS).
         public bool HasScopeCat => RadioCapabilities.SupportsSpectrumScopeCat(RadioModel);
+        public long MaxHz => RadioCapabilities.FrequencyRangeHz(RadioModel).MaxHz;
 
         public RadioPanelModel(RadioStateService radioStateService, ISettingsService settingsService)
             : base(radioStateService, settingsService)

@@ -81,12 +81,15 @@ function knobSvg(size) {
  *                                          The adapter fills each panel through
  *                                          api.windows.slot(groupId, panelId)
  *   onWindowPanel(groupId, panelId, shown) told when a window panel shows or hides
+ *   frequencyEntry (bool)                  show an ENT chip in each VFO box
  *   storagePrefix, fontBase
  *   onAction(kind, id, vfo)                kind: 'key' | 'band' | 'mode' | 'step' | 'vfoKey'
  *                                          | 'vfo' (the operator clicked VFO 'A' or 'B')
  *                                          | 'width' | 'agc' (picked from a VFO box chip)
  *                                          | 'tune' (id = signed Hz, from the wheel over a
- *                                            frequency digit). `vfo` is set when the
+ *                                            frequency digit)
+ *                                          | 'entry' (the ENT chip in a VFO box: the
+ *                                            operator wants to type a frequency). `vfo` is set when the
  *                                          action came from inside a VFO box and names
  *                                          that box; otherwise it is undefined.
  *   choices(kind, vfo)                     kind 'mode' | 'width' | 'agc': the list a click
@@ -192,7 +195,9 @@ export function mountRadioPanel(root, opts = {}) {
     const rxtx = h('span', 'rp-chip rx', 'RX');
     const splitChip = h('span', 'rp-chip hidden', 'SPLIT');
     const selA = h('span', 'rp-chip sel hidden', 'SELECTED');
-    mainHead.append(mainName, rxtx, splitChip, selA);
+    // ENT: type a frequency into this VFO (the adapter opens its keypad).
+    const entA = h('span', 'rp-chip ent hidden', 'ENT'), entB = h('span', 'rp-chip ent hidden', 'ENT');
+    mainHead.append(mainName, rxtx, splitChip, selA, entA);
     const mainFreq = h('div', 'rp-freq');
     const mainBig = h('span', 'big', '-.---'), mainSmall = h('span', 'small', '.---');
     mainFreq.append(mainBig, mainSmall);
@@ -208,7 +213,7 @@ export function mountRadioPanel(root, opts = {}) {
     const subName = h('span', 'rp-vfo-name', dual ? 'SUB · VFO-B' : 'VFO-B');
     const subRx = h('span', 'rp-chip dim', dual ? 'RX' : '');
     const selB = h('span', 'rp-chip sel hidden', 'SELECTED');
-    subHead.append(subName, subRx, selB);
+    subHead.append(subName, subRx, selB, entB);
     const subFreq = h('div', 'rp-subfreq');
     const subBig = h('span', 'big', '-.---'), subSmall = h('span', 'small', '.---');
     subFreq.append(subBig, subSmall);
@@ -265,6 +270,13 @@ export function mountRadioPanel(root, opts = {}) {
                 const el = chips[kind];
                 el.classList.add('act');
                 el.addEventListener('click', e => { e.stopPropagation(); openPicker(el, kind, vfo); });
+            }
+        if (opts.frequencyEntry)
+            for (const [el, vfo] of [[entA, 'A'], [entB, 'B']]) {
+                el.classList.remove('hidden');
+                el.classList.add('act');
+                el.title = 'Type a frequency';
+                el.addEventListener('click', e => { e.stopPropagation(); act('entry', vfo, vfo); });
             }
         for (const [freqEl, vfo] of [[mainFreq, 'A'], [subFreq, 'B']]) {
             freqEl.classList.add('wheel');

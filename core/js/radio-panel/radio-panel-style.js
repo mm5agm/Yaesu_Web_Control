@@ -118,6 +118,37 @@ html,body{margin:0;background:${v('page')}}
 .rp-wbtn.rp-wx{border-color:${v('key-border')};background:${v('key-bg')};color:${v('chipbtn-fg')}}
 .rp-wnote{font:500 14px ${SANS};color:${v('legend-dim')}}
 .rp-wpanel-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:7px;padding:8px 10px;overflow:auto;font:500 15px ${SANS};color:${v('text')}}
+/* What goes in a window panel: the adapter builds these, the theme colours them. */
+.rp-wpanel-body.flush{padding:0;overflow:hidden}
+.rp-wframe{flex:1;width:100%;min-height:0;border:0;display:block;background:${v('screen')}}
+.rp-wrow{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.rp-wlabel{font:600 13px ${SANS};letter-spacing:.12em;color:${v('sub-label')}}
+.rp-wval{font:600 18px ${MONO};color:${v('lcd-fg')};white-space:nowrap}
+.rp-wbtns{display:flex;flex-wrap:wrap;gap:6px}
+.rp-wkey{appearance:none;border:1px solid ${v('soft-border')};background:${v('soft-bg')};color:${v('soft-fg')};border-radius:5px;min-height:32px;padding:3px 10px;font:600 14px ${SANS};letter-spacing:.06em;cursor:pointer}
+.rp-wkey.on{background:${v('soft-on-bg')};border-color:${v('highlight')};color:${v('soft-on-fg')}}
+.rp-wkey:disabled{opacity:.45;cursor:default}
+.rp-wkey.warn{border-color:${v('accent')};color:${v('accent-soft')}}
+.rp-wbar{display:grid;grid-template-columns:62px 1fr 92px;align-items:center;gap:8px}
+.rp-wbar .lbl{font:600 13px ${SANS};letter-spacing:.12em;color:${v('sub-label')}}
+.rp-wbar .track{height:10px;background:${v('sbar-track')};border-radius:2px;overflow:hidden}
+.rp-wbar .fill{width:0;height:100%;background:${v('highlight')};transition:width .12s linear}
+.rp-wbar.tx .fill{background:${v('tx')}}
+.rp-wbar .txt{font:600 14px ${MONO};color:${v('lcd-fg')};text-align:right;white-space:nowrap}
+.rp-wcanvas{flex:1;min-height:0;width:100%;display:block;background:${v('screen')};border-radius:4px}
+.rp-wselect{font:500 14px ${SANS};background:${v('chipbtn-bg')};color:${v('chipbtn-fg')};border:1px solid ${v('key-border')};border-radius:4px;padding:3px 6px;max-width:100%}
+.rp-wlist{display:flex;flex-direction:column;gap:4px;overflow:auto;min-height:0}
+.rp-wtiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;overflow:auto;min-height:0;align-content:start}
+.rp-wtile{appearance:none;text-align:left;border:1px solid ${v('soft-border')};background:${v('soft-bg')};color:${v('soft-fg')};border-radius:5px;padding:5px 8px;cursor:pointer;display:flex;flex-direction:column;gap:1px;min-width:0}
+.rp-wtile:hover{border-color:${v('highlight')}}
+.rp-wtile.on{border-color:${v('highlight')};box-shadow:inset 0 0 0 1px ${v('highlight')}}
+.rp-wtile .t{font:600 14px ${SANS};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rp-wtile .f{font:600 15px ${MONO};color:${v('lcd-fg')}}
+.rp-wtile .m{font:500 12px ${SANS};letter-spacing:.08em;color:${v('sub-label')}}
+.rp-wentry{font:600 30px ${MONO};color:${v('freq')};background:${v('screen')};border:1px solid ${v('screen-line')};border-radius:5px;padding:6px 10px;text-align:right;min-height:52px}
+.rp-wpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;flex:1}
+.rp-wpad .rp-wkey{font-size:22px;min-height:44px}
+.rp-chip.ent{margin-left:auto}
 
 .rp-screen-well{border-radius:12px;background:${v('well')};padding:10px;border:1px solid ${v('well-border')};box-shadow:inset 0 2px 8px rgba(0,0,0,.9);min-width:0;display:flex}
 .rp-screen{flex:1;min-width:0;border-radius:6px;background:${v('screen')};border:1px solid ${v('screen-line')};padding:14px 18px;display:flex;flex-direction:column;gap:11px}

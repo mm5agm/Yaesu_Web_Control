@@ -61,7 +61,7 @@ export function startYaesuRadioPanel(root, cfg) {
     const maxPowerW = num(cfg.maxPowerW) || 100;
 
     let radioScreen = null;     // set just after mount; the panel may call onScreenView during it
-    let onWindowPanel = () => {};   // likewise: windows restored from last time report during mount
+    let win = null;             // likewise: windows restored from last time report during mount
     const panel = mountRadioPanel(root, {
         brandShort: 'YWC',
         brandName: 'Yaesu Web Control',
@@ -90,7 +90,8 @@ export function startYaesuRadioPanel(root, cfg) {
         ],
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
         windows: YAESU_WINDOWS,
-        onWindowPanel: (g, p, shown) => onWindowPanel(g, p, shown),
+        onWindowPanel: (g, p, shown) => win?.onShow(g, p, shown),
+        frequencyEntry: true,
         onScreenView: id => { if (id === 'tft') radioScreen?.show(); },
         onAction: (kind, id, vfo) => act(kind, id, vfo),
         choices: (kind, vfo) => choices(kind, vfo),
@@ -99,7 +100,6 @@ export function startYaesuRadioPanel(root, cfg) {
     });
     radioScreen = startRadioScreen(panel.screenSlot('tft'), { model, dual, scopeCat: !!cfg.scopeCat });
     if (panel.screenView() === 'tft') radioScreen.show();
-    onWindowPanel = startYaesuWindows(panel.windows);
 
     // ---- the slice of radio state the panel derives things from ----------
     const r = {
@@ -116,6 +116,12 @@ export function startYaesuRadioPanel(root, cfg) {
     panel.setStep(stepText(stepHz));
     panel.setSelected('A');
     const spots = new Map();       // callsign -> { call, hz, at }
+
+    win = startYaesuWindows(panel.windows, {
+        model, dual, maxPowerW, maxHz: num(cfg.maxHz) || 75_000_000, post,
+        selected: () => r.sel,
+        freq: vfo => r.freq[vfo] ?? 0,
+    });
 
     const pitchHz = () => 300 + num(r.pitchCode) * 10;
     const widthHz = vfo => (r.widthCode[vfo] == null ? null : ifWidthHzFor(model, r.mode[vfo], parseInt(r.widthCode[vfo], 10)));
@@ -187,6 +193,7 @@ export function startYaesuRadioPanel(root, cfg) {
     }
 
     function act(kind, id, vfo) {
+        if (kind === 'entry') return win.entry(id);
         if (vfo && kind !== 'tune' && !boxLive(vfo)) return;
         const v = vfo || r.sel, rx = v.toLowerCase();
         const flip = x => (on(x) ? '0' : '1');
@@ -426,8 +433,8 @@ export function startYaesuRadioPanel(root, cfg) {
     conn.on('RadioStateUpdate', msg => {
         radioScreen?.onRadioState(msg);
         const fn = handlers[msg?.property];
-        if (!fn) return;
-        try { fn(msg.value); } catch (e) { console.warn('radio panel:', msg.property, e); }
+        if (fn) try { fn(msg.value); } catch (e) { console.warn('radio panel:', msg.property, e); }
+        win.onRadioState(msg);
     });
     conn.onreconnecting(() => panel.setLamp('cat', 'warn'));
     conn.onclose(() => panel.setLamp('cat', 'bad'));

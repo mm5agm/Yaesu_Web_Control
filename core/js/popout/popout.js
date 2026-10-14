@@ -236,7 +236,7 @@ export async function screenPermissionState() {
  * @param {HTMLElement} container  the bar goes at the top of this element
  */
 export async function offerScreenPermission(container) {
-    if (!container) return;
+    if (!container || isEmbedded(window)) return;   // a frame never opens windows
     if (await screenPermissionState() !== 'prompt') return;
     if (!window.screen?.isExtended) return;
     try { if (localStorage.getItem(SCREEN_OFFER_DISMISSED)) return; } catch { /* ask anyway */ }
@@ -457,6 +457,11 @@ export function inTab(win) {
     return win?.toolbar?.visible === true;
 }
 
+/** True when the page is inside a frame rather than a window of its own. */
+export function isEmbedded(win) {
+    try { return win.self !== win.top; } catch { return true; }   // cross-origin parent
+}
+
 export class PopoutChild {
     /**
      * @param {object} opts
@@ -471,9 +476,20 @@ export class PopoutChild {
         this._saveTimer = null;
         this._watch    = null;
         this._frame    = null;
+        this._embedded = false;
     }
 
     start() {
+        // Hosted in a frame - the radio panel's windows show these pages in
+        // iframes - this is not a pop-out at all. Saying 'opened' would make
+        // a main page that has the same panel hide its own copy, and saving
+        // the frame's size as pop-out geometry would spoil the next real one.
+        // So it stays silent, and Reattach does nothing.
+        this._embedded = isEmbedded(window);
+        if (this._embedded) {
+            try { document.documentElement.classList.add('rwc-embedded'); } catch { /* ignore */ }
+            return this;
+        }
         // A browser that restores its tabs after a restart brings a pop-out
         // back as an ordinary tab, still carrying the pop-out's window name.
         // The main page's window.open then finds that name and loads the
@@ -528,6 +544,7 @@ export class PopoutChild {
 
     /** Hand the panel back to the main page and close this window. */
     reattach() {
+        if (this._embedded) return;
         this._saveGeometry();
         // The main page can give its panel the size this window was left at.
         this._post('reattach', { size: { width: window.innerWidth, height: window.innerHeight } });
