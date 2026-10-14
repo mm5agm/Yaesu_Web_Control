@@ -220,9 +220,11 @@ html,body{margin:0;background:${v('page')}}
 .rp-dial{width:300px;height:300px;border-radius:50%;background:repeating-conic-gradient(${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg);box-shadow:0 10px 24px rgba(0,0,0,.7),inset 0 0 0 1px ${v('dial-rim')};display:flex;align-items:center;justify-content:center}
 .rp-dial-inner{width:250px;height:250px;border-radius:50%;background:${v('dial-inner')};box-shadow:inset 0 2px 0 rgba(255,255,255,.07),inset 0 -6px 14px rgba(0,0,0,.45);position:relative}
 .rp-dial-dimple{position:absolute;width:52px;height:52px;border-radius:50%;left:154px;top:42px;background:${v('dial-dimple')};box-shadow:inset 0 3px 6px rgba(0,0,0,.7)}
-.rp-dial.dual{background:repeating-conic-gradient(${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg)}
+.rp-dial.dual{background:repeating-conic-gradient(from var(--rp-ring-rot,0deg),${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg)}
+.rp-turn{cursor:grab;touch-action:none;user-select:none}
+.rp-turn.turning{cursor:grabbing}
 .rp-dial-well{width:204px;height:204px;border-radius:50%;background:${v('dial-b')};box-shadow:inset 0 3px 8px rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center}
-.rp-dial-knob{width:168px;height:168px;border-radius:50%;background:repeating-conic-gradient(${v('dial-a')} 0deg 3deg,${v('dial-b')} 3deg 6deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.7)}
+.rp-dial-knob{width:168px;height:168px;border-radius:50%;background:repeating-conic-gradient(from var(--rp-knob-rot,0deg),${v('dial-a')} 0deg 3deg,${v('dial-b')} 3deg 6deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.7)}
 .rp-dial-knob .rp-dial-inner{width:130px;height:130px}
 .rp-dial-knob .rp-dial-dimple{width:36px;height:36px;left:78px;top:22px}
 .rp-dial.sel-a{box-shadow:0 10px 24px rgba(0,0,0,.7),inset 0 0 0 1px ${v('dial-rim')},0 0 0 3px ${v('accent')},0 0 22px ${v('accent')}}
