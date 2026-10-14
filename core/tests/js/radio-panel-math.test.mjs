@@ -69,6 +69,9 @@ test('span and width text', () => {
     assert.equal(spanText(50000), '50 kHz');
     assert.equal(spanText(2000000), '2 MHz');
     assert.equal(spanText(500), '500 Hz');
+    assert.equal(spanText(999), '1 kHz');
+    assert.equal(spanText(19989), '20 kHz');
+    assert.equal(spanText(124987), '125 kHz');
     assert.equal(widthText(2400), '2.4 kHz');
     assert.equal(widthText(3000), '3.0 kHz');
     assert.equal(widthText(250), '250 Hz');
@@ -92,9 +95,10 @@ test('columns keep the strongest bin, so a one-bin carrier survives', () => {
     assert.equal(binsToColumns([], 10).length, 10);
 });
 
-test('more columns than bins still fills every column', () => {
+test('more columns than bins draws lines between bins, not steps', () => {
     const cols = binsToColumns([1, 2, 3], 6);
-    assert.deepEqual(Array.from(cols), [1, 1, 2, 2, 3, 3]);
+    assert.deepEqual(Array.from(cols), [1, 1.25, 1.75, 2.25, 2.75, 3]);
+    assert.deepEqual(Array.from(binsToColumns([5], 3)), [5, 5, 5]);
 });
 
 test('percentile', () => {
