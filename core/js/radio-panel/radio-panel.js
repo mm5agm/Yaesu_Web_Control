@@ -73,6 +73,56 @@ function knob2Svg(size) {
     return { svg, outer, inner };
 }
 
+// Makes `el` turn like a knob: the mouse wheel over it, or a drag round its
+// centre. `partAt(x, y)` names the part under the pointer (a ring or the knob
+// inside it) and is fixed for the length of a drag. `onStep(part, dir)` is
+// called once per wheel notch or per `deg` of drag, dir +1 clockwise; and
+// `onTurn(part, deg)`, when given, follows the drag so the part can rotate
+// with the pointer.
+function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
+    el.classList.add('rp-turn');
+    el.addEventListener('wheel', e => {
+        if (!e.deltaY) return;
+        e.preventDefault();
+        const part = partAt(e.clientX, e.clientY), dir = e.deltaY < 0 ? 1 : -1;
+        onTurn?.(part, dir * deg);
+        onStep(part, dir);
+    }, { passive: false });
+    let drag = null;
+    const angle = e => {
+        const rc = el.getBoundingClientRect();
+        return Math.atan2(e.clientY - (rc.top + rc.height / 2), e.clientX - (rc.left + rc.width / 2)) * 180 / Math.PI;
+    };
+    el.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        drag = { id: e.pointerId, part: partAt(e.clientX, e.clientY), last: angle(e), acc: 0 };
+        el.setPointerCapture?.(e.pointerId);
+        el.classList.add('turning');
+        e.preventDefault();
+    });
+    el.addEventListener('pointermove', e => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const a = angle(e);
+        let d = a - drag.last;
+        if (d > 180) d -= 360; else if (d < -180) d += 360;
+        drag.last = a;
+        onTurn?.(drag.part, d);
+        drag.acc += d;
+        while (Math.abs(drag.acc) >= deg) {
+            const dir = drag.acc > 0 ? 1 : -1;
+            drag.acc -= dir * deg;
+            onStep(drag.part, dir);
+        }
+    });
+    const end = e => {
+        if (!drag || e.pointerId !== drag.id) return;
+        drag = null;
+        el.classList.remove('turning');
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+}
+
 /**
  * @param {HTMLElement} root
  * @param {object} opts
@@ -135,7 +185,13 @@ function knob2Svg(size) {
  *                                          | 'tune' (id = signed Hz, from the wheel over a
  *                                            frequency digit)
  *                                          | 'entry' (the ENT chip in a VFO box: the
- *                                            operator wants to type a frequency). `vfo` is set when the
+ *                                            operator wants to type a frequency)
+ *                                          | 'dial' (id 'up' | 'down'; vfo names the
+ *                                            ring or knob of a dual dial)
+ *                                          | 'knob' (a turned knob, id 'afrf:inner' etc.
+ *                                            or 'clar'; a fourth argument, +1 or -1, is
+ *                                            the direction; only knobs given `turn: true`,
+ *                                            and the clarifier with opts.clarTurn). `vfo` is set when the
  *                                          action came from inside a VFO box and names
  *                                          that box; otherwise it is undefined.
  *   choices(kind, vfo)                     kind 'mode' | 'width' | 'agc': the list a click
@@ -454,19 +510,31 @@ export function mountRadioPanel(root, opts = {}) {
             dialTagRow.append(t);
             dialTags[vfo] = { t, lamp };
         }
-    // The wheel over the dial tunes; with a dual dial, the inner knob tunes SUB.
+    // The wheel over the dial tunes, and so does dragging it round like the
+    // real knob: one step per 10 degrees, clockwise up. With a dual dial, the
+    // inner knob tunes SUB and the outer ring MAIN.
+    const dialRot = { A: 0, B: 0 };
     if (act)
-        dial.addEventListener('wheel', e => {
-            if (!e.deltaY) return;
-            e.preventDefault();
-            let vfo;
-            if (dualDial) {
+        turnable(dial, {
+            deg: 10,
+            partAt: (x, y) => {
+                if (!dualDial) return undefined;
                 const rc = dial.getBoundingClientRect(), kc = dialKnob.getBoundingClientRect();
-                const dx = e.clientX - (rc.left + rc.width / 2), dy = e.clientY - (rc.top + rc.height / 2);
-                vfo = Math.hypot(dx, dy) <= kc.width / 2 ? 'B' : 'A';
-            }
-            act('dial', e.deltaY < 0 ? 'up' : 'down', vfo);
-        }, { passive: false });
+                return Math.hypot(x - (rc.left + rc.width / 2), y - (rc.top + rc.height / 2)) <= kc.width / 2 ? 'B' : 'A';
+            },
+            // Turn the part being tuned: the ring's knurling for MAIN, the
+            // knob and its dimple for SUB (or the single dial).
+            onTurn: (vfo, d) => {
+                const k = vfo ?? 'B';
+                dialRot[k] = (dialRot[k] + d) % 360;
+                if (vfo === 'A') dial.style.setProperty('--rp-ring-rot', dialRot.A + 'deg');
+                else {
+                    dialInner.style.transform = `rotate(${dialRot.B}deg)`;
+                    dialKnob?.style.setProperty('--rp-knob-rot', dialRot.B + 'deg');
+                }
+            },
+            onStep: (vfo, dir) => act('dial', dir > 0 ? 'up' : 'down', vfo),
+        });
     const stepRow = h('div', 'rp-step');
     const down = button('rp-key', 'step', 'down'); down.append(h('span', 'big', '−'));
     const stepKey = button('rp-key', 'step', 'cycle'); const stepTxt = h('span', 'rp-sub', '');
@@ -518,6 +586,7 @@ export function mountRadioPanel(root, opts = {}) {
     }
     clarBox.append(clarName, clarRow);
     clar.append(clarKnob.svg, clarBox);
+    if (act && opts.clarTurn) turnable(clarKnob.svg, { onStep: (_, dir) => act('knob', 'clar', undefined, dir) });
     rightCol.append(h('span', 'rp-legend', 'Main dial'), dial);
     if (dualDial) rightCol.append(dialTagRow);
     rightCol.append(stepRow, vfoKeys);
@@ -541,12 +610,23 @@ export function mountRadioPanel(root, opts = {}) {
 
     // Or the bottom row as receiver groups: MAIN | SHARED | SUB.
     const groupEls = {};      // 'A' | 'B' | 'shared' -> { box, name, tag, knobs: { id -> { outer, inner, val, wrap } } }
-    function concentric(row, k) {
+    // Turned by the wheel or a drag when `k.turn` says so: act('knob',
+    // id + ':inner' | ':outer', vfo, dir). The inner knob is the middle
+    // 17 of the 32 units of radius.
+    function concentric(row, k, vfo) {
         const wrap = h('div', 'rp-cknob');
         const kn = knob2Svg(80);
         const val = h('span', 'rp-lcd', '--');
         wrap.append(h('span', 'rp-legend', k.label), kn.svg, val);
         row.append(wrap);
+        if (act && k.turn)
+            turnable(kn.svg, {
+                partAt: (x, y) => {
+                    const rc = kn.svg.getBoundingClientRect();
+                    return Math.hypot(x - (rc.left + rc.width / 2), y - (rc.top + rc.height / 2)) <= rc.width * 17 / 64 ? 'inner' : 'outer';
+                },
+                onStep: (part, dir) => act('knob', k.id + ':' + part, vfo, dir),
+            });
         return { wrap, outer: kn.outer, inner: kn.inner, val };
     }
     function rxGroup(vfo) {
@@ -557,7 +637,7 @@ export function mountRadioPanel(root, opts = {}) {
         head.append(name, tag);
         const row = h('div', 'rp-group-row');
         const g = { box, name, tag, knobs: {} };
-        for (const k of opts.rxGroups.knobs ?? []) g.knobs[k.id] = concentric(row, k);
+        for (const k of opts.rxGroups.knobs ?? []) g.knobs[k.id] = concentric(row, k, dual ? vfo : undefined);
         const grid = h('div', 'rp-gkeys');
         for (const k of opts.rxGroups.keys ?? []) {
             const b = h('button', 'rp-skey');

@@ -14,7 +14,7 @@
 // The bottom row is one group per receiver (MAIN | SHARED · TX | SUB). On a
 // dual-receiver radio each group's keys write to their own receiver whichever
 // is selected; on a single-receiver radio there is one group and it follows
-// the active VFO. The concentric knobs show values; they do not write yet.
+// the active VFO. The concentric knobs show values and turn (wheel or drag).
 //
 // No WSJT-X / JTAlert / Log4OM launcher links on this page, and no
 // accessibility layer: both were Colin's call on 2026-10-13. Classic keeps them.
@@ -95,8 +95,8 @@ export function startYaesuRadioPanel(root, cfg) {
         ],
         rxGroups: {
             knobs: [
-                { id: 'afrf', label: 'AF / RF·SQL' }, { id: 'shiftwidth', label: 'SHIFT / WIDTH' },
-                { id: 'notchcont', label: 'NOTCH / CONT' },
+                { id: 'afrf', label: 'AF / RF·SQL', turn: true }, { id: 'shiftwidth', label: 'SHIFT / WIDTH', turn: true },
+                { id: 'notchcont', label: 'NOTCH / CONT', turn: true },
             ],
             keys: [
                 { id: 'ipo', label: 'IPO' }, { id: 'att', label: 'ATT' }, { id: 'agc', label: 'AGC' },
@@ -105,12 +105,13 @@ export function startYaesuRadioPanel(root, cfg) {
             ],
         },
         sharedKnobs: [
-            { id: 'micproc', label: 'MIC / PROC' }, { id: 'powermon', label: 'POWER / MONI' },
-            { id: 'speedpitch', label: 'SPEED / PITCH' },
+            { id: 'micproc', label: 'MIC / PROC', turn: true }, { id: 'powermon', label: 'POWER / MONI', turn: true },
+            { id: 'speedpitch', label: 'SPEED / PITCH', turn: true },
         ],
         // The dial: on the FTdx101 the outer ring tunes MAIN and the inner
         // knob SUB, as on the radio.
         dualDial: true,
+        clarTurn: true,
         meters: ['PO', 'SWR', 'ALC', 'COMP', 'IDD', ...(vddDial ? ['VDD'] : []), ...(paTemp ? ['TEMP'] : [])],
         meterScales: vddDial ? { VDD: rangeLegends(vddDial.min, vddDial.max) } : {},
         liveMeters: ['VDD', 'TEMP'],
@@ -146,7 +147,7 @@ export function startYaesuRadioPanel(root, cfg) {
             if (!specHost.open()) alert('The browser blocked the spectrum window. Allow pop-ups for this page and press the key again.');
         },
         onSpectrumBack: () => specHost.recall(),
-        onAction: (kind, id, vfo) => act(kind, id, vfo),
+        onAction: (kind, id, vfo, dir) => act(kind, id, vfo, dir),
         choices: (kind, vfo) => choices(kind, vfo),
         storagePrefix: 'ywc.radioPanel.',
         fontBase: '/lib/fonts',
@@ -225,7 +226,7 @@ export function startYaesuRadioPanel(root, cfg) {
         refreshRxKnobs(vfo);
     }
 
-    // ---- the concentric knobs: values only --------------------------------
+    // ---- the concentric knobs: values (turned in knobTurn) -----------------
     // Inner knob first in each label's order the radio's panel uses: AF inside
     // RF/SQL, SHIFT inside WIDTH, NOTCH inside CONTOUR.
     const val = x => (x == null ? '--' : String(x));
@@ -337,7 +338,7 @@ export function startYaesuRadioPanel(root, cfg) {
         return null;
     }
 
-    function act(kind, id, vfo) {
+    function act(kind, id, vfo, dir) {
         if (kind === 'entry') return win.entry(id);
         if (vfo && kind !== 'tune' && !boxLive(vfo)) return;
         const v = vfo || r.sel, rx = v.toLowerCase();
@@ -349,6 +350,8 @@ export function startYaesuRadioPanel(root, cfg) {
                 return post(`/api/cat/agc/${rx}`, { code: String(id) });
             case 'tune':
                 return wheelTune(v, num(id));
+            case 'knob':
+                return knobTurn(id, v, dir > 0 ? 1 : -1);
             case 'dial':
                 return dialTune(v, id === 'up' ? 1 : -1);
             case 'vfo':
@@ -401,6 +404,90 @@ export function startYaesuRadioPanel(root, cfg) {
                     case 'qmbrcl': return post('/api/cat/qmb/recall');
                     case 'mstore': return post(`/api/memory/save-vfo/${rx}`, { label: '' });
                 }
+        }
+    }
+
+    // ---- the turned knobs ----------------------------------------------
+    // Each notch moves the value one step from where the last notch left it,
+    // shown at once; writes are folded like the dial's, so a fast spin sends
+    // only the value it stops on. RF power uses the same endpoint as Classic's
+    // slider (never radiopower, which switches the radio off).
+    const knobQ = {};
+    function knobFrom(key, now) {
+        const q = knobQ[key];
+        return q && (q.busy || Date.now() < q.until) ? q.to : now;
+    }
+    async function knobSend(key, value, send) {
+        const q = knobQ[key] ??= { to: null, busy: false, until: 0 };
+        q.to = value;
+        q.until = Date.now() + 700;
+        if (q.busy) return;
+        q.busy = true;
+        try {
+            let sent = null;
+            while (q.to !== sent) { sent = q.to; await send(sent); }
+        } finally { q.busy = false; }
+    }
+    const clampTo = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+    function knobTurn(id, v, dir) {
+        const rx = v.toLowerCase();
+        // key, current value, step, low, high, show it, send it
+        const turn = (key, now, step, lo, hi, show, send) => {
+            if (now == null) return;
+            const from = knobFrom(key, now);
+            const to = clampTo(Math.round((from + dir * step) / step) * step, lo, hi);
+            if (to === from) return;
+            show(to);
+            return knobSend(key, to, send);
+        };
+        switch (id) {
+            case 'afrf:inner':
+                return turn('af' + v, r.af[v], 5, 0, 255, x => { r.af[v] = x; refreshRxKnobs(v); },
+                    x => post(`/api/cat/afgain/${rx}`, x));
+            case 'afrf:outer':
+                return turn('rf' + v, r.rf[v], 5, 0, 255, x => { r.rf[v] = x; refreshRxKnobs(v); },
+                    x => post(`/api/cat/rfgain/${rx}`, { value: x }));
+            case 'shiftwidth:inner':
+                return turn('shift' + v, r.shift[v], 20, -1000, 1000, x => { r.shift[v] = x; refreshRxKnobs(v); },
+                    x => post(`/api/cat/ifshift/${rx}`, { shiftHz: x }));
+            case 'shiftwidth:outer': {
+                const opts = ifWidthOptionsFor(model, r.mode[v]);
+                const code = parseInt(knobFrom('width' + v, r.widthCode[v]), 10);
+                if (!opts?.length || !Number.isFinite(code)) return;
+                const i = opts.findIndex(o => parseInt(o.code, 10) === code);
+                const o = opts[clampTo((i < 0 ? 0 : i) + dir, 0, opts.length - 1)];
+                if (parseInt(o.code, 10) === code) return;
+                r.widthCode[v] = o.code;
+                refreshWidth(v);
+                return knobSend('width' + v, o.code, x => post(`/api/cat/ifwidth/${rx}`, { code: String(x) }));
+            }
+            case 'notchcont:inner':
+                return turn('notch' + v, r.notchHz[v], 10, 10, 3200, x => { r.notchHz[v] = x; refreshRxKnobs(v); },
+                    x => post(`/api/cat/manualnotchfreq/${rx}`, { frequencyHz: x }));
+            case 'notchcont:outer':
+                return turn('cont' + v, r.contourHz[v], 10, 10, 3200, x => { r.contourHz[v] = x; refreshRxKnobs(v); },
+                    x => post(`/api/cat/contour/${rx}`, { on: !!r.contour[v], freqHz: x }));
+            case 'micproc:inner':
+                return turn('mic', r.mic, 1, 0, 100, x => { r.mic = x; refreshSharedKnobs(); },
+                    x => post('/api/cat/micgain', { value: x }));
+            case 'micproc:outer':
+                return turn('procl', r.procl, 1, 0, 100, x => { r.procl = x; refreshSharedKnobs(); },
+                    x => post('/api/cat/proclevel', { value: x }));
+            case 'powermon:inner':
+                return turn('power', r.power, 1, 5, maxPowerW, x => { r.power = x; refreshSharedKnobs(); },
+                    x => post(`/api/cat/power/${r.sel.toLowerCase()}`, { Watts: x }));
+            case 'powermon:outer':
+                return turn('mon', r.mon, 1, 0, 100, x => { r.mon = x; refreshSharedKnobs(); },
+                    x => post('/api/cat/monitorlevel/a', { level: x }));
+            case 'speedpitch:inner':
+                return turn('speed', r.speed, 1, 4, 60, x => { r.speed = x; refreshSharedKnobs(); },
+                    x => post('/api/cat/cw/speed', { speed: x }));
+            case 'speedpitch:outer':
+                return turn('pitch', r.pitchKnown ? r.pitchCode : null, 1, 0, 75, x => { r.pitchCode = x; refreshSharedKnobs(); },
+                    x => post('/api/cat/cwpitch', { code: x }));
+            case 'clar':
+                return turn('clar' + v, r.clarHz[v], 10, -9990, 9990, x => { r.clarHz[v] = x; refreshClar(); },
+                    x => post('/api/cat/clarifier', { vfo: v, rxOn: r.rxClar, txOn: r.txClar, offsetHz: x }));
         }
     }
 
