@@ -100,6 +100,10 @@ function knob2Svg(size) {
  *                                          always 'sdr'; each other view gets an empty
  *                                          slot (screenSlot(id)) for the adapter to fill
  *   onScreenView(id)                       told when the operator switches view
+ *   spectrumPanes: [{ id, tab, name }]     optional: one spectrum per SDR, id 'A' or 'B'
+ *                                          (the VFO it follows). Each gets a tab, and a
+ *                                          'Both' tab stacks them, the selected receiver's
+ *                                          pane outlined. Without it there is one pane, A
  *   windows: [{ id, key, title, pos, panels }]  optional: the launcher keys and the
  *                                          windows they open - see panel-windows.js.
  *                                          The adapter fills each panel through
@@ -324,23 +328,39 @@ export function mountRadioPanel(root, opts = {}) {
         }
     }
 
-    const spec = h('div', 'rp-spectrum');
-    const pb = h('div', 'rp-passband');
-    const cursor = h('div', 'rp-cursor');
-    const spots = h('div');
-    const specLabel = h('div', 'rp-spec-label', '');
-    const specEmpty = h('div', 'rp-spec-empty', 'No SDR');
-    spec.append(pb, cursor, spots, specLabel, specEmpty);
-    const axis = h('div', 'rp-axis');
-    const wf = h('div', 'rp-waterfall');
+    // One spectrum pane per SDR, each following its own VFO.
+    const paneDefs = (opts.spectrumPanes ?? []).filter(x => x.id === 'A' || x.id === 'B');
+    if (!paneDefs.length) paneDefs.push({ id: 'A', tab: 'SDR', name: '' });
+    const sdrView = h('div', 'rp-sdrview');
+    const panes = {};         // 'A' | 'B' -> { box, spec, pb, spots, label, empty, axis, wf, view, name, text }
+    for (const d of paneDefs) {
+        const box = h('div', 'rp-specpane rp-specpane-' + d.id);
+        const spec = h('div', 'rp-spectrum');
+        const pb = h('div', 'rp-passband');
+        const spotsEl = h('div');
+        const label = h('div', 'rp-spec-label', '');
+        const empty = h('div', 'rp-spec-empty', 'No SDR');
+        spec.append(pb, h('div', 'rp-cursor'), spotsEl, label, empty);
+        const axis = h('div', 'rp-axis');
+        const wf = h('div', 'rp-waterfall');
+        box.append(spec, axis, wf);
+        sdrView.append(box);
+        panes[d.id] = { box, spec, pb, spots: spotsEl, label, empty, axis, wf, name: d.name ?? '', text: '' };
+    }
 
     // The spectrum and any other view share the space between the VFOs and
     // the band keys; the switch sits in the waterfall's corner, which is the
-    // one place DX spots never land.
+    // one place DX spots never land. With two panes the spectrum has a tab
+    // each, and Both; every other view is one tab.
+    const specViews = paneDefs.length > 1 ? [...paneDefs.map(d => d.id), 'both'] : [paneDefs[0].id];
     const screenViewList = [{ id: 'sdr', label: 'SDR' }, ...(opts.screenViews ?? []).filter(x => x.id !== 'sdr')];
+    const tabList = [
+        ...(paneDefs.length > 1
+            ? [...paneDefs.map(d => ({ view: 'sdr', spec: d.id, label: d.tab ?? d.id })), { view: 'sdr', spec: 'both', label: 'Both' }]
+            : [{ view: 'sdr', spec: paneDefs[0].id, label: 'SDR' }]),
+        ...screenViewList.filter(x => x.id !== 'sdr').map(x => ({ view: x.id, label: x.label })),
+    ];
     const viewArea = h('div', 'rp-viewarea');
-    const sdrView = h('div', 'rp-sdrview');
-    sdrView.append(spec, axis, wf);
     viewArea.append(sdrView);
     // The spectrum can go to a window of its own (a second screen); while it
     // is there the board shows where it went, and a key to fetch it back.
@@ -350,7 +370,7 @@ export function mountRadioPanel(root, opts = {}) {
         pop.type = 'button';
         pop.title = 'Spectrum in its own window';
         pop.addEventListener('click', () => opts.onSpectrumPopout());
-        spec.append(pop);
+        sdrView.append(pop);
         specAway = h('div', 'rp-spec-away');
         const back = h('button', 'rp-wkey', 'BRING BACK');
         back.type = 'button';
@@ -360,20 +380,22 @@ export function mountRadioPanel(root, opts = {}) {
     }
     const slots = {};
     const viewTabs = h('div', 'rp-viewtabs');
-    const viewTabEls = {};
+    const viewTabEls = [];     // [{ el, view, spec }]
     for (const vw of screenViewList) {
         if (vw.id !== 'sdr') {
             slots[vw.id] = h('div', 'rp-altview');
             slots[vw.id].style.display = 'none';
             viewArea.append(slots[vw.id]);
         }
-        const t = h('button', 'rp-viewtab', vw.label);
-        t.type = 'button';
-        t.addEventListener('click', () => setScreenView(vw.id));
-        viewTabs.append(t);
-        viewTabEls[vw.id] = t;
     }
-    if (screenViewList.length > 1) viewArea.append(viewTabs);
+    for (const tb of tabList) {
+        const t = h('button', 'rp-viewtab', tb.label);
+        t.type = 'button';
+        t.addEventListener('click', () => { if (tb.spec) setSpecView(tb.spec); setScreenView(tb.view); });
+        viewTabs.append(t);
+        viewTabEls.push({ el: t, ...tb });
+    }
+    if (tabList.length > 1) viewArea.append(viewTabs);
 
     const bandsRow = h('div', 'rp-bands');
     const bandEls = {};
@@ -482,11 +504,12 @@ export function mountRadioPanel(root, opts = {}) {
     const st = {
         freq: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null },
         s: { A: 0, B: 0 }, tx: false, meter: store.get(prefix + 'meter', 'PO'),
-        txMeters: {}, spanHz: 0, theme: null, spots: [], sel: 'A',
+        txMeters: {}, spanHz: { A: 0, B: 0 }, theme: null, spots: [], sel: 'A',
+        specView: specViews[0],
     };
     if (!METERS.includes(st.meter)) st.meter = 'PO';
 
-    const spectrum = new SpectrumView(spec, wf);
+    for (const pn of Object.values(panes)) pn.view = new SpectrumView(pn.spec, pn.wf);
 
     // ---- meter ---------------------------------------------------------
     let needle;
@@ -518,24 +541,54 @@ export function mountRadioPanel(root, opts = {}) {
     function chooseMeter(m) { st.meter = m; store.set(prefix + 'meter', m); drawMeterFace(); }
 
     // ---- spectrum overlays ---------------------------------------------
-    function drawOverlays() {
-        const pct = passbandPercent(st.mode.A, st.widthHz.A, st.spanHz);
-        if (pct) { pb.style.display = 'block'; pb.style.left = pct.left + '%'; pb.style.width = pct.width + '%'; }
-        else pb.style.display = 'none';
-        axis.textContent = '';
-        if (st.spanHz > 0 && st.freq.A > 0) for (const t of axisLabels(st.freq.A, st.spanHz)) axis.append(h('span', null, t));
-        spots.textContent = '';
-        if (st.spanHz > 0 && st.freq.A > 0) {
+    // Each pane's passband, axis and spots come from its own VFO.
+    function drawOverlays(vfo) {
+        if (!vfo) { for (const id of Object.keys(panes)) drawOverlays(id); return; }
+        const pn = panes[vfo];
+        if (!pn) return;
+        const span = st.spanHz[vfo], f = st.freq[vfo];
+        const pct = passbandPercent(st.mode[vfo], st.widthHz[vfo], span);
+        if (pct) { pn.pb.style.display = 'block'; pn.pb.style.left = pct.left + '%'; pn.pb.style.width = pct.width + '%'; }
+        else pn.pb.style.display = 'none';
+        pn.axis.textContent = '';
+        if (span > 0 && f > 0) for (const t of axisLabels(f, span)) pn.axis.append(h('span', null, t));
+        pn.spots.textContent = '';
+        if (span > 0 && f > 0) {
             let row = 0;
             for (const sp of st.spots) {
-                const pos = 50 + (sp.hz - st.freq.A) / st.spanHz * 100;
+                const pos = 50 + (sp.hz - f) / span * 100;
                 if (pos < 2 || pos > 98) continue;
                 const el = h('div', 'rp-spot', sp.call);
                 el.style.left = pos + '%';
                 el.style.top = (30 + (row++ % 4) * 28) + 'px';
-                spots.append(el);
+                pn.spots.append(el);
             }
         }
+    }
+    // "MAIN · SDR A · SPAN 100k": the pane's name, then the adapter's source
+    // label unless the name already says it, then the span.
+    function paneLabel(vfo) {
+        const pn = panes[vfo];
+        const parts = [pn.name];
+        if (pn.text && !pn.name.includes(pn.text)) parts.push(pn.text);
+        if (st.spanHz[vfo]) parts.push('SPAN ' + spanText(st.spanHz[vfo]));
+        pn.label.textContent = parts.filter(Boolean).join(' · ');
+    }
+    // Main / Sub show one pane; Both stacks them and outlines the selected receiver's.
+    function setSpecView(id) {
+        if (!specViews.includes(id)) id = specViews[0];
+        st.specView = id;
+        sdrView.classList.toggle('both', id === 'both');
+        for (const [vfo, pn] of Object.entries(panes)) {
+            pn.box.style.display = id === 'both' || id === vfo ? '' : 'none';
+            pn.box.classList.toggle('sel', id === 'both' && vfo === st.sel);
+        }
+        store.set(prefix + 'spectrum', id);
+        markTabs();
+    }
+    function markTabs() {
+        for (const t of viewTabEls)
+            t.el.classList.toggle('on', t.view === st.screenView && (t.view !== 'sdr' || t.spec === st.specView));
     }
 
     function markModeKeys() {
@@ -587,14 +640,14 @@ export function mountRadioPanel(root, opts = {}) {
         st.theme = applyTheme(root, id);
         themeSel.value = st.theme.id;
         store.set(prefix + 'theme', st.theme.id);
-        spectrum.setTheme(st.theme);
+        for (const pn of Object.values(panes)) pn.view.setTheme(st.theme);
     }
     function setScreenView(id) {
         if (!screenViewList.some(x => x.id === id)) id = 'sdr';
         st.screenView = id;
         sdrView.style.display = id === 'sdr' ? '' : 'none';
         for (const [k, el] of Object.entries(slots)) el.style.display = k === id ? '' : 'none';
-        for (const [k, el] of Object.entries(viewTabEls)) el.classList.toggle('on', k === id);
+        markTabs();
         store.set(prefix + 'screen', id);
         opts.onScreenView?.(id);
     }
@@ -629,6 +682,7 @@ export function mountRadioPanel(root, opts = {}) {
     });
 
     setTheme(store.get(prefix + 'theme', DEFAULT_THEME));
+    setSpecView(store.get(prefix + 'spectrum', specViews[0]));
     setScreenView(store.get(prefix + 'screen', 'sdr'));
     drawMeterFace();
     rescale();
@@ -641,19 +695,19 @@ export function mountRadioPanel(root, opts = {}) {
         setFrequency(vfo, hz) {
             st.freq[vfo] = Number(hz) || 0;
             setVfoText(vfo);
-            if (vfo === 'A') drawOverlays();
+            drawOverlays(vfo);
         },
         setMode(vfo, mode) {
             st.mode[vfo] = String(mode ?? '');
             flagsFor(vfo).mode.textContent = st.mode[vfo];
             if (vfo === st.sel) markModeKeys();
-            if (vfo === 'A') drawOverlays();
+            drawOverlays(vfo);
         },
         // `hz` null means the mode has no settable width (AM/FM): no chip, no passband.
         setWidth(vfo, hz) {
             st.widthHz[vfo] = hz;
             flagsFor(vfo).width.textContent = widthText(hz);
-            if (vfo === 'A') drawOverlays();
+            drawOverlays(vfo);
         },
         setAgc(vfo, text) { flagsFor(vfo).agc.textContent = text ? 'AGC ' + text : ''; },
         // Each flag is its text, or { id, label }: one with an id is pressed
@@ -701,6 +755,7 @@ export function mountRadioPanel(root, opts = {}) {
                 g.tag.classList.toggle('hidden', !(dual && on));
             }
             if (!dual && groupEls.A) groupEls.A.name.textContent = 'RECEIVER · VFO-' + st.sel;
+            for (const [id, pn] of Object.entries(panes)) pn.box.classList.toggle('sel', st.specView === 'both' && id === st.sel);
             markModeKeys();
             drawNeedle();
         },
@@ -762,23 +817,30 @@ export function mountRadioPanel(root, opts = {}) {
         },
         setStep(text) { stepTxt.textContent = text ?? ''; },
         // label: e.g. 'SDR A'; status: shown full-screen when there is no picture.
-        setSpectrumSource({ label, spanHz, status } = {}) {
-            if (spanHz != null && spanHz !== st.spanHz) { st.spanHz = Number(spanHz) || 0; drawOverlays(); }
-            specLabel.textContent = label && st.spanHz ? `${label} · SPAN ${spanText(st.spanHz)}` : (label ?? '');
+        // `vfo` names the pane ('A' when left out).
+        setSpectrumSource({ label, spanHz, status } = {}, vfo = 'A') {
+            const pn = panes[vfo];
+            if (!pn) return;
+            if (spanHz != null && Number(spanHz) !== st.spanHz[vfo]) { st.spanHz[vfo] = Number(spanHz) || 0; drawOverlays(vfo); }
+            if (label !== undefined) pn.text = label ?? '';
+            paneLabel(vfo);
             if (status !== undefined) {
-                specEmpty.textContent = status ?? '';
-                specEmpty.style.display = status ? 'flex' : 'none';
-                if (status) spectrum.clear();
+                pn.empty.textContent = status ?? '';
+                pn.empty.style.display = status ? 'flex' : 'none';
+                if (status) pn.view.clear();
             }
         },
-        pushSpectrum(bins) { spectrum.push(bins); },
+        pushSpectrum(bins, vfo = 'A') { panes[vfo]?.view.push(bins); },
         /** The spectrum is in its own window (true) or back on the board. */
         setSpectrumAway(away) {
             specAway?.classList.toggle('on', !!away);
-            if (away) spectrum.clear();
+            if (away) for (const pn of Object.values(panes)) pn.view.clear();
         },
-        clearSpectrum() { spectrum.clear(); },
+        // One pane, or every pane when `vfo` is left out.
+        clearSpectrum(vfo) { for (const [id, pn] of Object.entries(panes)) if (!vfo || id === vfo) pn.view.clear(); },
         setSpots(list) { st.spots = list ?? []; drawOverlays(); },
+        spectrumView() { return st.specView; },
+        setSpectrumView: id => setSpecView(id),
         setTheme,
         rescale,
         // The empty element for a screenViews entry; the adapter owns its content.

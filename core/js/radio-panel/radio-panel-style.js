@@ -201,7 +201,12 @@ html,body{margin:0;background:${v('page')}}
 .rp-axis{display:flex;justify-content:space-between;font:400 15px ${MONO};color:${v('axis')};margin-top:-4px;min-height:15px}
 .rp-waterfall{height:128px;position:relative;border:1px solid ${v('screen-line')};border-radius:4px;overflow:hidden;background:${v('spec-bg')}}
 .rp-viewarea{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
-.rp-sdrview{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px}
+.rp-sdrview{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.rp-specpane{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px}
+.rp-sdrview.both .rp-specpane{gap:4px;padding:2px;border:2px solid transparent;border-radius:6px}
+.rp-sdrview.both .rp-specpane.sel{border-color:${v('highlight')}}
+.rp-sdrview.both .rp-spectrum{min-height:0}
+.rp-sdrview.both .rp-waterfall{height:56px}
 .rp-altview{flex:1;min-height:360px;position:relative;border:1px solid ${v('screen-line')};border-radius:4px;overflow:hidden;background:${v('spec-bg')}}
 .rp-viewtabs{position:absolute;right:6px;bottom:6px;display:flex;gap:2px;padding:2px;border-radius:5px;background:${v('bar-bg')};border:1px solid ${v('well-border')};z-index:3}
 .rp-viewtab{font:600 13px ${SANS};letter-spacing:.1em;text-transform:uppercase;color:${v('legend-dim')};background:none;border:0;border-radius:3px;padding:3px 9px;cursor:pointer}

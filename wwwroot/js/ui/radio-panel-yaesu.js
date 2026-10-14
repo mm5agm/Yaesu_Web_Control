@@ -108,6 +108,11 @@ export function startYaesuRadioPanel(root, cfg) {
         ],
         bands: BANDS.map(b => ({ id: b, label: b.replace('m', '') })),
         modes: MODES.map(m => ({ id: m, label: m })),
+        // One spectrum per SDR, as on Classic and the pop-out: SDR A follows
+        // VFO-A (MAIN), SDR B follows VFO-B (SUB).
+        spectrumPanes: dual
+            ? [{ id: 'A', tab: 'Main', name: 'MAIN · SDR A' }, { id: 'B', tab: 'Sub', name: 'SUB · SDR B' }]
+            : [{ id: 'A', tab: 'VFO-A', name: 'VFO-A · SDR A' }, { id: 'B', tab: 'VFO-B', name: 'VFO-B · SDR B' }],
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
         windows: YAESU_WINDOWS,
         onWindowPanel: (g, p, shown) => win?.onShow(g, p, shown),
@@ -423,16 +428,24 @@ export function startYaesuRadioPanel(root, cfg) {
     // The axis correction, in the same convention as the Classic spectrum
     // panel: true RF of the frame's centre = dial + offset. Null (unmeasured
     // radio) is treated as no correction.
-    function offsetFor(frame) {
-        if (frame.rfOrdered) return num(frame.centreHz) - r.freq.A;
+    function offsetFor(vfo, frame) {
+        if (frame.rfOrdered) return num(frame.centreHz) - r.freq[vfo];
         const filter = {
-            mode: r.mode.A,
-            ifWidthHz: widthHz('A') ?? 3000,
-            ifShiftHz: num(r.shift.A),
+            mode: r.mode[vfo],
+            ifWidthHz: widthHz(vfo) ?? 3000,
+            ifShiftHz: num(r.shift[vfo]),
             cwPitchHz: pitchHz(),
             dataShiftHz: r.dataShiftHz,
         };
-        try { return axisOffsetHz(model, 'A', frame.centreHz, filter) ?? 0; } catch { return 0; }
+        try { return axisOffsetHz(model, vfo, frame.centreHz, filter) ?? 0; } catch { return 0; }
+    }
+    // The SDR lamp shows the better of the two SDRs; one that is not
+    // configured does not count against the other.
+    const sdrState = { A: 'unconfigured', B: 'unconfigured' };
+    function refreshSdrLamp() {
+        const sts = Object.values(sdrState);
+        panel.setLamp('sdr', sts.includes('streaming') ? 'on' : sts.includes('connecting') ? 'warn'
+            : sts.every(x => x === 'unconfigured') ? 'off' : 'bad');
     }
 
     function readDataShift(mode) {
@@ -463,10 +476,10 @@ export function startYaesuRadioPanel(root, cfg) {
         IsConnected: v => panel.setLamp('cat', on(v) ? 'on' : 'bad'),
         FrequencyA: v => { if (wheelHolds('A')) return; r.freq.A = num(v); panel.setFrequency('A', r.freq.A); },
         FrequencyB: v => { if (wheelHolds('B')) return; r.freq.B = num(v); panel.setFrequency('B', r.freq.B); },
-        BandA: v => { if (v !== r.band.A) { r.band.A = v; panel.clearSpectrum(); } panel.setBand(r.band[r.sel]); },
-        BandB: v => { r.band.B = v; panel.setBand(r.band[r.sel]); },
+        BandA: v => { if (v !== r.band.A) { r.band.A = v; panel.clearSpectrum('A'); } panel.setBand(r.band[r.sel]); },
+        BandB: v => { if (v !== r.band.B) { r.band.B = v; panel.clearSpectrum('B'); } panel.setBand(r.band[r.sel]); },
         ModeA: v => { r.mode.A = String(v ?? ''); panel.setMode('A', r.mode.A); refreshWidth('A'); readDataShift(r.mode.A); },
-        ModeB: v => { r.mode.B = String(v ?? ''); panel.setMode('B', r.mode.B); refreshWidth('B'); },
+        ModeB: v => { r.mode.B = String(v ?? ''); panel.setMode('B', r.mode.B); refreshWidth('B'); readDataShift(r.mode.B); },
         IfWidthA: v => { r.widthCode.A = v; refreshWidth('A'); },
         IfWidthB: v => { r.widthCode.B = v; refreshWidth('B'); },
         IfShiftA: v => { r.shift.A = num(v); refreshRxKnobs('A'); },
@@ -525,19 +538,23 @@ export function startYaesuRadioPanel(root, cfg) {
         CompressionMeter: v => { r.txMeterRaw.COMP = v; refreshTxMeters(); },
         IDDMeter: v => { r.txMeterRaw.IDD = v; refreshTxMeters(); },
         SdrStatus: v => {
-            if (v?.sdrId !== 'A') return;
+            const vfo = v?.sdrId;
+            if (vfo !== 'A' && vfo !== 'B') return;
             const st = String(v.status ?? '');
-            panel.setLamp('sdr', st === 'streaming' ? 'on' : st === 'connecting' ? 'warn' : st === 'unconfigured' ? 'off' : 'bad');
+            sdrState[vfo] = st;
+            refreshSdrLamp();
             const msg = { streaming: null, connecting: 'SDR connecting…', unconfigured: 'No SDR configured', nodll: 'SDR driver not found', disconnected: 'SDR disconnected' };
-            panel.setSpectrumSource({ label: 'SDR A', status: st in msg ? msg[st] : st });
+            panel.setSpectrumSource({ label: 'SDR ' + vfo, status: st in msg ? msg[st] : st }, vfo);
         },
         SpectrumUpdate: v => {
-            if (v?.sdrId !== 'A' || !v.bins?.length) return;
+            const vfo = v?.sdrId;
+            if ((vfo !== 'A' && vfo !== 'B') || !v.bins?.length) return;
             const span = num(v.spanHz);
-            panel.setSpectrumSource({ label: 'SDR A', spanHz: span, status: null });
+            if (sdrState[vfo] !== 'streaming') { sdrState[vfo] = 'streaming'; refreshSdrLamp(); }
+            panel.setSpectrumSource({ label: 'SDR ' + vfo, spanHz: span, status: null }, vfo);
             let bins = v.rfOrdered ? v.bins : Array.prototype.slice.call(v.bins).reverse();
-            if (r.freq.A > 0) bins = alignBins(bins, offsetFor(v), span);
-            if (!specAway) panel.pushSpectrum(bins);
+            if (r.freq[vfo] > 0) bins = alignBins(bins, offsetFor(vfo, v), span);
+            if (!specAway) panel.pushSpectrum(bins, vfo);
         },
         DxSpot: addSpot,
         DxClusterStatus: v => {
