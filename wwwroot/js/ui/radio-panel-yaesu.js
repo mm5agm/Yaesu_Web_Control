@@ -136,7 +136,9 @@ export function startYaesuRadioPanel(root, cfg) {
             { id: 'qmbsto', label: 'QMB STO' }, { id: 'qmbrcl', label: 'QMB RCL' },
             { id: 'mstore', label: 'M.STORE', sub: 'app', title: "Save the selected receiver to YWC's memories" },
         ],
-        clarKeys: [{ id: 'rxclar', label: 'RX' }, { id: 'txclar', label: 'TX' }],
+        // CLR zeroes the offset and leaves RX / TX clarifier as they are, as the
+        // radio's CLEAR does.
+        clarKeys: [{ id: 'rxclar', label: 'RX' }, { id: 'txclar', label: 'TX' }, { id: 'clrclar', label: 'CLR' }],
         bands: BANDS.map(b => ({ id: b, label: b.replace('m', '') })),
         modes: MODES.map(m => ({ id: m, label: m })),
         // One spectrum per SDR, as on Classic and the pop-out: SDR A follows
@@ -429,6 +431,11 @@ export function startYaesuRadioPanel(root, cfg) {
                     case 'swap': return post('/api/cat/swap-vfo');
                     case 'rxclar': return post('/api/cat/clarifier', { vfo: v, rxOn: !r.rxClar, txOn: r.txClar, offsetHz: r.clarHz[v] });
                     case 'txclar': return post('/api/cat/clarifier', { vfo: v, rxOn: r.rxClar, txOn: !r.txClar, offsetHz: r.clarHz[v] });
+                    case 'clrclar':
+                        if (!r.clarHz[v]) return;
+                        r.clarHz[v] = 0;
+                        refreshClar();
+                        return post('/api/cat/clarifier', { vfo: v, rxOn: r.rxClar, txOn: r.txClar, offsetHz: 0 });
                 }
                 return;
             case 'memKey':
