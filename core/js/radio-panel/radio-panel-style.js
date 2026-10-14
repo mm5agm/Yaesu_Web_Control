@@ -138,6 +138,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-wkey.tx.armed{background:${v('tx')};color:${v('tx-fg')}}
 .rp-wval.tx{color:${v('tx')}}
 .rp-status-chip{font-size:14px;padding:2px 8px}
+.rp-clock{font-variant-numeric:tabular-nums;letter-spacing:.06em;margin-right:6px}
 .rp-txbanner{position:fixed;left:16px;right:16px;top:8px;z-index:100000;display:flex;align-items:center;gap:18px;padding:10px 16px;border-radius:8px;background:${v('tx')};color:${v('tx-fg')};font:700 20px ${SANS};letter-spacing:.04em;box-shadow:0 6px 24px rgba(0,0,0,.6)}
 .rp-txbanner.hidden{display:none}
 .rp-txbanner-text{flex:1}

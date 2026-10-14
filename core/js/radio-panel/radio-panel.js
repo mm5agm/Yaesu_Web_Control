@@ -185,6 +185,7 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *   onSpectrumPopout(), onSpectrumBack()   optional: a ⧉ key on the spectrum, and the
  *                                          BRING BACK key shown while setSpectrumAway(true)
  *   frequencyEntry (bool)                  show an ENT chip in each VFO box
+ *   clock (bool)                           a UTC clock in the top bar, from the PC's clock
  *   vfoChips: ['ant', 'roof', ...]         optional: more picker chips in each VFO box,
  *                                          after AGC; filled with setChip(vfo, kind,
  *                                          text) and listed by choices(kind, vfo)
@@ -254,6 +255,15 @@ export function mountRadioPanel(root, opts = {}) {
 
     const right = h('div', 'rp-top-right');
     const lamps = h('div', 'rp-lamps rp-legend');
+    // UTC from this computer's clock, as on the classic page.
+    if (opts.clock) {
+        const clock = h('span', 'rp-clock', '--:--:--Z');
+        clock.title = "UTC from this computer's clock";
+        const tick = () => { clock.textContent = new Date().toISOString().slice(11, 19) + 'Z'; };
+        tick();
+        setInterval(tick, 1000);
+        lamps.append(clock);
+    }
     const lampEls = {};
     for (const l of opts.lamps ?? []) {
         const wrap = h('span');
