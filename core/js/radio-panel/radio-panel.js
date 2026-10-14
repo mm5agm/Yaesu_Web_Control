@@ -185,10 +185,14 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *   onSpectrumPopout(), onSpectrumBack()   optional: a ⧉ key on the spectrum, and the
  *                                          BRING BACK key shown while setSpectrumAway(true)
  *   frequencyEntry (bool)                  show an ENT chip in each VFO box
+ *   vfoChips: ['ant', 'roof', ...]         optional: more picker chips in each VFO box,
+ *                                          after AGC; filled with setChip(vfo, kind,
+ *                                          text) and listed by choices(kind, vfo)
  *   storagePrefix, fontBase
  *   onAction(kind, id, vfo)                kind: 'key' | 'band' | 'mode' | 'step' | 'vfoKey'
  *                                          | 'vfo' (the operator clicked VFO 'A' or 'B')
- *                                          | 'width' | 'agc' (picked from a VFO box chip)
+ *                                          | 'width' | 'agc' | a vfoChips kind (picked
+ *                                            from a VFO box chip)
  *                                          | 'tune' (id = signed Hz, from the wheel over a
  *                                            frequency digit)
  *                                          | 'entry' (the ENT chip in a VFO box: the
@@ -206,7 +210,8 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *                                            and the clarifier with opts.clarTurn). `vfo` is set when the
  *                                          action came from inside a VFO box and names
  *                                          that box; otherwise it is undefined.
- *   choices(kind, vfo)                     kind 'mode' | 'width' | 'agc': the list a click
+ *   choices(kind, vfo)                     kind 'mode' | 'width' | 'agc' | a vfoChips
+ *                                          kind: the list a click
  *                                          on that chip offers, [{ id, label, on }], or
  *                                          null for a chip that does nothing
  *
@@ -335,9 +340,12 @@ export function mountRadioPanel(root, opts = {}) {
     mainFreq.append(mainBig, mainSmall);
     const mainChips = h('div', 'rp-chips');
     const chip = cls => h('span', 'rp-chip' + (cls ? ' ' + cls : ''), '');
-    const chipsA = { mode: chip('mode'), width: chip(), agc: chip(), flags: h('span') };
+    // Extra picker chips the adapter asks for; empty text hides one.
+    const extraKinds = (opts.vfoChips ?? []).filter(k => !['mode', 'width', 'agc', 'flags'].includes(k));
+    const extraChips = cls => Object.fromEntries(extraKinds.map(k => [k, chip(cls)]));
+    const chipsA = { mode: chip('mode'), width: chip(), agc: chip(), ...extraChips(), flags: h('span') };
     chipsA.flags.style.display = 'contents';
-    mainChips.append(chipsA.mode, chipsA.width, chipsA.agc, chipsA.flags);
+    mainChips.append(chipsA.mode, chipsA.width, chipsA.agc, ...extraKinds.map(k => chipsA[k]), chipsA.flags);
     main.append(mainHead, mainFreq, mainChips);
 
     const sub = h('div', 'rp-subvfo');
@@ -350,9 +358,10 @@ export function mountRadioPanel(root, opts = {}) {
     const subBig = h('span', 'big', '-.---'), subSmall = h('span', 'small', '.---');
     subFreq.append(subBig, subSmall);
     const subChips = h('div', 'rp-chips');
-    const chipsB = { mode: chip('dim'), width: chip('dim'), agc: chip('dim'), flags: h('span') };
+    const chipsB = { mode: chip('dim'), width: chip('dim'), agc: chip('dim'), ...extraChips('dim'), flags: h('span') };
     chipsB.flags.style.display = 'contents';
-    subChips.append(chipsB.mode, chipsB.width, chipsB.agc, chipsB.flags);
+    subChips.append(chipsB.mode, chipsB.width, chipsB.agc, ...extraKinds.map(k => chipsB[k]), chipsB.flags);
+    for (const k of extraKinds) { chipsA[k].hidden = true; chipsB[k].hidden = true; }
     const sbar = h('div', 'rp-sbar');
     const sFill = h('div', 'fill'), sTrack = h('div', 'track'), sTxt = h('span', 'txt', 'S0');
     sTrack.append(sFill);
@@ -398,7 +407,7 @@ export function mountRadioPanel(root, opts = {}) {
         document.addEventListener('click', e => { if (!picker.hidden && !picker.contains(e.target)) closePicker(); });
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closePicker(); });
         for (const [chips, vfo] of [[chipsA, 'A'], [chipsB, 'B']])
-            for (const kind of ['mode', 'width', 'agc']) {
+            for (const kind of ['mode', 'width', 'agc', ...extraKinds]) {
                 const el = chips[kind];
                 el.classList.add('act');
                 el.addEventListener('click', e => { e.stopPropagation(); openPicker(el, kind, vfo); });
@@ -1031,6 +1040,13 @@ export function mountRadioPanel(root, opts = {}) {
             drawOverlays(vfo);
         },
         setAgc(vfo, text) { flagsFor(vfo).agc.textContent = text ? 'AGC ' + text : ''; },
+        // A vfoChips chip's text; empty hides it.
+        setChip(vfo, kind, text) {
+            const el = flagsFor(vfo)[kind];
+            if (!el || !extraKinds.includes(kind)) return;
+            el.textContent = text ?? '';
+            el.hidden = !text;
+        },
         // Each flag is its text, or { id, label }: one with an id is pressed
         // like key `id`, for this VFO.
         setFlags(vfo, list) {

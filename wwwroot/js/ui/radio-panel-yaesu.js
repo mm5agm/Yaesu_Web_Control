@@ -80,6 +80,11 @@ export function startYaesuRadioPanel(root, cfg) {
     // (40-55 V on the FTdx101MP, 10-16 V on the 13.8 V radios).
     const vddDial = cfg.vdd && num(cfg.vdd.max) > num(cfg.vdd.min) ? { min: num(cfg.vdd.min), max: num(cfg.vdd.max) } : null;
     const paTemp = !!cfg.paTemp && !!vddDial;
+    // Classic's antenna and roofing selects, as VFO box chips: only on a
+    // radio that has them, and only the roofing filters fitted.
+    const antennas = Array.isArray(cfg.antennas) ? cfg.antennas.map(String) : [];
+    const roofing = Array.isArray(cfg.roofing) ? cfg.roofing.filter(o => o?.code) : [];
+    const roofLabel = code => roofing.find(o => o.code === String(code))?.label ?? '';
 
     let radioScreen = null;     // set just after mount; the panel may call onScreenView during it
     let win = null;             // likewise: windows restored from last time report during mount
@@ -145,6 +150,7 @@ export function startYaesuRadioPanel(root, cfg) {
         windows: YAESU_WINDOWS,
         onWindowPanel: (g, p, shown) => win?.onShow(g, p, shown),
         frequencyEntry: true,
+        vfoChips: [...(antennas.length ? ['ant'] : []), ...(roofing.length ? ['roof'] : [])],
         onScreenView: id => { if (id === 'tft') radioScreen?.show(); },
         // The spectrum's own window, for a second screen: /RadioSpectrum.
         onSpectrumPopout: () => {
@@ -170,6 +176,7 @@ export function startYaesuRadioPanel(root, cfg) {
     // ---- the slice of radio state the panel derives things from ----------
     const r = {
         freq: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthCode: { A: null, B: null },
+        ant: { A: '', B: '' }, roof: { A: '', B: '' },
         shift: { A: 0, B: 0 }, pitchCode: 30, dataShiftHz: 1500, band: { A: '', B: '' },
         att: { A: '00', B: '00' }, ipo: { A: '0', B: '0' }, nb: { A: '0', B: '0' }, nr: { A: '0', B: '0' },
         dnf: { A: '0', B: '0' }, notch: { A: '0', B: '0' }, contour: { A: false, B: false }, apf: { A: false, B: false },
@@ -224,6 +231,16 @@ export function startYaesuRadioPanel(root, cfg) {
 
     const pitchHz = () => 300 + num(r.pitchCode) * 10;
     const widthHz = vfo => (r.widthCode[vfo] == null ? null : ifWidthHzFor(model, r.mode[vfo], parseInt(r.widthCode[vfo], 10)));
+
+    function setAnt(vfo, v) {
+        r.ant[vfo] = String(v ?? '');
+        if (antennas.length) panel.setChip(vfo, 'ant', antennas.includes(r.ant[vfo]) ? 'ANT ' + r.ant[vfo] : '');
+    }
+    function setRoof(vfo, v) {
+        r.roof[vfo] = String(v ?? '');
+        const label = roofLabel(r.roof[vfo]);
+        if (roofing.length) panel.setChip(vfo, 'roof', label ? 'ROOF ' + label : '');
+    }
 
     function refreshWidth(vfo) {
         panel.setWidth(vfo, widthHz(vfo));
@@ -340,6 +357,10 @@ export function startYaesuRadioPanel(root, cfg) {
             case 'agc':
                 // OFF is offered here, as on the radio's own screen.
                 return ['0', '1', '2', '3', '4'].map(c => ({ id: c, label: AGC[c], on: AGC[c] === r.agc[vfo] }));
+            case 'ant':
+                return antennas.map(a => ({ id: a, label: 'ANT ' + a, on: a === r.ant[vfo] }));
+            case 'roof':
+                return roofing.map(o => ({ id: o.code, label: 'ROOF ' + o.label, on: o.code === r.roof[vfo] }));
         }
         return null;
     }
@@ -355,6 +376,10 @@ export function startYaesuRadioPanel(root, cfg) {
                 return post(`/api/cat/ifwidth/${rx}`, { code: String(id) });
             case 'agc':
                 return post(`/api/cat/agc/${rx}`, { code: String(id) });
+            case 'ant':
+                return antennas.includes(String(id)) ? post(`/api/cat/antenna/${rx}`, { antenna: String(id) }) : undefined;
+            case 'roof':
+                return roofLabel(id) ? post(`/api/cat/roofingfilter/${rx}`, { filter: String(id) }) : undefined;
             case 'tune':
                 return wheelTune(v, num(id));
             case 'knob':
@@ -678,6 +703,10 @@ export function startYaesuRadioPanel(root, cfg) {
         IfShiftB: v => { r.shift.B = num(v); refreshRxKnobs('B'); },
         AgcA: v => { r.agcCode.A = String(v); r.agc.A = AGC[String(v)] ?? ''; panel.setAgc('A', r.agc.A); refreshFlags('A'); },
         AgcB: v => { r.agcCode.B = String(v); r.agc.B = AGC[String(v)] ?? ''; panel.setAgc('B', r.agc.B); refreshFlags('B'); },
+        AntennaA: v => setAnt('A', v),
+        AntennaB: v => setAnt('B', v),
+        RoofingFilterA: v => setRoof('A', v),
+        RoofingFilterB: v => setRoof('B', v),
         ActiveVfo: v => { r.sel = num(v) === 1 ? 'B' : 'A'; panel.setSelected(r.sel); panel.setBand(r.band[r.sel]); refreshKeys(); refreshClar(); if (!dual) { refreshFlags('A'); refreshFlags('B'); refreshRxKnobs(r.sel); } },
         IpoA: v => { r.ipo.A = String(v); refreshFlags('A'); },
         IpoB: v => { r.ipo.B = String(v); refreshFlags('B'); },
