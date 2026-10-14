@@ -27,7 +27,7 @@
 import { mountRadioPanel } from '/js/radio-panel/radio-panel.js';
 import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
 import { alignBins, txMeterFraction, rangeLegends } from '/js/radio-panel/panel-math.js';
-import { BAND_EDGES, nearestBandForHz, loadBandPlanFromServer, autoModeForHz, getSegments, segmentForHz } from '/js/ui/band-plan.js';
+import { BAND_PLANS, BAND_EDGES, nearestBandForHz, loadBandPlanFromServer, autoModeForHz, getSegments, segmentForHz } from '/js/ui/band-plan.js';
 import { loadRttySettings, afskMidpointAudioHz } from '/js/rtty/rtty-settings.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
@@ -620,7 +620,17 @@ export function startYaesuRadioPanel(root, cfg) {
         const near = inside ? null : nearestBandForHz(hz, edges);
         panel.setOutOfBand(v, inside ? null : 'Outside every amateur band' + (near ? ' - nearest ' + near : ''));
     }
-    loadBandPlanFromServer().then(() => { for (const v of ['A', 'B']) { checkBand(v); refreshSeg(v); } });
+    // Classic's spectrum guard rails and band-plan ticks, for the same region.
+    function publishBandMarks() {
+        const edges = BAND_EDGES[cfg.bandPlan] || BAND_EDGES.Region1;
+        const ticks = [];
+        for (const band of Object.values(BAND_PLANS[cfg.bandPlan] ?? {}))
+            for (const [k, sg] of Object.entries(band ?? {}))
+                if (sg && typeof sg.freq === 'number') ticks.push({ hz: sg.freq, label: sg.label || k });
+        panel.setBandMarks({ edges: edges.flatMap(b => [b.lo, b.hi]), ticks });
+    }
+    publishBandMarks();
+    loadBandPlanFromServer().then(() => { publishBandMarks(); for (const v of ['A', 'B']) { checkBand(v); refreshSeg(v); } });
 
     function tuneBy(deltaHz) {
         const v = r.sel;
