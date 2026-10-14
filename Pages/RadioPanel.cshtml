@@ -30,6 +30,7 @@
             model: '@Model.RadioModel',
             dual: @(Model.IsDual ? "true" : "false"),
             maxPowerW: @Model.MaxPower,
+            scopeCat: @(Model.HasScopeCat ? "true" : "false"),
             views: [
                 { label: 'Classic', href: '/' },
                 { label: 'Experimental', href: '/flexui' },

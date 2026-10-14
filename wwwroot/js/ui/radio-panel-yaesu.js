@@ -19,6 +19,8 @@ import { alignBins, txMeterFraction } from '/js/radio-panel/panel-math.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
+import { RadioScopeControl } from '/js/ui/radio-scope.js';
+import { RadioDisplayHotspots } from '/js/video/radio-display-hotspots.js';
 
 const BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
 const MODES = ['LSB', 'USB', 'CW-U', 'CW-L', 'AM', 'FM', 'RTTY-L', 'DATA-U'];
@@ -89,7 +91,7 @@ export function startYaesuRadioPanel(root, cfg) {
         storagePrefix: 'ywc.radioPanel.',
         fontBase: '/lib/fonts',
     });
-    radioScreen = startRadioScreen(panel.screenSlot('tft'));
+    radioScreen = startRadioScreen(panel.screenSlot('tft'), { model, dual, scopeCat: !!cfg.scopeCat });
     if (panel.screenView() === 'tft') radioScreen.show();
 
     // ---- the slice of radio state the panel derives things from ----------
@@ -355,6 +357,7 @@ export function startYaesuRadioPanel(root, cfg) {
     // the host open (HostPresenceTests reads the .cshtml, not this file).
     const conn = cfg.conn ?? window.rwcHubConnection('/radioHub');
     conn.on('RadioStateUpdate', msg => {
+        radioScreen?.onRadioState(msg);
         const fn = handlers[msg?.property];
         if (!fn) return;
         try { fn(msg.value); } catch (e) { console.warn('radio panel:', msg.property, e); }
@@ -374,7 +377,14 @@ export function startYaesuRadioPanel(root, cfg) {
 // and some USB HDMI dongles crash natively if the capture is closed and
 // reopened quickly - so once this page has started the stream it keeps it
 // for as long as the page is open, even while the SDR view is showing.
-function startRadioScreen(slot) {
+//
+// Clicks on the picture work as they do on the Radio Display page: the same
+// RadioDisplayHotspots overlay (click-to-tune, the ATT / IPO / R.FIL / AGC
+// readouts, the scope soft-keys, and the meter pop-up for choosing the TX
+// meters). It needs the radio's scope span for click-to-tune, so a
+// RadioScopeControl is kept here with no visible controls. It reads the
+// radio when the Radio screen is shown, not at page load.
+function startRadioScreen(slot, { model, dual, scopeCat } = {}) {
     if (!slot) return null;
     const img = document.createElement('img');
     img.alt = '';
@@ -432,7 +442,47 @@ function startRadioScreen(slot) {
         attach();
     });
 
+    let scope = null;
+    if (scopeCat) {
+        const root = document.createElement('div');
+        root.style.display = 'none';
+        // Band buttons only so setActiveBand() follows MAIN/SUB on a dual
+        // receiver; nothing ever clicks them.
+        if (dual) root.innerHTML = '<button class="scope-band-btn" data-band="main"></button><button class="scope-band-btn" data-band="sub"></button>';
+        slot.append(root);
+        scope = new RadioScopeControl(root);
+    }
+    ensureHotspotStyle();
+    const hotspots = new RadioDisplayHotspots(img, { radioModel: model, dualReceiver: dual, getScopeControl: () => scope });
+
     return {
-        show() { if (!streaming && !retryTimer) attach(); },
+        show() {
+            if (!streaming && !retryTimer) attach();
+            // Read the span now rather than on the first hover, which would
+            // otherwise say "scope span unknown" while the read is out.
+            if (scope && !scope.state) scope.refresh();
+        },
+        onRadioState(msg) {
+            if (!msg) return;
+            if (msg.property === 'ActiveVfo') scope?.setActiveBand(msg.value);
+            else if (msg.property === 'ScopeSetting') scope?.applyRemote(msg.value);
+            hotspots.onRadioState(msg);
+        },
     };
+}
+
+// The overlay's own layout rules live in site.css, which this page does not
+// load (no Bootstrap, no site theme). The same rules, scoped to the panel.
+function ensureHotspotStyle() {
+    if (document.getElementById('rp-hotspot-style')) return;
+    const st = document.createElement('style');
+    st.id = 'rp-hotspot-style';
+    st.textContent = `
+.rp-altview .radio-display-hotspots{position:absolute;z-index:2;overflow:visible;user-select:none;-webkit-user-select:none;cursor:crosshair}
+.rp-altview .radio-display-hotspots .rdh-debug{position:absolute;inset:0;pointer-events:none}
+.rp-altview .radio-display-hotspots .rdh-cursor{position:absolute;top:0;bottom:0;width:0;border-left:1px dashed rgba(255,255,255,.7);pointer-events:none}
+.rp-altview .radio-display-hotspots .rdh-label{position:absolute;top:4px;left:50%;transform:translateX(-50%);padding:1px 6px;border-radius:3px;background:rgba(0,0,0,.75);color:#fff;font:12px/1.4 monospace;width:max-content;max-width:calc(100% - 8px);box-sizing:border-box;text-align:center;pointer-events:none}
+.rp-altview .radio-display-hotspots .rdh-label.rdh-label-flash{background:#b02a37}
+`;
+    document.head.appendChild(st);
 }

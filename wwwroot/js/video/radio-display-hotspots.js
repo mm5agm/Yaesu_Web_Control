@@ -611,13 +611,25 @@ export class RadioDisplayHotspots {
         const r = this._imageRect();
         const pr = this.pane.getBoundingClientRect();
         if (!r) return;
+        const k = this._localPerScreenPx();
         Object.assign(this.overlay.style, {
-            left:   `${r.left - pr.left}px`,
-            top:    `${r.top - pr.top}px`,
-            width:  `${r.width}px`,
-            height: `${r.height}px`,
+            left:   `${(r.left - pr.left) * k}px`,
+            top:    `${(r.top - pr.top) * k}px`,
+            width:  `${r.width * k}px`,
+            height: `${r.height * k}px`,
         });
         this._drawDebug();
+    }
+
+    /**
+     * CSS pixels inside the pane per screen pixel. 1 on the Radio Display
+     * page; not 1 on the Radio panel page, which scales its whole board with
+     * a transform to fit the window. getBoundingClientRect() reports screen
+     * pixels, so the overlay's own left/top/width/height need converting back.
+     */
+    _localPerScreenPx() {
+        const w = this.pane.getBoundingClientRect().width;
+        return w > 0 && this.pane.offsetWidth > 0 ? this.pane.offsetWidth / w : 1;
     }
 
     /** Pointer event -> fractional frame coordinates. */
@@ -709,7 +721,7 @@ export class RadioDisplayHotspots {
 
         if (hit.kind === 'scope') {
             const r = this._freqAt(f.fx);
-            this._showCursor(e.clientX - f.rect.left, r.ok ? formatHz(r.hz) : r.why);
+            this._showCursor((e.clientX - f.rect.left) * this._localPerScreenPx(), r.ok ? formatHz(r.hz) : r.why);
             return;
         }
         this._showCursor(null, this._describe(hit));

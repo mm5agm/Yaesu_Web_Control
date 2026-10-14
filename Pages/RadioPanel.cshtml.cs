@@ -12,6 +12,8 @@ namespace Yaesu_Web_Control.Pages
     {
         public bool IsDual => RadioCapabilities.IsDualReceiver(RadioModel);
         public int MaxPower => RadioCapabilities.MaxPowerWatts(RadioModel);
+        // Click-to-tune on the Radio screen needs the radio's scope span (SS).
+        public bool HasScopeCat => RadioCapabilities.SupportsSpectrumScopeCat(RadioModel);
 
         public RadioPanelModel(RadioStateService radioStateService, ISettingsService settingsService)
             : base(radioStateService, settingsService)
