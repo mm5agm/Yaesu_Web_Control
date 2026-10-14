@@ -13,6 +13,11 @@
 //
 // No WSJT-X / JTAlert / Log4OM launcher links on this page, and no
 // accessibility layer: both were Colin's call on 2026-10-13. Classic keeps them.
+// The WSJT-X TX chip is status only: it lights while WSJT-X reports it is
+// transmitting (polled from /api/wsjtx/status, which the hub does not carry).
+//
+// The TX timeout (TX SETUP window) puts the main page's banner and tone across
+// the board. It warns; it never unkeys the radio.
 
 import { mountRadioPanel } from '/js/radio-panel/radio-panel.js';
 import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
@@ -23,6 +28,7 @@ import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 import { RadioScopeControl } from '/js/ui/radio-scope.js';
 import { RadioDisplayHotspots } from '/js/video/radio-display-hotspots.js';
 import { PopoutHost } from '/js/popout/popout.js';
+import { txTimeoutBeep, txTimeoutWarning } from '/js/radio-panel/tx-timeout.js';
 
 const BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
 const MODES = ['LSB', 'USB', 'CW-U', 'CW-L', 'AM', 'FM', 'RTTY-L', 'DATA-U'];
@@ -39,6 +45,8 @@ const ATT_NEXT = { '00': '06', '06': '12', '12': '18', '18': '00' };
 const STEPS_HZ = [10, 50, 100, 500, 1000, 5000, 10000];
 const STEP_KEY = 'ywc.radioPanel.stepHz';
 const SPOT_MAX_AGE_MS = 30 * 60 * 1000;
+const WSJTX_POLL_MS = 3000;
+const TX_BEEP_MS = 3000;
 
 const on = v => v === true || v === 'true' || v === 1 || (typeof v === 'string' && v !== '' && v !== '0' && v !== '00' && v !== 'false');
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -70,6 +78,7 @@ export function startYaesuRadioPanel(root, cfg) {
         dual,
         views: cfg.views ?? [],
         lamps: [{ id: 'cat', label: 'CAT' }, { id: 'sdr', label: 'SDR' }, { id: 'dx', label: 'DX' }],
+        statusChips: [{ id: 'wsjtx', label: 'WSJT-X TX', title: 'Lit while WSJT-X is transmitting through YWC' }],
         keys: [
             { id: 'ipo', label: 'IPO' }, { id: 'att', label: 'ATT' },
             { id: 'agc', label: 'AGC' }, { id: 'nb', label: 'NB' },
@@ -136,7 +145,37 @@ export function startYaesuRadioPanel(root, cfg) {
         selected: () => r.sel,
         freq: vfo => r.freq[vfo] ?? 0,
         showScreen: () => panel.setScreenView('tft'),
+        onTxTimeout: s => txWarning(s),
     });
+
+    // ---- TX timeout: the banner and a beep every few seconds while tripped --
+    let beepTimer = null;
+    function txWarning(s) {
+        panel.setTxWarning(s.tripped ? txTimeoutWarning(s.limit) : null, () => win?.txTimeout.dismiss());
+        if (s.tripped && beepTimer == null) {
+            txTimeoutBeep();
+            beepTimer = setInterval(txTimeoutBeep, TX_BEEP_MS);
+        } else if (!s.tripped && beepTimer != null) {
+            clearInterval(beepTimer);
+            beepTimer = null;
+        }
+    }
+
+    // ---- WSJT-X TX light ----------------------------------------------------
+    async function pollWsjtx() {
+        let d = null;
+        try {
+            const res = await fetch('/api/wsjtx/status', { cache: 'no-store' });
+            if (res.ok) d = await res.json();
+        } catch { /* app restarting: leave it dim */ }
+        const title = !d ? 'WSJT-X status unavailable'
+            : !d.running ? 'WSJT-X is not running'
+            : d.transmitting ? `WSJT-X is transmitting${d.mode ? ' (' + d.mode + ')' : ''}`
+            : `WSJT-X is running${d.mode ? ' (' + d.mode + ')' : ''}, not transmitting`;
+        panel.setStatusChip('wsjtx', !!d?.transmitting, title);
+    }
+    pollWsjtx();
+    setInterval(pollWsjtx, WSJTX_POLL_MS);
 
     const pitchHz = () => 300 + num(r.pitchCode) * 10;
     const widthHz = vfo => (r.widthCode[vfo] == null ? null : ifWidthHzFor(model, r.mode[vfo], parseInt(r.widthCode[vfo], 10)));

@@ -727,6 +727,12 @@ export function startYaesuWindows(windows, ctx) {
         };
     })();
 
+    // RTTY send needs a transmit path this radio's CAT does not have: there is
+    // no CAT text-to-RTTY command (KY is CW only), so it would mean generating
+    // AFSK or keying FSK from the app. Left for Colin's decision.
+    const rttySend = slot('rtty', 'rttySend');
+    if (rttySend) note(rttySend, 'Not built. The radio has no CAT command that sends RTTY text, so sending needs AFSK audio or FSK keying from YWC. For now, send RTTY from your RTTY program.');
+
     // ---- placeholders for the windows still to come ----------------------
     for (const g of YAESU_WINDOWS)
         for (const p of g.panels) {

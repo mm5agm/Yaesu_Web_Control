@@ -134,6 +134,11 @@ html,body{margin:0;background:${v('page')}}
 .rp-wkey.tx{border-color:${v('tx')};color:${v('tx')}}
 .rp-wkey.tx.armed{background:${v('tx')};color:${v('tx-fg')}}
 .rp-wval.tx{color:${v('tx')}}
+.rp-status-chip{font-size:14px;padding:2px 8px}
+.rp-txbanner{position:fixed;left:16px;right:16px;top:8px;z-index:100000;display:flex;align-items:center;gap:18px;padding:10px 16px;border-radius:8px;background:${v('tx')};color:${v('tx-fg')};font:700 20px ${SANS};letter-spacing:.04em;box-shadow:0 6px 24px rgba(0,0,0,.6)}
+.rp-txbanner.hidden{display:none}
+.rp-txbanner-text{flex:1}
+.rp-txbanner-btn{font:700 16px ${SANS};letter-spacing:.08em;padding:6px 14px;border-radius:5px;border:2px solid ${v('tx-fg')};background:transparent;color:${v('tx-fg')};cursor:pointer}
 .rp-wbar{display:grid;grid-template-columns:62px 1fr 92px;align-items:center;gap:8px}
 .rp-wbar .lbl{font:600 13px ${SANS};letter-spacing:.12em;color:${v('sub-label')}}
 .rp-wbar .track{height:10px;background:${v('sbar-track')};border-radius:2px;overflow:hidden}

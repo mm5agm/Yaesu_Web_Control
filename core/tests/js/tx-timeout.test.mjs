@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TxTimeout, clampTimeoutSeconds, timeoutText, stepTimeout, TX_TIMEOUT_KEY, TX_TIMEOUT_DEFAULT_S } from '../../js/radio-panel/tx-timeout.js';
+import { TxTimeout, clampTimeoutSeconds, timeoutText, stepTimeout, txTimeoutWarning, TX_TIMEOUT_KEY, TX_TIMEOUT_DEFAULT_S } from '../../js/radio-panel/tx-timeout.js';
 
 function rig(limit) {
     let t = 0;
@@ -97,4 +97,9 @@ test('text and stepping', () => {
     assert.equal(stepTimeout(30, 1), 45);
     assert.equal(stepTimeout(5, -1), 5);
     assert.equal(stepTimeout(3600, 1), 3600);
+});
+
+test('the warning names the limit, as the main page words it', () => {
+    assert.equal(txTimeoutWarning(90), '⚠ TX has been ON for more than 90 seconds — check your microphone, keyer or VOX!');
+    assert.match(txTimeoutWarning('junk'), /more than 120 seconds/);
 });

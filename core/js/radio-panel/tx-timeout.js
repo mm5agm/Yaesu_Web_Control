@@ -35,6 +35,30 @@ export function stepTimeout(s, dir) {
     return Math.max(TX_TIMEOUT_MIN_S, Math.min(TX_TIMEOUT_MAX_S, cur + (dir > 0 ? step : -step)));
 }
 
+/** The banner's words, as the main page has them. */
+export function txTimeoutWarning(limitSeconds) {
+    return `\u26A0 TX has been ON for more than ${clampTimeoutSeconds(limitSeconds)} seconds \u2014 check your microphone, keyer or VOX!`;
+}
+
+/** One short 440 Hz square-wave beep, the main page's warning tone. Silent
+ *  where the browser has not allowed audio yet. */
+export function txTimeoutBeep() {
+    try {
+        const ac = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ac.createOscillator();
+        const g = ac.createGain();
+        o.type = 'square';
+        o.frequency.setValueAtTime(440, ac.currentTime);
+        g.gain.setValueAtTime(0.0001, ac.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.25, ac.currentTime + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.25);
+        o.connect(g).connect(ac.destination);
+        o.start();
+        o.stop(ac.currentTime + 0.3);
+        o.onended = () => { try { ac.close(); } catch { /* already closed */ } };
+    } catch { /* audio not allowed */ }
+}
+
 const storage = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* private window */ } },

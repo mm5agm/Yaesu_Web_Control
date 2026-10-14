@@ -145,6 +145,15 @@ export function mountRadioPanel(root, opts = {}) {
         lamps.append(wrap);
         lampEls[l.id] = dot;
     }
+    // Status chips sit with the lamps: dim until the adapter lights one
+    // (e.g. 'WSJT-X TX' while another program is transmitting through the app).
+    const statusChipEls = {};
+    for (const c of opts.statusChips ?? []) {
+        const el = h('span', 'rp-chip dim rp-status-chip', c.label);
+        if (c.title) el.title = c.title;
+        lamps.append(el);
+        statusChipEls[c.id] = el;
+    }
     const settings = h('div', 'rp-bar');
     const themeSel = h('select', 'rp-select');
     themeSel.title = 'Theme';
@@ -526,6 +535,19 @@ export function mountRadioPanel(root, opts = {}) {
     sizeSel.addEventListener('change', () => { store.set(prefix + 'size', sizeSel.value); rescale(); });
     window.addEventListener('resize', rescale);
 
+    // The TX warning is fixed across the top of the browser window, outside the
+    // scaled board, so it shows however the page is scrolled or sized, until
+    // the adapter clears it or DISMISS is pressed.
+    const txBanner = h('div', 'rp-txbanner hidden');
+    txBanner.setAttribute('role', 'alert');
+    const txBannerText = h('span', 'rp-txbanner-text', '');
+    const txBannerBtn = h('button', 'rp-txbanner-btn', 'DISMISS');
+    txBannerBtn.type = 'button';
+    let txBannerDismiss = null;
+    txBannerBtn.addEventListener('click', () => txBannerDismiss?.());
+    txBanner.append(txBannerText, txBannerBtn);
+    root.append(txBanner);
+
     // Windows (CW, RTTY, Memories ...) sit on the board, so they scale with it.
     const windows = mountPanelWindows({
         board: panel, launcher, groups: opts.windows ?? [], store, prefix,
@@ -612,6 +634,21 @@ export function mountRadioPanel(root, opts = {}) {
         setLamp(id, state) {
             const el = lampEls[id];
             if (el) el.className = 'rp-lamp' + (state && state !== 'off' ? ' ' + state : '');
+        },
+        // Lit (red) or dim; `title` replaces the hover text when given.
+        setStatusChip(id, lit, title) {
+            const el = statusChipEls[id];
+            if (!el) return;
+            el.classList.toggle('tx', !!lit);
+            el.classList.toggle('dim', !lit);
+            if (title !== undefined) el.title = title ?? '';
+        },
+        // `text` null hides the banner; onDismiss is what its DISMISS key does.
+        setTxWarning(text, onDismiss) {
+            txBanner.classList.toggle('hidden', !text);
+            txBannerText.textContent = text ?? '';
+            txBannerDismiss = text ? (onDismiss ?? null) : null;
+            txBannerBtn.hidden = !txBannerDismiss;
         },
         // `frac` 0..1 positions the pointer; null leaves the knob dimmed (no reading yet).
         setKnob(id, frac, text) {
