@@ -332,6 +332,17 @@ export class PopoutHost {
         return true;
     }
 
+    /**
+     * Ask the pop-out to hand its panel back and close, as its own Reattach
+     * does. A pop-out that does not answer - its 'closed' was lost - is taken
+     * as gone, so the main page never waits for a window that is not there.
+     */
+    recall() {
+        if (!this._open) return;
+        try { this._channel?.postMessage({ type: 'recall' }); } catch { /* channel closed */ }
+        setTimeout(() => this._setOpen(false), 1000);
+    }
+
     /** Bring an open pop-out to the front. */
     focus() {
         let w = (this._win && !this._win.closed) ? this._win : null;
@@ -521,6 +532,7 @@ export class PopoutChild {
         this._channel = makeChannel(this._name);
         this._channel?.addEventListener('message', ev => {
             if (ev.data?.type === 'ping') this._post('opened');
+            if (ev.data?.type === 'recall') this.reattach();
         });
         this._post('opened');
 

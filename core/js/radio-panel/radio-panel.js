@@ -81,6 +81,8 @@ function knobSvg(size) {
  *                                          The adapter fills each panel through
  *                                          api.windows.slot(groupId, panelId)
  *   onWindowPanel(groupId, panelId, shown) told when a window panel shows or hides
+ *   onSpectrumPopout(), onSpectrumBack()   optional: a ⧉ key on the spectrum, and the
+ *                                          BRING BACK key shown while setSpectrumAway(true)
  *   frequencyEntry (bool)                  show an ENT chip in each VFO box
  *   storagePrefix, fontBase
  *   onAction(kind, id, vfo)                kind: 'key' | 'band' | 'mode' | 'step' | 'vfoKey'
@@ -307,6 +309,22 @@ export function mountRadioPanel(root, opts = {}) {
     const sdrView = h('div', 'rp-sdrview');
     sdrView.append(spec, axis, wf);
     viewArea.append(sdrView);
+    // The spectrum can go to a window of its own (a second screen); while it
+    // is there the board shows where it went, and a key to fetch it back.
+    let specAway = null;
+    if (typeof opts.onSpectrumPopout === 'function') {
+        const pop = h('button', 'rp-wkey rp-spec-pop', '⧉');
+        pop.type = 'button';
+        pop.title = 'Spectrum in its own window';
+        pop.addEventListener('click', () => opts.onSpectrumPopout());
+        spec.append(pop);
+        specAway = h('div', 'rp-spec-away');
+        const back = h('button', 'rp-wkey', 'BRING BACK');
+        back.type = 'button';
+        back.addEventListener('click', () => opts.onSpectrumBack?.());
+        specAway.append(h('span', null, 'Spectrum is in its own window'), back);
+        sdrView.append(specAway);
+    }
     const slots = {};
     const viewTabs = h('div', 'rp-viewtabs');
     const viewTabEls = {};
@@ -620,6 +638,11 @@ export function mountRadioPanel(root, opts = {}) {
             }
         },
         pushSpectrum(bins) { spectrum.push(bins); },
+        /** The spectrum is in its own window (true) or back on the board. */
+        setSpectrumAway(away) {
+            specAway?.classList.toggle('on', !!away);
+            if (away) spectrum.clear();
+        },
         clearSpectrum() { spectrum.clear(); },
         setSpots(list) { st.spots = list ?? []; drawOverlays(); },
         setTheme,

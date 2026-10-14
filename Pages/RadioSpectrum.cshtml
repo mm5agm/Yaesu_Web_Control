@@ -1,0 +1,42 @@
+@page
+@model Yaesu_Web_Control.Pages.RadioSpectrumModel
+@{
+    Layout = null;
+}
+@* The radio panel's pop-out spectrum. Like /radio it draws its own page: no
+   Bootstrap, no site nav, no accessibility layer. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spectrum - Yaesu Web Control</title>
+    <link rel="icon" href="~/favicon.ico" />
+    <style>html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
+        .popout-screen-offer { padding: 6px 10px; border-radius: 4px; background: #1b2330; color: #dde; font: 14px sans-serif; }
+        .popout-screen-offer button { margin-left: 8px; }
+    </style>
+</head>
+<body>
+    <div id="radioSpectrum"></div>
+
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script type="module">
+        import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { startYaesuSpectrumPopout } from "/js/ui/radio-spectrum-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        const popout = new PopoutChild({ name: 'radio-spectrum', fallbackUrl: '/radio' }).start();
+        // Layout = null, so no site.js: this connection is what tells the host
+        // a browser is still here, as well as feeding the spectrum.
+        const conn = window.rwcHubConnection('/radioHub');
+        const root = document.getElementById('radioSpectrum');
+        startYaesuSpectrumPopout(root, {
+            conn,
+            popout,
+            model: '@Model.RadioModel',
+            dual: @(Model.IsDual ? "true" : "false"),
+        });
+        offerScreenPermission(root.querySelector('.rp-spop-body'));
+    </script>
+</body>
+</html>

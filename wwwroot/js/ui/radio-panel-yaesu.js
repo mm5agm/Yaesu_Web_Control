@@ -22,6 +22,7 @@ import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 import { RadioScopeControl } from '/js/ui/radio-scope.js';
 import { RadioDisplayHotspots } from '/js/video/radio-display-hotspots.js';
+import { PopoutHost } from '/js/popout/popout.js';
 
 const BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
 const MODES = ['LSB', 'USB', 'CW-U', 'CW-L', 'AM', 'FM', 'RTTY-L', 'DATA-U'];
@@ -93,11 +94,24 @@ export function startYaesuRadioPanel(root, cfg) {
         onWindowPanel: (g, p, shown) => win?.onShow(g, p, shown),
         frequencyEntry: true,
         onScreenView: id => { if (id === 'tft') radioScreen?.show(); },
+        // The spectrum's own window, for a second screen: /RadioSpectrum.
+        onSpectrumPopout: () => {
+            if (!specHost.open()) alert('The browser blocked the spectrum window. Allow pop-ups for this page and press the key again.');
+        },
+        onSpectrumBack: () => specHost.recall(),
         onAction: (kind, id, vfo) => act(kind, id, vfo),
         choices: (kind, vfo) => choices(kind, vfo),
         storagePrefix: 'ywc.radioPanel.',
         fontBase: '/lib/fonts',
     });
+    // While the spectrum is in its own window the board stops drawing it.
+    let specAway = false;
+    const specHost = new PopoutHost({
+        name: 'radio-spectrum',
+        url: '/RadioSpectrum',
+        defaultSize: { width: 1100, height: 700 },
+        onChange: open => { specAway = open; panel.setSpectrumAway(open); },
+    }).start();
     radioScreen = startRadioScreen(panel.screenSlot('tft'), { model, dual, scopeCat: !!cfg.scopeCat });
     if (panel.screenView() === 'tft') radioScreen.show();
 
@@ -415,7 +429,7 @@ export function startYaesuRadioPanel(root, cfg) {
             panel.setSpectrumSource({ label: 'SDR A', spanHz: span, status: null });
             let bins = v.rfOrdered ? v.bins : Array.prototype.slice.call(v.bins).reverse();
             if (r.freq.A > 0) bins = alignBins(bins, offsetFor(v), span);
-            panel.pushSpectrum(bins);
+            if (!specAway) panel.pushSpectrum(bins);
         },
         DxSpot: addSpot,
         DxClusterStatus: v => {
