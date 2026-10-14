@@ -125,8 +125,11 @@ export function startYaesuRadioPanel(root, cfg) {
         vfoKeys: [
             { id: 'ab', label: 'A▸B' }, { id: 'ba', label: 'B▸A' }, { id: 'swap', label: 'A⇄B' },
             { id: 'split', label: 'SPLIT' }, { id: 'qsplit', label: 'Q.SPLIT' },
+            // Classic's TX VFO select. It picks the VFO, it does not key the radio.
+            { id: 'txa', label: 'TX A', title: 'Transmit on VFO A (selects it, does not transmit)' },
+            { id: 'txb', label: 'TX B', title: 'Transmit on VFO B (selects it, does not transmit)' },
         ],
-        vfoKeyColumns: 5,
+        vfoKeyColumns: 4,
         // M▸VFO and VFO▸M would read and overwrite the radio's own memory
         // channels; they stay display-only until that has been bench-checked.
         memKeys: [
@@ -186,7 +189,7 @@ export function startYaesuRadioPanel(root, cfg) {
         contourHz: { A: 800, B: 800 }, apfHz: { A: 0, B: 0 }, notchHz: { A: null, B: null },
         af: { A: null, B: null }, rf: { A: null, B: null }, sql: { A: null, B: null },
         mic: null, procl: null, power: null, mon: null, speed: null, pitchKnown: false,
-        tx: false, txMeterRaw: {}, sel: 'A', split: 0, proc: false,
+        tx: false, txMeterRaw: {}, sel: 'A', split: 0, txVfo: 0, proc: false,
     };
     let stepHz = (() => { try { return num(localStorage.getItem(STEP_KEY)); } catch { return 0; } })();
     if (!STEPS_HZ.includes(stepHz)) stepHz = 100;
@@ -337,6 +340,18 @@ export function startYaesuRadioPanel(root, cfg) {
 
     // Each receiver group's keys show their own receiver. A single-receiver
     // radio has one group, showing the active VFO, which is what a press changes.
+    // The VFO that transmits, worked out as Classic does: a single-receiver
+    // radio transmits on the other VFO in split, a dual one says so with FT.
+    function txVfoNow() {
+        if (!dual) return r.split ? (r.sel === 'A' ? 'B' : 'A') : r.sel;
+        return r.txVfo === 1 ? 'B' : 'A';
+    }
+    function refreshTxVfo() {
+        const t = txVfoNow();
+        panel.setKey('txa', { on: t === 'A' });
+        panel.setKey('txb', { on: t === 'B' });
+    }
+
     function refreshKeys() {
         for (const v of dual ? ['A', 'B'] : [r.sel]) {
             const g = groupFor(v);
@@ -351,6 +366,7 @@ export function startYaesuRadioPanel(root, cfg) {
             panel.setKey('apf', { on: !!r.apf[v] }, g);
         }
         panel.setKey('mainsub', { on: true, sub: dual ? (r.sel === 'A' ? 'MAIN' : 'SUB') : 'VFO-' + r.sel });
+        refreshTxVfo();
     }
 
     // ---- writes ----------------------------------------------------------
@@ -454,6 +470,8 @@ export function startYaesuRadioPanel(root, cfg) {
                     case 'ab': return post('/api/cat/copy-vfo/ab');
                     case 'ba': return post('/api/cat/copy-vfo/ba');
                     case 'swap': return post('/api/cat/swap-vfo');
+                    case 'txa': return txVfoNow() === 'A' ? undefined : post('/api/cat/tx-vfo/A');
+                    case 'txb': return txVfoNow() === 'B' ? undefined : post('/api/cat/tx-vfo/B');
                     case 'rxclar': return post('/api/cat/clarifier', { vfo: v, rxOn: !r.rxClar, txOn: r.txClar, offsetHz: r.clarHz[v] });
                     case 'txclar': return post('/api/cat/clarifier', { vfo: v, rxOn: r.rxClar, txOn: !r.txClar, offsetHz: r.clarHz[v] });
                     case 'clrclar':
@@ -762,7 +780,8 @@ export function startYaesuRadioPanel(root, cfg) {
         ManualNotchFreqB: v => { r.notchHz.B = num(v); refreshRxKnobs('B'); },
         ApfFreqA: v => { r.apfHz.A = num(v); },
         ApfFreqB: v => { r.apfHz.B = num(v); },
-        SplitMode: v => { r.split = num(v); panel.setSplit(r.split !== 0); panel.setKey('split', { on: r.split !== 0 }); },
+        SplitMode: v => { r.split = num(v); panel.setSplit(r.split !== 0); panel.setKey('split', { on: r.split !== 0 }); refreshTxVfo(); },
+        TxVfo: v => { r.txVfo = num(v); refreshTxVfo(); },
         RxClarOn: v => { r.rxClar = on(v); refreshClar(); },
         TxClarOn: v => { r.txClar = on(v); refreshClar(); },
         ClarifierOffsetA: v => { r.clarHz.A = num(v); refreshClar(); },
