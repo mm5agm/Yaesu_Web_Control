@@ -1,0 +1,92 @@
+@page
+@model Yaesu_Web_Control.Pages.RadioScopeModel
+@inject Yaesu_Web_Control.Services.RadioStateService RadioState
+@{
+    Layout = null;
+    ViewData["Title"] = "Radio Scope";
+    var radioModel  = Model.RadioModel;
+    var hasScope    = Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(radioModel);
+    var hasSub      = Yaesu_Web_Control.Services.RadioCapabilities.HasPerReceiverScopes(radioModel);
+    var initialBand = (hasSub && RadioState.ActiveVfo == 1) ? "sub" : "main";
+}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>Radio Scope - Yaesu Web Control</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <style>
+        html, body { margin: 0; background: #111; color: #e8e8e8; }
+        #radioScopeCard { padding: 10px 12px; }
+        #radioScopeCard .radio-scope-label { color: #9aa0a6; }
+        .radio-scope-none { padding: 12px; color: #9aa0a6; font-size: 0.9rem; }
+        /* The partial's buttons are styled for the light main page. */
+        #radioScopeCard .btn-outline-secondary { color: #c8ccd0; border-color: #4a4f55; }
+        #radioScopeCard .btn-outline-secondary.active,
+        #radioScopeCard .btn-outline-secondary:hover { color: #fff; background: #5a6168; border-color: #5a6168; }
+    </style>
+</head>
+<body>
+    @if (hasScope)
+    {
+        @* data-eager-load: no expand/collapse header here, so read the radio's
+           settings as soon as the page opens. *@
+        <div id="radioScopeCard" class="radio-scope-controls" data-eager-load="1" data-initial-band="@initialBand">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="scope-status badge bg-secondary small">&mdash;</span>
+            </div>
+            @if (hasSub)
+            {
+                <div class="radio-scope-row">
+                    <span class="radio-scope-label">Band</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Which band's scope to show and adjust">
+                        <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "main" ? "active" : "")"
+                                data-band="main">MAIN</button>
+                        <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "sub" ? "active" : "")"
+                                data-band="sub">SUB</button>
+                    </div>
+                </div>
+            }
+            <partial name="_RadioScopeButtonsPartial" model="@radioModel" />
+        </div>
+    }
+    else
+    {
+        <div class="radio-scope-none">
+            The @radioModel's own scope can't be set over CAT from YWC yet.
+        </div>
+    }
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.js"></script>
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    @* Builds the hub connection with a retry policy that never gives up.
+       This page has no _Layout, so it must load it itself. *@
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script type="module">
+        import { RadioScopeControl } from "/js/ui/radio-scope.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        window.radioScopeControls = [];
+        const card = document.getElementById('radioScopeCard');
+        if (card) {
+            const control = new RadioScopeControl(card);
+            window.radioScopeControls.push(control);
+            window.radioScopeControl = control;
+        }
+        // Scope settings changed at the rig, and the band the radio is on.
+        // It is also what keeps the host running while this page is the only
+        // one open: Layout = null, so there is no site.js heartbeat.
+        const conn = window.rwcHubConnection('/radioHub');
+        conn.on('RadioStateUpdate', (update) => {
+            if (update.property === 'ScopeSetting')
+                window.radioScopeControls.forEach(c => c.applyRemote(update.value));
+            if (update.property === 'ActiveVfo')
+                window.radioScopeControls.forEach(c => c.setActiveBand(update.value));
+        });
+        conn.onreconnected(() => window.radioScopeControls.forEach(c => c.refresh()));
+        conn.start().catch(err => console.error('[radio-scope]', err));
+    </script>
+</body>
+</html>

@@ -16,7 +16,11 @@
 // or joined back, because a browser reloads a frame that is moved. The
 // decoders run in the server, so only the text on screen starts again.
 //
-// Nothing here transmits. Sending (CW, RTTY) and TX setup come later.
+// Remote Audio, the radio's own scope and the audio filter are framed pages
+// too: /RemoteAudio, /RadioScope and /AudioFilter.
+//
+// Nothing here transmits, except the Remote Audio page's own TX key, which is
+// the same page and key as its pop-out. Sending (CW, RTTY) and TX setup come later.
 
 import { calibrateNumeric } from '/js/calibration/calibration-engine.js';
 import { sMeterFraction, sMeterText, txMeterFraction } from '/js/radio-panel/panel-math.js';
@@ -47,18 +51,18 @@ export const YAESU_WINDOWS = [
         { id: 'mGauges', title: 'ALL METERS', w: 380 },
         { id: 'mHistory', title: 'S-METER HISTORY' },
     ] },
-    { id: 'audio', key: 'AUDIO', title: 'REMOTE AUDIO', pos: [330, 150, 800, 300], panels: [
-        { id: 'aLink', title: 'LINK', w: 240 },
-        { id: 'aRx', title: 'RECEIVE' },
-        { id: 'aTx', title: 'TRANSMIT' },
+    // One panel, so it cannot be torn off: moving a frame reloads it, and
+    // reloading the Remote Audio page drops the audio.
+    { id: 'audio', key: 'AUDIO', title: 'REMOTE AUDIO', pos: [330, 150, 760, 380], panels: [
+        { id: 'aLink', title: 'RECEIVE · TRANSMIT' },
     ] },
-    { id: 'scope', key: 'SCOPE', title: 'SCOPE · SCREEN', pos: [320, 200, 980, 340], panels: [
-        { id: 'scCat', title: "RADIO'S OWN SCOPE (CAT)" },
-        { id: 'scScreen', title: 'RADIO SCREEN (VIDEO)' },
+    { id: 'scope', key: 'SCOPE', title: 'SCOPE · SCREEN', pos: [300, 150, 1000, 520], panels: [
+        { id: 'scCat', title: "RADIO'S OWN SCOPE (CAT)", dpos: [300, 150, 680, 520] },
+        { id: 'scScreen', title: 'RADIO SCREEN (VIDEO)', w: 280 },
     ] },
-    { id: 'rx', key: 'RX SETUP', title: 'RX SETUP', pos: [280, 200, 1100, 340], panels: [
-        { id: 'rxFilter', title: 'FILTER' },
-        { id: 'rxShift', title: 'SHIFT · NOTCH', w: 230 },
+    { id: 'rx', key: 'RX SETUP', title: 'RX SETUP', pos: [280, 200, 1080, 360], panels: [
+        { id: 'rxFilter', title: 'AUDIO FILTER', dpos: [280, 200, 560, 360] },
+        { id: 'rxShift', title: 'SHIFT · NOTCH', w: 240 },
         { id: 'rxFm', title: 'FM · REPEATER', w: 220 },
     ] },
     { id: 'tx', key: 'TX SETUP', title: 'TX SETUP', pos: [340, 560, 920, 300], panels: [
@@ -76,6 +80,7 @@ export const YAESU_WINDOWS = [
 // window has its own title, close and tear-off.
 const EMBED_CSS = `
 [id$="ReattachBtn"], .ywc-dialog-close, .popout-screen-offer,
+[id^="audioFilterReattachBtn"], [id^="audioFilterPopoutBtn"], #remoteAudioCloseBtn,
 #cwReaderTitle, #rttyTunerTitle, #dxSpotsTitle { display: none !important; }
 html, body { background: #111 !important; }
 `;
@@ -110,7 +115,7 @@ function mhzText(hz) {
  * Fill the window panels. Each panel's body is handed out once and kept for
  * the page's life.
  * @param {object} windows  the panel's windows API (panel-windows.js)
- * @param {object} ctx      { model, dual, maxPowerW, maxHz, post(url, body), selected() -> 'A'|'B', freq(vfo) }
+ * @param {object} ctx      { model, dual, maxPowerW, maxHz, post(url, body), selected() -> 'A'|'B', freq(vfo), showScreen() }
  * @returns {{ onShow(g, p, shown), onRadioState(msg), entry(vfo) }}
  */
 export function startYaesuWindows(windows, ctx) {
@@ -119,12 +124,16 @@ export function startYaesuWindows(windows, ctx) {
     const state = {};       // hub property -> last value
 
     // ---- framed pages ----------------------------------------------------
-    function framed(g, p, url, title) {
+    // url may be a function, read each time the panel is shown; frame.reload()
+    // re-reads it for a page that follows the selected receiver.
+    function framed(g, p, url, title, allow) {
         const body = slot(g, p);
-        if (!body) return;
+        if (!body) return null;
         body.classList.add('flush');
         const f = h('iframe', 'rp-wframe');
         f.title = title;
+        if (allow) f.allow = allow;
+        const urlNow = () => (typeof url === 'function' ? url() : url);
         f.addEventListener('load', () => {
             try {
                 const doc = f.contentDocument;
@@ -137,11 +146,23 @@ export function startYaesuWindows(windows, ctx) {
         });
         body.append(f);
         // Loaded the first time the panel is shown, not with the page.
-        shows[g + '/' + p] = shown => { if (shown && !f.getAttribute('src')) f.src = url; };
+        shows[g + '/' + p] = shown => { if (shown && !f.getAttribute('src')) f.src = urlNow(); };
+        return {
+            reload() {
+                const u = urlNow();
+                if (f.getAttribute('src') && f.getAttribute('src') !== u) f.src = u;
+            },
+        };
     }
     framed('cw', 'cwReader', '/CwReader', 'CW reader');
     framed('rtty', 'rttyReader', '/RttyTuner', 'RTTY tuner and reader');
     framed('dx', 'dxSpots', '/DxSpots', 'DX spots');
+    // The page's own Start/Stop, levels and microphone. Closing the window
+    // unloads it, which stops the audio, as closing its pop-out does.
+    framed('audio', 'aLink', '/RemoteAudio', 'Remote audio', 'microphone; autoplay');
+    framed('scope', 'scCat', '/RadioScope', "The radio's own scope");
+    const rxName = v => (ctx.dual ? (v === 'B' ? 'SUB' : 'MAIN') : 'VFO-' + v);
+    const filterFrame = framed('rx', 'rxFilter', () => '/AudioFilter?vfo=' + ctx.selected(), 'Audio filter');
     for (const [g, p] of [['cw', 'cwSend'], ['rtty', 'rttySend']]) note(slot(g, p), 'Sending comes with the TX windows, in a later build.');
 
     // ---- CW keyer --------------------------------------------------------
@@ -369,6 +390,127 @@ export function startYaesuWindows(windows, ctx) {
         };
     })();
 
+    // ---- RX setup: shift and notch, for the selected receiver --------------
+    // Values change here as soon as a key is pressed, and are put right by the
+    // radio's own value when it comes back over the hub.
+    const shiftNotch = (() => {
+        const body = slot('rx', 'rxShift');
+        const v = () => ctx.selected();
+        const val = { IfShiftA: 0, IfShiftB: 0, ManualNotchA: '0', ManualNotchB: '0', ManualNotchFreqA: 1500, ManualNotchFreqB: 1500 };
+        const row = (label) => {
+            const out = h('span', 'rp-wval', '--');
+            const r = h('div', 'rp-wrow');
+            r.append(h('span', 'rp-wlabel', label), out);
+            body.append(r);
+            return out;
+        };
+        const btns = list => {
+            const b = h('div', 'rp-wbtns');
+            for (const [label, fn] of list) b.append(key(label, fn));
+            body.append(b);
+            return b;
+        };
+        const shiftOut = row('IF SHIFT');
+        btns([['−20', () => shift(-20)], ['ZERO', () => shift(null)], ['+20', () => shift(20)]]);
+        const notchOut = row('MANUAL NOTCH');
+        const notchKeys = btns([['ON', () => notch('1')], ['OFF', () => notch('0')]]);
+        const freqOut = row('NOTCH AT');
+        btns([['−100', () => nfreq(-100)], ['−10', () => nfreq(-10)], ['+10', () => nfreq(10)], ['+100', () => nfreq(100)]]);
+        function shift(d) {
+            const k = 'IfShift' + v();
+            const hz = d == null ? 0 : Math.max(-1000, Math.min(1000, val[k] + d));
+            if (d != null && hz === val[k]) return;
+            val[k] = hz;
+            ctx.post(`/api/cat/ifshift/${v().toLowerCase()}`, { shiftHz: hz });
+            draw();
+        }
+        function notch(on) {
+            val['ManualNotch' + v()] = on;
+            ctx.post(`/api/cat/manualnotch/${v().toLowerCase()}`, { enabled: on });
+            draw();
+        }
+        function nfreq(d) {
+            const k = 'ManualNotchFreq' + v();
+            const hz = Math.max(10, Math.min(3200, val[k] + d));
+            if (hz === val[k]) return;
+            val[k] = hz;
+            ctx.post(`/api/cat/manualnotchfreq/${v().toLowerCase()}`, { frequencyHz: hz });
+            draw();
+        }
+        function draw() {
+            const s = val['IfShift' + v()];
+            shiftOut.textContent = (s > 0 ? '+' : '') + s + ' Hz';
+            const n = on(val['ManualNotch' + v()]);
+            notchOut.textContent = n ? 'ON' : 'OFF';
+            notchKeys.children[0].classList.toggle('on', n);
+            notchKeys.children[1].classList.toggle('on', !n);
+            freqOut.textContent = val['ManualNotchFreq' + v()] + ' Hz';
+        }
+        draw();
+        const take = k => x => { val[k] = k.startsWith('ManualNotch') && !k.includes('Freq') ? String(x) : num(x); draw(); };
+        const out = { draw };
+        for (const k of Object.keys(val)) out[k] = take(k);
+        return out;
+    })();
+
+    // ---- RX setup: FM repeater (read only) -------------------------------
+    const fm = (() => {
+        const body = slot('rx', 'rxFm');
+        const TONES = ['67.0', '69.3', '71.9', '74.4', '77.0', '79.7', '82.5', '85.4', '88.5', '91.5',
+            '94.8', '97.4', '100.0', '103.5', '107.2', '110.9', '114.8', '118.8', '123.0', '127.3',
+            '131.8', '136.5', '141.3', '146.2', '151.4', '156.7', '159.8', '162.2', '165.5', '167.9',
+            '171.3', '173.8', '177.3', '179.9', '183.5', '186.2', '189.9', '192.8', '196.6', '199.5',
+            '203.5', '206.5', '210.7', '218.1', '225.7', '229.1', '233.6', '241.8', '250.3', '254.1'];
+        const row = label => {
+            const out = h('span', 'rp-wval', '--');
+            const r = h('div', 'rp-wrow');
+            r.append(h('span', 'rp-wlabel', label), out);
+            body.append(r);
+            return out;
+        };
+        const dir = row('SHIFT'), off = row('OFFSET'), mode = row('CTCSS'), tone = row('TONE');
+        note(body, 'Set these on the main page. Read from the radio; MAIN only.');
+        return {
+            FmShiftDir: x => { dir.textContent = { 0: 'SIMPLEX', 1: '+', 2: '−', 3: 'SPLIT' }[String(x)] ?? String(x); },
+            FmOffsetHz: x => { off.textContent = (num(x) / 1000).toLocaleString() + ' kHz'; },
+            CtcssMode: x => { mode.textContent = { '00': 'OFF', '01': 'ENC / DEC', '02': 'ENC' }[String(x)] ?? String(x); },
+            CtcssTone: x => { tone.textContent = (TONES[parseInt(x, 10)] ?? '--') + ' Hz'; },
+        };
+    })();
+
+    // ---- radio screen (video): status, and where to see it ----------------
+    (() => {
+        const body = slot('scope', 'scScreen');
+        const row = label => {
+            const out = h('span', 'rp-wval', '--');
+            const r = h('div', 'rp-wrow');
+            r.append(h('span', 'rp-wlabel', label), out);
+            body.append(r);
+            return out;
+        };
+        const st = row('STATUS'), size = row('SIZE'), fps = row('FRAME RATE'), q = row('QUALITY');
+        const b = h('div', 'rp-wbtns');
+        b.append(
+            key('SHOW ON BOARD', () => ctx.showScreen?.()),
+            key('POP OUT', () => window.open('/RadioDisplay', 'ywc-radio-display', 'popup,width=1000,height=640')));
+        body.append(b);
+        note(body, 'Capture device, frame rate and quality are set in Settings and on Radio Display.');
+        let timer = 0;
+        async function poll() {
+            const j = await getJson('/api/video/status');
+            if (!j) { st.textContent = '--'; return; }
+            st.textContent = !j.enabled ? 'OFF IN SETTINGS' : j.halted ? 'DISCONNECTED' : String(j.status ?? '--').toUpperCase();
+            size.textContent = j.width && j.height ? `${j.width} × ${j.height}` : '--';
+            fps.textContent = j.fps ? `${j.fps} fps` : (j.targetFps ? `${j.targetFps} fps set` : '--');
+            q.textContent = j.jpegQuality ? String(j.jpegQuality) : '--';
+        }
+        shows['scope/scScreen'] = shown => {
+            clearInterval(timer);
+            timer = 0;
+            if (shown) { poll(); timer = setInterval(poll, 3000); }
+        };
+    })();
+
     // ---- frequency entry -------------------------------------------------
     const entry = (() => {
         const body = slot('kbd', 'kbdPad');
@@ -452,7 +594,16 @@ export function startYaesuWindows(windows, ctx) {
         for (const p of g.panels)
             if (windows.isShown(g.id, p.id)) shows[g.id + '/' + p.id]?.(true);
 
-    const handlers = [keyer, meters];
+    // RX Setup is for the selected receiver: its title says which, and the
+    // audio filter page is reloaded for the other one when it changes.
+    const rxFollow = () => {
+        windows.setSubtitle('rx', rxName(ctx.selected()));
+        shiftNotch.draw();
+        filterFrame?.reload();
+    };
+    rxFollow();
+
+    const handlers = [keyer, meters, shiftNotch, fm];
     return {
         onShow(g, p, shown) { try { shows[g + '/' + p]?.(shown); } catch (e) { console.warn('radio panel window:', g, p, e); } },
         onRadioState(msg) {
@@ -464,6 +615,7 @@ export function startYaesuWindows(windows, ctx) {
                 if (fn) try { fn(msg.value); } catch (e) { console.warn('radio panel window:', prop, e); }
             }
             if (prop === 'FrequencyA' || prop === 'FrequencyB' || prop === 'ActiveVfo') { memories.mark(); entry.draw(); }
+            if (prop === 'ActiveVfo') rxFollow();
         },
         entry: vfo => entry.open(vfo),
     };

@@ -121,6 +121,7 @@ export function startYaesuRadioPanel(root, cfg) {
         model, dual, maxPowerW, maxHz: num(cfg.maxHz) || 75_000_000, post,
         selected: () => r.sel,
         freq: vfo => r.freq[vfo] ?? 0,
+        showScreen: () => panel.setScreenView('tft'),
     });
 
     const pitchHz = () => 300 + num(r.pitchCode) * 10;
