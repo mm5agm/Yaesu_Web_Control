@@ -11,6 +11,11 @@
 // transmit: TUNE (atu/tune keys the radio) and VOX (room noise can key it) are
 // inert, display-only keys.
 //
+// The bottom row is one group per receiver (MAIN | SHARED · TX | SUB). On a
+// dual-receiver radio each group's keys write to their own receiver whichever
+// is selected; on a single-receiver radio there is one group and it follows
+// the active VFO. The concentric knobs show values; they do not write yet.
+//
 // No WSJT-X / JTAlert / Log4OM launcher links on this page, and no
 // accessibility layer: both were Colin's call on 2026-10-13. Classic keeps them.
 // The WSJT-X TX chip is status only: it lights while WSJT-X reports it is
@@ -80,24 +85,29 @@ export function startYaesuRadioPanel(root, cfg) {
         lamps: [{ id: 'cat', label: 'CAT' }, { id: 'sdr', label: 'SDR' }, { id: 'dx', label: 'DX' }],
         statusChips: [{ id: 'wsjtx', label: 'WSJT-X TX', title: 'Lit while WSJT-X is transmitting through YWC' }],
         keys: [
-            { id: 'ipo', label: 'IPO' }, { id: 'att', label: 'ATT' },
-            { id: 'agc', label: 'AGC' }, { id: 'nb', label: 'NB' },
-            { id: 'nr', label: 'DNR' }, { id: 'dnf', label: 'DNF' },
-            { id: 'notch', label: 'NOTCH' }, { id: 'contour', label: 'CONTOUR' },
-            { id: 'apf', label: 'APF' }, { id: 'proc', label: 'PROC' },
+            { id: 'mainsub', label: dual ? 'MAIN / SUB' : 'VFO A / B' }, { id: 'proc', label: 'PROC' },
             { id: 'vox', label: 'VOX', inert: true }, { id: 'tune', label: 'TUNE', inert: true },
+        ],
+        rxGroups: {
+            knobs: [
+                { id: 'afrf', label: 'AF / RF·SQL' }, { id: 'shiftwidth', label: 'SHIFT / WIDTH' },
+                { id: 'notchcont', label: 'NOTCH / CONT' },
+            ],
+            keys: [
+                { id: 'ipo', label: 'IPO' }, { id: 'att', label: 'ATT' }, { id: 'agc', label: 'AGC' },
+                { id: 'nb', label: 'NB' }, { id: 'nr', label: 'DNR' }, { id: 'dnf', label: 'DNF' },
+                { id: 'notch', label: 'NOTCH' }, { id: 'contour', label: 'CONT' }, { id: 'apf', label: 'APF' },
+            ],
+        },
+        sharedKnobs: [
+            { id: 'micproc', label: 'MIC / PROC' }, { id: 'powermon', label: 'POWER / MONI' },
+            { id: 'speedpitch', label: 'SPEED / PITCH' },
         ],
         vfoKeys: [
             { id: 'split', label: 'SPLIT' }, { id: 'rxclar', label: 'RX CLAR' }, { id: 'txclar', label: 'TX CLAR' },
         ],
         bands: BANDS.map(b => ({ id: b, label: b.replace('m', '') })),
         modes: MODES.map(m => ({ id: m, label: m })),
-        knobs: [
-            { id: 'af', label: 'AF Gain' }, { id: 'rf', label: 'RF Gain' }, { id: 'sql', label: 'Squelch' },
-            { id: 'shift', label: 'IF Shift' }, { id: 'width', label: 'Width' }, { id: 'pitch', label: 'CW Pitch' },
-            { id: 'speed', label: 'Key Speed' }, { id: 'power', label: 'RF Power' }, { id: 'mic', label: 'Mic Gain' },
-            { id: 'procl', label: 'Proc Level' }, { id: 'mon', label: 'Monitor' },
-        ],
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
         windows: YAESU_WINDOWS,
         onWindowPanel: (g, p, shown) => win?.onShow(g, p, shown),
@@ -131,7 +141,9 @@ export function startYaesuRadioPanel(root, cfg) {
         att: { A: '00', B: '00' }, ipo: { A: '0', B: '0' }, nb: { A: '0', B: '0' }, nr: { A: '0', B: '0' },
         dnf: { A: '0', B: '0' }, notch: { A: '0', B: '0' }, contour: { A: false, B: false }, apf: { A: false, B: false },
         agc: { A: '', B: '' }, agcCode: { A: '', B: '' }, rxClar: false, txClar: false, clarHz: { A: 0, B: 0 },
-        contourHz: { A: 800, B: 800 }, apfHz: { A: 0, B: 0 },
+        contourHz: { A: 800, B: 800 }, apfHz: { A: 0, B: 0 }, notchHz: { A: null, B: null },
+        af: { A: null, B: null }, rf: { A: null, B: null }, sql: { A: null, B: null },
+        mic: null, procl: null, power: null, mon: null, speed: null, pitchKnown: false,
         tx: false, txMeterRaw: {}, sel: 'A', split: 0, proc: false,
     };
     let stepHz = (() => { try { return num(localStorage.getItem(STEP_KEY)); } catch { return 0; } })();
@@ -181,14 +193,61 @@ export function startYaesuRadioPanel(root, cfg) {
     const widthHz = vfo => (r.widthCode[vfo] == null ? null : ifWidthHzFor(model, r.mode[vfo], parseInt(r.widthCode[vfo], 10)));
 
     function refreshWidth(vfo) {
+        panel.setWidth(vfo, widthHz(vfo));
+        refreshRxKnobs(vfo);
+    }
+
+    // ---- the concentric knobs: values only --------------------------------
+    // Inner knob first in each label's order the radio's panel uses: AF inside
+    // RF/SQL, SHIFT inside WIDTH, NOTCH inside CONTOUR.
+    const val = x => (x == null ? '--' : String(x));
+    const frac = (x, max) => (x == null ? null : Math.max(0, Math.min(1, x / max)));
+    const signed = x => (x >= 0 ? '+' : '') + x;
+    // On a single-receiver radio the one group (A) shows the active VFO.
+    const groupFor = vfo => (dual ? vfo : vfo === r.sel ? 'A' : null);
+    function refreshRxKnobs(vfo) {
+        const g = groupFor(vfo);
+        if (!g) return;
+        const { af, rf, sql } = { af: r.af[vfo], rf: r.rf[vfo], sql: r.sql[vfo] };
+        panel.setGroupKnob(g, 'afrf', {
+            inner: frac(af, 255), outer: frac(rf, 255), text: val(af) + ' · ' + val(rf),
+            title: `AF ${val(af)} · RF ${val(rf)} · SQL ${val(sql)}`,
+        });
         const hz = widthHz(vfo);
-        panel.setWidth(vfo, hz);
-        if (vfo !== 'A') return;
-        const opts = ifWidthOptionsFor(model, r.mode.A);
-        const code = parseInt(r.widthCode.A, 10);
-        if (!opts?.length || !Number.isFinite(code)) { panel.setKnob('width', null, '--'); return; }
-        const i = Math.max(0, opts.findIndex(o => o.code === code || String(o.code) === String(code)));
-        panel.setKnob('width', opts.length > 1 ? i / (opts.length - 1) : 0, hz ? (hz >= 1000 ? (hz / 1000).toFixed(hz % 100 ? 2 : 1) + 'k' : hz + '') : '--');
+        const opts = ifWidthOptionsFor(model, r.mode[vfo]);
+        const code = parseInt(r.widthCode[vfo], 10);
+        let wFrac = null;
+        if (opts?.length && Number.isFinite(code)) {
+            const i = Math.max(0, opts.findIndex(o => o.code === code || String(o.code) === String(code)));
+            wFrac = opts.length > 1 ? i / (opts.length - 1) : 0;
+        }
+        const wTxt = hz ? (hz >= 1000 ? (hz / 1000).toFixed(hz % 100 ? 2 : 1) + 'k' : hz + '') : '--';
+        panel.setGroupKnob(g, 'shiftwidth', {
+            inner: 0.5 + r.shift[vfo] / 2400, outer: wFrac, text: signed(r.shift[vfo]) + ' · ' + wTxt,
+            title: `IF shift ${signed(r.shift[vfo])} Hz · width ${wTxt}`,
+        });
+        const nOn = on(r.notch[vfo]), cOn = !!r.contour[vfo];
+        panel.setGroupKnob(g, 'notchcont', {
+            inner: frac(r.notchHz[vfo], 3200), outer: frac(r.contourHz[vfo], 3200),
+            text: (nOn && r.notchHz[vfo] != null ? r.notchHz[vfo] : 'off') + ' · ' + (cOn ? r.contourHz[vfo] : 'off'),
+            title: `Notch ${nOn ? 'on' : 'off'} ${val(r.notchHz[vfo])} Hz · contour ${cOn ? 'on' : 'off'} ${r.contourHz[vfo]} Hz`,
+        });
+    }
+    function refreshSharedKnobs() {
+        panel.setGroupKnob('shared', 'micproc', {
+            inner: frac(r.mic, 100), outer: frac(r.procl, 100), text: val(r.mic) + ' · ' + val(r.procl),
+            title: `Mic gain ${val(r.mic)} · processor level ${val(r.procl)}`,
+        });
+        panel.setGroupKnob('shared', 'powermon', {
+            inner: frac(r.power, maxPowerW), outer: frac(r.mon, 100),
+            text: (r.power == null ? '--' : r.power + ' W') + ' · ' + val(r.mon),
+            title: `RF power ${r.power == null ? '--' : r.power + ' W'} · monitor ${val(r.mon)}`,
+        });
+        panel.setGroupKnob('shared', 'speedpitch', {
+            inner: r.speed == null ? null : (r.speed - 4) / 56, outer: r.pitchKnown ? r.pitchCode / 75 : null,
+            text: val(r.speed) + ' · ' + (r.pitchKnown ? pitchHz() : '--'),
+            title: `Key speed ${val(r.speed)} wpm · CW pitch ${r.pitchKnown ? pitchHz() + ' Hz' : '--'}`,
+        });
     }
 
     function refreshFlags(vfo) {
@@ -201,22 +260,26 @@ export function startYaesuRadioPanel(root, cfg) {
         if (on(r.dnf[vfo])) flag('dnf', 'DNF');
         if (on(r.notch[vfo])) flag('notch', 'NOTCH');
         panel.setFlags(vfo, f);
-        if (vfo === r.sel) refreshKeys();
+        refreshKeys();
+        refreshRxKnobs(vfo);
     }
 
-    // The receiver keys show the selected receiver, because that is the one
-    // a press changes.
+    // Each receiver group's keys show their own receiver. A single-receiver
+    // radio has one group, showing the active VFO, which is what a press changes.
     function refreshKeys() {
-        const v = r.sel;
-        panel.setKey('ipo', { on: r.ipo[v] !== '0', sub: IPO[r.ipo[v]] ?? '' });
-        panel.setKey('att', { on: on(r.att[v]), sub: on(r.att[v]) ? parseInt(r.att[v], 10) + ' dB' : 'OFF' });
-        panel.setKey('agc', { on: !!r.agc[v] && r.agc[v] !== 'OFF', sub: r.agc[v] });
-        panel.setKey('nb', { on: on(r.nb[v]) });
-        panel.setKey('nr', { on: on(r.nr[v]) });
-        panel.setKey('dnf', { on: on(r.dnf[v]) });
-        panel.setKey('notch', { on: on(r.notch[v]) });
-        panel.setKey('contour', { on: !!r.contour[v] });
-        panel.setKey('apf', { on: !!r.apf[v] });
+        for (const v of dual ? ['A', 'B'] : [r.sel]) {
+            const g = groupFor(v);
+            panel.setKey('ipo', { on: r.ipo[v] !== '0', sub: IPO[r.ipo[v]] ?? '' }, g);
+            panel.setKey('att', { on: on(r.att[v]), sub: on(r.att[v]) ? parseInt(r.att[v], 10) + ' dB' : 'OFF' }, g);
+            panel.setKey('agc', { on: !!r.agc[v] && r.agc[v] !== 'OFF', sub: r.agc[v] }, g);
+            panel.setKey('nb', { on: on(r.nb[v]) }, g);
+            panel.setKey('nr', { on: on(r.nr[v]) }, g);
+            panel.setKey('dnf', { on: on(r.dnf[v]) }, g);
+            panel.setKey('notch', { on: on(r.notch[v]) }, g);
+            panel.setKey('contour', { on: !!r.contour[v] }, g);
+            panel.setKey('apf', { on: !!r.apf[v] }, g);
+        }
+        panel.setKey('mainsub', { on: true, sub: dual ? (r.sel === 'A' ? 'MAIN' : 'SUB') : 'VFO-' + r.sel });
     }
 
     // ---- writes ----------------------------------------------------------
@@ -275,6 +338,7 @@ export function startYaesuRadioPanel(root, cfg) {
                 return tuneBy(id === 'up' ? stepHz : -stepHz);
             case 'key':
                 switch (id) {
+                    case 'mainsub': return act('vfo', r.sel === 'A' ? 'B' : 'A');
                     case 'ipo': return post(`/api/cat/ipo/${rx}`, { code: IPO_NEXT[r.ipo[v]] ?? '0' });
                     case 'att': return post(`/api/cat/attenuator/${rx}`, { code: ATT_NEXT[r.att[v]] ?? '00' });
                     case 'agc': return post(`/api/cat/agc/${rx}`, { code: AGC_NEXT[r.agcCode[v]] ?? '2' });
@@ -405,11 +469,11 @@ export function startYaesuRadioPanel(root, cfg) {
         ModeB: v => { r.mode.B = String(v ?? ''); panel.setMode('B', r.mode.B); refreshWidth('B'); },
         IfWidthA: v => { r.widthCode.A = v; refreshWidth('A'); },
         IfWidthB: v => { r.widthCode.B = v; refreshWidth('B'); },
-        IfShiftA: v => { r.shift.A = num(v); panel.setKnob('shift', 0.5 + r.shift.A / 2000, (r.shift.A > 0 ? '+' : '') + r.shift.A); },
-        IfShiftB: v => { r.shift.B = num(v); },
+        IfShiftA: v => { r.shift.A = num(v); refreshRxKnobs('A'); },
+        IfShiftB: v => { r.shift.B = num(v); refreshRxKnobs('B'); },
         AgcA: v => { r.agcCode.A = String(v); r.agc.A = AGC[String(v)] ?? ''; panel.setAgc('A', r.agc.A); refreshFlags('A'); },
         AgcB: v => { r.agcCode.B = String(v); r.agc.B = AGC[String(v)] ?? ''; panel.setAgc('B', r.agc.B); refreshFlags('B'); },
-        ActiveVfo: v => { r.sel = num(v) === 1 ? 'B' : 'A'; panel.setSelected(r.sel); panel.setBand(r.band[r.sel]); refreshKeys(); refreshClar(); if (!dual) { refreshFlags('A'); refreshFlags('B'); } },
+        ActiveVfo: v => { r.sel = num(v) === 1 ? 'B' : 'A'; panel.setSelected(r.sel); panel.setBand(r.band[r.sel]); refreshKeys(); refreshClar(); if (!dual) { refreshFlags('A'); refreshFlags('B'); refreshRxKnobs(r.sel); } },
         IpoA: v => { r.ipo.A = String(v); refreshFlags('A'); },
         IpoB: v => { r.ipo.B = String(v); refreshFlags('B'); },
         AttA: v => { r.att.A = String(v); refreshFlags('A'); },
@@ -426,8 +490,10 @@ export function startYaesuRadioPanel(root, cfg) {
         ContourOnB: v => { r.contour.B = on(v); refreshFlags('B'); },
         ApfOnA: v => { r.apf.A = on(v); refreshFlags('A'); },
         ApfOnB: v => { r.apf.B = on(v); refreshFlags('B'); },
-        ContourFreqA: v => { r.contourHz.A = num(v); },
-        ContourFreqB: v => { r.contourHz.B = num(v); },
+        ContourFreqA: v => { r.contourHz.A = num(v); refreshRxKnobs('A'); },
+        ContourFreqB: v => { r.contourHz.B = num(v); refreshRxKnobs('B'); },
+        ManualNotchFreqA: v => { r.notchHz.A = num(v); refreshRxKnobs('A'); },
+        ManualNotchFreqB: v => { r.notchHz.B = num(v); refreshRxKnobs('B'); },
         ApfFreqA: v => { r.apfHz.A = num(v); },
         ApfFreqB: v => { r.apfHz.B = num(v); },
         SplitMode: v => { r.split = num(v); panel.setSplit(r.split !== 0); panel.setKey('split', { on: r.split !== 0 }); },
@@ -439,15 +505,18 @@ export function startYaesuRadioPanel(root, cfg) {
         AtuTuning: v => panel.setKey('tune', { tx: on(v) }),
         ProcEnabled: v => { r.proc = on(v); panel.setKey('proc', { on: r.proc }); },
         VoxOn: v => panel.setKey('vox', { on: on(v) }),
-        AfGainA: v => panel.setKnob('af', num(v) / 255, String(num(v))),
-        RfGainA: v => panel.setKnob('rf', num(v) / 255, String(num(v))),
-        SquelchA: v => panel.setKnob('sql', num(v) / 255, String(num(v))),
-        CwPitch: v => { r.pitchCode = num(v); panel.setKnob('pitch', num(v) / 75, pitchHz() + ''); },
-        CwSpeed: v => panel.setKnob('speed', (num(v) - 4) / 56, num(v) + ' wpm'),
-        Power: v => panel.setKnob('power', num(v) / maxPowerW, num(v) + ' W'),
-        MicGain: v => panel.setKnob('mic', num(v) / 100, String(num(v))),
-        ProcLevel: v => panel.setKnob('procl', num(v) / 100, String(num(v))),
-        MonitorLevelA: v => panel.setKnob('mon', num(v) / 100, String(num(v))),
+        AfGainA: v => { r.af.A = num(v); refreshRxKnobs('A'); },
+        AfGainB: v => { r.af.B = num(v); refreshRxKnobs('B'); },
+        RfGainA: v => { r.rf.A = num(v); refreshRxKnobs('A'); },
+        RfGainB: v => { r.rf.B = num(v); refreshRxKnobs('B'); },
+        SquelchA: v => { r.sql.A = num(v); refreshRxKnobs('A'); },
+        SquelchB: v => { r.sql.B = num(v); refreshRxKnobs('B'); },
+        CwPitch: v => { r.pitchCode = num(v); r.pitchKnown = true; refreshSharedKnobs(); },
+        CwSpeed: v => { r.speed = num(v); refreshSharedKnobs(); },
+        Power: v => { r.power = num(v); refreshSharedKnobs(); },
+        MicGain: v => { r.mic = num(v); refreshSharedKnobs(); },
+        ProcLevel: v => { r.procl = num(v); refreshSharedKnobs(); },
+        MonitorLevelA: v => { r.mon = num(v); refreshSharedKnobs(); },
         SMeterA: v => panel.setSMeter('A', calibrateNumeric('SMETER', num(v))),
         SMeterB: v => panel.setSMeter('B', calibrateNumeric('SMETER', num(v))),
         PowerMeter: v => { r.txMeterRaw.PO = typeof v === 'object' && v ? v.value : v; refreshTxMeters(); },

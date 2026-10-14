@@ -59,6 +59,20 @@ function knobSvg(size) {
     return { svg, g };
 }
 
+// A concentric pair, as on a transceiver: an outer ring round an inner knob,
+// each with its own pointer.
+function knob2Svg(size) {
+    const svg = s('svg', { width: size, height: size, viewBox: '0 0 64 64', class: 'rp-knobsvg' });
+    svg.append(s('circle', { cx: 32, cy: 32, r: 31, class: 'o' }), s('circle', { cx: 32, cy: 32, r: 28, class: 'm' }));
+    const outer = s('g', { transform: 'rotate(-135 32 32)', class: 'idle' });
+    outer.append(s('line', { x1: 32, y1: 5, x2: 32, y2: 12, class: 'mark' }));
+    svg.append(outer, s('circle', { cx: 32, cy: 32, r: 17, class: 'o' }), s('circle', { cx: 32, cy: 32, r: 15, class: 'c ring' }));
+    const inner = s('g', { transform: 'rotate(-135 32 32)', class: 'idle' });
+    inner.append(s('line', { x1: 32, y1: 19, x2: 32, y2: 25, class: 'mark2' }));
+    svg.append(inner);
+    return { svg, outer, inner };
+}
+
 /**
  * @param {HTMLElement} root
  * @param {object} opts
@@ -70,7 +84,17 @@ function knobSvg(size) {
  *                                          (e.g. anything that would transmit)
  *   vfoKeys:[{ id, label, inert }]         under the dial, three per row
  *   bands:  [{ id, label }]   modes: [{ id, label }]
- *   knobs:  [{ id, label }]
+ *   knobs:  [{ id, label }]                the knob row, used when rxGroups is not given
+ *   rxGroups: { keys: [{ id, label }], knobs: [{ id, label }] }
+ *                                          optional: the bottom row as one group per
+ *                                          receiver (MAIN and SUB; SUB only when dual),
+ *                                          each with the same concentric knobs and keys,
+ *                                          and a SHARED group between them. A group key
+ *                                          acts as act('key', id, vfo) - vfo undefined on
+ *                                          a single-receiver radio, where the one group
+ *                                          follows the selected VFO
+ *   sharedKnobs: [{ id, label }]           the SHARED group's concentric knobs
+ *   sharedName                             its heading (default 'SHARED · TX')
  *   screenViews: [{ id, label }]         optional: what the centre screen can show
  *                                          instead of the spectrum. The spectrum is
  *                                          always 'sdr'; each other view gets an empty
@@ -393,7 +417,7 @@ export function mountRadioPanel(root, opts = {}) {
     // knob row
     const knobs = h('div', 'rp-knobs');
     const knobEls = {};
-    for (const k of opts.knobs ?? []) {
+    for (const k of opts.rxGroups ? [] : opts.knobs ?? []) {
         const wrap = h('div', 'rp-knob idle');
         const kn = knobSvg(88);
         const val = h('span', 'rp-lcd', '--');
@@ -402,7 +426,57 @@ export function mountRadioPanel(root, opts = {}) {
         knobEls[k.id] = { wrap, g: kn.g, val };
     }
 
-    panel.append(top, body, knobs);
+    // Or the bottom row as receiver groups: MAIN | SHARED | SUB.
+    const groupEls = {};      // 'A' | 'B' | 'shared' -> { box, name, tag, knobs: { id -> { outer, inner, val, wrap } } }
+    function concentric(row, k) {
+        const wrap = h('div', 'rp-cknob');
+        const kn = knob2Svg(80);
+        const val = h('span', 'rp-lcd', '--');
+        wrap.append(h('span', 'rp-legend', k.label), kn.svg, val);
+        row.append(wrap);
+        return { wrap, outer: kn.outer, inner: kn.inner, val };
+    }
+    function rxGroup(vfo) {
+        const box = h('div', 'rp-group rp-group-' + vfo);
+        const head = h('div', 'rp-group-head');
+        const name = h('span', 'rp-group-name', dual ? (vfo === 'A' ? 'MAIN · VFO-A' : 'SUB · VFO-B') : 'RECEIVER · VFO-A');
+        const tag = h('span', 'rp-chip sel rp-group-tag hidden', 'SELECTED');
+        head.append(name, tag);
+        const row = h('div', 'rp-group-row');
+        const g = { box, name, tag, knobs: {} };
+        for (const k of opts.rxGroups.knobs ?? []) g.knobs[k.id] = concentric(row, k);
+        const grid = h('div', 'rp-gkeys');
+        for (const k of opts.rxGroups.keys ?? []) {
+            const b = h('button', 'rp-skey');
+            b.type = 'button';
+            if (act && !k.inert) b.addEventListener('click', () => act('key', k.id, dual ? vfo : undefined));
+            else b.disabled = true;
+            const led = h('span', 'rp-led'), sub = h('span', 'rp-sub', '');
+            b.append(led, h('span', 'rp-skey-label', k.label), sub);
+            grid.append(b);
+            keyEls[vfo + ':' + k.id] = { b, led, sub };
+        }
+        row.append(grid);
+        box.append(head, row);
+        groupEls[vfo] = g;
+        return box;
+    }
+    let bottom = knobs;
+    if (opts.rxGroups) {
+        bottom = h('div', 'rp-groups' + (dual ? '' : ' single'));
+        const shared = h('div', 'rp-group rp-group-shared');
+        const sharedRow = h('div', 'rp-group-row');
+        const sg = { box: shared, name: h('span', 'rp-group-name', opts.sharedName ?? 'SHARED · TX'), tag: null, knobs: {} };
+        for (const k of opts.sharedKnobs ?? []) sg.knobs[k.id] = concentric(sharedRow, k);
+        const sharedHead = h('div', 'rp-group-head');
+        sharedHead.append(sg.name);
+        shared.append(sharedHead, sharedRow);
+        groupEls.shared = sg;
+        bottom.append(rxGroup('A'), shared);
+        if (dual) bottom.append(rxGroup('B'));
+    }
+
+    panel.append(top, body, bottom);
 
     // ---- state ---------------------------------------------------------
     const st = {
@@ -619,14 +693,24 @@ export function mountRadioPanel(root, opts = {}) {
             sub.classList.toggle('sel', st.sel === 'B');
             selA.classList.toggle('hidden', st.sel !== 'A');
             selB.classList.toggle('hidden', st.sel !== 'B');
+            for (const vfo of ['A', 'B']) {
+                const g = groupEls[vfo];
+                if (!g) continue;
+                const on = !dual || st.sel === vfo;
+                g.box.classList.toggle('sel', on);
+                g.tag.classList.toggle('hidden', !(dual && on));
+            }
+            if (!dual && groupEls.A) groupEls.A.name.textContent = 'RECEIVER · VFO-' + st.sel;
             markModeKeys();
             drawNeedle();
         },
         selected() { return st.sel; },
         setSplit(on) { splitChip.classList.toggle('hidden', !on); },
         setBand(id) { for (const [b, el] of Object.entries(bandEls)) el.classList.toggle('on', b === id); },
-        setKey(id, { on = false, tx = false, sub } = {}) {
-            const k = keyEls[id];
+        // `vfo` names a receiver group's key ('A' or 'B'; on a single-receiver
+        // radio the one group is 'A').
+        setKey(id, { on = false, tx = false, sub } = {}, vfo) {
+            const k = keyEls[vfo ? vfo + ':' + id : id];
             if (!k) return;
             k.led.className = 'rp-led' + (tx ? ' tx' : on ? ' on' : '');
             if (k.sub && sub !== undefined) k.sub.textContent = sub ?? '';
@@ -658,6 +742,19 @@ export function mountRadioPanel(root, opts = {}) {
             k.wrap.classList.toggle('idle', !known);
             k.g.setAttribute('transform', `rotate(${knobAngle(known ? frac : 0)} 32 32)`);
             k.val.textContent = text ?? '--';
+        },
+        // A concentric knob in a group ('A' | 'B' | 'shared'). Fractions are
+        // 0..1; null leaves that pointer dimmed. `title` is the hover text.
+        setGroupKnob(group, id, { inner, outer, text, title } = {}) {
+            const k = groupEls[group]?.knobs[id];
+            if (!k) return;
+            for (const [g, f] of [[k.outer, outer], [k.inner, inner]]) {
+                const known = f != null && Number.isFinite(Number(f));
+                g.classList.toggle('idle', !known);
+                g.setAttribute('transform', `rotate(${knobAngle(known ? f : 0)} 32 32)`);
+            }
+            k.val.textContent = text ?? '--';
+            if (title !== undefined) k.wrap.title = title ?? '';
         },
         setClarifier(text, frac) {
             clarTxt.textContent = text;
