@@ -203,7 +203,18 @@ html,body{margin:0;background:${v('page')}}
 .rp-tunable{cursor:crosshair}
 .rp-spec-oob{display:none;position:absolute;left:50%;top:8px;transform:translateX(-50%);padding:2px 10px;border-radius:4px;background:${v('tx')};color:${v('tx-fg')};font:600 14px ${SANS};letter-spacing:.12em;z-index:2}
 .rp-spec-oob.on{display:block}
-.rp-spec-span{position:absolute;left:6px;bottom:6px;z-index:3;font-size:13px;padding:3px 8px;border-radius:5px;background:${v('bar-bg')};border:1px solid ${v('well-border')}}
+.rp-spec-tools{position:absolute;left:6px;bottom:6px;z-index:3;display:flex;gap:4px;align-items:stretch;cursor:default}
+.rp-spec-span{font-size:13px;padding:3px 8px;border-radius:5px;background:${v('bar-bg')};border:1px solid ${v('well-border')}}
+.rp-spec-tools .rp-wkey{min-height:26px;padding:2px 8px;font-size:12px}
+.rp-spec-tools .rp-wkey.on{background:${v('tx')};border-color:${v('tx')};color:${v('tx-fg')}}
+.rp-specpane{position:relative}
+.rp-specpane.held .rp-spectrum{outline:2px solid ${v('tx')};outline-offset:-2px}
+.rp-spec-settings{display:none;position:absolute;left:6px;bottom:42px;z-index:6;padding:10px 12px;gap:6px;flex-direction:column;border-radius:6px;background:${v('bar-bg')};border:1px solid ${v('well-border')};color:${v('soft-fg')};font:500 13px ${SANS};box-shadow:0 6px 18px rgba(0,0,0,.45);cursor:default}
+.rp-spec-settings.open{display:flex}
+.rp-spec-row{display:grid;grid-template-columns:64px 150px 56px;align-items:center;gap:8px}
+.rp-spec-row input[type=range]{width:150px}
+.rp-spec-val{font-variant-numeric:tabular-nums;text-align:right}
+.rp-spop-key.rp-spop-hold.on{background:${v('tx')};border-color:${v('tx')};color:${v('tx-fg')}}
 .rp-spec-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 22px ${SANS};letter-spacing:.14em;text-transform:uppercase;color:${v('spec-label')}}
 .rp-axis{display:flex;justify-content:space-between;font:400 15px ${MONO};color:${v('axis')};margin-top:-4px;min-height:15px}
 .rp-waterfall{height:128px;position:relative;border:1px solid ${v('screen-line')};border-radius:4px;overflow:hidden;background:${v('spec-bg')}}

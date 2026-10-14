@@ -4,12 +4,14 @@
 // The page around it is the app's: it opens the hub, orders the bins and
 // feeds each pane (spectrum-pane.js). This draws the window - title, the
 // Main / Sub / Both tabs, the DX spots switch, REATTACH and close - and
-// keeps the operator's choices. Colours follow the radio panel's theme,
-// including a change made on the board while this window is open.
+// keeps the operator's choices. Colours follow the radio panel's theme, and
+// each pane the board's Range / Speed / Bright / Smooth / Passband / Hold for
+// that receiver, including a change made on the board while this is open.
 
 import { injectRadioPanelStyle } from './radio-panel-style.js';
 import { applyTheme, DEFAULT_THEME } from './radio-panel-themes.js';
 import { SpectrumPane } from './spectrum-pane.js';
+import { cleanSpectrumSettings } from './spectrum-view.js';
 
 const store = {
     get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
@@ -72,6 +74,7 @@ export function mountSpectrumPopout(root, opts) {
 
     const panes = {};
     const spanSel = {};
+    const holdKeys = {};
     for (const p of opts.panes) {
         const holder = h('div', 'rp-spop-holder');
         holder.dataset.pane = p.id;
@@ -86,8 +89,30 @@ export function mountSpectrumPopout(root, opts) {
             pane.tools.append(sel);
             spanSel[p.id] = sel;
         }
+        const hold = btn('rp-spop-key rp-spop-hold', 'HOLD', () => {
+            const s = readSettings(p.id);
+            s.hold = !s.hold;
+            store.set(prefix + 'spectrum.' + p.id, JSON.stringify(s));
+            applySettings(p.id);
+        });
+        hold.title = 'Freeze the spectrum and waterfall';
+        pane.tools.append(hold);
         panes[p.id] = pane;
+        holdKeys[p.id] = hold;
     }
+
+    // The board writes these; this window reads and follows them.
+    function readSettings(id) {
+        let s = {};
+        try { s = JSON.parse(store.get(prefix + 'spectrum.' + id, '{}')) ?? {}; } catch { /* defaults */ }
+        return { ...cleanSpectrumSettings(s), passband: s.passband !== false };
+    }
+    function applySettings(id) {
+        const s = readSettings(id);
+        panes[id].setSettings(s);
+        holdKeys[id].classList.toggle('on', s.hold);
+    }
+    for (const id of ids) applySettings(id);
 
     let view = store.get(own + 'view', views.length > 1 ? 'both' : ids[0]);
     let showSpots = store.get(own + 'spots', '1') === '1';
@@ -110,7 +135,10 @@ export function mountSpectrumPopout(root, opts) {
         for (const p of Object.values(panes)) p.setTheme(t);
     }
     // The board's theme picker writes the same key; follow it.
-    window.addEventListener('storage', e => { if (e.key === prefix + 'theme') setTheme(); });
+    window.addEventListener('storage', e => {
+        if (e.key === prefix + 'theme') setTheme();
+        for (const id of ids) if (e.key === prefix + 'spectrum.' + id) applySettings(id);
+    });
     try {
         window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', setTheme);
     } catch { /* nothing to follow */ }
