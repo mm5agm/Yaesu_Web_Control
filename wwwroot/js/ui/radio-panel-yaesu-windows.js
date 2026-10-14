@@ -67,9 +67,10 @@ export const YAESU_WINDOWS = [
         { id: 'scCat', title: "RADIO'S OWN SCOPE (CAT)", dpos: [300, 150, 680, 520] },
         { id: 'scScreen', title: 'RADIO SCREEN (VIDEO)', w: 280 },
     ] },
-    { id: 'rx', key: 'RX SETUP', title: 'RX SETUP', pos: [280, 200, 1080, 360], panels: [
+    { id: 'rx', key: 'RX SETUP', title: 'RX SETUP', pos: [200, 200, 1300, 360], panels: [
         { id: 'rxFilter', title: 'AUDIO FILTER', dpos: [280, 200, 560, 360] },
         { id: 'rxShift', title: 'SHIFT · NOTCH', w: 240 },
+        { id: 'rxLevels', title: 'LEVELS', w: 220 },
         { id: 'rxFm', title: 'FM · REPEATER', w: 220 },
     ] },
     { id: 'tx', key: 'TX SETUP', title: 'TX SETUP', pos: [340, 500, 920, 400], panels: [
@@ -461,6 +462,54 @@ export function startYaesuWindows(windows, ctx) {
         return out;
     })();
 
+    // ---- RX setup: squelch, NB and DNR levels, for the selected receiver ---
+    // Classic's Squelch slider and NB / DNR level selects. Squelch is offered
+    // in every mode, as the radio's SQL is; Classic shows it only in FM.
+    const levels = (() => {
+        const body = slot('rx', 'rxLevels');
+        const v = () => ctx.selected();
+        const val = { SquelchA: null, SquelchB: null, NbLevelA: null, NbLevelB: null, NrLevelA: null, NrLevelB: null };
+        const row = label => {
+            const out = h('span', 'rp-wval', '--');
+            const r = h('div', 'rp-wrow');
+            r.append(h('span', 'rp-wlabel', label), out);
+            body.append(r);
+            return out;
+        };
+        const btns = list => {
+            const b = h('div', 'rp-wbtns');
+            for (const [label, fn] of list) b.append(key(label, fn));
+            body.append(b);
+        };
+        const nrName = ['FTdx10', 'FT-710'].includes(ctx.model) ? 'DNR No.' : 'DNR LEVEL';
+        const sqlOut = row('SQUELCH');
+        btns([['−10', () => step('Squelch', -10, 0, 255, 'squelch', 'value')], ['−1', () => step('Squelch', -1, 0, 255, 'squelch', 'value')],
+            ['+1', () => step('Squelch', 1, 0, 255, 'squelch', 'value')], ['+10', () => step('Squelch', 10, 0, 255, 'squelch', 'value')]]);
+        const nbOut = row('NB LEVEL');
+        btns([['−1', () => step('NbLevel', -1, 1, 20, 'nblevel', 'level')], ['+1', () => step('NbLevel', 1, 1, 20, 'nblevel', 'level')]]);
+        const nrOut = row(nrName);
+        btns([['−1', () => step('NrLevel', -1, 1, 15, 'nrlevel', 'level')], ['+1', () => step('NrLevel', 1, 1, 15, 'nrlevel', 'level')]]);
+        function step(name, d, lo, hi, path, field) {
+            const k = name + v();
+            if (val[k] == null) return;     // not read from the radio yet
+            const to = Math.max(lo, Math.min(hi, val[k] + d));
+            if (to === val[k]) return;
+            val[k] = to;
+            ctx.post(`/api/cat/${path}/${v().toLowerCase()}`, { [field]: to });
+            draw();
+        }
+        const text = x => (x == null ? '--' : String(x));
+        function draw() {
+            sqlOut.textContent = text(val['Squelch' + v()]);
+            nbOut.textContent = text(val['NbLevel' + v()]);
+            nrOut.textContent = text(val['NrLevel' + v()]);
+        }
+        draw();
+        const out = { draw };
+        for (const k of Object.keys(val)) out[k] = x => { val[k] = num(x); draw(); };
+        return out;
+    })();
+
     // ---- RX setup: FM repeater (read only) -------------------------------
     const fm = (() => {
         const body = slot('rx', 'rxFm');
@@ -751,11 +800,12 @@ export function startYaesuWindows(windows, ctx) {
     const rxFollow = () => {
         windows.setSubtitle('rx', rxName(ctx.selected()));
         shiftNotch.draw();
+        levels.draw();
         filterFrame?.reload();
     };
     rxFollow();
 
-    const handlers = [keyer, meters, shiftNotch, fm, vox, txTimer, atu];
+    const handlers = [keyer, meters, shiftNotch, levels, fm, vox, txTimer, atu];
     return {
         onShow(g, p, shown) { try { shows[g + '/' + p]?.(shown); } catch (e) { console.warn('radio panel window:', g, p, e); } },
         onRadioState(msg) {
