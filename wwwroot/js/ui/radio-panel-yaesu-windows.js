@@ -67,11 +67,11 @@ export const YAESU_WINDOWS = [
         { id: 'scCat', title: "RADIO'S OWN SCOPE (CAT)", dpos: [300, 150, 680, 520] },
         { id: 'scScreen', title: 'RADIO SCREEN (VIDEO)', w: 280 },
     ] },
-    { id: 'rx', key: 'RX SETUP', title: 'RX SETUP', pos: [200, 200, 1300, 360], panels: [
+    { id: 'rx', key: 'RX SETUP', title: 'RX SETUP', pos: [160, 180, 1380, 470], panels: [
         { id: 'rxFilter', title: 'AUDIO FILTER', dpos: [280, 200, 560, 360] },
         { id: 'rxShift', title: 'SHIFT · NOTCH', w: 240 },
         { id: 'rxLevels', title: 'LEVELS', w: 220 },
-        { id: 'rxFm', title: 'FM · REPEATER', w: 220 },
+        { id: 'rxFm', title: 'FM · REPEATER', w: 290 },
     ] },
     { id: 'tx', key: 'TX SETUP', title: 'TX SETUP', pos: [340, 500, 920, 400], panels: [
         { id: 'txVox', title: 'VOX' },
@@ -530,14 +530,63 @@ export function startYaesuWindows(windows, ctx) {
             body.append(r);
             return out;
         };
-        const dir = row('SHIFT'), off = row('OFFSET'), mode = row('CTCSS'), tone = row('TONE');
-        note(body, 'Set these on the main page. Read from the radio; MAIN only.');
-        return {
-            FmShiftDir: x => { dir.textContent = { 0: 'SIMPLEX', 1: '+', 2: '−', 3: 'SPLIT' }[String(x)] ?? String(x); },
-            FmOffsetHz: x => { off.textContent = (num(x) / 1000).toLocaleString() + ' kHz'; },
-            CtcssMode: x => { mode.textContent = { '00': 'OFF', '01': 'ENC / DEC', '02': 'ENC' }[String(x)] ?? String(x); },
-            CtcssTone: x => { tone.textContent = (TONES[parseInt(x, 10)] ?? '--') + ' Hz'; },
+        const btns = list => {
+            const d = h('div', 'rp-wbtns');
+            for (const [label, fn] of list) d.append(key(label, fn));
+            body.append(d);
         };
+        // Classic's FM section: edit the four, then Save sends them together
+        // (RS, RO, CT, CN). They set the repeater shift and tone; none of them
+        // keys the radio. Nothing is sent until all four have been read.
+        const SHIFT = { 0: 'SIMPLEX', 1: '+', 2: '−', 3: 'SPLIT' };
+        const CT = { '00': 'OFF', '01': 'ENC / DEC', '02': 'ENC' };
+        const radio = { FmShiftDir: null, FmOffsetHz: null, CtcssMode: null, CtcssTone: null };
+        let edit = null;    // the unsaved copy, or null when showing the radio
+        const cur = () => edit ?? radio;
+        const known = () => Object.values(radio).every(x => x != null);
+        const change = (k, fn) => {
+            if (!known()) return;
+            edit ??= { ...radio };
+            edit[k] = fn(edit[k]);
+            draw();
+        };
+        const dir = row('SHIFT');
+        btns([['SHIFT', () => change('FmShiftDir', x => String((num(x) + 1) % 4))]]);
+        const off = row('OFFSET');
+        const offStep = d => change('FmOffsetHz', x => Math.max(0, Math.min(999000, num(x) + d)));
+        btns([['−100k', () => offStep(-100000)], ['−10k', () => offStep(-10000)], ['+10k', () => offStep(10000)], ['+100k', () => offStep(100000)]]);
+        const mode = row('CTCSS');
+        btns([['CTCSS', () => change('CtcssMode', x => ({ '00': '01', '01': '02', '02': '00' })[String(x)] ?? '00')]]);
+        const tone = row('TONE');
+        const toneStep = d => change('CtcssTone', x => String(Math.max(0, Math.min(49, parseInt(x, 10) + d))).padStart(3, '0'));
+        btns([['−1', () => toneStep(-1)], ['+1', () => toneStep(1)]]);
+        const save = key('SAVE', () => {
+            if (!edit) return;
+            const e = edit;
+            edit = null;
+            Object.assign(radio, e);
+            ctx.post('/api/cat/fmrepeater', { shiftDir: String(e.FmShiftDir), offsetHz: num(e.FmOffsetHz), ctcssMode: String(e.CtcssMode), ctcssTone: String(e.CtcssTone) });
+            draw();
+        });
+        const undo = key('CANCEL', () => { edit = null; draw(); });
+        const sb = h('div', 'rp-wbtns');
+        sb.append(save, undo);
+        body.append(sb);
+        note(body, 'MAIN only, as on the radio. SAVE sends all four.');
+        function draw() {
+            const c = cur();
+            dir.textContent = c.FmShiftDir == null ? '--' : SHIFT[String(c.FmShiftDir)] ?? String(c.FmShiftDir);
+            off.textContent = c.FmOffsetHz == null ? '--' : (num(c.FmOffsetHz) / 1000).toLocaleString() + ' kHz';
+            mode.textContent = c.CtcssMode == null ? '--' : CT[String(c.CtcssMode)] ?? String(c.CtcssMode);
+            tone.textContent = c.CtcssTone == null ? '--' : (TONES[parseInt(c.CtcssTone, 10)] ?? '--') + ' Hz';
+            save.disabled = !edit;
+            undo.disabled = !edit;
+            save.classList.toggle('warn', !!edit);
+        }
+        draw();
+        const out = {};
+        for (const k of Object.keys(radio)) out[k] = x => { radio[k] = k === 'FmOffsetHz' ? num(x) : String(x); draw(); };
+        return out;
     })();
 
     // ---- TX setup: VOX, TX timeout, ATU ----------------------------------
