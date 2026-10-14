@@ -195,14 +195,15 @@ const LAYOUTS = {
         // DEC LVL / DEC OFF cells are 12-13 % text on both decode screens,
         // but CENTER / SPAN fill the same cells on the scope screen, so the
         // check also needs the scope's own cells empty.
-        // The ANT..AGC readout row is drawn in the same place on the decode
-        // screen (same frames), so those zones stay live there: `keep`.
+        // The meters, frequency and ANT..AGC readout row are drawn in the same
+        // place on the decode screen (same frames), so those zones stay live
+        // there: `keep`.
         decode: {
             screen: {
                 lit: ['declvl', 'decoff'], min: 2,
                 dark: ['dss3', 'mono', 'multi', 'expand', 'hold'],
             },
-            keep: ['ant', 'att', 'ipo', 'rfil', 'agc', 'multifn', ...FTDX101_DIGITS.map(d => d[0])],
+            keep: ['meter', 'ant', 'att', 'ipo', 'rfil', 'agc', 'multifn', ...FTDX101_DIGITS.map(d => d[0])],
             zones: {
                 declvl: { rect: [0.003, 0.847, 0.124, 0.902], action: 'none',
                           hint: 'DEC LVL has no CAT command — touch it on the radio, then turn MULTI to set the decode threshold' },
@@ -774,7 +775,9 @@ export class RadioDisplayHotspots {
 
         if (!hit) {
             // Say why nothing is clickable, rather than going quiet.
-            if (this._screenNow() !== 'scope') this._showCursor(null, 'Radio is not on the scope screen — clicks are off');
+            // The decode screen keeps the top half clickable, so only a screen
+            // with no zones at all gets the warning.
+            if (this._screenNow() === 'other') this._showCursor(null, 'Radio is not on the scope screen — clicks are off');
             else this._hideCursor();
             return;
         }
