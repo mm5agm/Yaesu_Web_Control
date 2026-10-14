@@ -125,9 +125,15 @@ export function axisLabels(centreHz, spanHz, count = 5) {
     return out;
 }
 
-// Span as the screen shows it: "50 kHz", "2 MHz", "500 Hz".
+// Span as the screen shows it: "50 kHz", "2 MHz", "500 Hz". A frame's span
+// is whole bins, so a 1 kHz zoom arrives as 999 Hz and 20 kHz as 19989 Hz;
+// anything within 2% of a standard span is shown as that span.
+const STANDARD_SPANS = [500, 1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 250e3, 500e3, 1e6, 2e6];
 export function spanText(spanHz) {
-    const s = Number(spanHz) || 0;
+    let s = Number(spanHz) || 0;
+    const near = STANDARD_SPANS.find(x => Math.abs(s - x) <= x * 0.02);
+    if (near) s = near;
+    else if (s >= 1000) s = Math.round(s / 100) * 100;
     if (s >= 1e6) return (s / 1e6).toString() + ' MHz';
     if (s >= 1000) return (s / 1000).toString() + ' kHz';
     return s + ' Hz';
@@ -162,11 +168,22 @@ export function waterfallColour(t, stops = WATERFALL_STOPS) {
 
 // Reduce `bins` (low to high frequency) to `columns` values, keeping the
 // strongest bin in each column so a one-bin CW carrier is not averaged away.
+// With fewer bins than columns (a narrow software-zoom span sends ~130 bins)
+// it draws straight lines between bin centres instead of repeating each bin,
+// which would show as flat steps several pixels wide.
 export function binsToColumns(bins, columns) {
     const n = bins?.length ?? 0;
     const cols = Math.max(1, Math.floor(columns));
     const out = new Float32Array(cols);
     if (!n) return out;
+    if (n < cols) {
+        for (let c = 0; c < cols; c++) {
+            const x = Math.max(0, Math.min(n - 1, (c + 0.5) * n / cols - 0.5));
+            const i = Math.min(n - 2, Math.floor(x));
+            out[c] = n === 1 ? bins[0] : bins[i] + (bins[i + 1] - bins[i]) * (x - i);
+        }
+        return out;
+    }
     for (let c = 0; c < cols; c++) {
         const a = Math.floor(c * n / cols);
         const b = Math.max(a + 1, Math.floor((c + 1) * n / cols));
