@@ -15,6 +15,10 @@ namespace Yaesu_Web_Control.Pages
         // Click-to-tune on the Radio screen needs the radio's scope span (SS).
         public bool HasScopeCat => RadioCapabilities.SupportsSpectrumScopeCat(RadioModel);
         public long MaxHz => RadioCapabilities.FrequencyRangeHz(RadioModel).MaxHz;
+        // The same gates as Index's VDD and temperature gauges.
+        public bool HasVdd => RadioModel is not ("FTdx10" or "FT-710" or "FTDX5000MP" or "FTDX5000D");
+        public bool HasPaTemp => HasVdd && RadioCapabilities.HasPaTemperatureMeter(RadioModel);
+        public (int Min, int Max) VddDial => RadioCapabilities.VddGaugeRange(RadioModel);
 
         public RadioPanelModel(RadioStateService radioStateService, ISettingsService settingsService)
             : base(radioStateService, settingsService)

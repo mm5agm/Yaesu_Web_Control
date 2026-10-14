@@ -93,6 +93,12 @@ function knob2Svg(size) {
  *                                          "acts on" the selected receiver: act('memKey', id)
  *   clarKeys:[{ id, label }]               small keys beside the clarifier readout,
  *                                          act('vfoKey', id); lit through setKey(id, { on })
+ *   meters: ['PO', ...]                    the meter keys under the S-meter (default
+ *                                          PO SWR ALC COMP IDD); meterScales: { name:
+ *                                          [five legends] } for any not in LOWER_SCALES
+ *   liveMeters: ['VDD', ...]               meters read in receive as well, so their
+ *                                          needle shows whenever they are chosen; the
+ *                                          rest show the S-meter until TX
  *   bands:  [{ id, label }]   modes: [{ id, label }]
  *   knobs:  [{ id, label }]                the knob row, used when rxGroups is not given
  *   rxGroups: { keys: [{ id, label }], knobs: [{ id, label }] }
@@ -213,7 +219,14 @@ export function mountRadioPanel(root, opts = {}) {
     meterWell.append(meterSvg);
     const meterBtns = h('div', 'rp-meter-btns');
     const meterBtnEls = {};
-    for (const m of METERS) {
+    const meterList = opts.meters ?? METERS;
+    const meterScales = { ...LOWER_SCALES, ...opts.meterScales };
+    const liveMeters = new Set(opts.liveMeters ?? []);
+    if (meterList.length !== 5) {
+        meterBtns.style.gridTemplateColumns = `repeat(${meterList.length},minmax(0,1fr))`;
+        meterBtns.classList.add('many');
+    }
+    for (const m of meterList) {
         const b = h('button', 'rp-chipbtn', m);
         b.type = 'button';
         b.addEventListener('click', () => chooseMeter(m));
@@ -585,14 +598,14 @@ export function mountRadioPanel(root, opts = {}) {
         txMeters: {}, spanHz: { A: 0, B: 0 }, theme: null, spots: [], sel: 'A',
         specView: specViews[0],
     };
-    if (!METERS.includes(st.meter)) st.meter = 'PO';
+    if (!meterList.includes(st.meter)) st.meter = 'PO';
 
     for (const pn of Object.values(panes)) pn.view = new SpectrumView(pn.spec, pn.wf);
 
     // ---- meter ---------------------------------------------------------
     let needle;
     function drawMeterFace() {
-        const g = meterGeometry(0, LOWER_SCALES[st.meter]);
+        const g = meterGeometry(0, meterScales[st.meter] ?? LOWER_SCALES.PO);
         meterSvg.textContent = '';
         meterSvg.append(
             s('path', { d: g.arc, class: 'ink' }),
@@ -611,7 +624,7 @@ export function mountRadioPanel(root, opts = {}) {
         drawNeedle();
     }
     function drawNeedle() {
-        const frac = st.tx ? (st.txMeters[st.meter] ?? 0) : sMeterFraction(st.s[st.sel]);
+        const frac = st.tx || liveMeters.has(st.meter) ? (st.txMeters[st.meter] ?? 0) : sMeterFraction(st.s[st.sel]);
         const n = meterGeometry(frac).needle;
         needle.setAttribute('x1', n.x1); needle.setAttribute('y1', n.y1);
         needle.setAttribute('x2', n.x2); needle.setAttribute('y2', n.y2);
@@ -808,7 +821,7 @@ export function mountRadioPanel(root, opts = {}) {
             if (vfo === st.sel) drawNeedle();
             if (vfo === 'B') { sFill.style.width = (sMeterFraction(st.s.B) * 100) + '%'; sTxt.textContent = sMeterText(st.s.B); }
         },
-        setTxMeter(name, frac) { st.txMeters[name] = Math.max(0, Math.min(1, Number(frac) || 0)); if (st.tx) drawNeedle(); },
+        setTxMeter(name, frac) { st.txMeters[name] = Math.max(0, Math.min(1, Number(frac) || 0)); if (st.tx || liveMeters.has(name)) drawNeedle(); },
         setTx(on) {
             st.tx = !!on;
             rxtx.className = 'rp-chip ' + (st.tx ? 'tx' : 'rx');

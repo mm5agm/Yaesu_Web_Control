@@ -26,7 +26,7 @@
 
 import { mountRadioPanel } from '/js/radio-panel/radio-panel.js';
 import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
-import { alignBins, txMeterFraction } from '/js/radio-panel/panel-math.js';
+import { alignBins, txMeterFraction, rangeLegends } from '/js/radio-panel/panel-math.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
@@ -73,6 +73,11 @@ export function startYaesuRadioPanel(root, cfg) {
     const model = cfg.model;
     const dual = !!cfg.dual;
     const maxPowerW = num(cfg.maxPowerW) || 100;
+    // VDD and TEMP are read every two seconds in receive too (RM8 / RM9), on
+    // the models whose Classic page shows them. The VDD dial is the model's
+    // (40-55 V on the FTdx101MP, 10-16 V on the 13.8 V radios).
+    const vddDial = cfg.vdd && num(cfg.vdd.max) > num(cfg.vdd.min) ? { min: num(cfg.vdd.min), max: num(cfg.vdd.max) } : null;
+    const paTemp = !!cfg.paTemp && !!vddDial;
 
     let radioScreen = null;     // set just after mount; the panel may call onScreenView during it
     let win = null;             // likewise: windows restored from last time report during mount
@@ -106,6 +111,9 @@ export function startYaesuRadioPanel(root, cfg) {
         // The dial: on the FTdx101 the outer ring tunes MAIN and the inner
         // knob SUB, as on the radio.
         dualDial: true,
+        meters: ['PO', 'SWR', 'ALC', 'COMP', 'IDD', ...(vddDial ? ['VDD'] : []), ...(paTemp ? ['TEMP'] : [])],
+        meterScales: vddDial ? { VDD: rangeLegends(vddDial.min, vddDial.max) } : {},
+        liveMeters: ['VDD', 'TEMP'],
         vfoKeys: [
             { id: 'ab', label: 'A▸B' }, { id: 'ba', label: 'B▸A' }, { id: 'swap', label: 'A⇄B' },
             { id: 'split', label: 'SPLIT' }, { id: 'qsplit', label: 'Q.SPLIT' },
@@ -578,6 +586,18 @@ export function startYaesuRadioPanel(root, cfg) {
         ALCMeter: v => { r.txMeterRaw.ALC = v; refreshTxMeters(); },
         CompressionMeter: v => { r.txMeterRaw.COMP = v; refreshTxMeters(); },
         IDDMeter: v => { r.txMeterRaw.IDD = v; refreshTxMeters(); },
+        // Raw 0 is no reading (a PA supply is never 0 V with the radio on), and
+        // a VDD off its dial is a bad read, as the Classic gauge treats them.
+        VDDMeter: v => {
+            const raw = num(v);
+            if (!vddDial || raw <= 0) return;
+            const volts = calibrateNumeric('VPA', raw);
+            if (volts >= vddDial.min && volts <= vddDial.max) panel.setTxMeter('VDD', txMeterFraction('VDD', volts, vddDial));
+        },
+        Temperature: v => {
+            const raw = num(v);
+            if (paTemp && raw > 0) panel.setTxMeter('TEMP', txMeterFraction('TEMP', calibrateNumeric('TPA', raw)));
+        },
         SdrStatus: v => {
             const vfo = v?.sdrId;
             if (vfo !== 'A' && vfo !== 'B') return;

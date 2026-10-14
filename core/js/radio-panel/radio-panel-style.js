@@ -89,6 +89,8 @@ html,body{margin:0;background:${v('page')}}
 .rp-meter .needle{stroke:${v('needle')};stroke-width:1.8;stroke-linecap:round}
 .rp-meter .hub{fill:${v('meter-hub')}}
 .rp-meter-btns{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+.rp-meter-btns.many{gap:4px}
+.rp-meter-btns.many .rp-chipbtn{height:34px;font-size:14px;letter-spacing:.04em}
 .rp-keys{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}
 .rp-panel{position:relative}
 .rp-pop-head{display:flex;align-items:center;gap:8px;border-top:1px solid ${v('well-border')};padding-top:6px}
