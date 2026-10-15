@@ -155,6 +155,7 @@ export function startYaesuRadioPanel(root, cfg) {
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
         windows: YAESU_WINDOWS,
         onWindowPanel: (g, p, shown) => win?.onShow(g, p, shown),
+        onWindowPopout: (g, p) => win?.popout(g, p),
         frequencyEntry: true,
         clock: true,
         fullscreenKey: true,

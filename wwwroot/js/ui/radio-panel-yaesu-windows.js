@@ -16,6 +16,12 @@
 // or joined back, because a browser reloads a frame that is moved. The
 // decoders run in the server, so only the text on screen starts again.
 //
+// Those four - reader, tuner, DX spots and CW send - also have a ⇱ key: the
+// same page in a browser window of its own, which can go on another screen.
+// It is the window Classic's Pop out opens (same name and channel), so there
+// is only ever one. While it is open the panel leaves the board; its Reattach,
+// or closing it, puts the panel back.
+//
 // Remote Audio, the radio's own scope and the audio filter are framed pages
 // too: /RemoteAudio, /RadioScope and /AudioFilter.
 //
@@ -32,17 +38,21 @@ import { calibrateNumeric } from '/js/calibration/calibration-engine.js';
 import { sMeterFraction, sMeterText, txMeterFraction } from '/js/radio-panel/panel-math.js';
 import { SMeterHistoryPanel } from '/js/guages/smeter-history-panel.js';
 import { TxTimeout, stepTimeout, timeoutText } from '/js/radio-panel/tx-timeout.js';
+import { PopoutHost, screenShare } from '/js/popout/popout.js';
 
 const LATER = 'Comes in a later build.';
 
 export const YAESU_WINDOWS = [
     { id: 'cw', key: 'CW', title: 'CW', pos: [330, 230, 980, 340], panels: [
         { id: 'keyer', title: 'KEYER', w: 230 },
-        { id: 'cwReader', title: 'READER', dpos: [380, 560, 760, 320] },
-        { id: 'cwSend', title: 'SEND', w: 320, dpos: [420, 300, 520, 400] },
+        { id: 'cwReader', title: 'READER', dpos: [380, 560, 760, 320],
+          popout: { name: 'cw-reader', url: '/CwReader', size: () => screenShare(0.25, window.screen) } },
+        { id: 'cwSend', title: 'SEND', w: 320, dpos: [420, 300, 520, 400],
+          popout: { name: 'cw-send', url: '/CwSend', size: { width: 600, height: 340 } } },
     ] },
     { id: 'rtty', key: 'RTTY', title: 'RTTY', pos: [330, 380, 1040, 420], panels: [
-        { id: 'rttyReader', title: 'TUNER · READER', dpos: [360, 380, 820, 420] },
+        { id: 'rttyReader', title: 'TUNER · READER', dpos: [360, 380, 820, 420],
+          popout: { name: 'rtty-tuner', url: '/RttyTuner', size: { width: 380, height: 520 } } },
         { id: 'rttySend', title: 'SEND', w: 220 },
     ] },
     { id: 'mem', key: 'MEMORIES', title: 'MEMORIES', pos: [560, 150, 940, 460], panels: [
@@ -51,7 +61,8 @@ export const YAESU_WINDOWS = [
         { id: 'memRadio', title: 'SAVE', w: 170 },
     ] },
     { id: 'dx', key: 'DX', title: 'DX CLUSTER', pos: [700, 150, 860, 480], panels: [
-        { id: 'dxSpots', title: 'SPOTS' },
+        { id: 'dxSpots', title: 'SPOTS',
+          popout: { name: 'dx-spots', url: '/DxSpots', size: { width: 760, height: 480 } } },
         { id: 'dxWatch', title: 'WATCH LIST', w: 220 },
     ] },
     { id: 'meters', key: 'METERS', title: 'METERS', pos: [330, 380, 1000, 400], panels: [
@@ -173,6 +184,24 @@ export function startYaesuWindows(windows, ctx) {
     const rxName = v => (ctx.dual ? (v === 'B' ? 'SUB' : 'MAIN') : 'VFO-' + v);
     const filterFrame = framed('rx', 'rxFilter', () => '/AudioFilter?vfo=' + ctx.selected(), 'Audio filter');
     framed('cw', 'cwSend', '/CwSend', 'CW send');
+
+    // ---- browser windows of their own (⇱) --------------------------------
+    // While one is open its panel is off the board, so the page is not
+    // running twice. A pop-out already open from Classic says so when this
+    // page starts, and takes its panel off here too.
+    const popouts = {};
+    for (const g of YAESU_WINDOWS) {
+        for (const p of g.panels) {
+            if (!p.popout) continue;
+            popouts[g.id + '/' + p.id] = new PopoutHost({
+                name: p.popout.name,
+                url: p.popout.url,
+                defaultSize: p.popout.size,
+                onChange: open => { if (open) windows.closePanel(g.id, p.id); },
+                onReattach: () => windows.showPanel(g.id, p.id),
+            }).start();
+        }
+    }
 
     // ---- CW keyer --------------------------------------------------------
     const keyer = (() => {
@@ -874,6 +903,11 @@ export function startYaesuWindows(windows, ctx) {
             if (prop === 'ActiveVfo') rxFollow();
         },
         entry: vfo => entry.open(vfo),
+        /** A panel's ⇱ key: its page in a browser window of its own. */
+        popout(g, p) {
+            const host = popouts[g + '/' + p];
+            if (host && !host.open()) alert('The browser blocked the window. Allow pop-ups for this page and press the key again.');
+        },
         txTimeout: txTimer.tt,
     };
 }

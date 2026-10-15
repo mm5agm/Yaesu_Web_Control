@@ -19,6 +19,11 @@
 // never rebuilt - so whatever the app put in it carries on running. onShow
 // tells the app when a panel becomes visible or hidden, so it can start and
 // stop polling.
+//
+// A panel marked popout gets a ⇱ key as well, for a browser window of its own
+// that can go on another screen - which a torn-off window, being on the board,
+// never can. The app opens that window (onPopout) and uses closePanel and
+// showPanel to take the panel off the board while it is out, and put it back.
 
 const SAVE_KEY = 'windows';
 
@@ -34,14 +39,16 @@ function h(tag, cls, text) {
  * @param {HTMLElement} o.board      the positioned board the windows sit on
  * @param {HTMLElement} o.launcher   where the launcher keys go
  * @param {Array<{id:string, key?:string, title:string, pos:number[],
- *          panels:Array<{id:string, title:string, w?:number, dpos?:number[]}>}>} o.groups
+ *          panels:Array<{id:string, title:string, w?:number, dpos?:number[], popout?:any}>}>} o.groups
  *        pos is [left, top, width, height] in board pixels. A group with no
  *        key gets no launcher key; the app opens it with open().
  * @param {{ get(k:string, d?:string):string|null, set(k:string, v:string):void }} o.store
  * @param {string} o.prefix
  * @param {(groupId:string, panelId:string, shown:boolean) => void} [o.onShow]
+ * @param {(groupId:string, panelId:string) => void} [o.onPopout]  a panel's ⇱ key;
+ *        only panels with popout set get one
  */
-export function mountPanelWindows({ board, launcher, groups, store, prefix, onShow }) {
+export function mountPanelWindows({ board, launcher, groups, store, prefix, onShow, onPopout }) {
     const defs = Object.fromEntries(groups.map(g => [g.id, g]));
     const saved = load();
     // open: group window showing; shut: panels closed inside it;
@@ -95,7 +102,15 @@ export function mountPanelWindows({ board, launcher, groups, store, prefix, onSh
             closeBtn.type = 'button';
             closeBtn.title = 'Close this panel';
             closeBtn.addEventListener('click', () => closePanel(g.id, p.id));
-            ph.append(h('span', 'rp-wpanel-title', p.title), detachBtn, closeBtn);
+            ph.append(h('span', 'rp-wpanel-title', p.title));
+            if (p.popout && onPopout) {
+                const popBtn = h('button', 'rp-wbtn', '⇱');
+                popBtn.type = 'button';
+                popBtn.title = 'Open this panel in a browser window of its own - it can go on another screen';
+                popBtn.addEventListener('click', () => onPopout(g.id, p.id));
+                ph.append(popBtn);
+            }
+            ph.append(detachBtn, closeBtn);
             const body = h('div', 'rp-wpanel-body');
             box.append(ph, body);
             panels[g.id + '/' + p.id] = { box, body, detachBtn, closeBtn, def: p };
@@ -203,6 +218,14 @@ export function mountPanelWindows({ board, launcher, groups, store, prefix, onSh
         }
         render();
     }
+    function showPanel(gid, pid) {
+        if (!defs[gid]) return;
+        st.shut[gid] = st.shut[gid].filter(p => p !== pid);
+        if (!st.det[gid].includes(pid)) st.open[gid] = true;
+        render();
+        const w = wins[st.det[gid].includes(pid) ? gid + '/' + pid : gid];
+        if (w) raise(w.frame);
+    }
     function detach(gid, pid) {
         st.det[gid] = [...st.det[gid], pid];
         if (!visible(gid).length) st.open[gid] = false;
@@ -304,6 +327,10 @@ export function mountPanelWindows({ board, launcher, groups, store, prefix, onSh
         /** The body element of a panel; the app fills it. */
         slot(gid, pid) { return panels[gid + '/' + pid]?.body ?? null; },
         open, close,
+        /** Close one panel, as its × does; nothing if it is not showing. */
+        closePanel(gid, pid) { if (shownNow[gid + '/' + pid]) closePanel(gid, pid); },
+        /** Show one panel again, in its group window or its own torn-off one. */
+        showPanel,
         isOpen(gid) { return !!st.open[gid] && visible(gid).length > 0; },
         isShown(gid, pid) { return !!shownNow[gid + '/' + pid]; },
         /** Text beside a group window's title, e.g. which receiver it acts on. */
