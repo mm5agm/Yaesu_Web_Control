@@ -17,6 +17,7 @@ namespace Yaesu_Web_Control.Controllers
         private readonly RadioStatePersistenceService _statePersistence;
         private readonly RadioInitializationService _radioInitService;
         private readonly AudioFilterMapService _audioFilterMap;
+        private readonly CatMultiplexerService _multiplexer;
         private static readonly SemaphoreSlim _requestSemaphore = new(1, 1);
 
         // -- P1=0-Fixed outgoing-command helpers -------------------------------
@@ -301,7 +302,8 @@ namespace Yaesu_Web_Control.Controllers
             RadioStateService radioStateService,
             RadioStatePersistenceService statePersistence,
             RadioInitializationService radioInitService,
-            AudioFilterMapService audioFilterMap)
+            AudioFilterMapService audioFilterMap,
+            CatMultiplexerService multiplexer)
         {
             _catClient = catClient;
             _settingsService = settingsService;
@@ -310,6 +312,7 @@ namespace Yaesu_Web_Control.Controllers
             _statePersistence = statePersistence;
             _radioInitService = radioInitService;
             _audioFilterMap = audioFilterMap;
+            _multiplexer = multiplexer;
         }
 
         private async Task EnsureConnectedAsync()
@@ -2686,10 +2689,20 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("disconnect")]
         public async Task<IActionResult> Disconnect()
         {
+            // Closing the port while the radio is keyed would leave nothing to
+            // unkey it, so a transmitting radio keeps its link.
+            if (_radioStateService.IsTransmitting)
+                return Ok(new { success = false, message = "Transmitting - unkey before disconnecting" });
             try
             {
-                await _catClient.DisconnectAsync();
+                // The multiplexer owns the port. _catClient.DisconnectAsync is
+                // deliberately a no-op, so calling it left the port open and the
+                // key only changed colour. Closing it here frees the COM port for
+                // other programs until Connect opens it again.
+                await _multiplexer.DisconnectAsync();
+                _radioStateService.IsConnected = false;
                 AppStatus.InitializationStatus = "disconnected";
+                _logger.LogInformation("CAT link closed by the operator");
                 return Ok(new { success = true });
             }
             catch (Exception ex)
