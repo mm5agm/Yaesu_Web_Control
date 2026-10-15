@@ -185,6 +185,9 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *   onWindowPopout(groupId, panelId)       a window panel's ⇱ key (panels with popout set)
  *   onSpectrumPopout(), onSpectrumBack()   optional: a ⧉ key on the spectrum, and the
  *                                          BRING BACK key shown while setSpectrumAway(true)
+ *   spectrumTuneTo(hz, paneId)             optional: the Hz a spectrum click at hz will put
+ *                                          the dial on, when the app tunes somewhere else
+ *                                          (an RTTY mark offset); the readout shows it
  *   frequencyEntry (bool)                  show an ENT chip in each VFO box
  *   clock (bool)                           a UTC clock in the top bar, from the PC's clock
  *   fullscreenKey (bool)                   bare F goes full screen (not while typing)
@@ -565,7 +568,13 @@ export function mountRadioPanel(root, opts = {}) {
                 const { frac } = at;
                 const fr = formatFrequency(at.hz);
                 for (const x of xLines) { x.style.left = frac * 100 + '%'; x.style.display = 'block'; }
-                xRead.textContent = fr.big + fr.small + (at.spot ? ' ' + at.spot.call : '');
+                // Where the dial will land, when the app tunes somewhere other than
+                // the click (Yaesu RTTY puts mark on the dial, half the shift
+                // above the clicked midpoint) - so the readout never surprises.
+                const to = opts.spectrumTuneTo?.(at.hz, d.id);
+                const dial = Number.isFinite(to) && Math.round(to) !== at.hz ? formatFrequency(Math.round(to)) : null;
+                xRead.textContent = fr.big + fr.small + (at.spot ? ' ' + at.spot.call : '')
+                    + (dial ? ' → dial ' + dial.big + dial.small : '');
                 xRead.style.display = 'block';
                 xRead.classList.toggle('left', frac > 0.75);
                 xRead.style.left = frac * 100 + '%';

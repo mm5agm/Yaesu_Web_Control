@@ -170,6 +170,7 @@ export function startYaesuRadioPanel(root, cfg) {
         },
         onSpectrumBack: () => specHost.recall(),
         onAction: (kind, id, vfo, dir) => act(kind, id, vfo, dir),
+        spectrumTuneTo: (hz, vfo) => spectrumTarget(vfo, hz).to,
         choices: (kind, vfo) => choices(kind, vfo),
         storagePrefix: 'ywc.radioPanel.',
         fontBase: '/lib/fonts',
@@ -622,11 +623,14 @@ export function startYaesuRadioPanel(root, cfg) {
         if (mode === 'DATA-L') return afskMidpointAudioHz(loadRttySettings());
         return 0;
     }
-    function spectrumTune(v, hz) {
-        if (!(hz > 0)) return;
+    function spectrumTarget(v, hz) {
         const auto = autoModeForHz(hz);
         const mode = auto && MODE_CAT[auto] ? auto : null;
-        const to = Math.round(hz + toneOffsetHz(mode || r.mode[v]));
+        return { mode, to: Math.round(hz + toneOffsetHz(mode || r.mode[v])) };
+    }
+    function spectrumTune(v, hz) {
+        if (!(hz > 0)) return;
+        const { mode, to } = spectrumTarget(v, hz);
         r.freq[v] = to;
         panel.setFrequency(v, to);
         checkBand(v);
