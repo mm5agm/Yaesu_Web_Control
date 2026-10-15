@@ -7,14 +7,53 @@
 //
 // The vertical scale follows the noise floor so a quiet band and a loud one
 // both fill the screen: the floor is a slow average of the lower quartile and
-// the screen shows 60 dB above it. Columns keep the strongest bin they cover,
-// so a single-bin CW carrier is not averaged away at wide spans.
+// the screen shows `range` dB above it (60 by default). Columns keep the
+// strongest bin they cover, so a single-bin CW carrier is not averaged away at
+// wide spans.
+//
+// The settings are the classic spectrum's, with the same meanings:
+//   range   dB from bottom to top of the trace, 5-160 (the waterfall keeps 60)
+//   speed   the waterfall scrolls one row every `speed` frames: 1, 2, 4 ... 128
+//   bright  dB of lift for the waterfall only, 0-60
+//   smooth  half-width in bins of a moving average across the trace, 0-8
+//   hold    true freezes trace and waterfall; frames are dropped, not queued
 
 import { binsToColumns, percentile, waterfallColour } from './panel-math.js';
 
-const RANGE_DB = 60;
+const WATERFALL_DB = 60;
 const FLOOR_MARGIN_DB = 6;
 const FLOOR_ALPHA = 0.08;
+
+export const SPECTRUM_SPEEDS = [1, 2, 4, 8, 16, 32, 64, 128];
+export const SPECTRUM_DEFAULTS = Object.freeze({ range: 60, speed: 1, bright: 0, smooth: 2, hold: false });
+
+// Bring a settings object into range; anything missing takes the default.
+export function cleanSpectrumSettings(s = {}) {
+    const num = (x, d, lo, hi) => { const n = Number(x); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.round(n))) : d; };
+    const D = SPECTRUM_DEFAULTS;
+    const speed = Number(s.speed);
+    return {
+        range: num(s.range, D.range, 5, 160),
+        speed: SPECTRUM_SPEEDS.includes(speed) ? speed : D.speed,
+        bright: num(s.bright, D.bright, 0, 60),
+        smooth: num(s.smooth, D.smooth, 0, 8),
+        hold: s.hold === true,
+    };
+}
+
+// Moving average of half-width r across the bins; the ends average what they have.
+export function smoothBins(bins, r) {
+    if (!(r > 0) || bins.length < 3) return bins;
+    const n = bins.length, out = new Float64Array(n);
+    let sum = 0, lo = 0, hi = -1;
+    for (let i = 0; i < n; i++) {
+        const a = Math.max(0, i - r), b = Math.min(n - 1, i + r);
+        while (hi < b) sum += bins[++hi];
+        while (lo < a) sum -= bins[lo++];
+        out[i] = sum / (hi - lo + 1);
+    }
+    return out;
+}
 
 export class SpectrumView {
     constructor(spectrumEl, waterfallEl) {
@@ -28,6 +67,8 @@ export class SpectrumView {
         this._wctx = this._wf.getContext('2d', { willReadFrequently: false });
         this._floor = null;
         this._last = null;
+        this._set = { ...SPECTRUM_DEFAULTS };
+        this._frames = 0;
         this._palette = buildPalette();
         this._colours = {};
         this._ro = new ResizeObserver(() => this._resize());
@@ -58,19 +99,33 @@ export class SpectrumView {
         this._draw();
     }
 
+    /** Change any of range, speed, bright, smooth, hold; returns the settings in force. */
+    setSettings(s) {
+        this._set = cleanSpectrumSettings({ ...this._set, ...s });
+        this._frames = 0;
+        this._draw();
+        return { ...this._set };
+    }
+
+    get settings() { return { ...this._set }; }
+
     push(bins) {
-        if (!bins?.length) return;
+        if (!bins?.length || this._set.hold) return;
+        bins = smoothBins(bins, this._set.smooth);
         const cols = binsToColumns(bins, Math.max(1, this._spec.width));
         const f = percentile(cols, 0.25);
         this._floor = this._floor == null ? f : this._floor + (f - this._floor) * FLOOR_ALPHA;
         this._last = cols;
         this._draw();
-        this._waterfallRow(bins);
+        if (this._frames++ % this._set.speed === 0) this._waterfallRow(bins);
     }
 
+    // The trace's window: FLOOR_MARGIN_DB of it below the floor, as a share
+    // of the 60 dB default so a wide range does not push the floor up.
     _range() {
-        const lo = (this._floor ?? -100) - FLOOR_MARGIN_DB;
-        return { lo, hi: lo + RANGE_DB };
+        const r = this._set.range;
+        const lo = (this._floor ?? -100) - FLOOR_MARGIN_DB * r / 60;
+        return { lo, hi: lo + r };
     }
 
     _resize() {
@@ -138,7 +193,7 @@ export class SpectrumView {
         const rowH = Math.max(1, Math.round(window.devicePixelRatio || 1));
         this._wctx.drawImage(this._wf, 0, 0, w, h - rowH, 0, rowH, w, h - rowH);
         const cols = binsToColumns(bins, w);
-        const { lo, hi } = this._range();
+        const lo = (this._floor ?? -100) - FLOOR_MARGIN_DB - this._set.bright, hi = lo + WATERFALL_DB;
         const img = this._wctx.createImageData(w, rowH);
         const d = img.data, pal = this._palette;
         for (let x = 0; x < w; x++) {

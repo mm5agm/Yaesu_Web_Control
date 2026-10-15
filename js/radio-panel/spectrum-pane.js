@@ -41,7 +41,14 @@ export class SpectrumPane {
         this.el.append(this.bar, spec, this._axis, wf);
         container.append(this.el);
         this._view = new SpectrumView(spec, wf);
-        this._st = { hz: 0, mode: '', widthHz: null, spanHz: 0, spots: [], showSpots: true, name: '', status: null };
+        this._st = { hz: 0, mode: '', widthHz: null, spanHz: 0, spots: [], showSpots: true, name: '', status: null, passband: true };
+    }
+
+    /** The board's drawing settings: SpectrumView's, plus passband on or off. */
+    setSettings(s) {
+        this._view.setSettings(s);
+        this._st.passband = s?.passband !== false;
+        this._draw();
     }
 
     setTheme(theme) { this._view.setTheme(theme); }
@@ -83,7 +90,7 @@ export class SpectrumPane {
 
     _draw() {
         const s = this._st;
-        const pct = passbandPercent(s.mode, s.widthHz, s.spanHz);
+        const pct = s.passband && passbandPercent(s.mode, s.widthHz, s.spanHz);
         if (pct) { this._pb.style.display = 'block'; this._pb.style.left = pct.left + '%'; this._pb.style.width = pct.width + '%'; }
         else this._pb.style.display = 'none';
         this._axis.textContent = '';
