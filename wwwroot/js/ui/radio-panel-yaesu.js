@@ -94,11 +94,12 @@ export function startYaesuRadioPanel(root, cfg) {
         model,
         dual,
         views: cfg.views ?? [],
-        lamps: [{ id: 'cat', label: 'CAT' }, { id: 'sdr', label: 'SDR' }, { id: 'dx', label: 'DX' }],
+        lamps: [{ id: 'cat', label: 'CAT', click: true, title: "The radio's CAT link: click to disconnect or connect, as Classic's Connect key" }, { id: 'sdr', label: 'SDR' }, { id: 'dx', label: 'DX' }],
         statusChips: [{ id: 'wsjtx', label: 'WSJT-X TX', title: 'Lit while WSJT-X is transmitting through YWC' }],
         keys: [
             { id: 'mainsub', label: dual ? 'MAIN / SUB' : 'VFO A / B' }, { id: 'proc', label: 'PROC' },
             { id: 'vox', label: 'VOX', inert: true }, { id: 'tune', label: 'TUNE', inert: true },
+            { id: 'moni', label: 'MONI', title: 'Monitor on / off: hear your own transmit audio. It does not transmit' },
         ],
         rxGroups: {
             knobs: [
@@ -191,7 +192,7 @@ export function startYaesuRadioPanel(root, cfg) {
         contourHz: { A: 800, B: 800 }, apfHz: { A: 0, B: 0 }, notchHz: { A: null, B: null },
         af: { A: null, B: null }, rf: { A: null, B: null }, sql: { A: null, B: null },
         mic: null, procl: null, power: null, mon: null, speed: null, pitchKnown: false,
-        tx: false, txMeterRaw: {}, sel: 'A', split: 0, txVfo: 0, proc: false,
+        tx: false, txMeterRaw: {}, sel: 'A', split: 0, txVfo: 0, proc: false, moni: false, catOn: false,
     };
     let stepHz = (() => { try { return num(localStorage.getItem(STEP_KEY)); } catch { return 0; } })();
     if (!STEPS_HZ.includes(stepHz)) stepHz = 100;
@@ -463,8 +464,12 @@ export function startYaesuRadioPanel(root, cfg) {
                     case 'contour': return post(`/api/cat/contour/${rx}`, { on: !r.contour[v], freqHz: r.contourHz[v] || 800 });
                     case 'apf': return post(`/api/cat/apf/${rx}`, { on: !r.apf[v], freqHz: r.apfHz[v] });
                     case 'proc': return post('/api/cat/proc', { enabled: !r.proc });
+                    case 'moni': return post('/api/cat/monitoron', { on: !r.moni });
                 }
                 return;    // vox and tune are inert
+            case 'lamp':
+                if (id === 'cat') return post(r.catOn ? '/api/cat/disconnect' : '/api/cat/connect');
+                return;
             case 'vfoKey':
                 switch (id) {
                     case 'split': return post(`/api/cat/split/${r.split ? 0 : 1}`);
@@ -752,7 +757,7 @@ export function startYaesuRadioPanel(root, cfg) {
 
     // ---- one hub, one router ---------------------------------------------
     const handlers = {
-        IsConnected: v => panel.setLamp('cat', on(v) ? 'on' : 'bad'),
+        IsConnected: v => { r.catOn = on(v); panel.setLamp('cat', r.catOn ? 'on' : 'bad'); },
         FrequencyA: v => { if (wheelHolds('A')) return; r.freq.A = num(v); panel.setFrequency('A', r.freq.A); checkBand('A'); refreshSeg('A'); },
         FrequencyB: v => { if (wheelHolds('B')) return; r.freq.B = num(v); panel.setFrequency('B', r.freq.B); checkBand('B'); refreshSeg('B'); },
         BandA: v => { if (v !== r.band.A) { r.band.A = v; panel.clearSpectrum('A'); } panel.setBand(r.band[r.sel]); refreshSeg('A'); },
@@ -802,6 +807,7 @@ export function startYaesuRadioPanel(root, cfg) {
         AtuTuning: v => panel.setKey('tune', { tx: on(v) }),
         ProcEnabled: v => { r.proc = on(v); panel.setKey('proc', { on: r.proc }); },
         VoxOn: v => panel.setKey('vox', { on: on(v) }),
+        MonitorOn: v => { r.moni = on(v); panel.setKey('moni', { on: r.moni }); },
         AfGainA: v => { r.af.A = num(v); refreshRxKnobs('A'); },
         AfGainB: v => { r.af.B = num(v); refreshRxKnobs('B'); },
         RfGainA: v => { r.rf.A = num(v); refreshRxKnobs('A'); },
