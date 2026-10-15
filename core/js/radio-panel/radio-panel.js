@@ -553,12 +553,23 @@ export function mountRadioPanel(root, opts = {}) {
         if (act)
             for (const el of [spec, wf]) {
                 el.classList.add('rp-tunable');
-                el.title = 'Click to tune there; mouse wheel steps the dial';
+                el.title = 'Click to tune there; mouse wheel steps the dial; Shift+click marks a frequency (again on the mark clears it)';
                 el.addEventListener('click', e => {
                     if (e.target.closest('select, button, .rp-spec-tools')) return;
                     const x = lastX != null && Math.abs(lastX - e.clientX) < 1 ? lastX : e.clientX;
                     const at = hzAt(el, x);
-                    if (at) act('spectrum', String(at.hz), d.id);
+                    if (!at) return;
+                    // Shift+click drops a mark to come back to, as the classic
+                    // spectrum does, and doesn't tune; on or within 8 px of the
+                    // mark it clears it. Not saved, as on the classic page.
+                    if (e.shiftKey) {
+                        const pn = panes[d.id], span = st.spanHz[d.id];
+                        const w = el.getBoundingClientRect().width || 1;
+                        pn.pinHz = pn.pinHz != null && Math.abs(pn.pinHz - at.hz) <= 8 / w * span ? null : at.hz;
+                        drawPin(pn, st.freq[d.id], span);
+                        return;
+                    }
+                    act('spectrum', String(at.hz), d.id);
                 });
                 // The wheel tunes that pane's VFO one step a notch, as the dial does.
                 el.addEventListener('wheel', e => {
@@ -595,8 +606,13 @@ export function mountRadioPanel(root, opts = {}) {
             });
             el.addEventListener('pointerleave', () => { lastX = null; xHide(); });
         }
+        const pinLines = [spec, wf].map(el => { const x = h('div', 'rp-pin'); el.append(x); return x; });
+        const pinRead = h('div', 'rp-pin-read');
+        spec.append(pinRead);
         sdrView.append(box);
-        panes[d.id] = { box, spec, pb, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '' };
+        panes[d.id] = { box, spec, pb, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '',
+            pinHz: null, pinLines, pinRead };
+        drawPin(panes[d.id], 0, 0);
     }
 
     // A pane's drawing settings - the classic spectrum's Range, Speed,
@@ -986,6 +1002,7 @@ export function mountRadioPanel(root, opts = {}) {
         pn.axis.textContent = '';
         if (span > 0 && f > 0) for (const t of axisLabels(f, span)) pn.axis.append(h('span', null, t));
         drawMarks(pn, f, span);
+        drawPin(pn, f, span);
         pn.spots.textContent = '';
         if (span > 0 && f > 0) {
             let row = 0;
@@ -998,6 +1015,19 @@ export function mountRadioPanel(root, opts = {}) {
                 pn.spots.append(el);
             }
         }
+    }
+    // The Shift+click mark: a solid line through spectrum and waterfall and
+    // its frequency, hidden while it is off the pane.
+    function drawPin(pn, f, span) {
+        const x = pn.pinHz != null && span > 0 && f > 0 ? 50 + (pn.pinHz - f) / span * 100 : null;
+        const shown = x != null && x >= 0 && x <= 100;
+        for (const l of pn.pinLines) { l.style.display = shown ? 'block' : 'none'; if (shown) l.style.left = x + '%'; }
+        pn.pinRead.style.display = shown ? 'block' : 'none';
+        if (!shown) return;
+        const fr = formatFrequency(pn.pinHz);
+        pn.pinRead.textContent = fr.big + fr.small;
+        pn.pinRead.style.left = x + '%';
+        pn.pinRead.classList.toggle('left', x > 75);
     }
     // Band edges are dashed lines the full height of the trace; band-plan
     // marks are short ticks along the bottom, their labels stacked up to three
