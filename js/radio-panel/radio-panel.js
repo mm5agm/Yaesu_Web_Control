@@ -182,6 +182,7 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *                                          The adapter fills each panel through
  *                                          api.windows.slot(groupId, panelId)
  *   onWindowPanel(groupId, panelId, shown) told when a window panel shows or hides
+ *   onWindowPopout(groupId, panelId)       a window panel's ⇱ key (panels with popout set)
  *   onSpectrumPopout(), onSpectrumBack()   optional: a ⧉ key on the spectrum, and the
  *                                          BRING BACK key shown while setSpectrumAway(true)
  *   frequencyEntry (bool)                  show an ENT chip in each VFO box
@@ -1092,6 +1093,7 @@ export function mountRadioPanel(root, opts = {}) {
     const windows = mountPanelWindows({
         board: panel, launcher, groups: opts.windows ?? [], store, prefix,
         onShow: opts.onWindowPanel,
+        onPopout: opts.onWindowPopout,
     });
 
     setTheme(store.get(prefix + 'theme', DEFAULT_THEME));
