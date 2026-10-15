@@ -127,7 +127,7 @@ export function startYaesuRadioPanel(root, cfg) {
             ],
         },
         sharedKnobs: [
-            { id: 'micproc', label: 'MIC / PROC', turn: true, title: 'Inner: mic gain. Outer: speech processor level' + U },
+            { id: 'micproc', label: 'MIC / PROC', turn: true, title: 'Inner: mic gain. Outer: speech processor level, or AMC output while the processor is off' + U },
             { id: 'powermon', label: 'POWER / MONI', turn: true, title: 'Inner: RF power. Outer: monitor level' + U },
             { id: 'speedpitch', label: 'SPEED / PITCH', turn: true, title: 'Inner: CW keyer speed. Outer: CW pitch' + U },
         ],
@@ -215,7 +215,7 @@ export function startYaesuRadioPanel(root, cfg) {
         agc: { A: '', B: '' }, agcCode: { A: '', B: '' }, rxClar: false, txClar: false, clarHz: { A: 0, B: 0 },
         contourHz: { A: 800, B: 800 }, apfHz: { A: 0, B: 0 }, notchHz: { A: null, B: null },
         af: { A: null, B: null }, rf: { A: null, B: null }, sql: { A: null, B: null },
-        mic: null, procl: null, power: null, mon: null, speed: null, pitchKnown: false,
+        mic: null, procl: null, amc: null, procType: null, power: null, mon: null, speed: null, pitchKnown: false,
         tx: false, txMeterRaw: {}, sel: 'A', split: 0, txVfo: 0, proc: false, moni: false, catOn: false,
     };
     let stepHz = (() => { try { return num(localStorage.getItem(STEP_KEY)); } catch { return 0; } })();
@@ -350,10 +350,18 @@ export function startYaesuRadioPanel(root, cfg) {
             title: `Notch ${nOn ? 'on' : 'off'} ${val(r.notchHz[vfo])} Hz (inner) · contour ${cOn ? 'on' : 'off'} ${val(r.contourHz[vfo])} Hz (outer)` + U,
         });
     }
+    // The radio's PROC knob (FTdx101 manual p.50): PROC TYPE COMP sets the
+    // processor level while the processor is on and AMC output while it is
+    // off; PROC TYPE AMC always sets AMC. procType stays null where the
+    // radio has no AMC (AmcCodes), and the ring stays the processor level.
+    const outerAmc = () => r.procType === 1 || (r.procType === 0 && !r.proc);
     function refreshSharedKnobs() {
         panel.setGroupKnob('shared', 'micproc', {
-            inner: frac(r.mic, 100), outer: frac(r.procl, 100), text: val(r.mic) + ' · ' + val(r.procl),
-            title: `Mic gain ${val(r.mic)} (inner) · processor level ${val(r.procl)} (outer)` + U,
+            inner: frac(r.mic, 100), outer: frac(outerAmc() ? r.amc : r.procl, 100),
+            text: val(r.mic) + ' · ' + val(outerAmc() ? r.amc : r.procl),
+            title: `Mic gain ${val(r.mic)} (inner) · ` + (outerAmc()
+                ? `AMC output ${val(r.amc)} (outer: the processor is off, or PROC TYPE is AMC)`
+                : `processor level ${val(r.procl)} (outer)`) + U,
         });
         panel.setGroupKnob('shared', 'powermon', {
             inner: frac(r.power, maxPowerW), outer: frac(r.mon, 100),
@@ -631,6 +639,9 @@ export function startYaesuRadioPanel(root, cfg) {
                 return turn('mic', r.mic, 1, 0, 100, x => { r.mic = x; refreshSharedKnobs(); },
                     x => post('/api/cat/micgain', { value: x }));
             case 'micproc:outer':
+                if (outerAmc())
+                    return turn('amc', r.amc, 1, 1, 100, x => { r.amc = x; refreshSharedKnobs(); },
+                        x => post('/api/cat/amclevel', { value: x }));
                 return turn('procl', r.procl, 1, 0, 100, x => { r.procl = x; refreshSharedKnobs(); },
                     x => post('/api/cat/proclevel', { value: x }));
             case 'powermon:inner':
@@ -875,7 +886,7 @@ export function startYaesuRadioPanel(root, cfg) {
         ClarifierOffsetB: v => { r.clarHz.B = num(v); refreshClar(); },
         IsTransmitting: v => { r.tx = on(v); panel.setTx(r.tx); },
         AtuTuning: v => panel.setKey('tune', { tx: on(v) }),
-        ProcEnabled: v => { r.proc = on(v); panel.setKey('proc', { on: r.proc }); },
+        ProcEnabled: v => { r.proc = on(v); panel.setKey('proc', { on: r.proc }); refreshSharedKnobs(); },
         VoxOn: v => panel.setKey('vox', { on: on(v) }),
         MonitorOn: v => { r.moni = on(v); panel.setKey('moni', { on: r.moni }); },
         AfGainA: v => { r.af.A = num(v); refreshRxKnobs('A'); },
@@ -889,6 +900,8 @@ export function startYaesuRadioPanel(root, cfg) {
         Power: v => { r.power = num(v); refreshSharedKnobs(); },
         MicGain: v => { r.mic = num(v); refreshSharedKnobs(); },
         ProcLevel: v => { r.procl = num(v); refreshSharedKnobs(); },
+        AmcLevel: v => { r.amc = v == null ? null : num(v); refreshSharedKnobs(); },
+        ProcType: v => { r.procType = v == null ? null : num(v); refreshSharedKnobs(); },
         MonitorLevelA: v => { r.mon = num(v); refreshSharedKnobs(); },
         SMeterA: v => panel.setSMeter('A', calibrateNumeric('SMETER', num(v))),
         SMeterB: v => panel.setSMeter('B', calibrateNumeric('SMETER', num(v))),

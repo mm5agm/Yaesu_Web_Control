@@ -184,6 +184,38 @@ namespace Yaesu_Web_Control.Controllers
             }
         }
 
+        // AMC output level (AO, 1-100): what the radio's PROC knob sets while
+        // the processor is off, or always with PROC TYPE on AMC - see AmcCodes.
+        [HttpPost("amclevel")]
+        public async Task<IActionResult> SetAmcLevel([FromBody] ProcLevelRequest request)
+        {
+            if (!AmcCodes.SupportsAmc(_radioStateService.RadioModel))
+                return BadRequest(new { error = "AMC level is not supported on this radio" });
+            if (request.Value < 1 || request.Value > 100)
+                return BadRequest(new { error = "AMC level out of range (1-100)" });
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                await _catClient.SendCommandAsync($"AO{request.Value:D3};", "WebUI", CancellationToken.None);
+                // Read back: the radio is the source of truth.
+                var response = await _catClient.SendCommandAsync("AO;", "WebUI", CancellationToken.None);
+                int actual = AmcCodes.ParseAmcLevel(response ?? "") ?? request.Value;
+                _radioStateService.AmcLevel = actual;
+                return Ok(new { actual });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting AMC level");
+                return StatusCode(500, new { error = "Failed to set AMC level" });
+            }
+            finally
+            {
+                _requestSemaphore.Release();
+            }
+        }
+
         [HttpPost("radiopower")]
         public async Task<IActionResult> SetRadioPower([FromBody] RadioPowerRequest request)
         {

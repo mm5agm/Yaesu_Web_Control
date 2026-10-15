@@ -583,6 +583,15 @@ namespace Yaesu_Web_Control.Services
         private int _procLevel = 50;
         public int ProcLevel { get => _procLevel; set => SetField(ref _procLevel, value); }
 
+        // AMC output level (AO, 1-100) and the PROC TYPE menu (0 = COMP,
+        // 1 = AMC): together they say what the radio's PROC knob is setting.
+        // Null until read; only read where AmcCodes confirms the model.
+        private int? _amcLevel;
+        public int? AmcLevel { get => _amcLevel; set => SetField(ref _amcLevel, value); }
+
+        private int? _procType;
+        public int? ProcType { get => _procType; set => SetField(ref _procType, value); }
+
         // ATU: false = bypass, true = engaged
         private bool _atuEnabled = false;
         public bool AtuEnabled { get => _atuEnabled; set => SetField(ref _atuEnabled, value); }
@@ -768,6 +777,8 @@ namespace Yaesu_Web_Control.Services
                 // Missing until 2026-10-15: MicGain only reached a page when it
                 // changed, so /radio's MIC knob had no value and ignored turns.
                 new("MicGain", MicGain),
+                new("AmcLevel", AmcLevel),
+                new("ProcType", ProcType),
                 new("AtuEnabled", AtuEnabled),
                 new("AtuTuning", AtuTuning),
                 new("MonitorOn", MonitorOn),
