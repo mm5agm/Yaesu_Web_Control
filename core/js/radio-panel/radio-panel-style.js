@@ -72,7 +72,8 @@ html,body{margin:0;background:${v('page')}}
 .rp-brand-short{font-size:34px;font-weight:700;letter-spacing:.18em;color:${v('title')}}
 .rp-brand-model{font:600 23px ${SANS};letter-spacing:.1em;color:${v('accent')}}
 .rp-lamps{display:flex;align-items:center;gap:18px}
-.rp-lamps>span{display:flex;align-items:center;gap:7px}
+.rp-lamps>span,.rp-lampkey{display:flex;align-items:center;gap:7px}
+.rp-lampkey{font:inherit;color:inherit;letter-spacing:inherit;background:none;border:0;padding:0;cursor:pointer}
 .rp-top-right{display:flex;align-items:center;gap:14px}
 
 .rp-body{height:800px;display:grid;grid-template-columns:292px minmax(0,1fr) 350px;gap:22px}

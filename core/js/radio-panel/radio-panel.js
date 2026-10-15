@@ -135,8 +135,8 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  * @param {object} opts
  *   brandShort, brandName, model, dual (bool),
  *   views:  [{ label, href, on }]          layout switch in the top strip
- *   lamps:  [{ id, label }]
- *   keys:   [{ id, label, inert }]         left column, two per row; `inert` keeps
+ *   lamps:  [{ id, label, click, title }]  `click` makes the lamp a key: act('lamp', id)
+ *   keys:   [{ id, label, inert, title }]  left column, two per row; `inert` keeps
  *                                          one key display-only even with onAction
  *                                          (e.g. anything that would transmit)
  *   vfoKeys:[{ id, label, inert, title }]  under the dial, vfoKeyColumns per row (default 3)
@@ -279,7 +279,8 @@ export function mountRadioPanel(root, opts = {}) {
     }
     const lampEls = {};
     for (const l of opts.lamps ?? []) {
-        const wrap = h('span');
+        const wrap = l.click && act ? button('rp-lampkey', 'lamp', l.id) : h('span');
+        if (l.title) wrap.title = l.title;
         const dot = h('span', 'rp-lamp');
         wrap.append(dot, document.createTextNode(l.label));
         lamps.append(wrap);
@@ -333,6 +334,7 @@ export function mountRadioPanel(root, opts = {}) {
     const keyEls = {};
     for (const k of opts.keys ?? []) {
         const b = button('rp-key', 'key', k.id, k.inert);
+        if (k.title) b.title = k.title;
         const led = h('span', 'rp-led'), sub = h('span', 'rp-sub', '');
         b.append(led, h('span', null, k.label), sub);
         keysGrid.append(b);
