@@ -24,6 +24,8 @@
 // that can go on another screen - which a torn-off window, being on the board,
 // never can. The app opens that window (onPopout) and uses closePanel and
 // showPanel to take the panel off the board while it is out, and put it back.
+// A group marked popout gets a ⇱ WINDOW key in its title bar the same way,
+// for the whole window (onPopout with no panel); the app uses close and open.
 
 const SAVE_KEY = 'windows';
 
@@ -39,14 +41,15 @@ function h(tag, cls, text) {
  * @param {HTMLElement} o.board      the positioned board the windows sit on
  * @param {HTMLElement} o.launcher   where the launcher keys go
  * @param {Array<{id:string, key?:string, title:string, pos:number[],
- *          panels:Array<{id:string, title:string, w?:number, dpos?:number[], popout?:any}>}>} o.groups
+ *          panels:Array<{id:string, title:string, w?:number, dpos?:number[], popout?:any}>, popout?:any}>} o.groups
  *        pos is [left, top, width, height] in board pixels. A group with no
  *        key gets no launcher key; the app opens it with open().
  * @param {{ get(k:string, d?:string):string|null, set(k:string, v:string):void }} o.store
  * @param {string} o.prefix
  * @param {(groupId:string, panelId:string, shown:boolean) => void} [o.onShow]
- * @param {(groupId:string, panelId:string) => void} [o.onPopout]  a panel's ⇱ key;
- *        only panels with popout set get one
+ * @param {(groupId:string, panelId:string|null) => void} [o.onPopout]  a panel's ⇱ key,
+ *        or a group window's ⇱ WINDOW key (panelId null); only panels and groups
+ *        with popout set get one
  */
 export function mountPanelWindows({ board, launcher, groups, store, prefix, onShow, onPopout }) {
     const defs = Object.fromEntries(groups.map(g => [g.id, g]));
@@ -128,14 +131,18 @@ export function mountPanelWindows({ board, launcher, groups, store, prefix, onSh
         const join = h('button', 'rp-win-join', '');
         join.type = 'button';
         join.title = 'Put this panel back in its group window';
+        const pop = h('button', 'rp-win-join', '⇱ WINDOW');
+        pop.type = 'button';
+        pop.title = 'Open this window in a browser window of its own - it can go on another screen';
+        pop.hidden = true;
         const x = h('button', 'rp-win-x', '×');
         x.type = 'button';
         x.title = 'Close this window';
-        bar.append(title, sub, join, x);
+        bar.append(title, sub, pop, join, x);
         const body = h('div', 'rp-win-body');
         const grip = h('div', 'rp-win-grip');
         frame.append(bar, body, grip);
-        const w = { frame, title, sub, join, x, body };
+        const w = { frame, title, sub, join, pop, x, body };
         place(frame, st.geom[wkey] ?? defaultPos);
         frame.addEventListener('pointerdown', () => raise(frame), true);
         dragWith(bar, frame, wkey, 'move');
@@ -252,6 +259,8 @@ export function mountPanelWindows({ board, launcher, groups, store, prefix, onSh
                 w.title.textContent = g.title;
                 w.sub.textContent = subtitles[g.id] ?? '';
                 w.join.hidden = true;
+                w.pop.hidden = !(g.popout && onPopout);
+                w.pop.onclick = () => onPopout?.(g.id, null);
                 w.x.onclick = () => close(g.id);
                 const fixedAll = shown.every(p => p.w);
                 const boxes = shown.map((p, i) => {
@@ -273,6 +282,7 @@ export function mountPanelWindows({ board, launcher, groups, store, prefix, onSh
                 w.title.textContent = (g.key || g.title) + ' · ' + p.title;
                 w.sub.textContent = '';
                 w.join.hidden = false;
+                w.pop.hidden = true;
                 w.join.textContent = '◂ INTO ' + (g.key || g.title);
                 w.join.onclick = () => join(g.id, pid);
                 w.x.onclick = () => closePanel(g.id, pid);
