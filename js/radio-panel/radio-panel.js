@@ -135,11 +135,11 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  * @param {object} opts
  *   brandShort, brandName, model, dual (bool),
  *   views:  [{ label, href, on }]          layout switch in the top strip
- *   lamps:  [{ id, label }]
- *   keys:   [{ id, label, inert }]         left column, two per row; `inert` keeps
+ *   lamps:  [{ id, label, click, title }]  `click` makes the lamp a key: act('lamp', id)
+ *   keys:   [{ id, label, inert, title }]  left column, two per row; `inert` keeps
  *                                          one key display-only even with onAction
  *                                          (e.g. anything that would transmit)
- *   vfoKeys:[{ id, label, inert }]         under the dial, vfoKeyColumns per row (default 3)
+ *   vfoKeys:[{ id, label, inert, title }]  under the dial, vfoKeyColumns per row (default 3)
  *   dualDial (bool)                        on a dual-receiver radio, the dial is an outer
  *                                          ring (MAIN, VFO-A) round an inner knob (SUB,
  *                                          VFO-B), each tagged, the selected one glowing.
@@ -185,10 +185,16 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *   onSpectrumPopout(), onSpectrumBack()   optional: a ⧉ key on the spectrum, and the
  *                                          BRING BACK key shown while setSpectrumAway(true)
  *   frequencyEntry (bool)                  show an ENT chip in each VFO box
+ *   clock (bool)                           a UTC clock in the top bar, from the PC's clock
+ *   fullscreenKey (bool)                   bare F goes full screen (not while typing)
+ *   vfoChips: ['ant', 'roof', ...]         optional: more picker chips in each VFO box,
+ *                                          after AGC; filled with setChip(vfo, kind,
+ *                                          text) and listed by choices(kind, vfo)
  *   storagePrefix, fontBase
  *   onAction(kind, id, vfo)                kind: 'key' | 'band' | 'mode' | 'step' | 'vfoKey'
  *                                          | 'vfo' (the operator clicked VFO 'A' or 'B')
- *                                          | 'width' | 'agc' (picked from a VFO box chip)
+ *                                          | 'width' | 'agc' | a vfoChips kind (picked
+ *                                            from a VFO box chip)
  *                                          | 'tune' (id = signed Hz, from the wheel over a
  *                                            frequency digit)
  *                                          | 'entry' (the ENT chip in a VFO box: the
@@ -206,7 +212,8 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *                                            and the clarifier with opts.clarTurn). `vfo` is set when the
  *                                          action came from inside a VFO box and names
  *                                          that box; otherwise it is undefined.
- *   choices(kind, vfo)                     kind 'mode' | 'width' | 'agc': the list a click
+ *   choices(kind, vfo)                     kind 'mode' | 'width' | 'agc' | a vfoChips
+ *                                          kind: the list a click
  *                                          on that chip offers, [{ id, label, on }], or
  *                                          null for a chip that does nothing
  *
@@ -249,9 +256,31 @@ export function mountRadioPanel(root, opts = {}) {
 
     const right = h('div', 'rp-top-right');
     const lamps = h('div', 'rp-lamps rp-legend');
+    // Bare F goes full screen, as on the classic page; Esc leaves (the
+    // browser's own). Not while typing, and never with a modifier, so
+    // Ctrl+F still finds in the page.
+    if (opts.fullscreenKey)
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'f' && e.key !== 'F') return;
+            if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || document.fullscreenElement) return;
+            const t = e.target;
+            if (t?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
+            document.documentElement.requestFullscreen?.()?.catch?.(() => {});
+            e.preventDefault();
+        });
+    // UTC from this computer's clock, as on the classic page.
+    if (opts.clock) {
+        const clock = h('span', 'rp-clock', '--:--:--Z');
+        clock.title = "UTC from this computer's clock";
+        const tick = () => { clock.textContent = new Date().toISOString().slice(11, 19) + 'Z'; };
+        tick();
+        setInterval(tick, 1000);
+        lamps.append(clock);
+    }
     const lampEls = {};
     for (const l of opts.lamps ?? []) {
-        const wrap = h('span');
+        const wrap = l.click && act ? button('rp-lampkey', 'lamp', l.id) : h('span');
+        if (l.title) wrap.title = l.title;
         const dot = h('span', 'rp-lamp');
         wrap.append(dot, document.createTextNode(l.label));
         lamps.append(wrap);
@@ -305,6 +334,7 @@ export function mountRadioPanel(root, opts = {}) {
     const keyEls = {};
     for (const k of opts.keys ?? []) {
         const b = button('rp-key', 'key', k.id, k.inert);
+        if (k.title) b.title = k.title;
         const led = h('span', 'rp-led'), sub = h('span', 'rp-sub', '');
         b.append(led, h('span', null, k.label), sub);
         keysGrid.append(b);
@@ -335,9 +365,12 @@ export function mountRadioPanel(root, opts = {}) {
     mainFreq.append(mainBig, mainSmall);
     const mainChips = h('div', 'rp-chips');
     const chip = cls => h('span', 'rp-chip' + (cls ? ' ' + cls : ''), '');
-    const chipsA = { mode: chip('mode'), width: chip(), agc: chip(), flags: h('span') };
+    // Extra picker chips the adapter asks for; empty text hides one.
+    const extraKinds = (opts.vfoChips ?? []).filter(k => !['mode', 'width', 'agc', 'flags'].includes(k));
+    const extraChips = cls => Object.fromEntries(extraKinds.map(k => [k, chip(cls)]));
+    const chipsA = { mode: chip('mode'), width: chip(), agc: chip(), ...extraChips(), flags: h('span') };
     chipsA.flags.style.display = 'contents';
-    mainChips.append(chipsA.mode, chipsA.width, chipsA.agc, chipsA.flags);
+    mainChips.append(chipsA.mode, chipsA.width, chipsA.agc, ...extraKinds.map(k => chipsA[k]), chipsA.flags);
     main.append(mainHead, mainFreq, mainChips);
 
     const sub = h('div', 'rp-subvfo');
@@ -350,9 +383,10 @@ export function mountRadioPanel(root, opts = {}) {
     const subBig = h('span', 'big', '-.---'), subSmall = h('span', 'small', '.---');
     subFreq.append(subBig, subSmall);
     const subChips = h('div', 'rp-chips');
-    const chipsB = { mode: chip('dim'), width: chip('dim'), agc: chip('dim'), flags: h('span') };
+    const chipsB = { mode: chip('dim'), width: chip('dim'), agc: chip('dim'), ...extraChips('dim'), flags: h('span') };
     chipsB.flags.style.display = 'contents';
-    subChips.append(chipsB.mode, chipsB.width, chipsB.agc, chipsB.flags);
+    subChips.append(chipsB.mode, chipsB.width, chipsB.agc, ...extraKinds.map(k => chipsB[k]), chipsB.flags);
+    for (const k of extraKinds) { chipsA[k].hidden = true; chipsB[k].hidden = true; }
     const sbar = h('div', 'rp-sbar');
     const sFill = h('div', 'fill'), sTrack = h('div', 'track'), sTxt = h('span', 'txt', 'S0');
     sTrack.append(sFill);
@@ -398,7 +432,7 @@ export function mountRadioPanel(root, opts = {}) {
         document.addEventListener('click', e => { if (!picker.hidden && !picker.contains(e.target)) closePicker(); });
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closePicker(); });
         for (const [chips, vfo] of [[chipsA, 'A'], [chipsB, 'B']])
-            for (const kind of ['mode', 'width', 'agc']) {
+            for (const kind of ['mode', 'width', 'agc', ...extraKinds]) {
                 const el = chips[kind];
                 el.classList.add('act');
                 el.addEventListener('click', e => { e.stopPropagation(); openPicker(el, kind, vfo); });
@@ -431,10 +465,11 @@ export function mountRadioPanel(root, opts = {}) {
         const spec = h('div', 'rp-spectrum');
         const pb = h('div', 'rp-passband');
         const spotsEl = h('div');
+        const marksEl = h('div');
         const label = h('div', 'rp-spec-label', '');
         const empty = h('div', 'rp-spec-empty', 'No SDR');
         const oob = h('div', 'rp-spec-oob', 'OUT OF BAND');
-        spec.append(pb, h('div', 'rp-cursor'), spotsEl, label, oob, empty);
+        spec.append(pb, marksEl, h('div', 'rp-cursor'), spotsEl, label, oob, empty);
         const axis = h('div', 'rp-axis');
         const wf = h('div', 'rp-waterfall');
         // The span picker, HOLD and the settings key sit in the waterfall's
@@ -500,8 +535,30 @@ export function mountRadioPanel(root, opts = {}) {
                     act('dial', e.deltaY < 0 ? 'up' : 'down', d.id);
                 }, { passive: false });
             }
+        // A hairline and readout follow the pointer over the spectrum and
+        // waterfall, naming the frequency under it, as the classic spectrum does.
+        const xRead = h('div', 'rp-xread');
+        const xLines = [spec, wf].map(el => { const x = h('div', 'rp-xhair'); el.append(x); return x; });
+        spec.append(xRead);
+        const xHide = () => { xRead.style.display = 'none'; for (const x of xLines) x.style.display = 'none'; };
+        xHide();
+        for (const el of [spec, wf]) {
+            el.addEventListener('pointermove', e => {
+                const span = st.spanHz[d.id], f = st.freq[d.id];
+                const rc = el.getBoundingClientRect();
+                if (!(span > 0 && f > 0) || !rc.width || e.target.closest('select, button, .rp-spec-tools')) return xHide();
+                const frac = Math.max(0, Math.min(1, (e.clientX - rc.left) / rc.width));
+                const fr = formatFrequency(f + (frac - 0.5) * span);
+                for (const x of xLines) { x.style.left = frac * 100 + '%'; x.style.display = 'block'; }
+                xRead.textContent = fr.big + fr.small;
+                xRead.style.display = 'block';
+                xRead.classList.toggle('left', frac > 0.75);
+                xRead.style.left = frac * 100 + '%';
+            });
+            el.addEventListener('pointerleave', xHide);
+        }
         sdrView.append(box);
-        panes[d.id] = { box, spec, pb, spots: spotsEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '' };
+        panes[d.id] = { box, spec, pb, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '' };
     }
 
     // A pane's drawing settings - the classic spectrum's Range, Speed,
@@ -692,6 +749,7 @@ export function mountRadioPanel(root, opts = {}) {
         const b = button('rp-key', 'vfoKey', k.id, k.inert);
         const led = h('span', 'rp-led');
         b.append(led, h('span', null, k.label));
+        if (k.title) b.title = k.title;
         vfoKeys.append(b);
         keyEls[k.id] = { b, led, sub: null };
     }
@@ -825,7 +883,7 @@ export function mountRadioPanel(root, opts = {}) {
     const st = {
         freq: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null },
         s: { A: 0, B: 0 }, tx: false, meter: store.get(prefix + 'meter', 'PO'),
-        txMeters: {}, spanHz: { A: 0, B: 0 }, theme: null, spots: [], sel: 'A',
+        txMeters: {}, spanHz: { A: 0, B: 0 }, theme: null, spots: [], marks: { edges: [], ticks: [] }, sel: 'A',
         specView: specViews[0],
     };
     if (!meterList.includes(st.meter)) st.meter = 'PO';
@@ -873,6 +931,7 @@ export function mountRadioPanel(root, opts = {}) {
         else pn.pb.style.display = 'none';
         pn.axis.textContent = '';
         if (span > 0 && f > 0) for (const t of axisLabels(f, span)) pn.axis.append(h('span', null, t));
+        drawMarks(pn, f, span);
         pn.spots.textContent = '';
         if (span > 0 && f > 0) {
             let row = 0;
@@ -884,6 +943,39 @@ export function mountRadioPanel(root, opts = {}) {
                 el.style.top = (30 + (row++ % 4) * 28) + 'px';
                 pn.spots.append(el);
             }
+        }
+    }
+    // Band edges are dashed lines the full height of the trace; band-plan
+    // marks are short ticks along the bottom, their labels stacked up to three
+    // rows deep where they would overlap, as the classic spectrum draws them.
+    function drawMarks(pn, f, span) {
+        pn.marks.textContent = '';
+        if (!(span > 0 && f > 0)) return;
+        const pos = hz => 50 + (hz - f) / span * 100;
+        for (const hz of st.marks.edges) {
+            const x = pos(hz);
+            if (x < 0 || x > 100) continue;
+            const el = h('div', 'rp-edge');
+            el.style.left = x + '%';
+            pn.marks.append(el);
+        }
+        const width = pn.spec.offsetWidth || 1000;
+        const ends = [-Infinity, -Infinity, -Infinity];
+        const ticks = st.marks.ticks.map(t => ({ ...t, x: pos(t.hz) })).filter(t => t.x >= 0 && t.x <= 100).sort((a, b) => a.x - b.x);
+        for (const t of ticks) {
+            const px = t.x / 100 * width, half = String(t.label).length * 4.5 + 2;
+            let row = ends.findIndex(e => px - half >= e + 4);
+            if (row < 0) row = ends.length - 1;
+            ends[row] = px + half;
+            const tick = h('div', 'rp-mark');
+            tick.style.left = t.x + '%';
+            const lab = h('div', 'rp-mark-label', t.label);
+            lab.style.left = t.x + '%';
+            // Near either side the label hangs inward, so it is not cut off.
+            if (px < half) lab.style.transform = 'none';
+            else if (px > width - half) lab.style.transform = 'translateX(-100%)';
+            lab.style.bottom = (20 + row * 14) + 'px';
+            pn.marks.append(tick, lab);
         }
     }
     // "MAIN · SDR A · SPAN 100k": the pane's name, then the adapter's source
@@ -1031,6 +1123,13 @@ export function mountRadioPanel(root, opts = {}) {
             drawOverlays(vfo);
         },
         setAgc(vfo, text) { flagsFor(vfo).agc.textContent = text ? 'AGC ' + text : ''; },
+        // A vfoChips chip's text; empty hides it.
+        setChip(vfo, kind, text) {
+            const el = flagsFor(vfo)[kind];
+            if (!el || !extraKinds.includes(kind)) return;
+            el.textContent = text ?? '';
+            el.hidden = !text;
+        },
         // Each flag is its text, or { id, label }: one with an id is pressed
         // like key `id`, for this VFO.
         setFlags(vfo, list) {
@@ -1190,6 +1289,8 @@ export function mountRadioPanel(root, opts = {}) {
         // One pane, or every pane when `vfo` is left out.
         clearSpectrum(vfo) { for (const [id, pn] of Object.entries(panes)) if (!vfo || id === vfo) pn.view.clear(); },
         setSpots(list) { st.spots = list ?? []; drawOverlays(); },
+        // Band edges in Hz, and band-plan marks as { hz, label }, drawn on every pane.
+        setBandMarks({ edges, ticks } = {}) { st.marks = { edges: edges ?? [], ticks: ticks ?? [] }; drawOverlays(); },
         spectrumView() { return st.specView; },
         setSpectrumView: id => setSpecView(id),
         setTheme,
