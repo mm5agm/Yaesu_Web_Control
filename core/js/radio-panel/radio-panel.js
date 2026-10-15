@@ -512,22 +512,36 @@ export function mountRadioPanel(root, opts = {}) {
         // A click on the spectrum or waterfall names the frequency under it,
         // or a DX spot's own frequency when the click is within 8 px of its
         // marker: act('spectrum', Hz, pane id). The pane's centre is its dial.
+        // The readout below names exactly what a click there would send: both
+        // come from hzAt, and from the same x. A click's clientX is whole CSS
+        // pixels while a pointer's is fractional (display scaling), and at a
+        // 1 MHz span one pixel is over 1 kHz - so the click takes the pointer's
+        // last x when it is within a pixel of it, or the readout and the radio
+        // disagree by a few hundred Hz (Colin, 2026-10-15: 14.815.690 read,
+        // 14.815.439 tuned).
+        const hzAt = (el, clientX) => {
+            const span = st.spanHz[d.id], f = st.freq[d.id];
+            const rc = el.getBoundingClientRect();
+            if (!(span > 0 && f > 0) || !rc.width) return null;
+            const frac = Math.max(0, Math.min(1, (clientX - rc.left) / rc.width));
+            let hz = Math.round(f + (frac - 0.5) * span), spot = null;
+            let best = 8 / rc.width * span;
+            for (const sp of st.spots) {
+                const gap = Math.abs(sp.hz - hz);
+                if (gap <= best) { best = gap; spot = sp; }
+            }
+            if (spot) hz = spot.hz;
+            return { hz, frac, spot };
+        };
+        let lastX = null;
         if (act)
             for (const el of [spec, wf]) {
                 el.classList.add('rp-tunable');
                 el.addEventListener('click', e => {
                     if (e.target.closest('select, button, .rp-spec-tools')) return;
-                    const span = st.spanHz[d.id], f = st.freq[d.id];
-                    const rc = el.getBoundingClientRect();
-                    if (!(span > 0 && f > 0) || !rc.width) return;
-                    let hz = Math.round(f + ((e.clientX - rc.left) / rc.width - 0.5) * span);
-                    const near = 8 / rc.width * span;
-                    let best = near;
-                    for (const sp of st.spots) {
-                        const gap = Math.abs(sp.hz - hz);
-                        if (gap <= best) { best = gap; hz = sp.hz; }
-                    }
-                    act('spectrum', String(hz), d.id);
+                    const x = lastX != null && Math.abs(lastX - e.clientX) < 1 ? lastX : e.clientX;
+                    const at = hzAt(el, x);
+                    if (at) act('spectrum', String(at.hz), d.id);
                 });
                 // The wheel tunes that pane's VFO one step a notch, as the dial does.
                 el.addEventListener('wheel', e => {
@@ -545,18 +559,18 @@ export function mountRadioPanel(root, opts = {}) {
         xHide();
         for (const el of [spec, wf]) {
             el.addEventListener('pointermove', e => {
-                const span = st.spanHz[d.id], f = st.freq[d.id];
-                const rc = el.getBoundingClientRect();
-                if (!(span > 0 && f > 0) || !rc.width || e.target.closest('select, button, .rp-spec-tools')) return xHide();
-                const frac = Math.max(0, Math.min(1, (e.clientX - rc.left) / rc.width));
-                const fr = formatFrequency(f + (frac - 0.5) * span);
+                lastX = e.clientX;
+                const at = e.target.closest('select, button, .rp-spec-tools') ? null : hzAt(el, e.clientX);
+                if (!at) return xHide();
+                const { frac } = at;
+                const fr = formatFrequency(at.hz);
                 for (const x of xLines) { x.style.left = frac * 100 + '%'; x.style.display = 'block'; }
-                xRead.textContent = fr.big + fr.small;
+                xRead.textContent = fr.big + fr.small + (at.spot ? ' ' + at.spot.call : '');
                 xRead.style.display = 'block';
                 xRead.classList.toggle('left', frac > 0.75);
                 xRead.style.left = frac * 100 + '%';
             });
-            el.addEventListener('pointerleave', xHide);
+            el.addEventListener('pointerleave', () => { lastX = null; xHide(); });
         }
         sdrView.append(box);
         panes[d.id] = { box, spec, pb, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '' };
