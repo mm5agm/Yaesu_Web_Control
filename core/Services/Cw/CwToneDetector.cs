@@ -644,6 +644,12 @@ namespace RadioWebControl.Core.Services.Cw
         // Debounce. _pending holds samples that cannot be emitted yet because a
         // later hop may still backdate their key state.
         private readonly List<CwToneSample> _pending = new();
+
+        // Lookback. While presence is false the newest LookbackHops samples
+        // are held back rather than emitted, so that when it opens they can
+        // be re-keyed - see Lookback.
+        private const int LookbackHops = 120;   // 600 ms
+        private readonly List<CwToneSample> _held = new();
         private int  _debounceHops;
         private bool _committedKey;
         private int  _runHops;
@@ -761,7 +767,7 @@ namespace RadioWebControl.Core.Services.Cw
             _envBuf[_envFill++] = x;
             if (_envFill == EnvWindow)
             {
-                produced += Emit(MakeSample(), output);
+                produced += Lookback(MakeSample(), output);
                 Array.Copy(_envBuf, EnvHop, _envBuf, 0, EnvWindow - EnvHop);
                 _envFill = EnvWindow - EnvHop;
             }
@@ -775,6 +781,84 @@ namespace RadioWebControl.Core.Services.Cw
         /// downstream sees it - and a run which turns out to be real can have
         /// its transition backdated to the hop where it actually began.
         /// </summary>
+        /// <summary>
+        /// Hold samples back while no signal is present, and when presence
+        /// opens, key the held ones against the levels that opened it.
+        ///
+        /// The gate that grants presence can only decide after it has heard
+        /// marks - KeyingOpenHops of them on a band whose noise never lets the
+        /// grace re-arm, which is any band with steady hiss on it - and until
+        /// it decides the key is forced up. So the marks that convinced it are
+        /// gone before it says yes, and those are the first letter of the
+        /// transmission: on the NCDXF beacons 2026-10-15 presence opened at the
+        /// end of the second dah of OH2B, and every 20 m slot printed TH2B or
+        /// SH2B. Holding 600 ms covers the gate at every speed it opens at -
+        /// two dahs or four dits at 22 wpm, a single dah at 12 - and costs
+        /// nothing once a station is being copied, since samples pass straight
+        /// through while presence holds. What lags is only the quiet-band
+        /// readout, by the same 600 ms.
+        ///
+        /// Re-keying starts at the first run that would have qualified as a
+        /// mark (MarkRunHops over the on threshold) with a gap before it, so a
+        /// lone hiss peak in the held stretch stays key-up and a mark already
+        /// under way when the hold began is not cut short into a false one.
+        /// Nothing from warm-up is replayed: the levels are still settling
+        /// there, and replaying them handed the decoder a 1.4 s opening mark
+        /// on goodcw that cost it its first nine characters.
+        /// </summary>
+        private int Lookback(CwToneSample s, IList<CwToneSample> output)
+        {
+            int produced = 0;
+            if (!s.SignalPresent)
+            {
+                _held.Add(s);
+                while (_held.Count > LookbackHops)
+                {
+                    produced += Emit(_held[0], output);
+                    _held.RemoveAt(0);
+                }
+                return produced;
+            }
+
+            if (_held.Count > 0)
+            {
+                // Presence has just opened. Re-key what was held against the
+                // levels that opened it, from the first run that would have
+                // qualified as a mark; anything before that stays key-up.
+                double noise = s.NoiseLevel, reference = s.MarkLevel;
+                double onThr  = noise + OnFraction  * (reference - noise);
+                double offThr = noise + OffFraction * (reference - noise);
+
+                double warmEnd = (_warmupHops * EnvHop - EnvWindow / 2.0) / WorkRate;
+                int first = -1, run = 0;
+                bool sawGap = false;
+                for (int i = 0; i < _held.Count && first < 0; i++)
+                {
+                    if (_held[i].TimeSeconds < warmEnd) { run = 0; sawGap = false; continue; }
+                    if (_held[i].Magnitude >= onThr)
+                    {
+                        if (sawGap && ++run >= MarkRunHops) first = i - run + 1;
+                    }
+                    else { run = 0; sawGap = true; }
+                }
+
+                bool key = false;
+                for (int i = 0; i < _held.Count; i++)
+                {
+                    var h = _held[i];
+                    if (first >= 0 && i >= first)
+                    {
+                        if (!key && h.Magnitude >= onThr) key = true;
+                        else if (key && h.Magnitude < offThr) key = false;
+                        h = h with { KeyDown = key, SignalPresent = true };
+                    }
+                    produced += Emit(h, output);
+                }
+                _held.Clear();
+            }
+            return produced + Emit(s, output);
+        }
+
         private int Emit(CwToneSample s, IList<CwToneSample> output)
         {
             int d = _debounceHops;
@@ -816,6 +900,8 @@ namespace RadioWebControl.Core.Services.Cw
         /// </summary>
         public int Flush(IList<CwToneSample> output)
         {
+            foreach (var h in _held) Emit(h, output);
+            _held.Clear();
             int produced = _pending.Count;
             foreach (var p in _pending) output.Add(p);
             _pending.Clear();
