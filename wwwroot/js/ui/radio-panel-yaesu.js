@@ -49,6 +49,8 @@ const IPO = { '0': 'IPO', '1': 'AMP1', '2': 'AMP2' };
 const AGC_NEXT = { '1': '2', '2': '3', '3': '4', '4': '0', '5': '0', '6': '0', '0': '1' };
 const IPO_NEXT = { '0': '1', '1': '2', '2': '0' };
 const ATT_NEXT = { '00': '06', '06': '12', '12': '18', '18': '00' };
+// What opening the CW or RTTY window switches the selected receiver to.
+const WINDOW_MODE = { cw: { mode: 'CW-U', is: /^CW/ }, rtty: { mode: 'RTTY-L', is: /^RTTY/ } };
 const STEPS_HZ = [10, 50, 100, 500, 1000, 5000, 10000];
 const STEP_KEY = 'ywc.radioPanel.stepHz';
 const SPOT_MAX_AGE_MS = 30 * 60 * 1000;
@@ -88,6 +90,7 @@ export function startYaesuRadioPanel(root, cfg) {
 
     let radioScreen = null;     // set just after mount; the panel may call onScreenView during it
     let win = null;             // likewise: windows restored from last time report during mount
+    const windowShown = {};     // group -> panels of it shown on the board
     const panel = mountRadioPanel(root, {
         brandShort: 'YWC',
         brandName: 'Yaesu Web Control',
@@ -154,8 +157,8 @@ export function startYaesuRadioPanel(root, cfg) {
         spectrumSpans: [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6].map(hz => ({ hz })),
         screenViews: [{ id: 'tft', label: 'Radio screen' }],
         windows: YAESU_WINDOWS,
-        onWindowPanel: (g, p, shown) => win?.onShow(g, p, shown),
-        onWindowPopout: (g, p) => win?.popout(g, p),
+        onWindowPanel: (g, p, shown) => { win?.onShow(g, p, shown); windowMode(g, p, shown); },
+        onWindowPopout: (g, p) => { win?.popout(g, p); windowMode(g, p, true, true); },
         frequencyEntry: true,
         clock: true,
         fullscreenKey: true,
@@ -208,6 +211,22 @@ export function startYaesuRadioPanel(root, cfg) {
         showScreen: () => panel.setScreenView('tft'),
         onTxTimeout: s => txWarning(s),
     });
+
+    // ---- the CW and RTTY windows bring their mode -------------------------
+    // Opening either one (its key, or a ⇱ window of its own) puts the
+    // selected receiver in that mode, as the radio's own keys do. A receiver
+    // already in it is left alone - CW-L stays CW-L - and windows reopened
+    // as the page loads change nothing.
+    function windowMode(g, p, shown, popout = false) {
+        const want = WINDOW_MODE[g];
+        if (!want) return;
+        const set = windowShown[g] ??= new Set();
+        const was = set.size;
+        if (shown) set.add(p); else set.delete(p);
+        if (!win || !shown || (was && !popout)) return;
+        const v = r.sel;
+        if (!want.is.test(r.mode[v])) post(`/api/cat/mode/${v.toLowerCase()}`, { mode: MODE_CAT[want.mode] });
+    }
 
     // ---- TX timeout: the banner and a beep every few seconds while tripped --
     let beepTimer = null;

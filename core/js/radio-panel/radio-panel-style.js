@@ -327,6 +327,10 @@ html,body{margin:0;background:${v('page')}}
 .rp-spop-x{min-width:30px;background:${v('accent-bg')};color:${v('accent-soft')};border-color:transparent}
 .rp-spop-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:10px}
 .rp-spop-holder{flex:1;min-height:0;display:flex}
+/* window-popout.js: one window group in a page of its own. The board's
+   frame is undone; the panel boxes fill the page. */
+.rp-wpop-board{flex:1;min-height:0;padding:0;border:0;border-radius:0;box-shadow:none;gap:0}
+.rp-wpop-board>.rp-win-body{height:100%}
 .rp-pane{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:6px}
 .rp-pane .rp-spectrum{flex:1;min-height:80px}
 .rp-pane .rp-waterfall{height:auto;flex:1.2;min-height:60px}

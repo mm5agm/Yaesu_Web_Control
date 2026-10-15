@@ -55,7 +55,7 @@ export const YAESU_WINDOWS = [
           popout: { name: 'rtty-tuner', url: '/RttyTuner', size: { width: 380, height: 520 } } },
         { id: 'rttySend', title: 'SEND', w: 220 },
     ] },
-    { id: 'mem', key: 'MEMORIES', title: 'MEMORIES', pos: [560, 150, 940, 460], panels: [
+    { id: 'mem', key: 'MEMORIES', title: 'MEMORIES', pos: [560, 150, 940, 460], popout: { width: 960, height: 500 }, panels: [
         { id: 'memBank', title: 'BANK', w: 200 },
         { id: 'memTiles', title: 'CHANNELS' },
         { id: 'memRadio', title: 'SAVE', w: 170 },
@@ -65,7 +65,7 @@ export const YAESU_WINDOWS = [
           popout: { name: 'dx-spots', url: '/DxSpots', size: { width: 760, height: 480 } } },
         { id: 'dxWatch', title: 'WATCH LIST', w: 220 },
     ] },
-    { id: 'meters', key: 'METERS', title: 'METERS', pos: [330, 380, 1000, 400], panels: [
+    { id: 'meters', key: 'METERS', title: 'METERS', pos: [330, 380, 1000, 400], popout: { width: 1020, height: 440 }, panels: [
         { id: 'mGauges', title: 'ALL METERS', w: 380 },
         { id: 'mHistory', title: 'S-METER HISTORY' },
     ] },
@@ -74,17 +74,17 @@ export const YAESU_WINDOWS = [
     { id: 'audio', key: 'AUDIO', title: 'REMOTE AUDIO', pos: [330, 150, 760, 380], panels: [
         { id: 'aLink', title: 'RECEIVE · TRANSMIT' },
     ] },
-    { id: 'scope', key: 'SCOPE', title: 'SCOPE · SCREEN', pos: [300, 150, 1000, 520], panels: [
+    { id: 'scope', key: 'SCOPE', title: 'SCOPE · SCREEN', pos: [300, 150, 1000, 520], popout: { width: 1020, height: 560 }, panels: [
         { id: 'scCat', title: "RADIO'S OWN SCOPE (CAT)", dpos: [300, 150, 680, 520] },
         { id: 'scScreen', title: 'RADIO SCREEN (VIDEO)', w: 280 },
     ] },
-    { id: 'rx', key: 'RX SETUP', title: 'RX SETUP', pos: [160, 180, 1380, 470], panels: [
+    { id: 'rx', key: 'RX SETUP', title: 'RX SETUP', pos: [160, 180, 1380, 470], popout: { width: 1400, height: 510 }, panels: [
         { id: 'rxFilter', title: 'AUDIO FILTER', dpos: [280, 200, 560, 360] },
         { id: 'rxShift', title: 'SHIFT · NOTCH', w: 240 },
         { id: 'rxLevels', title: 'LEVELS', w: 220 },
         { id: 'rxFm', title: 'FM · REPEATER', w: 290 },
     ] },
-    { id: 'tx', key: 'TX SETUP', title: 'TX SETUP', pos: [340, 500, 920, 400], panels: [
+    { id: 'tx', key: 'TX SETUP', title: 'TX SETUP', pos: [340, 500, 920, 400], popout: { width: 940, height: 440 }, panels: [
         { id: 'txVox', title: 'VOX' },
         { id: 'txTimeout', title: 'TX TIMEOUT' },
         { id: 'txAtu', title: 'ATU', w: 230 },
@@ -135,7 +135,8 @@ function mhzText(hz) {
  * the page's life.
  * @param {object} windows  the panel's windows API (panel-windows.js)
  * @param {object} ctx      { model, dual, maxPowerW, maxHz, post(url, body), selected() -> 'A'|'B', freq(vfo), showScreen(),
- *                            onTxTimeout(state) - optional, the TX timeout's state on every change }
+ *                            onTxTimeout(state) - optional, the TX timeout's state on every change,
+ *                            popouts - false in a window group's own page (/RadioWindow), which opens none }
  * @returns {{ onShow(g, p, shown), onRadioState(msg), entry(vfo), txTimeout }}
  */
 export function startYaesuWindows(windows, ctx) {
@@ -189,8 +190,18 @@ export function startYaesuWindows(windows, ctx) {
     // While one is open its panel is off the board, so the page is not
     // running twice. A pop-out already open from Classic says so when this
     // page starts, and takes its panel off here too.
+    // A group marked popout opens whole, at /RadioWindow, the same way.
     const popouts = {};
-    for (const g of YAESU_WINDOWS) {
+    for (const g of ctx.popouts === false ? [] : YAESU_WINDOWS) {
+        if (g.popout) {
+            popouts[g.id] = new PopoutHost({
+                name: 'radio-win-' + g.id,
+                url: '/RadioWindow?g=' + g.id,
+                defaultSize: g.popout,
+                onChange: open => { if (open) windows.close(g.id); },
+                onReattach: () => windows.open(g.id),
+            }).start();
+        }
         for (const p of g.panels) {
             if (!p.popout) continue;
             popouts[g.id + '/' + p.id] = new PopoutHost({
@@ -903,9 +914,9 @@ export function startYaesuWindows(windows, ctx) {
             if (prop === 'ActiveVfo') rxFollow();
         },
         entry: vfo => entry.open(vfo),
-        /** A panel's ⇱ key: its page in a browser window of its own. */
+        /** A panel's ⇱ key, or a group's (p null): a browser window of its own. */
         popout(g, p) {
-            const host = popouts[g + '/' + p];
+            const host = popouts[p ? g + '/' + p : g];
             if (host && !host.open()) alert('The browser blocked the window. Allow pop-ups for this page and press the key again.');
         },
         txTimeout: txTimer.tt,
