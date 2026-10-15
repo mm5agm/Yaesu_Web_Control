@@ -134,12 +134,12 @@ export function startYaesuRadioPanel(root, cfg) {
             { id: 'txb', label: 'TX B', title: 'Transmit on VFO B (selects it, does not transmit)' },
         ],
         vfoKeyColumns: 4,
-        // M▸VFO and VFO▸M would read and overwrite the radio's own memory
-        // channels; they stay display-only until that has been bench-checked.
+        // M▸VFO and VFO▸M act on the radio's current memory channel (MC).
+        // VFO▸M overwrites it, so it takes a second press, naming the channel.
         memKeys: [
             { id: 'vm', label: 'V/M' },
-            { id: 'mtovfo', label: 'M▸VFO', inert: true, title: 'Not wired yet' },
-            { id: 'vfotom', label: 'VFO▸M', inert: true, title: 'Not wired yet' },
+            { id: 'mtovfo', label: 'M▸VFO', title: "Copy the radio's current memory channel to the selected receiver" },
+            { id: 'vfotom', label: 'VFO▸M', title: "Write VFO-A over the radio's current memory channel - press twice" },
             { id: 'qmbsto', label: 'QMB STO' }, { id: 'qmbrcl', label: 'QMB RCL' },
             { id: 'mstore', label: 'M.STORE', sub: 'app', title: "Save the selected receiver to YWC's memories" },
         ],
@@ -430,6 +430,31 @@ export function startYaesuRadioPanel(root, cfg) {
         return null;
     }
 
+    // VFO▸M: the first press reads the current channel and shows it on the
+    // key; a second press within 4 s writes VFO-A over that channel, and the
+    // server refuses if the channel has moved since.
+    let vfoToMemArm = null;
+    function vfoToMemory() {
+        const disarm = () => {
+            clearTimeout(vfoToMemArm?.timer);
+            vfoToMemArm = null;
+            panel.setKey('mem:vfotom', { on: false, sub: '' });
+        };
+        if (vfoToMemArm?.channel) {
+            const channel = vfoToMemArm.channel;
+            disarm();
+            return post('/api/cat/memvfo/vfotom', { channel });
+        }
+        if (vfoToMemArm) return;
+        vfoToMemArm = { channel: null, timer: setTimeout(disarm, 4000) };
+        fetch('/api/cat/memvfo').then(x => (x.ok ? x.json() : null)).then(d => {
+            if (!vfoToMemArm) return;
+            if (!d?.channel) return disarm();
+            vfoToMemArm.channel = String(d.channel);
+            panel.setKey('mem:vfotom', { on: true, sub: 'M' + d.channel + '?' });
+        }).catch(disarm);
+    }
+
     function act(kind, id, vfo, dir) {
         if (kind === 'entry') return win.entry(id);
         // The digit wheel, the dial and the spectrum panes tune either VFO.
@@ -516,6 +541,8 @@ export function startYaesuRadioPanel(root, cfg) {
                     case 'vm': return post('/api/cat/qmb/vfo');
                     case 'qmbsto': return post('/api/cat/qmb/store');
                     case 'qmbrcl': return post('/api/cat/qmb/recall');
+                    case 'mtovfo': return post(`/api/cat/memvfo/mtovfo-${dual ? rx : 'a'}`);
+                    case 'vfotom': return vfoToMemory();
                     case 'mstore': return post(`/api/memory/save-vfo/${rx}`, { label: '' });
                 }
         }

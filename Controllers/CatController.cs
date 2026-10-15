@@ -1906,6 +1906,81 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
+        // The front panel's M▸VFO and VFO▸M (CAT manual: MC, MA, MB, AM).
+        // Both act on the radio's CURRENT memory channel, which MC; reads:
+        //   GET  memvfo           → { channel: "012" }
+        //   POST memvfo/mtovfo-a  → MA;  current channel to MAIN (VFO-A)
+        //   POST memvfo/mtovfo-b  → MB;  current channel to SUB  (VFO-B)
+        //   POST memvfo/vfotom    → AM;  MAIN (VFO-A) over the current channel
+        // AM; overwrites a channel on the radio, so it needs { channel } - the
+        // one the operator was shown - and is refused if MC; now says another
+        // (the front panel may have moved it in between). There is no SUB to
+        // memory command.
+        [HttpGet("memvfo")]
+        public async Task<IActionResult> ReadMemoryChannel()
+        {
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                return Ok(new { channel = await ReadMemoryChannelAsync() });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading memory channel");
+                return StatusCode(500, new { error = "Failed to read memory channel" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        public sealed class MemoryVfoRequest { public string? Channel { get; set; } }
+
+        [HttpPost("memvfo/{op}")]
+        public async Task<IActionResult> MemoryVfo(string op, [FromBody] MemoryVfoRequest? req)
+        {
+            var a = op.ToLowerInvariant();
+            string command = a switch
+            {
+                "mtovfo-a" => "MA;",
+                "mtovfo-b" => "MB;",
+                "vfotom"   => "AM;",
+                _          => ""
+            };
+            if (command.Length == 0)
+                return BadRequest(new { error = "op must be 'mtovfo-a', 'mtovfo-b' or 'vfotom'" });
+            if (a == "vfotom" && string.IsNullOrWhiteSpace(req?.Channel))
+                return BadRequest(new { error = "VFO to memory needs the channel it will overwrite" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var channel = await ReadMemoryChannelAsync();
+                if (a == "vfotom" && !string.Equals(channel, req!.Channel!.Trim(), StringComparison.OrdinalIgnoreCase))
+                    return Conflict(new { error = "The memory channel changed", channel });
+                await _catClient.SendCommandAsync(command, "WebUI", CancellationToken.None);
+                _logger.LogInformation("Memory/VFO {Op} ({Command}) channel {Channel}", a, command, channel);
+                return Ok(new { op = a, channel });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending memory/VFO {Op}", a);
+                return StatusCode(500, new { error = "Failed to send memory/VFO command" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        // MC; → "MC012;" → "012". Null if the radio answers in another shape.
+        private async Task<string?> ReadMemoryChannelAsync()
+        {
+            var response = await _catClient.SendCommandAsync("MC;", "WebUI", CancellationToken.None);
+            if (string.IsNullOrWhiteSpace(response)) return null;
+            var body = response.Trim().TrimEnd(';');
+            return body.Length > 2 && body.StartsWith("MC", StringComparison.OrdinalIgnoreCase) ? body.Substring(2) : null;
+        }
+
         // Set the active/operating band on dual-receiver radios (FTdx101).
         // VS selects which band the main tuning knob controls: 0 = MAIN (VFO A),
         // 1 = SUB (VFO B). The radio auto-broadcasts VS, so the UI highlight
