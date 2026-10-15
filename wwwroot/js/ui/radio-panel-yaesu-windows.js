@@ -20,7 +20,10 @@
 // same page in a browser window of its own, which can go on another screen.
 // It is the window Classic's Pop out opens (same name and channel), so there
 // is only ever one. While it is open the panel leaves the board; its Reattach,
-// or closing it, puts the panel back.
+// or closing it, puts the panel back. In CW and RTTY, though, the ⇱ takes
+// the whole window out - keyer, reader and send together, at /RadioWindow -
+// because the reader on its own is not what an operator wants on the other
+// screen.
 //
 // Remote Audio, the radio's own scope and the audio filter are framed pages
 // too: /RemoteAudio, /RadioScope and /AudioFilter.
@@ -43,14 +46,14 @@ import { PopoutHost, screenShare } from '/js/popout/popout.js';
 const LATER = 'Comes in a later build.';
 
 export const YAESU_WINDOWS = [
-    { id: 'cw', key: 'CW', title: 'CW', pos: [330, 230, 980, 340], panels: [
+    { id: 'cw', key: 'CW', title: 'CW', pos: [330, 230, 980, 340], popout: { width: 1000, height: 400 }, panels: [
         { id: 'keyer', title: 'KEYER', w: 230 },
         { id: 'cwReader', title: 'READER', dpos: [380, 560, 760, 320],
           popout: { name: 'cw-reader', url: '/CwReader', size: () => screenShare(0.25, window.screen) } },
         { id: 'cwSend', title: 'SEND', w: 320, dpos: [420, 300, 520, 400],
           popout: { name: 'cw-send', url: '/CwSend', size: { width: 600, height: 340 } } },
     ] },
-    { id: 'rtty', key: 'RTTY', title: 'RTTY', pos: [330, 380, 1040, 420], panels: [
+    { id: 'rtty', key: 'RTTY', title: 'RTTY', pos: [330, 380, 1040, 420], popout: { width: 1060, height: 480 }, panels: [
         { id: 'rttyReader', title: 'TUNER · READER', dpos: [360, 380, 820, 420],
           popout: { name: 'rtty-tuner', url: '/RttyTuner', size: { width: 380, height: 520 } } },
         { id: 'rttySend', title: 'SEND', w: 220 },
@@ -198,12 +201,20 @@ export function startYaesuWindows(windows, ctx) {
                 name: 'radio-win-' + g.id,
                 url: '/RadioWindow?g=' + g.id,
                 defaultSize: g.popout,
-                onChange: open => { if (open) windows.close(g.id); },
+                // Out of the board whole, torn-off panels included (Colin,
+                // 2026-10-15); REATTACH brings them all back in the window.
+                onChange: open => {
+                    if (!open) return;
+                    windows.close(g.id);
+                    for (const p of g.panels) windows.closePanel(g.id, p.id);
+                },
                 onReattach: () => windows.open(g.id),
             }).start();
         }
         for (const p of g.panels) {
-            if (!p.popout) continue;
+            // In a group that pops out whole (CW, RTTY), a panel's ⇱ does that
+            // too: the reader alone, without its keyer and send, is half a job.
+            if (!p.popout || g.popout) continue;
             popouts[g.id + '/' + p.id] = new PopoutHost({
                 name: p.popout.name,
                 url: p.popout.url,
@@ -916,7 +927,7 @@ export function startYaesuWindows(windows, ctx) {
         entry: vfo => entry.open(vfo),
         /** A panel's ⇱ key, or a group's (p null): a browser window of its own. */
         popout(g, p) {
-            const host = popouts[p ? g + '/' + p : g];
+            const host = (p && popouts[g + '/' + p]) || popouts[g];
             if (host && !host.open()) alert('The browser blocked the window. Allow pop-ups for this page and press the key again.');
         },
         txTimeout: txTimer.tt,
