@@ -436,6 +436,14 @@ namespace Yaesu_Web_Control.Services
                 if (CwBreakInCodes.BkInTypeExAddress(settings.RadioModel) is string bkTypeAddr)
                     await multiplexer.SendCommandAndDispatchAsync($"EX{bkTypeAddr};", "Initialization", stoppingToken);
 
+                // AMC output level and PROC TYPE: together they say what the
+                // radio's PROC knob is setting - see AmcCodes.
+                if (AmcCodes.ProcTypeExAddress(settings.RadioModel) is string procTypeAddr)
+                {
+                    await multiplexer.SendCommandAndDispatchAsync("AO;", "Initialization", stoppingToken);
+                    await multiplexer.SendCommandAndDispatchAsync($"EX{procTypeAddr};", "Initialization", stoppingToken);
+                }
+
                 // 4b. Single-receiver "ping-pong" -- read the OTHER VFO's
                 // P1=0-Fixed receive controls so YWC has both *A and *B
                 // populated. Without this, the inactive panel shows defaults

@@ -35,6 +35,7 @@
    - 5.20 [Radio Scope — the radio's own display (FTdx101MP/D and FTdx10)](#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
    - 5.21 [Pop-out windows](#521-pop-out-windows)
    - 5.22 [Experimental UI](#522-experimental-ui)
+   - 5.23 [Radio panel](#523-radio-panel)
 6. [Settings Page](#6-settings-page)
    - 6.1 [Radio Connection](#61-radio-connection)
    - 6.2 [Web Server Settings](#62-web-server-settings)
@@ -1322,6 +1323,39 @@ The Experimental UI is a dark workspace made of panels: **VFO A**, **VFO B**, **
 - **RX and TX.** On the single-receiver radios (FTdx10, FT-710, FTDX3000, FT-991A), the **RX A/B** and **TX A/B** buttons in the toolbar choose the receive and transmit VFOs separately; split is on whenever they are different. The FTdx101MP and FTdx101D don't show them: there, **Split** in the **VFO Actions** panel moves transmit to VFO B, as on the Classic page. On the FT-991A, **RX B** is greyed out because the radio can't choose its receive VFO over CAT; use Swap A/B instead.
 
 It is called experimental for a reason. It is a separate copy of the page's code, so a fix made to the Classic page doesn't reach it automatically and the two can behave a little differently. If something works on the Classic page and not here, please report it and say which page you were on.
+
+### 5.23 Radio panel
+
+**Radio** in the top bar, on both the Classic page and the Experimental UI, opens a third way of working the radio, at `http://localhost:8080/radio`. It is laid out like the front of a transceiver: the meter and the keys down the left, a screen in the middle with the VFOs, the spectrum and the band and mode keys, the main dial on the right, and a row of knobs along the bottom. The **Classic**, **Experimental** and **Radio** buttons in its top strip move between the three, and they can all be open in different tabs at once.
+
+It is still being built. What is described here works now. The knobs only show the radio's settings so far; turning them, and turning the main dial, is the next stage.
+
+**The screen.**
+
+- **MAIN · VFO-A** on the left and **SUB · VFO-B** on the right show each VFO's frequency, mode, IF width, AGC, and anything switched on such as IPO, ATT, NB, DNR, DNF or NOTCH. On the FTdx101MP and FTdx101D, SUB has its own small S-meter bar as well. **SPLIT** appears beside MAIN when split is on.
+- **The spectrum** is VFO A's SDR ([§5.4](#54-spectrum-display)), with the passband shaded, the frequency along the bottom and DX cluster spots ([§5.17](#517-dx-spots-list)) marked on it. With no SDR set up, it says so.
+- **Radio screen.** The **SDR / Radio screen** switch in the corner of the waterfall swaps the spectrum for the picture of the radio's own display, the same one the Radio Display panel shows ([§19](#19-radio-display)). It needs a capture device chosen in that panel on the Classic page first. The picture is stretched to fill the box, so it is a little wider than on the radio. It works as it does on the Radio Display page: click the radio's spectrum to tune there, click the readouts along the ANT…AGC row to change them, and click the meters to choose which TX meters the radio shows. Hold the mouse over a digit of the radio's frequency, and a box appears round it; the mouse wheel then moves that digit up or down. On the RTTY and PSK decode screen the meters, the frequency and the ANT…AGC row still work; the rest of the picture is not clickable there.
+- **The lamps** in the top strip show the connection to the radio (**CAT**), the SDR and the DX cluster: green is working, amber is connecting, red is a fault.
+
+**Changing things in the VFO boxes.** Click the mode, the IF width or the AGC in a VFO box to get a list, and click one to change it; click anywhere else or press Esc to close the list. The width list only offers the widths for the mode that VFO is in, and there is none in AM or FM. Click IPO, ATT, NB and the other words in a box to switch them, as their keys do. Hold the mouse over a digit of either frequency and turn the mouse wheel to move that digit up or down: the big digits move in kHz steps and the small ones in Hz. On radios with one receiver, only the VFO the radio is on can be changed this way; the other one is shown but cannot be changed from its box.
+
+**The selected receiver.** One VFO is outlined and tagged **SELECTED**. That is the receiver the radio is on (MAIN or SUB on the FTdx101MP and FTdx101D), and it is the one the panel works on: the meter needle, the mode keys and the keys down the left all show it, and a press changes it. **Click the other VFO to select it**, which changes the radio over as clicking a VFO's heading does on the Classic page. If you change it on the radio itself, the outline follows.
+
+**The keys.** Each key's light shows whether that function is on for the selected receiver, and the small text under some of them shows the setting.
+
+- **IPO** steps through IPO, AMP1 and AMP2. **ATT** steps through off, 6, 12 and 18 dB.
+- **AGC** steps through FAST, MID, SLOW, AUTO and OFF. With AGC off the S-meter sits at zero and the receiver can sound deaf, so if signals vanish check that the key does not say OFF.
+- **NB**, **DNR**, **DNF**, **NOTCH**, **CONTOUR**, **APF** and **PROC** switch on and off. CONTOUR and APF keep the frequency they were last set to.
+- **SPLIT**, **RX CLAR** and **TX CLAR** under the dial switch split and the clarifier on and off. The clarifier offset is shown beside the knob under them.
+- **VOX** and **TUNE** only show the radio's state, and pressing them does nothing. Both can make the radio transmit, so on this page they are left alone deliberately.
+
+**Bands, modes and the step.** The band keys under the spectrum change band on the selected receiver, and the mode keys change its mode; the lit mode key is the one it is in. The **−** and **+** keys under the dial tune the selected receiver down or up by one step, landing on a whole step as a radio's dial does. Press **STEP** to go through 10 Hz, 50 Hz, 100 Hz, 500 Hz, 1 kHz, 5 kHz and 10 kHz; this browser remembers it.
+
+**The meter.** On receive, the needle shows the selected receiver's S-meter. On transmit, the **PO**, **SWR**, **ALC**, **COMP** and **IDD** buttons under it choose what the lower scale and the needle show.
+
+**Theme and size.** The two boxes at the right of the top strip choose the colours and the size. **Dark console** is the usual look; **Night (red)**, **Silver classic**, **Daylight**, **Green display** and **High contrast** are the others, and **Match computer** follows Windows' light or dark setting. **Fit** makes the whole panel fit the window; the percentages fix its size and let you scroll. Both are remembered by this browser, so a tablet and a PC can each have their own.
+
+The Radio panel has none of the screen-reader or voice-control work of the Classic page, and no launch buttons for WSJT-X or other programs. Those stay on the Classic page.
 
 ---
 
@@ -4147,6 +4181,10 @@ The **Decode** pane prints what the software is making of the two tones. Press *
 
 There is no Mark, Shift, Speed or Rev in the Decode pane, and that is deliberate. It uses the ones in the **Tune** column next to it. Get the cross upright, or press **Auto** and let it work them out ([§22.3](#223-auto-working-out-what-you-are-listening-to)), and the decoder is already listening in the right place. Change the radio's mode between **RTTY-L** and **RTTY-U** and it follows that too, with nothing for you to press. One set of settings is one thing to get right, instead of two that can disagree.
 
+![The RTTY panel decoding real off-air contest exchanges in RTTY-L through a 400 Hz IF filter, with Mark 2131 Space 2301 Hz, M -28, S -26, in -23 dBFS and a clean cross](pictures/RTTY-Tuner-400Hz-IF.png)
+
+That is real copy off the air on my FTdx101MP in RTTY-L, with the radio's IF filter at 400 Hz. The cross is clean and the two arms are within 2 dB of each other, so both tones are well inside the filter. The odd wrong letter is ordinary RTTY in a crowded band, not the filter.
+
 The counters beside the text are worth a glance when nothing is arriving. **Activity** is how much of the audio is landing in the two tone filters; **characters** is how many it has tried to assemble; and **framing errors** is how many of those did not have their stop element where a character of that speed should have put it. Text with a low error count is good copy. A lot of characters and a lot of errors together means it is being fed something that is nearly right — the commonest causes are the wrong speed, or **Rev** the wrong way round. Nothing arriving at all, with activity near zero, is an audio or tuning problem rather than a decoding one.
 
 ### 22.6 Sending
@@ -4187,9 +4225,13 @@ The reason it does this rather than just warning you is worth knowing: the tuner
 
 **The IF filter**, and only ever wider. Changing to RTTY brings your own stored RTTY filter width with it, which is better evidence about your band than any formula, and it is touched only if it is too narrow to have carried the shift you are set to. Narrowing is left to you: a narrow filter is how you dig a signal out of a crowded band, and only you know the band.
 
-> **How much filter a shift needs is not the shift.** On the FTdx101MP the RTTY passband sits at a **fixed place in the audio, about 1800 Hz** — it does not follow the mark tone. I measured that on 2026-10-09. So with the standard 2125 Hz mark the tones sit *above* the middle of the filter, and it is the space tone that falls off the edge as the shift grows. The width asked for is twice the distance from 1800 Hz to the further of the two tones, plus twice the baud rate for the keying sidebands, which comes out at about **1100 Hz** for a 170 Hz shift at 45.45 baud, **1650 Hz** at 450 Hz and 50 baud, and **2450 Hz** at 850 Hz. Those are a good deal wider than the shift alone suggests, and that is the placement rather than the signal: the same tones sitting centred in the filter would need far less.
+> **Where the filter sits.** In RTTY-L the FTdx101MP centres its IF filter on the middle of the tone pair **its own RTTY menu** expects: MARK FREQUENCY plus half the SHIFT FREQUENCY. With the usual 2125 Hz and 170 Hz that is about 2210 Hz. It does not follow the tuner's **Mark** box, only the radio's menu. I proved that on 2026-10-13 on a real station, with the dial left alone: with the menu at 2125/170 the pair around 2208 Hz came through and a pair around 1485 Hz was more than 20 dB down. Changing only the menu to 1275/425 swapped them round.
 >
-> If even the widest filter cannot reach both tones, the status line says so and asks you to move the dial, which is the only thing that can fix it. On my Icom the same radio-level question has a different answer — that one centres its RTTY passband on the mark tone — which is why the two apps compute this differently from the same shared arithmetic.
+> That is why keeping the radio's menu in step with **Mark** and **Shift** matters ([§22.2](#222-mark-shift-speed-and-rev)). When the two agree, the tones sit evenly either side of the middle of the filter. The width the tuner asks for is then the shift plus twice the baud rate for the keying sidebands: about **260 Hz** for 170 Hz shift at 45.45 baud, **550 Hz** for 450 Hz at 50 baud, and **950 Hz** for 850 Hz at 50 baud. A 400 Hz filter is comfortably wide enough for amateur RTTY, as the picture in [§22.5](#225-decoding-the-text) shows. If the menu and the tuner disagree, the tones sit off to one side, and the tuner asks for more, because it works the width out from where the radio has really put the filter.
+>
+> In RTTY-U I have assumed the filter sits the mirror-image way, at the menu mark minus half the shift, and I have not measured it. Outside RTTY (DATA-L, DATA-U, USB and LSB) there is no RTTY menu. There the FTdx101MP's passband sat at about 1485 Hz in my measurements, and it moved one for one with IF SHIFT. That IF SHIFT moves the RTTY filter in the same way is assumed too.
+>
+> If even the widest filter cannot reach both tones, the status line says so and asks you to move the dial, which is the only thing that can fix it. My Icom app follows the same rule, because the IC-7300 also centres its RTTY filter on its own menu.
 
 **The dial**, after **Auto**, and only when it is sure of what it heard. [§22.3](#223-auto-working-out-what-you-are-listening-to) has the limits: never further than your IF filter is wide, never less than 500 Hz, never in an AFSK mode and never while transmitting. It always says what it moved and by how much. This one is not put back, because it is a correction rather than a borrowing — you asked it to tune the signal in.
 

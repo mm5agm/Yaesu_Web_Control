@@ -466,6 +466,11 @@
                         if (message.Length >= 6 && int.TryParse(message.Substring(2, 3), out var procLevel))
                             _stateService.ProcLevel = Math.Clamp(procLevel, 0, 100);
                         break;
+                    case "AO":
+                        // AO{nnn}; — AMC output level 001-100 (FTdx101)
+                        if (AmcCodes.ParseAmcLevel(message) is int amc)
+                            _stateService.AmcLevel = amc;
+                        break;
                     case "ST":
                         // ST{mode}; — 0=OFF, 1=ON (VFO A=RX / VFO B=TX), 2=ON+5kHz Quick Split
                         if (message.Length >= 4 && int.TryParse(message.Substring(2, 1), out int splitMode))
@@ -734,14 +739,22 @@
                             _stateService.CwBreakInDelay = sdMs;
                         break;
                     case "EX":
-                        // Only CW BK-IN TYPE is tracked here, and only at the
-                        // address confirmed for this model.
+                        // Only CW BK-IN TYPE and PROC TYPE are tracked here,
+                        // and only at the address confirmed for this model.
                         if (CwBreakInCodes.BkInTypeExAddress(_stateService.RadioModel) is string bkAddr
                             && message.StartsWith("EX" + bkAddr, StringComparison.Ordinal)
                             && message.Length > 2 + bkAddr.Length)
                         {
                             _bkInFull = message[2 + bkAddr.Length] == '1';
                             if (_bkInOn) _stateService.CwBreakIn = _bkInFull ? "2" : "1";
+                        }
+                        // PROC TYPE: 0 = COMP, 1 = AMC - see AmcCodes.
+                        else if (AmcCodes.ProcTypeExAddress(_stateService.RadioModel) is string ptAddr
+                            && message.StartsWith("EX" + ptAddr, StringComparison.Ordinal)
+                            && message.Length > 2 + ptAddr.Length
+                            && message[2 + ptAddr.Length] is '0' or '1')
+                        {
+                            _stateService.ProcType = message[2 + ptAddr.Length] - '0';
                         }
                         break;
                     case "ID":

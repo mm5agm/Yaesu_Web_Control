@@ -20,6 +20,7 @@
 
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script>window.ywcAutoModeChangeOnTune = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AutoModeChangeOnTune));</script>
     <script type="module">
         import { startYaesuRadioPanel } from '/js/ui/radio-panel-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current';
         // Layout = null, so no site.js: this connection is what tells the host
@@ -30,6 +31,13 @@
             model: '@Model.RadioModel',
             dual: @(Model.IsDual ? "true" : "false"),
             maxPowerW: @Model.MaxPower,
+            maxHz: @Model.MaxHz,
+            scopeCat: @(Model.HasScopeCat ? "true" : "false"),
+            bandPlan: '@Model.BandPlan',
+            vdd: @(Model.HasVdd ? Html.Raw($"{{ min: {Model.VddDial.Min}, max: {Model.VddDial.Max} }}") : Html.Raw("null")),
+            paTemp: @(Model.HasPaTemp ? "true" : "false"),
+            antennas: @(Model.HasAntennaSelector ? Html.Raw("['1', '2', '3']") : Html.Raw("[]")),
+            roofing: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RoofingChoices.Select(o => new { code = o.Code, label = o.Label }))),
             views: [
                 { label: 'Classic', href: '/' },
                 { label: 'Experimental', href: '/flexui' },

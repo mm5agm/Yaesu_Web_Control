@@ -1,0 +1,43 @@
+@page
+@model Yaesu_Web_Control.Pages.RadioWindowModel
+@{
+    Layout = null;
+}
+@* One of the radio panel's windows in a browser window of its own
+   (/RadioWindow?g=meters). Like /radio it draws its own page: no Bootstrap,
+   no site nav, no accessibility layer. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yaesu Web Control</title>
+    <link rel="icon" href="~/favicon.ico" />
+    <style>html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
+    </style>
+</head>
+<body>
+    <div id="radioWindow"></div>
+
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script type="module">
+        import { PopoutChild } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { startYaesuRadioWindow } from "/js/ui/radio-window-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        const group = new URLSearchParams(location.search).get('g') ?? '';
+        const popout = new PopoutChild({ name: 'radio-win-' + group, fallbackUrl: '/radio' }).start();
+        // Layout = null, so no site.js: this connection is what tells the host
+        // a browser is still here, as well as feeding the panels.
+        const conn = window.rwcHubConnection('/radioHub');
+        startYaesuRadioWindow(document.getElementById('radioWindow'), {
+            conn,
+            popout,
+            group,
+            model: '@Model.RadioModel',
+            dual: @(Model.IsDual ? "true" : "false"),
+            maxPowerW: @Model.MaxPower,
+            maxHz: @Model.MaxHz,
+        });
+    </script>
+</body>
+</html>

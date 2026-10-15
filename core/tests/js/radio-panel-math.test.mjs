@@ -69,6 +69,9 @@ test('span and width text', () => {
     assert.equal(spanText(50000), '50 kHz');
     assert.equal(spanText(2000000), '2 MHz');
     assert.equal(spanText(500), '500 Hz');
+    assert.equal(spanText(999), '1 kHz');
+    assert.equal(spanText(19989), '20 kHz');
+    assert.equal(spanText(124987), '125 kHz');
     assert.equal(widthText(2400), '2.4 kHz');
     assert.equal(widthText(3000), '3.0 kHz');
     assert.equal(widthText(250), '250 Hz');
@@ -92,9 +95,10 @@ test('columns keep the strongest bin, so a one-bin carrier survives', () => {
     assert.equal(binsToColumns([], 10).length, 10);
 });
 
-test('more columns than bins still fills every column', () => {
+test('more columns than bins draws lines between bins, not steps', () => {
     const cols = binsToColumns([1, 2, 3], 6);
-    assert.deepEqual(Array.from(cols), [1, 1, 2, 2, 3, 3]);
+    assert.deepEqual(Array.from(cols), [1, 1.25, 1.75, 2.25, 2.75, 3]);
+    assert.deepEqual(Array.from(binsToColumns([5], 3)), [5, 5, 5]);
 });
 
 test('percentile', () => {
@@ -147,6 +151,17 @@ test('TX meter fractions land on their legends', async () => {
     assert.equal(txMeterFraction('COMP', 10), 0.5);
     assert.equal(txMeterFraction('IDD', 40), 1);
     assert.equal(txMeterFraction('NOPE', 5), 0);
+    assert.equal(txMeterFraction('TEMP', 50), 0.5);
+    assert.equal(txMeterFraction('VDD', 47.5, { min: 40, max: 55 }), 0.5);
+    assert.equal(txMeterFraction('VDD', 13, { min: 10, max: 16 }), 0.5);
+    assert.equal(txMeterFraction('VDD', 30, { min: 40, max: 55 }), 0);
+    assert.equal(txMeterFraction('VDD', 13), 0);
+});
+
+test('a range dial is labelled at its ends and middle', async () => {
+    const { rangeLegends } = await import('../../js/radio-panel/panel-math.js');
+    assert.deepEqual(rangeLegends(40, 55), ['40', '', '47.5', '', '55']);
+    assert.deepEqual(rangeLegends(10, 16), ['10', '', '13', '', '16']);
 });
 
 test('every theme defines every colour, so none falls back half-drawn', async () => {

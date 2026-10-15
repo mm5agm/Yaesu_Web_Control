@@ -17,6 +17,7 @@ namespace Yaesu_Web_Control.Controllers
         private readonly RadioStatePersistenceService _statePersistence;
         private readonly RadioInitializationService _radioInitService;
         private readonly AudioFilterMapService _audioFilterMap;
+        private readonly CatMultiplexerService _multiplexer;
         private static readonly SemaphoreSlim _requestSemaphore = new(1, 1);
 
         // -- P1=0-Fixed outgoing-command helpers -------------------------------
@@ -183,6 +184,38 @@ namespace Yaesu_Web_Control.Controllers
             }
         }
 
+        // AMC output level (AO, 1-100): what the radio's PROC knob sets while
+        // the processor is off, or always with PROC TYPE on AMC - see AmcCodes.
+        [HttpPost("amclevel")]
+        public async Task<IActionResult> SetAmcLevel([FromBody] ProcLevelRequest request)
+        {
+            if (!AmcCodes.SupportsAmc(_radioStateService.RadioModel))
+                return BadRequest(new { error = "AMC level is not supported on this radio" });
+            if (request.Value < 1 || request.Value > 100)
+                return BadRequest(new { error = "AMC level out of range (1-100)" });
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                await _catClient.SendCommandAsync($"AO{request.Value:D3};", "WebUI", CancellationToken.None);
+                // Read back: the radio is the source of truth.
+                var response = await _catClient.SendCommandAsync("AO;", "WebUI", CancellationToken.None);
+                int actual = AmcCodes.ParseAmcLevel(response ?? "") ?? request.Value;
+                _radioStateService.AmcLevel = actual;
+                return Ok(new { actual });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting AMC level");
+                return StatusCode(500, new { error = "Failed to set AMC level" });
+            }
+            finally
+            {
+                _requestSemaphore.Release();
+            }
+        }
+
         [HttpPost("radiopower")]
         public async Task<IActionResult> SetRadioPower([FromBody] RadioPowerRequest request)
         {
@@ -301,7 +334,8 @@ namespace Yaesu_Web_Control.Controllers
             RadioStateService radioStateService,
             RadioStatePersistenceService statePersistence,
             RadioInitializationService radioInitService,
-            AudioFilterMapService audioFilterMap)
+            AudioFilterMapService audioFilterMap,
+            CatMultiplexerService multiplexer)
         {
             _catClient = catClient;
             _settingsService = settingsService;
@@ -310,6 +344,7 @@ namespace Yaesu_Web_Control.Controllers
             _statePersistence = statePersistence;
             _radioInitService = radioInitService;
             _audioFilterMap = audioFilterMap;
+            _multiplexer = multiplexer;
         }
 
         private async Task EnsureConnectedAsync()
@@ -1903,6 +1938,81 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
+        // The front panel's M▸VFO and VFO▸M (CAT manual: MC, MA, MB, AM).
+        // Both act on the radio's CURRENT memory channel, which MC; reads:
+        //   GET  memvfo           → { channel: "012" }
+        //   POST memvfo/mtovfo-a  → MA;  current channel to MAIN (VFO-A)
+        //   POST memvfo/mtovfo-b  → MB;  current channel to SUB  (VFO-B)
+        //   POST memvfo/vfotom    → AM;  MAIN (VFO-A) over the current channel
+        // AM; overwrites a channel on the radio, so it needs { channel } - the
+        // one the operator was shown - and is refused if MC; now says another
+        // (the front panel may have moved it in between). There is no SUB to
+        // memory command.
+        [HttpGet("memvfo")]
+        public async Task<IActionResult> ReadMemoryChannel()
+        {
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                return Ok(new { channel = await ReadMemoryChannelAsync() });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading memory channel");
+                return StatusCode(500, new { error = "Failed to read memory channel" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        public sealed class MemoryVfoRequest { public string? Channel { get; set; } }
+
+        [HttpPost("memvfo/{op}")]
+        public async Task<IActionResult> MemoryVfo(string op, [FromBody] MemoryVfoRequest? req)
+        {
+            var a = op.ToLowerInvariant();
+            string command = a switch
+            {
+                "mtovfo-a" => "MA;",
+                "mtovfo-b" => "MB;",
+                "vfotom"   => "AM;",
+                _          => ""
+            };
+            if (command.Length == 0)
+                return BadRequest(new { error = "op must be 'mtovfo-a', 'mtovfo-b' or 'vfotom'" });
+            if (a == "vfotom" && string.IsNullOrWhiteSpace(req?.Channel))
+                return BadRequest(new { error = "VFO to memory needs the channel it will overwrite" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var channel = await ReadMemoryChannelAsync();
+                if (a == "vfotom" && !string.Equals(channel, req!.Channel!.Trim(), StringComparison.OrdinalIgnoreCase))
+                    return Conflict(new { error = "The memory channel changed", channel });
+                await _catClient.SendCommandAsync(command, "WebUI", CancellationToken.None);
+                _logger.LogInformation("Memory/VFO {Op} ({Command}) channel {Channel}", a, command, channel);
+                return Ok(new { op = a, channel });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending memory/VFO {Op}", a);
+                return StatusCode(500, new { error = "Failed to send memory/VFO command" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        // MC; → "MC012;" → "012". Null if the radio answers in another shape.
+        private async Task<string?> ReadMemoryChannelAsync()
+        {
+            var response = await _catClient.SendCommandAsync("MC;", "WebUI", CancellationToken.None);
+            if (string.IsNullOrWhiteSpace(response)) return null;
+            var body = response.Trim().TrimEnd(';');
+            return body.Length > 2 && body.StartsWith("MC", StringComparison.OrdinalIgnoreCase) ? body.Substring(2) : null;
+        }
+
         // Set the active/operating band on dual-receiver radios (FTdx101).
         // VS selects which band the main tuning knob controls: 0 = MAIN (VFO A),
         // 1 = SUB (VFO B). The radio auto-broadcasts VS, so the UI highlight
@@ -2686,10 +2796,20 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("disconnect")]
         public async Task<IActionResult> Disconnect()
         {
+            // Closing the port while the radio is keyed would leave nothing to
+            // unkey it, so a transmitting radio keeps its link.
+            if (_radioStateService.IsTransmitting)
+                return Ok(new { success = false, message = "Transmitting - unkey before disconnecting" });
             try
             {
-                await _catClient.DisconnectAsync();
+                // The multiplexer owns the port. _catClient.DisconnectAsync is
+                // deliberately a no-op, so calling it left the port open and the
+                // key only changed colour. Closing it here frees the COM port for
+                // other programs until Connect opens it again.
+                await _multiplexer.DisconnectAsync();
+                _radioStateService.IsConnected = false;
                 AppStatus.InitializationStatus = "disconnected";
+                _logger.LogInformation("CAT link closed by the operator");
                 return Ok(new { success = true });
             }
             catch (Exception ex)
