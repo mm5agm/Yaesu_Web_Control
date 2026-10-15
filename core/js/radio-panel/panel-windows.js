@@ -40,10 +40,11 @@ function h(tag, cls, text) {
  * @param {object} o
  * @param {HTMLElement} o.board      the positioned board the windows sit on
  * @param {HTMLElement} o.launcher   where the launcher keys go
- * @param {Array<{id:string, key?:string, title:string, pos:number[],
+ * @param {Array<{id:string, key?:string, title:string, tip?:string, pos:number[],
  *          panels:Array<{id:string, title:string, w?:number, dpos?:number[], popout?:any}>, popout?:any}>} o.groups
  *        pos is [left, top, width, height] in board pixels. A group with no
- *        key gets no launcher key; the app opens it with open().
+ *        key gets no launcher key; the app opens it with open(). tip is the
+ *        launcher key's tooltip (default: open or close the window).
  * @param {{ get(k:string, d?:string):string|null, set(k:string, v:string):void }} o.store
  * @param {string} o.prefix
  * @param {(groupId:string, panelId:string, shown:boolean) => void} [o.onShow]
@@ -85,6 +86,7 @@ export function mountPanelWindows({ board, launcher, groups, store, prefix, onSh
         b.dataset.group = g.id;
         const led = h('span', 'rp-led'), sub = h('span', 'rp-sub', '');
         b.append(led, h('span', 'rp-skey-label', g.key), sub);
+        b.title = g.tip ?? `Open or close the ${g.title} window`;
         b.addEventListener('click', () => open(g.id));
         grid.append(b);
         keys[g.id] = { b, led, sub };

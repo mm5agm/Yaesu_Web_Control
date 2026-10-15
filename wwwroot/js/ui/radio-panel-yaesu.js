@@ -47,6 +47,8 @@ const IPO = { '0': 'IPO', '1': 'AMP1', '2': 'AMP2' };
 // in the cycle because the radio's own screen offers it; it pins the S-meter
 // at zero, so the chip shows OFF while it is set.
 const AGC_NEXT = { '1': '2', '2': '3', '3': '4', '4': '0', '5': '0', '6': '0', '0': '1' };
+// How to work a concentric knob, appended to each knob's tooltip.
+const U = ' - mouse wheel or drag: on the middle for the inner knob, on the ring for the outer';
 const IPO_NEXT = { '0': '1', '1': '2', '2': '0' };
 const ATT_NEXT = { '00': '06', '06': '12', '12': '18', '18': '00' };
 // What opening the CW or RTTY window switches the selected receiver to.
@@ -100,24 +102,34 @@ export function startYaesuRadioPanel(root, cfg) {
         lamps: [{ id: 'cat', label: 'CAT', click: true, title: "The radio's CAT link: click to disconnect or connect, as Classic's Connect key" }, { id: 'sdr', label: 'SDR' }, { id: 'dx', label: 'DX' }],
         statusChips: [{ id: 'wsjtx', label: 'WSJT-X TX', title: 'Lit while WSJT-X is transmitting through YWC' }],
         keys: [
-            { id: 'mainsub', label: dual ? 'MAIN / SUB' : 'VFO A / B' }, { id: 'proc', label: 'PROC' },
-            { id: 'vox', label: 'VOX', inert: true }, { id: 'tune', label: 'TUNE', inert: true },
+            { id: 'mainsub', label: dual ? 'MAIN / SUB' : 'VFO A / B', title: dual ? 'Select MAIN or SUB: the keys, knobs and rows act on the selected receiver' : 'Select VFO A or VFO B' },
+            { id: 'proc', label: 'PROC', title: 'Speech processor on / off (transmit audio only)' },
+            { id: 'vox', label: 'VOX', inert: true, title: 'VOX - not available here: it would let audio key the transmitter' },
+            { id: 'tune', label: 'TUNE', inert: true, title: 'ATU TUNE - not available here: tuning transmits' },
             { id: 'moni', label: 'MONI', title: 'Monitor on / off: hear your own transmit audio. It does not transmit' },
         ],
         rxGroups: {
             knobs: [
-                { id: 'afrf', label: 'AF / RF·SQL', turn: true }, { id: 'shiftwidth', label: 'SHIFT / WIDTH', turn: true },
-                { id: 'notchcont', label: 'NOTCH / CONT', turn: true },
+                { id: 'afrf', label: 'AF / RF·SQL', turn: true, title: 'Inner: AF gain (volume). Outer: RF gain' + U },
+                { id: 'shiftwidth', label: 'SHIFT / WIDTH', turn: true, title: 'Inner: IF shift. Outer: IF width' + U },
+                { id: 'notchcont', label: 'NOTCH / CONT', turn: true, title: 'Inner: manual notch frequency. Outer: contour frequency' + U },
             ],
             keys: [
-                { id: 'ipo', label: 'IPO' }, { id: 'att', label: 'ATT' }, { id: 'agc', label: 'AGC' },
-                { id: 'nb', label: 'NB' }, { id: 'nr', label: 'DNR' }, { id: 'dnf', label: 'DNF' },
-                { id: 'notch', label: 'NOTCH' }, { id: 'contour', label: 'CONT' }, { id: 'apf', label: 'APF' },
+                { id: 'ipo', label: 'IPO', title: 'Preamp: each press steps IPO, AMP1, AMP2' },
+                { id: 'att', label: 'ATT', title: 'Attenuator: each press steps OFF, 6, 12, 18 dB' },
+                { id: 'agc', label: 'AGC', title: 'AGC: each press steps the speed, including OFF' },
+                { id: 'nb', label: 'NB', title: 'Noise blanker on / off' },
+                { id: 'nr', label: 'DNR', title: 'Digital noise reduction on / off' },
+                { id: 'dnf', label: 'DNF', title: 'Digital (auto) notch filter on / off' },
+                { id: 'notch', label: 'NOTCH', title: 'Manual notch on / off; the NOTCH / CONT knob sets its frequency' },
+                { id: 'contour', label: 'CONT', title: 'Contour on / off; the NOTCH / CONT outer ring sets its frequency' },
+                { id: 'apf', label: 'APF', title: 'CW audio peak filter on / off' },
             ],
         },
         sharedKnobs: [
-            { id: 'micproc', label: 'MIC / PROC', turn: true }, { id: 'powermon', label: 'POWER / MONI', turn: true },
-            { id: 'speedpitch', label: 'SPEED / PITCH', turn: true },
+            { id: 'micproc', label: 'MIC / PROC', turn: true, title: 'Inner: mic gain. Outer: speech processor level' + U },
+            { id: 'powermon', label: 'POWER / MONI', turn: true, title: 'Inner: RF power. Outer: monitor level' + U },
+            { id: 'speedpitch', label: 'SPEED / PITCH', turn: true, title: 'Inner: CW keyer speed. Outer: CW pitch' + U },
         ],
         // The dial: on the FTdx101 the outer ring tunes MAIN and the inner
         // knob SUB, as on the radio.
@@ -127,8 +139,10 @@ export function startYaesuRadioPanel(root, cfg) {
         meterScales: vddDial ? { VDD: rangeLegends(vddDial.min, vddDial.max) } : {},
         liveMeters: ['VDD', 'TEMP'],
         vfoKeys: [
-            { id: 'ab', label: 'A▸B' }, { id: 'ba', label: 'B▸A' }, { id: 'swap', label: 'A⇄B' },
-            { id: 'split', label: 'SPLIT' }, { id: 'qsplit', label: 'Q.SPLIT' },
+            { id: 'ab', label: 'A▸B', title: 'Copy VFO A to VFO B' }, { id: 'ba', label: 'B▸A', title: 'Copy VFO B to VFO A' },
+            { id: 'swap', label: 'A⇄B', title: 'Swap VFO A and VFO B' },
+            { id: 'split', label: 'SPLIT', title: 'Split on / off: receive on A, transmit on B' },
+            { id: 'qsplit', label: 'Q.SPLIT', title: "Quick split: set VFO B a step above A (the radio's Q.SPLIT offset) and turn split on" },
             // Classic's TX VFO select. It picks the VFO, it does not key the radio.
             { id: 'txa', label: 'TX A', title: 'Transmit on VFO A (selects it, does not transmit)' },
             { id: 'txb', label: 'TX B', title: 'Transmit on VFO B (selects it, does not transmit)' },
@@ -137,15 +151,20 @@ export function startYaesuRadioPanel(root, cfg) {
         // M▸VFO and VFO▸M act on the radio's current memory channel (MC).
         // VFO▸M overwrites it, so it takes a second press, naming the channel.
         memKeys: [
-            { id: 'vm', label: 'V/M' },
+            { id: 'vm', label: 'V/M', title: 'Switch between VFO and memory' },
             { id: 'mtovfo', label: 'M▸VFO', title: "Copy the radio's current memory channel to the selected receiver" },
             { id: 'vfotom', label: 'VFO▸M', title: "Write VFO-A over the radio's current memory channel - press twice" },
-            { id: 'qmbsto', label: 'QMB STO' }, { id: 'qmbrcl', label: 'QMB RCL' },
+            { id: 'qmbsto', label: 'QMB STO', title: 'Quick memory bank: store the current frequency and mode' },
+            { id: 'qmbrcl', label: 'QMB RCL', title: 'Quick memory bank: recall; each press steps to the next stored one' },
             { id: 'mstore', label: 'M.STORE', sub: 'app', title: "Save the selected receiver to YWC's memories" },
         ],
         // CLR zeroes the offset and leaves RX / TX clarifier as they are, as the
         // radio's CLEAR does.
-        clarKeys: [{ id: 'rxclar', label: 'RX' }, { id: 'txclar', label: 'TX' }, { id: 'clrclar', label: 'CLR' }],
+        clarKeys: [
+            { id: 'rxclar', label: 'RX', title: 'RX clarifier on / off: offsets the receive frequency' },
+            { id: 'txclar', label: 'TX', title: 'TX clarifier on / off: offsets the transmit frequency' },
+            { id: 'clrclar', label: 'CLR', title: 'Clear the clarifier offset to zero' },
+        ],
         bands: BANDS.map(b => ({ id: b, label: b.replace('m', '') })),
         modes: MODES.map(m => ({ id: m, label: m })),
         // One spectrum per SDR, as on Classic and the pop-out: SDR A follows
@@ -307,7 +326,7 @@ export function startYaesuRadioPanel(root, cfg) {
         const { af, rf, sql } = { af: r.af[vfo], rf: r.rf[vfo], sql: r.sql[vfo] };
         panel.setGroupKnob(g, 'afrf', {
             inner: frac(af, 255), outer: frac(rf, 255), text: val(af) + ' · ' + val(rf),
-            title: `AF ${val(af)} · RF ${val(rf)} · SQL ${val(sql)}`,
+            title: `AF ${val(af)} (inner) · RF ${val(rf)} (outer) · SQL ${val(sql)}` + U,
         });
         const hz = widthHz(vfo);
         const opts = ifWidthOptionsFor(model, r.mode[vfo]);
@@ -320,7 +339,7 @@ export function startYaesuRadioPanel(root, cfg) {
         const wTxt = hz ? (hz >= 1000 ? (hz / 1000).toFixed(hz % 100 ? 2 : 1) + 'k' : hz + '') : '--';
         panel.setGroupKnob(g, 'shiftwidth', {
             inner: 0.5 + r.shift[vfo] / 2400, outer: wFrac, text: signed(r.shift[vfo]) + ' · ' + wTxt,
-            title: `IF shift ${signed(r.shift[vfo])} Hz · width ${wTxt}`,
+            title: `IF shift ${signed(r.shift[vfo])} Hz (inner) · width ${wTxt} (outer)` + U,
         });
         const nOn = on(r.notch[vfo]), cOn = !!r.contour[vfo];
         panel.setGroupKnob(g, 'notchcont', {
@@ -328,23 +347,23 @@ export function startYaesuRadioPanel(root, cfg) {
             // The frequencies show whether or not the filter is on (the NOTCH
             // and CONTOUR keys light for that), so turning a knob always shows.
             text: val(r.notchHz[vfo]) + '·' + val(r.contourHz[vfo]),
-            title: `Notch ${nOn ? 'on' : 'off'} ${val(r.notchHz[vfo])} Hz · contour ${cOn ? 'on' : 'off'} ${r.contourHz[vfo]} Hz`,
+            title: `Notch ${nOn ? 'on' : 'off'} ${val(r.notchHz[vfo])} Hz (inner) · contour ${cOn ? 'on' : 'off'} ${val(r.contourHz[vfo])} Hz (outer)` + U,
         });
     }
     function refreshSharedKnobs() {
         panel.setGroupKnob('shared', 'micproc', {
             inner: frac(r.mic, 100), outer: frac(r.procl, 100), text: val(r.mic) + ' · ' + val(r.procl),
-            title: `Mic gain ${val(r.mic)} · processor level ${val(r.procl)}`,
+            title: `Mic gain ${val(r.mic)} (inner) · processor level ${val(r.procl)} (outer)` + U,
         });
         panel.setGroupKnob('shared', 'powermon', {
             inner: frac(r.power, maxPowerW), outer: frac(r.mon, 100),
             text: (r.power == null ? '--' : r.power + ' W') + ' · ' + val(r.mon),
-            title: `RF power ${r.power == null ? '--' : r.power + ' W'} · monitor ${val(r.mon)}`,
+            title: `RF power ${r.power == null ? '--' : r.power + ' W'} (inner) · monitor ${val(r.mon)} (outer)` + U,
         });
         panel.setGroupKnob('shared', 'speedpitch', {
             inner: r.speed == null ? null : (r.speed - 4) / 56, outer: r.pitchKnown ? r.pitchCode / 75 : null,
             text: val(r.speed) + ' · ' + (r.pitchKnown ? pitchHz() : '--'),
-            title: `Key speed ${val(r.speed)} wpm · CW pitch ${r.pitchKnown ? pitchHz() + ' Hz' : '--'}`,
+            title: `Key speed ${val(r.speed)} wpm (inner) · CW pitch ${r.pitchKnown ? pitchHz() + ' Hz' : '--'} (outer)` + U,
         });
     }
 

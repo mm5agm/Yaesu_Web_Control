@@ -765,6 +765,9 @@ namespace Yaesu_Web_Control.Services
                 new("SquelchB", SquelchB),
                 new("ProcEnabled", ProcEnabled),
                 new("ProcLevel", ProcLevel),
+                // Missing until 2026-10-15: MicGain only reached a page when it
+                // changed, so /radio's MIC knob had no value and ignored turns.
+                new("MicGain", MicGain),
                 new("AtuEnabled", AtuEnabled),
                 new("AtuTuning", AtuTuning),
                 new("MonitorOn", MonitorOn),
