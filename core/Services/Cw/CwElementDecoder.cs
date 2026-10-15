@@ -1177,6 +1177,23 @@ namespace RadioWebControl.Core.Services.Cw
             if (_markWindowCount == 0 && _runWindowCount == 0
                 && _ditOnlyCount == 0 && _gapWindowCount == 0) return;
 
+            // The speed goes too. It is as much one operator's property as the
+            // gap is, and a stale one is worse than none, because it holds
+            // itself in place: the de-glitch floor scales with _ditMs, so an
+            // estimate railed fast by chatter on a quiet band waves the same
+            // chatter through as elements, and they keep it there. Measured on
+            // the NCDXF beacons 2026-10-15: noise between slots had trained it
+            // to 59 wpm, every 22 wpm dit of the next callsign read as a dah,
+            // and OH2B printed as TMTT. Starting each transmission from
+            // InitialWpm, with the fast learning rate, took a 30-minute 17 m
+            // recording from 9 to 13 of 25 callsigns exact, and changed nothing
+            // on the practice corpus, which never goes quiet long enough.
+            _ditMs     = 1200.0 / _opt.InitialWpm;
+            _dahMs     = _ditMs * 3.0;
+            _marksSeen = 0;
+            _consecutiveOutliers = 0;
+            _recentCount = 0;
+
             _markWindowCount = _markWindowNext = 0;
             _runWindowCount  = _runWindowNext  = 0;
             _ditOnlyCount    = _ditOnlyNext    = 0;
