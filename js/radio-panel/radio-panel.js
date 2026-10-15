@@ -38,6 +38,12 @@ function h(tag, cls, text) {
     return el;
 }
 
+// Tooltips for the meter keys; an app's opts.meterTitles overrides them.
+const METER_TITLES = {
+    PO: 'Power output', SWR: 'SWR', ALC: 'ALC', COMP: 'Speech compression',
+    IDD: 'Final amplifier current', VDD: 'Supply voltage', TEMP: 'PA temperature',
+};
+
 const SVG = 'http://www.w3.org/2000/svg';
 function s(tag, attrs = {}, text) {
     const el = document.createElementNS(SVG, tag);
@@ -150,6 +156,8 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  *                                          "acts on" the selected receiver: act('memKey', id)
  *   clarKeys:[{ id, label }]               small keys beside the clarifier readout,
  *                                          act('vfoKey', id); lit through setKey(id, { on })
+ *   title on any key, knob, band or mode   its tooltip; the board's own controls have
+ *                                          theirs built in (meterTitles: { PO: ... })
  *   meters: ['PO', ...]                    the meter keys under the S-meter (default
  *                                          PO SWR ALC COMP IDD); meterScales: { name:
  *                                          [five legends] } for any not in LOWER_SCALES
@@ -330,6 +338,7 @@ export function mountRadioPanel(root, opts = {}) {
     for (const m of meterList) {
         const b = h('button', 'rp-chipbtn', m);
         b.type = 'button';
+        b.title = (opts.meterTitles?.[m] ?? METER_TITLES[m] ?? m) + ' on the lower meter scale';
         b.addEventListener('click', () => chooseMeter(m));
         meterBtns.append(b);
         meterBtnEls[m] = b;
@@ -357,8 +366,10 @@ export function mountRadioPanel(root, opts = {}) {
     const mainHead = h('div', 'rp-vfo-head');
     const mainName = h('span', 'rp-vfo-name', dual ? 'MAIN · VFO-A' : 'VFO-A');
     const rxtx = h('span', 'rp-chip rx', 'RX');
+    rxtx.title = 'RX while receiving, TX while transmitting';
     const splitChip = h('span', 'rp-chip hidden', 'SPLIT');
     const selA = h('span', 'rp-chip sel hidden', 'SELECTED');
+    selA.title = 'The selected receiver: the keys and the mode, band and memory rows act on it';
     // ENT: type a frequency into this VFO (the adapter opens its keypad).
     const entA = h('span', 'rp-chip ent hidden', 'ENT'), entB = h('span', 'rp-chip ent hidden', 'ENT');
     // OUT OF BAND: the adapter says when a VFO is outside every band.
@@ -381,7 +392,9 @@ export function mountRadioPanel(root, opts = {}) {
     const subHead = h('div', 'rp-vfo-head');
     const subName = h('span', 'rp-vfo-name', dual ? 'SUB · VFO-B' : 'VFO-B');
     const subRx = h('span', 'rp-chip dim', dual ? 'RX' : '');
+    subRx.title = 'RX while receiving, TX while transmitting';
     const selB = h('span', 'rp-chip sel hidden', 'SELECTED');
+    selB.title = selA.title;
     subHead.append(subName, subRx, selB, oobB, entB);
     const subFreq = h('div', 'rp-subfreq');
     const subBig = h('span', 'big', '-.---'), subSmall = h('span', 'small', '.---');
@@ -540,6 +553,7 @@ export function mountRadioPanel(root, opts = {}) {
         if (act)
             for (const el of [spec, wf]) {
                 el.classList.add('rp-tunable');
+                el.title = 'Click to tune there; mouse wheel steps the dial';
                 el.addEventListener('click', e => {
                     if (e.target.closest('select, button, .rp-spec-tools')) return;
                     const x = lastX != null && Math.abs(lastX - e.clientX) < 1 ? lastX : e.clientX;
@@ -693,6 +707,8 @@ export function mountRadioPanel(root, opts = {}) {
     for (const tb of tabList) {
         const t = h('button', 'rp-viewtab', tb.label);
         t.type = 'button';
+        t.title = tb.spec === 'both' ? 'Both spectrums, one above the other'
+            : tb.spec ? `The ${tb.label} spectrum` : `Show the ${tb.label}`;
         t.addEventListener('click', () => { if (tb.spec) setSpecView(tb.spec); setScreenView(tb.view); });
         viewTabs.append(t);
         viewTabEls.push({ el: t, ...tb });
@@ -701,10 +717,10 @@ export function mountRadioPanel(root, opts = {}) {
 
     const bandsRow = h('div', 'rp-bands');
     const bandEls = {};
-    for (const b of opts.bands ?? []) { const el = button('rp-soft', 'band', b.id); el.textContent = b.label; bandsRow.append(el); bandEls[b.id] = el; }
+    for (const b of opts.bands ?? []) { const el = button('rp-soft', 'band', b.id); el.textContent = b.label; el.title = b.title ?? `${b.label} band`; bandsRow.append(el); bandEls[b.id] = el; }
     const modesRow = h('div', 'rp-modes');
     const modeEls = {};
-    for (const m of opts.modes ?? []) { const el = button('rp-soft', 'mode', m.id); el.textContent = m.label; modesRow.append(el); modeEls[m.id] = el; }
+    for (const m of opts.modes ?? []) { const el = button('rp-soft', 'mode', m.id); el.textContent = m.label; el.title = m.title ?? `${m.label} mode`; modesRow.append(el); modeEls[m.id] = el; }
 
     screen.append(vfos, viewArea, bandsRow, modesRow);
 
@@ -723,6 +739,9 @@ export function mountRadioPanel(root, opts = {}) {
         well.append(dialKnob);
         dial.append(well);
     } else dial.append(dialInner);
+    dial.title = dualDial
+        ? 'Tune: mouse wheel or drag. The outer ring tunes MAIN (VFO-A), the inner knob SUB (VFO-B)'
+        : 'Tune: mouse wheel or drag';
     const dialTags = {};
     const dialTagRow = h('div', 'rp-dial-tags');
     if (dualDial)
@@ -763,6 +782,9 @@ export function mountRadioPanel(root, opts = {}) {
     const stepKey = button('rp-key', 'step', 'cycle'); const stepTxt = h('span', 'rp-sub', '');
     stepKey.append(h('span', null, 'STEP'), stepTxt);
     const up = button('rp-key', 'step', 'up'); up.append(h('span', 'big', '+'));
+    down.title = 'Tune down one step';
+    stepKey.title = 'Change the tuning step';
+    up.title = 'Tune up one step';
     stepRow.append(down, stepKey, up);
     const vfoKeys = h('div', 'rp-vfokeys');
     if (opts.vfoKeyColumns) {
@@ -805,12 +827,16 @@ export function mountRadioPanel(root, opts = {}) {
     for (const k of opts.clarKeys ?? []) {
         const b = button('rp-chipbtn rp-clar-key', 'vfoKey', k.id);
         b.textContent = k.label;
+        if (k.title) b.title = k.title;
         clarRow.append(b);
         keyEls[k.id] = { b, led: null, sub: null };
     }
     clarBox.append(clarName, clarRow);
     clar.append(clarKnob.svg, clarBox);
-    if (act && opts.clarTurn) turnable(clarKnob.svg, { onStep: (_, dir) => act('knob', 'clar', undefined, dir) });
+    if (act && opts.clarTurn) {
+        turnable(clarKnob.svg, { onStep: (_, dir) => act('knob', 'clar', undefined, dir) });
+        clarKnob.svg.append(s('title', {}, 'Clarifier offset: mouse wheel or drag to turn'));
+    }
     rightCol.append(h('span', 'rp-legend', 'Main dial'), dial);
     if (dualDial) rightCol.append(dialTagRow);
     rightCol.append(stepRow, vfoKeys);
@@ -828,6 +854,7 @@ export function mountRadioPanel(root, opts = {}) {
         const kn = knobSvg(88);
         const val = h('span', 'rp-lcd', '--');
         wrap.append(h('span', 'rp-legend', k.label), kn.svg, val);
+        if (k.title) wrap.title = k.title;
         knobs.append(wrap);
         knobEls[k.id] = { wrap, g: kn.g, val };
     }
@@ -842,6 +869,7 @@ export function mountRadioPanel(root, opts = {}) {
         const kn = knob2Svg(80);
         const val = h('span', 'rp-lcd', '--');
         wrap.append(h('span', 'rp-legend', k.label), kn.svg, val);
+        if (k.title) wrap.title = k.title;
         row.append(wrap);
         if (act && k.turn)
             turnable(kn.svg, {
@@ -858,6 +886,7 @@ export function mountRadioPanel(root, opts = {}) {
         const head = h('div', 'rp-group-head');
         const name = h('span', 'rp-group-name', dual ? (vfo === 'A' ? 'MAIN · VFO-A' : 'SUB · VFO-B') : 'RECEIVER · VFO-A');
         const tag = h('span', 'rp-chip sel rp-group-tag hidden', 'SELECTED');
+        tag.title = 'The selected receiver';
         head.append(name, tag);
         const row = h('div', 'rp-group-row');
         const g = { box, name, tag, knobs: {} };
@@ -866,6 +895,7 @@ export function mountRadioPanel(root, opts = {}) {
         for (const k of opts.rxGroups.keys ?? []) {
             const b = h('button', 'rp-skey');
             b.type = 'button';
+            if (k.title) b.title = k.title;
             if (act && !k.inert) b.addEventListener('click', () => act('key', k.id, dual ? vfo : undefined));
             else b.disabled = true;
             const led = h('span', 'rp-led'), sub = h('span', 'rp-sub', '');
