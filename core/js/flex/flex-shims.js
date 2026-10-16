@@ -58,7 +58,7 @@
     };
 
     // Only the menus this shim owns (those with a [data-bs-toggle="dropdown"]
-    // toggler) may be closed here. The Yaesu key widgets also render a
+    // toggler) may be closed here. YWC's Yaesu key widgets also render a
     // .dropdown-menu but manage their own open/close; clearing those by class
     // alone made left-click menus (Apps, Band, Mode, ...) open and immediately
     // vanish because the click bubbled up to this handler.

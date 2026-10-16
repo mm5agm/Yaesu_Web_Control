@@ -2,14 +2,14 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using Yaesu_Web_Control.Models;
+using RadioWebControl.Core.Models;
 
-namespace Yaesu_Web_Control.Services.Flex
+namespace RadioWebControl.Core.Services.Flex
 {
     /// <summary>
-    /// Singleton implementation of <see cref="IFlexLayoutStore"/>, owning
-    /// <c>flex-layouts.json</c> in <c>%APPDATA%\MM5AGM\Yaesu Web Control\</c>
-    /// (or <c>$XDG_CONFIG_HOME</c> on macOS/Linux).
+    /// Singleton implementation of <see cref="IFlexLayoutStore"/>, owning one
+    /// <c>flex-layouts.json</c> whose path the app passes in (each app keeps it
+    /// in its own per-user data folder).
     ///
     /// Deliberately a separate file from <c>appsettings.user.json</c>: the
     /// Settings page rewrites the whole settings object from a form read-modify-write,
@@ -38,28 +38,22 @@ namespace Yaesu_Web_Control.Services.Flex
         };
 
         private readonly string _filePath;
-        private readonly ILogger<FlexLayoutStore> _logger;
+        private readonly Action<string>? _warn;
         private readonly SemaphoreSlim _gate = new(1, 1);
         private volatile State _state;
 
-        public FlexLayoutStore(ILogger<FlexLayoutStore> logger)
-            : this(logger, null)
+        /// <param name="filePath">Where the layouts live. The app chooses it.</param>
+        /// <param name="warn">
+        /// Optional sink for the store's warnings (unreadable file, duplicate ids,
+        /// a file from a newer build). Core has no logging dependency; the app
+        /// passes its logger through this.
+        /// </param>
+        public FlexLayoutStore(string filePath, Action<string>? warn = null)
         {
-        }
-
-        /// <summary>
-        /// Test/embedding seam: pass an explicit file path. Production resolves
-        /// the standard per-user data directory when <paramref name="filePath"/>
-        /// is null.
-        /// </summary>
-        public FlexLayoutStore(ILogger<FlexLayoutStore> logger, string? filePath)
-        {
-            _logger = logger;
-            _filePath = string.IsNullOrWhiteSpace(filePath)
-                ? Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "MM5AGM", "Yaesu Web Control", "flex-layouts.json")
-                : filePath;
+            if (string.IsNullOrWhiteSpace(filePath))
+                throw new ArgumentException("A file path is required.", nameof(filePath));
+            _warn = warn;
+            _filePath = filePath;
 
             var dir = Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
@@ -309,9 +303,8 @@ namespace Yaesu_Web_Control.Services.Flex
                 {
                     // A newer build wrote this. Keep every record we understand
                     // rather than discarding the user's layouts on a downgrade.
-                    _logger.LogWarning(
-                        "[FlexLayoutStore] {Path} has storeVersion {Found} newer than {Current}; loading known fields only.",
-                        _filePath, doc.StoreVersion, CurrentStoreVersion);
+                    _warn?.Invoke(
+                        $"[FlexLayoutStore] {_filePath} has storeVersion {doc.StoreVersion} newer than {CurrentStoreVersion}; loading known fields only.");
                 }
 
                 var layouts = new Dictionary<string, StoredLayout>(StringComparer.Ordinal);
@@ -324,9 +317,8 @@ namespace Yaesu_Web_Control.Services.Flex
                     var stored = new StoredLayout(
                         l.Id, (l.Name ?? "").Trim(), l.Layout, l.CreatedAt, l.UpdatedAt);
                     if (!layouts.TryAdd(l.Id, stored))
-                        _logger.LogWarning(
-                            "[FlexLayoutStore] Duplicate layout id {Id} in {Path}; keeping the first.",
-                            l.Id, _filePath);
+                        _warn?.Invoke(
+                            $"[FlexLayoutStore] Duplicate layout id {l.Id} in {_filePath}; keeping the first.");
                 }
 
                 var active = doc.ActiveId;
@@ -337,7 +329,7 @@ namespace Yaesu_Web_Control.Services.Flex
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[FlexLayoutStore] Failed to read {Path}; starting empty.", _filePath);
+                _warn?.Invoke($"[FlexLayoutStore] Failed to read {_filePath}; starting empty. {ex.Message}");
                 return State.Empty;
             }
         }

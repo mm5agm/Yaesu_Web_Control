@@ -389,6 +389,11 @@ Remote Video in the standing instructions above.
   directly in `core/` on `feature/cw-reader`, not migrated in after the fact.
   This is the model to follow going forward: build shared work in `core/`
   from the start rather than writing it locally and moving it later.
+- `js/flex/*`, `Services/Flex/FlexLayoutStore.cs`, `Models/FlexLayout.cs` —
+  the Experimental UI's dock shell and its named-layout store, shared with
+  IWC since 2026-10-16. YWC's `wwwroot/js/flexui/flex-workspace.js` is now a
+  thin config wrapper (panels, layout file, `ywc.flexui.` storage prefix);
+  everything else under `wwwroot/js/flexui/` is still YWC's own fork.
 - `js/audio/*` — the transport-layer JS for Remote Audio (session, protocol,
   capture, playback) is already shared. The C# side (`Services/Audio/`)
   isn't yet — treat it as a candidate on next touch, not something to

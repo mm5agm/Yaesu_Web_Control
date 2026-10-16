@@ -24,7 +24,7 @@
 
     @* First script on the page: it has to see every listener the others add,
        so a popped-out panel gets them too. See the file's header. *@
-    <script src="~/js/flexui/flex-popout-bridge.js" asp-append-version="true"></script>
+    <script src="~/js/flex/flex-popout-bridge.js" asp-append-version="true"></script>
     <script src="~/lib/canvas-gauges/gauge.min.js"></script>
 
     <script type="module">
@@ -61,7 +61,7 @@
 
     @* Bootstrap shim must install before site.js: site.js tests `typeof bootstrap`
        on demand (tooltips / modal). Flex UI does not ship Bootstrap's JS. *@
-    <script src="~/js/flexui/flex-shims.js"></script>
+    <script src="~/js/flex/flex-shims.js"></script>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     @* One connection factory for every /radioHub connection; must precede site.js. *@

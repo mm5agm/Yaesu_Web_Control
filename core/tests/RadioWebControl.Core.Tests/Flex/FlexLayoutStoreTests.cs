@@ -2,12 +2,11 @@ using System;
 using System.IO;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
-using Yaesu_Web_Control.Models;
-using Yaesu_Web_Control.Services.Flex;
+using RadioWebControl.Core.Models;
+using RadioWebControl.Core.Services.Flex;
 
-namespace YaesuWebControl.Tests
+namespace RadioWebControl.Core.Tests.Flex
 {
     /// <summary>
     /// FlexLayoutStore — named Flex UI arrangements persisted to a separate
@@ -20,12 +19,12 @@ namespace YaesuWebControl.Tests
     public class FlexLayoutStoreTests : IDisposable
     {
         private readonly string _dir =
-            Path.Combine(Path.GetTempPath(), "ywc-flex-tests-" + Guid.NewGuid().ToString("N"));
+            Path.Combine(Path.GetTempPath(), "rwc-flex-tests-" + Guid.NewGuid().ToString("N"));
 
         private string FilePath => Path.Combine(_dir, "flex-layouts.json");
 
         private FlexLayoutStore NewStore() =>
-            new(NullLogger<FlexLayoutStore>.Instance, FilePath);
+            new(FilePath);
 
         private static JsonNode Layout(string mode = "row") =>
             JsonNode.Parse(
@@ -181,7 +180,7 @@ namespace YaesuWebControl.Tests
             await first.CreateAsync("abc123", "Desk", Layout());
             await first.SetActiveAsync("abc123");
 
-            var second = new FlexLayoutStore(NullLogger<FlexLayoutStore>.Instance, FilePath);
+            var second = new FlexLayoutStore(FilePath);
             Assert.Equal("abc123", second.GetSnapshot().ActiveId);
             Assert.Equal("Desk", second.Get("abc123")!.Name);
             Assert.Equal("row", second.Get("abc123")!.Layout!["layout"]!["type"]!.GetValue<string>());
