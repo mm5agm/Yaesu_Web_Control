@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace Yaesu_Web_Control.Models
+namespace RadioWebControl.Core.Models
 {
     /// <summary>
     /// Named Flex UI workspace arrangements.

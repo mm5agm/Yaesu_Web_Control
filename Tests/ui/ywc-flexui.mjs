@@ -32,9 +32,11 @@ const status = async p => (await fetch(BASE + p)).status;
 test('fork serves the flex modules and assets', async () => {
     for (const p of [
         '/js/flexui/site.js',
-        '/js/flexui/flex-shims.js',
+        '/js/flex/flex-shims.js',
+        '/js/flex/flex-workspace.js',
+        '/js/flex/flex-popout-bridge.js',
         '/js/flexui/flex-workspace.js',
-        '/js/flexui/flex-layouts-admin.js',
+        '/js/flex/flex-layouts-admin.js',
         '/js/flexui/app/guages/meter-panel.js',
         '/js/flexui/app/guages/gaugeFactory.js',
         '/js/flexui/app/guages/gauge.js',
