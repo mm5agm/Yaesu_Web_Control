@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
-using Yaesu_Web_Control.Models;
-using Yaesu_Web_Control.Services.Flex;
+using RadioWebControl.Core.Models;
+using RadioWebControl.Core.Services.Flex;
 
 namespace Yaesu_Web_Control.Controllers
 {

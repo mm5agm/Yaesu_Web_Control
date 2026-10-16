@@ -2,7 +2,8 @@
  * Named Flex UI layout administration, shared by the Flex UI "Manage layouts"
  * dialog and the Settings page.
  *
- * Pure server CRUD against /api/flexlayouts — it never touches the live
+ * Pure server CRUD against the app's layouts API (opts.apiBase, default
+ * /api/flexlayouts) — it never touches the live
  * workspace. On /flexui the caller passes `onSelect` so a row can switch the
  * active arrangement; on Settings there is no live workspace and no onSelect.
  *
@@ -10,10 +11,11 @@
  * exported and imported whole, never inspected.
  */
 
-const API = '/api/flexlayouts';
+const DEFAULT_API = '/api/flexlayouts';
 
 export function initFlexLayoutsAdmin(container, opts = {}) {
     if (!container) return { refresh: () => {} };
+    const API = opts.apiBase || DEFAULT_API;
 
     const state = {
         presets: [],
