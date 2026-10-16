@@ -1332,6 +1332,8 @@ It is called experimental for a reason. It is a separate copy of the page's code
 
 **Radio** in the top bar, on both the Classic page and the Experimental UI, opens a third way of working the radio, at `http://localhost:8080/radio`. It is laid out like the front of a transceiver: the meter and the keys down the left, a screen in the middle with the VFOs, the spectrum and the band and mode keys, the main dial on the right, and a row of knobs along the bottom. The **Classic**, **Experimental** and **Radio** buttons in its top strip move between the three, and they can all be open in different tabs at once.
 
+![The Radio panel in the Dark console theme on an FTdx101MP: the meter and keys on the left, MAIN and SUB VFOs above the radio's own screen in the middle, the main dial on the right and the knobs along the bottom](pictures/Radio_Dark_Console.png)
+
 Everything on it works the radio: the keys, the knobs, the main dial and the windows opened from the keys under the meter. The few things that are not built yet say **Comes in a later build** when you press them.
 
 **The screen.**
@@ -1386,6 +1388,10 @@ Everything on it works the radio: the keys, the knobs, the main dial and the win
 The CW Reader, CW Send, the RTTY tuner and the DX spots each have a **⇱** key that opens them in a browser window of their own. Unlike a window on the panel, that one can go on another screen. In the CW and RTTY windows, **⇱ WINDOW** in the title bar does the same for the whole window. Only three things in the windows make the radio transmit, and each is marked in red: the Remote Audio TX key, CW Send's Send key and keyer memories, and the ATU's TUNE. The TUNE key on the left of the panel is the fourth.
 
 **Theme and size.** The two boxes at the right of the top strip choose the colours and the size. **Dark console** is the usual look; **Night (red)**, **Silver classic**, **Daylight**, **Green display** and **High contrast** are the others, and **Match computer** follows Windows' light or dark setting. **Fit** makes the whole panel fit the window; the percentages fix its size and let you scroll. Both are remembered by this browser, so a tablet and a PC can each have their own.
+
+![The Radio panel in the Night (red) theme, for operating in the dark](pictures/Radio_Night_Console.png)
+
+![The Radio panel in the Silver classic theme](pictures/Radio_Silver_Classic.png)
 
 The Radio panel has none of the screen-reader or voice-control work of the Classic page, and no launch buttons for WSJT-X or other programs. Those stay on the Classic page.
 
