@@ -87,6 +87,19 @@ test('Calibrations page shows the tables, not its loading text', async () => {
 
 // ---------------------------------------------------------------- pop-outs
 
+// Layout = null, so no site.js: radio-window-yaesu.js has to start the hub
+// itself, and before 7097f86c it never did - the window loaded and stayed dead.
+test('/RadioWindow?g=mem: the window draws and its hub connects', async () => {
+    const page = await open('/RadioWindow?g=mem', { settleMs: 2500 });
+    try {
+        const r = await page.eval(`({ started: __rwcTest.started, panels: [...document.querySelectorAll('.rp-wpanel')].length, text: document.body.textContent })`);
+        expect(!/No such window/.test(r.text), 'window group not found');
+        expect(r.panels > 0, 'no panels drawn');
+        expect(r.started, 'hub never started');
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 async function modePopoutChecks({ path, pausedSel, announceSel, name, good, bad, note }) {
     const page = await open(path);
     try {

@@ -778,6 +778,10 @@ export function mountRadioPanel(root, opts = {}) {
     const modeEls = {};
     for (const m of opts.modes ?? []) { const el = button('rp-soft', 'mode', m.id); el.textContent = m.label; el.title = m.title ?? `${m.label} mode`; modesRow.append(el); modeEls[m.id] = el; }
 
+    // One row each, however many the radio has: IWC has 12 bands and 10 modes,
+    // YWC 11 and 8.
+    bandsRow.style.gridTemplateColumns = `repeat(${Math.max(1, bandsRow.childElementCount)},minmax(0,1fr))`;
+    modesRow.style.gridTemplateColumns = `repeat(${Math.max(1, modesRow.childElementCount)},minmax(0,1fr))`;
     screen.append(vfos, viewArea, bandsRow, modesRow);
 
     // right: dial and VFO keys
