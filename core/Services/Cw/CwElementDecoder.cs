@@ -145,6 +145,29 @@ namespace RadioWebControl.Core.Services.Cw
         public double ReadabilitySpreadCeiling { get; set; } = 8.0;
 
         /// <summary>
+        /// Marks of dah length (2.5 x p10 or more) that overrule the spread
+        /// floor. Zero turns the exemption off.
+        ///
+        /// The floor reads p90 of a 16-mark window, so it needs three dahs in
+        /// sixteen marks to see one. Real Morse can go under that: on
+        /// bench/slow-cw-20261016e.wav, 13 wpm, "RST 5 5N 5 5N K" is ten dits
+        /// to every dah, the spread fell to 1.06 and the window read Chatter.
+        /// The text was held, went stale after HoldStaleSeconds and was
+        /// cleared - every character in it had decoded correctly. Chatter
+        /// on a near-threshold carrier has no dahs at all, so two is enough
+        /// to tell the difference. Scored 2026-10-16:
+        ///
+        ///   dahs   slow-cw-e           practice clean   practice noisy   dead band
+        ///   off    "RST 5 K"           62.9/67.5/88.0   43.8/44.7/46.8   no text
+        ///   2      "RST 5 5N 5 5N K"   63.3/68.6/89.3   44.1/44.8/47.4   no text
+        ///   3      "RST 5 K"           62.9/67.5/88.0   43.8/44.7/46.8   no text
+        ///
+        /// The NCDXF beacon scores were the same at all three. The dead-band
+        /// files are diag-dead, noise-15m-long, probe15d and mkii-14040-slow.
+        /// </summary>
+        public int ChatterExemptDahs { get; set; } = 2;
+
+        /// <summary>
         /// Fraction of recent key-down runs that may be thrown out as too short
         /// to be an element before the copy is called
         /// <see cref="CwReadability.Jumbled"/> whatever its spread says.
@@ -1271,6 +1294,24 @@ namespace RadioWebControl.Core.Services.Cw
         /// The spread is then overruled by the share of runs the de-glitch
         /// threw away, which the spread cannot see by construction.
         /// </summary>
+        /// <summary>
+        /// Whether the mark window holds enough marks of dah length to be
+        /// Morse whatever its p90 says. See
+        /// <see cref="CwElementDecoderOptions.ChatterExemptDahs"/>.
+        /// </summary>
+        private bool HoldsDahs(double p10)
+        {
+            if (_opt.ChatterExemptDahs <= 0) return false;
+            int dahs = 0;
+            for (int i = 0; i < _markWindowCount; i++)
+                if (_markWindow[i] >= ChatterDahRatio * p10) dahs++;
+            return dahs >= _opt.ChatterExemptDahs;
+        }
+
+        // A dah is three dits; 2.5 leaves room for a light fist and still sits
+        // well clear of the 1.3 spread chatter produces.
+        private const double ChatterDahRatio = 2.5;
+
         private CwReadability AssessReadability(out double spread)
         {
             spread = 0.0;
@@ -1285,7 +1326,7 @@ namespace RadioWebControl.Core.Services.Cw
             if (p10 <= 0.0) return CwReadability.Unknown;
 
             spread = p90 / p10;
-            if (spread < _opt.ReadabilitySpreadFloor)   return CwReadability.Chatter;
+            if (spread < _opt.ReadabilitySpreadFloor && !HoldsDahs(p10)) return CwReadability.Chatter;
             if (spread > _opt.ReadabilitySpreadCeiling) return CwReadability.Jumbled;
 
             if (_runWindowCount >= _opt.ReadabilityMinMarks)
