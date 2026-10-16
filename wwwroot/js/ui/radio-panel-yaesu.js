@@ -218,7 +218,7 @@ export function startYaesuRadioPanel(root, cfg) {
         contourHz: { A: 800, B: 800 }, apfHz: { A: 0, B: 0 }, notchHz: { A: null, B: null },
         af: { A: null, B: null }, rf: { A: null, B: null }, sql: { A: null, B: null },
         mic: null, procl: null, amc: null, procType: null, power: null, mon: null, speed: null, pitchKnown: false,
-        tx: false, txMeterRaw: {}, sel: 'A', split: 0, txVfo: 0, proc: false, moni: false, catOn: false,
+        tx: false, txMeterRaw: {}, poHist: [], swrHist: [], sel: 'A', split: 0, txVfo: 0, proc: false, moni: false, catOn: false,
     };
     let stepHz = (() => { try { return num(localStorage.getItem(STEP_KEY)); } catch { return 0; } })();
     if (!STEPS_HZ.includes(stepHz)) stepHz = 100;
@@ -828,6 +828,34 @@ export function startYaesuRadioPanel(root, cfg) {
         panel.setKey('txclar', { on: r.txClar });
     }
 
+    // PO and SWR are averaged over the last few readings of the over, as the
+    // Classic gauges do (4 and 3), and both start afresh at each over. A raw 0
+    // is the server's end-of-over reset, not a reading, so it clears the
+    // history rather than being averaged in (the #124 trap). An SWR reading
+    // taken while the radio is putting out under 1 W - between CW elements,
+    // or at the start of an over - measures nothing and swung the needle to
+    // full scale on a 1:1 load, so it is left out and the needle holds.
+    const MIN_PO_FOR_SWR_W = 1;
+    const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+    const poWatts = () => r.poHist.length ? Math.min(maxPowerW, calibrateNumeric('PWR', avg(r.poHist))) : 0;
+
+    function takePo(raw) {
+        const n = num(raw);
+        if (!r.tx || n === 0) { r.poHist = []; r.txMeterRaw.PO = 0; return; }
+        r.poHist.push(n);
+        if (r.poHist.length > 4) r.poHist.shift();
+        r.txMeterRaw.PO = avg(r.poHist);
+    }
+
+    function takeSwr(raw) {
+        const n = num(raw);
+        if (!r.tx || n === 0) { r.swrHist = []; r.txMeterRaw.SWR = 0; return; }
+        if (poWatts() < MIN_PO_FOR_SWR_W) return;
+        r.swrHist.push(n);
+        if (r.swrHist.length > 3) r.swrHist.shift();
+        r.txMeterRaw.SWR = avg(r.swrHist);
+    }
+
     function refreshTxMeters() {
         const raw = r.txMeterRaw;
         const v = {
@@ -934,7 +962,11 @@ export function startYaesuRadioPanel(root, cfg) {
         TxClarOn: v => { r.txClar = on(v); refreshClar(); },
         ClarifierOffsetA: v => { r.clarHz.A = num(v); refreshClar(); },
         ClarifierOffsetB: v => { r.clarHz.B = num(v); refreshClar(); },
-        IsTransmitting: v => { r.tx = on(v); panel.setTx(r.tx); },
+        IsTransmitting: v => {
+            r.tx = on(v);
+            if (!r.tx) { takePo(0); takeSwr(0); refreshTxMeters(); }
+            panel.setTx(r.tx);
+        },
         AtuTuning: v => { r.atuTuning = on(v); refreshTune(); },
         ProcEnabled: v => { r.proc = on(v); panel.setKey('proc', { on: r.proc }); refreshSharedKnobs(); },
         VoxOn: v => { r.vox = on(v); panel.setKey('vox', { on: r.vox }); },
@@ -955,8 +987,8 @@ export function startYaesuRadioPanel(root, cfg) {
         MonitorLevelA: v => { r.mon = num(v); refreshSharedKnobs(); },
         SMeterA: v => panel.setSMeter('A', calibrateNumeric('SMETER', num(v))),
         SMeterB: v => panel.setSMeter('B', calibrateNumeric('SMETER', num(v))),
-        PowerMeter: v => { r.txMeterRaw.PO = typeof v === 'object' && v ? v.value : v; refreshTxMeters(); },
-        SWRMeter: v => { r.txMeterRaw.SWR = v; refreshTxMeters(); },
+        PowerMeter: v => { takePo(typeof v === 'object' && v ? v.value : v); refreshTxMeters(); },
+        SWRMeter: v => { takeSwr(v); refreshTxMeters(); },
         ALCMeter: v => { r.txMeterRaw.ALC = v; refreshTxMeters(); },
         CompressionMeter: v => { r.txMeterRaw.COMP = v; refreshTxMeters(); },
         IDDMeter: v => { r.txMeterRaw.IDD = v; refreshTxMeters(); },

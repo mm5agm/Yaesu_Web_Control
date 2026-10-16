@@ -13,7 +13,9 @@
 
 **Since v2.5.3** — in the code, not yet in a full release:
 
-Nothing yet.
+| Fixed | Issue | In build |
+|---|---|---|
+| Radio panel: the SWR needle no longer jumps to full scale on a good aerial while transmitting CW. It ignores readings taken when the radio puts out under 1 W, and averages the rest as the Classic page does. | - | *Not yet in a build* |
 
 **New in v2.5.3:**
 
