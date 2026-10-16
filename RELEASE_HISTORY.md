@@ -13,6 +13,16 @@ a different and much older format.
 
 ---
 
+## 2026-10-07 - v2.5.3-pre7 (pre-release)
+
+*An Experimental UI beside the Classic one, meter readings that stay with their own meter, and capture dongles remembered by device instead of by their place in the list. Everything in v2.5.3-pre6 is included. Install it over v2.5.2 or an earlier pre-release; your settings are kept.*
+
+- **Experimental UI** (Fabio Valente, CR7CDC). A new **Experimental UI** link in the top bar opens a dark, dockable workspace at `/flexui`. The VFOs, spectrum, meters, Radio Display, Radio Scope and the other controls are panels that can be dragged, docked, tabbed together and resized, and an arrangement can be saved as a named layout. The Classic page is unchanged and is still where YWC opens. The one change Classic users will see is the top bar: its links have been reordered and have icons, and none has been removed. It is experimental: a fix made to the Classic page doesn't automatically reach it. I've tested it on my FTdx101MP on receive and transmit, on both receivers. [§5.22](USER_MANUAL.md#522-experimental-ui).
+- **Meter readings stay with their own meter.** A reply from the radio that arrived late was given to the next reading of the same kind, so the power gauge could briefly show the compression or SWR reading instead, and VFO B's S-meter could show VFO A's. Each reading now only accepts its own reply.
+- **Two capture dongles of the same model** - one per radio - are told apart by the dongle itself, not by their place in the device list, so Radio Display no longer opens the wrong radio's screen after a replug or a reboot. Keep each dongle in the same USB socket: these dongles have no serial number, so the socket is what identifies them, and a dongle moved to another socket has to be chosen again. If the chosen dongle isn't plugged in when the stream starts, the panel says **Not connected** instead of disappearing. The first time you pick a device after installing, the setting moves to the new form; until then it works as before. [§6.9](USER_MANUAL.md#69-radio-display).
+
+---
+
 ## 2026-10-05 - v2.5.3-pre6 (pre-release)
 
 *The FT-991A gets a model of its own, and WSJT-X and Log4OM are told the right mode. Everything in v2.5.3-pre5 is included. Install it over v2.5.2 or an earlier pre-release; your settings are kept.*

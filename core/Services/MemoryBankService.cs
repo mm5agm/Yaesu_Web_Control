@@ -51,6 +51,15 @@ namespace RadioWebControl.Core.Services
             File.WriteAllText(_path, JsonSerializer.Serialize(_banks, _opts));
         }
 
+        /// <summary>
+        /// The bank last loaded into, or saved from, the working list, while
+        /// the two still match by name. Not kept across a restart.
+        /// </summary>
+        public string? LoadedBank { get; private set; }
+
+        /// <summary>The working list was replaced by something that is not a bank.</summary>
+        public void ForgetLoadedBank() => LoadedBank = null;
+
         public IReadOnlyList<string> GetBankNames() =>
             _banks.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -64,8 +73,43 @@ namespace RadioWebControl.Core.Services
             {
                 _banks[name] = memories;
                 SaveToDisk();
+                LoadedBank = name;
             }
             finally { _lock.Release(); }
+        }
+
+        /// <summary>
+        /// Adds one memory to the end of a bank, without loading the bank.
+        /// When that bank is the one in the working list (<see cref="LoadedBank"/>)
+        /// it goes on the end of the working list too, so a later save of
+        /// the working list over the bank does not drop it. Returns false,
+        /// changing nothing, when there is no such bank.
+        /// </summary>
+        public async Task<bool> AddToBankAsync(string name, AppMemory memory)
+        {
+            bool alsoWorking;
+            await _lock.WaitAsync();
+            try
+            {
+                if (!_banks.TryGetValue(name, out var bank)) return false;
+                var copy = memory.Clone();
+                copy.Id = bank.Count > 0 ? bank.Max(m => m.Id) + 1 : 1;
+                copy.SortOrder = bank.Count > 0 ? bank.Max(m => m.SortOrder) + 1 : 1;
+                bank.Add(copy);
+                SaveToDisk();
+                alsoWorking = LoadedBank == name;
+            }
+            finally { _lock.Release(); }
+
+            if (alsoWorking)
+            {
+                var working = memory.Clone();
+                working.Id = 0;
+                var all = _memoryService.GetAll();
+                working.SortOrder = all.Count > 0 ? all.Max(m => m.SortOrder) + 1 : 1;
+                await _memoryService.AddAsync(working);
+            }
+            return true;
         }
 
         /// <summary>
@@ -106,6 +150,7 @@ namespace RadioWebControl.Core.Services
             var copies = bank.Select(m => m.Clone()).ToList();
 
             await _memoryService.ReplaceAllAsync(copies);
+            LoadedBank = name;
             return true;
         }
 
@@ -117,6 +162,7 @@ namespace RadioWebControl.Core.Services
                 if (!_banks.ContainsKey(name)) return false;
                 _banks.Remove(name);
                 SaveToDisk();
+                if (LoadedBank == name) LoadedBank = null;
                 return true;
             }
             finally { _lock.Release(); }

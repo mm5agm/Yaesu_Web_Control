@@ -139,8 +139,9 @@ function mhzText(hz) {
  * @param {object} windows  the panel's windows API (panel-windows.js)
  * @param {object} ctx      { model, dual, maxPowerW, maxHz, post(url, body), selected() -> 'A'|'B', freq(vfo), showScreen(),
  *                            onTxTimeout(state) - optional, the TX timeout's state on every change,
+ *                            onAtuTune({ armed, tuning }) - optional, the ATU TUNE key's state on every change,
  *                            popouts - false in a window group's own page (/RadioWindow), which opens none }
- * @returns {{ onShow(g, p, shown), onRadioState(msg), entry(vfo), txTimeout }}
+ * @returns {{ onShow(g, p, shown), onRadioState(msg), entry(vfo), txTimeout, atuTune() }}
  */
 export function startYaesuWindows(windows, ctx) {
     const slot = (g, p) => windows.slot(g, p);
@@ -336,9 +337,12 @@ export function startYaesuWindows(windows, ctx) {
         const bankBody = slot('mem', 'memBank');
         const sel = h('select', 'rp-wselect');
         const loadBtn = key('LOAD', () => loadBank());
-        const bankMsg = h('div', 'rp-wnote', 'Loading a bank replaces the memories you have now.');
+        const saveBtn = key('SAVE TO BANK', () => saveBank());
+        saveBtn.title = 'Write the memories you have now over the chosen bank';
+        const IDLE = 'LOAD replaces the memories you have now with the bank. SAVE TO BANK writes them over the bank.';
+        const bankMsg = h('div', 'rp-wnote', IDLE);
         const bb = h('div', 'rp-wbtns');
-        bb.append(loadBtn);
+        bb.append(loadBtn, saveBtn);
         bankBody.append(sel, bb, bankMsg);
 
         const tilesBody = slot('mem', 'memTiles');
@@ -353,7 +357,7 @@ export function startYaesuWindows(windows, ctx) {
         const edit = key('EDIT…', () => window.open('/Memories', '_blank', 'noopener'));
         saveBody.append(sb, saveMsg, edit);
 
-        let list = [], armed = false, armTimer = null;
+        let list = [], armed = null, armTimer = null;    // armed: 'load' or 'save', waiting for its second press
 
         async function refreshBanks() {
             const names = (await getJson('/api/memorybank')) ?? [];
@@ -388,19 +392,21 @@ export function startYaesuWindows(windows, ctx) {
                 t.classList.toggle('on', !!m && num(m.frequencyHz) === hz);
             }
         }
+        // Both bank keys take two presses: each replaces a whole list.
+        function arm(which, btn, text, msg) {
+            if (armed === which) return true;
+            disarm();
+            armed = which;
+            btn.textContent = text;
+            btn.classList.add('warn');
+            bankMsg.textContent = msg;
+            armTimer = setTimeout(disarm, 4000);
+            return false;
+        }
         async function loadBank() {
             const name = sel.value;
             if (!name) { bankMsg.textContent = 'Choose a bank first.'; return; }
-            // Two presses: a bank replaces every memory there is now.
-            if (!armed) {
-                armed = true;
-                loadBtn.textContent = 'SURE? LOAD';
-                loadBtn.classList.add('warn');
-                bankMsg.textContent = 'Press again to replace your memories with this bank.';
-                clearTimeout(armTimer);
-                armTimer = setTimeout(disarm, 4000);
-                return;
-            }
+            if (!arm('load', loadBtn, 'SURE? LOAD', 'Press again to replace your memories with this bank.')) return;
             disarm();
             const res = name === STARTER
                 ? await ctx.post('/api/memory/starter-bank/load', { mode: 'replace' })
@@ -408,11 +414,23 @@ export function startYaesuWindows(windows, ctx) {
             bankMsg.textContent = res?.ok ? 'Loaded.' : 'That bank did not load.';
             refreshTiles();
         }
+        async function saveBank() {
+            const name = sel.value;
+            if (!name) { bankMsg.textContent = 'Choose a bank first.'; return; }
+            if (name === STARTER) { bankMsg.textContent = "The starter bank is built in and can't be saved over. Use EDIT… to save as a new bank."; return; }
+            if (!arm('save', saveBtn, 'SURE? SAVE', `Press again to write your memories over ${name}.`)) return;
+            disarm();
+            const res = await ctx.post('/api/memorybank/save', { name });
+            bankMsg.textContent = res?.ok ? `Saved to ${name}.` : 'That bank was not saved.';
+        }
         function disarm() {
-            armed = false;
+            armed = null;
+            clearTimeout(armTimer);
             loadBtn.textContent = 'LOAD';
+            saveBtn.textContent = 'SAVE TO BANK';
             loadBtn.classList.remove('warn');
-            bankMsg.textContent = 'Loading a bank replaces the memories you have now.';
+            saveBtn.classList.remove('warn');
+            bankMsg.textContent = IDLE;
         }
         async function saveVfo(vfo) {
             const res = await ctx.post(`/api/memory/save-vfo/${vfo.toLowerCase()}`, { label: '' });
@@ -729,6 +747,7 @@ export function startYaesuWindows(windows, ctx) {
     // P2 is fixed at 0), so, as on the main page, "tuning" is a fixed window
     // after which the settled ATU state is read back. Pressed again while
     // tuning, the same AC002 stops it.
+    let atuTune = () => {};
     const atu = (() => {
         const body = slot('tx', 'txAtu');
         const ARM_MS = 4000, TUNE_MS = 8000;
@@ -773,8 +792,10 @@ export function startYaesuWindows(windows, ctx) {
             onOff.children[1].classList.toggle('on', enabled === false);
             tuneKey.classList.toggle('armed', armed || tuning);
             tuneKey.textContent = tuning ? 'TUNING · STOP' : armed ? 'PRESS AGAIN' : 'TUNE';
+            try { ctx.onAtuTune?.({ armed, tuning }); } catch (e) { console.warn('radio panel: atu tune', e); }
         }
         draw();
+        atuTune = tune;
         return { AtuEnabled: x => { enabled = on(x); draw(); } };
     })();
 
@@ -931,5 +952,7 @@ export function startYaesuWindows(windows, ctx) {
             if (host && !host.open()) alert('The browser blocked the window. Allow pop-ups for this page and press the key again.');
         },
         txTimeout: txTimer.tt,
+        /** The TX SETUP window's TUNE, for the panel's own TUNE key. */
+        atuTune: () => atuTune(),
     };
 }

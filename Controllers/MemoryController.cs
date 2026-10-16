@@ -224,8 +224,25 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("save-vfo/{vfo}")]
         public async Task<IActionResult> SaveVfo(string vfo, [FromBody] SaveVfoRequest? request)
         {
+            var created = await _memoryService.AddAsync(VfoMemory(vfo, request));
+            return Ok(created);
+        }
+
+        // The Radio panel's M.STORE: the VFO goes straight into a saved bank,
+        // with no load and save of the working list around it.
+        [HttpPost("save-vfo/{vfo}/to-bank/{bank}")]
+        public async Task<IActionResult> SaveVfoToBank(string vfo, string bank, [FromBody] SaveVfoRequest? request)
+        {
+            var mem = VfoMemory(vfo, request);
+            if (!await _bankService.AddToBankAsync(bank, mem))
+                return NotFound(new { error = $"There is no bank called {bank}" });
+            return Ok(new { bank, mem.FrequencyHz, mem.Mode, inWorkingList = _bankService.LoadedBank == bank });
+        }
+
+        private AppMemory VfoMemory(string vfo, SaveVfoRequest? request)
+        {
             bool isA = string.Equals(vfo, "A", StringComparison.OrdinalIgnoreCase);
-            var mem = new AppMemory
+            return new AppMemory
             {
                 Label             = string.IsNullOrWhiteSpace(request?.Label) ? "" : request!.Label.Trim(),
                 FrequencyHz       = isA ? _radioStateService.FrequencyA : _radioStateService.FrequencyB,
@@ -244,8 +261,6 @@ namespace Yaesu_Web_Control.Controllers
                 PowerWatts        = _radioStateService.Power > 0 ? _radioStateService.Power : (int?)null,
                 Notes             = request?.Notes,
             };
-            var created = await _memoryService.AddAsync(mem);
-            return Ok(created);
         }
 
         // ── Import from Radio ────────────────────────────────────────────────
@@ -338,7 +353,10 @@ namespace Yaesu_Web_Control.Controllers
                 return Ok(new { imported = 0, mode = request.Mode, warning = "No channels found on radio — existing app memories were not changed." });
 
             if (request.Mode == "replace")
+            {
                 await _memoryService.ReplaceAllAsync(imported);
+                _bankService.ForgetLoadedBank();
+            }
             else
                 await _memoryService.MergeAsync(imported);
 
@@ -491,6 +509,7 @@ namespace Yaesu_Web_Control.Controllers
                 if (mode == "replace")
                 {
                     await _memoryService.ReplaceAllAsync(new List<AppMemory>(bank.Entries));
+                    _bankService.ForgetLoadedBank();
                     added = bank.Entries.Count;
                 }
                 else if (mode == "append")

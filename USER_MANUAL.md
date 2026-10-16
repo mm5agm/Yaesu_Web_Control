@@ -908,6 +908,8 @@ Recall is *modal* — once the radio is in QMB mode it stays there until you pre
 
 The button updates automatically — if the radio is powered off or stops responding, it switches to red/Disconnected within a few seconds without any action needed.
 
+Pressing it to disconnect closes the COM port, so another program can open it while YWC is disconnected; press it again to reconnect. While the radio is transmitting, the link is left open, so the radio is never left keyed with nothing talking to it.
+
 Click the button to toggle the connection. While connecting, it briefly shows "Connecting…". On reconnect the app re-reads all radio settings so the controls reflect the current radio state. Useful if the radio was powered on after the app started, or after a USB cable was unplugged and re-plugged.
 
 **ATU button** — Controls the radio's automatic antenna tuner. The button matches the Yaesu front-panel TUNE button's behaviour: short tap and long press do different things.
@@ -1330,30 +1332,58 @@ It is called experimental for a reason. It is a separate copy of the page's code
 
 **Radio** in the top bar, on both the Classic page and the Experimental UI, opens a third way of working the radio, at `http://localhost:8080/radio`. It is laid out like the front of a transceiver: the meter and the keys down the left, a screen in the middle with the VFOs, the spectrum and the band and mode keys, the main dial on the right, and a row of knobs along the bottom. The **Classic**, **Experimental** and **Radio** buttons in its top strip move between the three, and they can all be open in different tabs at once.
 
-It is still being built. What is described here works now. The knobs only show the radio's settings so far; turning them, and turning the main dial, is the next stage.
+Everything on it works the radio: the keys, the knobs, the main dial and the windows opened from the keys under the meter. The few things that are not built yet say **Comes in a later build** when you press them.
 
 **The screen.**
 
-- **MAIN · VFO-A** on the left and **SUB · VFO-B** on the right show each VFO's frequency, mode, IF width, AGC, and anything switched on such as IPO, ATT, NB, DNR, DNF or NOTCH. On the FTdx101MP and FTdx101D, SUB has its own small S-meter bar as well. **SPLIT** appears beside MAIN when split is on.
-- **The spectrum** is VFO A's SDR ([§5.4](#54-spectrum-display)), with the passband shaded, the frequency along the bottom and DX cluster spots ([§5.17](#517-dx-spots-list)) marked on it. With no SDR set up, it says so.
+- **MAIN · VFO-A** on the left and **SUB · VFO-B** on the right show each VFO's frequency, mode, IF width, AGC, and anything switched on such as IPO, ATT, NB, DNR, DNF or NOTCH. On the FTdx101MP and FTdx101D, SUB has its own small S-meter bar as well. **SPLIT** appears beside MAIN when split is on. Chips along the bottom of each box show the antenna (**ANT**), the roofing filter (**ROOF**) and the band segment (**SEG**), where the radio has them, and clicking one gives a list to change it. **ENT** opens a keypad for typing in a frequency.
+- **The spectrum** shows the SDR for each VFO that has one ([§5.4](#54-spectrum-display)), with the passband shaded, the band edges and band-plan marks, the frequency along the bottom and DX cluster spots ([§5.17](#517-dx-spots-list)) marked on it. **OUT OF BAND** appears when the dial is outside the band. With two SDRs, the **Main**, **Sub** and **Both** tabs choose which you see; **Both** stacks them and outlines the selected receiver's one. With no SDR set up, it says so.
+  - **Click** to tune there, or turn the **mouse wheel** to tune one step a notch. A thin line and a readout follow the mouse and show exactly the frequency a click would send. In RTTY the readout also shows **→ dial**, because the dial is set half the shift away from where you click, so that the signal lands in the middle of the filter ([§22](#22-rtty)).
+  - **Shift+click** drops a marker; Shift+click on it again to clear it. Markers are not saved.
+  - In the waterfall's bottom-left corner are the **span** list, **HOLD**, and **SCOPE**, which sets the range, speed, brightness, smoothing and passband shading.
+  - The **⇱** key opens the spectrum in a browser window of its own, for a second screen.
 - **Radio screen.** The **SDR / Radio screen** switch in the corner of the waterfall swaps the spectrum for the picture of the radio's own display, the same one the Radio Display panel shows ([§19](#19-radio-display)). It needs a capture device chosen in that panel on the Classic page first. The picture is stretched to fill the box, so it is a little wider than on the radio. It works as it does on the Radio Display page: click the radio's spectrum to tune there, click the readouts along the ANT…AGC row to change them, and click the meters to choose which TX meters the radio shows. Hold the mouse over a digit of the radio's frequency, and a box appears round it; the mouse wheel then moves that digit up or down. On the RTTY and PSK decode screen the meters, the frequency and the ANT…AGC row still work; the rest of the picture is not clickable there.
-- **The lamps** in the top strip show the connection to the radio (**CAT**), the SDR and the DX cluster: green is working, amber is connecting, red is a fault.
+- **The top strip** has lamps for the connection to the radio (**CAT**), the SDR and the DX cluster: green is working, amber is connecting, red is a fault. **Click CAT** to disconnect from the radio, and again to connect, as **Connect** does on the Classic page; while it is disconnected YWC lets go of the COM port, so another program can use it. Beside the lamps are WSJT-X's transmit state and a UTC clock. **F** fills the screen with the panel; Esc goes back. **MENU**, at the right-hand end, drops down YWC's other pages: Settings, Application Setup, Memories, Labels, Meter Calibration and Diagnostics, then the User Manual and About. Each opens in a new tab, so the panel keeps running behind it. Click elsewhere or press Esc to close the list without choosing.
 
 **Changing things in the VFO boxes.** Click the mode, the IF width or the AGC in a VFO box to get a list, and click one to change it; click anywhere else or press Esc to close the list. The width list only offers the widths for the mode that VFO is in, and there is none in AM or FM. Click IPO, ATT, NB and the other words in a box to switch them, as their keys do. Hold the mouse over a digit of either frequency and turn the mouse wheel to move that digit up or down: the big digits move in kHz steps and the small ones in Hz. On radios with one receiver, only the VFO the radio is on can be changed this way; the other one is shown but cannot be changed from its box.
 
-**The selected receiver.** One VFO is outlined and tagged **SELECTED**. That is the receiver the radio is on (MAIN or SUB on the FTdx101MP and FTdx101D), and it is the one the panel works on: the meter needle, the mode keys and the keys down the left all show it, and a press changes it. **Click the other VFO to select it**, which changes the radio over as clicking a VFO's heading does on the Classic page. If you change it on the radio itself, the outline follows.
+**The selected receiver.** One VFO is outlined and tagged **SELECTED**. That is the receiver the radio is on (MAIN or SUB on the FTdx101MP and FTdx101D), and it is the one the panel works on: the meter needle, the mode keys and the keys down the left all show it, and a press changes it. **Click the other VFO**, or press **MAIN/SUB** (**VFO A/B** on radios with one receiver), to select it. That changes the radio over, as clicking a VFO's heading does on the Classic page. If you change it on the radio itself, the outline follows.
+
+**The main dial and the knobs.** Turn the mouse wheel over a knob, or drag it round, to turn it.
+
+- **The main dial** tunes the selected receiver one step at a time. On the FTdx101MP and FTdx101D the outer ring tunes MAIN and the inner knob tunes SUB, as on the radio. The **−** and **+** keys under it tune down or up by one step, landing on a whole step as a radio's dial does. Press **STEP** to go through 10 Hz, 50 Hz, 100 Hz, 500 Hz, 1 kHz, 5 kHz and 10 kHz; this browser remembers it.
+- Each receiver has **AF/RF·SQL** (inner AF gain, outer RF gain), **SHIFT/WIDTH** and **NOTCH/CONT**.
+- **MIC/PROC**: the inner knob is the mic gain. The outer ring is the speech processor level or, while the processor is off, the AMC output level.
+- **POWER/MONI**: the inner knob is the RF power, the outer ring the monitor level. **SPEED/PITCH** is the CW keyer speed and pitch.
+- **The clarifier knob** sets the clarifier offset. **RX** and **TX** beside it switch the clarifier on and off, and **CLR** sets the offset back to zero without switching it off.
 
 **The keys.** Each key's light shows whether that function is on for the selected receiver, and the small text under some of them shows the setting.
 
 - **IPO** steps through IPO, AMP1 and AMP2. **ATT** steps through off, 6, 12 and 18 dB.
 - **AGC** steps through FAST, MID, SLOW, AUTO and OFF. With AGC off the S-meter sits at zero and the receiver can sound deaf, so if signals vanish check that the key does not say OFF.
-- **NB**, **DNR**, **DNF**, **NOTCH**, **CONTOUR**, **APF** and **PROC** switch on and off. CONTOUR and APF keep the frequency they were last set to.
-- **SPLIT**, **RX CLAR** and **TX CLAR** under the dial switch split and the clarifier on and off. The clarifier offset is shown beside the knob under them.
-- **VOX** and **TUNE** only show the radio's state, and pressing them does nothing. Both can make the radio transmit, so on this page they are left alone deliberately.
+- **NB**, **DNR**, **DNF**, **NOTCH**, **CONT**, **APF** and **PROC** switch on and off. CONT and APF keep the frequency they were last set to. **MONI** switches the monitor on and off; it does not transmit.
+- **TUNE** starts the ATU tuning, which makes the radio transmit a carrier, so it needs two presses. The first lights it and shows **AGAIN** under it; press it again within four seconds to tune, or leave it and it goes out. While the radio tunes, the key shows **STOP**, and pressing it then stops the tune, so leave it alone until the radio has finished. It is the same TUNE as the one in the **TX SETUP** window, and either one shows what the other is doing.
+- **VOX** switches VOX on and off, as **VOX ON** and **VOX OFF** in the **TX SETUP** window do. While it is lit, your microphone keys the transmitter. Its gain and delay are in TX SETUP, described below.
+- **A▸B**, **B▸A**, **A⇄B** and **SPLIT** copy, swap and split the VFOs. **Q.SPLIT** puts VFO B above VFO A by the Q.SPLIT step set in the radio's menu, and turns split on. **TX A** and **TX B** choose which VFO transmits; they do not transmit.
+- **V/M** switches between VFO and memory. **M▸VFO** copies the radio's current memory channel into the selected receiver. **VFO▸M** writes VFO A over the radio's own current memory channel: the first press names the channel under the key, such as **RADIO M001?**, and a second press within four seconds writes it; if the channel has changed in between, nothing is written. It writes to the radio's memory, not to YWC's memories in the **MEMORIES** window. **QMB STO** stores a quick memory and **QMB RCL** recalls one, stepping on to the next each time it is pressed. **M.STORE** saves the selected receiver into one of YWC's memory banks ([§8.5](#85-memory-banks)): press it, and a list of your banks drops down under it; click a bank, and the frequency, mode and the rest of the receiver's setup go on the end of it. The key then shows the bank's name for a few seconds. The bank does not have to be loaded first. If it is the bank you have loaded, the memory appears in your memories straight away as well. **The memories in use now**, at the bottom of the list, adds it to those instead, as Classic's **Save to Mem** does. Press M.STORE again or Esc to close the list without saving.
 
-**Bands, modes and the step.** The band keys under the spectrum change band on the selected receiver, and the mode keys change its mode; the lit mode key is the one it is in. The **−** and **+** keys under the dial tune the selected receiver down or up by one step, landing on a whole step as a radio's dial does. Press **STEP** to go through 10 Hz, 50 Hz, 100 Hz, 500 Hz, 1 kHz, 5 kHz and 10 kHz; this browser remembers it.
+**Bands and modes.** The band keys under the spectrum change band on the selected receiver, and the mode keys change its mode; the lit mode key is the one it is in.
 
-**The meter.** On receive, the needle shows the selected receiver's S-meter. On transmit, the **PO**, **SWR**, **ALC**, **COMP** and **IDD** buttons under it choose what the lower scale and the needle show.
+**The meter.** On receive, the needle shows the selected receiver's S-meter. On transmit, the **PO**, **SWR**, **ALC**, **COMP** and **IDD** buttons under it choose what the lower scale and the needle show, with **VDD** and **TEMP** as well on the radios that have them.
+
+**The windows.** The keys under the meter open windows on top of the panel. Drag a window by its title bar and resize it from its corner. Each part of a window can be closed (**×**), or torn off into a window of its own and put back into its group again; pressing the key again brings back anything you closed. Where each window was, and which were open, is remembered by this browser.
+
+- **CW** (switches to CW-U): the keyer, the CW Reader ([§20](#20-cw-reader)) and CW Send ([§21](#21-cw-send)).
+- **RTTY** (switches to RTTY-L): the RTTY tuner and reader ([§22](#22-rtty)). Its send part only explains that this radio can't send RTTY text over CAT.
+- **MEMORIES**: YWC's own memories ([§8](#8-radio-memories)), not the radio's channels. **CHANNELS** shows the memories you have now; click one to tune there. **SAVE MAIN** and **SAVE SUB** (**SAVE VFO-A** and **SAVE VFO-B** on radios with one receiver) add a receiver to them, as **M.STORE** does, and **EDIT…** opens the Memories page. In **BANK**, choose a bank, then **LOAD** replaces the memories you have now with it, and **SAVE TO BANK** writes the memories you have now over it. Both take two presses. To put the receiver into a bank, **M.STORE** is quicker: press it and click the bank. The built-in starter bank can be loaded but not saved over; to make a new bank, use **Save As…** on the Memories page ([§8.5](#85-memory-banks)).
+- **DX**: the DX spots list and the watch list ([§5.17](#517-dx-spots-list)).
+- **METERS**: all the meters, and the S-meter history.
+- **AUDIO**: Remote Audio ([§18](#18-remote-audio)).
+- **SCOPE**: the radio's own scope over CAT ([§5.20](#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)), and the Radio screen picture.
+- **RX SETUP**: the audio filter ([§5.18](#518-audio-filter-popout)), IF shift and notch, the squelch, NB and DNR levels, and the FM repeater settings.
+- **TX SETUP**: VOX on and off, with its gain, delay and anti-VOX. A **TX TIMEOUT**, which puts up a warning banner once you have been transmitting for longer than the limit you set; it only warns and does not unkey the radio, and **DISMISS** clears it. The **ATU**, with **ATU ON** and **THRU**. **TUNE** there makes the radio transmit a carrier, so it asks for a second press, as the TUNE key on the left does.
+
+The CW Reader, CW Send, the RTTY tuner and the DX spots each have a **⇱** key that opens them in a browser window of their own. Unlike a window on the panel, that one can go on another screen. In the CW and RTTY windows, **⇱ WINDOW** in the title bar does the same for the whole window. Only three things in the windows make the radio transmit, and each is marked in red: the Remote Audio TX key, CW Send's Send key and keyer memories, and the ATU's TUNE. The TUNE key on the left of the panel is the fourth.
 
 **Theme and size.** The two boxes at the right of the top strip choose the colours and the size. **Dark console** is the usual look; **Night (red)**, **Silver classic**, **Daylight**, **Green display** and **High contrast** are the others, and **Match computer** follows Windows' light or dark setting. **Fit** makes the whole panel fit the window; the percentages fix its size and let you scroll. Both are remembered by this browser, so a tablet and a PC can each have their own.
 
@@ -3816,13 +3846,14 @@ The reader decodes at the pitch you are using, because that is the tone you have
 
 ### 20.4 The panel controls
 
-Along the top of the panel are four buttons and two switches. The switches — **Follow** and **Tune** — are easy to miss because they do not look like the buttons beside them, and both are worth knowing about.
+Along the top of the panel are five buttons and two switches. The switches — **Follow** and **Tune** — are easy to miss because they do not look like the buttons beside them, and both are worth knowing about.
 
 | Control | What it does |
 |---|---|
 | **Start / Stop** | Runs the decoder. Stop also restores your radio settings if Reader Mode is on. |
 | **Clear** | Empties the on-screen text. The transcript file on disk is not touched, so this is safe to press when you move to a new station. |
 | **Reader Mode** | Sets the radio up for decoding, and puts your settings back afterwards — see [§20.6](#206-reader-mode). |
+| **Auto** | Finds the station being read, tunes it onto your CW pitch and sets the filter for its speed — see [Auto](#auto-tune-the-station-in-for-you) in §20.6. |
 | **Log QSO** | Opens the log form — see [§20.8](#208-logging-a-qso). |
 | **Follow** *(switch, on by default)* | Keeps the newest text in view. See below. |
 | **Tune** *(switch, off by default)* | Shows the tuning display beside the text — see [§20.5](#205-the-tune-display). |
@@ -3880,6 +3911,21 @@ Two details worth knowing:
 - **It survives a page reload.** YWC remembers your previous settings on the host, not in the browser tab, so if you reload the page — or open YWC in a second browser — the button still knows what to put back. That is the whole reason it is a server-side feature rather than three quick commands from the page.
 
 Reader Mode only touches VFO A.
+
+#### Auto: tune the station in for you
+
+**Auto** does for a CW station what the RTTY Tuner's Auto does for RTTY ([§22.3](#223-auto-working-out-what-you-are-listening-to)). Press it with a station keying somewhere in your filter, and it moves the dial so the station's tone sits on your CW pitch, then sets the filter for the speed it is sending. The status line says what it did, for example *Auto: 17 wpm, moved the dial -347 Hz onto pitch, filter 250 Hz, APF on.*
+
+It works in two steps:
+
+1. **If the station can't be read yet** — well off pitch in a wide filter, with neighbours either side — Auto moves onto the tone and closes the filter to 500 Hz. That is usually what lets the reader start copying.
+2. **Once it is copying**, Auto makes the final small move onto pitch and sets the width for the speed: your Reader Mode width (250 Hz unless you changed it in [§6.10](#610-cw-reader-mode)) at most speeds, opening up to 500 Hz for fast CW, which a narrow filter would smear.
+
+A station that is already readable skips the first step. The dial always moves before the filter narrows, so a station a little off pitch isn't thrown out of the filter before it has been brought onto pitch.
+
+The filter and APF go through Reader Mode, so **Stop** puts your own filter back. The dial stays where Auto put it: that is the station, and moving back would take you off it.
+
+Auto changes nothing when it can't be sure. With no steady tone for 10 seconds — a bare carrier, noise, or two stations of equal strength — it says so and leaves the radio alone. It only works in CW-U or CW-L, never while transmitting, and like Reader Mode it only touches VFO A. If it found the station but it still isn't readable after the first step, it says so; press **Auto** again once text is appearing.
 
 ### 20.7 Transcripts
 

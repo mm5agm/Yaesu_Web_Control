@@ -7,9 +7,9 @@
 //
 // Stage 2: keys, bands, modes, step and the VFO keys write to the radio
 // through the same /api/cat endpoints Classic uses, aimed at the SELECTED
-// receiver (the radio's VS state - click a VFO to change it). Nothing here may
-// transmit: TUNE (atu/tune keys the radio) and VOX (room noise can key it) are
-// inert, display-only keys.
+// receiver (the radio's VS state - click a VFO to change it). TUNE keys the
+// radio, so it takes two presses (the TX SETUP window's tune); VOX switches
+// as Classic's does, and is lit while on.
 //
 // The bottom row is one group per receiver (MAIN | SHARED · TX | SUB). On a
 // dual-receiver radio each group's keys write to their own receiver whichever
@@ -73,7 +73,7 @@ function post(url, body) {
 
 /**
  * @param {HTMLElement} root
- * @param {object} cfg  { model, dual, maxPowerW, views }
+ * @param {object} cfg  { model, dual, maxPowerW, views, menu }
  */
 export function startYaesuRadioPanel(root, cfg) {
     const model = cfg.model;
@@ -92,6 +92,7 @@ export function startYaesuRadioPanel(root, cfg) {
 
     let radioScreen = null;     // set just after mount; the panel may call onScreenView during it
     let win = null;             // likewise: windows restored from last time report during mount
+    let atuKey = { armed: false, tuning: false };    // the TX SETUP window's TUNE, also reports during mount
     const windowShown = {};     // group -> panels of it shown on the board
     const panel = mountRadioPanel(root, {
         brandShort: 'YWC',
@@ -99,13 +100,14 @@ export function startYaesuRadioPanel(root, cfg) {
         model,
         dual,
         views: cfg.views ?? [],
+        menu: cfg.menu ?? [],
         lamps: [{ id: 'cat', label: 'CAT', click: true, title: "The radio's CAT link: click to disconnect or connect, as Classic's Connect key" }, { id: 'sdr', label: 'SDR' }, { id: 'dx', label: 'DX' }],
         statusChips: [{ id: 'wsjtx', label: 'WSJT-X TX', title: 'Lit while WSJT-X is transmitting through YWC' }],
         keys: [
             { id: 'mainsub', label: dual ? 'MAIN / SUB' : 'VFO A / B', title: dual ? 'Select MAIN or SUB: the keys, knobs and rows act on the selected receiver' : 'Select VFO A or VFO B' },
             { id: 'proc', label: 'PROC', title: 'Speech processor on / off (transmit audio only)' },
-            { id: 'vox', label: 'VOX', inert: true, title: 'VOX - not available here: it would let audio key the transmitter' },
-            { id: 'tune', label: 'TUNE', inert: true, title: 'ATU TUNE - not available here: tuning transmits' },
+            { id: 'vox', label: 'VOX', title: 'VOX on / off: while on, your microphone keys the transmitter. Gain and delay are in TX SETUP' },
+            { id: 'tune', label: 'TUNE', title: 'ATU TUNE - transmits a carrier: press twice. Pressed while tuning, it stops' },
             { id: 'moni', label: 'MONI', title: 'Monitor on / off: hear your own transmit audio. It does not transmit' },
         ],
         rxGroups: {
@@ -153,10 +155,10 @@ export function startYaesuRadioPanel(root, cfg) {
         memKeys: [
             { id: 'vm', label: 'V/M', title: 'Switch between VFO and memory' },
             { id: 'mtovfo', label: 'M▸VFO', title: "Copy the radio's current memory channel to the selected receiver" },
-            { id: 'vfotom', label: 'VFO▸M', title: "Write VFO-A over the radio's current memory channel - press twice" },
+            { id: 'vfotom', label: 'VFO▸M', title: "Write VFO-A over the radio's own current memory channel (not YWC's Memories) - press twice" },
             { id: 'qmbsto', label: 'QMB STO', title: 'Quick memory bank: store the current frequency and mode' },
             { id: 'qmbrcl', label: 'QMB RCL', title: 'Quick memory bank: recall; each press steps to the next stored one' },
-            { id: 'mstore', label: 'M.STORE', sub: 'app', title: "Save the selected receiver to YWC's memories" },
+            { id: 'mstore', label: 'M.STORE', sub: 'bank', title: "Save the selected receiver into one of YWC's memory banks: press, then click the bank" },
         ],
         // CLR zeroes the offset and leaves RX / TX clarifier as they are, as the
         // radio's CLEAR does.
@@ -230,6 +232,7 @@ export function startYaesuRadioPanel(root, cfg) {
         freq: vfo => r.freq[vfo] ?? 0,
         showScreen: () => panel.setScreenView('tft'),
         onTxTimeout: s => txWarning(s),
+        onAtuTune: s => { atuKey = s; refreshTune(); },
     });
 
     // ---- the CW and RTTY windows bring their mode -------------------------
@@ -478,8 +481,44 @@ export function startYaesuRadioPanel(root, cfg) {
             if (!vfoToMemArm) return;
             if (!d?.channel) return disarm();
             vfoToMemArm.channel = String(d.channel);
-            panel.setKey('mem:vfotom', { on: true, sub: 'M' + d.channel + '?' });
+            panel.setKey('mem:vfotom', { on: true, sub: 'RADIO M' + d.channel + '?' });
         }).catch(disarm);
+    }
+
+    // M.STORE: one press lists the banks, one click on a bank saves the
+    // selected receiver into it. The bank need not be loaded; the key's
+    // small text says where it went.
+    let mstoreTimer = 0;
+    function mstoreSays(text) {
+        clearTimeout(mstoreTimer);
+        panel.setKey('mstore', { on: !!text, sub: text || 'bank' }, 'mem');
+        if (text) mstoreTimer = setTimeout(() => mstoreSays(''), 4000);
+    }
+    async function memoryStore(rx) {
+        const [names, loaded] = await Promise.all([
+            fetch('/api/memorybank').then(x => (x.ok ? x.json() : [])).catch(() => []),
+            fetch('/api/memorybank/loaded').then(x => (x.ok ? x.json() : {})).catch(() => ({})),
+        ]);
+        const who = dual ? (rx === 'a' ? 'MAIN' : 'SUB') : 'VFO-' + rx.toUpperCase();
+        const toList = () => post(`/api/memory/save-vfo/${rx}`, { label: '' })
+            .then(res => mstoreSays(res?.ok ? 'SAVED' : 'FAILED'));
+        const items = [{ group: `SAVE ${who} TO BANK` }];
+        for (const name of names) {
+            items.push({
+                label: name === loaded?.name ? `${name}  (loaded)` : name,
+                title: `Add ${who} to the end of ${name}`,
+                on: name === loaded?.name,
+                run: () => post(`/api/memory/save-vfo/${rx}/to-bank/${encodeURIComponent(name)}`, { label: '' })
+                    .then(res => mstoreSays(res?.ok ? '→ ' + name.toUpperCase().slice(0, 10) : 'FAILED')),
+            });
+        }
+        if (!names.length) items.push({ group: 'NO BANKS YET - MAKE ONE IN MEMORIES' });
+        items.push({ group: 'OR' }, {
+            label: 'The memories in use now',
+            title: 'Add it to the memory list in use now (the Memories page), not to a bank',
+            run: toList,
+        });
+        panel.openKeyList('mstore', items, 'mem');
     }
 
     function act(kind, id, vfo, dir) {
@@ -538,8 +577,10 @@ export function startYaesuRadioPanel(root, cfg) {
                     case 'apf': return post(`/api/cat/apf/${rx}`, { on: !r.apf[v], freqHz: r.apfHz[v] });
                     case 'proc': return post('/api/cat/proc', { enabled: !r.proc });
                     case 'moni': return post('/api/cat/monitoron', { on: !r.moni });
+                    case 'tune': return win.atuTune();
+                    case 'vox': return post('/api/cat/vox', { on: !r.vox });
                 }
-                return;    // vox and tune are inert
+                return;
             case 'lamp':
                 if (id === 'cat') return post(r.catOn ? '/api/cat/disconnect' : '/api/cat/connect');
                 return;
@@ -570,7 +611,7 @@ export function startYaesuRadioPanel(root, cfg) {
                     case 'qmbrcl': return post('/api/cat/qmb/recall');
                     case 'mtovfo': return post(`/api/cat/memvfo/mtovfo-${dual ? rx : 'a'}`);
                     case 'vfotom': return vfoToMemory();
-                    case 'mstore': return post(`/api/memory/save-vfo/${rx}`, { label: '' });
+                    case 'mstore': return memoryStore(rx);
                 }
         }
     }
@@ -770,6 +811,15 @@ export function startYaesuRadioPanel(root, cfg) {
     }
     const wheelHolds = vfo => wheel[vfo].busy || Date.now() < wheel[vfo].until;
 
+    // TUNE on the left runs the same two-press tune as the TX SETUP window's
+    // TUNE (both are that window's one tuner), and shows where it has got to.
+    function refreshTune() {
+        panel.setKey('tune', {
+            tx: atuKey.armed || atuKey.tuning || !!r.atuTuning,
+            sub: atuKey.tuning ? 'STOP' : atuKey.armed ? 'AGAIN' : '',
+        });
+    }
+
     function refreshClar() {
         const hz = r.clarHz[r.sel];
         const txt = (hz >= 0 ? '+' : '') + hz + ' Hz';
@@ -885,9 +935,9 @@ export function startYaesuRadioPanel(root, cfg) {
         ClarifierOffsetA: v => { r.clarHz.A = num(v); refreshClar(); },
         ClarifierOffsetB: v => { r.clarHz.B = num(v); refreshClar(); },
         IsTransmitting: v => { r.tx = on(v); panel.setTx(r.tx); },
-        AtuTuning: v => panel.setKey('tune', { tx: on(v) }),
+        AtuTuning: v => { r.atuTuning = on(v); refreshTune(); },
         ProcEnabled: v => { r.proc = on(v); panel.setKey('proc', { on: r.proc }); refreshSharedKnobs(); },
-        VoxOn: v => panel.setKey('vox', { on: on(v) }),
+        VoxOn: v => { r.vox = on(v); panel.setKey('vox', { on: r.vox }); },
         MonitorOn: v => { r.moni = on(v); panel.setKey('moni', { on: r.moni }); },
         AfGainA: v => { r.af.A = num(v); refreshRxKnobs('A'); },
         AfGainB: v => { r.af.B = num(v); refreshRxKnobs('B'); },

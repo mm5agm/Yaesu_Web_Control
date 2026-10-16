@@ -134,7 +134,7 @@ test('CW Reader pop-out pauses outside CW and resumes in CW', async note => {
 
 test('RTTY Tuner pop-out pauses outside RTTY/DATA/SSB and resumes', async note => {
     const { onPause, onResume } = await modePopoutChecks({ path: '/RttyTuner', pausedSel: '#rttyTunerPaused', announceSel: '#rttyTunerAnnounce',
-        name: 'RTTY tuner', good: 'RTTY-L', bad: 'CW-U', note });
+        name: 'RTTY panel', good: 'RTTY-L', bad: 'CW-U', note });
     expect(onPause.some(w => /\/api\/rtty\/tuner\/stop/.test(w.path)), `no tuner stop sent on pause (sent: ${onPause.map(w => w.path).join(', ') || 'nothing'})`);
     expect(onResume.some(w => /\/api\/rtty\/tuner\/start/.test(w.path)), `no tuner start sent on resume (sent: ${onResume.map(w => w.path).join(', ') || 'nothing'})`);
 });
