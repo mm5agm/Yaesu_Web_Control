@@ -71,4 +71,7 @@ export function startYaesuRadioWindow(root, cfg) {
         }
         win.onRadioState(msg);
     });
+    // rwcHubConnection hands back an unstarted connection, and this page has
+    // no site.js to start it.
+    cfg.conn.start().catch(e => console.warn('radio window: hub', e));
 }
