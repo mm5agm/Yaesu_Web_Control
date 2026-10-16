@@ -88,7 +88,9 @@ Every one of these is written up in full in the [release notes](RELEASE_HISTORY.
 
 One line per fix, newest first, with the build that has it. A pre-release installs exactly like a release and carries everything before it; each one is written up under [Release Notes](#release-notes). *Not yet in a build* means the fix is in the code and will be in the next pre-release or release.
 
-Nothing since v2.5.3 yet. Everything fixed in the v2.5.3 pre-releases is in [v2.5.3](#2026-10-16---v253).
+| Fixed | Issue | In build |
+|---|---|---|
+| CW Reader: a slow sender heard straight after fast or fading signals no longer has his callsign broken into letters ("I W 2 B TA" for IW2BTA). Gaps measured at the old speed are no longer used to judge where words end at the new one. | - | *Not yet in a build* |
 
 **Supported transceivers:**
 
