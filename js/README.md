@@ -51,6 +51,23 @@ two repositories.
   UI layer over `createAudioSession` and does touch app-specific markup and
   settings. Same split as the calibration engine and its tables: the shared
   half knows the shape, the app half knows the specifics.
+- `flex/` — the dockable workspace behind YWC's Experimental UI, written by
+  Fabio Valente and moved here so IWC can have one too:
+  `flex-workspace.js` (the FlexLayout dock, layout persistence, pop-outs,
+  scale, the Panels and Layouts menus), `flex-popout-bridge.js` (makes a
+  popped-out panel part of the page for lookups and listeners; a classic
+  script, loaded first), `flex-shims.js` (the Bootstrap Modal/Tooltip/Dropdown
+  shim the dock pages use instead of Bootstrap's JS) and
+  `flex-layouts-admin.js` (the Manage layouts dialog). The app passes
+  `initFlexWorkspace` a config naming its panels, layout file, storage prefix
+  and API base; a panel's markup is either a `<template>` or a node the page
+  pre-rendered into `#ywcFlexParking`. Each app keeps its own page, layout
+  JSON, `popout.html` and vendored `lib/flexlayout/` (only `*.js` is copied
+  from here). The C# half — `Services/Flex/FlexLayoutStore` and
+  `Models/FlexLayout` — is in this repo too; the controller is each app's.
+  The `ywc-flex-*` event/class names and the `window.ywcFlex*` globals are
+  the shell's namespace in both apps and keep their original prefix on
+  purpose: both apps' scripts and CSS use them.
 
 The per-radio numbers it works on are **not** here: each app keeps its own
 `wwwroot/js/calibration/calibration-tables.js`, which the engine imports as a
