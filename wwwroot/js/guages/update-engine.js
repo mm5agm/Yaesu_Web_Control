@@ -28,8 +28,20 @@ export function updateGaugeValue(gaugeInstance, calibratedValue, options = {}) {
         value = clamp(value, min, max);
     }
 
-    // Only touch the underlying gauge value.
-    gaugeInstance.gauge.value = value;
+    // canvas-gauges remembers the target of the animation that started a
+    // run of overlapping animations, and every later one in that run ends on
+    // it instead of on its own value. Meters update every 200 ms against a
+    // 400 ms animation, so during an over the run never breaks, and the 0 at
+    // the end left the power needle on a value from early in the over while
+    // the label read 0 W (headless repro: 15, 30, 31, 30, 0 ends on 15).
+    // Cancelling the running animation first makes the new one start from
+    // where the needle is drawn and end on the value just sent.
+    const g = gaugeInstance.gauge;
+    if (g.animation && g.animation.frame) {
+        g.animation.cancel();
+        delete g._value;
+    }
+    g.value = value;
 }
 
 /**

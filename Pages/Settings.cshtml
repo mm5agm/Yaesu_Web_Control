@@ -1793,6 +1793,7 @@
                                 <option value="FTDX3000">FTDX3000</option>
                                 <option value="FTDX5000MP">FTDX5000MP</option>
                                 <option value="FTDX5000D">FTDX5000D</option>
+                                <option value="FT-991A">FT-991A</option>
                             </select>
                             <div class="form-text">
                                 <strong>FTdx101MP:</strong> 200W output, dual receivers (VFO A + VFO B shown by default)<br />
@@ -1801,7 +1802,8 @@
                                 <strong>FT-710:</strong> 100W output, single receiver (VFO B for split/memory)<br />
                                 <strong>FTDX3000:</strong> 100W output, single receiver, SDR IF output available (9 MHz)<br />
                                 <strong>FTDX5000MP:</strong> 200W output, dual receivers (VFO A + VFO B shown by default); new profile, testing in progress<br />
-                                <strong>FTDX5000D:</strong> 200W output, dual receivers (VFO A + VFO B shown by default); new profile, testing in progress
+                                <strong>FTDX5000D:</strong> 200W output, dual receivers (VFO A + VFO B shown by default); new profile, testing in progress<br />
+                                <strong>FT-991A:</strong> 100W output (50W on 2 m / 70 cm), single receiver, HF + 6 m + 2 m + 70 cm; new profile, testing in progress
                             </div>
                             <span asp-validation-for="Settings.RadioModel" class="text-danger"></span>
                         </div>
@@ -1854,6 +1856,11 @@
                                 <div class="alert alert-info py-2 mb-0">
                                     The FT-710 has no roofing filter CAT command — the radio selects its filter
                                     automatically based on DSP bandwidth and mode. No configuration is needed.
+                                </div>
+                            </div>
+                            <div id="filtersFt991aSection" style="display:@(Model.Settings.RadioModel == "FT-991A" ? "block" : "none")">
+                                <div class="alert alert-info py-2 mb-0">
+                                    The FT-991A has no roofing filter CAT command, so there is nothing to configure here.
                                 </div>
                             </div>
                             <div id="filtersFtdx3000Section" style="display:@(Model.Settings.RadioModel == "FTDX3000" ? "block" : "none")">
@@ -2289,6 +2296,13 @@
                         </select>
                         <input type="hidden" asp-for="Settings.SdrDeviceKeyB" id="sdrDeviceKeyInputB" />
                         <div id="sdrDeviceKeyDisplayB" class="font-monospace small text-muted"></div>
+                        <span asp-validation-for="Settings.SdrDeviceKeyB" class="text-danger small"></span>
+                        <div id="sdrSameDeviceWarning" class="alert alert-warning small py-2 mt-2 mb-0" role="alert" hidden>
+                            <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+                            The same SDR is chosen for VFO A and VFO B. One SDR can only feed one VFO,
+                            so one panel would show "SDR device unavailable". Choose (none) for the VFO
+                            it isn't wired to. Settings won't save like this.
+                        </div>
 
                         <div id="sdrScanNotes" class="mt-2"></div>
                     </div>
@@ -2335,6 +2349,19 @@
                             this until the peak sits under the dial line; a peak that shows
                             <em>above</em> the dial needs a <em>negative</em> trim. Leave at 0 unless
                             you see the offset.
+                        </div>
+                    </div>
+                    <div class="mb-3 form-check form-switch">
+                        <input class="form-check-input" type="checkbox" asp-for="Settings.ReleaseSdrWhenBrowsersClose" />
+                        <label class="form-check-label" asp-for="Settings.ReleaseSdrWhenBrowsersClose">
+                            Free the SDR when the last browser closes
+                        </label>
+                        <div class="form-text">
+                            When on, YWC stops using the SDR about 3 seconds after you close the last
+                            YWC tab, so another program can open it straight away. Opening YWC in a
+                            browser again starts the spectrum again. When off (default), YWC keeps the
+                            SDR until it exits, which is 30 seconds after the last tab closes if
+                            "Automatically exit when no browser is connected" is on.
                         </div>
                     </div>
                     <div class="mb-3">
@@ -2706,6 +2733,91 @@
                         The audio peak filter narrows further still and is the biggest single
                         improvement available on a weak signal. Turn it off if you are listening as
                         well as reading and dislike the ringing.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <!-- RTTY Tuner -->
+    <details class="settings-section" @(ViewContext.ModelState.IsValid ? "" : "open")>
+        <summary><i class="bi bi-activity" aria-hidden="true"></i>&nbsp;RTTY Tuner</summary>
+        <div class="section-body">
+            <p class="text-muted small mb-3">
+                The RTTY tuner draws the crossed figure that shows when a teleprinter
+                signal is tuned in, it decodes the text, and its Auto button listens
+                for a few seconds and works out the tones, the shift, the speed and
+                which way round they are. All three depend on the receiver passing
+                both tones equally, which is what the first two settings are about.
+                The third is about how much of the panel you want on screen.
+            </p>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="rttyTunerSetMode"
+                               name="Settings.RttyTunerSetMode" value="true"
+                               @(Model.Settings.RttyTunerSetMode ? "checked" : "") />
+                        <input type="hidden" name="Settings.RttyTunerSetMode" value="false" />
+                        <label class="form-check-label" for="rttyTunerSetMode">Set RTTY mode when the tuner starts</label>
+                    </div>
+                    <div class="form-text">
+                        Only from the modes RTTY cannot be received in at all - CW, AM and
+                        FM - and your mode and filter are put back when the tuner closes.
+                        SSB, DATA and PSK are left alone, because that is how AFSK software
+                        works.
+                    </div>
+                    <div class="form-text">
+                        It also opens the IF filter if it is too narrow to carry the shift
+                        you are set to. It never narrows one: a narrow filter is how you dig
+                        a signal out of a crowded band, and only you know the band. Changing
+                        to RTTY brings your own stored RTTY filter width with it, which is
+                        better evidence about your band than any formula.
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="rttyAutoCentreMark"
+                               name="Settings.RttyAutoCentreMark" value="true"
+                               @(Model.Settings.RttyAutoCentreMark ? "checked" : "") />
+                        <input type="hidden" name="Settings.RttyAutoCentreMark" value="false" />
+                        <label class="form-check-label" for="rttyAutoCentreMark">Auto also tunes the signal in</label>
+                    </div>
+                    <div class="form-text">
+                        When Auto is sure of what it heard, the dial moves so the mark tone
+                        arrives on the tuner's mark - by as much as your IF filter is wide,
+                        and never less than 500 Hz, in RTTY only and never while
+                        transmitting. Auto says what it moved and by how much.
+                    </div>
+                    <div class="form-text">
+                        This is worth having on: a signal sitting off-centre in the IF arrives
+                        with one tone quieter than the other, and the speed cannot be measured
+                        from keying whose two halves are unequal. Tuning it in fixes the figure,
+                        the speed and anything decoding it, all at once.
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="rttyContestMode"
+                               name="Settings.RttyContestMode" value="true"
+                               @(Model.Settings.RttyContestMode ? "checked" : "") />
+                        <input type="hidden" name="Settings.RttyContestMode" value="false" />
+                        <label class="form-check-label" for="rttyContestMode">RTTY Contest Mode</label>
+                    </div>
+                    <div class="form-text">
+                        Leaves the tuner with just the tone controls, the crossed figure and
+                        its readouts. The hint under the scope goes, and the two message
+                        lines keep their height, so the panel stops changing size while you
+                        are tuning.
+                    </div>
+                    <div class="form-text">
+                        For contesting, where the logger already has a decoder and what it
+                        cannot draw is the figure. The same switch is in Icom Web Control,
+                        where it also leaves out that app's decode and send panels.
                     </div>
                 </div>
             </div>
@@ -3175,6 +3287,8 @@
         // driver=rtlsdr,label=Generic RTL2832U,...  →  "Generic RTL2832U [rtlsdr]"
         function keyToLabel(key) {
             if (!key) return '';
+            // The radio's own scope, not an SDR (Ft710ScopeFrame.KeyPrefix).
+            if (key.startsWith('yaesu-scope:')) return 'FT-710 internal scope [radio]';
             if (key.startsWith('sdrplay:')) {
                 const { hwVer, serial } = parseSdrplayKey(key);
                 const model = hwVer != null ? (SDRPLAY_HW_VER_NAMES[hwVer] || `hw${hwVer}`) : null;
@@ -3214,6 +3328,15 @@
             const key = document.getElementById(cfg.inputId).value;
             const el  = document.getElementById(cfg.displayId);
             el.textContent = key ? `Saved key: ${key}` : '';
+            updateSameDeviceWarning();
+        }
+
+        // Exact key match only, the same test the server makes on save.
+        function updateSameDeviceWarning() {
+            const a = document.getElementById(sdrSlots.A.inputId)?.value || '';
+            const b = document.getElementById(sdrSlots.B.inputId)?.value || '';
+            const warn = document.getElementById('sdrSameDeviceWarning');
+            if (warn) warn.hidden = !(a && a === b);
         }
 
         // Initialise both dropdowns from saved keys on page load, then
@@ -3491,6 +3614,7 @@
             const ftdx10Section   = document.getElementById('filtersFtdx10Section');
             const ft710Section    = document.getElementById('filtersFt710Section');
             const ftdx3000Section = document.getElementById('filtersFtdx3000Section');
+            const ft991aSection   = document.getElementById('filtersFt991aSection');
             if (!modelSelect) return;
             // Only the shown section's checkboxes may post — they all share one
             // field name, and a hidden ticked box would still be submitted (#156).
@@ -3506,6 +3630,7 @@
                 show(ftdx10Section,   v === 'FTdx10');
                 show(ft710Section,    v === 'FT-710');
                 show(ftdx3000Section, v === 'FTDX3000');
+                show(ft991aSection,   v === 'FT-991A');
             });
         })();
     </script>

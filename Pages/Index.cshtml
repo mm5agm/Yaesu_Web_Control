@@ -6,7 +6,9 @@
     ViewData["BodyLabel"] = "Yaesu radio control panel";
     var allModes = new[] {
         "LSB", "USB", "CW-U", "CW-L", "FM", "FM-N", "AM", "AM-N", "RTTY-L", "RTTY-U",
-        "DATA-L", "DATA-U", "DATA-FM", "DATA-FM-N", "PSK"
+        "DATA-L", "DATA-U", "DATA-FM", "DATA-FM-N",
+        // MD code E: C4FM on the FT-991A, PSK on every other model.
+        Model.RadioModel == "FT-991A" ? "C4FM" : "PSK"
     };
     // Display label shown in the dropdown — value stays as the CAT mode string.
     string ModeLabel(string m) => m == "DATA-FM-N" ? "D-FM-N" : m;
@@ -20,10 +22,18 @@
     // — see docs/decisions/0003-single-vs-dual-receiver-ui.md.
     bool isSingleReceiver  = Yaesu_Web_Control.Services.RadioCapabilities.IsSingleReceiver(Model.RadioModel);
     bool hasAntennaSelector = Yaesu_Web_Control.Services.RadioCapabilities.HasAntennaSelector(Model.RadioModel);
+    bool canSelectRxVfo = Yaesu_Web_Control.Services.RadioCapabilities.CanSelectRxVfo(Model.RadioModel);
+    bool hasRoofingCat = Yaesu_Web_Control.Services.RadioCapabilities.HasRoofingFilterCat(Model.RadioModel);
+    bool hasPaTemp = Yaesu_Web_Control.Services.RadioCapabilities.HasPaTemperatureMeter(Model.RadioModel);
+    bool isFt991a = Model.RadioModel == "FT-991A";
     // Rated TX output. Server-rendered rather than derived in JavaScript so the
     // slider and the Power dial are right on first paint, and so the browser
     // agrees with the range check CatController.SetPower applies to the same value.
     int maxPowerWatts = Yaesu_Web_Control.Services.RadioCapabilities.MaxPowerWatts(Model.RadioModel);
+    // Upper tuning limit, for the VFO digit count and every client-side clamp
+    // (site.js maxTunableHz). 75 MHz on all but the FT-991A's 470 MHz.
+    long maxTunableHz = Yaesu_Web_Control.Services.RadioCapabilities.FrequencyRangeHz(Model.RadioModel).MaxHz;
+    string maxTunableMhz = (maxTunableHz / 1_000_000).ToString(System.Globalization.CultureInfo.InvariantCulture);
     // VDD dial, per model for the same reason: 40–55 V for the FTdx101MP's 50 V
     // PA supply, 10–16 V for the 13.8 V radios (#155). Invariant culture so a
     // German-locale host does not render 13,8 into the JavaScript.
@@ -77,6 +87,19 @@
             ("0","300 Hz"), ("2","600 Hz"), ("3","850 Hz"), ("5","1.2 kHz"),
             ("7","1.65 kHz"), ("9","1.95 kHz"), ("12","2.4 kHz"), ("16","2.7 kHz"),
             ("19","3.0 kHz"), ("20","3.2 kHz"), ("21","3.5 kHz"), ("22","4.0 kHz")
+        }
+        : isFt991a
+        ? new (string Value, string Label)[]
+        {
+            // FT-991A SH codes, SSB column (CAT manual). Code 0 is the radio's
+            // default: 1.5 kHz with NARROW on, 2.4 kHz with it off.
+            ("0","Default"),
+            ("1","200 Hz"), ("2","400 Hz"), ("3","600 Hz"), ("4","850 Hz"),
+            ("5","1.1 kHz"), ("6","1.35 kHz"), ("7","1.5 kHz"), ("8","1.65 kHz"),
+            ("9","1.8 kHz"), ("10","1.95 kHz"), ("11","2.1 kHz"), ("12","2.2 kHz"),
+            ("13","2.3 kHz"), ("14","2.4 kHz"), ("15","2.5 kHz"), ("16","2.6 kHz"),
+            ("17","2.7 kHz"), ("18","2.8 kHz"), ("19","2.9 kHz"), ("20","3.0 kHz"),
+            ("21","3.2 kHz")
         }
         : isFtdx3000
         ? new (string Value, string Label)[]
@@ -254,21 +277,103 @@
         50%      { transform: scale(1.12); opacity: 0.85; }
     }
 
-    /* Dialog close (✕) button — a solid red so it stands out clearly against
-       the dark dialog header. The default btn-outline-secondary was a faint
-       grey outline that several operators found hard to spot. */
-    .ywc-dialog-close {
-        background: #c0392b;
-        color: #fff;
-        border: 1px solid #e74c3c;
-        font-weight: bold;
-        line-height: 1;
+    /* The dialog close (✕) button style is in site.css, so the pop-out
+       windows, which do not load this page, get it too. */
+
+    /* Spectrum panel height — Bruce VK2RT, discussion #171, who wanted more
+       vertical room for the spectrum.
+
+       `resize: vertical` gives a browser-drawn drag handle in the bottom-right
+       corner and writes the dragged height back as an inline style, which is
+       what SpectrumPanel persists. The same technique the CW Send and CW
+       Reader dialogs already use (see makeResizable further down this page).
+
+       `overflow: hidden` is not cosmetic: `resize` is ignored outright on an
+       element whose overflow is `visible`, which a Bootstrap .card-body
+       otherwise is. The canvas is sized to exactly this box by _sizeCanvas,
+       so there is nothing to clip in normal use.
+
+       The height here is the starting value only. SpectrumPanel puts the
+       operator's saved height back on load, and min/max are enforced in both
+       places so neither route can produce a panel the other would refuse.
+       Keep these three numbers in step with MIN_PANEL_H / MAX_PANEL_H /
+       DEFAULT_PANEL_H in wwwroot/js/sdr/spectrum-panel.js. */
+    .spectrum-canvas-wrap {
+        height: 280px;
+        min-height: 40px;
+        max-height: 1000px;
+        overflow: hidden;
+
+        /* This element is also Bootstrap's .card-body, which is flex:1 1 auto,
+           and the card is a flex column — so the body GROWS past the height set
+           above to fill whatever the card is. Side by side that card is
+           stretched to match the other VFO's, so every height below the other
+           panel's rendered identically and only Tall and above got through.
+           flex:0 0 auto makes the height above the one that decides. */
+        flex: 0 0 auto;
     }
-    .ywc-dialog-close:hover,
-    .ywc-dialog-close:focus {
-        background: #e74c3c;
-        color: #fff;
-        border-color: #ff6b5a;
+
+    /* Side by side, the flex row stretches both cards to the taller of the two
+       (align-items defaults to stretch), which would leave the shorter panel's
+       card padded out with dead space below its grip. Each card takes its own
+       height instead. Column layout is untouched: there, this axis is width. */
+    #spectrumPanels.flex-row {
+        align-items: flex-start;
+    }
+
+    /* The panel's resize grip. This started as CSS `resize: vertical` on the
+       wrapper above, letting the browser draw the handle, and that failed on
+       the bench: the browser's handle is a small triangle in the bottom-right
+       CORNER, which sits below the fold at the default height and moves
+       further off-screen every time the panel is made taller. Growing the
+       panel pushed its own control out of reach. This strip runs the full
+       width instead, is visible on a dark card, and takes the keyboard. */
+    .spectrum-resize-grip {
+        height: 16px;
+        cursor: row-resize;
+        background: #2b3035;
+        border-top: 1px solid #6c757d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        touch-action: none;   /* or a touch drag scrolls the page instead */
+    }
+
+    .spectrum-resize-grip::before {
+        content: "";
+        width: 64px;
+        height: 5px;
+        border-top: 2px dotted #ced4da;
+        border-bottom: 2px dotted #ced4da;
+    }
+
+    .spectrum-resize-grip:hover,
+    .spectrum-resize-grip.dragging {
+        background: #3a4047;
+    }
+
+    .spectrum-resize-grip:hover::before,
+    .spectrum-resize-grip.dragging::before {
+        border-color: #fff;
+    }
+
+    /* Amber, as the Radio Display splitter uses: a 2px blue ring inside the
+       strip all but vanished against the blue VFO card under it. */
+    .spectrum-resize-grip:focus-visible {
+        outline: 3px solid #ffc107;
+        outline-offset: -3px;
+        background: #3a4047;
+    }
+
+    .spectrum-resize-grip:focus-visible::before {
+        border-color: #ffc107;
+    }
+
+    /* While a grip drag is in progress, stop the pointer selecting the text it
+       sweeps across and keep the resize cursor even off the strip. */
+    body.spectrum-resizing {
+        user-select: none;
+        cursor: row-resize;
     }
 </style>
 
@@ -437,7 +542,17 @@
                     <span class="small text-nowrap">RX</span>
                     <div class="btn-group btn-group-sm" role="group" aria-label="Receive VFO">
                         <button type="button" id="rxVfoA" class="btn btn-outline-secondary py-0" data-rx="A" aria-label="Receive on VFO A">A</button>
+                        @if (canSelectRxVfo)
+                        {
                         <button type="button" id="rxVfoB" class="btn btn-outline-secondary py-0" data-rx="B" aria-label="Receive on VFO B">B</button>
+                        }
+                        else
+                        {
+                        @* FT-991A: no VS or FR, so CAT cannot move the receiver to VFO B. *@
+                        <button type="button" id="rxVfoB" class="btn btn-outline-secondary py-0" data-rx="B" disabled
+                                title="The FT-991A cannot choose its receive VFO over CAT. Use Swap A/B instead."
+                                aria-label="Receive on VFO B - not available on this radio over CAT">B</button>
+                        }
                     </div>
                     <span class="small text-nowrap ms-1">TX</span>
                     <div class="btn-group btn-group-sm" role="group" aria-label="Transmit VFO">
@@ -471,13 +586,13 @@
     <!-- Power and SWR Meters -->
     <div class="row mt-3">
         <div class="col-12">
-            <div class="card border-secondary">
+            <div class="card border-secondary" id="meterCard">
                 <div class="card-body py-2">
                     <!-- Gauges row. The id is the hook site.js uses to add
                          .meters-tx-dim while transmitting; data-meter-scope="rx"
                          on a cell marks it as one the radio stops measuring
                          during an over. -->
-                    <div id="meterGaugesRow" class="d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
+                    <div id="meterGaugesRow" class="fold-target d-flex justify-content-start align-items-start flex-wrap" style="margin-left: 0; gap: 0; margin-bottom: 0.2rem !important;">
                         <!-- S-Meter rolling history strip — leftmost so the live trace
                              reads left-to-right toward the S-meter needle. Hidden
                              until the toolbar's S-hist toggle is on. Sized to match
@@ -561,13 +676,16 @@
                             </div>
                         </div>
                         @if (!isFtdx10 && !isFt710 && !isFtdx5000) {
+                        @if (hasPaTemp) {
                         <!-- PA Temperature Meter — FTdx101/FTDX3000 only (high-voltage PA board).
-                             FTDX5000 excluded: no temperature read-code in its RM meter set. -->
+                             FTDX5000 excluded: no temperature read-code in its RM meter set.
+                             FT-991A excluded: it has RM7 (ID) and RM8 (VDD) but no RM9. -->
                         <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
                                 <canvas id="tempMeterCanvas" role="img" aria-hidden="true" aria-label="Amplifier temperature meter" data-a11y-key="meters.temp"></canvas>
                             </div>
                         </div>
+                        }
                         <!-- IDD Meter — FTdx101/FTDX3000 only -->
                         <div class="text-center" style="position: relative; height: 135px; min-width: 165px; margin: 0; padding: 0;">
                             <div class="analog-meter-container">
@@ -679,27 +797,34 @@
                                 aria-label="DX watch — alerts for spotted callsigns"
                                 title="Open DX watch list — get alerts when watched callsigns are spotted"
                                 onclick="document.getElementById('dxWatchDialog').show(); window.refreshDxWatchList && window.refreshDxWatchList();">DX Watch</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
+                        <button id="dxSpotsOpenBtn" class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="DX spots — list of cluster spots on current band"
                                 title="Open DX spots list — see callsigns spotted on the current band"
-                                onclick="window.dxSpotsPanel && window.dxSpotsPanel.toggle()">DX Spots</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
+                                onclick="window.dxSpotsOpen ? window.dxSpotsOpen() : (window.dxSpotsPanel && window.dxSpotsPanel.toggle())">DX Spots</button>
+                        <button id="cwReaderOpenBtn" class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="CW reader - decode received Morse to text"
                                 title="Open the CW reader - decodes the received Morse to text"
-                                onclick="window.cwReaderPanel && window.cwReaderPanel.toggle()">CW Read</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
+                                onclick="window.cwReaderOpen && window.cwReaderOpen()">CW Read</button>
+                        <button id="rttyTunerOpenBtn" class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="RTTY tuner - crossed-ellipse tuning scope"
                                 title="Open the RTTY tuner - mark and space filters on an X-Y scope; tune for the cross"
-                                onclick="window.rttyTuner && window.rttyTuner.toggle()">RTTY Tune</button>
-                        <button class="btn btn-sm ms-1 btn-outline-secondary"
+                                onclick="window.rttyTunerOpen && window.rttyTunerOpen()">RTTY Tune</button>
+                        <button id="cwSendOpenBtn" class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="CW send - type text and send it as Morse"
                                 title="Open CW send - type a line, press Enter, the radio keys it"
-                                onclick="window.cwSendPanel && window.cwSendPanel.toggle()">CW Send</button>
+                                onclick="window.cwSendOpen && window.cwSendOpen()">CW Send</button>
                         <button id="voiceBtn"
                                 class="btn btn-sm ms-1 btn-outline-secondary"
                                 aria-label="Voice announcements settings"
                                 title="Voice announcements for band, mode, TX state etc. — useful for partially sighted operators"
                                 onclick="document.getElementById('voiceDialog').show();">Voice</button>
+                        <!-- Fold button (Discussion #171): hides the gauges only.
+                             This row and the Power/MIC controls stay, and the
+                             gauges keep updating while hidden. Last in the
+                             toolbar so it never sits on top of a gauge. -->
+                        <button type="button" id="meterFoldBtn" class="btn btn-sm ms-1 btn-outline-secondary fold-btn">
+                            <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">Hide meters</span>
+                        </button>
                     </div>
 
                 </div>
@@ -953,7 +1078,16 @@
                      pulls that card wider than the other. -->
                 <div id="spectrumContainerA" class="card border-dark" style="flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
-                        <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO A</span>
+                            <!-- Fold button (Discussion #171): hides both VFO panels so the
+                                 page can be just the spectrum. Beside the title, which always
+                                 has room, even with the panels side by side; the control bar
+                                 runs out of width there and would push it off the card. -->
+                            <button type="button" id="vfoFoldBtnA" class="btn btn-outline-light btn-sm fold-btn py-0">
+                                <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">VFOs</span>
+                            </button>
+                        </div>
                         <div class="d-flex align-items-center gap-2">
                             <div class="btn-group btn-group-sm" role="group" aria-label="VFO A spectrum span">
                                 <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzA == 1_000 ? "active" : "")" data-hz="1000" data-vfo="A" data-a11y-key="spectrum.spanA1k" aria-label="VFO A span 1 kHz" title="VFO A span 1 kHz — one CW signal, the dial in the middle; software zoom, switches instantly">1k</button>
@@ -974,16 +1108,16 @@
                     </div>
                     <div class="spectrum-dsp-bar d-flex align-items-center gap-2 px-2 py-1 small" data-vfo="A">
                         <label class="text-nowrap mb-0" title="Vertical scale — dB of headroom above the auto-tracked noise floor. Smaller = taller peaks (zoom in on weak signals); larger = flatter. The noise floor stays pinned near the bottom automatically, so there's no floor slider to chase.">Range</label>
-                        <input type="range" class="form-range spectrum-range-slider" data-vfo="A" min="5" max="160" step="1" value="60" aria-label="VFO A spectrum vertical range (dB above the noise floor)" style="flex:1; min-width:60px;">
+                        <input type="range" class="spectrum-range-slider" data-vfo="A" min="5" max="160" step="1" value="60" aria-label="VFO A spectrum vertical range (dB above the noise floor)" style="flex:1; min-width:60px; height:16px;">
                         <span class="text-monospace spectrum-range-label" data-vfo="A" style="min-width:3.5em; text-align:right;">60 dB</span>
                         <label class="text-nowrap mb-0 ms-2" title="How fast the waterfall scrolls, from full speed down to 1/128. Does not affect the spectrum trace above it.">Speed</label>
-                        <input type="range" class="form-range spectrum-speed-slider" data-vfo="A" min="0" max="7" step="1" value="0" aria-label="VFO A waterfall scroll speed" style="flex:1; min-width:60px;">
+                        <input type="range" class="spectrum-speed-slider" data-vfo="A" min="0" max="7" step="1" value="0" aria-label="VFO A waterfall scroll speed" style="flex:1; min-width:60px; height:16px;">
                         <span class="text-monospace spectrum-speed-label" data-vfo="A" style="min-width:3.5em; text-align:right;">Full</span>
                         <label class="text-nowrap mb-0 ms-2" title="Waterfall brightness — lifts weak signals up the waterfall colour scale. The spectrum trace auto-ranges, so this brightens the waterfall only, leaving the trace unchanged.">Bright</label>
-                        <input type="range" class="form-range spectrum-bright-slider" data-vfo="A" min="0" max="60" step="1" value="0" aria-label="VFO A waterfall brightness" style="flex:1; min-width:60px;">
+                        <input type="range" class="spectrum-bright-slider" data-vfo="A" min="0" max="60" step="1" value="0" aria-label="VFO A waterfall brightness" style="flex:1; min-width:60px; height:16px;">
                         <span class="text-monospace spectrum-bright-label" data-vfo="A" style="min-width:3.5em; text-align:right;">Off</span>
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
-                        <input type="range" class="form-range spectrum-smooth-slider" data-vfo="A" min="0" max="8" step="1" value="2" aria-label="VFO A spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
+                        <input type="range" class="spectrum-smooth-slider" data-vfo="A" min="0" max="8" step="1" value="2" aria-label="VFO A spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px; height:16px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="A" style="min-width:3.5em; text-align:right;">2</span>
                         <label class="text-nowrap mb-0 ms-2" for="spectrumStepSelectA" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO A. Also set by clicking a digit on the VFO A frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz.">Step</label>
                         <select class="form-select form-select-sm spectrum-step-select" data-vfo="A" id="spectrumStepSelectA"
@@ -1003,10 +1137,26 @@
                                    aria-label="Show the VFO A receiver passband as a shaded band on the spectrum">
                             <label class="form-check-label" for="spectrumPassbandToggleA">Passband</label>
                         </div>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectA" title="How tall the VFO A spectrum panel is, as a percentage of its normal height. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
+                        <select class="form-select form-select-sm spectrum-height-select" data-vfo="A" id="spectrumHeightSelectA"
+                                style="width:auto;" title="How tall the VFO A spectrum panel is, as a percentage of its normal height. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
+                                aria-label="VFO A spectrum panel height">
+                            <option value="">Custom</option>
+                            <option value="140">50%</option>
+                            <option value="210">75%</option>
+                            <option value="280">100%</option>
+                            <option value="420">150%</option>
+                            <option value="560">200%</option>
+                            <option value="840">300%</option>
+                        </select>
                     </div>
-                    <div class="card-body p-0">
+                    <div class="card-body p-0 spectrum-canvas-wrap">
                         <canvas id="spectrumCanvasA" role="img" aria-hidden="true" aria-label="RF spectrum display VFO A" style="display:block; width:100%;"></canvas>
                     </div>
+                    <div class="spectrum-resize-grip" id="spectrumResizeGripA" data-vfo="A"
+                         role="separator" aria-orientation="horizontal" tabindex="0"
+                         aria-label="Resize VFO A spectrum panel"
+                         title="Drag to make the VFO A spectrum taller or shorter. Arrow keys when focused (Shift for bigger steps); double-click to go back to the default height."></div>
                 </div>
 
                 <!-- VFO B spectrum panel — hidden by default; shown when SdrDeviceKeyB is configured.
@@ -1014,7 +1164,16 @@
                      in side-by-side layout regardless of badge text content. -->
                 <div id="spectrumContainerB" class="card border-dark" style="display:none; flex: 1 1 0; min-width:0;">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-1">
-                        <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <span class="small fw-bold"><i class="bi bi-broadcast-pin me-1" aria-hidden="true"></i>Spectrum — VFO B</span>
+                            <!-- Fold button (Discussion #171): hides both VFO panels so the
+                                 page can be just the spectrum. Beside the title, which always
+                                 has room, even with the panels side by side; the control bar
+                                 runs out of width there and would push it off the card. -->
+                            <button type="button" id="vfoFoldBtnB" class="btn btn-outline-light btn-sm fold-btn py-0">
+                                <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">VFOs</span>
+                            </button>
+                        </div>
                         <div class="d-flex align-items-center gap-2">
                             <div class="btn-group btn-group-sm" role="group" aria-label="VFO B spectrum span">
                                 <button type="button" class="btn btn-outline-light btn-sm span-btn @(Model.SdrSampleRateHzB == 1_000 ? "active" : "")" data-hz="1000" data-vfo="B" data-a11y-key="spectrum.spanB1k" aria-label="VFO B span 1 kHz" title="VFO B span 1 kHz — one CW signal, the dial in the middle; software zoom, switches instantly">1k</button>
@@ -1035,16 +1194,16 @@
                     </div>
                     <div class="spectrum-dsp-bar d-flex align-items-center gap-2 px-2 py-1 small" data-vfo="B">
                         <label class="text-nowrap mb-0" title="Vertical scale — dB of headroom above the auto-tracked noise floor. Smaller = taller peaks (zoom in on weak signals); larger = flatter. The noise floor stays pinned near the bottom automatically, so there's no floor slider to chase.">Range</label>
-                        <input type="range" class="form-range spectrum-range-slider" data-vfo="B" min="5" max="160" step="1" value="60" aria-label="VFO B spectrum vertical range (dB above the noise floor)" style="flex:1; min-width:60px;">
+                        <input type="range" class="spectrum-range-slider" data-vfo="B" min="5" max="160" step="1" value="60" aria-label="VFO B spectrum vertical range (dB above the noise floor)" style="flex:1; min-width:60px; height:16px;">
                         <span class="text-monospace spectrum-range-label" data-vfo="B" style="min-width:3.5em; text-align:right;">60 dB</span>
                         <label class="text-nowrap mb-0 ms-2" title="How fast the waterfall scrolls, from full speed down to 1/128. Does not affect the spectrum trace above it.">Speed</label>
-                        <input type="range" class="form-range spectrum-speed-slider" data-vfo="B" min="0" max="7" step="1" value="0" aria-label="VFO B waterfall scroll speed" style="flex:1; min-width:60px;">
+                        <input type="range" class="spectrum-speed-slider" data-vfo="B" min="0" max="7" step="1" value="0" aria-label="VFO B waterfall scroll speed" style="flex:1; min-width:60px; height:16px;">
                         <span class="text-monospace spectrum-speed-label" data-vfo="B" style="min-width:3.5em; text-align:right;">Full</span>
                         <label class="text-nowrap mb-0 ms-2" title="Waterfall brightness — lifts weak signals up the waterfall colour scale. The spectrum trace auto-ranges, so this brightens the waterfall only, leaving the trace unchanged.">Bright</label>
-                        <input type="range" class="form-range spectrum-bright-slider" data-vfo="B" min="0" max="60" step="1" value="0" aria-label="VFO B waterfall brightness" style="flex:1; min-width:60px;">
+                        <input type="range" class="spectrum-bright-slider" data-vfo="B" min="0" max="60" step="1" value="0" aria-label="VFO B waterfall brightness" style="flex:1; min-width:60px; height:16px;">
                         <span class="text-monospace spectrum-bright-label" data-vfo="B" style="min-width:3.5em; text-align:right;">Off</span>
                         <label class="text-nowrap mb-0 ms-2" title="Spatial smoothing — averages neighbouring FFT bins to flatten the noise floor's grass. Higher = calmer floor but blunter peaks. A CW signal is only one bin wide, so smoothing hides it: set this to 0 when working CW.">Smooth</label>
-                        <input type="range" class="form-range spectrum-smooth-slider" data-vfo="B" min="0" max="8" step="1" value="2" aria-label="VFO B spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px;">
+                        <input type="range" class="spectrum-smooth-slider" data-vfo="B" min="0" max="8" step="1" value="2" aria-label="VFO B spectrum spatial smoothing, in FFT bins. Zero is off; raise to flatten the noise floor at the cost of narrow peaks such as CW." style="flex:1; min-width:60px; height:16px;">
                         <span class="text-monospace spectrum-smooth-label" data-vfo="B" style="min-width:3.5em; text-align:right;">2</span>
                         <label class="text-nowrap mb-0 ms-2" for="spectrumStepSelectB" title="Tuning step - how far one mouse-wheel notch on the spectrum moves VFO B. Also set by clicking a digit on the VFO B frequency display, by right-clicking the spectrum, or by voice. The radio accepts 1 Hz over CAT even where its own dial will not go below 10 Hz.">Step</label>
                         <select class="form-select form-select-sm spectrum-step-select" data-vfo="B" id="spectrumStepSelectB"
@@ -1064,16 +1223,32 @@
                                    aria-label="Show the VFO B receiver passband as a shaded band on the spectrum">
                             <label class="form-check-label" for="spectrumPassbandToggleB">Passband</label>
                         </div>
+                        <label class="text-nowrap mb-0 ms-2" for="spectrumHeightSelectB" title="How tall the VFO B spectrum panel is, as a percentage of its normal height. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it.">Height</label>
+                        <select class="form-select form-select-sm spectrum-height-select" data-vfo="B" id="spectrumHeightSelectB"
+                                style="width:auto;" title="How tall the VFO B spectrum panel is, as a percentage of its normal height. You can also drag the grip along the bottom of the panel to any height in between. Taller gives the trace and the waterfall more room; the split between the two stays where you dragged it."
+                                aria-label="VFO B spectrum panel height">
+                            <option value="">Custom</option>
+                            <option value="140">50%</option>
+                            <option value="210">75%</option>
+                            <option value="280">100%</option>
+                            <option value="420">150%</option>
+                            <option value="560">200%</option>
+                            <option value="840">300%</option>
+                        </select>
                     </div>
-                    <div class="card-body p-0">
+                    <div class="card-body p-0 spectrum-canvas-wrap">
                         <canvas id="spectrumCanvasB" role="img" aria-hidden="true" aria-label="RF spectrum display VFO B" style="display:block; width:100%;"></canvas>
                     </div>
+                    <div class="spectrum-resize-grip" id="spectrumResizeGripB" data-vfo="B"
+                         role="separator" aria-orientation="horizontal" tabindex="0"
+                         aria-label="Resize VFO B spectrum panel"
+                         title="Drag to make the VFO B spectrum taller or shorter. Arrow keys when focused (Shift for bigger steps); double-click to go back to the default height."></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row g-3 flex-wrap" id="vfoRow" data-radio-model="@Model.RadioModel" data-max-power="@maxPowerWatts" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
+    <div class="row g-3 flex-wrap fold-target" id="vfoRow" data-radio-model="@Model.RadioModel" data-max-power="@maxPowerWatts" data-max-hz="@maxTunableHz" data-single-receiver="@(isSingleReceiver ? "true" : "false")">
         <!-- VFO A Panel -->
         <div class="col-lg-6 col-12" id="vfoACol">
             <div class="card border-primary h-100 receiver-card">
@@ -1135,7 +1310,7 @@
                         <!-- Band buttons + Mode/Antenna (sized to content so the
                              scope column can sit in the leftover middle gap) -->
                         <div class="flex-shrink-0 d-flex flex-column gap-1">
-                            @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", "A", Model.SelectedBandA))
+                            @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create(Model.RadioModel ?? "", "A", Model.SelectedBandA))
                             <div class="d-flex align-items-center gap-2 mt-1">
                                 <label class="vfo-control-label" for="modeSelectA">Mode</label>
                                 <select class="form-select form-select-sm vfo-mode-select" id="modeSelectA"
@@ -1426,7 +1601,7 @@
 
                     <!-- Frequency + Roofing + AF Gain on one row -->
                     <div class="vfo-freq-row d-flex align-items-center flex-wrap gap-2 mb-1" style="margin-top: -2px;">
-                        <span id="freqA" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO A frequency" title="VFO A frequency" data-a11y-key="vfo.a.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
+                        <span id="freqA" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO A frequency" title="VFO A frequency" data-a11y-key="vfo.a.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="@maxTunableMhz" aria-valuenow="0"></span>
                         <span class="frequency-display digit-display">MHz</span>
                         <div id="freqA-controls" class="freq-step-controls" style="display:@(Model.ShowFrequencyArrowButtons ? "inline-flex" : "none");">
                             <button type="button" id="freqA-up" class="btn btn-secondary btn-sm" aria-label="Step VFO A selected digit up" title="Step VFO A selected digit up (↑)">▲</button>
@@ -1439,7 +1614,7 @@
                                 title="Keyboard — enter VFO A frequency">
                             <strong>123</strong>
                         </button>
-                        @if (!isFt710)
+                        @if (hasRoofingCat)
                         {
                         <label class="mb-0 text-nowrap ms-1 fw-bold">Roofing:</label>
                         <select class="form-select form-select-sm fw-bold flex-shrink-0" id="roofingFilterSelectA"
@@ -1588,7 +1763,7 @@
                         <!-- Band buttons + Mode/Antenna (sized to content so the
                              scope column can sit in the leftover middle gap) -->
                         <div class="flex-shrink-0 d-flex flex-column gap-1">
-                            @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create("unused", "B", Model.SelectedBandB))
+                            @await Html.PartialAsync("_BandButtonsPartial", Tuple.Create(Model.RadioModel ?? "", "B", Model.SelectedBandB))
                             <div class="d-flex align-items-center gap-2 mt-1">
                                 <label class="vfo-control-label" for="modeSelectB">Mode</label>
                                 <select class="form-select form-select-sm vfo-mode-select" id="modeSelectB"
@@ -1844,7 +2019,7 @@
 
                     <!-- Frequency + Roofing + AF Gain on one row -->
                     <div class="vfo-freq-row d-flex align-items-center flex-wrap gap-2 mb-1" style="margin-top: -2px;">
-                        <span id="freqB" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO B frequency" title="VFO B frequency" data-a11y-key="vfo.b.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="75" aria-valuenow="0"></span>
+                        <span id="freqB" class="fw-bold frequency-display digit-display" role="spinbutton" aria-label="VFO B frequency" title="VFO B frequency" data-a11y-key="vfo.b.frequency" tabindex="0" aria-valuemin="0.03" aria-valuemax="@maxTunableMhz" aria-valuenow="0"></span>
                         <span class="frequency-display digit-display">MHz</span>
                         <div id="freqB-controls" class="freq-step-controls" style="display:@(Model.ShowFrequencyArrowButtons ? "inline-flex" : "none");">
                             <button type="button" id="freqB-up" class="btn btn-secondary btn-sm" aria-label="Step VFO B selected digit up" title="Step VFO B selected digit up (↑)">▲</button>
@@ -1857,7 +2032,7 @@
                                 title="Keyboard — enter VFO B frequency">
                             <strong>123</strong>
                         </button>
-                        @if (!isFt710)
+                        @if (hasRoofingCat)
                         {
                         <label class="mb-0 text-nowrap ms-1 fw-bold">Roofing:</label>
                         <select class="form-select form-select-sm fw-bold flex-shrink-0" id="roofingFilterSelectB"
@@ -1952,6 +2127,7 @@
             <div class="card-body py-2 px-3">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <span class="fw-bold text-nowrap">Clarifier</span>
+                    <div id="clarControls" class="fold-target" style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                     <div class="btn-group btn-group-sm" id="clarVfoGroup" role="group" aria-label="Clarifier VFO selection">
                         <button type="button" class="btn btn-outline-primary active" id="clarVfoABtn"
                                 onclick="selectClarVfo('A')" title="Apply clarifier to VFO A"
@@ -1989,6 +2165,12 @@
                             onclick="resetClarifier()"
                             title="Reset offset to 0 Hz (mode unchanged)"
                             aria-label="Reset clarifier offset to zero">Reset</button>
+                    </div>
+                    <!-- Fold button (Discussion #171): hides everything but the
+                         word Clarifier, which stays so the strip can be found. -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm fold-btn ms-auto flex-shrink-0" id="clarFoldBtn">
+                        <i class="bi bi-chevron-up" aria-hidden="true"></i> <span class="fold-text">Hide</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -2162,12 +2344,15 @@
                     onchange="setCwBreakIn(this.value)">
                 <option value="0" selected="@(Model.CwBreakIn=="0"?"selected":null)">Off</option>
                 <option value="1" selected="@(Model.CwBreakIn=="1"?"selected":null)">Semi BK-IN</option>
-                <option value="2" selected="@(Model.CwBreakIn=="2"?"selected":null)">Full BK-IN</option>
+                @if (Yaesu_Web_Control.Services.CwBreakInCodes.SupportsFullBreakIn(Model.RadioModel))
+                {
+                    <option value="2" selected="@(Model.CwBreakIn=="2"?"selected":null)">Full BK-IN</option>
+                }
             </select>
         </div>
         <div class="d-flex align-items-center gap-2">
             <label class="mb-0 text-nowrap" style="min-width:100px;">BK-IN Delay: <span id="cwDelayValue">@Model.CwBreakInDelay</span> ms</label>
-            <input type="range" id="cwDelaySlider" min="0" max="2500" step="50" value="@Model.CwBreakInDelay"
+            <input type="range" id="cwDelaySlider" min="30" max="3000" step="10" value="@Model.CwBreakInDelay"
                    style="flex:1; height:18px;"
                    oninput="document.getElementById('cwDelayValue').textContent = this.value"
                    onchange="setCwBreakInDelay(this.value)"
@@ -2281,56 +2466,7 @@
      SL-based "IF Low Cut" dropdown. -->
 @foreach (var vfo in new[] { "A", "B" })
 {
-    <dialog id="audioFilterDialog@(vfo)" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:380px; max-width:520px; position:fixed; margin:0;" aria-labelledby="audioFilterDialogTitle@(vfo)">
-        <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
-            <strong id="audioFilterDialogTitle@(vfo)">Audio Filter — VFO @vfo <span id="audioFilterModeLabel@(vfo)" class="text-info ms-1"></span></strong>
-            <button class="btn btn-sm ywc-dialog-close" onclick="document.getElementById('audioFilterDialog@(vfo)').close()" aria-label="Close VFO @vfo Audio Filter dialog">✕</button>
-        </div>
-        <div class="p-3 d-flex flex-column gap-3">
-            <div id="audioFilterStatus@(vfo)" class="small text-warning" style="min-height:1.2em;"></div>
-            <div id="audioFilterUnsupported@(vfo)" class="alert alert-secondary mb-0" style="display:none;">
-                Audio Filter is not available for this mode on this radio model.
-            </div>
-            <div id="audioFilterControls@(vfo)">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <label class="mb-0 fw-bold" style="min-width:90px;">LCUT FREQ:</label>
-                    <input type="checkbox" id="audioFilterLcutFreqOff@(vfo)" class="form-check-input"
-                           title="Disable low-cut filter (OFF)" aria-label="LCUT FREQ off">
-                    <label class="mb-0 small" for="audioFilterLcutFreqOff@(vfo)">Off</label>
-                    <input type="range" id="audioFilterLcutFreqSlider@(vfo)"
-                           min="100" max="1000" step="50" value="100"
-                           style="flex:1; height:18px;"
-                           aria-label="LCUT FREQ Hz">
-                    <span id="audioFilterLcutFreqLabel@(vfo)" class="text-end" style="min-width:64px;">—</span>
-                </div>
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <label class="mb-0 fw-bold" style="min-width:90px;">LCUT SLOPE:</label>
-                    <button type="button" class="btn btn-sm btn-outline-light audio-filter-slope-btn"
-                            id="audioFilterLcutSlopeBtn@(vfo)" data-slope-code="0"
-                            title="Toggle LCUT slope between 6 dB/oct and 18 dB/oct"
-                            aria-label="LCUT slope">— dB/oct</button>
-                </div>
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <label class="mb-0 fw-bold" style="min-width:90px;">HCUT FREQ:</label>
-                    <input type="checkbox" id="audioFilterHcutFreqOff@(vfo)" class="form-check-input"
-                           title="Disable high-cut filter (OFF)" aria-label="HCUT FREQ off">
-                    <label class="mb-0 small" for="audioFilterHcutFreqOff@(vfo)">Off</label>
-                    <input type="range" id="audioFilterHcutFreqSlider@(vfo)"
-                           min="700" max="4000" step="50" value="3000"
-                           style="flex:1; height:18px;"
-                           aria-label="HCUT FREQ Hz">
-                    <span id="audioFilterHcutFreqLabel@(vfo)" class="text-end" style="min-width:64px;">—</span>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <label class="mb-0 fw-bold" style="min-width:90px;">HCUT SLOPE:</label>
-                    <button type="button" class="btn btn-sm btn-outline-light audio-filter-slope-btn"
-                            id="audioFilterHcutSlopeBtn@(vfo)" data-slope-code="0"
-                            title="Toggle HCUT slope between 6 dB/oct and 18 dB/oct"
-                            aria-label="HCUT slope">— dB/oct</button>
-                </div>
-            </div>
-        </div>
-    </dialog>
+    <partial name="_AudioFilterPartial" model="(vfo, false)" />
 }
 
 <!-- Voice Announcements Dialog -->
@@ -2511,335 +2647,19 @@
 <!-- DX Spots list panel — filtered list of cluster spots on the current band.
      Works regardless of whether an SDR is configured; data flows over the
      same SignalR DxSpot stream the spectrum overlay uses. -->
-<style>
-    .dxs-call     { font-weight:600; }
-    .dxs-watched  { color:#ff5050; font-weight:bold; }
-    .dxs-num      { font-family:monospace; text-align:right; }
-    .dxs-mode     { font-family:monospace; }
-    .dxs-comment  { color:#bbb; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    #dxSpotsTbody tr        { cursor:pointer; }
-    #dxSpotsTbody tr:hover td { background:#333; }
-    #dxSpotsDialog th[data-sort]:hover { background:#444; }
-</style>
-<dialog id="dxSpotsDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:720px; max-width:95vw;" aria-labelledby="dxSpotsTitle">
-    <div class="dxs-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
-        <strong id="dxSpotsTitle">DX Spots</strong>
-        <div class="d-flex align-items-center gap-3">
-            <small id="dxSpotsCount" class="text-muted">0 shown / 0 total</small>
-            <div class="form-check form-switch mb-0" style="cursor:default;">
-                <input class="form-check-input" type="checkbox" id="dxSpotsAllBandsChk">
-                <label class="form-check-label small" for="dxSpotsAllBandsChk">All bands</label>
-            </div>
-            <button class="btn btn-sm ywc-dialog-close"
-                    onclick="document.getElementById('dxSpotsDialog').close()"
-                    aria-label="Close DX spots panel">✕</button>
-        </div>
-    </div>
-    <div class="p-2" style="max-height:60vh; overflow-y:auto;">
-        <table class="table table-sm table-dark table-hover mb-0" style="font-size:0.85rem;">
-            <thead style="position:sticky; top:0; background:#222; z-index:1;">
-                <tr>
-                    <th data-sort="callsign" style="cursor:pointer;">Callsign</th>
-                    <th data-sort="freq"     style="cursor:pointer;">Freq kHz</th>
-                    <th data-sort="mode"     style="cursor:pointer;">Mode</th>
-                    <th data-sort="time"     style="cursor:pointer;">Time UTC</th>
-                    <th data-sort="age"      style="cursor:pointer;">Age</th>
-                    <th data-sort="spotter"  style="cursor:pointer;">Spotter</th>
-                    <th>Comment</th>
-                </tr>
-            </thead>
-            <tbody id="dxSpotsTbody"></tbody>
-        </table>
-        <div id="dxSpotsEmpty" class="text-muted small p-3" style="display:none;">
-            No spots on this band. Configure DX cluster in Settings (§6.6) if not already done,
-            or tick <strong>All bands</strong> above to see spots from elsewhere.
-        </div>
-    </div>
-</dialog>
+<partial name="_DxSpotsPartial" model="false" />
 
-<!-- CW SEND - type a line, Enter keys it. Built on the same KM/KY keyer
-     memories as the M1-M5 buttons, borrowing M5 as the scratch slot and
-     putting it back afterwards. Non-modal and draggable like the reader. -->
-<style>
-    #cwSendDialog .cws-header { cursor:move; }
-    /* A definite width so lines wrap instead of stretching the panel to
-       the longest one; the corner drags to resize, and a size the operator
-       has set is kept (dlgSize_cwSendDialog) - see makeResizable. */
-    #cwSendDialog { width:560px; min-width:420px; min-height:220px; max-height:95vh; resize:both; overflow:auto; }
-    #cwSendDialog[open] { display:flex; flex-direction:column; }
-    #cwSendDialog .cws-header { flex:0 0 auto; }
-    #cwSendDialog .cws-body { flex:1 1 auto; min-height:0; }
-    #cwSendDialog.user-sized #cwSendLog { max-height:none; flex:1 1 auto; min-height:4rem; }
-    #cwSendInput {
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 1.05rem;
-        text-transform: uppercase;
-        background: #111; border-color: #444; color: #dfe;
-    }
-    #cwSendInput:focus { background: #111; color: #dfe; border-color: #6aa; box-shadow: none; }
-    #cwSendLog {
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 0.95rem;
-        line-height: 1.5;
-        min-height: 6rem;
-        max-height: 30vh;
-        overflow-y: auto;
-        position: relative;   /* offsetTop of a character is then within the log */
-        background: #111;
-        border: 1px solid #444;
-        border-radius: 6px;
-        padding: 6px 10px;
-        color: #dfe;
-    }
-    #cwSendLog .cws-line { display:flex; gap:0.6rem; align-items:baseline; }
-    #cwSendLog .cws-time { color:#778; font-size:0.75rem; flex:0 0 auto; }
-    #cwSendLog .cws-text { flex:1 1 auto; white-space:pre-wrap; word-break:break-word; }
-    #cwSendLog .cws-tag  { color:#9ab; font-size:0.75rem; flex:0 0 auto; }
-    #cwSendLog .cws-line[data-state="queued"]  .cws-text { color:#9ab; }
-    #cwSendLog .cws-line[data-state="sending"] .cws-text { color:#ffd24a; }
-    #cwSendLog .cws-line[data-state="sending"] .cws-tag  { color:#ffd24a; }
-    #cwSendLog .cws-line[data-state="sent"]    .cws-tag  { color:#9d9; }
-    #cwSendLog .cws-line[data-state="monitor"] .cws-tag  { color:#8fd0ff; }
-    #cwSendLog .cws-line[data-state="dropped"] .cws-text { color:#778; text-decoration:line-through; }
-    #cwSendLog .cws-line[data-state="error"]   .cws-tag  { color:#ff6b6b; }
-    #cwSendLog .cws-ch.cws-done { color:#eee; }
-    #cwSendLog .cws-ch.cws-cur  { background:#ffd24a; color:#111; border-radius:2px; }
-    #cwSendStatus { font-size: 0.8rem; color:#9ab; min-height:1.2em; }
-    #cwSendStatus.cws-problem { color:#ffd23f; font-weight:600; }
-    #cwSendBanner {
-        font-size: 0.9rem; font-weight: 600; color: #ffd23f;
-        background: rgba(255, 210, 63, 0.10);
-        border-left: 3px solid #ffd23f;
-        padding: 0.4rem 0.6rem; border-radius: 0.25rem;
-    }
-</style>
-<dialog id="cwSendDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; max-width:95vw;" aria-labelledby="cwSendTitle">
-    <div class="cws-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
-        <strong id="cwSendTitle">CW Send</strong>
-        <div class="d-flex align-items-center gap-2">
-            <button id="cwSendStopBtn" class="btn btn-sm btn-outline-warning" type="button"
-                    title="Send nothing further. The piece already playing cannot be stopped - the radio has no CAT command for that.">Stop</button>
-            <button id="cwSendClearBtn" class="btn btn-sm btn-outline-light" type="button" title="Clear the sent-lines log">Clear log</button>
-            <button class="btn btn-sm ywc-dialog-close"
-                    onclick="document.getElementById('cwSendDialog').close()"
-                    aria-label="Close CW send panel">&#10005;</button>
-        </div>
-    </div>
-    <div class="cws-body p-2 d-flex flex-column gap-2">
-        <div id="cwSendBanner" role="status" aria-live="polite" hidden></div>
-        <div id="cwSendLog" role="log" aria-live="polite" aria-label="CW lines sent"></div>
-        <div class="input-group">
-            <input type="text" id="cwSendInput" class="form-control"
-                   autocomplete="off" spellcheck="false" autocapitalize="characters"
-                   placeholder="Type here and press Enter to send"
-                   aria-label="CW text to send - Enter sends, Escape stops"
-                   title="A-Z 0-9 space ? / . , - Enter sends the line, Escape drops anything not yet started (or clears the box when nothing is sending)">
-            <button id="cwSendClearInputBtn" class="btn btn-outline-light" type="button"
-                    title="Empty the text box without sending it" aria-label="Clear the text box">Clear</button>
-        </div>
-        <div class="d-flex align-items-center gap-2">
-            <label class="mb-0 text-nowrap" for="cwSendSpeedSlider">Speed WPM: <span id="cwSendSpeedValue">@Model.CwSpeed</span></label>
-            <input type="range" id="cwSendSpeedSlider" min="4" max="60" step="1" value="@Model.CwSpeed"
-                   style="flex:1; height:18px;"
-                   aria-label="CW keyer speed" title="CW keyer speed in WPM - the same control as in the CW keyer panel">
-        </div>
-        <div id="cwSendStatus" role="status" aria-live="polite"></div>
-    </div>
-</dialog>
+<!-- CW Send panel. The markup and its CSS are shared with the /CwSend
+     pop-out window, so both live in Pages/Shared/_CwSendPartial.cshtml. -->
+<partial name="_CwSendPartial" model="new Yaesu_Web_Control.Pages.CwSendPartialModel(false, Model.CwSpeed)" />
 
-<!-- CW Reader panel - server-side Morse decode of the receive audio.
-     Non-modal and draggable, like DX Spots: the operator has to be able to
-     work the station while the text is on screen. -->
-<style>
-    #cwReaderDialog .cwr-header { cursor:move; }
-    #cwReaderDialog { width:680px; min-width:480px; min-height:260px; max-height:95vh; resize:both; overflow:auto; }
-    #cwReaderDialog[open] { display:flex; flex-direction:column; }
-    #cwReaderDialog .cwr-header { flex:0 0 auto; }
-    #cwReaderDialog .cwr-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
-    #cwReaderDialog.user-sized .cwr-main { flex:1 1 auto; min-height:0; }
-    #cwReaderDialog.user-sized .cwr-textcol { display:flex; flex-direction:column; min-height:0; align-self:stretch; }
-    #cwReaderDialog.user-sized #cwReaderOut { max-height:none; flex:1 1 auto; min-height:4rem; }
-    #cwReaderOut {
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 1.05rem;
-        line-height: 1.5;
-        letter-spacing: 0.02em;
-        white-space: pre-wrap;
-        word-break: break-word;
-        min-height: 9rem;
-        max-height: 40vh;
-        overflow-y: auto;
-        background: #111;
-        border: 1px solid #444;
-        border-radius: 6px;
-        padding: 8px 10px;
-        color: #dfe;
-    }
-    /* Tokens that have the shape of QSO traffic. Colour is the only change -
-       nothing is added, removed or reordered - and it means "this looks like
-       something an operator sends", not "this is right". A callsign seen only
-       once is dimmed rather than hidden, because garble finds callsign shape
-       by chance and the first sighting of a real call looks identical. */
-    #cwReaderDialog .cw-tok-proc { color:#8fd0ff; }
-    #cwReaderDialog .cw-tok-rst  { color:#c9a6ff; }
-    #cwReaderDialog .cw-tok-call { color:#ffd24a; font-weight:600; }
-    #cwReaderDialog .cw-tok-call1 { color:#a08a3c; }
-    .cwr-legend { font-size: 0.72rem; color:#89a; }
-    #cwReaderStatus { font-family: ui-monospace, Consolas, monospace; font-size: 0.78rem; color:#9ab; }
-    /* A problem the operator has to act on must not be drawn like the running
-       tone/SNR commentary. Same dim monospace at 0.78rem meant 'your radio
-       audio could not be opened' was read straight past. */
-    #cwReaderStatus.cwr-problem {
-        font-family: inherit;
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: #ffd23f;
-        background: rgba(255, 210, 63, 0.10);
-        border-left: 3px solid #ffd23f;
-        padding: 0.5rem 0.6rem;
-        border-radius: 0.25rem;
-    }
+<!-- CW Reader panel. The markup and its CSS are shared with the /CwReader
+     pop-out window, so both live in Pages/Shared/_CwReaderPartial.cshtml. -->
+<partial name="_CwReaderPartial" model="false" />
 
-    /* QSO log form. The module builds its own DOM; the palette is the host
-       app's business, so the classes are styled here. */
-    .cwq { border-top: 1px solid #444; margin-top: 0.6rem; padding-top: 0.6rem; }
-    .cwq-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
-    .cwq-head-btns { display: flex; align-items: center; gap: 0.4rem; }
-    .cwq-grid {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 0.35rem 0.6rem;
-        align-items: start;
-    }
-    .cwq-label { font-size: 0.85rem; color: #cde; padding-top: 0.3rem; white-space: nowrap; }
-    .cwq-input { background: #111; border-color: #444; color: #dfe; }
-    .cwq-input:focus { background: #111; color: #dfe; border-color: #6aa; box-shadow: none; }
-    .cwq-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
-    /* A chip is a suggestion, so it is drawn as something to consider, not as
-       an answer already given: outlined and quiet until it is chosen. */
-    .cwq-chip {
-        display: inline-flex; align-items: baseline; gap: 0.35rem;
-        background: transparent; color: #ffd24a;
-        border: 1px solid #6a5a20; border-radius: 999px;
-        padding: 0.1rem 0.55rem; font-size: 0.85rem; line-height: 1.4; cursor: pointer;
-    }
-    .cwq-chip:hover { border-color: #ffd24a; }
-    .cwq-chip-on { background: rgba(255, 210, 74, 0.15); border-color: #ffd24a; }
-    .cwq-why { font-size: 0.7rem; color: #9ab; }
-    .cwq-none { font-size: 0.72rem; color: #778; font-style: italic; }
-    .cwq-facts {
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 0.72rem; color: #9ab; margin-top: 0.5rem;
-    }
-    .cwq-status { font-size: 0.85rem; color: #9d9; margin-top: 0.35rem; min-height: 1.2rem; }
-    .cwq-status.cwq-problem { color: #ffd23f; font-weight: 600; }
-</style>
-<dialog id="cwReaderDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; max-width:95vw;" aria-labelledby="cwReaderTitle">
-    <div class="cwr-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
-        <strong id="cwReaderTitle">CW Reader</strong>
-        <div class="d-flex align-items-center gap-2">
-            <button id="cwReaderStartBtn" class="btn btn-sm btn-success" type="button">Start</button>
-            <button id="cwReaderClearBtn" class="btn btn-sm btn-outline-secondary" type="button">Clear</button>
-            <button id="cwReaderModeBtn" class="btn btn-sm btn-outline-info" type="button" aria-pressed="false"
-                    title="Set CW mode, a narrow filter and APF for decoding. Your current settings are put back when you stop.">Reader Mode</button>
-            <button id="cwReaderLogBtn" class="btn btn-sm btn-outline-warning" type="button"
-                    title="Log this contact to ywc-log.adi, using what the copy suggests">Log QSO</button>
-            <div class="form-check form-switch mb-0" style="cursor:default;">
-                <input class="form-check-input" type="checkbox" id="cwReaderAutoScroll" checked>
-                <label class="form-check-label small" for="cwReaderAutoScroll">Follow</label>
-            </div>
-            <div class="form-check form-switch mb-0" style="cursor:default;">
-                <input class="form-check-input" type="checkbox" id="cwPhasorToggle">
-                <label class="form-check-label small" for="cwPhasorToggle"
-                       title="X-Y tuning figure: tune until it stops turning">Tune</label>
-            </div>
-            <button class="btn btn-sm ywc-dialog-close"
-                    onclick="document.getElementById('cwReaderDialog').close()"
-                    aria-label="Close CW reader panel">&#10005;</button>
-        </div>
-    </div>
-    <div class="cwr-body p-2">
-        <div class="cwr-main d-flex gap-2 align-items-start">
-            <div class="cwr-textcol flex-grow-1" style="min-width:0;">
-                <div id="cwReaderOut" role="log" aria-live="polite" aria-label="Decoded CW text"></div>
-                <div class="cwr-legend mt-1">
-                    Colour marks what <em>looks like</em> QSO traffic, and nothing is hidden or corrected:
-                    <span class="cw-tok-proc">CQ DE 73</span>,
-                    <span class="cw-tok-rst">5NN</span>,
-                    <span class="cw-tok-call">a call heard more than once</span>,
-                    <span class="cw-tok-call1">a call heard once</span>.
-                </div>
-            </div>
-            <div id="cwPhasorBox" style="display:none; flex:0 0 auto; width:200px;">
-                <canvas id="cwSpectrumCanvas" width="200" height="90"
-                        style="width:200px; height:90px; display:block; border:1px solid #444; border-radius:6px;"
-                        aria-label="CW passband spectrum with a marker at the wanted pitch"></canvas>
-                <div id="cwSpectrumInfo" class="mb-1"
-                     style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
-                    Waiting.
-                </div>
-                <canvas id="cwPhasorCanvas" width="200" height="200"
-                        style="width:200px; display:block; border:1px solid #444; border-radius:6px;"
-                        aria-label="CW tuning phasor"></canvas>
-                <div id="cwPhasorInfo" class="mt-1"
-                     style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
-                    Waiting.
-                </div>
-            </div>
-        </div>
-        <div id="cwReaderStatus" class="mt-2 px-1">Stopped.</div>
-        <div class="text-muted small px-1 mt-1">
-            A machine reading Morse out of noise. On a strong clean signal it is close to
-            perfect; on a marginal one it prints plausible-looking rubbish that looks no
-            different. The line above tells you which you are looking at.
-        </div>
-        <div id="cwQsoForm" class="px-1"></div>
-    </div>
-</dialog>
-
-<!-- RTTY tuner: the mark filter on X, the space filter on Y, as a terminal unit
-     used to drive an oscilloscope. Non-modal so the VFO stays in reach. -->
-<dialog id="rttyTunerDialog" style="border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; width:340px; max-width:95vw;" aria-labelledby="rttyTunerTitle">
-    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; cursor:move;">
-        <strong id="rttyTunerTitle">RTTY Tuner</strong>
-        <button class="btn btn-sm ywc-dialog-close"
-                onclick="document.getElementById('rttyTunerDialog').close()"
-                aria-label="Close RTTY tuner">&#10005;</button>
-    </div>
-    <div class="p-2">
-        <div class="d-flex align-items-center gap-2 mb-2 small flex-wrap">
-            <label for="rttyTunerMark">Mark</label>
-            <input id="rttyTunerMark" type="number" min="300" max="3000" step="5" value="2125"
-                   class="form-control form-control-sm" style="width:5.5rem;"
-                   title="Mark tone in the receive audio, Hz. 2125 unless your RTTY setup says otherwise.">
-            <label for="rttyTunerShift">Shift</label>
-            <select id="rttyTunerShift" class="form-select form-select-sm" style="width:auto;">
-                <option value="170">170</option>
-                <option value="200">200</option>
-                <option value="425">425</option>
-                <option value="450">450</option>
-                <option value="850">850</option>
-            </select>
-            <div class="form-check mb-0">
-                <input class="form-check-input" type="checkbox" id="rttyTunerReverse">
-                <label class="form-check-label" for="rttyTunerReverse"
-                       title="Space on the other side of mark: reversed tones, or REV on the radio">Rev</label>
-            </div>
-        </div>
-        <canvas id="rttyTunerCanvas" width="320" height="320"
-                style="width:100%; display:block; border:1px solid #444; border-radius:6px;"
-                aria-label="RTTY crossed-ellipse tuning scope"></canvas>
-        <div id="rttyTunerInfo" class="mt-1"
-             style="font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#9ab;">
-            Waiting.
-        </div>
-        <div id="rttyTunerStatus" class="mt-1 small" role="status" aria-live="polite">Stopped.</div>
-        <div class="small mt-1" style="color:#9ab;">
-            Tune for a clean cross: mark draws the line across, space the line up.
-            Arms leaning and opening means off tune.
-        </div>
-    </div>
-</dialog>
+<!-- RTTY tuner. The markup and its CSS are shared with the /RttyTuner
+     pop-out window, so both live in Pages/Shared/_RttyTunerPartial.cshtml. -->
+<partial name="_RttyTunerPartial" model="false" />
 
 <!-- DX Watch alert toast container — populated by site.js when a watched spot arrives.
      Position is user-draggable; saved in localStorage as dxAlertPos. Defaults to
@@ -2894,17 +2714,23 @@
         import { axisOffsetHz }         from "/js/sdr/if-out-offset.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { FilterScopePanel }    from "/js/ui/filter-scope-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import "/js/ui/if-width-tables.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer } from "/js/ui/band-plan.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { BAND_PLANS, BAND_EDGES, getSegments, segmentForHz, nearestBandForHz, loadBandPlanFromServer, autoModeForHz } from "/js/ui/band-plan.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { loadLabels }           from "/js/ui/a11y-labels.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initFreqKeyboard }     from "/js/ui/freq-keyboard.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initMemoriesPanel }   from "/js/ui/memories.js?v=@Yaesu_Web_Control.AppVersion.Current";
-        import { DxSpotsPanel }         from "/js/ui/dx-spots-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { DxSpotsPanel }         from "/js/dx/dx-spots-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         // Side-effect import: publishes window.radioFeatureSetup, which the
         // shared CW panel calls if the host app provides it. Loaded before
         // the panels that offer it so the global is there when they render.
         import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RttyReader }           from "/js/rtty/rtty-reader.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { ModePanelGuard }       from "/js/modes/mode-panel-guard.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { attachPopout, screenShare } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { attachFold }           from "/js/layout/fold-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { watchInView }          from "/js/dialogs/place-in-view.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { AudioFilterPanel }     from "/js/ui/audio-filter-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwSendPanel }          from "/js/ui/cw-send-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwQsoForm }           from "/js/cw/cw-qso-form.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { initRemoteAudioUi }    from "/js/audio/remote-audio-ui.js?v=@Yaesu_Web_Control.AppVersion.Current";
@@ -2957,6 +2783,85 @@
             const scopeDlg = document.getElementById('radioDisplayScopeDialog');
             if (scopeDlg) window.radioScopeControls.push(new RadioScopeControl(scopeDlg));
             window.radioScopeControl = window.radioScopeControls[0] || null;
+
+            // Fold the meter gauges and the Clarifier strip away (Discussion
+            // #171), as the Radio Scope card already can. The choice is kept
+            // per browser. The Power row sits under the gauges with an inline
+            // !important pull-up and indent, so it is reset by hand when they
+            // go; a resize afterwards lets anything sized to its box redraw.
+            const powerRow = document.querySelector('#meterCard .closer-to-raw-power');
+            attachFold({
+                name: 'meters',
+                button: document.getElementById('meterFoldBtn'),
+                targets: [document.getElementById('meterGaugesRow')],
+                root: document.getElementById('meterCard'),
+                shownLabel:  { text: 'Hide meters', title: 'Hide the meter gauges (Power, MIC and the toolbar stay)', aria: 'Hide the meter gauges' },
+                foldedLabel: { text: 'Show meters', title: 'Show the meter gauges again', aria: 'Show the meter gauges' },
+                onChange: folded => {
+                    if (powerRow) {
+                        powerRow.style.setProperty('margin-top', folded ? '0' : '-18px', 'important');
+                        powerRow.style.paddingLeft  = folded ? '0' : '280px';
+                    }
+                    if (!folded) window.dispatchEvent(new Event('resize'));
+                },
+            });
+            attachFold({
+                name: 'clarifier',
+                button: document.getElementById('clarFoldBtn'),
+                targets: [document.getElementById('clarControls')],
+                shownLabel:  { text: 'Hide', title: 'Hide the clarifier controls', aria: 'Hide the clarifier controls' },
+                foldedLabel: { text: 'Show', title: 'Show the clarifier controls again', aria: 'Show the clarifier controls' },
+            });
+
+            // Fold both VFO panels away (Discussion #171), so a contest page can
+            // be just the spectrum. Each spectrum card has the button, since
+            // either may be the only one showing; A's drives the fold and B's
+            // follows it. The panels only fold while the spectrum is on screen:
+            // with no SDR there is no button, so a choice saved earlier must not
+            // leave the page with no VFO panels and no way to bring them back.
+            {
+                const vfoRow   = document.getElementById('vfoRow');
+                const specBox  = document.getElementById('spectrumContainer');
+                const btnB     = document.getElementById('vfoFoldBtnB');
+                const specOn   = () => !!specBox && getComputedStyle(specBox).display !== 'none';
+                const shown    = { text: 'VFOs', title: 'Hide the VFO A and VFO B panels, leaving the spectrum', aria: 'Hide the VFO panels' };
+                const hidden   = { text: 'VFOs', title: 'Show the VFO A and VFO B panels again', aria: 'Show the VFO panels' };
+                let fold = null;
+                // attachFold sets hidden itself before calling sync, so the row's
+                // own state can't say whether it just came back; this can.
+                let rowHidden = false;
+                const sync = folded => {
+                    const hide = folded && specOn();
+                    if (vfoRow) vfoRow.hidden = hide;
+                    if (btnB) {
+                        const l = folded ? hidden : shown;
+                        btnB.title = l.title;
+                        btnB.setAttribute('aria-label', l.aria);
+                        btnB.setAttribute('aria-expanded', String(!folded));
+                        const icon = btnB.querySelector('.bi');
+                        icon?.classList.toggle('bi-chevron-up', !folded);
+                        icon?.classList.toggle('bi-chevron-down', folded);
+                    }
+                    // Anything sized to its box redraws once the panels are back.
+                    if (rowHidden && !hide) window.dispatchEvent(new Event('resize'));
+                    rowHidden = hide;
+                };
+                fold = attachFold({
+                    name: 'vfoPanels',
+                    button: document.getElementById('vfoFoldBtnA'),
+                    targets: vfoRow ? [vfoRow] : [],
+                    shownLabel: shown,
+                    foldedLabel: hidden,
+                    onChange: sync,
+                });
+                if (fold) {
+                    btnB?.setAttribute('aria-controls', 'vfoRow');
+                    btnB?.addEventListener('click', () => fold.toggle());
+                    // The spectrum shows and hides as the SDRs come and go.
+                    if (specBox) new MutationObserver(() => sync(fold.folded))
+                        .observe(specBox, { attributes: true, attributeFilter: ['style', 'class'] });
+                }
+            }
 
             // ── UTC clock in the top bar ──────────────────────────────────────
             const utcClockEl = document.getElementById('utcClock');
@@ -3081,8 +2986,25 @@
             // long even though frames are already flowing. So promote the VFO to
             // "streaming" on its first frame, which reveals the panel within
             // ~100ms of connecting instead of waiting on the heartbeat.
-            spectrumPipeline.onSpectrumUpdate('A', data => { spectrumPanelA.update(data); markStreamingFromFrame('A'); });
-            spectrumPipeline.onSpectrumUpdate('B', data => { spectrumPanelB.update(data); markStreamingFromFrame('B'); });
+            spectrumPipeline.onSpectrumUpdate('A', data => { spectrumPanelA.update(data); markStreamingFromFrame('A'); syncSpanButtons('A', data); });
+            spectrumPipeline.onSpectrumUpdate('B', data => { spectrumPanelB.update(data); markStreamingFromFrame('B'); syncSpanButtons('B', data); });
+
+            // The FT-710's own scope (rfOrdered frames) runs at whatever span
+            // the radio is set to, so the SDR span buttons would do nothing.
+            // Hide them and let the active button follow the radio instead.
+            const spanSource = { A: null, B: null };
+            function syncSpanButtons(vfo, data) {
+                const radioScope = !!data.rfOrdered;
+                const buttons = document.querySelectorAll(`.span-btn[data-vfo="${vfo}"]`);
+                const group = buttons[0]?.closest('.btn-group');
+                if (spanSource[vfo] !== radioScope) {
+                    spanSource[vfo] = radioScope;
+                    if (group) group.style.display = radioScope ? 'none' : '';
+                }
+                if (radioScope) {
+                    buttons.forEach(b => b.classList.toggle('active', Number(b.dataset.hz) === data.spanHz));
+                }
+            }
 
             // Per-VFO status routing — drives the panel state + small badge in the header.
             function setStatusBadge(vfo, status) {
@@ -3094,6 +3016,8 @@
                     streaming:    ['success',   'Live'],
                     disconnected: ['danger',    'Disconnected'],
                     nodll:        ['danger',    'No SoapySDR'],
+                    noft4222:     ['danger',    'No FTDI driver'],
+                    scopeplacement: ['warning', 'Check radio scope'],
                 };
                 const [colour, text] = labels[status] ?? ['secondary', status];
                 badge.className = `badge bg-${colour} small`;
@@ -3242,9 +3166,34 @@
             // Stand up the DX Spots list panel BEFORE wiring the pipeline so its
             // handlers can dispatch to it. It works whether or not the SDR is
             // configured — relies only on the DxSpot/FrequencyA event stream.
-            window.dxSpotsPanel = new DxSpotsPanel();
+            // The shared panel doesn't import the band plan itself (a second
+            // URL would load a second copy of it), so the gated lookup is
+            // handed in: off in Settings means no mode change on a spot click.
+            window.dxSpotsPanel = new DxSpotsPanel({ autoModeForHz });
             window.dxSpotsPanel.init();
             window.dxSpotsPanel.setVfoFrequency(@Model.RadioState.FrequencyA);
+            // The list can live in a window of its own too (/DxSpots), which
+            // keeps its own SignalR feed. While it is out, DX Spots brings
+            // that window to the front instead of opening the dialog.
+            window.dxSpotsOpen = attachPopout({
+                name: 'dx-spots',
+                url: '/DxSpots',
+                defaultSize: { width: 760, height: 480 },
+                dialog: () => document.getElementById('dxSpotsDialog'),
+                openButton: document.getElementById('dxSpotsOpenBtn'),
+                popoutButton: document.getElementById('dxSpotsPopoutBtn'),
+                show: () => window.dxSpotsPanel.show(),
+                closedLabel: {
+                    text: 'DX Spots',
+                    title: 'Open DX spots list — see callsigns spotted on the current band',
+                    aria: 'DX spots — list of cluster spots on current band',
+                },
+                openLabel: {
+                    text: 'DX Spots (pop-out)',
+                    title: 'The DX spots list is in its own window - click to bring it to the front',
+                    aria: 'DX spots list is in a pop-out window - bring it to the front',
+                },
+            }).open;
 
             // The CW reader is independent of the SDR and of the cluster: it
             // needs only the audio bridge, which it taps rather than opening a
@@ -3252,15 +3201,214 @@
             window.cwReaderPanel = new CwReaderPanel();
             window.cwReaderPanel.init();
 
+            // The reader can also live in a window of its own (/CwReader), so
+            // it can go on a second monitor. While it is out, CW Read brings
+            // that window to the front instead of opening the dialog, and the
+            // dialog stays shut so the two are not both polling. Reattach in
+            // the window, or closing it, gives the button back.
+            // Opening the CW reader puts the radio in CW, as opening the RTTY
+            // panel puts it in RTTY (that one on the server - see
+            // RttyTunerModeService). Only on opening, not when the button
+            // brings a pop-out to the front, and not if it is already CW.
+            let readerModeA = '@Model.RadioState.ModeA';
+            const openCwReaderInCw = () => {
+                const dlg = document.getElementById('cwReaderDialog');
+                if (!dlg?.open && !readerModeA.startsWith('CW')) window.setMode('A', 'CW-U');
+                window.cwReaderPanel.toggle();
+            };
+
+            window.cwReaderOpen = attachPopout({
+                name: 'cw-reader',
+                // Reattach gives the dialog the size the window was left at.
+                takeSize: true,
+                url: '/CwReader',
+                // A quarter of the screen: the reader has no natural size, and 720x480
+                // was a postage stamp on a 4K monitor.
+                defaultSize: () => screenShare(0.25, window.screen),
+                dialog: () => document.getElementById('cwReaderDialog'),
+                openButton: document.getElementById('cwReaderOpenBtn'),
+                popoutButton: document.getElementById('cwReaderPopoutBtn'),
+                show: openCwReaderInCw,
+                closedLabel: {
+                    text: 'CW Read',
+                    title: 'Open the CW reader - decodes the received Morse to text',
+                    aria: 'CW reader - decode received Morse to text',
+                },
+                openLabel: {
+                    text: 'CW Read (pop-out)',
+                    title: 'The CW reader is in its own window - click to bring it to the front',
+                    aria: 'CW reader is in a pop-out window - bring it to the front',
+                },
+            }).open;
+
             // The RTTY tuner taps the same audio bridge, with its own hold, so
             // it runs with or without the CW reader.
             window.rttyTuner = new RttyTuner();
             window.rttyTuner.init();
+            // The Decode half of that same panel. Its markup comes in with the
+            // partial whether or not anything drives it, so without this the
+            // pane sits there looking functional and prints nothing: Start has
+            // no listener and no poll ever runs. Contest Mode hides the
+            // section, so there it is left alone and the server is stopped
+            // once, exactly as the Flex page does it - otherwise a decode left
+            // running from an earlier session would have no button to stop it.
+            if (document.getElementById('rttyTunerDialog')?.classList.contains('rtty-contest')) {
+                fetch('/api/rtty/reader/stop', { method: 'POST' }).catch(() => { });
+            } else {
+                window.rttyReader = new RttyReader().init();
+            }
+            // The tuner can live in a window of its own (/RttyTuner) too. Each
+            // window holds the radio's audio under its own lease, so popping
+            // out - which closes the dialog here - does not stop the figure.
+            window.rttyTunerOpen = attachPopout({
+                name: 'rtty-tuner',
+                // Reattach gives the dialog the size the window was left at.
+                takeSize: true,
+                url: '/RttyTuner',
+                defaultSize: { width: 380, height: 520 },
+                dialog: () => document.getElementById('rttyTunerDialog'),
+                openButton: document.getElementById('rttyTunerOpenBtn'),
+                popoutButton: document.getElementById('rttyTunerPopoutBtn'),
+                show: () => window.rttyTuner.toggle(),
+                closedLabel: {
+                    text: 'RTTY Tune',
+                    title: 'Open the RTTY tuner - mark and space filters on an X-Y scope; tune for the cross',
+                    aria: 'RTTY tuner - crossed-ellipse tuning scope',
+                },
+                openLabel: {
+                    text: 'RTTY Tune (pop-out)',
+                    title: 'The RTTY tuner is in its own window - click to bring it to the front',
+                    aria: 'RTTY tuner is in a pop-out window - bring it to the front',
+                },
+            }).open;
+
+            // Audio Filter: one panel per VFO, each of which can also live in
+            // a window of its own (/AudioFilter?vfo=A or B). The radio holds
+            // the settings, so the dialog and the window read the same values.
+            // site.js calls window.audioFilter.onModeChanged on ModeA/ModeB.
+            {
+                const panels = {}, opens = {};
+                for (const vfo of ['A', 'B']) {
+                    const btn = document.getElementById('audioFilterBtn' + vfo);
+                    const panel = panels[vfo] = new AudioFilterPanel(vfo, { anchor: btn }).init();
+                    opens[vfo] = attachPopout({
+                        name: 'audio-filter-' + vfo.toLowerCase(),
+                        url: '/AudioFilter?vfo=' + vfo,
+                        defaultSize: { width: 460, height: 330 },
+                        dialog: () => panel.dialog,
+                        openButton: btn,
+                        popoutButton: document.getElementById('audioFilterPopoutBtn' + vfo),
+                        show: () => panel.open(),
+                        onClass: 'btn-info',
+                        offClass: 'btn-secondary',
+                        closedLabel: {
+                            text: 'Audio Filter',
+                            title: `Open the Audio Filter dialog for VFO ${vfo}'s current mode (LCUT FREQ, LCUT SLOPE, HCUT FREQ, HCUT SLOPE)`,
+                            aria: `VFO ${vfo} Audio Filter`,
+                        },
+                        openLabel: {
+                            text: 'Audio Filter (pop-out)',
+                            title: `The VFO ${vfo} Audio Filter is in its own window - click to bring it to the front`,
+                            aria: `VFO ${vfo} Audio Filter is in a pop-out window - bring it to the front`,
+                        },
+                    }).open;
+                }
+                window.audioFilter = {
+                    open: vfo => opens[vfo === 'B' ? 'B' : 'A'](),
+                    onModeChanged: vfo => { panels.A.onModeChanged(vfo); panels.B.onModeChanged(vfo); },
+                };
+            }
+
+            // Close the CW reader and the RTTY tuner once the radio has
+            // settled in a mode neither is any use in, so an RTTY tuner is not
+            // left holding the audio after a move to CW, or the reader after a
+            // move to RTTY. Both follow MAIN (the server reads ModeA), so only
+            // ModeA feeds them. The RTTY tuner stays open in DATA, LSB and USB
+            // because those are the AFSK modes it also works in; the CW reader
+            // only in CW. Closing the reader leaves its decoder running, as
+            // the X does, so the copy is still there when it is reopened.
+            const announceModeClose = msg => {
+                const el = document.getElementById('vfoStatusAnnounce');
+                if (!el) return;
+                el.textContent = '';
+                requestAnimationFrame(() => { el.textContent = msg; });
+            };
+            const guardFor = (name, dialogId, buttonId, belongs, close) => {
+                const dialog = () => document.getElementById(dialogId);
+                const g = new ModePanelGuard({
+                    name, belongs, close,
+                    isOpen: () => !!dialog()?.open,
+                    announce: announceModeClose,
+                });
+                g.setFocusReturn(el => !!dialog()?.contains(el), document.getElementById(buttonId));
+                return g;
+            };
+            const modePanelGuards = [
+                guardFor('CW reader', 'cwReaderDialog', 'cwReaderOpenBtn',
+                         m => m.startsWith('CW'),
+                         () => document.getElementById('cwReaderDialog')?.close()),
+                guardFor('RTTY tuner', 'rttyTunerDialog', 'rttyTunerOpenBtn',
+                         m => m.startsWith('RTTY') || m.startsWith('DATA') || m === 'PSK'
+                              || m === 'LSB' || m === 'USB',
+                         () => document.getElementById('rttyTunerDialog')?.close()),
+            ];
+            modePanelGuards.forEach(g => g.setMode('@Model.RadioState.ModeA'));
 
             // Typed CW goes out through the keyer memories the M1-M5 buttons
             // use; the panel only sequences the writes and plays.
             window.cwSendPanel = new CwSendPanel();
             window.cwSendPanel.init();
+            // It warns, rather than closing like the reader, when the transmit
+            // VFO is not in CW: site.js keeps these current after this.
+            window.cwSendPanel.setMode('A', '@Model.RadioState.ModeA');
+            window.cwSendPanel.setMode('B', '@Model.RadioState.ModeB');
+            window.cwSendPanel.setTxVfo(@Model.RadioState.TxVfo);
+
+            // CW Send can live in a window of its own too (/CwSend), beside
+            // the CW reader on a second monitor. The queue is in whichever
+            // page the line was typed in, so Pop out waits while a line from
+            // here is still going out - popping out mid-line would leave two
+            // pages borrowing M5. While the window is sending, it says so over
+            // a channel and the keyer's M1-M5 buttons here are marked busy.
+            {
+                const popoutBtn = document.getElementById('cwSendPopoutBtn');
+                const popoutTitle = popoutBtn?.title ?? '';
+                window.cwSendPanel.onBusy = busy => {
+                    if (!popoutBtn) return;
+                    popoutBtn.disabled = busy;
+                    popoutBtn.title = busy
+                        ? 'Wait for the line to finish (or press Stop) before popping CW Send out'
+                        : popoutTitle;
+                };
+                window.cwSendOpen = attachPopout({
+                    name: 'cw-send',
+                    // Reattach gives the dialog the size the window was left at.
+                    takeSize: true,
+                    url: '/CwSend',
+                    defaultSize: { width: 600, height: 340 },
+                    dialog: () => document.getElementById('cwSendDialog'),
+                    openButton: document.getElementById('cwSendOpenBtn'),
+                    popoutButton: popoutBtn,
+                    show: () => window.cwSendPanel.show(),
+                    closedLabel: {
+                        text: 'CW Send',
+                        title: 'Open CW send - type a line, press Enter, the radio keys it',
+                        aria: 'CW send - type text and send it as Morse',
+                    },
+                    openLabel: {
+                        text: 'CW Send (pop-out)',
+                        title: 'CW Send is in its own window - click to bring it to the front',
+                        aria: 'CW send is in a pop-out window - bring it to the front',
+                    },
+                }).open;
+                try {
+                    new BroadcastChannel('ywc-cw-send-busy').addEventListener('message', ev => {
+                        // A line typed here marks the buttons itself; only
+                        // follow the window when this page is not sending.
+                        if (!window.cwSendPanel.busy) window.cwMemButtonsBusy?.(!!ev.data?.busy);
+                    });
+                } catch { /* no BroadcastChannel: the buttons are not marked */ }
+            }
 
             // The log form is separate from the reader and starts closed. The
             // operator opens it when a QSO is worth keeping, and it asks the
@@ -3300,6 +3448,8 @@
             });
             spectrumPipeline.onModeA(mode => {
                 spectrumPanelA?.setMode(mode);
+                readerModeA = mode || '';
+                modePanelGuards.forEach(g => g.setMode(mode));
                 ensureRttyTones(mode);
                 readDataShift(mode);
             });
@@ -3676,6 +3826,52 @@
 
                 box.checked = panel.getShowPassband();
                 box.addEventListener('change', () => panel.setShowPassband(box.checked));
+            });
+
+            // Panel height — Bruce VK2RT asked for a bigger spectrum
+            // (discussion #171). There are two routes to the same number:
+            // drag the grip along the bottom of the panel, or pick a preset
+            // here. Both are needed. The preset box is the only route that is
+            // always on screen, and the grip is the only one that gives an
+            // arbitrary height — and the grip is what made the first version
+            // unusable on the bench, when it was the browser's own corner
+            // handle and ended up below the fold. The panel owns the height
+            // and persists it per VFO, so the select is initialised FROM the
+            // panel rather than from the markup's first <option>, the same
+            // trap the Smooth slider and the Passband checkbox both have.
+            ['A', 'B'].forEach(vfo => {
+                const select = document.querySelector(`.spectrum-height-select[data-vfo="${vfo}"]`);
+                const grip   = document.getElementById(`spectrumResizeGrip${vfo}`);
+                const panel  = vfo === 'B' ? spectrumPanelB : spectrumPanelA;
+                if (!panel) return;
+                panel.attachResizeGrip(grip);
+                if (!select) return;
+
+                // Heights read as a percentage of the normal 280 px. The first
+                // option is what dragging produces: it shows that height's own
+                // percentage, and it is not a height anyone can pick from the
+                // list, so choosing it must not resize anything. Everything
+                // else is a straight match on the value.
+                const customOption = select.options[0];
+                const syncSelect = (h) => {
+                    const listed = [...select.options].some(o => o.value && o.value === String(h));
+                    customOption.textContent = listed
+                        ? 'Custom'
+                        : `${Math.round(h / SpectrumPanel.DEFAULT_PANEL_H * 100)}%`;
+                    select.value = listed ? String(h) : '';
+                };
+
+                panel.enableHeightControl();                // applies the saved height
+                syncSelect(panel.getPanelHeight());
+                panel.setHeightChangeHandler(syncSelect);   // keeps the select honest during a drag
+
+                select.addEventListener('change', () => {
+                    if (!select.value) return;
+                    panel.setPanelHeight(parseInt(select.value, 10));
+                    // A taller panel can push the grip below the fold, which
+                    // is exactly what made the first version hard to undo.
+                    panel.ensureGripVisible();
+                });
             });
 
             // Span selector — POST new sample rate for this VFO and restart
@@ -4372,7 +4568,7 @@
                 }, 250);
             }).observe(dialog);
         }
-        ['cwSendDialog', 'cwReaderDialog'].forEach(id => {
+        ['cwSendDialog', 'cwReaderDialog', 'rttyTunerDialog'].forEach(id => {
             const dlg = document.getElementById(id);
             if (dlg) makeResizable(dlg);
         });
@@ -4391,7 +4587,15 @@
                     dlg.style.position = 'fixed';
                 }
             } catch {}
+            // A place saved at another browser zoom, or on a bigger monitor,
+            // can be off the window, and then the dialog opens out of sight.
+            // The floating panels also open across the top the first time,
+            // rather than wherever their markup sits down the page.
+            watchInView(dlg, { placeFirst: ['cwSendDialog', 'rttyTunerDialog'].includes(id) });
         });
+        // The CW reader keeps its own place (cw-reader-panel.js), so it is not
+        // in the list above, but it can be left off the window the same way.
+        watchInView(document.getElementById('cwReaderDialog'), { placeFirst: true });
 
         // --- DX Watch (watched-callsign alerts) ---
         // Backed by ApplicationSettings.DxClusterWatchedCallsigns. The
@@ -4793,7 +4997,7 @@
                     'RTTY-L': 'RTTY lower', 'RTTY-U': 'RTTY upper',
                     'DATA-L': 'data lower', 'DATA-U': 'data upper',
                     'DATA-FM': 'data F M', 'DATA-FM-N': 'data F M narrow',
-                    'PSK': 'P S K',
+                    'PSK': 'P S K', 'C4FM': 'C 4 F M',
                 };
                 return map[String(m).toUpperCase()] || String(m);
             }
@@ -4826,7 +5030,11 @@
                     if (receiver !== 'A') { seen[`mode${receiver}`] = true; return; }
                     announce('mode', 'modeA', fmtMode(mode));
                 },
-                sayTxState(isTx) {
+                sayTxState(isTx, txMode) {
+                    // In CW, break-in keys TX on and off with the Morse itself,
+                    // so "transmit, receive" would talk over every over (Rick
+                    // W2JAZ, #190). The TX timeout warning still speaks.
+                    if (/^CW/i.test(String(txMode || ''))) { seen.txState = true; return; }
                     announce('tx', 'txState', isTx ? 'transmit' : 'receive');
                 },
                 sayFrequencyEntered(hz) {
@@ -5272,11 +5480,26 @@
             catch (e) { console.error('cwZeroIn error:', e); }
         }
         async function setCwBreakIn(v) {
-            try { await fetch('/api/cat/cw/breakin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: v }) }); }
+            try {
+                const r = await fetch('/api/cat/cw/breakin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: v }) });
+                const j = r.ok ? await r.json() : null;
+                const el = document.getElementById('cwBreakInSelect');
+                if (j && j.mode != null && el) el.value = j.mode;
+                if (j && j.mode != null) window.cwSendPanel?.setBreakIn?.(j.mode);
+            }
             catch (e) { console.error('setCwBreakIn error:', e); }
         }
         async function setCwBreakInDelay(v) {
-            try { await fetch('/api/cat/cw/breakindelay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delayMs: parseInt(v) }) }); }
+            try {
+                // The radio holds only certain steps (30, 50, 100 ... 3000 ms);
+                // show the one it actually took.
+                const r = await fetch('/api/cat/cw/breakindelay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delayMs: parseInt(v) }) });
+                const j = r.ok ? await r.json() : null;
+                if (j && j.delayMs != null) {
+                    const s = document.getElementById('cwDelaySlider'); const l = document.getElementById('cwDelayValue');
+                    if (s) s.value = j.delayMs; if (l) l.textContent = j.delayMs;
+                }
+            }
             catch (e) { console.error('setCwBreakInDelay error:', e); }
         }
         // While a memory is playing nothing can stop it - the radio has no
@@ -5389,191 +5612,6 @@
                 await fetch('/api/cat/cw/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msgs) });
             } catch (e) { console.error('saveCwMessages error:', e); }
         }
-
-        // --- AUDIO FILTER POPOUT ---
-        // One independent dialog per VFO so the user can view/adjust both at
-        // once on FTdx101-family dual-receiver radios. Each instance reads/
-        // writes the four EX-menu values for *its* VFO's current mode class,
-        // backed by /api/cat/audiofilter/{vfo}. The dialog is a thin read/
-        // write proxy — the radio holds all state.
-        window.audioFilter = (function () {
-            const $ = (id) => document.getElementById(id);
-
-            function makeInstance(vfo) {
-                const dialogId = 'audioFilterDialog' + vfo;
-                const dlg = () => $(dialogId);
-                const id = (suffix) => `audioFilter${suffix}${vfo}`;
-                const el = (suffix) => $(id(suffix));
-                // Remember the slider's last non-OFF Hz so toggling OFF→ON
-                // returns to the same value rather than the slider's min.
-                let _lastLcutHz = 300;
-                let _lastHcutHz = 3000;
-                let _busy = false;
-
-                async function open() {
-                    const d = dlg();
-                    if (d && typeof d.show === 'function' && !d.open) {
-                        // On first open (no saved drag position), anchor the
-                        // dialog just below the Audio Filter button that
-                        // opened it.
-                        const hasSaved = !!localStorage.getItem('dlgPos_' + dialogId);
-                        if (!hasSaved) {
-                            const btn = $('audioFilterBtn' + vfo);
-                            if (btn) {
-                                const r = btn.getBoundingClientRect();
-                                d.style.left = Math.round(r.left) + 'px';
-                                d.style.top  = Math.round(r.bottom + 6) + 'px';
-                                d.style.transform = 'none';
-                            }
-                        }
-                        d.show();
-                    }
-                    await refresh();
-                }
-
-                async function refresh() {
-                    if (_busy) return;
-                    _busy = true;
-                    try {
-                        const resp = await fetch(`/api/cat/audiofilter/${vfo.toLowerCase()}`);
-                        if (!resp.ok) {
-                            el('Status').textContent = 'Failed to read audio filter.';
-                            return;
-                        }
-                        const data = await resp.json();
-                        el('ModeLabel').textContent = data.modeClass ? `(${data.modeClass})` : '';
-
-                        const otherVfo = vfo === 'A' ? 'B' : 'A';
-                        el('Status').textContent = data.otherVfoShares
-                            ? `VFO ${otherVfo} is also in ${data.modeClass} — these settings affect both VFOs.`
-                            : '';
-
-                        const anySupported = (data.lcutFreq && data.lcutFreq.supported)
-                                          || (data.lcutSlope && data.lcutSlope.supported)
-                                          || (data.hcutFreq && data.hcutFreq.supported)
-                                          || (data.hcutSlope && data.hcutSlope.supported);
-                        el('Unsupported').style.display = anySupported ? 'none' : '';
-                        el('Controls').style.display    = anySupported ? '' : 'none';
-                        if (!anySupported) return;
-
-                        renderFreqRow('Lcut', data.lcutFreq);
-                        renderSlopeBtn('Lcut', data.lcutSlope);
-                        renderFreqRow('Hcut', data.hcutFreq);
-                        renderSlopeBtn('Hcut', data.hcutSlope);
-                    } catch (e) {
-                        console.error(`audioFilter[${vfo}].refresh error:`, e);
-                    } finally {
-                        _busy = false;
-                    }
-                }
-
-                function renderFreqRow(prefix, v) {
-                    const slider = el(prefix + 'FreqSlider');
-                    const off    = el(prefix + 'FreqOff');
-                    const label  = el(prefix + 'FreqLabel');
-                    if (!v || !v.supported) {
-                        slider.disabled = true; off.disabled = true; label.textContent = '—';
-                        return;
-                    }
-                    off.disabled = false;
-                    if (v.label === 'OFF') {
-                        off.checked = true; slider.disabled = true;
-                        label.textContent = 'OFF';
-                    } else {
-                        off.checked = false; slider.disabled = false;
-                        if (typeof v.hz === 'number') {
-                            slider.value = v.hz;
-                            if (prefix === 'Lcut') _lastLcutHz = v.hz; else _lastHcutHz = v.hz;
-                        }
-                        label.textContent = v.label || (slider.value + ' Hz');
-                    }
-                }
-
-                function renderSlopeBtn(prefix, v) {
-                    const btn = el(prefix + 'SlopeBtn');
-                    if (!v || !v.supported) {
-                        btn.disabled = true; btn.textContent = '—';
-                        btn.classList.remove('btn-warning'); btn.classList.add('btn-outline-light');
-                        return;
-                    }
-                    btn.disabled = false;
-                    btn.dataset.slopeCode = v.code || '0';
-                    btn.textContent = v.label || (v.code === '1' ? '18 dB/oct' : '6 dB/oct');
-                    btn.classList.toggle('btn-warning',      v.code === '1');
-                    btn.classList.toggle('btn-outline-light', v.code !== '1');
-                }
-
-                function hzToFreqCode(hz, isLcut) {
-                    const base = isLcut ? 100 : 700;
-                    const n = Math.round((hz - base) / 50) + 1;
-                    return String(n).padStart(2, '0');
-                }
-
-                async function writeOne(setting, code) {
-                    try {
-                        const resp = await fetch(`/api/cat/audiofilter/${vfo.toLowerCase()}/${setting}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ code })
-                        });
-                        if (!resp.ok) return;
-                        const data = await resp.json();
-                        const v = data.result;
-                        if (setting === 'lcutFreq') renderFreqRow('Lcut', v);
-                        else if (setting === 'hcutFreq') renderFreqRow('Hcut', v);
-                        else if (setting === 'lcutSlope') renderSlopeBtn('Lcut', v);
-                        else if (setting === 'hcutSlope') renderSlopeBtn('Hcut', v);
-                    } catch (e) { console.error(`audioFilter[${vfo}].writeOne error:`, e); }
-                }
-
-                function wireDom() {
-                    el('LcutFreqSlider').addEventListener('input',  (e) => el('LcutFreqLabel').textContent = e.target.value + ' Hz');
-                    el('LcutFreqSlider').addEventListener('change', (e) => writeOne('lcutFreq', hzToFreqCode(parseInt(e.target.value), true)));
-                    el('LcutFreqOff').addEventListener('change', (e) => {
-                        if (e.target.checked) writeOne('lcutFreq', '00');
-                        else                  writeOne('lcutFreq', hzToFreqCode(_lastLcutHz, true));
-                    });
-                    el('LcutSlopeBtn').addEventListener('click', () => {
-                        const cur = el('LcutSlopeBtn').dataset.slopeCode || '0';
-                        writeOne('lcutSlope', cur === '0' ? '1' : '0');
-                    });
-                    el('HcutFreqSlider').addEventListener('input',  (e) => el('HcutFreqLabel').textContent = e.target.value + ' Hz');
-                    el('HcutFreqSlider').addEventListener('change', (e) => writeOne('hcutFreq', hzToFreqCode(parseInt(e.target.value), false)));
-                    el('HcutFreqOff').addEventListener('change', (e) => {
-                        if (e.target.checked) writeOne('hcutFreq', '00');
-                        else                  writeOne('hcutFreq', hzToFreqCode(_lastHcutHz, false));
-                    });
-                    el('HcutSlopeBtn').addEventListener('click', () => {
-                        const cur = el('HcutSlopeBtn').dataset.slopeCode || '0';
-                        writeOne('hcutSlope', cur === '0' ? '1' : '0');
-                    });
-                }
-
-                function onModeChanged(changedVfo) {
-                    if (changedVfo !== vfo) return;
-                    const d = dlg();
-                    if (!d || !d.open) return;
-                    refresh();
-                }
-
-                return { open, refresh, onModeChanged, wireDom };
-            }
-
-            const instances = { A: makeInstance('A'), B: makeInstance('B') };
-
-            document.addEventListener('DOMContentLoaded', () => {
-                instances.A.wireDom();
-                instances.B.wireDom();
-            });
-
-            return {
-                open: (vfo) => instances[(vfo === 'B') ? 'B' : 'A'].open(),
-                onModeChanged: (vfo, mode) => {
-                    instances.A.onModeChanged(vfo, mode);
-                    instances.B.onModeChanged(vfo, mode);
-                }
-            };
-        })();
 
         // Expose functions called from HTML onclick/onchange attributes
         window.launchWsjtx  = launchWsjtx;

@@ -74,7 +74,7 @@ flag it if you think `rules.md` should be extended to cover them explicitly.
 Pre-releases are batched — one is cut for something serious, or once four
 or five minor fixes have built up — never one per bug. Minor vs serious
 decides whether a bug on its own justifies cutting a build; it does **not**
-decide who closes the issue.
+decide when the issue closes.
 
 A bug is **serious** if any of these holds:
 
@@ -93,17 +93,20 @@ Everything else — a wrong scale on one gauge, a setting not persisted,
 layout at extreme zoom, manual typos, a gauge face that recovers on refresh
 — is **minor**.
 
-**The reporter closes the issue, never Claude and not Colin either**
-(policy set 2026-09-18, reversing a one-day experiment with closing minor
-bugs on fix). Once the fix is in a build they can download, the comment
-says what was wrong and what changed, names the tag that has it, lists
-anything they must do when they install it, and asks them to try it and
-close the issue themselves if it is right for them — or say so in the
-thread if it isn't. If the fix is in code but not yet in any build, say it
-will be in the next pre-release or main release (never name a pre-release
-that doesn't exist) and leave the issue open. Don't chase reporters who
-go quiet: how quickly people respond is information Colin wants, and an
-issue sitting open is the price of collecting it.
+**Close an issue once its fix is in a build the reporter can download**
+(policy set 2026-10-14). The 2026-09-18 rule of leaving every issue open
+for the reporter to close was dropped: too many sat open for more than
+three weeks waiting on replies that never came. The closing comment says
+what was wrong and what changed, names the tag that has it, lists anything
+they must do when they install it, and asks them to reply if it isn't
+right for them. **Reporters cannot reopen an issue a maintainer closed** —
+only Colin can — so the comment says "reply here and I'll reopen it",
+never "reopen it". Something that turns out to be working as designed is
+closed the same way, once it has been explained. If the fix is in code but
+not yet in any build, say it will be in the next pre-release or main
+release (never name a pre-release that doesn't exist) and leave the issue
+open until it is. The closing comment is a public post, so it is drafted
+for Colin's approval like any other. Don't chase reporters who go quiet.
 
 ---
 
@@ -271,6 +274,14 @@ dotnet test Tests/YaesuWebControl.Tests/YaesuWebControl.Tests.csproj
 It targets `net10.0`, so it runs on any host. Nothing in the UI, live CAT
 transport, SDR, or Audio paths is covered by it — see the standing
 instructions above on reporting protocol-level changes as verified.
+
+`Tests/ui/ywc-ui.mjs` drives the pages and pop-outs in headless Chrome
+against the running app (`node Tests/ui/ywc-ui.mjs`, `--only <text>`,
+`--headed`). Every write is stubbed and the mode/frequency come from the
+script, so it is safe with the radio connected, but it proves nothing about
+CAT. It is not in CI - run it before a pre-release and after any change to
+pages, pop-outs or `core/js`. The browser driver it uses is shared, in
+`core/tests/ui/browser-harness.mjs`.
 
 `Tests/test-api.ps1` is a separate, manual API-poking script — not part of
 the automated suite.
@@ -745,8 +756,8 @@ Index page lays out two card panels (`spectrumContainerA`, `spectrumContainerB`)
 
 `Index` (main control panel; `RadioState` exposes `RadioStateService` for
 server-rendered initial values), `Settings`, `Diagnostics` (SDR device
-scanning, port listing), `Memories`, `Calibrations` / `Calibration/MeterCalibration`
-/ `Calibration/SMeterCalibration`, `Labels` (accessibility label overrides),
+scanning, port listing), `Memories`, `Calibrations` / `Calibration/MeterCalibration`,
+`Labels` (accessibility label overrides),
 `RemoteAudio`, `RadioDisplay` (Remote Video), `Ports`, `ApplicationSetup`,
 `About`, `UserManual`.
 

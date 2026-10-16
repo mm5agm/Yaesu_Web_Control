@@ -27,7 +27,7 @@ const MODE_GROUP = {
     'RTTY-L': 'cw', 'RTTY-U': 'cw',
     'PSK': 'cw',
     'AM': null, 'AM-N': null,
-    'FM': null, 'FM-N': null,
+    'FM': null, 'FM-N': null, 'C4FM': null,
     'DATA-FM': null, 'DATA-FM-N': null,
 };
 
@@ -102,6 +102,24 @@ const TABLES = {
         cw: {
             // FTDX3000 CW Wide: codes 10-16
             10: 500, 11: 800, 12: 1200, 13: 1400, 14: 1700, 15: 2000, 16: 2400
+        }
+    },
+    'FT-991A': {
+        // From the SH table in the FT-991A CAT manual. Narrow and Wide (the
+        // NA command) are separate columns there, but a code that appears in
+        // both means the same width, so one table per mode covers both.
+        // Code 0 is 1500/2400 Hz SSB depending on NA - left as 'default'.
+        ssb: {
+            0: 'default',
+            1: 200, 2: 400, 3: 600, 4: 850, 5: 1100, 6: 1350, 7: 1500, 8: 1650,
+            9: 1800, 10: 1950, 11: 2100, 12: 2200, 13: 2300, 14: 2400, 15: 2500,
+            16: 2600, 17: 2700, 18: 2800, 19: 2900, 20: 3000, 21: 3200
+        },
+        cw: {
+            0: 'default',
+            1: 50, 2: 100, 3: 150, 4: 200, 5: 250, 6: 300, 7: 350, 8: 400,
+            9: 450, 10: 500, 11: 800, 12: 1200, 13: 1400, 14: 1700, 15: 2000,
+            16: 2400, 17: 3000
         }
     },
 };

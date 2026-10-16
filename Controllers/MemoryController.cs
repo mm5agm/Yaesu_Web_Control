@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Yaesu_Web_Control.Services;
@@ -24,7 +24,8 @@ namespace Yaesu_Web_Control.Controllers
             { "LSB", '1' }, { "USB", '2' }, { "CW-U", '3' }, { "FM", '4' },
             { "AM", '5' }, { "RTTY-L", '6' }, { "CW-L", '7' }, { "DATA-L", '8' },
             { "RTTY-U", '9' }, { "DATA-FM", 'A' }, { "FM-N", 'B' }, { "DATA-U", 'C' },
-            { "AM-N", 'D' }, { "PSK", 'E' }, { "DATA-FM-N", 'F' }
+            { "AM-N", 'D' }, { "PSK", 'E' }, { "DATA-FM-N", 'F' },
+            { "C4FM", 'E' }   // FT-991A: its code E is C4FM, not PSK
         };
 
         private readonly MemoryService _memoryService;
@@ -151,15 +152,14 @@ namespace Yaesu_Web_Control.Controllers
             }
             if (!string.IsNullOrEmpty(memory.IfWidthCode) && int.TryParse(memory.IfWidthCode, out int ifw))
             {
-                await _catClient.SendCommandAsync($"SH00{ifw:D2};", "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "0", ifw), "MemRecall", CancellationToken.None);
                 if (targetB) _radioStateService.IfWidthB = memory.IfWidthCode;
                 else _radioStateService.IfWidthA = memory.IfWidthCode;
             }
             if (memory.IfShiftHz.HasValue)
             {
                 int shift = memory.IfShiftHz.Value;
-                char sign = shift >= 0 ? '+' : '-';
-                await _catClient.SendCommandAsync($"IS00{sign}{Math.Abs(shift):D4};", "MemRecall", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfShift(settings.RadioModel, "0", shift), "MemRecall", CancellationToken.None);
                 if (targetB) _radioStateService.IfShiftB = shift;
                 else _radioStateService.IfShiftA = shift;
             }
@@ -224,8 +224,25 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("save-vfo/{vfo}")]
         public async Task<IActionResult> SaveVfo(string vfo, [FromBody] SaveVfoRequest? request)
         {
+            var created = await _memoryService.AddAsync(VfoMemory(vfo, request));
+            return Ok(created);
+        }
+
+        // The Radio panel's M.STORE: the VFO goes straight into a saved bank,
+        // with no load and save of the working list around it.
+        [HttpPost("save-vfo/{vfo}/to-bank/{bank}")]
+        public async Task<IActionResult> SaveVfoToBank(string vfo, string bank, [FromBody] SaveVfoRequest? request)
+        {
+            var mem = VfoMemory(vfo, request);
+            if (!await _bankService.AddToBankAsync(bank, mem))
+                return NotFound(new { error = $"There is no bank called {bank}" });
+            return Ok(new { bank, mem.FrequencyHz, mem.Mode, inWorkingList = _bankService.LoadedBank == bank });
+        }
+
+        private AppMemory VfoMemory(string vfo, SaveVfoRequest? request)
+        {
             bool isA = string.Equals(vfo, "A", StringComparison.OrdinalIgnoreCase);
-            var mem = new AppMemory
+            return new AppMemory
             {
                 Label             = string.IsNullOrWhiteSpace(request?.Label) ? "" : request!.Label.Trim(),
                 FrequencyHz       = isA ? _radioStateService.FrequencyA : _radioStateService.FrequencyB,
@@ -244,8 +261,6 @@ namespace Yaesu_Web_Control.Controllers
                 PowerWatts        = _radioStateService.Power > 0 ? _radioStateService.Power : (int?)null,
                 Notes             = request?.Notes,
             };
-            var created = await _memoryService.AddAsync(mem);
-            return Ok(created);
         }
 
         // ── Import from Radio ────────────────────────────────────────────────
@@ -299,7 +314,9 @@ namespace Yaesu_Web_Control.Controllers
                     bool txClar = mrResp[20] == '1';
 
                     string mode = "USB";
-                    CodeToMode.TryGetValue(char.ToUpper(mrResp[21]), out mode!);
+                    char mrMode = char.ToUpper(mrResp[21]);
+                    if (mrMode == 'E' && settings.RadioModel == "FT-991A") mode = "C4FM";
+                    else CodeToMode.TryGetValue(mrMode, out mode!);
                     mode ??= "USB";
 
                     // Read label via MT{ch}; — only available on non-FTDX3000 radios.
@@ -336,7 +353,10 @@ namespace Yaesu_Web_Control.Controllers
                 return Ok(new { imported = 0, mode = request.Mode, warning = "No channels found on radio — existing app memories were not changed." });
 
             if (request.Mode == "replace")
+            {
                 await _memoryService.ReplaceAllAsync(imported);
+                _bankService.ForgetLoadedBank();
+            }
             else
                 await _memoryService.MergeAsync(imported);
 
@@ -489,6 +509,7 @@ namespace Yaesu_Web_Control.Controllers
                 if (mode == "replace")
                 {
                     await _memoryService.ReplaceAllAsync(new List<AppMemory>(bank.Entries));
+                    _bankService.ForgetLoadedBank();
                     added = bank.Entries.Count;
                 }
                 else if (mode == "append")

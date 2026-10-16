@@ -291,11 +291,40 @@ pre, code { tab-size: 4; }
    outline-secondary button, add it here too - or give the dialogs a shared
    class and key this off that instead, which would be the better fix. */
 #cwReaderDialog .btn-outline-secondary,
+#cwSendDialog .btn-outline-secondary,
+#rttyTunerDialog .btn-outline-secondary,
+#audioFilterDialogA .btn-outline-secondary,
+#audioFilterDialogB .btn-outline-secondary,
+#dxSpotsDialog .btn-outline-secondary,
 #voxDialog .btn-outline-secondary,
 #voiceDialog .btn-outline-secondary {
     color: #adb5bd;          /* 7.3:1 on #222 - passes AA and AAA */
     border-color: #6c757d;
 }
+
+/* Dialog close (✕) button - a solid red so it stands out clearly against
+   the dark dialog header. The default btn-outline-secondary was a faint
+   grey outline that several operators found hard to spot. It lived in
+   Index.cshtml until the pop-out windows, which have their own pages,
+   showed their ✕ as a bare unstyled button. */
+.ywc-dialog-close {
+    background: #c0392b;
+    color: #fff;
+    border: 1px solid #e74c3c;
+    font-weight: bold;
+    line-height: 1;
+}
+.ywc-dialog-close:hover,
+.ywc-dialog-close:focus {
+    background: #e74c3c;
+    color: #fff;
+    border-color: #ff6b5a;
+}
+/* Folded sections (js/layout/fold-panel.js). The targets carry d-flex or an
+   inline display, either of which beats the browser's own [hidden] rule, so
+   this one has to say !important. */
+.fold-target[hidden] { display: none !important; }
+.fold-btn { white-space: nowrap; }
 
 /* Mode select - sized to fit longest option (D-FM-N), sits below band buttons */
 .vfo-mode-select {
@@ -798,6 +827,19 @@ fieldset.calibration-card {
 #fmDialog  > div:first-child:active {
     cursor: grabbing;
 }
+/* Every modeless dialog (opened with show(), not showModal()) stacks with the
+   page instead of going into the browser's top layer. Without a z-index of
+   its own, anything on the page that has one (gauge label overlays at 10,
+   spectrum controls at 2, Bootstrap's focused button-group button at 1)
+   paints straight through it. The CW Reader, RTTY Tuner, DX Watch and the
+   rest showed the meters and buttons underneath them for exactly that reason.
+   1040 is the bottom of the band that js/dialogs/dialog-stack.js (shared,
+   from core/) renumbers to put the clicked dialog in front; it stays under
+   Bootstrap's modal backdrop (1050), so a message box still covers them all. */
+dialog[open]:not(:modal) {
+    z-index: 1040;
+}
+
 #voxDialog {
     position: fixed;
     top: 80px;
@@ -1273,6 +1315,10 @@ fieldset.calibration-card {
     position: absolute;
     z-index: 2;
     overflow: hidden;
+    /* Clicks here are for the radio; a double-click must not select the
+       hover label's text. */
+    user-select: none;
+    -webkit-user-select: none;
 }
 .radio-display-hotspots .rdh-debug {
     position: absolute;
@@ -1300,7 +1346,12 @@ fieldset.calibration-card {
     background: rgba(0, 0, 0, 0.75);
     color: #fff;
     font: 12px/1.4 monospace;
-    white-space: nowrap;
+    /* One line when it fits; a long hint wraps inside the picture rather
+       than running off both edges of it. */
+    width: max-content;
+    max-width: calc(100% - 8px);
+    box-sizing: border-box;
+    text-align: center;
     pointer-events: none;
 }
 

@@ -33,6 +33,9 @@
    - 5.18 [Audio Filter popout](#518-audio-filter-popout)
    - 5.19 [VC Tune Preselector (FTdx101MP)](#519-vc-tune-preselector-ftdx101mp)
    - 5.20 [Radio Scope — the radio's own display (FTdx101MP/D and FTdx10)](#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)
+   - 5.21 [Pop-out windows](#521-pop-out-windows)
+   - 5.22 [Experimental UI](#522-experimental-ui)
+   - 5.23 [Radio panel](#523-radio-panel)
 6. [Settings Page](#6-settings-page)
    - 6.1 [Radio Connection](#61-radio-connection)
    - 6.2 [Web Server Settings](#62-web-server-settings)
@@ -138,10 +141,16 @@
     - 21.5 [Stopping](#215-stopping)
     - 21.6 [The panel](#216-the-panel)
     - 21.7 [Troubleshooting](#217-troubleshooting)
-22. [RTTY Tuner](#22-rtty-tuner)
+22. [RTTY](#22-rtty)
     - 22.1 [Reading the figure](#221-reading-the-figure)
-    - 22.2 [Mark, Shift and Rev](#222-mark-shift-and-rev)
-    - 22.3 [Troubleshooting](#223-troubleshooting)
+    - 22.2 [Mark, Shift, Speed and Rev](#222-mark-shift-speed-and-rev)
+    - 22.3 [Auto: working out what you are listening to](#223-auto-working-out-what-you-are-listening-to)
+    - 22.4 [Your first session, step by step](#224-your-first-session-step-by-step)
+    - 22.5 [Decoding the text](#225-decoding-the-text)
+    - 22.6 [Sending](#226-sending)
+    - 22.7 [Contest Mode: the tuner on its own](#227-contest-mode-the-tuner-on-its-own)
+    - 22.8 [What the tuner changes on your radio](#228-what-the-tuner-changes-on-your-radio)
+    - 22.9 [Troubleshooting](#229-troubleshooting)
 
 ---
 
@@ -168,7 +177,7 @@ The **shipped installer** is for **Windows 10/11 (64-bit)** and includes the ful
 | Voice *announcements* (browser TTS) | Yes | Yes | Yes |
 | CW Reader ([§20](#20-cw-reader)) | Yes | Yes | Yes |
 | CW Send ([§21](#21-cw-send)) | Yes | Yes | Yes |
-| RTTY Tuner ([§22](#22-rtty-tuner)) | Yes | Yes | Yes |
+| RTTY tuner and reader ([§22](#22-rtty)) | Yes | Yes | Yes |
 | Launch WSJT-X / JTAlert / etc. from YWC | Yes (Windows paths) | Buttons exist but target Windows-style paths — run those apps yourself and point them at YWC's rigctld | Same — use host/network apps |
 | Serial port form | `COM3`, `COM4`, … | `/dev/cu.*` | `/dev/ttyUSB*` / `/dev/ttyACM*` (pass device into the container for Docker) |
 | USB serial driver | **Windows / macOS:** if the radio's COM / `/dev/cu.*` ports are missing or CAT never answers, install [Silicon Labs CP210x VCP](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and **reboot** ([§2.4](#24-usb-serial-driver-windows--macos--linux)). **Linux:** usually skip — the kernel already includes CP210x support. |
@@ -189,6 +198,7 @@ Supported radios:
 | FTDX3000 | 100 W | Single |
 | FTdx10 | 100 W | Single |
 | FT-710 | 100 W | Single |
+| FT-991A | 100 W (50 W on 2 m and 70 cm) | Single |
 
 The app runs as a small host process and is accessed through any web browser — on the same machine, a tablet, or any device on your home network.
 
@@ -198,7 +208,7 @@ The application was written for operators who want a large, clean, touchscreen-f
 
 - Large, readable frequency displays with digit-by-digit mouse-wheel tuning and an on-screen frequency keyboard
 - Full dual-receiver control (VFO A and VFO B)
-- Live S-meter, power, SWR, ALC, and compression meters (plus PA temperature, IDD, and VDD on FTdx101MP, FTdx101D, and FTDX3000)
+- Live S-meter, power, SWR, ALC, and compression meters (plus PA temperature, IDD, and VDD on FTdx101MP, FTdx101D, and FTDX3000, and IDD and VDD on the FT-991A)
 - Real-time two-way sync — changes on the radio front panel appear immediately in the app, and vice versa
 - Band and segment selectors for fast QSY to CW, FT8, SSB, or RTTY
 - **Per-band memory** for IF Width, IF Shift, and Mode — switching to a band automatically restores your preferred filter and mode for that band
@@ -309,6 +319,8 @@ docker compose up -d
 
 Open `http://<host>:8080`. Settings and logs persist under `./data/ywc` by default. The container entrypoint fixes ownership of that volume automatically (so a host-created `./data/ywc` does not need a manual `chown`). Auto-exit and local browser-open are disabled in the container. If the serial port is permission-denied, set `YWC_DIALOUT_GID` to the host `dialout` GID (`getent group dialout`). For Remote Audio, compose also maps `/dev/snd` and adds the host `audio` group (`YWC_AUDIO_GID`, often `29`); pick the radio USB codec in **Settings → Remote Audio**. For Radio Display, map `/dev/video*` (`YWC_VIDEO_DEVICE`) and the host `video` group (`YWC_VIDEO_GID`, often `44`); see [§19](#19-radio-display) and comments in `docker-compose.yml`.
 
+**Shortcuts for the Docker host (optional).** Mick, W8BE, has published a set of shell aliases for the Pi or Linux host: short commands to show the container's status, ports and logs, with the output in colour using the `grc` and `jq` tools. They are in [Discussion #219](https://github.com/mm5agm/Yaesu_Web_Control/discussions/219), with the files and how to install them, and Mick keeps them up to date there. They run on the host, not inside the image, so you need to install `grc` and `jq` yourself (`sudo apt install grc jq` on Raspberry Pi OS or Debian). Nothing in YWC depends on them.
+
 ### 2.4 USB serial driver (Windows / macOS / Linux)
 
 Modern Yaesu HF radios (FTdx101, FTdx10, FT-710, and similar) talk CAT over USB through a built-in **Silicon Labs CP210x** USB-to-UART bridge. You only need Silicon Labs' official **CP210x Virtual COM Port (VCP)** package when the OS does not already present working ports — most often on a fresh **Windows** or **macOS** install after CAT or port discovery fails. **Linux** already includes a CP210x kernel module, so skip the Silicon Labs download there unless something is clearly broken.
@@ -343,7 +355,7 @@ Before the app can communicate with your radio you need to tell it which serial 
    - **macOS:** use the menu-bar status item (Open), or check the console log.
    - **Linux / Docker:** use the URL printed at startup, or `http://<host>:8080` from another device on the LAN.
 2. Click the **Settings** link in the navigation bar.
-3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, single receiver), **FTdx10** (100 W, single receiver), or **FT-710** (100 W, single receiver).
+3. Set **Radio Model** to your transceiver: **FTdx101MP** (200 W, dual receiver), **FTdx101D** (100 W, dual receiver), **FTDX3000** (100 W, single receiver), **FTdx10** (100 W, single receiver), **FT-710** (100 W, single receiver), or **FT-991A** (100 W, 50 W on 2 m and 70 cm, single receiver).
 4. Set **Serial Port** to the radio's **Enhanced** (CAT) virtual port — not the Standard / TX-control port if two appear:
    - **Windows:** a COM port (e.g. `COM3`). Use **Diagnostics → Ports** or Device Manager (*Silicon Labs Dual CP210x… Enhanced COM Port*).
    - **macOS:** prefer a `/dev/cu.*` device (e.g. `ls /dev/cu.usbserial-*` in Terminal). Try the other `cu.usbserial-…` node if Test Connection fails.
@@ -418,7 +430,7 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 ### 5.1 Top Bar
 
-The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.2**) are shown in the top-left corner.
+The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.3**) are shown in the top-left corner.
 
 **Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner listing what has changed, with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the newest version or if the internet is not available.
 
@@ -495,6 +507,8 @@ A scrollable row of meters is displayed above the VFO panels. The leftmost slots
 
 **FTdx10, FT-710** — single S-meter (VFO A) plus four TX meters (SWR, Power, Compression, ALC). The Temp, IDD, and VDD meters are not shown because those radios have a different power amplifier design that runs on 13.8 V; the high-voltage PA meters do not apply.
 
+**FT-991A** - single S-meter (VFO A) plus SWR, Power, Compression, ALC, IDD and VDD. There is no Temp meter, because the FT-991A has no temperature reading over CAT.
+
 All meters update in real time — about five times a second at the default 200 ms **Meter Poll Interval** (Settings → Radio Connection). Not everything is read on every cycle: the S-meter(s) and transmit state are, while PA temperature, IDD, VDD and the antenna selection are read every two seconds, because they change slowly and reading them costs bus time the meters need. Meters that only apply to transmit automatically read zero when the radio is receiving. The S-meter(s) are always live.
 
 > **Reading the SWR meter above 3:1.** The SWR dial is marked 1.0 to 3.0, so the
@@ -514,6 +528,8 @@ The meter scales are calibrated to show meaningful units rather than raw ADC val
 - **Red dashed line** — the noise-floor reference (the 10th-percentile reading in the window). When the line jumps up suddenly, a noise source has switched on — often a useful diagnostic when QRM appears.
 
 The vertical axis is calibrated in S-units (S1, S5, S9, S9+30, S9+60) using the same calibration table as the analog gauge. The horizontal axis runs from **-30s** on the left to **now** on the right. The strip is purely a visual aid — none of the information is sent to the radio.
+
+**Hiding the meters.** The **Hide meters** button at the end of the toolbar under the meters folds the gauges away, so the space goes to the spectrum and VFO panels. Only the gauges go: the Power, MIC Gain and PROC controls and the toolbar itself move up and stay, and the button becomes **Show meters** to bring them back. The meters keep reading while they are hidden, so they are current the moment they come back. The choice is remembered by the browser, so each PC or tablet keeps its own.
 
 ---
 
@@ -573,7 +589,7 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 > usual mode for AFSK RTTY where your software makes the tones, the dial is the suppressed
 > carrier, so a click puts it above the signal with the two tones where your RTTY
 > software is listening. YWC takes those tones from the **Mark**, **Shift** and **Rev** in
-> the RTTY Tuner ([§22.2](#222-mark-shift-and-rev)): 2125 Hz and 2295 Hz unless you change
+> the RTTY Tuner ([§22.2](#222-mark-shift-speed-and-rev)): 2125 Hz and 2295 Hz unless you change
 > them, which is the default in most RTTY software. If your software uses a different
 > mark, 1415 Hz for example, which puts the pair in the middle of the SSB passband, open
 > the tuner once and type it into **Mark**. Every click after that uses it, whether the
@@ -583,6 +599,8 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 > Choosing a named segment (CW, FT8, SSB, RTTY) from a VFO’s band dropdown still sets
 > that segment’s mode either way. That is a choice you made by name, not a mode guessed
 > from a frequency.
+
+**Drag to tune** — Hold the left button on the spectrum or the waterfall and slide sideways. The signals follow the pointer, so dragging right tunes down and dragging left tunes up, and the station you grabbed stays under the pointer as the display recentres. A press that moves only a few pixels is still an ordinary click-to-tune. A drag never changes the mode, even with the automatic mode change on. The dial lands on a 10 Hz boundary.
 
 **Mouse wheel to tune** — Scroll the mouse wheel over the spectrum to tune that panel's VFO up or down by one **tuning step**. The step starts at 1 kHz and is remembered per VFO across browser reloads. Four things set it, and they all set the same thing:
 
@@ -594,6 +612,20 @@ This panel is drawn by YWC from your SDR. It is not the radio's own scope, and n
 Every change is announced to screen readers. 1 Hz is now offered everywhere, including the voice nudge — Bruce VK2RT asked for it in [discussion #168](https://github.com/mm5agm/Yaesu_Web_Control/discussions/168), because 1 kHz is far too coarse for chasing RTTY. I have measured the FTdx101MP honouring a 1 Hz step set over CAT exactly, on both receivers; I have not measured the other models. Note that AM and FM bottom out at 10 Hz on the radio's own dial on every model, so a 1 Hz wheel step may not be honoured in those modes.
 
 **Frequency crosshair** — Move the mouse over the spectrum to see the exact RF frequency at the cursor position displayed above the waterfall.
+
+**Panel height** — the whole spectrum panel can be made taller. There are two ways, and they set the same thing:
+
+- **The Height box** on the control bar, beside Passband — **50%**, **75%**, **100%**, **150%**, **200%** or **300%**, where 100% is the normal height (280 pixels). This is the one to use if you just want it bigger without fiddling, and it is always on screen however tall the panel has become.
+- **The grip along the bottom of the panel** — a full-width strip with a dotted marker in the middle. Drag it down for more, up for less. Anything between 40 and 1000 pixels is allowed, so you are not limited to the six presets — when you drag to a size that is not one of them the Height box shows that size as a percentage, such as **137%**. **Double-click the grip** to go straight back to the default height.
+- **At the short end the frequency scale drops out.** Below about 80 pixels there is no room for both the labels and the trace, so the labels go and the trace keeps the space — which is the point of a short panel. The Height box does not go that low; dragging the grip does, and at the 40-pixel floor the whole card is about 135 pixels tall, most of which is the title bar and the control bar above the trace.
+
+  The grip also takes the keyboard. Tab to it (or click it once) and use **up and down arrows** to change the height 10 pixels at a time, **Shift** with them for 50, **Page Up / Page Down** for 100, and **Home** / **End** for the smallest and largest sizes. When you reach it with Tab, an amber outline shows it has the keyboard. It works with a finger on a tablet too.
+
+The height is remembered per VFO across browser reloads, and A and B are independent, so you can run a tall VFO A and a short VFO B if that suits how you operate. The split between the trace and the waterfall (below) is kept as a proportion, so both grow together when you make the panel taller. Bruce VK2RT asked for this in [discussion #171](https://github.com/mm5agm/Yaesu_Web_Control/discussions/171).
+
+> A very tall panel is more work for your browser to draw, because the waterfall has to be redrawn in full on every frame and there is simply more of it. On a desktop PC you will not notice. On a Raspberry Pi, or any low-powered machine, come down a size or two if the waterfall starts to stutter.
+
+**Hiding the VFO panels** - the **VFOs** button beside the title of each spectrum panel ("Spectrum - VFO A") hides both VFO panels (VFO A and VFO B) and shows them again, so the page can be just the spectrum, for example alongside RTTY Tune in a contest. The arrow on it points up while the panels show and down while they are hidden. Nothing on the radio changes, and keyboard shortcuts and voice control still work while the panels are hidden. The choice is remembered by the browser. If no spectrum is showing (no SDR configured, or the SDR has stopped) the VFO panels always show, so they can never be left hidden with no button to bring them back.
 
 **Resize spectrum vs waterfall** — Hover the horizontal boundary between the spectrum trace (top) and the waterfall (bottom); the cursor becomes a vertical-resize arrow. Drag up to give the spectrum more vertical room — useful when you're hunting weak signals close to the noise floor. Drag down to give the waterfall more history. The ratio is remembered per VFO across browser reloads, so the next time you open YWC the panel is back the way you left it. Two short grey grip-bars at the centre of the boundary mark the handle; they turn cyan while you're dragging.
 
@@ -646,6 +678,8 @@ Both panels have identical controls — changing a control on either panel write
 
 **VFO-B toggle** — the **VFO-B** button in the toolbar shows or hides the VFO B panel. The last state is remembered across sessions.
 
+**Clarifier strip** — the strip under the VFO panels holds the clarifier (RIT/XIT): which VFO it applies to, OFF / RX / TX / RX+TX, and the offset. Its **Hide** button at the right-hand end folds the controls away and leaves only the word **Clarifier** and a **Show** button. Hiding it changes nothing on the radio, and the choice is remembered by the browser.
+
 **A↔B Swap** — the **A↔B** button in the toolbar swaps the frequencies and modes between VFO A and VFO B in one click. Available on all supported radios.
 
 **B→A Copy** — the **B→A** button copies VFO B's frequency and mode into VFO A. **VFO B is left unchanged.** This is the right control to use when you want to transmit on VFO B's settings without enabling split — after the copy, VFO A holds the same frequency and mode as VFO B and the radio transmits normally on VFO A. Different from swap (which exchanges both VFOs), and different from split (which leaves the VFOs alone but uses VFO B as the TX frequency only while in RX/TX mode).
@@ -662,7 +696,7 @@ Both panels have identical controls — changing a control on either panel write
 > 3. Press **Split** — you are now receiving on 20m and transmitting on 6m
 > 4. Do **not** press +5k, as that would move VFO B back to 20m + 5 kHz
 
-**RX / TX VFO selectors (single-receiver radios only).** On the single-receiver radios (**FTdx10, FT-710, FTDX3000**) a pair of small selectors — **RX [A│B]** and **TX [A│B]** — sits next to the Split and +5k buttons. They let you choose the receive VFO and the transmit VFO **independently**, instead of being limited to the fixed "VFO A receives, VFO B transmits" that the Split button gives. There is no separate split toggle here — **split is derived automatically: you are in split whenever the RX and TX VFOs are different.** That makes all four combinations available directly:
+**RX / TX VFO selectors (single-receiver radios only).** On the single-receiver radios (**FTdx10, FT-710, FTDX3000, FT-991A**) a pair of small selectors — **RX [A│B]** and **TX [A│B]** — sits next to the Split and +5k buttons. They let you choose the receive VFO and the transmit VFO **independently**, instead of being limited to the fixed "VFO A receives, VFO B transmits" that the Split button gives. There is no separate split toggle here — **split is derived automatically: you are in split whenever the RX and TX VFOs are different.** That makes all four combinations available directly:
 
 | RX | TX | Result |
 |----|----|--------|
@@ -670,6 +704,8 @@ Both panels have identical controls — changing a control on either panel write
 | A | B | Standard split (the same as the Split button) |
 | B | A | Reverse split — receive on B, transmit on A |
 | B | B | Normal — receive and transmit on VFO B |
+
+**On the FT-991A, RX B is greyed out.** The FT-991A has no CAT command to move its receiver to VFO B, so only the two rows with RX on A are available from YWC. To listen on VFO B's frequency, press **A↔B** in YWC to swap the two frequencies, or press **A/B** on the radio. TX A and TX B both work.
 
 The currently selected **RX** button is filled **green** (receiving); the selected **TX** button is filled **red** (transmitting) — the same colour convention as the radio's front panel. Unselected buttons stay outlined. The selectors follow the radio live, so if you change the receive or transmit VFO at the rig the buttons update to match.
 
@@ -822,6 +858,8 @@ Available bands depend on your band plan setting:
 
 Region 1 is the only plan that includes the 4m (70 MHz) band. Japan has no 60m secondary allocation.
 
+With **Radio Model** set to **FT-991A**, every plan also has **2m** and **70cm** buttons, and the 4m button is never shown, because the FT-991A has no 4 m band. On 2 m and 70 cm the power slider stops at 50 W, which is the radio's own maximum there.
+
 **Segment dropdown** — After selecting a band, a dropdown appears above the frequency display showing common operating segments for that band. Select a segment to jump directly to its standard frequency and set the appropriate mode:
 
 | Segment | Example (20m) | Mode set |
@@ -829,7 +867,9 @@ Region 1 is the only plan that includes the 4m (70 MHz) band. Japan has no 60m s
 | CW | 14.025 MHz | CW-U |
 | FT8 | 14.074 MHz | DATA-U |
 | SSB | 14.150 MHz | USB |
-| RTTY | 14.080 MHz | RTTY-U |
+| RTTY | 14.080 MHz | RTTY-L |
+
+RTTY is RTTY-L on every band, including above 10 MHz. On the FTdx101 the dial sits on the upper tone in RTTY-U as well, so in RTTY-U the radio's own decoder reads normal amateur RTTY with mark and space swapped and prints rubbish.
 
 The last segment you used on each band is remembered, so when you return to a band the dropdown re-selects your previous segment.
 
@@ -867,6 +907,8 @@ Recall is *modal* — once the radio is in QMB mode it stays there until you pre
 - **Disconnected** (red) — the serial port is closed or the radio is not responding
 
 The button updates automatically — if the radio is powered off or stops responding, it switches to red/Disconnected within a few seconds without any action needed.
+
+Pressing it to disconnect closes the COM port, so another program can open it while YWC is disconnected; press it again to reconnect. While the radio is transmitting, the link is left open, so the radio is never left keyed with nothing talking to it.
 
 Click the button to toggle the connection. While connecting, it briefly shows "Connecting…". On reconnect the app re-reads all radio settings so the controls reflect the current radio state. Useful if the radio was powered on after the app started, or after a USB cable was unplugged and re-plugged.
 
@@ -932,8 +974,8 @@ Click the **CW** button to open the CW Keyer pop-up panel.
 |---------|-------------|
 | Speed | Keyer speed in WPM (4–60) |
 | ZIN | CW Auto Zero In. One click sends the Yaesu `ZI` command; the radio nudges the VFO so the received CW signal sits exactly at your configured CW pitch (set via the Pitch control). Much faster than chasing the signal with the VFO knob. Targets whichever VFO is currently active on dual-receiver radios. **Also available as a per-VFO ZIN button in each VFO panel's header** — handy for Search-and-Pounce operating when you don't want to open the popout for every signal. The per-VFO buttons target their specific VFO regardless of which is currently focused. |
-| Break-in | **Off** (keyer only), **Semi** (semi break-in), or **Full** (QSK full break-in) |
-| Delay | Semi break-in delay (0–2500 ms) — only relevant in Semi mode |
+| Break-in | **Off** (keyer only), **Semi** (semi break-in), or **Full** (QSK full break-in). **Full** is offered on the FTdx101MP/D and the FT-991A only for now. On the other models it's set in the radio's own menu (CW BK-IN TYPE), and YWC shows Semi whichever type the radio uses |
+| Delay | Semi break-in delay, 30–3000 ms: how long the radio stays on transmit after the last element before it drops back to receive. The radio holds only certain steps (30, 50, 100, 150, 200, 250 ms, then every 100 ms), so the slider moves to the nearest one when you let go. Only relevant in Semi mode |
 | Pitch | CW sidetone pitch frequency (300–1050 Hz in 10 Hz steps). Also sets the CW receive offset so the radio zero-beats at this tone. Read from the radio on connect. |
 | M1–M5 buttons | Sends the corresponding memory message. See **Sending a memory message** below — there is more to it than it looks. |
 
@@ -1071,7 +1113,7 @@ The feature uses your browser's built-in text-to-speech engine (Web Speech API),
 
 - **Band changes** — "forty metres" when you change band on VFO A
 - **Mode changes** — "upper sideband", "C W upper", "data lower", etc.
-- **TX / RX state** — "transmit" when you key up, "receive" when you stop
+- **TX / RX state** — "transmit" when you key up, "receive" when you stop. Not spoken while the transmit VFO is in CW: with break-in the radio keys on and off with the Morse itself, and the announcements would talk across it
 - **Manual frequency entry** — confirmation after typing a frequency on the on-screen keyboard
 - **DX watched-callsign alerts** — spelled-out callsign and frequency when a watched call appears in the DX cluster feed (in addition to the existing toast + beep)
 - **TX timeout warning** — "Warning. Transmit timeout. Check microphone."
@@ -1117,6 +1159,8 @@ Click the **DX Spots** button on the toolbar to open a list of DX cluster spots 
 - The spectrum overlay drops callsign labels on crowded bands (§5.4). The list shows them all.
 - The list shows comments, spotter info and exact time — the overlay only has room for the callsign.
 - The list is fully accessible to screen readers; canvas-rendered text in the overlay is not.
+
+**In a window of its own.** The **↗** button in the list's title bar opens it in a separate window, which can go on a second monitor ([§5.21](#521-pop-out-windows)). The window starts with every spot the cluster already has and keeps up as new ones arrive, follows VFO A's band, and keeps the same sort, **All bands** and **Show only watched callsigns** choices. Clicking a row tunes VFO A just as it does in the main page. **Reattach** puts the list back.
 - On phones and tablets, tapping a list row is easier than tapping a tiny spectrum label.
 
 **Age-out** — spots older than the configured age (default 15 min, set in Settings → DX Cluster) are dropped automatically. The list re-renders every 30 seconds to remove stale rows even when no new spots arrive.
@@ -1143,6 +1187,10 @@ Four controls in each dialog:
 **Per-mode storage.** The radio internally remembers a separate set of four values for each mode class — SSB, AM, FM, PSK/DATA, RTTY, CW. Switching mode automatically restores that mode's stored values; the dialog re-queries when the mode changes and the sliders jump to the new mode's settings. So you can have (for example) LCUT 200 Hz / HCUT 2.7 kHz for SSB and LCUT 500 Hz / HCUT 1 kHz for CW, and the radio swaps them in and out automatically as you change mode.
 
 **FTdx101 dual-receiver — both VFOs at once.** On the FTdx101 family you can open both VFO A's and VFO B's Audio Filter dialogs simultaneously; each opens with one click of its own button and can be dragged anywhere on screen, with positions remembered independently. When both VFOs happen to be in the same mode class, the dialogs show a small note ("VFO B is also in SSB — these settings affect both VFOs") because the radio shares the values between the two receivers for the same mode.
+
+**In a window of its own.** The **↗** button in the dialog's title bar opens that VFO's Audio Filter in a separate window, which can go on a second monitor ([§5.21](#521-pop-out-windows)). VFO A and VFO B each have their own window. The window re-reads the radio when its VFO changes mode, just as the dialog does, and **Reattach** puts it back in the main page.
+
+The radio doesn't tell YWC when you change these settings on its own menu, so the dialog and the window read them again whenever you click on them or come back to their window. A change made at the radio shows up as soon as you look at the panel again.
 
 **Replaces the old IF Low Cut dropdown.** The dropdown that was there in v2.3.9 sent a CAT command (`SL`) that turned out not to exist on any of YWC's supported radios — so it was a phantom control that *looked* like it was doing something but never actually reached the radio. The Audio Filter popout uses the radio's `EX` (menu) command path, which all five supported radios honour, so the values you set actually take effect on the audio.
 
@@ -1249,6 +1297,104 @@ When you expand the card it reads the current settings from the radio, so it ope
 
 Every button and the level slider carry labels that screen readers announce, and all of them can be renamed through the Accessibility Labels editor (§16.6) if the defaults do not suit you.
 
+### 5.21 Pop-out windows
+
+A panel on the main page can be dragged around and resized, but it can't leave the browser window it's in. The CW Reader, CW Send and the RTTY Tuner open across the top of the window the first time, and after that where you last dragged them. If that place is now off the window, because you have changed the browser's zoom or moved to a smaller screen, the panel is brought back into view when it opens. To put one on a second monitor, open it in a window of its own. At the moment the **CW Reader** ([§20](#20-cw-reader)), **CW Send** ([§21](#21-cw-send)), the **RTTY Tuner** ([§22](#22-rtty)), each VFO's **Audio Filter** ([§5.18](#518-audio-filter-popout)) and the **DX Spots** list ([§5.17](#517-dx-spots-list)) can do this. Radio Display ([§19](#19-radio-display)) and Remote Audio already open their own windows in the same way.
+
+- **To pop a panel out**, press the **↗** button in its title bar. The panel closes in the main page and opens in its own window. Its button on the main page changes to show that it's popped out, for example **CW Read (pop-out)**, and pressing that button brings the window to the front instead of opening a second copy.
+- **To put it back**, press **Reattach** in the pop-out window. The window closes and the panel opens in the main page again. The CW Reader, CW Send and the RTTY Tuner come back at the size you left the window, as far as the main window has room. Closing the window with **×** also works, but leaves the panel closed.
+- **To resize a pop-out**, drag the window's edges or corners, as with any window. The grip in the bottom-right corner that the panel has on the main page isn't there in a pop-out window, because the window does the resizing itself.
+- **Size and position are remembered.** The next time you pop the panel out, YWC asks the browser for the same size and place, whatever the browser's zoom is set to. The first time, the CW Reader opens at a quarter of the screen (half its width by half its height), so it is a useful size on a large monitor as well as a small one.
+- **Second monitor.** The first time, the window opens on the same monitor as the main page, so drag it across. Chrome and Edge only let a page put a window on a *different* monitor if you give it permission to place windows, so on a computer with more than one monitor the pop-out window shows a bar asking for it. Press **Allow**, then **Allow** again when the browser asks, and the window should reopen on the monitor you left it on. Press **Not now** and the bar doesn't come back; the window then reopens on the main page's monitor and you drag it across each time. Firefox doesn't ask, and places the window itself.
+- **It goes behind the main page.** On the same monitor, clicking or scrolling the main page brings the main page to the front and covers the pop-out window, as with any two windows. A browser can't keep a window on top, so the pop-out is at its best on a second monitor. Press the panel's button on the main page, for example **CW Read (pop-out)**, to bring it back to the front, or use **Alt+Tab**.
+- **A blocked pop-up.** If your browser blocks the window, YWC says so. Allow pop-ups for YWC's address (usually `http://localhost:8080`) and press **↗** again.
+- **Reloading the main page** while a panel is popped out is fine. The main page still knows the window is open.
+- **Pop-out windows belong to this computer.** A tablet or a second PC using YWC at the same time keeps its own panels and doesn't see your pop-out.
+
+### 5.22 Experimental UI
+
+**Experimental UI** in the top bar opens a second way of working the radio, at `http://localhost:8080/flexui`. It was written by Fabio Valente (CR7CDC). The Classic page described in the rest of §5 is unchanged and is still where YWC opens; you can go back to it with **Classic Home** in the Experimental UI's top bar, and both can be open in different tabs at once.
+
+The Experimental UI is a dark workspace made of panels: **VFO A**, **VFO B**, **VFO Actions**, **Buttons**, **Levels**, **Linear Meters**, **Clarifier**, **Spectrum A**, **Spectrum B**, **Radio Display**, **Radio Scope** and **Remote Audio**. They control the radio exactly as the Classic page does; what is different is how they are laid out.
+
+- **Arranging panels.** Drag a panel by its tab to move it. Drop it on the edge of another panel to dock it beside it, or in the middle to put the two together as tabs. Drag the dividers between panels to resize them.
+- **Popping a panel out.** The **Popout selected tab** button at the right of a panel's tab bar moves the panel into a window of its own, which you can put on another screen. It works there just as it did in the main page, and resizing the window resizes the panel. Close the window to bring the panel back into the main page. It comes back as a tab, but not always in the place it left; **Reset Layout** puts every panel back in its usual place.
+- **Showing and hiding panels.** The **Panels** menu in the toolbar shows or hides each one, so a panel you have closed can be brought back.
+- **UI size.** The **Size** box (Extra small to Large) changes the size of the text and controls without moving the panels.
+- **Layouts.** The layouts menu in the toolbar, which shows the name of the layout in use, holds named arrangements. **Save current as…** saves what is on screen under a name, and **Manage layouts…** renames or deletes them. Layouts are saved in YWC itself, not in the browser, so another browser or PC using the same YWC sees the same list. Once a named layout is chosen, changes to it are saved as you make them. **Default** is the built-in arrangement and is never overwritten: changes made to it are kept by this browser only, until you save them under a name.
+- **Reset layout** puts the panels back where the Default arrangement has them.
+- **Active VFO.** On the FTdx101MP and FTdx101D, click a VFO's tab (**VFO A** or **VFO B**) to make that VFO the active (MAIN/SUB) band, as clicking the VFO's heading does on the Classic page. The active VFO's tab is marked with a dot.
+- **RX and TX.** On the single-receiver radios (FTdx10, FT-710, FTDX3000, FT-991A), the **RX A/B** and **TX A/B** buttons in the toolbar choose the receive and transmit VFOs separately; split is on whenever they are different. The FTdx101MP and FTdx101D don't show them: there, **Split** in the **VFO Actions** panel moves transmit to VFO B, as on the Classic page. On the FT-991A, **RX B** is greyed out because the radio can't choose its receive VFO over CAT; use Swap A/B instead.
+
+It is called experimental for a reason. It is a separate copy of the page's code, so a fix made to the Classic page doesn't reach it automatically and the two can behave a little differently. If something works on the Classic page and not here, please report it and say which page you were on.
+
+### 5.23 Radio panel
+
+**Radio** in the top bar, on both the Classic page and the Experimental UI, opens a third way of working the radio, at `http://localhost:8080/radio`. It is laid out like the front of a transceiver: the meter and the keys down the left, a screen in the middle with the VFOs, the spectrum and the band and mode keys, the main dial on the right, and a row of knobs along the bottom. The **Classic**, **Experimental** and **Radio** buttons in its top strip move between the three, and they can all be open in different tabs at once.
+
+![The Radio panel in the Dark console theme on an FTdx101MP: the meter and keys on the left, MAIN and SUB VFOs above the radio's own screen in the middle, the main dial on the right and the knobs along the bottom](pictures/Radio_Dark_Console.png)
+
+Everything on it works the radio: the keys, the knobs, the main dial and the windows opened from the keys under the meter. The few things that are not built yet say **Comes in a later build** when you press them.
+
+**The screen.**
+
+- **MAIN · VFO-A** on the left and **SUB · VFO-B** on the right show each VFO's frequency, mode, IF width, AGC, and anything switched on such as IPO, ATT, NB, DNR, DNF or NOTCH. On the FTdx101MP and FTdx101D, SUB has its own small S-meter bar as well. **SPLIT** appears beside MAIN when split is on. Chips along the bottom of each box show the antenna (**ANT**), the roofing filter (**ROOF**) and the band segment (**SEG**), where the radio has them, and clicking one gives a list to change it. **ENT** opens a keypad for typing in a frequency.
+- **The spectrum** shows the SDR for each VFO that has one ([§5.4](#54-spectrum-display)), with the passband shaded, the band edges and band-plan marks, the frequency along the bottom and DX cluster spots ([§5.17](#517-dx-spots-list)) marked on it. **OUT OF BAND** appears when the dial is outside the band. With two SDRs, the **Main**, **Sub** and **Both** tabs choose which you see; **Both** stacks them and outlines the selected receiver's one. With no SDR set up, it says so.
+  - **Click** to tune there, or turn the **mouse wheel** to tune one step a notch. A thin line and a readout follow the mouse and show exactly the frequency a click would send. In RTTY the readout also shows **→ dial**, because the dial is set half the shift away from where you click, so that the signal lands in the middle of the filter ([§22](#22-rtty)).
+  - **Shift+click** drops a marker; Shift+click on it again to clear it. Markers are not saved.
+  - In the waterfall's bottom-left corner are the **span** list, **HOLD**, and **SCOPE**, which sets the range, speed, brightness, smoothing and passband shading.
+  - The **⇱** key opens the spectrum in a browser window of its own, for a second screen.
+- **Radio screen.** The **SDR / Radio screen** switch in the corner of the waterfall swaps the spectrum for the picture of the radio's own display, the same one the Radio Display panel shows ([§19](#19-radio-display)). It needs a capture device chosen in that panel on the Classic page first. The picture is stretched to fill the box, so it is a little wider than on the radio. It works as it does on the Radio Display page: click the radio's spectrum to tune there, click the readouts along the ANT…AGC row to change them, and click the meters to choose which TX meters the radio shows. Hold the mouse over a digit of the radio's frequency, and a box appears round it; the mouse wheel then moves that digit up or down. On the RTTY and PSK decode screen the meters, the frequency and the ANT…AGC row still work; the rest of the picture is not clickable there.
+- **The top strip** has lamps for the connection to the radio (**CAT**), the SDR and the DX cluster: green is working, amber is connecting, red is a fault. **Click CAT** to disconnect from the radio, and again to connect, as **Connect** does on the Classic page; while it is disconnected YWC lets go of the COM port, so another program can use it. Beside the lamps are WSJT-X's transmit state and a UTC clock. **F** fills the screen with the panel; Esc goes back. **MENU**, at the right-hand end, drops down YWC's other pages: Settings, Application Setup, Memories, Labels, Meter Calibration and Diagnostics, then the User Manual and About. Each opens in a new tab, so the panel keeps running behind it. Click elsewhere or press Esc to close the list without choosing.
+
+**Changing things in the VFO boxes.** Click the mode, the IF width or the AGC in a VFO box to get a list, and click one to change it; click anywhere else or press Esc to close the list. The width list only offers the widths for the mode that VFO is in, and there is none in AM or FM. Click IPO, ATT, NB and the other words in a box to switch them, as their keys do. Hold the mouse over a digit of either frequency and turn the mouse wheel to move that digit up or down: the big digits move in kHz steps and the small ones in Hz. On radios with one receiver, only the VFO the radio is on can be changed this way; the other one is shown but cannot be changed from its box.
+
+**The selected receiver.** One VFO is outlined and tagged **SELECTED**. That is the receiver the radio is on (MAIN or SUB on the FTdx101MP and FTdx101D), and it is the one the panel works on: the meter needle, the mode keys and the keys down the left all show it, and a press changes it. **Click the other VFO**, or press **MAIN/SUB** (**VFO A/B** on radios with one receiver), to select it. That changes the radio over, as clicking a VFO's heading does on the Classic page. If you change it on the radio itself, the outline follows.
+
+**The main dial and the knobs.** Turn the mouse wheel over a knob, or drag it round, to turn it.
+
+- **The main dial** tunes the selected receiver one step at a time. On the FTdx101MP and FTdx101D the outer ring tunes MAIN and the inner knob tunes SUB, as on the radio. The **−** and **+** keys under it tune down or up by one step, landing on a whole step as a radio's dial does. Press **STEP** to go through 10 Hz, 50 Hz, 100 Hz, 500 Hz, 1 kHz, 5 kHz and 10 kHz; this browser remembers it.
+- Each receiver has **AF/RF·SQL** (inner AF gain, outer RF gain), **SHIFT/WIDTH** and **NOTCH/CONT**.
+- **MIC/PROC**: the inner knob is the mic gain. The outer ring is the speech processor level or, while the processor is off, the AMC output level.
+- **POWER/MONI**: the inner knob is the RF power, the outer ring the monitor level. **SPEED/PITCH** is the CW keyer speed and pitch.
+- **The clarifier knob** sets the clarifier offset. **RX** and **TX** beside it switch the clarifier on and off, and **CLR** sets the offset back to zero without switching it off.
+
+**The keys.** Each key's light shows whether that function is on for the selected receiver, and the small text under some of them shows the setting.
+
+- **IPO** steps through IPO, AMP1 and AMP2. **ATT** steps through off, 6, 12 and 18 dB.
+- **AGC** steps through FAST, MID, SLOW, AUTO and OFF. With AGC off the S-meter sits at zero and the receiver can sound deaf, so if signals vanish check that the key does not say OFF.
+- **NB**, **DNR**, **DNF**, **NOTCH**, **CONT**, **APF** and **PROC** switch on and off. CONT and APF keep the frequency they were last set to. **MONI** switches the monitor on and off; it does not transmit.
+- **TUNE** starts the ATU tuning, which makes the radio transmit a carrier, so it needs two presses. The first lights it and shows **AGAIN** under it; press it again within four seconds to tune, or leave it and it goes out. While the radio tunes, the key shows **STOP**, and pressing it then stops the tune, so leave it alone until the radio has finished. It is the same TUNE as the one in the **TX SETUP** window, and either one shows what the other is doing.
+- **VOX** switches VOX on and off, as **VOX ON** and **VOX OFF** in the **TX SETUP** window do. While it is lit, your microphone keys the transmitter. Its gain and delay are in TX SETUP, described below.
+- **A▸B**, **B▸A**, **A⇄B** and **SPLIT** copy, swap and split the VFOs. **Q.SPLIT** puts VFO B above VFO A by the Q.SPLIT step set in the radio's menu, and turns split on. **TX A** and **TX B** choose which VFO transmits; they do not transmit.
+- **V/M** switches between VFO and memory. **M▸VFO** copies the radio's current memory channel into the selected receiver. **VFO▸M** writes VFO A over the radio's own current memory channel: the first press names the channel under the key, such as **RADIO M001?**, and a second press within four seconds writes it; if the channel has changed in between, nothing is written. It writes to the radio's memory, not to YWC's memories in the **MEMORIES** window. **QMB STO** stores a quick memory and **QMB RCL** recalls one, stepping on to the next each time it is pressed. **M.STORE** saves the selected receiver into one of YWC's memory banks ([§8.5](#85-memory-banks)): press it, and a list of your banks drops down under it; click a bank, and the frequency, mode and the rest of the receiver's setup go on the end of it. The key then shows the bank's name for a few seconds. The bank does not have to be loaded first. If it is the bank you have loaded, the memory appears in your memories straight away as well. **The memories in use now**, at the bottom of the list, adds it to those instead, as Classic's **Save to Mem** does. Press M.STORE again or Esc to close the list without saving.
+
+**Bands and modes.** The band keys under the spectrum change band on the selected receiver, and the mode keys change its mode; the lit mode key is the one it is in.
+
+**The meter.** On receive, the needle shows the selected receiver's S-meter. On transmit, the **PO**, **SWR**, **ALC**, **COMP** and **IDD** buttons under it choose what the lower scale and the needle show, with **VDD** and **TEMP** as well on the radios that have them.
+
+**The windows.** The keys under the meter open windows on top of the panel. Drag a window by its title bar and resize it from its corner. Each part of a window can be closed (**×**), or torn off into a window of its own and put back into its group again; pressing the key again brings back anything you closed. Where each window was, and which were open, is remembered by this browser.
+
+- **CW** (switches to CW-U): the keyer, the CW Reader ([§20](#20-cw-reader)) and CW Send ([§21](#21-cw-send)).
+- **RTTY** (switches to RTTY-L): the RTTY tuner and reader ([§22](#22-rtty)). Its send part only explains that this radio can't send RTTY text over CAT.
+- **MEMORIES**: YWC's own memories ([§8](#8-radio-memories)), not the radio's channels. **CHANNELS** shows the memories you have now; click one to tune there. **SAVE MAIN** and **SAVE SUB** (**SAVE VFO-A** and **SAVE VFO-B** on radios with one receiver) add a receiver to them, as **M.STORE** does, and **EDIT…** opens the Memories page. In **BANK**, choose a bank, then **LOAD** replaces the memories you have now with it, and **SAVE TO BANK** writes the memories you have now over it. Both take two presses. To put the receiver into a bank, **M.STORE** is quicker: press it and click the bank. The built-in starter bank can be loaded but not saved over; to make a new bank, use **Save As…** on the Memories page ([§8.5](#85-memory-banks)).
+- **DX**: the DX spots list and the watch list ([§5.17](#517-dx-spots-list)).
+- **METERS**: all the meters, and the S-meter history.
+- **AUDIO**: Remote Audio ([§18](#18-remote-audio)).
+- **SCOPE**: the radio's own scope over CAT ([§5.20](#520-radio-scope--the-radios-own-display-ftdx101mpd-and-ftdx10)), and the Radio screen picture.
+- **RX SETUP**: the audio filter ([§5.18](#518-audio-filter-popout)), IF shift and notch, the squelch, NB and DNR levels, and the FM repeater settings.
+- **TX SETUP**: VOX on and off, with its gain, delay and anti-VOX. A **TX TIMEOUT**, which puts up a warning banner once you have been transmitting for longer than the limit you set; it only warns and does not unkey the radio, and **DISMISS** clears it. The **ATU**, with **ATU ON** and **THRU**. **TUNE** there makes the radio transmit a carrier, so it asks for a second press, as the TUNE key on the left does.
+
+The CW Reader, CW Send, the RTTY tuner and the DX spots each have a **⇱** key that opens them in a browser window of their own. Unlike a window on the panel, that one can go on another screen. In the CW and RTTY windows, **⇱ WINDOW** in the title bar does the same for the whole window. Only three things in the windows make the radio transmit, and each is marked in red: the Remote Audio TX key, CW Send's Send key and keyer memories, and the ATU's TUNE. The TUNE key on the left of the panel is the fourth.
+
+**Theme and size.** The two boxes at the right of the top strip choose the colours and the size. **Dark console** is the usual look; **Night (red)**, **Silver classic**, **Daylight**, **Green display** and **High contrast** are the others, and **Match computer** follows Windows' light or dark setting. **Fit** makes the whole panel fit the window; the percentages fix its size and let you scroll. Both are remembered by this browser, so a tablet and a PC can each have their own.
+
+![The Radio panel in the Night (red) theme, for operating in the dark](pictures/Radio_Night_Console.png)
+
+![The Radio panel in the Silver classic theme](pictures/Radio_Silver_Classic.png)
+
+The Radio panel has none of the screen-reader or voice-control work of the Classic page, and no launch buttons for WSJT-X or other programs. Those stay on the Classic page.
+
 ---
 
 ## 6. Settings Page
@@ -1273,7 +1419,7 @@ Clicking **Restart Now** stops YWC and (when running as the installed exe) autom
 
 | Setting | Description |
 |---------|-------------|
-| Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), or **FT-710** (100 W, single RX) |
+| Radio Model | **FTdx101MP** (200 W, dual RX), **FTdx101D** (100 W, dual RX), **FTDX3000** (100 W, single RX), **FTdx10** (100 W, single RX), **FT-710** (100 W, single RX), or **FT-991A** (100 W, 50 W on 2 m / 70 cm, single RX) |
 | Serial Port | Path to the radio's **Enhanced** (CAT) USB/serial port. **Windows:** `COM3`, `COM4`, … (Device Manager: *Enhanced COM Port*). **macOS:** `/dev/cu.usbserial-…` (prefer `cu.*` over `tty.*`). **Linux / Docker:** `/dev/ttyUSB0`, `/dev/ttyACM0`, or `/dev/serial/by-id/…`. If ports are missing or CAT never answers on Windows/macOS, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads) and reboot — [§2.4](#24-usb-serial-driver-windows--macos--linux). Linux can normally skip that. |
 | Baud Rate | Must match the radio's CAT Rate setting. Default: 38400 |
 | Meter Poll Interval (ms) | Minimum cycle period for CAT meter polls (delay between cycle starts). Default: **200** ms. Valid range: 50–1000. The next cycle starts after this interval minus the time the previous cycle took, so the setting is a target period rather than a raw wait after each poll. Lower values give a faster S-meter update rate but increase CAT bus traffic — if you share the port with WSJT-X or rigctld, reducing this below ~100 ms raises the chance of collisions where both programs try to read the bus at the same time. Raise it (e.g. to 500) if you see erratic readings or CAT timeouts when running digital modes. |
@@ -1371,6 +1517,8 @@ If you have two SDRs (typically two SDRplay RSPs) and a dual-receiver radio (FTd
 
 If you only have one SDR, set it in the **VFO A SDR** slot and leave **VFO B SDR** as *(none)*. The main page will show only the VFO A panel exactly as in single-SDR setups before v2.3.0.
 
+One SDR can only feed one VFO. If you pick the same device for both slots, Settings shows a warning under the VFO B dropdown and won't save until you change one of them. Saved that way, whichever VFO opened the SDR first kept it, and the other panel showed *SDR device unavailable*.
+
 > **Note on SDRplay devices specifically:** the SDRplay API service only allows one device per host process. YWC works around this by launching a separate background process (`Yaesu_Sdr_Worker.exe`) for each SDR you configure — you'll see them in Task Manager when YWC is streaming. They start and stop automatically; no user action needed. See [docs/decisions/0001-dual-sdr-architecture.md](docs/decisions/0001-dual-sdr-architecture.md) on GitHub if you're curious about the why.
 
 > **If YWC can't find your SDRplay device:** YWC needs to be able to load `sdrplay_api.dll` from the SDRplay install folder. For a standard install at `C:\Program Files\SDRplay\API\x64\sdrplay_api.dll` this just works — YWC auto-detects the path on startup. If you installed SDRplay to a non-standard location and your Windows `PATH` doesn't include its `x64` folder, YWC may fail to find the DLL.
@@ -1430,6 +1578,12 @@ The Settings page Sample Rate dropdown still exists but now acts as a "reset bot
 
 **At 1k and 2k a CW station is a hump, not a needle.** A keyed carrier has keying sidebands, and at 7.6 Hz per bin they spread across tens of pixels. The radio's own scope at its 1k span shows exactly the same shape. If you want to see individual stations as clickable lines, **20k** is the span for that.
 
+#### Free the SDR when the last browser closes
+
+YWC normally keeps the SDR open for as long as YWC itself is running, whether or not a browser is showing the spectrum. That suits most stations, but it means no other SDR program can open the device while YWC is up. Tick **Free the SDR when the last browser closes** (Settings, SDR section; off by default) and YWC lets go of the SDR 3 seconds after the last browser tab or pop-out closes, then opens it again as soon as a browser comes back. The 3 seconds is there so that moving between YWC's own pages doesn't restart the SDR. The panel takes a few seconds to come back when you reopen the browser, just as it does at startup.
+
+This is separate from **Automatically exit when no browser is connected**, which stops YWC altogether 30 seconds after the last browser closes.
+
 #### SDR frequency trim
 
 At the wide spans an SDR whose crystal is a few ppm out draws every signal a pixel or so from where it belongs and you will never notice. At **1k** the same error is a fifth of the screen. My original RSP1 (VFO B) is 5 ppm out — a steady carrier sat 44 Hz above the dial line while the same carrier on the RSP1B (VFO A, which has a TCXO) sat on it.
@@ -1470,6 +1624,27 @@ Only spans of **200k and above** change the SDR's sample rate; from 100k down th
 The delay is **hardware**, not software. Changing the sample rate means YWC asks the SDR worker process to close the device, reopen it at the new rate, and restart streaming. The SDRplay API takes roughly a second to release a device cleanly and another second or so to reinitialise it. Only the SDR whose span you changed restarts; the other panel carries on.
 
 YWC keeps the previous spectrum frame visible during the pause rather than blanking out the canvas — the brief frozen image is intentional, not a glitch. It returns to live data as soon as the new sample rate is running.
+
+#### FT-710: the radio's own scope, no SDR needed *(experimental)*
+
+The FT-710 has no IF output, but it can send its own spectrum scope to the computer over the same USB lead as CAT. YWC can show that scope in the spectrum panel, so you need no SDR, no splitter and no T/R switch, and nothing is at risk when you transmit.
+
+> I don't own an FT-710. One owner has checked it on his radio on receive: signals land at their true frequency at every span, and the panel follows the span set on the radio. It has **not yet been checked while transmitting**. If you try it, please tell me in [Discussion #187](https://github.com/mm5agm/Yaesu_Web_Control/discussions/187).
+
+**Setting it up (Windows only):**
+
+1. On the radio, set menu item **SCU-LAN10** (EX 03-01-26) to **ON**. You don't need an SCU-LAN10 unit; this switch makes the radio's scope data appear on USB.
+2. Install FTDI's **D2XX driver** from [ftdichip.com](https://ftdichip.com/drivers/d2xx-drivers/).
+3. Download **LibFT4222** for Windows from [ftdichip.com](https://ftdichip.com/software-examples/ft4222h-software-examples/) and copy **LibFT4222-64.dll** into the Yaesu Web Control program folder. YWC can't include these two FTDI files because they are closed source. If either is missing, the spectrum panel tells you so.
+4. In **Settings → SDR Spectrum Display**, with the radio model set to FT-710 and saved, press **Scan** under **SDR Devices** and choose **FT-710 internal scope** as the SDR for VFO A. Save.
+5. On the radio, put the scope in a **CENTER** mode (3DSS CENTER, or waterfall CENTER). In CURSOR or FIX mode the panel shows a message instead of a waterfall, because YWC can't tell where those modes put the picture. YWC never changes the radio's scope mode itself.
+6. On the radio, set **SCOPE CTR** to **CARRIER POINT** for now. On **FILTER**, RTTY, PSK and FM stay centred on the dial, but USB and LSB have not been confirmed on a radio yet.
+
+**What's different from an SDR:**
+
+- **The span is the radio's.** Change it on the radio. The span buttons are hidden for this panel, and the width follows the radio within about a second.
+- **The panel follows VFO A.**
+- **The first connection can be slow.** Opening the radio's USB scope for the first time after power-on can take a while. If it hasn't opened after 20 seconds, YWC tries again.
 
 ---
 
@@ -1644,7 +1819,7 @@ On the Index **Remote Audio** bar, **Pop out** opens a small dedicated window th
 |---------|-------------|
 | Enable radio display | Opt-in. When off, capture stays closed and the Index panel is hidden. |
 
-On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close. If the dongle is unplugged, the badge stays **Disconnected** until you refresh the device list and click **Start** — YWC does not reopen whatever camera now sits at the old index. **Auto** and reloading the page do not bypass that halt; only **Start** (after refresh) or choosing a different device clears it.
+On the panel: pick a USB capture device, set **15 / 30 / 60 fps** (rates above what the stick can do are hidden), Fit/Fill, Fullscreen, Pop out / **Reattach**, or Close. If the dongle is unplugged, the badge stays **Disconnected** until you refresh the device list and click **Start** — YWC does not reopen whatever camera now sits at the old index. **Auto** and reloading the page do not bypass that halt; only **Start** (after refresh) or choosing a different device clears it. On Windows YWC remembers the dongle itself, not its place in the list, so two dongles of the same model (one per radio, say) each keep their own radio across a replug, as long as each goes back into the same USB socket. Moving a dongle to a different socket means picking it again. If the chosen dongle is not plugged in when the stream starts, the badge reads **Not connected**, and the picture comes up when you plug it in.
 
 > **Why the device list needs a Refresh at all.** Loading the page lists the names of your capture devices and nothing else. Finding out which sizes and frame rates a stick actually supports means opening it, and a capture stick does not survive being opened while something already has it open — the whole application disappears, with no error and nothing in the log. So **Refresh** beside the device list is the one place YWC asks, it is yours to press, and it declines while the stream is running. Press it after plugging a stick in, or when you want the size and frame-rate lists filled in for a device you have not used yet.
 
@@ -3243,7 +3418,7 @@ The Settings page → Voice Control section has a **Diagnostics** block that sho
 
 **No mic buttons on the Index page.**
 - Did you tick "Enable voice control" in Settings *and* restart YWC? The toggle only takes effect on next launch.
-- Only one mic button (VFO A's)? That's expected on single-receiver radios (FTdx10, FT-710, FTDX3000) — there's no independent VFO B to target.
+- Only one mic button (VFO A's)? That's expected on single-receiver radios (FTdx10, FT-710, FTDX3000, FT-991A) — there's no independent VFO B to target.
 - Open the Settings page → Voice Control → Diagnostics. If the **State** is anything other than `Idle`, there's an engine error — read the **Last error** line.
 - If Diagnostics shows the active language's Windows speech pack isn't installed, install it (Windows → Settings → Time &amp; Language → Speech → Add a language) — see [§17.2](#172-enabling-voice-control).
 
@@ -3489,7 +3664,7 @@ Yaesu Web Control does **not** supply or electrically protect video adapters or 
 ### 19.3 Settings and Index panel
 
 1. Open **Settings → Radio Display** and enable **Radio display**, then Save.
-2. On Home, the **Radio Display** card appears. Pick the capture device, then click **Start**. The stream does **not** open until you start it (so a leftover device selection cannot grab the dongle). Tick **Auto** if you want the previous behaviour — start as soon as the panel opens with a device selected. Preference is stored in the browser.
+2. On Home, the **Radio Display** card appears. Pick the capture device, then click **Start**. The stream does **not** open until you start it (so a leftover device selection cannot grab the dongle). Tick **Auto** if you want the previous behaviour — start as soon as the panel opens with a device selected. Preference is stored in the browser. Two dongles of the same model show the same name, so the list adds a short tag from the USB socket each is plugged into, for example **USB Video (#0, 35a07035)**; on Windows that tag, not the number, is what YWC remembers.
 3. **Capture size** — the dropdown between the device list and the frame rate.
    **Auto size** (the default) lets the host rank the dongle's modes and pick
    the one that matches a radio panel, which is the right answer for almost
@@ -3521,6 +3696,8 @@ Capture opens while at least one browser is viewing the stream, and stays open f
 The Radio Display picture is a live capture of the radio’s TFT. Clicks on that image never reach the touchscreen (the dongle is one-way). On radios that expose the spectrum scope over CAT (`SS`), a **Controls** button on the video bar (next to FPS / quality) shows scope controls beside the video by default — the stream on the left, buttons on the right — so nothing floats over the picture. Hide the column with **✕** on the column header (or **Controls** on the video bar); the video recentres. **Controls** only shows or hides the panel — when hidden, click it again to bring controls back in the same layout (docked column or floating panel). The picture-in-picture icon on the column header switches to a floating panel; the sidebar icon on the floating panel pins the column again (hover either icon for its label). **✕** closes the panel without changing layout mode. Drag the column’s left edge to widen or narrow it (Arrow keys nudge when the edge is focused; Home/End jump to the limits; double-click restores the default width); the choice is remembered in the browser. **Reattach** from the pop-out window restores the controls panel in the same docked or floating layout you had before pop-out.
 
 On the **FTdx101MP/D**, with the radio in MONO W/F, YWC also treats the captured picture as a control surface: hover over the spectrum or waterfall for the frequency under the cursor, click to tune that VFO, click the ANT / ATT / IPO / R.FIL / AGC readouts to cycle them, and click CURSOR / SPAN / 3DSS / HOLD for the same CAT scope commands as **Controls**. The frequency is measured from the radio’s own VFO marker line, so it is right whatever the span. MONO / MULTI / EXPAND / MEM CH have no CAT command — a click flashes that on the label rather than doing nothing silently. The **FTdx10** has the same overlay on its MONO W/F screen: no ANT target (one jack), and the soft-button row is CURSOR / 3DSS / MULTI / EXPAND / SPAN / SPEED, of which MULTI and EXPAND have no CAT command. **FT-710** has no click overlay.
+
+On the **FTdx101MP/D**, clicking the meter at the top left of the picture opens a small **TX meters** box under it, the same choice the radio's own touch pop-up gives: **Left meter** PO / COMP / TEMP and **Right meter** ALC / VDD / ID / SWR. The one lit is what the radio is showing now. Click another and YWC sends it to the radio (CAT `MS`), and the meter on the picture changes to match. The box closes itself once you have picked a meter on each side, so both can be changed in one go; to change just one side, or to close it without choosing, use **×**, **Esc**, or a click anywhere else on the picture. These are **transmit** meters: the radio only moves their needles while RF is going out, so on receive (or in CW with the key up) they sit at zero whatever you pick. Normally YWC sets the FTdx101's meters to COMP + SWR while you transmit, because that is the only way it can read those two for its own gauges. Once you pick meters in this box, YWC leaves your choice on the radio during TX for the rest of the session, and reads COMP and SWR only when your choice shows them. So with TEMP + VDD picked, the radio's needles show temperature and supply voltage on transmit, and YWC's own COMP and SWR gauges read zero. Its power, ALC and ID gauges are unaffected. The box tells you which of YWC's gauges your choice leaves blank. Restarting YWC goes back to the COMP + SWR behaviour until you pick again. The **FTdx10** and **FT-710** have one meter with six choices; YWC knows the choices, but the overlay has no meter zone for them until the FTdx10's screen has been measured.
 
 One limitation, the same on both radios: **EXPAND** grows the scope up over the readout row, and the radio does not report it over CAT (`SS` reports W/F vs 3DSS, placement and size, never EXPAND), so the overlay assumes EXPAND is off. With it on, the readout clicks land on scope and the top of the plot is wrong — press EXPAND on the radio to put it back. This is CAT, not the radio’s touchscreen, and it is not the SDR IF-OUT axis correction in §6.3 — the FTdx10 has no IF tap, and that correction stays on the FTdx101.
 
@@ -3583,6 +3760,10 @@ OCR, capture-device audio, and WebRTC are **not** in this version. Clicks on the
 The **CW Read** button on the main control panel opens a reader that listens to the radio's receive audio and prints the Morse it hears as text. It also offers a **Reader Mode** button that sets the radio up for decoding and puts your settings back afterwards, keeps a transcript of everything it decoded, and can turn a contact into a line in an ADIF log.
 
 Nothing here transmits. The reader only listens. To answer the station you are reading, use **CW Send** ([§21](#21-cw-send)).
+
+If you move MAIN out of CW (to RTTY or SSB, say) and it stays there for two seconds, the panel closes itself and a screen reader hears "CW reader closed, mode is now ...". Only the panel closes. The reader keeps running, as it does when you close it with **×**, so your copy is still there when you open it again. A brief change, such as a band change or a memory recall passing through another mode, does not close it.
+
+The **↗** button in the panel's title bar opens the reader in a window of its own, which you can put on a second monitor ([§5.21](#521-pop-out-windows)). That window doesn't close when the mode changes. Instead it says *Not in CW mode, so the reader is paused*, and carries on as soon as MAIN is back in CW. **Log QSO** stays on the main page and isn't in the pop-out window.
 
 ![The CW Reader panel — decoded text at the top, the status line beneath it, and the Reader Mode, transcript and log controls](pictures/CW-Reader.png)
 
@@ -3671,16 +3852,18 @@ The reader decodes at the pitch you are using, because that is the tone you have
 
 ### 20.4 The panel controls
 
-Along the top of the panel are four buttons and two switches. The switches — **Follow** and **Tune** — are easy to miss because they do not look like the buttons beside them, and both are worth knowing about.
+Along the top of the panel are five buttons and two switches. The switches — **Follow** and **Tune** — are easy to miss because they do not look like the buttons beside them, and both are worth knowing about.
 
 | Control | What it does |
 |---|---|
 | **Start / Stop** | Runs the decoder. Stop also restores your radio settings if Reader Mode is on. |
 | **Clear** | Empties the on-screen text. The transcript file on disk is not touched, so this is safe to press when you move to a new station. |
 | **Reader Mode** | Sets the radio up for decoding, and puts your settings back afterwards — see [§20.6](#206-reader-mode). |
+| **Auto** | Finds the station being read, tunes it onto your CW pitch and sets the filter for its speed — see [Auto](#auto-tune-the-station-in-for-you) in §20.6. |
 | **Log QSO** | Opens the log form — see [§20.8](#208-logging-a-qso). |
 | **Follow** *(switch, on by default)* | Keeps the newest text in view. See below. |
 | **Tune** *(switch, off by default)* | Shows the tuning display beside the text — see [§20.5](#205-the-tune-display). |
+| **↗** | Opens the reader in a window of its own, for a second monitor — see [§5.21](#521-pop-out-windows). In that window, **Reattach** puts it back in the main page. |
 | **×** | Closes the panel. It does **not** stop the reader — see [§20.6](#206-reader-mode). |
 
 **Follow** is the one to understand first, because the situation it exists for comes up in your first hour.
@@ -3734,6 +3917,21 @@ Two details worth knowing:
 - **It survives a page reload.** YWC remembers your previous settings on the host, not in the browser tab, so if you reload the page — or open YWC in a second browser — the button still knows what to put back. That is the whole reason it is a server-side feature rather than three quick commands from the page.
 
 Reader Mode only touches VFO A.
+
+#### Auto: tune the station in for you
+
+**Auto** does for a CW station what the RTTY Tuner's Auto does for RTTY ([§22.3](#223-auto-working-out-what-you-are-listening-to)). Press it with a station keying somewhere in your filter, and it moves the dial so the station's tone sits on your CW pitch, then sets the filter for the speed it is sending. The status line says what it did, for example *Auto: 17 wpm, moved the dial -347 Hz onto pitch, filter 250 Hz, APF on.*
+
+It works in two steps:
+
+1. **If the station can't be read yet** — well off pitch in a wide filter, with neighbours either side — Auto moves onto the tone and closes the filter to 500 Hz. That is usually what lets the reader start copying.
+2. **Once it is copying**, Auto makes the final small move onto pitch and sets the width for the speed: your Reader Mode width (250 Hz unless you changed it in [§6.10](#610-cw-reader-mode)) at most speeds, opening up to 500 Hz for fast CW, which a narrow filter would smear.
+
+A station that is already readable skips the first step. The dial always moves before the filter narrows, so a station a little off pitch isn't thrown out of the filter before it has been brought onto pitch.
+
+The filter and APF go through Reader Mode, so **Stop** puts your own filter back. The dial stays where Auto put it: that is the station, and moving back would take you off it.
+
+Auto changes nothing when it can't be sure. With no steady tone for 10 seconds — a bare carrier, noise, or two stations of equal strength — it says so and leaves the radio alone. It only works in CW-U or CW-L, never while transmitting, and like Reader Mode it only touches VFO A. If it found the station but it still isn't readable after the first step, it says so; press **Auto** again once text is appearing.
 
 ### 20.7 Transcripts
 
@@ -3818,6 +4016,8 @@ You can press Enter again while a line is still going out; the next line is queu
 
 The keyer takes **A–Z, 0–9, space, and `? / . ,`**. Anything else is dropped before sending, and lower case is sent as upper. A line with nothing sendable in it is refused with a message rather than silently keying nothing. The **Speed** slider sets the radio’s keyer speed (4–60 wpm) and is the same setting as the one on the CW Keyer panel.
 
+**The transmit VFO must be in CW** (CW-U or CW-L). In any other mode the radio accepts the text and keys nothing, not even the sidetone, so CW Send checks first. If VFO A is in DATA-U, say, a banner says *"VFO A is in DATA-U, so the radio won't play CW"* and nothing is sent. The **Switch VFO A to CW** button beside it puts that VFO into CW-U. The mode is changed only when you press it, never behind your back.
+
 **Break-in decides whether it goes out**, exactly as it does for M1–M5 ([§5.12](#512-cw-keyer-panel)). With Break-in **Semi** or **Full** the line is transmitted. With Break-in **Off** the radio plays it to the sidetone monitor and no RF leaves the set — a yellow banner across the top of the panel says so while that is the case, and each line is tagged **monitor only** rather than **sent**.
 
 ### 21.2 Practising without transmitting
@@ -3860,11 +4060,11 @@ Anything you send more than occasionally belongs in a memory instead of your fin
 
 ### 21.4 What the radio is actually doing
 
-There is no “send this text” command on any Yaesu. What the radio has is five keyer memories of up to 50 characters each, and a command that plays one of them whole. So CW Send cuts your line into pieces of up to 50 characters at word boundaries, writes each piece into **keyer memory 5**, plays it, waits for it to finish, and writes the next. When the last piece has gone, your own **M5** text is written back.
+There is no “send this text” command on any Yaesu. What the radio has is five keyer memories of up to 50 characters each, and a command that plays one of them whole. So CW Send cuts your line into pieces of a word or two (about 10 characters, split at word boundaries), writes each piece into **keyer memory 5**, plays it, waits for it to finish, and writes the next. A single word longer than that goes in one piece, up to the memory's 50 characters. When the last piece has gone, your own **M5** text is written back.
 
 Three things follow from that, and all are worth knowing:
 
-**There is a short gap between pieces.** Each piece is a separate memory write and playback, and the radio cannot be told to start the next one early. The pause is a fraction of a second — I have measured it on the air and it is small enough not to trouble the other station, but a very long line is not quite one continuous transmission. Keep lines to a sentence or two and you will never notice.
+**The pieces join at word spaces.** Each piece is a separate memory write and playback, and the radio cannot be told to start the next one early. So every piece is timed from the keyer speed, and the next one is written and started as the last ends. On my FTdx101MP the extra wait at each join is about a fifth of a second at 25 wpm, and by ear the joins sound like ordinary word spaces, with nothing clipped.
 
 **Your M5 is borrowed.** While a line is going out, the radio’s keyer memory 5 holds a piece of it, not your message. It is read before the first piece and put back after the last, and the panel tells you if the write-back failed — check M5 in the CW Keyer panel if it ever does. The M1–M5 buttons are disabled while CW Send is busy, for the same reason a second message cannot be started on top of a first.
 
@@ -3872,7 +4072,7 @@ Three things follow from that, and all are worth knowing:
 
 ### 21.5 Stopping
 
-**Stop** (or **Escape** with the cursor in the box) drops everything that has not started: queued lines are tagged **not sent**, and a line part way through is tagged **stopped after part 2 of 3**. The piece already playing has to finish — the radio has no command to stop a memory playback, and I measured every candidate on the air before writing that ([§5.12](#512-cw-keyer-panel)). This is precisely why the line is sent in pieces rather than as one long memory: the most you can ever be committed to is one piece, and a piece is at most 50 characters.
+**Stop** (or **Escape** with the cursor in the box) drops everything that has not started: queued lines are tagged **not sent**, and a line part way through is tagged **stopped after part 2 of 3**. The piece already playing has to finish, so what you hear after pressing Stop is the word or two already playing. The radio has no command to stop a memory playback, and I measured every candidate on the air before writing that ([§5.12](#512-cw-keyer-panel)). That includes going to receive, switching break-in off, changing mode and back, and sending the same play command a second time, which is what stops it from the radio's front panel. This is why the line is sent in short pieces rather than as one long memory: the most you can ever be committed to is one piece.
 
 **Escape** with nothing sending simply empties the box (as does the **Clear** button beside it) — handy after a paste that was never meant for the keyer. **Clear log** empties the sent-lines log.
 
@@ -3880,10 +4080,17 @@ Three things follow from that, and all are worth knowing:
 
 The panel is non-modal: it can stay open while you work the rest of the page, and the CW Reader can be open beside it. That pairing is the normal way to use it — read in one, answer in the other, with nothing to switch between. Drag the title bar to move it; drag the bottom-right corner to resize it, and the log grows to fill whatever height you give it. Both are remembered between sessions. Close it with **×**; a line already going out finishes on its own.
 
+**In a window of its own.** The **↗** button in the title bar opens CW Send in a separate window, which can go on a second monitor beside the CW Reader's ([§5.21](#521-pop-out-windows)). It works exactly as the panel does, and follows the radio's speed and break-in. A line is sent by whichever window you typed it in, so:
+
+- **↗** is greyed out while a line from the main page is still going out, and **Reattach** is greyed out while a line from the window is. Wait for it to finish, or press **Stop**. Both pages are protecting M5: switching mid-line would leave the radio's keyer memory 5 holding a piece of the line instead of your own text.
+- Closing the window with **×** while a line is going out makes the browser ask first, for the same reason.
+- While the window is sending, the M1–M5 buttons on the main page are greyed out, as they are when the panel sends.
+
 ### 21.7 Troubleshooting
 
 | Symptom | What to try |
 |---|---|
+| Nothing is sent, and a banner says *"VFO A is in DATA-U, so the radio won't play CW"* (or another mode) | The radio only plays its keyer memories in CW. Press **Switch VFO A to CW** on the banner, or change the mode yourself, and send again. |
 | Lines are tagged **monitor only** and nothing is transmitted | Break-in is **Off**. Set it to **Semi** or **Full** on the CW Keyer panel ([§5.12](#512-cw-keyer-panel)). The yellow banner on the panel says the same. If you meant to practise, that is the setting you want ([§21.2](#212-practising-without-transmitting)). |
 | I can’t hear the sending | With break-in off the radio plays to the monitor, so turn the radio’s **MONI** level up. |
 | “Radio is still sending – waiting for it to finish” | Something else is playing — an M button, or a piece from the previous line. It resumes on its own. |
@@ -3894,17 +4101,37 @@ The panel is non-modal: it can stay open while you work the rest of the page, an
 
 ---
 
-## 22. RTTY Tuner
+## 22. RTTY
 
-The **RTTY Tune** button on the main control panel opens a tuning scope for RTTY, the kind that sat beside every RTTY terminal unit before anything had a waterfall. The receive audio goes through two narrow filters, one on the mark tone and one on the space tone. The mark filter drives the scope sideways and the space filter drives it up and down, so a signal shifting between the two tones draws a cross. You tune for the cross.
+The **RTTY Tune** button on the main control panel opens one panel with three parts in it: the **decoded text** and a **send** box down the left, and the **tuning scope** and its settings in a column on the right. One panel, because tuning a RTTY signal and reading it are the same job — you watch the cross and the text together, and what you change on one side you see on the other.
 
-It does not decode anything; the radio's own RTTY decoder, or your RTTY software, does that. It only shows you when the signal is sitting where the decoder expects it.
+The scope is the kind that sat beside every RTTY terminal unit before anything had a waterfall. The receive audio goes through two narrow filters, one on the mark tone and one on the space tone. The mark filter drives the scope sideways and the space filter drives it up and down, so a signal shifting between the two tones draws a cross. You tune for the cross.
 
-Nothing here transmits. The tuner only listens.
+Drag the panel narrower than about 640 pixels and the two columns fold into one, scope on top, so it still works on a phone or squeezed into a corner of the screen.
 
-It uses the same capture device as the CW Reader: set the **RX device** to the radio's USB codec under Settings → Remote Audio ([§6.8](#68-remote-audio)). Remote Audio itself does not need to be switched on. The device is held open only while the tuner is open, and let go a couple of seconds after you close it. The CW Reader and the tuner can run together.
+**It decodes RTTY into text.** That is the Decode pane, and [§22.5](#225-decoding-the-text) is all of it. The decoder has no Mark, Shift, Speed or Rev of its own: it uses the ones in the Tune column beside it, so getting the cross upright is the whole of putting the decoder on the signal. **Sending is not built** — the Send box is there so you can see where it will go, and [§22.6](#226-sending) says why it is empty.
+
+Nothing here transmits. It does change things on the receiver — the mode, the IF filter and, after **Auto**, the dial — all of them so that the figure can be believed, and the first two put back when you close it. [§22.8](#228-what-the-tuner-changes-on-your-radio) is the whole of that, and both of the automatic ones can be switched off on the Settings page.
+
+It will also put the radio's own **RTTY MARK FREQUENCY** and **SHIFT FREQUENCY** menu in step with what you choose, so its built-in decoder does not have to be set twice ([§22.2](#222-mark-shift-speed-and-rev)).
+
+**You probably have a second decoder, in the radio.** The supported Yaesu radios decode RTTY themselves, onto their own screen, with no PC involved — your radio's manual will say where. That is worth having as well as this one, and not only as a spare: when the two agree you can believe the copy, and when they disagree you are looking at a marginal signal and should trust neither very far. What the browser gives you is the figure and the text together in front of you, instead of leaning over to read the radio's display. PC software such as MMTTY or fldigi is tuned in exactly the same way.
+
+The scope and the decoder are both shared with my Icom app, so the two draw an identical figure and read identical text from identical audio. What differs is only where the audio comes from, and what the radio does with its filter.
+
+It uses the same capture device as the CW Reader: set the **RX device** to the radio's USB codec under Settings → Remote Audio ([§6.8](#68-remote-audio)). Remote Audio itself does not need to be switched on. The device is held open only while something is using it, and let go a couple of seconds after the last thing stops. The CW Reader, the RTTY figure and the RTTY decoder can all run at once.
+
+The panel closes itself if MAIN leaves the modes it works in and stays out for two seconds, which is what happens when you change mode yourself while it is open. It stays open in RTTY-L, RTTY-U, the DATA modes, PSK, LSB and USB, because in the DATA modes and SSB the tones come from your RTTY software. A screen reader hears "RTTY tuner closed, mode is now ...". Nothing opens on its own: moving to CW does not open the CW Reader. **Closing the panel does not stop the decoder** — it keeps running on the server, and the text is still there when you open it again.
+
+**Size, tones only and its own window.** Drag the tuner's bottom-right corner to make it bigger or smaller; the scope stays square and fills the space, and the size is remembered. Once **Mark** is set, the **Tones only** button in the title bar hides the settings, the buttons, the status lines and the whole decode-and-send column, leaving just the scope, so the panel can be made very small. Press it again to bring them back. The **↗** button opens the tuner in a window of its own, which you can put on a second monitor ([§5.21](#521-pop-out-windows)). That window doesn't close when the mode changes. It says it is paused, lets go of the audio, and starts again when you go back to RTTY, DATA, LSB or USB.
+
+The tuner can be open in more than one place at once, for example the main page and a pop-out window, or a PC and a tablet. Closing it in one leaves it running in the others, and the audio is let go only when the last one closes.
 
 ### 22.1 Reading the figure
+
+![RTTY Tuner on a real off-air RTTY signal in RTTY-L on 80 m: a clean cross, mark across and space up, with Mark 2125 Space 2295 Hz, M -31, S -34, in -25 dBFS](pictures/RTTY-Tuner.png)
+
+That is a real RTTY station on 80 m, received on my FTdx101MP in RTTY-L. The two arms are about the same size: mark is at -31 dBFS and space at -34, only 3 dB apart. **Equal arms are what tell you it is RTTY.** A steady carrier in the mark filter draws a bright, convincing line too, but only one, and its space level stays far below its mark level however long you watch.
 
 | What you see | What it means |
 |---|---|
@@ -3917,28 +4144,164 @@ The figure grows to fill the face whatever the signal level. So that plain noise
 
 Under the scope, a line gives the two filter frequencies and three levels in dBFS: mark filter (**M**), space filter (**S**) and everything the receiver is passing (**in**). The line under that says in words which of the cases above you are looking at.
 
-### 22.2 Mark, Shift and Rev
+### 22.2 Mark, Shift, Speed and Rev
 
-- **Mark** is the mark tone in the receive audio. In the radio's RTTY-L and RTTY-U that is the radio's own RTTY MARK setting, **2125 Hz** unless you have changed it. In DATA-L it is whatever your RTTY software uses: many operators run **1415 Hz**, which puts the two tones in the middle of the SSB passband.
+Four controls, and for ordinary amateur RTTY you will not touch any of them. If you would rather not set them by hand at all, **Auto** will work all four out from the signal ([§22.3](#223-auto-working-out-what-you-are-listening-to)).
+
+- **Mark** is the mark tone in the receive audio. In the radio's RTTY-L and RTTY-U that is the radio's own MARK FREQUENCY setting, **2125 Hz** unless you have changed it. In DATA-L it is whatever your RTTY software uses: many operators run **1415 Hz**, which puts the two tones in the middle of the SSB passband.
 - **Shift** is the station's shift. Amateur RTTY is **170 Hz**; 200, 425, 450 and 850 are there for everything else. 450 is the shift of the German weather service broadcasts (DDK9 on 10.1008 MHz, among others), which run all day and are the easiest real RTTY to find when the amateur bands are quiet.
-- **Rev** puts the space filter on the other side of mark. Tick it if the station is sending reversed, or if you have **REV** set on the radio.
+- **Speed** is how fast the station is sending. **45.45 baud** is amateur RTTY; **50** is most European weather and commercial traffic, with **75** and **100** on faster circuits. The figure does not use it — two narrow filters listening for two tones do not care how fast they are being keyed, and the cross draws just as cleanly on a 75-baud utility station. It is what the decoder works from, and what **Auto** measures.
+- **Rev** puts the space filter below mark instead of above it. It is for when **the other station** is sending reversed; leave it unticked otherwise. The radio's own RTTY-L / RTTY-U setting is followed for you, so a change of mode needs nothing here. A station sending reversed does not land its tones in different places from one sending normally — that is what Rev is for, and it is the one case the mode cannot tell you about.
 
-Which side of mark the space filter goes on depends on the mode on VFO A:
+> **A figure in a box labelled "measured"** is one **Auto** worked out that is on no list — 452 Hz rather than 450, or 56.9 baud on a press circuit. It is used exactly as a standard one is. There is nothing to correct; it is what the station is actually doing, and rounding it to a familiar number would be the error.
 
-- **RTTY-L:** space above mark, 2125 and 2295 Hz. I measured this on my FTdx101MP. In RTTY-L the dial sits on the mark tone, and a signal below the dial comes out higher in the audio.
-- **RTTY-U:** space below mark, 2125 and 1955 Hz. This is what upper sideband should do, but I have not measured it. If the figure looks wrong in RTTY-U, try **Rev** and let me know.
-- **DATA-L, DATA-U and anything else:** space above mark, 2125 and 2295 Hz. That is AFSK, where your RTTY software makes the tones, and it is the usual default in RTTY software.
+In every mode the space filter goes above mark, at 2125 and 2295 Hz unless you change **Mark**:
+
+- **RTTY-L:** I measured this on my FTdx101MP. The dial sits on the mark tone, and a signal below the dial comes out higher in the audio.
+- **RTTY-U:** I measured this too. The two tones come out at the same 2125 and 2295 Hz, so the cross is the same as in RTTY-L. But the dial is still on the upper tone, which on the air is the station's mark, and the radio's own decoder reads it reversed. Use RTTY-L for amateur RTTY.
+- **DATA-L, DATA-U and anything else:** that is AFSK, where your RTTY software makes the tones, and space above mark is the usual default in RTTY software.
 
 These settings are remembered in the browser. In **DATA-L**, click-to-tune on the spectrum uses them as well, to put a clicked signal's tones where your software is listening ([§5.4](#54-spectrum-display)). So set **Mark** to your software's mark tone even if you never use the tuner.
 
-### 22.3 Troubleshooting
+#### Keeping the radio in step, and the **From radio** button
+
+**In RTTY, Mark and Shift are kept in step with the radio both ways round.**
+
+*Radio to tuner:* while the tuner is open it re-reads the radio's **MARK FREQUENCY** and **SHIFT FREQUENCY** menu items every four seconds, so changing the shift on the radio changes the tuner with it and the two never quietly disagree. There is no CAT message for a menu change, so re-reading is the only way to notice; it costs two short reads every four seconds, and only while the tuner is open.
+
+*Tuner to radio:* change Mark or Shift here and the radio's menu changes with you, so its built-in decoder does not have to be set a second time by hand. The menu is a short list of fixed choices rather than a pair of numbers, so some of what the tuner offers has nowhere to go:
+
+| | The radio's menu has | The tuner also offers |
+|---|---|---|
+| **Mark** | 1275 and 2125 Hz | anything you type, and anything **Auto** measures |
+| **Shift** | 170, 200, 425 and 850 Hz | **450**, and anything **Auto** measures |
+
+Pick one the radio does not have and the tuner uses it, the radio keeps its own setting, and the status line tells you which of the two it could set — *"Radio set to mark 2125 Hz; it has no shift 450 Hz."* Nothing is lost by this: the figure is two filters and the decoding is arithmetic, and neither goes anywhere near that menu. The only thing that cannot be told about a 450 Hz station is the radio's *built-in* decoder, and nothing here depends on it. **Rev writes nothing**, because it is a statement about the station you are listening to and the radio has no setting for it.
+
+**It follows, but it does not argue.** The moment you type your own Mark or Shift, the tuner stops replacing it and leaves your figure alone — for the rest of the session and across a page reload. That matters more than it sounds. The radio's menu describes the radio's own decoder, and it is routinely the wrong description of what you are listening to: a utility station on 425 Hz shift while the menu still says 170 is the ordinary case, not an exotic one, and a tuner that dragged you back to 170 every four seconds would be useless for exactly the signals this scope is best at.
+
+**From radio** is how you hand control back. Press it and the tuner takes the radio's numbers again, and goes on following from there. (Typing a figure of your own is not undone by this — it is written to the radio, but the *following* stops until you press the button.) It tells you what it read, and says so when the two already match. It is also the only way to read the menu in an AFSK mode, where nothing is synced for you.
+
+Two things about the reading itself are worth knowing:
+
+- **It only describes FSK.** Those menu items belong to the radio's own RTTY mode. If you are running AFSK — DATA-L, DATA-U, PSK, LSB or USB, with MMTTY or fldigi making the tones — the radio's menu has nothing to do with what is arriving, which is why nothing is synced automatically in those modes and **nothing is written to the radio there either**. Those items also govern how the radio *transmits* RTTY, and a receive-side tuning aid has no business changing that on behalf of someone who is not using it. Pressing the button there is not refused: it reports the radio's values along with a note that you are not in FSK, and leaves the decision to you.
+- **Rev is not read from the radio**, and that is deliberate. The obvious candidate, **POLARITY RX**, is about the radio's own decoder rather than about the station, and which way up a received signal arrives depends on the mode, which the tuner already follows. If you have POLARITY RX set to REV on the radio, that is the one case where ticking **Rev** matches it.
+
+### 22.3 Auto: working out what you are listening to
+
+Press **Auto** and the tuner listens for about four seconds, then fills in all four settings from the signal itself — the two tones, the shift between them, which way round they are, and the speed. It is the quickest way onto an unfamiliar station, and it is the only practical way onto one whose parameters you have no way of knowing, which outside the amateur bands is most of them.
+
+It needs the signal tuned in well enough that both tones are inside the receiver's audio, and not much better than that. It does **not** need a signal strong enough to read: it is measuring the timing of the keying, not copying the text, so a station too weak and ragged for a decoder is usually still well within its reach.
+
+**If it cannot make sense of what it hears, it says so and changes nothing.** That is deliberate, and it is the behaviour to rely on: you press Auto exactly when you cannot tell what you are listening to, which is when a confident-looking wrong answer would do the most harm — it would overwrite the settings you had and leave you nothing to go back to. So pressing it on an empty band, on SSB, or on a data mode that is not RTTY costs you nothing but the four seconds.
+
+There are four different kinds of answer, and the status line distinguishes them because they call for different things:
+
+| What it says | What to do |
+|---|---|
+| It could not make sense of it | Nothing was changed. Tune the signal in better, narrow the IF, and try again. If it keeps refusing, what you are hearing is probably not RTTY — PSK and the FT modes will never satisfy it. |
+| It says **only one of the two tones was in range** | Nothing was changed. You are tuned so far off that one tone has fallen outside the audio the measurement works in, so there is no pair to measure. If it moved the dial towards the signal, press **Auto** again and it will measure it properly; otherwise tune closer first. |
+| It gives you figures, and adds that **which tone is mark is a guess** | The speed and both tones are measured; only which of the two is mark is uncertain. Try it, and if the text does not come out, tick **Rev**. |
+| It gives you figures with no warning | Use them. |
+
+> **How it does it, for the curious.** Every RTTY character ends with a stop element one and a half bits long, and that element is always mark. So runs of *space* are always a whole number of bits and runs of mark never quite are — and that one asymmetry gives up both answers at once. Measuring which yardstick divides the space runs most exactly gives the speed, to about a percent; whether the tones have to be swapped to make that work gives which one is mark. A station that sends a one-bit stop element instead is still measured correctly for speed, but the asymmetry it leans on is then simply absent, and that is the case where it warns you about mark.
+
+> **Why one tone out of range gets its own answer.** It is the one failure that does not look like one. With both tones present, a signal Auto cannot read gives a low score and is refused. With only one tone present, it measures that tone against the loudest thing left beside it — which is a piece of the same tone's own skirt — and the keying in it fits a speed beautifully, so the answer comes back *confident* and wrong: on the bench a true 450 Hz shift at 50 baud was reported as 115 Hz at 100 baud, and scored 0.92 out of 1. It no longer writes anything at all in this case, and says which case it is, because the dial correction it makes from the tone it can hear is usually enough that a second press gets it right.
+
+Auto measures rather than choosing from a list, so a station on no standard shift or speed is reported as it is, shown in the box labelled *measured*, and used that way. It will also tick or untick **Rev** for you, and push the mark and shift into the radio's menu where there is a rung for them, exactly as if you had typed them ([§22.2](#222-mark-shift-speed-and-rev)).
+
+**And when it is sure of what it heard, it tunes the signal in.** The dial moves so that the mark tone arrives on the tuner's **Mark** — 2125 Hz unless you have changed it — and the status line says which way it went and by how much: *"Moved the dial 66 Hz down to put the mark on 2125 Hz - it was arriving at 2191 Hz."* The figure then redraws upright, because the signal is now where the filters are.
+
+This is the most useful thing Auto does, and it is not only about saving you the tuning. A signal sitting off-centre in the receiver's filter arrives with one tone quieter than the other, and the speed cannot be measured from keying whose two halves are unequal — which is why a badly tuned station can give a steady, correct shift and a different speed on every press. Putting the signal in the middle of the filter fixes the figure, the speed and anything decoding it, all at once.
+
+What it will not do: move the mark further than your **IF filter is wide**, and never less than **500 Hz** whatever the filter is set to — beyond the passband it is more likely a different station than a mistuning. It will not move at all unless it is sure, or if the answer is within about 25 Hz, which is the limit of what it can measure; move while you are transmitting; or move the dial in **LSB, USB, PSK or the DATA modes**, where your own RTTY software is making the tones and has its own tuning indicator. Turn it off altogether with *Auto also tunes the signal in* on the Settings page.
+
+### 22.4 Your first session, step by step
+
+1. **Set the audio device first.** The tuner uses the Remote Audio **RX device** on the Settings page, which is the same one the CW Reader uses — on a USB-connected radio that is the radio's own USB codec ([§6.8](#68-remote-audio)). If the CW Reader works, so will this.
+2. **Tune roughly onto a signal.** RTTY lives just below the FT8 frequencies on most bands — 14.080–14.099 on 20 m is the usual hunting ground. You do not have to put the radio in RTTY first: if you are in CW, AM or FM, pressing **RTTY Tune** does it for you and puts your mode back when you close the panel ([§22.8](#228-what-the-tuner-changes-on-your-radio)).
+3. **The filter looks after itself, within reason.** The tuner opens the IF if it is too narrow for the shift you are set to, but it will not narrow a wide one — a 2.4 kHz SSB filter puts half the band into the tuner at once and the figure will never settle, so if you are in SSB or DATA, narrow it yourself ([§5.8](#58-if-width-audio-filter-if-shift-and-af-gain)).
+4. **Press RTTY Tune.** The figure starts drawing within a second or so.
+5. **If you do not know the station's shift or speed, press Auto** and let it work them out ([§22.3](#223-auto-working-out-what-you-are-listening-to)). On amateur RTTY you can skip this — the defaults are already right.
+6. **Tune slowly** — 10 Hz steps are about right — until the cross stands upright. On a strong signal this is unmistakable; on a weak one, aim for the most upright you can get and the most equal arm lengths. If you pressed **Auto** and it was sure, this is already done: it moves the dial itself and tells you it has.
+7. **Press Start in the Decode pane** and read the text ([§22.5](#225-decoding-the-text)). You can do this at any point — before tuning, even — but it has the best chance once the cross is upright.
+8. **Close the panel when you are done.** Your mode and filter go back, and the audio device is let go a couple of seconds later.
+
+The panel can be dragged by its title bar, like the others.
+
+### 22.5 Decoding the text
+
+The **Decode** pane prints what the software is making of the two tones. Press **Start** and the text begins to arrive; press **Stop** and it stops. It keeps running while the panel is closed, so shutting the panel and opening it again does not lose the copy, and a second browser or a tablet sees the same text.
+
+There is no Mark, Shift, Speed or Rev in the Decode pane, and that is deliberate. It uses the ones in the **Tune** column next to it. Get the cross upright, or press **Auto** and let it work them out ([§22.3](#223-auto-working-out-what-you-are-listening-to)), and the decoder is already listening in the right place. Change the radio's mode between **RTTY-L** and **RTTY-U** and it follows that too, with nothing for you to press. One set of settings is one thing to get right, instead of two that can disagree.
+
+![The RTTY panel decoding real off-air contest exchanges in RTTY-L through a 400 Hz IF filter, with Mark 2131 Space 2301 Hz, M -28, S -26, in -23 dBFS and a clean cross](pictures/RTTY-Tuner-400Hz-IF.png)
+
+That is real copy off the air on my FTdx101MP in RTTY-L, with the radio's IF filter at 400 Hz. The cross is clean and the two arms are within 2 dB of each other, so both tones are well inside the filter. The odd wrong letter is ordinary RTTY in a crowded band, not the filter.
+
+The counters beside the text are worth a glance when nothing is arriving. **Activity** is how much of the audio is landing in the two tone filters; **characters** is how many it has tried to assemble; and **framing errors** is how many of those did not have their stop element where a character of that speed should have put it. Text with a low error count is good copy. A lot of characters and a lot of errors together means it is being fed something that is nearly right — the commonest causes are the wrong speed, or **Rev** the wrong way round. Nothing arriving at all, with activity near zero, is an audio or tuning problem rather than a decoding one.
+
+### 22.6 Sending
+
+The **Send** box is in the panel, and it does nothing. It is disabled, and it is there so that the shape of the panel is the shape it will keep.
+
+Receive came first on purpose. RTTY transmit needs more than a text box — AFSK through the radio's data input or FSK keying, the right data mode, drive level, and a PTT path — and each of those is a way to put a badly set-up signal on the air. There is a working decoder here now, which is useful on its own, so it ships on its own.
+
+### 22.7 Contest Mode: the tuner on its own
+
+If you are contesting you almost certainly have a decoder already — MMTTY,
+2Tone, or the one built into your logger — and the thing those cannot draw is
+the crossed figure. **RTTY Contest Mode**, on the Settings page under **RTTY
+Tuner**, trims the panel to just that.
+
+- **The decode and send panes go**, leaving the figure and its controls.
+- **The hint under the figure goes.** It is there to teach you the picture, and
+  by the time you are contesting with it you have learnt it.
+- **The panel stops changing size.** The two lines under the figure are the
+  readouts and the status line, and their text changes length as the tuner
+  reports — *"Stopped."* one moment, *"Mark 2125, shift 450"* the next. Each
+  change used to reflow the panel and shift the scope under the mouse that was
+  tuning it. In Contest Mode both lines keep two lines' worth of height
+  whatever they say.
+
+Everything else is unchanged: **Tones only** still shrinks it to the figure
+alone, and the panel still pops out into a window of its own
+([§5.21](#521-pop-out-windows)) at whatever size you leave it. The same switch,
+under the same name, is in Icom Web Control.
+
+### 22.8 What the tuner changes on your radio
+
+Three things, and two of them are put back. Both of the automatic ones can be switched off on the Settings page under **RTTY Tuner**.
+
+**The mode**, and only from the modes RTTY cannot be received in at all — CW, AM, FM and DATA-FM. Open the tuner in one of those and it goes to **RTTY-L**, and your mode comes back when you close it. SSB, DATA and PSK are left exactly as they are, because that is a working AFSK arrangement and switching out of it would break it.
+
+The reason it does this rather than just warning you is worth knowing: the tuner opens on whatever the radio was last doing, and what the radio was last doing is often CW with a 250 Hz filter. A passband that narrow cannot carry a 170 Hz shift's keying sidebands, let alone a 450 Hz shift's — and the figure then draws a perfectly convincing ellipse out of one tone and the skirt of the other, which looks exactly like a correctly tuned signal. **A tuning indicator that lies is worse than none**, so the conditions it needs are set rather than hoped for.
+
+**The IF filter**, and only ever wider. Changing to RTTY brings your own stored RTTY filter width with it, which is better evidence about your band than any formula, and it is touched only if it is too narrow to have carried the shift you are set to. Narrowing is left to you: a narrow filter is how you dig a signal out of a crowded band, and only you know the band.
+
+> **Where the filter sits.** In RTTY-L the FTdx101MP centres its IF filter on the middle of the tone pair **its own RTTY menu** expects: MARK FREQUENCY plus half the SHIFT FREQUENCY. With the usual 2125 Hz and 170 Hz that is about 2210 Hz. It does not follow the tuner's **Mark** box, only the radio's menu. I proved that on 2026-10-13 on a real station, with the dial left alone: with the menu at 2125/170 the pair around 2208 Hz came through and a pair around 1485 Hz was more than 20 dB down. Changing only the menu to 1275/425 swapped them round.
+>
+> That is why keeping the radio's menu in step with **Mark** and **Shift** matters ([§22.2](#222-mark-shift-speed-and-rev)). When the two agree, the tones sit evenly either side of the middle of the filter. The width the tuner asks for is then the shift plus twice the baud rate for the keying sidebands: about **260 Hz** for 170 Hz shift at 45.45 baud, **550 Hz** for 450 Hz at 50 baud, and **950 Hz** for 850 Hz at 50 baud. A 400 Hz filter is comfortably wide enough for amateur RTTY, as the picture in [§22.5](#225-decoding-the-text) shows. If the menu and the tuner disagree, the tones sit off to one side, and the tuner asks for more, because it works the width out from where the radio has really put the filter.
+>
+> In RTTY-U I have assumed the filter sits the mirror-image way, at the menu mark minus half the shift, and I have not measured it. Outside RTTY (DATA-L, DATA-U, USB and LSB) there is no RTTY menu. There the FTdx101MP's passband sat at about 1485 Hz in my measurements, and it moved one for one with IF SHIFT. That IF SHIFT moves the RTTY filter in the same way is assumed too.
+>
+> If even the widest filter cannot reach both tones, the status line says so and asks you to move the dial, which is the only thing that can fix it. My Icom app follows the same rule, because the IC-7300 also centres its RTTY filter on its own menu.
+
+**The dial**, after **Auto**, and only when it is sure of what it heard. [§22.3](#223-auto-working-out-what-you-are-listening-to) has the limits: never further than your IF filter is wide, never less than 500 Hz, never in an AFSK mode and never while transmitting. It always says what it moved and by how much. This one is not put back, because it is a correction rather than a borrowing — you asked it to tune the signal in.
+
+### 22.9 Troubleshooting
 
 | Symptom | What to try |
 |---|---|
 | Status says the radio audio could not be opened | Set the Remote Audio **RX device** to the radio's USB codec in Settings ([§6.8](#68-remote-audio)). The tuner uses the same device as the CW Reader. |
 | Only ever a fuzzy ball, even on a strong signal | Check that **Mark** and **Shift** match the signal and that the mode is right. A 3 kHz SSB filter passes plenty of noise; a narrower RTTY filter on the radio gives a cleaner cross. |
-| Both arms there but they swap over | That is harmless: the picture is the same either way round. Tick **Rev** if your decoder is printing rubbish. |
-
+| Both arms there but they swap over | That is harmless: the picture is the same either way round. |
+| A perfect cross but the radio's decoder prints rubbish | Check the mode. In RTTY-U the radio decodes amateur RTTY reversed; switch to **RTTY-L** at the same dial frequency. **Rev** does not help: it only moves the tuner's filter, and it will break the cross. |
+| The cross broke when I changed between RTTY-U and RTTY-L | Untick **Rev**. Before this was fixed, RTTY-U needed Rev to draw a cross. |
+| The cross is upright but the Decode pane prints nothing | Check **Speed** — 45.45 for amateur RTTY, 50 for most weather and commercial traffic — and press **Auto** if you do not know it. A lot of characters with a lot of framing errors means nearly-right settings; nothing at all, with activity near zero, means the audio is not arriving. |
+| The text comes out as runs of the same wrong letter | **Rev** is the wrong way round for this station. Tick it, or untick it. |
+| **Auto** keeps saying it cannot make sense of it | It needs both tones inside the receiver's audio. Tune closer, and narrow the IF if it is wide open. If it refuses on everything, what you are listening to is probably not RTTY. |
+| **Auto** says the filter cannot carry the signal | Move the dial rather than widening further — see the note in [§22.8](#228-what-the-tuner-changes-on-your-radio). The tones are sitting too far from the middle of the passband for any width to reach both. |
 ---
 
 

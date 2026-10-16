@@ -1,4 +1,4 @@
-// RTTY crossed-ellipse tuning scope.
+﻿// RTTY crossed-ellipse tuning scope.
 //
 // How RTTY was tuned before anything had a waterfall: the terminal unit's mark
 // filter went to the X plates of an oscilloscope and its space filter to the Y
@@ -25,6 +25,10 @@ const POINTS     = 500;    // about 21 ms at 24,000 points a second: one sweep
 const PERSIST    = 6;      // sweeps kept on screen, oldest dimmest
 const QUIET_DB   = -80;    // below this in both filters there is nothing to draw
 const CHUNK      = 5;      // points per stroke: half a cycle of 2 kHz at 24,000 points a second
+const RADIO_MS   = 4000;  // how often to re-read the radio's RTTY menu while open
+const FETCH_MS   = 2000;   // a frame request that takes longer than this is abandoned
+const RESTART_MS = 3000;   // at most one automatic restart this often
+const COMPACT_KEY = 'rttyTunerCompact';   // localStorage: the tones-only view
 
 // How much of what the receiver passes lands in the two tone filters, in dB.
 // RTTY on tune puts nearly all of it there; noise, or a signal off to one side,
@@ -41,9 +45,14 @@ export class RttyTuner {
             canvas:  'rttyTunerCanvas',
             info:    'rttyTunerInfo',
             status:  'rttyTunerStatus',
-            mark:    'rttyTunerMark',
-            shift:   'rttyTunerShift',
-            reverse: 'rttyTunerReverse',
+            mark:      'rttyTunerMark',
+            shift:     'rttyTunerShift',
+            baud:      'rttyTunerBaud',
+            reverse:   'rttyTunerReverse',
+            fromRadio: 'rttyTunerFromRadio',
+            auto:      'rttyTunerAutoBtn',
+            paused:    'rttyTunerPaused',
+            compact:   'rttyTunerCompactBtn',
         }, ids);
 
         this._timer    = null;
@@ -52,41 +61,142 @@ export class RttyTuner {
         this._scale    = 1e-4;     // decaying peak, so the figure fills the face
         this._last     = null;
         this._settings = { ...DEFAULT_RTTY_SETTINGS };
+        this._radioProbed = false;
+        this._radioTimer   = null;
+        this._radioApplied = null;   // {markHz, shiftHz} we last took FROM the radio
+        this._want    = null;        // settings we have POSTed but not yet seen come back
+        this._wantAt  = 0;
+        this._radioBusy = false;     // a radio-tones read is outstanding
+        this._autoBusy  = false;     // an Auto analysis is outstanding
+        this._pushBusy    = false;   // a radio-tones write is outstanding
+        this._pushPending = null;    // the newest tones to write once it finishes
+        this._pushQuiet   = false;   // hand the note back rather than post it
+        this._pushNote    = null;    // what the radio took, for the caller to fold in
+        this._modeNoteShown = null;  // the host's last note about the radio, once said
+        this._statusHold  = 0;       // Date.now() until which _draw must not overwrite
+        this._restartAt   = 0;       // Date.now() of the last automatic restart
+        this._paused      = false;   // a pop-out waiting out a mode the tuner has no use in
+        // Which window this is, to the host. Each open tuner holds the audio
+        // under its own id, so closing the dialog here does not stop the
+        // figure in a pop-out or on another PC. New on every page load: a
+        // reloaded page is a new window, and the old one's lease runs out.
+        this._client = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
     }
 
     init() {
         const $ = id => document.getElementById(this._ids[id]);
+        this._pausedEl  = $('paused');
+        this._compactEl = $('compact');
         this._dialog  = $('dialog');
         this._canvas  = $('canvas');
         this._info    = $('info');
         this._status  = $('status');
         this._markEl  = $('mark');
         this._shiftEl = $('shift');
+        this._baudEl  = $('baud');
         this._revEl   = $('reverse');
+        this._radioEl = $('fromRadio');
+        this._autoEl  = $('auto');
         if (!this._dialog || !this._canvas) return false;
 
         this._ctx = this._canvas.getContext('2d');
         this._loadSettings();
         this._showSettings();
 
-        const changed = () => { this._readSettings(); this._saveSettings(); this._send('start'); };
+        // The operator changing Mark or Shift here changes them on the radio
+        // too, so the two do not have to be kept in step by hand. Reverse has
+        // no radio equivalent (it is which way round the station we are
+        // listening to is sending) and so writes nothing.
+        const changed = () => {
+            const was = { markHz: this._settings.markHz, shiftHz: this._settings.shiftHz };
+            this._readSettings();
+            this._saveSettings();
+            this._send('start');
+            if (was.markHz !== this._settings.markHz || was.shiftHz !== this._settings.shiftHz)
+                this._pushToRadio();
+        };
         this._markEl?.addEventListener('change', changed);
         this._shiftEl?.addEventListener('change', changed);
+        this._baudEl?.addEventListener('change', changed);
         this._revEl?.addEventListener('change', changed);
+
+        this._autoEl?.addEventListener('click', () => this._auto());
 
         // The audio is held only while the dialog is open. Closing it by any
         // route - the X, Escape, or the page's own code - lets the host go.
+        // The radio sync goes with it: it costs CI-V traffic and there is
+        // nothing to keep in step with once the figure is gone.
         this._dialog.addEventListener('close', () => {
+            this._holdMode(false);
             this._stopPolling();
+            this._stopRadioSync();
             this._send('stop');
         });
 
+        // A tab in the background gets its timers slowed or frozen by the
+        // browser, the host stops the tuner after 15 s without a poll, and
+        // the figure used to sit on "Stopped." until the dialog was reopened.
+        // Coming back to the tab starts it again at once; _poll covers the
+        // cases this event does not see.
+        // The restart itself is left to the next poll, a frame away, because
+        // only the frame can say whether another window is running the host -
+        // and if one is, this window must take its settings, not impose its own.
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') this._restartAt = 0;
+        });
+
+        // A tab or pop-out window closing fires no dialog close, and the host
+        // would hold the audio for this window until the idle stop. Say so
+        // instead; a beacon is the one request a closing page still gets out.
+        window.addEventListener('pagehide', () => {
+            if (!this._timer) return;
+            try { navigator.sendBeacon?.(`/api/rtty/tuner/stop?client=${this._client}`); } catch { /* idle stop covers it */ }
+        });
+
+        // Tones only: just the scope, for an operator who has set Mark and
+        // wants the cross in the smallest window. The host page styles the
+        // rtty-compact class; this only keeps the choice.
+        if (this._compactEl) {
+            let compact = false;
+            try { compact = localStorage.getItem(COMPACT_KEY) === '1'; } catch { /* ignore */ }
+            this._setCompact(compact);
+            this._compactEl.addEventListener('click', () => {
+                const on = !this._dialog.classList.contains('rtty-compact');
+                this._setCompact(on);
+                try { localStorage.setItem(COMPACT_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+            });
+        }
+
         if (window.ResizeObserver) {
-            new ResizeObserver(() => { this._resize(); this._draw(); }).observe(this._canvas);
+            const ro = new ResizeObserver(() => { this._resize(); this._draw(); });
+            ro.observe(this._canvas);
+            if (this._canvas.parentElement) ro.observe(this._canvas.parentElement);
         }
         this._resize();
         this._draw();
         return true;
+    }
+
+    /**
+     * Claim the mode while the figure is running, and let it go when it stops.
+     *
+     * The tuner exists to be watched while the operator tunes around, so for as
+     * long as it is open the radio's mode belongs to it rather than to the host
+     * page's band plan - otherwise the click that moves the dial also writes
+     * whatever mode the plan has for that slice of band, which on an RTTY
+     * segment of a CW band is CW, and the panel is shut by its own host two
+     * seconds later.
+     *
+     * A Set of reasons rather than a flag: a CW reader holding CW wants the same
+     * promise, and both panels can be open at once. The host page decides what
+     * to do about it - this only states the claim.
+     */
+    _holdMode(on) {
+        try {
+            globalThis.radioModeHolds ??= new Set();
+            if (on) globalThis.radioModeHolds.add('rtty-tuner');
+            else    globalThis.radioModeHolds.delete('rtty-tuner');
+        } catch { /* a host without it simply keeps its old behaviour */ }
     }
 
     toggle() {
@@ -94,49 +204,514 @@ export class RttyTuner {
         if (this._dialog.open) { this._dialog.close(); return; }
         // Non-modal: the operator tunes the VFO while watching the figure.
         this._dialog.show();
+        this.start();
+    }
+
+    /**
+     * Start the figure in a panel that is already showing - the pop-out
+     * window, whose dialog is open from the start. toggle() calls it too.
+     */
+    start() {
+        if (!this._dialog || this._paused) return;
         this._resize();
+        if (this._radioEl && !this._radioProbed) {
+            this._radioProbed = true;
+            this._radioEl.addEventListener('click', () => this._syncFromRadio(true));
+        }
+        this._holdMode(true);
         this._send('start');
         this._startPolling();
+        this._startRadioSync();
+    }
+
+    get isPaused() { return this._paused; }
+
+    /**
+     * Pause or resume, for a pop-out window that stays open while the radio
+     * is in a mode the tuner is no use in: it lets the audio go, as closing
+     * the dialog does, and shows why. Resuming starts it again.
+     */
+    setPaused(paused, message = '') {
+        paused = !!paused;
+        if (this._pausedEl) {
+            this._pausedEl.hidden = !paused;
+            this._pausedEl.textContent = paused ? message : '';
+        }
+        if (paused === this._paused) return;
+        this._paused = paused;
+        if (paused) {
+            const wasRunning = !!this._timer;
+            this._holdMode(false);
+            this._stopPolling();
+            this._stopRadioSync();
+            if (wasRunning) this._send('stop');
+        } else if (this._dialog?.open) {
+            this.start();
+        }
+    }
+
+    _active() { return !!this._dialog?.open && !this._paused; }
+
+    _setCompact(on) {
+        this._dialog.classList.toggle('rtty-compact', on);
+        if (!this._compactEl) return;
+        this._compactEl.setAttribute('aria-pressed', on ? 'true' : 'false');
+        this._compactEl.title = on
+            ? 'Show Mark, Shift and the readouts again'
+            : 'Tones only - show just the scope, without Mark, Shift and the readouts';
     }
 
     // ── Settings ────────────────────────────────────────────────────────────
 
     // Shared with click-to-tune, which reads them for AFSK modes.
-    _loadSettings() { this._settings = loadRttySettings(); }
+    _loadSettings() {
+        this._settings = loadRttySettings();
+
+        // Storage does not record whether the saved tones were typed or taken
+        // from the radio, and on a reload that is exactly what the sync needs
+        // to know. Assume the keyboard unless they are still the factory pair:
+        // guessing the other way throws a typed setting away once per reload,
+        // and not throwing it away is the whole point of _radioApplied. The
+        // cost of guessing this way is one press of From radio.
+        const untouched = this._settings.markHz  === DEFAULT_RTTY_SETTINGS.markHz
+                       && this._settings.shiftHz === DEFAULT_RTTY_SETTINGS.shiftHz;
+        this._radioApplied = untouched ? { ...this._settings } : null;
+    }
 
     _saveSettings() { saveRttySettings(this._settings); }
 
+    // Which shifts this radio can be SET to, taken from the options the host page
+    // put in its Shift control. The IC-7300 offers three (170/200/425, CI-V
+    // 00 40); another rig offers another set, and neither list belongs in shared
+    // code. Falls back to the standard set when the control is missing.
+    //
+    // It is not a limit on what the tuner will run on. Every shift on the air is
+    // two filters to this panel and arithmetic to a decoder, and the ones no menu
+    // offers - 450 on the German weather stations, 850 on aviation - are ordinary
+    // listening. This list only decides whether the dropdown has a rung to select
+    // or has to show the figure as a measurement; see _setChoice.
+    _shifts() {
+        const opts = this._shiftEl?.options;
+        if (!opts || !opts.length) return SHIFTS;
+        const list = Array.from(opts, o => Number(o.value)).filter(Number.isFinite);
+        return list.length ? list : SHIFTS;
+    }
+
+    /**
+     * Show `value` in a <select> of named figures, which may not contain it.
+     *
+     * A measured shift or speed is very often not one of the names - 450 Hz has no
+     * rung on this radio, 56.9 baud is on no list anywhere - and the dropdown must
+     * then say what was measured rather than quietly select a different number.
+     * So an option carrying the figure is inserted at the top, labelled as
+     * measured so it cannot be mistaken for a setting the operator chose, and it
+     * is taken out again the moment the value is one of the names.
+     *
+     * One at most, reused, because Auto can be pressed all afternoon.
+     */
+    _setChoice(el, value, label) {
+        if (!el) return;
+        const named = Array.from(el.options).filter(o => !o.dataset.measured);
+        let extra   = Array.from(el.options).find(o => o.dataset.measured);
+        if (named.some(o => Number(o.value) === value)) {
+            extra?.remove();
+        } else {
+            if (!extra) {
+                extra = document.createElement('option');
+                extra.dataset.measured = '1';
+                el.insertBefore(extra, el.firstChild);
+            }
+            extra.value = String(value);
+            extra.textContent = label;
+        }
+        el.value = String(value);
+    }
+
     _showSettings() {
-        if (this._markEl)  this._markEl.value    = String(this._settings.markHz);
-        if (this._shiftEl) this._shiftEl.value   = String(this._settings.shiftHz);
-        if (this._revEl)   this._revEl.checked   = this._settings.reverse;
+        if (this._markEl) this._markEl.value  = String(this._settings.markHz);
+        if (this._revEl)  this._revEl.checked = this._settings.reverse;
+        this._setChoice(this._shiftEl, this._settings.shiftHz, `${this._settings.shiftHz} measured`);
+        this._setChoice(this._baudEl,  this._settings.baud,    `${this._settings.baud} measured`);
     }
 
     _readSettings() {
         const mark  = Number(this._markEl?.value);
         const shift = Number(this._shiftEl?.value);
+        const baud  = Number(this._baudEl?.value);
         if (Number.isFinite(mark) && mark >= 300 && mark <= 3000) this._settings.markHz = Math.round(mark);
-        if (SHIFTS.includes(shift)) this._settings.shiftHz = shift;
+        // Whatever the control offers, including a measured option Auto put there.
+        if (Number.isFinite(shift) && shift >= 20 && shift <= 1200) this._settings.shiftHz = Math.round(shift);
+        if (Number.isFinite(baud) && baud >= 20 && baud <= 300) this._settings.baud = baud;
         this._settings.reverse = !!this._revEl?.checked;
     }
 
     // ── Host ────────────────────────────────────────────────────────────────
 
     async _send(what) {
+        // Remember what we are asking for BEFORE the request goes out. Frames
+        // arriving in the meantime still describe the old filters, and
+        // _adoptServerSettings must not mistake one of them for somebody else
+        // overruling us - see there.
+        if (what === 'start') {
+            this._want   = { markHz: this._settings.markHz, shiftHz: this._settings.shiftHz, reverse: !!this._settings.reverse };
+            this._wantAt = Date.now();
+        }
         try {
-            const res = await fetch(`/api/rtty/tuner/${what}`, {
+            const res = await fetch(`/api/rtty/tuner/${what}?client=${this._client}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: what === 'start' ? JSON.stringify(this._settings) : '{}',
             });
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
-                this._setStatus(body.error || `HTTP ${res.status}`);
+                this._setStatus(body.error || `HTTP ${res.status}`, 4000);
                 return;
             }
             if (what === 'start') this._sweeps.length = 0;
         } catch {
-            this._setStatus('Cannot reach Yaesu Web Control.');
+            this._setStatus('Cannot reach the server.', 4000);
+        }
+    }
+
+    // ── Auto: work out what is being sent ───────────────────────────────────
+    //
+    // Optional, like the radio-tones pair: an app whose backend has no
+    // /api/rtty/auto hides the button after the first 404, so this ships before
+    // every app implements it.
+    //
+    // The host listens for about four seconds and measures the two tones, the
+    // shift, which way round they are and the speed. All four are then applied -
+    // including a shift or a speed that no menu anywhere offers, because what the
+    // decoder needs is what is on the air.
+    //
+    // A weak answer is NOT applied. The operator presses this when they cannot
+    // tell what they are listening to, which is exactly when a confident-looking
+    // wrong answer does most harm: it would overwrite the settings they already
+    // had, and they would have nothing to go back to. So below the threshold the
+    // analyser itself documents, it says it could not tell and changes nothing.
+    async _auto() {
+        if (!this._autoEl || this._autoBusy) return;
+        this._autoBusy = true;
+        const label = this._autoEl.textContent;
+        this._autoEl.disabled = true;
+        this._autoEl.textContent = 'Listening';
+        this._setStatus('Listening for a few seconds...', 8000);
+        try {
+            // The mark goes up with the request. The server cannot know it -
+            // it is this dialog's setting, and the host's copy is only as fresh
+            // as the last start - and it is what the answer gets centred on: an
+            // app that reads it moves the dial so the signal arrives on our mark
+            // filter instead of leaving it on the slope of the IF. An app that
+            // does not read it ignores the body and answers as before.
+            const res = await fetch('/api/rtty/auto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ markHz: this._settings.markHz }),
+            });
+            if (res.status === 404) {        // this app cannot answer: stop offering
+                this._autoEl.hidden = true;
+                return;
+            }
+            if (!res.ok) { this._setStatus(`Auto: HTTP ${res.status}`, 5000); return; }
+            const r = await res.json();
+
+            // The server's note about anything it knows that the analyser could
+            // not - today only that the IF filter is too narrow for a wide shift
+            // to have been in the audio at all. It is appended rather than
+            // substituted, on every one of the three paths below, because it
+            // explains a result instead of replacing one - and on a refusal it is
+            // the more useful half of what the operator is told.
+            const advice = r.advice ? ` ${r.advice}` : '';
+
+            if (!r.ok) {
+                this._setStatus((r.reason || 'Nothing to measure.') + advice, 8000);
+                return;
+            }
+
+            // Half a signal: one of the two tones was outside what the analyser
+            // could see, so the mark is sound and the shift and the speed are not.
+            // This is not a low-confidence answer and cannot be caught as one -
+            // bench-measured at 0.92 and 0.97 - so it is tested before the
+            // confidence gate and answered on its own terms.
+            //
+            // Nothing is written. The dial has already moved on the strength of
+            // the tone that was real, which brings the rest of the signal into
+            // view, so pressing Auto again measures it properly; what must not
+            // happen is the working shift and speed in the dialog being replaced
+            // by figures measured from a fragment, which is what used to happen
+            // silently. The settings are left exactly as the operator had them.
+            if (r.halfSignal) {
+                const moved = r.centreOffsetHz
+                    ? `Moved the dial ${Math.abs(Math.round(r.centreOffsetHz))} Hz ` +
+                      `${r.centreOffsetHz < 0 ? 'down' : 'up'} towards it - press Auto ` +
+                      `again to measure it.`
+                    : `Tune it closer to the middle of the passband and try again.`;
+                this._setStatus(
+                    `Auto: only one of the two tones was in range, so the shift and ` +
+                    `speed could not be measured and have been left alone. ${moved}` +
+                    advice, 12000);
+                return;
+            }
+
+            if (r.confidence < 0.4) {
+                this._setStatus(
+                    `Could not make sense of it - that may not be RTTY, or another ` +
+                    `signal in the passband is louder. Tune it in and try again.` +
+                    advice, 8000);
+                return;
+            }
+
+            // The recognised figure where there is one, the raw measurement
+            // where there is not - and then the same numbers are what the status
+            // line reports, so the operator is never told two things about one
+            // result. Measuring a 50 baud station at 50.65 is a 1.3% error, not a
+            // discovery: SnapBaud's tolerance is the analyser saying it knows
+            // which speed that is, and showing "50.65 measured" would claim it
+            // had found an odd one. The measured figure still wins whenever
+            // nothing on the list fits, which is the case the label is for.
+            const shiftHz = r.snappedShiftHz ?? r.shiftHz;
+            const baudHz  = r.snappedBaud    ?? r.baud;
+
+            // The speed is the one field that can arrive uncorroborated on an
+            // otherwise good answer. Both halves of the capture found the same
+            // two tones and agreed which was the mark, and one of them read the
+            // keying at a different speed - which is what a fade does to that
+            // measurement, not evidence that the station changed speed. The
+            // operator's speed is nearly always 45.45 and nearly always right,
+            // so it is kept; everything the halves did agree on is applied.
+            this._settings.markHz  = Math.round(r.markHz);
+            this._settings.shiftHz = shiftHz;
+            if (!r.speedUnmeasured) this._settings.baud = baudHz;
+            this._settings.reverse = !!r.reverse;
+            this._showSettings();
+            this._saveSettings();
+            this._send('start');
+
+            // The radio's menu goes with it where it can, and clears
+            // _radioApplied either way so the four-second sync does not drag any
+            // of this back.
+            //
+            // Awaited, and asked to stay quiet, because there is one status line
+            // and two things to say. Left to post its own note it would land a
+            // few hundred ms after the summary below, overwrite it, and reset the
+            // hold to its own - and the part of the summary worth reading is the
+            // one it was wiping: the warning about which tone is mark, which is
+            // the only part the operator has to act on.
+            this._radioApplied = null;
+            this._pushNote = null;
+            this._pushQuiet = true;
+            try { await this._pushToRadio(); } finally { this._pushQuiet = false; }
+
+            const shift = r.snappedShiftHz == null ? `${shiftHz} Hz measured` : `${shiftHz} Hz`;
+            const baud  = r.speedUnmeasured
+                ? `speed left at ${this._settings.baud} - it did not measure twice`
+                : r.snappedBaud == null ? `${baudHz} baud measured` : `${baudHz} baud`;
+            const parts = [`mark ${Math.round(r.markHz)} Hz`, `shift ${shift}`, baud];
+            if (r.reverse) parts.push('reversed');
+
+            // Two different uncertainties, and the second one is the operator's to
+            // act on: a station using a one-bit stop element can be measured
+            // perfectly except for which of its two tones is mark, and then the
+            // only thing to do is try Rev and see which copies.
+            const doubt = r.toneMargin <= 0.08
+                ? ' Which tone is mark is a guess here - if it does not copy, try Rev.'
+                : '';
+            const note = this._pushNote ? ` ${this._pushNote}` : '';
+
+            // Said plainly, because the radio has just retuned itself and an
+            // operator who is not told why has a radio that moved on its own.
+            // Both numbers are given: the mark their filters are now on, and the
+            // one that was heard, which together explain the move. Absent on
+            // every path that did not move anything - an app without the feature,
+            // the setting off, a mode it refuses, or a signal already centred -
+            // and absent rather than "moved by 0 Hz".
+            const centre = r.centreOffsetHz
+                ? ` Moved the dial ${Math.abs(Math.round(r.centreOffsetHz))} Hz ` +
+                  `${r.centreOffsetHz < 0 ? 'down' : 'up'} to put the mark on ` +
+                  `${Math.round(r.markHz)} Hz - it was arriving at ` +
+                  `${Math.round(r.measuredMarkHz)} Hz.`
+                : '';
+
+            // Longer than the usual hold: this is up to four clauses, and the ones
+            // that ask the operator to do something are at the end of them.
+            this._setStatus(`Auto: ${parts.join(', ')}.${centre}${note}${advice}${doubt}`, 14000);
+        } catch {
+            this._setStatus('Cannot reach the server.', 5000);
+        } finally {
+            this._autoBusy = false;
+            if (this._autoEl) {
+                this._autoEl.disabled = false;
+                this._autoEl.textContent = label;
+            }
+        }
+    }
+
+    // ── Mark and shift from the radio ───────────────────────────────────────
+    //
+    // Optional in both directions. The host page need not provide the button,
+    // and an app whose backend has no /api/rtty/radio-tones stops asking after
+    // the first 404 - so this is safe to ship before every app implements the
+    // endpoint.
+    //
+    // The tuner follows the radio while the dialog is open, re-reading every
+    // few seconds, because the alternative was worse: change the radio's RTTY
+    // Shift Width, look at the tuner, and it sits there on the old number
+    // looking broken. There is no CI-V event for a SET-menu change, so polling
+    // is the only way to notice. Two reads every four seconds, only while the
+    // dialog is open.
+    //
+    // But it only ever overwrites values it put there itself. That is what
+    // _radioApplied is for. The radio's menu describes its own FSK decoder and
+    // is often simply wrong for what you are listening to - a utility station
+    // on 450 Hz shift while the menu says 170 is the ordinary case, not an
+    // exotic one - so the moment the operator types something different, the
+    // sync backs off and leaves it alone until they ask again. Follow, but
+    // never argue.
+
+    _startRadioSync() {
+        if (!this._radioEl || this._radioTimer) return;
+        this._syncFromRadio(false);
+        this._radioTimer = setInterval(() => this._syncFromRadio(false), RADIO_MS);
+    }
+
+    _stopRadioSync() {
+        if (this._radioTimer) { clearInterval(this._radioTimer); this._radioTimer = null; }
+    }
+
+    // manual: the operator pressed the button, so say what happened either way
+    // and apply even in an AFSK mode, where they may well have a reason.
+    async _syncFromRadio(manual) {
+        // One at a time, and never for long. Reading the menu is a CI-V round
+        // trip on a bus the poll loop and the scope are already sharing, so it
+        // can take longer than the four seconds between two of these; without
+        // the guard they would stack up, and each one that arrives late writes
+        // a stale answer into the dialog.
+        if (this._radioBusy) {
+            if (manual) this._setStatus('Still reading the radio - try again in a moment.', 3000);
+            return;
+        }
+        this._radioBusy = true;
+        const abort = new AbortController();
+        const bail  = setTimeout(() => abort.abort(), 3000);
+        try {
+            const res = await fetch('/api/rtty/radio-tones', { signal: abort.signal });
+            if (res.status === 404) {          // this app cannot answer: stop asking
+                if (this._radioEl) this._radioEl.hidden = true;
+                this._stopRadioSync();
+                return;
+            }
+            if (!res.ok) { if (manual) this._setStatus(`Radio settings: HTTP ${res.status}`, 4000); return; }
+            const r = await res.json();
+            if (!r.ok) { if (manual) this._setStatus(r.reason || 'The radio did not answer.', 4000); return; }
+
+            const mark  = Number.isFinite(r.markHz) ? Math.round(r.markHz) : null;
+            const shift = this._shifts().includes(r.shiftHz) ? r.shiftHz : null;
+            if (mark === null && shift === null) return;
+
+            if (!manual) {
+                // Not while they are typing a mark, and not in an AFSK mode,
+                // where the tones belong to their software and this menu is
+                // describing something else entirely.
+                if (!r.fsk) return;
+                if (document.activeElement === this._markEl) return;
+                // Only replace what we ourselves last took from the radio.
+                // Anything else on screen is the operator's, including on a
+                // fresh page where we do not know - see _loadSettings.
+                const a = this._radioApplied;
+                if (!a || a.markHz !== this._settings.markHz || a.shiftHz !== this._settings.shiftHz) return;
+            }
+
+            const before = { ...this._settings };
+            if (mark  !== null) this._settings.markHz  = mark;
+            if (shift !== null) this._settings.shiftHz = shift;
+            this._radioApplied = { markHz: this._settings.markHz, shiftHz: this._settings.shiftHz };
+
+            const same = before.markHz === this._settings.markHz
+                      && before.shiftHz === this._settings.shiftHz;
+            if (same && !manual) return;       // nothing to do, and nothing to say
+
+            this._showSettings();
+            this._saveSettings();
+            this._send('start');
+
+            const read = `Radio: mark ${this._settings.markHz} Hz, shift ${this._settings.shiftHz} Hz`;
+            this._setStatus(r.note ? `${read}. ${r.note}`
+                                   : same ? `${read} - already matching.` : `${read}.`, 4000);
+        } catch {
+            if (manual) this._setStatus('The radio did not answer in time.', 4000);
+        } finally {
+            clearTimeout(bail);
+            this._radioBusy = false;
+        }
+    }
+
+    // The other direction: what the operator chooses here goes into the
+    // radio's own RTTY menu (SET > Function > RTTY Mark/Shift), so the tuner
+    // and the radio's built-in decoder do not have to be set twice. FSK only,
+    // and the server enforces that - those menu items describe how the radio
+    // *transmits*, and in an AFSK mode the tones are the operator's software's.
+    //
+    // Latest-wins rather than queued. Working the Shift dropdown with the
+    // keyboard fires a change per step, and what matters is that the radio
+    // ends up on the one they stopped at, not that it visits the others.
+    async _pushToRadio() {
+        if (!this._radioEl) return;                  // this app has no radio endpoint
+
+        // Quiet mode hands the note back in _pushNote instead of posting it, so a
+        // caller with its own one-line summary can fold this into it. A field
+        // rather than an argument because the latest-wins continuation at the end
+        // of this function re-enters with none, and it has to stay quiet too.
+        const say = text => {
+            if (this._pushQuiet) this._pushNote = text;
+            else this._setStatus(text, 4000);
+        };
+
+        const want = { markHz: this._settings.markHz, shiftHz: this._settings.shiftHz };
+        if (this._pushBusy) { this._pushPending = want; return; }
+        this._pushBusy = true;
+        try {
+            const res = await fetch('/api/rtty/radio-tones', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(want)
+            });
+            if (res.status === 404) return;          // older server: nothing to say
+            if (!res.ok) { say(`Radio: HTTP ${res.status}`); return; }
+            const r = await res.json();
+
+            if (!r.ok) { say(r.reason || 'The radio would not take those tones.'); return; }
+
+            // Only the parts the radio actually took. A null is a value with no
+            // rung on this radio, and the tuner goes on using it regardless,
+            // because it is a receive aid and the radio's menu is not what makes
+            // it work. A null shift is the ordinary case after Auto has measured
+            // one of the shifts the menu has never offered.
+            const took = [];
+            if (r.markHz  != null) took.push(`mark ${r.markHz} Hz`);
+            if (r.shiftHz != null) took.push(`shift ${r.shiftHz} Hz`);
+            const missed = [];
+            if (r.markHz  == null) missed.push(`mark ${want.markHz} Hz`);
+            if (r.shiftHz == null) missed.push(`shift ${want.shiftHz} Hz`);
+
+            // Both sides now agree about whatever was written, so let the
+            // four-second sync resume following the radio for those - see
+            // _radioApplied. Anything the radio could not take leaves them
+            // disagreeing, and following would drag the tuner straight back off
+            // the value the operator chose.
+            this._radioApplied = missed.length ? null : { ...want };
+
+            say(missed.length
+                ? (took.length ? `Radio set to ${took.join(', ')}; it has no ${missed.join(' or ')}.`
+                               : `The radio has no ${missed.join(' or ')} - tuner only.`)
+                : `Radio set to ${took.join(', ')}.`);
+        } catch {
+            say('Cannot reach the server.');
+        } finally {
+            this._pushBusy = false;
+            const next = this._pushPending;
+            this._pushPending = null;
+            if (next && (next.markHz !== want.markHz || next.shiftHz !== want.shiftHz))
+                this._pushToRadio();
         }
     }
 
@@ -152,14 +727,68 @@ export class RttyTuner {
         this._draw();
     }
 
+    // Start the host again after it stopped without being asked to - see the
+    // visibilitychange handler in init. Rate-limited, so a host that cannot
+    // start (no audio device, say) is not asked twenty times a second.
+    //
+    // Never from a hidden page. Chrome polls a background tab about once a
+    // minute, so its lease lapses between polls; restarting from there sent
+    // that tab's settings, minutes old, over whatever the window in front had
+    // just set - on the bench, Auto's centred mark replaced by the old one
+    // nineteen seconds later, and the tuner stopping and starting every minute.
+    //
+    // And when another window is running the host, this one rejoins on what
+    // it is running: the host has one set of tones, and they are the newest.
+    _restart(f) {
+        if (document.hidden) return;
+        const now = Date.now();
+        if (now - this._restartAt < RESTART_MS) return;
+        this._restartAt = now;
+        if (f?.hostRunning) {
+            const s = this._settings;
+            if (Number.isFinite(f.markHz))  s.markHz  = Math.round(f.markHz);
+            if (Number.isFinite(f.shiftHz)) s.shiftHz = f.shiftHz;
+            if (Number.isFinite(f.baud))    s.baud    = f.baud;
+            if (typeof f.reverse === 'boolean') s.reverse = f.reverse;
+            this._radioApplied = null;
+            this._showSettings();
+            this._saveSettings();
+        }
+        this._send('start');
+    }
+
     async _poll() {
         // A slow reply must not stack requests behind it: skip a frame instead.
+        // But a reply that never comes must not stop the polling for good,
+        // which is what _inFlight alone did: hence the abort.
         if (this._inFlight) return;
         this._inFlight = true;
+        const abort = new AbortController();
+        const bail  = setTimeout(() => abort.abort(), FETCH_MS);
         try {
-            const res = await fetch(`/api/rtty/tuner?points=${POINTS}`);
+            const res = await fetch(`/api/rtty/tuner?points=${POINTS}&client=${this._client}`, { signal: abort.signal });
             if (!res.ok) return;
             const f = await res.json();
+            // The dialog is open and still polling, so a stopped host was not
+            // our doing: the page went quiet long enough for the host's idle
+            // stop, or the app restarted underneath it. The host also says
+            // stopped when another window kept it running but this window's
+            // own hold lapsed, so this starts us again and we are counted.
+            if (!f.running && this._active()) this._restart(f);
+
+            // What the host changed about the radio so that the figure could be
+            // believed - a mode switch, a widened filter. Once per note, not once
+            // per frame: _draw rewrites this line twenty times a second, so it is
+            // posted with a hold, and a note that is still the same note on the
+            // next frame must not keep re-arming that hold or nothing else could
+            // ever be read.
+            if (f.modeNote && f.modeNote !== this._modeNoteShown) {
+                this._modeNoteShown = f.modeNote;
+                this._setStatus(f.modeNote, 8000);
+            } else if (!f.modeNote) {
+                this._modeNoteShown = null;
+            }
+
             this._last = f;
             this._adoptServerSettings(f);
             this._push(f);
@@ -167,6 +796,7 @@ export class RttyTuner {
         } catch {
             // One dropped frame in twenty. Not worth saying.
         } finally {
+            clearTimeout(bail);
             this._inFlight = false;
         }
     }
@@ -174,17 +804,50 @@ export class RttyTuner {
     // There is one tuner on the server, so another tab or browser changing
     // its settings changes them for this one too. Show what it is really
     // using, or the dialog says 170 while the filters sit at 450. Not while
-    // the operator is typing a mark, and not saved: this page's own choice
-    // is still what it starts with next time.
+    // the operator is typing a mark. Saved, because click-to-tune reads the
+    // saved settings at click time: unsaved, a DATA-L click in this tab
+    // would put the tones where the dialog no longer says they are.
+    //
+    // This runs twenty times a second, which is what makes the gate below
+    // load-bearing rather than tidy. Changing Shift in the dialog POSTs a
+    // start and returns; several frames then arrive before the host has
+    // re-toned, every one of them still saying 170. Without the gate the
+    // first of them put 170 straight back into the dropdown - so the
+    // operator's choice visibly sprang back and the change "did not work" -
+    // and the pair then chased each other, saving to localStorage
+    // synchronously on every frame until the page stopped painting. With the
+    // gate, a save happens only when the settings really have changed.
     _adoptServerSettings(f) {
         if (!f.running) return;
         const s = this._settings;
         if (document.activeElement === this._markEl) return;
+
+        // Our own start is still in flight. Ignore frames until one comes back
+        // carrying what we asked for - or until it is plain the host is not
+        // going to (it rejects a mark+shift that will not fit the audio), so a
+        // refused setting cannot wedge this shut.
+        if (this._want) {
+            const w = this._want;
+            const arrived = Math.round(f.markHz) === w.markHz
+                         && f.shiftHz === w.shiftHz
+                         && !!f.reverse === w.reverse;
+            if (!arrived && Date.now() - this._wantAt < 3000) return;
+            this._want = null;
+        }
+
         let changed = false;
-        if (SHIFTS.includes(f.shiftHz) && f.shiftHz !== s.shiftHz) { s.shiftHz = f.shiftHz; changed = true; }
+        // Any shift the host accepted, not just the ones this radio's menu has:
+        // the other tab may have pressed Auto and measured 450, and this tab has
+        // to follow it rather than sit on 170 looking right.
+        if (Number.isFinite(f.shiftHz) && f.shiftHz !== s.shiftHz) { s.shiftHz = f.shiftHz; changed = true; }
+        if (Number.isFinite(f.baud) && f.baud !== s.baud) { s.baud = f.baud; changed = true; }
         if (typeof f.reverse === 'boolean' && f.reverse !== s.reverse) { s.reverse = f.reverse; changed = true; }
         if (Number.isFinite(f.markHz) && Math.round(f.markHz) !== s.markHz) { s.markHz = Math.round(f.markHz); changed = true; }
-        if (changed) { this._showSettings(); this._saveSettings(); }
+
+        // Whatever arrived here is another tab's doing, not ours and not the
+        // radio's, so the radio sync backs off from it exactly as it does from
+        // a typed value. Saved, per the note above.
+        if (changed) { this._showSettings(); this._saveSettings(); this._radioApplied = null; }
     }
 
     _push(f) {
@@ -211,9 +874,20 @@ export class RttyTuner {
         const c = this._canvas;
         if (!c) return;
         const dpr = window.devicePixelRatio || 1;
-        const css = Math.max(160, Math.min(c.clientWidth || 280, 480));
-        if (this._css === css && c.width === Math.round(css * dpr)) return;
+        // Two layouts. In the flow, the canvas is as wide as the panel and as
+        // tall as it is wide, up to a cap. Positioned out of the flow - the
+        // host page does that once the panel has been sized, and in a pop-out
+        // window - it is the largest square that fits the box around it,
+        // however big the operator makes the window.
+        const box = c.parentElement;
+        const boxed = !!box && getComputedStyle(c).position === 'absolute';
+        const css = boxed
+            ? Math.max(100, Math.floor(Math.min(box.clientWidth, box.clientHeight)) - 2)
+            : Math.max(160, Math.min(c.clientWidth || 280, 480));
+        const width = boxed ? `${css}px` : '100%';
+        if (this._css === css && c.width === Math.round(css * dpr) && c.style.width === width) return;
         c.width = c.height = Math.round(css * dpr);
+        c.style.width = width;
         c.style.height = `${css}px`;
         this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this._css = css;
@@ -315,7 +989,12 @@ export class RttyTuner {
         return `Both tones in their filters - fine-tune for the thinnest cross${mode}.`;
     }
 
-    _setStatus(text) {
+    // _draw rewrites the status line twenty times a second, so anything worth
+    // reading - what the radio took, why it would not - has to be able to hold
+    // the line for a moment or it is gone before the eye reaches it.
+    _setStatus(text, holdMs = 0) {
+        if (holdMs) this._statusHold = Date.now() + holdMs;
+        else if (Date.now() < this._statusHold) return;
         if (this._status && this._status.textContent !== text) this._status.textContent = text;
     }
 }

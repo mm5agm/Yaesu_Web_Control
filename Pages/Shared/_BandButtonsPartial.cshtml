@@ -1,6 +1,10 @@
 ﻿@model Tuple<string, string, string>
 @{
-    var bands = new[] { "160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "4m" };
+    // Item1 is the radio model. The FT-991A has 2 m and 70 cm and no 4 m
+    // (FT-991A CAT manual, BS table); every other model stops at 4 m.
+    var bands = Model.Item1 == "FT-991A"
+        ? new[] { "160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm" }
+        : new[] { "160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "4m" };
     var bandLabels = new Dictionary<string, string>
     {
         ["160m"] = "160 metres",
@@ -14,7 +18,9 @@
         ["12m"]  = "12 metres",
         ["10m"]  = "10 metres",
         ["6m"]   = "6 metres",
-        ["4m"]   = "4 metres"
+        ["4m"]   = "4 metres",
+        ["2m"]   = "2 metres",
+        ["70cm"] = "70 centimetres"
     };
     var receiver = Model.Item2;
     var selectedBand = (Model.Item3 ?? "").Trim().ToLowerInvariant();

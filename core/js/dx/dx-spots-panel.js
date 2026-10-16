@@ -1,12 +1,18 @@
-﻿// Yaesu Web Control – DX Spots List Panel
+// Radio Web Control - DX Spots List Panel
+// Shared by Icom Web Control and Yaesu Web Control. This file is copied into
+// each app's wwwroot at build time - see js/README.md. Edit it here, in the
+// core, never in a wwwroot copy. Served at /js/dx/dx-spots-panel.js.
 //
 // Popup list of DX cluster spots. Sortable columns, click-to-QSY, filtered
 // to the operator's current band (with an "All bands" override). Works
 // regardless of whether an SDR is configured — relies only on the SignalR
 // DxSpot event stream, which flows unconditionally.
 
-// ?v=1 is a one-time cache-buster, not a number to bump — see gaugeFactory.js.
-import { autoModeForHz } from './band-plan.js?v=1';
+//
+// Nothing here knows the radio. Click-to-QSY goes through window.radioControl
+// and window.setMode on the main page (each app's site.js), or through the
+// tune callback a pop-out page passes in; the band-plan mode lookup is the
+// app's own and is passed in too.
 
 const LS_KEY     = 'dxSpotsPanel';
 const AGE_MAX_MS = 15 * 60 * 1000;   // matches DxSpotAgeMinutes default
@@ -37,7 +43,20 @@ const FT8_KHZ = [1840, 3573, 5357, 7074, 10136, 14074, 18100, 21074, 24915, 2807
 const FT4_KHZ = [3575, 7047, 10140, 14080, 18104, 21140, 24919, 28180];
 
 export class DxSpotsPanel {
-    constructor() {
+    /**
+     * @param {object} [opts]
+     * @param {boolean} [opts.floating=true]  false in the /DxSpots pop-out
+     *        window, where the window frame does the moving and sizing: no
+     *        header drag, and the main page's saved place is left alone
+     * @param {(hz: number) => void} [opts.tune]  click-to-QSY; defaults to
+     *        the main page's window.radioControl and window.setMode
+     * @param {(hz: number) => (string|null)} [opts.autoModeForHz]  the mode to
+     *        follow a main-page QSY with, or null for none (the app's band plan)
+     */
+    constructor({ floating = true, tune = null, autoModeForHz = null } = {}) {
+        this._floating       = floating;
+        this._autoModeForHz  = autoModeForHz;
+        this._tune           = tune ?? (hz => this._tuneHere(hz));
         this._spots          = [];
         this._vfoHz          = 0;
         this._showAllBands   = false;
@@ -72,6 +91,13 @@ export class DxSpotsPanel {
                 this._saveSettings();
                 this._render();
             });
+            // Bootstrap's switch wrapper has a strip of its own between the
+            // switch and its label. A click there reaches neither, so it did
+            // nothing - and it looks like part of the control. Pass it on.
+            const wrap = this._allBandsChk.closest('.form-check, .form-switch');
+            if (wrap) wrap.addEventListener('click', (e) => {
+                if (e.target === wrap) this._allBandsChk.click();
+            });
         }
 
         // Sortable column headers — `data-sort` carries the column key
@@ -79,7 +105,7 @@ export class DxSpotsPanel {
             th.addEventListener('click', () => this._setSort(th.dataset.sort));
         }
 
-        this._initDrag();
+        if (this._floating) this._initDrag();
         this._render();
 
         // Periodic re-render so rows age out even when no new spot arrives.
@@ -117,13 +143,44 @@ export class DxSpotsPanel {
     show() {
         if (!this._dialog) return;
         this._dialog.show();
+        if (this._floating) this._placeInView();
         this._render();
+    }
+
+    // With no saved place, show() leaves the dialog wherever its markup sits
+    // in the page - on a long page that is below the bottom of the window,
+    // and where the page cannot scroll the operator never sees it open at
+    // all. So it is pinned fixed (see _loadSettings for why fixed), centred
+    // across the top on its first showing, and a saved place that is now off
+    // the window - saved on a bigger screen, say - is pulled back into it.
+    _placeInView() {
+        const d = this._dialog;
+        if (d.style.position !== 'fixed') {
+            d.style.position = 'fixed';
+            d.style.margin   = '0';
+            d.style.left     = '0px';
+            d.style.top      = '0px';
+            const w = d.getBoundingClientRect().width;
+            d.style.left = `${Math.max(0, (window.innerWidth - w) / 2)}px`;
+            d.style.top  = `${Math.min(80, Math.max(0, window.innerHeight / 10))}px`;
+            return;
+        }
+        const r = d.getBoundingClientRect();
+        if (r.top < 0 || r.top > window.innerHeight - 40)
+            d.style.top = `${Math.max(0, Math.min(80, window.innerHeight - r.height))}px`;
+        if (r.right < 40 || r.left > window.innerWidth - 40)
+            d.style.left = `${Math.max(0, (window.innerWidth - r.width) / 2)}px`;
     }
 
     toggle() {
         if (!this._dialog) return;
         if (this._dialog.open) this._dialog.close();
         else                   this.show();
+    }
+
+    close() {
+        if (!this._dialog) return;
+        if (this._dialog.open) this._dialog.close();
     }
 
     // ── Band / mode helpers ─────────────────────────────────────────────────
@@ -272,21 +329,25 @@ export class DxSpotsPanel {
                 const tr = e.target.closest('tr');
                 if (!tr) return;
                 const hz = parseInt(tr.dataset.hz, 10);
-                if (hz && window.radioControl && typeof window.radioControl.setFrequency === 'function') {
-                    window.radioControl.setFrequency('A', hz);
-                    // Match the spectrum-panel click behaviour — follow the
-                    // QSY with a band-plan-aware mode change so clicking
-                    // an FT8 spot from a phone spot also flips USB→DATA-U.
-                    // autoModeForHz returns the mode name window.setMode
-                    // accepts, or null when the operator has turned the
-                    // automatic change off in Settings (discussion #169).
-                    const targetMode = autoModeForHz(hz);
-                    if (targetMode && typeof window.setMode === 'function') {
-                        try { window.setMode('A', targetMode); } catch { /* ignore */ }
-                    }
-                }
+                if (hz) this._tune(hz);
             });
             this._rowClickWired = true;
+        }
+    }
+
+    /** Click-to-QSY on the main page, through site.js. */
+    _tuneHere(hz) {
+        if (!window.radioControl || typeof window.radioControl.setFrequency !== 'function') return;
+        window.radioControl.setFrequency('A', hz);
+        // Match the spectrum-panel click behaviour — follow the
+        // QSY with a band-plan-aware mode change so clicking
+        // an FT8 spot from a phone spot also flips USB→DATA-U.
+        // autoModeForHz returns the mode name window.setMode
+        // accepts, or null when the operator has turned the
+        // automatic change off in Settings (discussion #169).
+        const targetMode = this._autoModeForHz ? this._autoModeForHz(hz) : null;
+        if (targetMode && typeof window.setMode === 'function') {
+            try { window.setMode('A', targetMode); } catch { /* ignore */ }
         }
     }
 
@@ -310,14 +371,27 @@ export class DxSpotsPanel {
 
     _saveSettings() {
         if (!this._dialog) return;
+        // The pop-out window shares the sort and band choice with the main
+        // page's dialog, but not its place: keep whatever the dialog saved.
+        let geom = {};
+        if (!this._floating) {
+            try {
+                const old = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+                geom = { left: old.left || '', top: old.top || '', width: old.width || '', height: old.height || '' };
+            } catch { /* ignore corrupt data */ }
+        } else {
+            geom = {
+                left:   this._dialog.style.left   || '',
+                top:    this._dialog.style.top    || '',
+                width:  this._dialog.style.width  || '',
+                height: this._dialog.style.height || '',
+            };
+        }
         const s = {
             showAllBands: this._showAllBands,
             sortBy:       this._sortBy,
             sortDir:      this._sortDir,
-            left:   this._dialog.style.left   || '',
-            top:    this._dialog.style.top    || '',
-            width:  this._dialog.style.width  || '',
-            height: this._dialog.style.height || '',
+            ...geom,
         };
         try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch {}
     }
@@ -331,6 +405,7 @@ export class DxSpotsPanel {
             if (typeof s.showAllBands === 'boolean') this._showAllBands = s.showAllBands;
             if (s.sortBy)  this._sortBy  = s.sortBy;
             if (s.sortDir) this._sortDir = s.sortDir;
+            if (!this._floating) return;
             if (s.left || s.top) {
                 // A <dialog> shown with show() is position:absolute, so it is placed
                 // against the document and scrolls with it. Every coordinate here is a
@@ -354,7 +429,12 @@ export class DxSpotsPanel {
         const header = this._dialog.querySelector('.dxs-header');
         if (!header) return;
         header.addEventListener('mousedown', (e) => {
-            if (e.target.closest('button, input, label')) return;
+            // Don't start a drag when the mousedown lands on an interactive
+            // control OR its Bootstrap wrapper - the .form-check/.form-switch
+            // div has padding around the "All bands" switch, and clicking that
+            // padding (target = the div, not the input) was starting a drag and
+            // preventDefault-ing the toggle, so the checkbox could never change.
+            if (e.target.closest('button, input, label, select, .form-check, .form-switch')) return;
             const rect  = this._dialog.getBoundingClientRect();
             const origX = e.clientX, origY = e.clientY;
             const baseL = rect.left,  baseT = rect.top;

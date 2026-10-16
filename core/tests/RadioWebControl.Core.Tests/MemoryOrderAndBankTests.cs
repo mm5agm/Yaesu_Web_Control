@@ -70,6 +70,36 @@ namespace RadioWebControl.Core.Tests
             }
         }
 
+        // The Radio panel's M.STORE adds straight to a bank. It must not touch
+        // the working list unless that list is the bank, and then it must
+        // reach both, or the next save of the list over the bank drops it.
+        [Fact]
+        public async Task AddToBankGoesToTheWorkingListOnlyWhenItIsThatBank()
+        {
+            var memories = NewMemoryService();
+            await memories.ReplaceAllAsync(new List<AppMemory> { FullMemory("one", 7_000_000) });
+            var banks = NewBankService(memories);
+            await banks.SaveBankAsync("Daily");
+            await banks.SaveBankAsync("Contest");          // the list is now "Contest"
+
+            Assert.True(await banks.AddToBankAsync("Daily", FullMemory("two", 14_000_000)));
+            Assert.Single(memories.GetAll());              // not loaded: list untouched
+
+            Assert.True(await banks.LoadBankAsync("Daily"));
+            Assert.Equal(new[] { "one", "two" }, memories.GetAll().Select(m => m.Label));
+
+            Assert.True(await banks.AddToBankAsync("Daily", FullMemory("three", 21_000_000)));
+            Assert.Equal(new[] { "one", "two", "three" }, memories.GetAll().Select(m => m.Label));
+            await banks.SaveBankAsync("Daily");
+            await banks.LoadBankAsync("Daily");
+            Assert.Equal(new[] { "one", "two", "three" }, memories.GetAll().Select(m => m.Label));
+
+            Assert.False(await banks.AddToBankAsync("Nope", FullMemory("x", 1)));
+            banks.ForgetLoadedBank();
+            Assert.True(await banks.AddToBankAsync("Daily", FullMemory("four", 28_000_000)));
+            Assert.Equal(3, memories.GetAll().Count);
+        }
+
         [Fact]
         public async Task BankIsASnapshotNotALiveReference()
         {

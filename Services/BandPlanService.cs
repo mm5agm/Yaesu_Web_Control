@@ -238,6 +238,8 @@ namespace Yaesu_Web_Control.Services
                 new() { Name =  "10m", Lo = 28000000, Hi = 29700000 },
                 new() { Name =   "6m", Lo = 50000000, Hi = 52000000 },
                 new() { Name =   "4m", Lo = 70000000, Hi = 70500000 },
+                new() { Name =   "2m", Lo = 144000000, Hi = 146000000 },
+                new() { Name = "70cm", Lo = 430000000, Hi = 440000000 },
             },
             ["Region2"] = new()
             {
@@ -252,6 +254,8 @@ namespace Yaesu_Web_Control.Services
                 new() { Name =  "12m", Lo = 24890000, Hi = 24990000 },
                 new() { Name =  "10m", Lo = 28000000, Hi = 29700000 },
                 new() { Name =   "6m", Lo = 50000000, Hi = 54000000 },
+                new() { Name =   "2m", Lo = 144000000, Hi = 148000000 },
+                new() { Name = "70cm", Lo = 420000000, Hi = 450000000 },
             },
             ["Region3"] = new()
             {
@@ -266,6 +270,8 @@ namespace Yaesu_Web_Control.Services
                 new() { Name =  "12m", Lo = 24890000, Hi = 24990000 },
                 new() { Name =  "10m", Lo = 28000000, Hi = 29700000 },
                 new() { Name =   "6m", Lo = 50000000, Hi = 54000000 },
+                new() { Name =   "2m", Lo = 144000000, Hi = 148000000 },
+                new() { Name = "70cm", Lo = 430000000, Hi = 440000000 },
             },
             ["Japan"] = new()
             {
@@ -281,6 +287,8 @@ namespace Yaesu_Web_Control.Services
                 new() { Name =  "12m", Lo = 24890000, Hi = 24990000 },
                 new() { Name =  "10m", Lo = 28000000, Hi = 29700000 },
                 new() { Name =   "6m", Lo = 50000000, Hi = 54000000 },
+                new() { Name =   "2m", Lo = 144000000, Hi = 146000000 },
+                new() { Name = "70cm", Lo = 430000000, Hi = 440000000 },
             },
         };
     }

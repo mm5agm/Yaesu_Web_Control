@@ -13,7 +13,6 @@
     <title>@(ViewData["Title"]?.ToString() == "Yaesu Web Control" ? "Yaesu Web Control" : ViewData["Title"] + " - Yaesu Web Control")</title>
     <script type="importmap">{}</script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/Yaesu_Web_Control.styles.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/gauge-debug.css" />
     @* Bootstrap Icons, Canvas Gauges and SignalR (further down) are served from
        wwwroot/lib, not from a CDN. YWC runs on a shack PC that may never have an
@@ -69,34 +68,66 @@
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between align-items-center">
-                    <ul class="navbar-nav flex-grow-1">
+                <div class="navbar-collapse collapse d-sm-inline-flex align-items-center">
+                    <ul class="navbar-nav">
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/About">About</a>
+                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">
+                                <i class="bi bi-house-door-fill" aria-hidden="true"></i> Home
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/UserManual">User Manual</a>
+                            <a class="nav-link text-dark" asp-area="" asp-page="/FlexUi" title="Experimental UI — dockable workspace">
+                                <i class="bi bi-grid-1x2-fill" aria-hidden="true"></i> Experimental UI
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
+                            <a class="nav-link text-dark" asp-area="" asp-page="/RadioPanel" title="Radio-style front panel">
+                                <i class="bi bi-broadcast" aria-hidden="true"></i> Radio
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Settings">Settings</a>
+                            <a class="nav-link text-dark" asp-area="" asp-page="/Settings">
+                                <i class="bi bi-gear-fill" aria-hidden="true"></i> Settings
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/ApplicationSetup">Application Setup</a>
+                            <a class="nav-link text-dark" asp-area="" asp-page="/Memories">
+                                <i class="bi bi-bookmarks-fill" aria-hidden="true"></i> Memories
+                            </a>
+                        </li>
+                    </ul>
+                    <ul class="navbar-nav ms-sm-auto">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-page="/UserManual">
+                                <i class="bi bi-book-fill" aria-hidden="true"></i> User Manual
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" href="/MeterCalibration">Meter Calibration</a>
+                            <a class="nav-link text-dark" asp-area="" asp-page="/About">
+                                <i class="bi bi-info-circle-fill" aria-hidden="true"></i> About
+                            </a>
+                        </li>
+                    </ul>
+                    <ul class="navbar-nav ms-sm-2 ps-sm-2">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-page="/ApplicationSetup">
+                                <i class="bi bi-sliders" aria-hidden="true"></i> Application Setup
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Memories">Memories</a>
+                            <a class="nav-link text-dark" asp-area="" asp-page="/Labels">
+                                <i class="bi bi-universal-access" aria-hidden="true"></i> Accessibility Labels
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Labels">Accessibility Labels</a>
+                            <a class="nav-link text-dark" href="/MeterCalibration">
+                                <i class="bi bi-speedometer2" aria-hidden="true"></i> Meter Calibration
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Diagnostics">Diagnostics</a>
+                            <a class="nav-link text-dark" asp-area="" asp-page="/Diagnostics">
+                                <i class="bi bi-activity" aria-hidden="true"></i> Diagnostics
+                            </a>
                         </li>
                     </ul>
                 </div>
@@ -122,11 +153,14 @@
     <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
     @* Every /radioHub connection is built here, so that one retry policy
        and one set of timeouts govern the lot. Must precede site.js. *@
-    <script src="~/js/ui/hub-connection.js" asp-append-version="true"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
     <script src="~/js/ui/site.js" asp-append-version="true"></script>
     <!-- Update banner — shared with IWC; lives in core/js/update/ and is copied
          into wwwroot by the shared-core-js copy target. Independent of site.js. -->
     <script src="~/js/update/update-banner.js" asp-append-version="true"></script>
+    <!-- Puts the clicked movable dialog in front of the others. Shared with IWC,
+         from core/js/dialogs/. -->
+    <script src="~/js/dialogs/dialog-stack.js" asp-append-version="true"></script>
     @{
         // Voice Control: server-render the enable flag so voice-control.js
         // can decide whether to show the per-VFO mic buttons before any user

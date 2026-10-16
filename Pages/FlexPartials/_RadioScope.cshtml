@@ -1,0 +1,33 @@
+@model string
+@inject Yaesu_Web_Control.Services.RadioStateService RadioState
+@{
+    // Flex UI host for the CAT scope controls. Same controls as the standalone
+    // Radio Scope card and the Radio Display Controls dialog, but rendered flat
+    // with no collapsible header — the docked panel shows the buttons at once.
+    // data-eager-load makes RadioScopeControl read state at construction rather
+    // than waiting for a first expand. See docs/design/scope-control-via-cat.md.
+    var radioModel  = Model ?? "";
+    var hasScope    = Yaesu_Web_Control.Services.RadioCapabilities.SupportsSpectrumScopeCat(radioModel);
+    var hasSub      = Yaesu_Web_Control.Services.RadioCapabilities.HasPerReceiverScopes(radioModel);
+    var initialBand = (hasSub && RadioState.ActiveVfo == 1) ? "sub" : "main";
+}
+
+@if (hasScope)
+{
+    <div id="radioScopeCard" class="radio-scope-controls p-2"
+         data-initial-band="@initialBand" data-eager-load="1">
+        @if (hasSub)
+        {
+            <div class="radio-scope-row">
+                <span class="radio-scope-label" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Which physical receiver's scope the radio is showing. Switching band here is the same as clicking the VFO A or VFO B panel header.">Band</span>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Which band's scope to show and adjust">
+                    <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "main" ? "active" : "")"
+                            data-band="main" data-a11y-key="radioScope.bandMain">MAIN</button>
+                    <button type="button" class="btn btn-outline-secondary scope-band-btn @(initialBand == "sub" ? "active" : "")"
+                            data-band="sub" data-a11y-key="radioScope.bandSub">SUB</button>
+                </div>
+            </div>
+        }
+        <partial name="_RadioScopeButtonsPartial" model="@radioModel" />
+    </div>
+}

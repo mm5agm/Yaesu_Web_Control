@@ -1,11 +1,15 @@
 ﻿@page
 @model Yaesu_Web_Control.Pages.MemoriesModel
+@inject Yaesu_Web_Control.Services.ISettingsService SettingsService
 @{
     ViewData["Title"] = "Radio Memories";
+    var radioModel = (await SettingsService.GetSettingsAsync()).RadioModel;
 
     var allModes = new[] {
         "LSB", "USB", "CW-U", "CW-L", "FM", "FM-N", "AM", "AM-N",
-        "RTTY-L", "RTTY-U", "DATA-L", "DATA-U", "DATA-FM", "DATA-FM-N", "PSK"
+        "RTTY-L", "RTTY-U", "DATA-L", "DATA-U", "DATA-FM", "DATA-FM-N",
+        // Mode code E is C4FM on the FT-991A and PSK everywhere else.
+        radioModel == "FT-991A" ? "C4FM" : "PSK"
     };
 }
 

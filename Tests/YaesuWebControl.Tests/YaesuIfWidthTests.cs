@@ -215,7 +215,7 @@ namespace YaesuWebControl.Tests
         }
 
         [Theory]
-        [InlineData("FT-991A", "CW-U")]   // a model with no table here
+        [InlineData("FT-891", "CW-U")]    // a model with no table here
         [InlineData("FTdx101MP", "AM")]   // a mode with no IF width at all
         [InlineData("FTdx101MP", "FM")]
         public void No_table_means_no_answer_rather_than_a_guess(string model, string mode)

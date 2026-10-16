@@ -1,0 +1,132 @@
+﻿@page
+@model Yaesu_Web_Control.Pages.RttyTunerModel
+@{
+    Layout = null;
+    ViewData["Title"] = "RTTY Tuner";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>RTTY Tuner - Yaesu Web Control</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <style>
+        html, body { height: 100%; margin: 0; background: #222; color: #eee; overflow: hidden; }
+        /* The panel is the whole window here, not a floating dialog: the
+           window's own frame does the moving and resizing. */
+        #rttyTunerDialog.rtty-popout {
+            position: static;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            min-width: 0;
+            min-height: 0;
+            max-width: none;
+            max-height: none;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: #222;
+            color: #eee;
+            resize: none;
+            overflow: auto;
+        }
+        #rttyTunerDialog.rtty-popout .rtty-header { cursor: default; flex-wrap: wrap; gap: 0.4rem; }
+        .popout-screen-offer {
+            font-size: 0.85rem; color: #cde; background: rgba(120, 170, 255, 0.10);
+            border-left: 3px solid #78aaff; border-radius: 0.25rem;
+            padding: 0.4rem 0.6rem; margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <partial name="_RttyTunerPartial" model="true" />
+    <div id="rttyTunerAnnounce" class="visually-hidden" role="status" aria-live="polite"></div>
+
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    @* Builds the hub connection with a retry policy that never gives up.
+       This page has no _Layout, so it must load it itself. *@
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script type="module">
+        import { RttyTuner }      from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RttyReader }     from "/js/rtty/rtty-reader.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { startModePausedPopout } from "/js/popout/popout-mode-pause.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+
+        const popout = new PopoutChild({ name: 'rtty-tuner', fallbackUrl: '/' }).start();
+        offerScreenPermission(document.querySelector('#rttyTunerDialog .rtty-body'));
+        document.getElementById('rttyTunerReattachBtn')
+            ?.addEventListener('click', () => popout.reattach());
+
+        const tuner = new RttyTuner();
+        tuner.init();
+
+        // The reader in the same panel. The dialog is open from the moment this
+        // page loads and never closes, so the reader starts polling on init and
+        // only the pause below ever stops it.
+        //
+        // Unless Contest Mode (Settings) is on, which hides the Decode section
+        // and the reader's Start/Stop button with it: nothing would show the
+        // text, and a decode still running on the server from an earlier
+        // session would have no button left to stop it. The flag is read off
+        // the class the partial put on the dialog, so this window and the main
+        // page cannot disagree about it. See ApplicationSettings.RttyContestMode.
+        const contest = document.getElementById('rttyTunerDialog')
+            ?.classList.contains('rtty-contest');
+        let reader = null;
+        if (contest) {
+            fetch('/api/rtty/reader/stop', { method: 'POST' }).catch(() => { });
+        } else {
+            reader = new RttyReader();
+            reader.init();
+        }
+
+        // One panel as far as the mode watcher is concerned: pausing the window
+        // has to stop both pollers, or the reader would keep asking for text
+        // from a decoder listening to a radio that has left RTTY.
+        const panel = {
+            get isPaused() { return tuner.isPaused; },
+            setPaused(paused, text) { tuner.setPaused(paused, text); reader?.setPaused(paused); },
+        };
+
+        // The same modes the main page keeps its tuner open in: RTTY, and the
+        // AFSK modes it also works in.
+        const belongs = m => typeof m === 'string'
+            && (m.startsWith('RTTY') || m.startsWith('DATA') || m === 'PSK' || m === 'LSB' || m === 'USB');
+        // The main page closes its tuner once the mode has settled somewhere
+        // the tuner is no use. A window on a second monitor closing itself
+        // would be worse than a dialog doing it, so this one pauses instead -
+        // letting the audio go, as a close does - and starts again the moment
+        // the radio is back in a mode it works in.
+        // startModePausedPopout (core) does the pausing and the resuming,
+        // and starts at once only if the window opened in one of its modes.
+        const modePause = startModePausedPopout({
+            name: 'RTTY panel',
+            panel,
+            belongs,
+            pausedText: m =>
+                `Not in an RTTY or data mode (the radio is in ${m}), so the panel is paused. ` +
+                'It starts again when you go back to RTTY, DATA, LSB or USB.',
+            startNow: () => tuner.start(),
+            initialMode: '@Model.ModeA',
+            announceEl: document.getElementById('rttyTunerAnnounce'),
+        });
+
+        // Mode changes, and the hub's state replay on connect. This
+        // connection is also what keeps the host running while this window is
+        // the only one open: the page sets Layout = null, so there is no
+        // site.js here.
+        const conn = window.rwcHubConnection('/radioHub');
+        conn.on('RadioStateUpdate', update => {
+            if (update.property === 'ModeA') modePause.setMode(update.value);
+        });
+        conn.start().catch(err => console.error('[rtty-tuner-popout]', err));
+    </script>
+</body>
+</html>

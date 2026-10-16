@@ -1,0 +1,35 @@
+<!-- Message Box Modal (Windows-style) -->
+<div class="modal fade" id="messageBoxModal" tabindex="-1" aria-labelledby="messageBoxTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
+        <div class="modal-content" style="border-radius: 4px; border: 2px solid #dc3545;">
+            <div class="modal-header py-2" style="background: linear-gradient(to bottom, #dc3545, #c82333); border-bottom: 1px solid #bd2130;">
+                <h6 class="modal-title text-white" id="messageBoxTitle" style="font-size: 0.9rem;">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Warning
+                </h6>
+            </div>
+            <div class="modal-body py-3" style="background: var(--yaesu-face, #2a2a2a);">
+                <p id="messageBoxText" class="mb-0" style="font-size: 0.9rem; color: var(--yaesu-ink, #e6e6e6);"></p>
+            </div>
+            <div class="modal-footer py-2 justify-content-center" style="background: var(--yaesu-face-lo, #1a1a1a); border-top: 1px solid #4a4a4a;">
+                <button type="button" class="btn btn-danger btn-sm px-4" data-bs-dismiss="modal" style="min-width: 80px;">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Overlay for initialization status -->
+<div id="initOverlay" class="init-overlay">
+    <div class="init-message">
+        <span id="initStatusText">Initializing radio, please wait...</span>
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+</div>
+
+<!-- Viewport too-narrow warning (shown once, dismissible) -->
+<div id="viewportWarning" class="alert alert-warning alert-dismissible mb-1 py-1 px-3" role="alert" style="display:none; font-size:0.85rem;">
+    <strong>Display settings may need attention.</strong>
+    Your browser viewport appears narrow — some controls may wrap to a second row.
+    Check <strong>Windows Display Settings</strong>: ensure resolution is set to native and scaling is correct for your monitor
+    (recommended: <strong>150%</strong> for 4K, <strong>125%</strong> for 1440p, <strong>100%</strong> for 1080p).
+    <button type="button" class="btn-close btn-sm py-2" onclick="dismissViewportWarning()" aria-label="Dismiss"></button>
+</div>

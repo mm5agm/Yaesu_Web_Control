@@ -358,26 +358,34 @@ namespace Yaesu_Web_Control.Services
         private async Task<string> GetModeAsync(string clientId)
         {
             var response = await _multiplexer.SendCommandAsync("MD0", clientId);
-            var mode = CatCommands.ParseMode(response ?? string.Empty);
+            var mode = CatCommands.ParseMode(response ?? string.Empty, _radioStateService.RadioModel);
             var bandwidth = 0; // FT-dx101 manages bandwidth automatically
 
-            // Convert to Hamlib mode names
-            var hamlibMode = mode switch
-            {
-                "USB" => "USB",
-                "LSB" => "LSB",
-                "CW" => "CW",
-                "CW-R" => "CW-R",
-                "FM" => "FM",
-                "AM" => "AM",
-                "RTTY" => "RTTY",
-                "RTTY-R" => "RTTY-R",
-                "DATA-USB" or "DATA-LSB" => "PKTUSB",
-                _ => "USB"
-            };
-
-            return $"{hamlibMode}\n{bandwidth}";
+            return $"{ToHamlibMode(mode)}\n{bandwidth}";
         }
+
+        /// <summary>
+        /// Yaesu mode name (as CatCommands.ParseMode gives it) to the Hamlib
+        /// name, the reverse of HamlibToYaesuMode. This used to match names
+        /// ParseMode never produces ("CW", "DATA-USB"), so CW, RTTY and every
+        /// DATA mode were reported as USB, and WSJT-X saw FT8 on DATA-U as USB.
+        /// </summary>
+        internal static string ToHamlibMode(string yaesuMode) => yaesuMode switch
+        {
+            "LSB"       => "LSB",
+            "USB"       => "USB",
+            "CW-U"      => "CW",
+            "CW-L"      => "CW-R",
+            "RTTY-L"    => "RTTY",
+            "RTTY-U"    => "RTTY-R",
+            "DATA-U"    => "PKTUSB",
+            "PSK"       => "PKTUSB",   // the 101's PSK is a USB-side data mode
+            "DATA-L"    => "PKTLSB",
+            "DATA-FM" or "DATA-FM-N" => "PKTFM",
+            "FM" or "FM-N" or "C4FM"  => "FM",
+            "AM" or "AM-N" => "AM",
+            _ => "USB"
+        };
 
         private async Task<string> SetModeAsync(string mode, string? passband, string clientId)
         {

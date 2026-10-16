@@ -20,16 +20,19 @@ namespace Yaesu_Web_Control.Controllers
         private readonly CwReaderService _reader;
         private readonly CwQsoLogService _log;
         private readonly CwReaderModeService _readerMode;
+        private readonly CwAutoService _auto;
         private readonly ILogger<CwController> _logger;
 
         public CwController(CwReaderService reader,
                             CwQsoLogService log,
                             CwReaderModeService readerMode,
+                            CwAutoService auto,
                             ILogger<CwController> logger)
         {
             _reader = reader;
             _log = log;
             _readerMode = readerMode;
+            _auto = auto;
             _logger = logger;
         }
 
@@ -203,6 +206,26 @@ namespace Yaesu_Web_Control.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to enter Reader Mode");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Waits up to ten seconds for a readable station, moves the dial onto
+        /// pitch and sets the filter for its speed. Starts the reader if it is
+        /// not running. A station not found is a 200 with Ok false: it is an
+        /// answer for the operator, not a fault.
+        /// </summary>
+        [HttpPost("auto")]
+        public async Task<IActionResult> Auto(CancellationToken ct)
+        {
+            try
+            {
+                return Ok(await _auto.RunAsync(ct));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "CW Auto failed");
                 return StatusCode(500, new { error = ex.Message });
             }
         }

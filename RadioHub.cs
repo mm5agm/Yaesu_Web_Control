@@ -13,6 +13,7 @@ namespace Yaesu_Web_Control.Hubs
         private readonly RadioStateService _radioState;
         private readonly ISettingsService _settings;
         private readonly FilterSpectrumService _filterSpectrum;
+        private readonly BrowserPresence _presence;
 
         // Every currently open SignalR connection, and the whole of what the
         // host means by "a browser is watching". Presence used to mean a
@@ -36,8 +37,10 @@ namespace Yaesu_Web_Control.Hubs
             IHostApplicationLifetime lifetime,
             RadioStateService radioState,
             ISettingsService settings,
-            FilterSpectrumService filterSpectrum)
+            FilterSpectrumService filterSpectrum,
+            BrowserPresence presence)
         {
+            _presence = presence;
             _logger   = logger;
             _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
             _radioState = radioState;
@@ -61,6 +64,7 @@ namespace Yaesu_Web_Control.Hubs
         public override async Task OnConnectedAsync()
         {
             _connections.TryAdd(Context.ConnectionId, 0);
+            _presence.Report(true);
             CancelShutdown("browser connected");
 
             // Replay the full state snapshot to this client only. Regular
@@ -69,12 +73,28 @@ namespace Yaesu_Web_Control.Hubs
             // frontend JS defaults for everything not server-rendered in the
             // Razor page — most visibly ActiveVfo/TxVfo/SplitMode, which made
             // VFO A always appear active on late-joining clients.
+            await SendStateSnapshotAsync();
+
+            await base.OnConnectedAsync();
+        }
+
+        /// <summary>
+        /// Re-send the full state snapshot to the calling client on demand.
+        /// The snapshot is otherwise sent once, at connect, and broadcasts
+        /// fire only on change — so a panel that mounts after that moment (a
+        /// Flex UI VFO tab that was not selected on load, or one reopened
+        /// from the Panels menu) would otherwise hold its page-load values
+        /// until each property next changed. The frontend asks for this the
+        /// first time such a panel mounts.
+        /// </summary>
+        public Task RequestState() => SendStateSnapshotAsync();
+
+        private async Task SendStateSnapshotAsync()
+        {
             foreach (var (property, value) in _radioState.GetClientStateSnapshot())
             {
                 await Clients.Caller.SendAsync("RadioStateUpdate", new { property, value });
             }
-
-            await base.OnConnectedAsync();
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
@@ -104,6 +124,7 @@ namespace Yaesu_Web_Control.Hubs
             // setting is enabled (default true).
             if (_connections.IsEmpty)
             {
+                _presence.Report(false);
                 var settings = await _settings.GetSettingsAsync();
                 // Containers must stay up as a headless CAT controller even if
                 // the user left AutoShutdown enabled in a copied settings file.

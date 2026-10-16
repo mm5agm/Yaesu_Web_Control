@@ -19,6 +19,10 @@ namespace Yaesu_Web_Control.Controllers
         [HttpGet]
         public IActionResult GetBankNames() => Ok(_bankService.GetBankNames());
 
+        // The bank the working list came from, or null: the Radio panel marks it.
+        [HttpGet("loaded")]
+        public IActionResult GetLoadedBank() => Ok(new { name = _bankService.LoadedBank });
+
         public class SaveBankRequest { public string Name { get; set; } = ""; }
 
         [HttpPost("save")]

@@ -1,0 +1,127 @@
+@model Yaesu_Web_Control.Pages.CwSendPartialModel
+@{
+    // The CW Send panel's markup and CSS, shared by the main page's floating
+    // dialog and the /CwSend pop-out window. CwSendPanel finds its elements
+    // by these ids, so both pages run the same panel code.
+    //
+    // Popout: true for the pop-out window, which swaps the Pop out button
+    // for Reattach; its close button closes the window rather than the dialog.
+    var popout = Model.Popout;
+}
+<!-- CW SEND - type a line, Enter keys it. Built on the same KM/KY keyer
+     memories as the M1-M5 buttons, borrowing M5 as the scratch slot and
+     putting it back afterwards. Non-modal and draggable like the reader. -->
+<style>
+    #cwSendDialog .cws-header { cursor:move; }
+    /* A definite width so lines wrap instead of stretching the panel to
+       the longest one; the corner drags to resize, and a size the operator
+       has set is kept (dlgSize_cwSendDialog) - see makeResizable. */
+    #cwSendDialog { width:560px; min-width:420px; min-height:220px; max-height:95vh; resize:both; overflow:auto; }
+    #cwSendDialog[open] { display:flex; flex-direction:column; }
+    #cwSendDialog .cws-header { flex:0 0 auto; }
+    #cwSendDialog .cws-body { flex:1 1 auto; min-height:0; }
+    #cwSendDialog.user-sized #cwSendLog { max-height:none; flex:1 1 auto; min-height:4rem; }
+    #cwSendInput {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 1.05rem;
+        text-transform: uppercase;
+        background: #111; border-color: #444; color: #dfe;
+    }
+    #cwSendInput:focus { background: #111; color: #dfe; border-color: #6aa; box-shadow: none; }
+    #cwSendLog {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        min-height: 6rem;
+        max-height: 30vh;
+        overflow-y: auto;
+        position: relative;   /* offsetTop of a character is then within the log */
+        background: #111;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 6px 10px;
+        color: #dfe;
+    }
+    #cwSendLog .cws-line { display:flex; gap:0.6rem; align-items:baseline; }
+    #cwSendLog .cws-time { color:#778; font-size:0.75rem; flex:0 0 auto; }
+    #cwSendLog .cws-text { flex:1 1 auto; white-space:pre-wrap; word-break:break-word; }
+    #cwSendLog .cws-tag  { color:#9ab; font-size:0.75rem; flex:0 0 auto; }
+    #cwSendLog .cws-line[data-state="queued"]  .cws-text { color:#9ab; }
+    #cwSendLog .cws-line[data-state="sending"] .cws-text { color:#ffd24a; }
+    #cwSendLog .cws-line[data-state="sending"] .cws-tag  { color:#ffd24a; }
+    #cwSendLog .cws-line[data-state="sent"]    .cws-tag  { color:#9d9; }
+    #cwSendLog .cws-line[data-state="monitor"] .cws-tag  { color:#8fd0ff; }
+    #cwSendLog .cws-line[data-state="dropped"] .cws-text { color:#778; text-decoration:line-through; }
+    #cwSendLog .cws-line[data-state="error"]   .cws-tag  { color:#ff6b6b; }
+    #cwSendLog .cws-ch.cws-done { color:#eee; }
+    #cwSendLog .cws-ch.cws-cur  { background:#ffd24a; color:#111; border-radius:2px; }
+    #cwSendStatus { font-size: 0.8rem; color:#9ab; min-height:1.2em; }
+    #cwSendStatus.cws-problem { color:#ffd23f; font-weight:600; }
+    /* d-flex would override [hidden] */
+    #cwSendModeWarn[hidden] { display:none !important; }
+    #cwSendModeWarn, #cwSendBanner {
+        font-size: 0.9rem; font-weight: 600; color: #ffd23f;
+        background: rgba(255, 210, 63, 0.10);
+        border-left: 3px solid #ffd23f;
+        padding: 0.4rem 0.6rem; border-radius: 0.25rem;
+    }
+</style>
+<dialog id="cwSendDialog" open="@popout"
+        class="@(popout ? "cws-popout user-sized" : null)"
+        style="@(popout ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; max-width:95vw;")"
+        aria-labelledby="cwSendTitle">
+    <div class="cws-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
+        <strong id="cwSendTitle">CW Send</strong>
+        <div class="d-flex align-items-center gap-2">
+            <button id="cwSendStopBtn" class="btn btn-sm btn-outline-warning" type="button"
+                    title="Send nothing further. The word or two already playing finishes - the radio has no CAT command to cut it short.">Stop</button>
+            <button id="cwSendClearBtn" class="btn btn-sm btn-outline-light" type="button" title="Clear the sent-lines log">Clear log</button>
+            @if (popout)
+            {
+            <button id="cwSendReattachBtn" class="btn btn-sm btn-outline-secondary" type="button"
+                    title="Close this window and put CW Send back in the main page"
+                    aria-label="Reattach - put CW Send back in the main page">
+                <i class="bi bi-box-arrow-in-down-left" aria-hidden="true"></i> Reattach
+            </button>
+            <button id="cwSendWindowCloseBtn" class="btn btn-sm ywc-dialog-close" type="button"
+                    aria-label="Close the CW send window">&#10005;</button>
+            }
+            else
+            {
+            <button id="cwSendPopoutBtn" class="btn btn-sm btn-outline-secondary" type="button"
+                    title="Open CW Send in a window of its own, which can go on another monitor"
+                    aria-label="Pop out - open CW Send in its own window">
+                <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+            </button>
+            <button class="btn btn-sm ywc-dialog-close" type="button"
+                    onclick="document.getElementById('cwSendDialog').close()"
+                    aria-label="Close CW send panel">&#10005;</button>
+            }
+        </div>
+    </div>
+    <div class="cws-body p-2 d-flex flex-column gap-2">
+        <div id="cwSendModeWarn" class="cws-warn d-flex align-items-center gap-2 flex-wrap" role="alert" hidden>
+            <span id="cwSendModeWarnText"></span>
+            <button id="cwSendSwitchCwBtn" class="btn btn-sm btn-warning ms-auto" type="button"
+                    title="Put the transmit VFO in CW-U. Nothing changes until you press this.">Switch to CW</button>
+        </div>
+        <div id="cwSendBanner" role="status" aria-live="polite" hidden></div>
+        <div id="cwSendLog" role="log" aria-live="polite" aria-label="CW lines sent"></div>
+        <div class="input-group">
+            <input type="text" id="cwSendInput" class="form-control"
+                   autocomplete="off" spellcheck="false" autocapitalize="characters"
+                   placeholder="Type here and press Enter to send"
+                   aria-label="CW text to send - Enter sends, Escape stops"
+                   title="A-Z 0-9 space ? / . , - Enter sends the line, Escape drops anything not yet started (or clears the box when nothing is sending)">
+            <button id="cwSendClearInputBtn" class="btn btn-outline-light" type="button"
+                    title="Empty the text box without sending it" aria-label="Clear the text box">Clear</button>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap" for="cwSendSpeedSlider">Speed WPM: <span id="cwSendSpeedValue">@Model.CwSpeed</span></label>
+            <input type="range" id="cwSendSpeedSlider" min="4" max="60" step="1" value="@Model.CwSpeed"
+                   style="flex:1; height:18px;"
+                   aria-label="CW keyer speed" title="CW keyer speed in WPM - the same control as in the CW keyer panel">
+        </div>
+        <div id="cwSendStatus" role="status" aria-live="polite"></div>
+    </div>
+</dialog>

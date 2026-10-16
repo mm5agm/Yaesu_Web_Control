@@ -482,6 +482,26 @@ namespace Yaesu_Web_Control.Services
             if (RadioMeterSelection == digits) return;
             RadioMeterSelection = digits;
             _logger.LogInformation("[Meters] Operator front-panel meter selection is MS{Digits}", digits);
+            BroadcastUpdate("MeterSelection", digits);
+        }
+
+        // True once the operator has picked meters in YWC (the Radio Display
+        // meter pop-up), for the rest of the session. MeterPollingService then
+        // leaves the FTdx101's meters alone during TX instead of borrowing them
+        // for COMP + SWR: a pick made to watch VDD on the radio has to survive
+        // keying up, or it never shows a live needle at all.
+        public bool MetersPinnedByOperator { get; private set; }
+
+        // The operator picked meters in YWC. Records even during a borrow: the
+        // choice is the operator's by definition.
+        public void SetOperatorMeterSelection(string digits)
+        {
+            if (string.IsNullOrEmpty(digits)) return;
+            MetersPinnedByOperator = true;
+            if (RadioMeterSelection == digits) return;
+            RadioMeterSelection = digits;
+            _logger.LogInformation("[Meters] Operator chose front-panel meters MS{Digits} in YWC", digits);
+            BroadcastUpdate("MeterSelection", digits);
         }
 
         private int? _compressionMeter;
@@ -562,6 +582,15 @@ namespace Yaesu_Web_Control.Services
 
         private int _procLevel = 50;
         public int ProcLevel { get => _procLevel; set => SetField(ref _procLevel, value); }
+
+        // AMC output level (AO, 1-100) and the PROC TYPE menu (0 = COMP,
+        // 1 = AMC): together they say what the radio's PROC knob is setting.
+        // Null until read; only read where AmcCodes confirms the model.
+        private int? _amcLevel;
+        public int? AmcLevel { get => _amcLevel; set => SetField(ref _amcLevel, value); }
+
+        private int? _procType;
+        public int? ProcType { get => _procType; set => SetField(ref _procType, value); }
 
         // ATU: false = bypass, true = engaged
         private bool _atuEnabled = false;
@@ -745,6 +774,11 @@ namespace Yaesu_Web_Control.Services
                 new("SquelchB", SquelchB),
                 new("ProcEnabled", ProcEnabled),
                 new("ProcLevel", ProcLevel),
+                // Missing until 2026-10-15: MicGain only reached a page when it
+                // changed, so /radio's MIC knob had no value and ignored turns.
+                new("MicGain", MicGain),
+                new("AmcLevel", AmcLevel),
+                new("ProcType", ProcType),
                 new("AtuEnabled", AtuEnabled),
                 new("AtuTuning", AtuTuning),
                 new("MonitorOn", MonitorOn),

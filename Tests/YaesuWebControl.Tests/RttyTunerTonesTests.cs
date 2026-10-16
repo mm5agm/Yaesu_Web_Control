@@ -20,9 +20,12 @@ namespace YaesuWebControl.Tests
         }
 
         [Fact]
-        public void RttyUPutsSpaceBelowMark()
+        public void RttyUAlsoPutsSpaceAboveMark()
         {
-            Assert.Equal((2125.0, 1955.0), RttyTunerService.TonesFor("RTTY-U", 2125, 170, false));
+            // Measured 2026-09-24 (#178): in RTTY-U a carrier at the dial comes
+            // out at 2295 Hz, so the tones are 2125 and 2295 as in RTTY-L. The
+            // old 1955 needed Reverse in RTTY-U, which then broke RTTY-L.
+            Assert.Equal((2125.0, 2295.0), RttyTunerService.TonesFor("RTTY-U", 2125, 170, false));
         }
 
         [Theory]
@@ -38,7 +41,7 @@ namespace YaesuWebControl.Tests
 
         [Theory]
         [InlineData("RTTY-L", 1955.0)]
-        [InlineData("RTTY-U", 2295.0)]
+        [InlineData("RTTY-U", 1955.0)]
         [InlineData("DATA-L", 1955.0)]
         public void ReverseMovesSpaceToTheOtherSide(string mode, double space)
         {

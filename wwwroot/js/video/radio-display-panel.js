@@ -47,7 +47,7 @@ export class RadioDisplayPanel {
     return this._container?.querySelector('.radio-display-body');
   }
 
-  /** @param {'unconfigured'|'idle'|'connecting'|'streaming'|'disconnected'|'error'} status */
+  /** @param {'unconfigured'|'idle'|'connecting'|'streaming'|'disconnected'|'notconnected'|'error'} status */
   setStatus(status, detail) {
     this._status = status || 'idle';
     if (!this._container) return;
@@ -73,6 +73,7 @@ export class RadioDisplayPanel {
         connecting: 'Connecting…',
         streaming: 'Streaming',
         disconnected: 'Disconnected',
+        notconnected: 'Not connected',
         error: 'Error'
       };
       this._badge.textContent = (status === 'streaming' && detail)

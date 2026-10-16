@@ -1,12 +1,19 @@
-// hub-connection.js -- build every /radioHub connection the same way.
+// Radio Web Control - hub connection
+// Shared by Icom Web Control and Yaesu Web Control. This file is copied into
+// each app's wwwroot at build time - see js/README.md. Edit it here, in the
+// core, never in a wwwroot copy.
 //
-// Loaded as a plain script straight after signalr.min.js, so it is available
-// to classic scripts (site.js) and to modules alike -- modules are deferred,
-// so they run after this.
+// Builds every /radioHub connection the same way. Loaded as a plain script
+// straight after signalr.min.js, so it is available to classic scripts
+// (site.js) and to modules alike - modules are deferred, so they run after
+// this. Served at /js/hub/hub-connection.js.
 //
-// Why this exists, measured on 2026-09-19:
+// The server half lives in each app's Program.cs: ClientTimeoutInterval must
+// be longer than SERVER_TIMEOUT_MS below, and KeepAliveInterval well under it.
 //
-//   12:49:16  Shutdown countdown cancelled (browser connected)   <- About page
+// Why this exists, measured in Yaesu Web Control on 2026-09-19:
+//
+//   12:49:16  Shutdown countdown cancelled (browser connected)   <- an About page
 //             ... 24 minutes, tab open and visible on screen ...
 //   13:13:40  Last live browser connection dropped
 //   13:14:10  No clients reconnected -- stopping application
@@ -22,7 +29,7 @@
 //     (HubOptions.ClientTimeoutInterval). Everything that keeps a browser
 //     "alive" -- SignalR's own ping and our 5-second Heartbeat -- is a JS
 //     timer, and a browser is free to throttle or freeze timers in a tab it
-//     considers background. Program.cs now allows two minutes, which is
+//     considers background. The apps' Program.cs allows two minutes, which is
 //     longer than any throttling a browser applies.
 //
 //   * withAutomaticReconnect() with no argument retries at 0s, 2s, 10s and
@@ -60,7 +67,7 @@
      * @param {string} url hub path, e.g. "/radioHub"
      * @returns {object} an unstarted HubConnection
      */
-    window.ywcHubConnection = function (url) {
+    window.rwcHubConnection = function (url) {
         var conn = new signalR.HubConnectionBuilder()
             .withUrl(url)
             .withAutomaticReconnect(retryPolicy)

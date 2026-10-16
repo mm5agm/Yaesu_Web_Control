@@ -52,7 +52,8 @@ namespace Yaesu_Web_Control.Services.Video
 
                 if (OperatingSystem.IsWindows())
                 {
-                    var named = FromFriendlyNames(ReadWindowsFriendlyNames());
+                    var named = FromFriendlyNames(
+                        ReadWindowsFriendlyNames(), WindowsDshowDevices.ListDevicePaths());
                     if (named.Count > 0)
                     {
                         lock (CacheLock)
@@ -119,11 +120,16 @@ namespace Yaesu_Web_Control.Services.Video
         private static List<VideoDeviceInfo> EnumerateWindows()
         {
             var names = ReadWindowsFriendlyNames();
-            if (names.Count == 0)
-                return ProbeIndices(VideoCaptureAPIs.DSHOW, ReadEmptyNames());
+            // Read once and pass it down: each call walks the moniker list.
+            var paths = OperatingSystem.IsWindows()
+                ? WindowsDshowDevices.ListDevicePaths()
+                : ReadEmptyNames();
 
-            var probed = ProbeNamedIndices(VideoCaptureAPIs.DSHOW, names);
-            return MergeUnprobedNames(probed, names);
+            if (names.Count == 0)
+                return ProbeIndices(VideoCaptureAPIs.DSHOW, ReadEmptyNames(), paths);
+
+            var probed = ProbeNamedIndices(VideoCaptureAPIs.DSHOW, names, paths);
+            return MergeUnprobedNames(probed, names, paths);
         }
 
         /// <summary>
@@ -206,7 +212,9 @@ namespace Yaesu_Web_Control.Services.Video
             }
         }
 
-        private static List<VideoDeviceInfo> FromFriendlyNames(IReadOnlyDictionary<int, string> names)
+        private static List<VideoDeviceInfo> FromFriendlyNames(
+            IReadOnlyDictionary<int, string> names,
+            IReadOnlyDictionary<int, string>? devicePaths = null)
         {
             var collisions = CollidingNames(names);
             var result = new List<VideoDeviceInfo>();
@@ -214,11 +222,14 @@ namespace Yaesu_Web_Control.Services.Video
             {
                 if (string.IsNullOrWhiteSpace(kv.Value))
                     continue;
+                var path = DevicePathFor(kv.Key, devicePaths);
                 result.Add(new VideoDeviceInfo
                 {
                     Index = kv.Key,
-                    Key = VideoDeviceKey.FromIndex(kv.Key),
-                    Label = FormatLabel(kv.Key, kv.Value, collisions.Contains(kv.Value.Trim())),
+                    Key = KeyFor(kv.Key, path),
+                    Label = FormatLabel(kv.Key, kv.Value, collisions.Contains(kv.Value.Trim()), path),
+                    // Probe by index: a capability read wants the index we would
+                    // open now, not the key we persist.
                     Rates = VideoDeviceFpsCaps.PeekRates(VideoDeviceKey.FromIndex(kv.Key))
                 });
             }
@@ -227,7 +238,8 @@ namespace Yaesu_Web_Control.Services.Video
 
         private static List<VideoDeviceInfo> MergeUnprobedNames(
             IReadOnlyList<VideoDeviceInfo> probed,
-            IReadOnlyDictionary<int, string> names)
+            IReadOnlyDictionary<int, string> names,
+            IReadOnlyDictionary<int, string>? devicePaths = null)
         {
             var byIndex = probed.ToDictionary(d => d.Index);
             var collisions = CollidingNames(names);
@@ -249,11 +261,12 @@ namespace Yaesu_Web_Control.Services.Video
                 if (!names.TryGetValue(i, out var friendly) || string.IsNullOrWhiteSpace(friendly))
                     continue;
 
+                var path = DevicePathFor(i, devicePaths);
                 result.Add(new VideoDeviceInfo
                 {
                     Index = i,
-                    Key = VideoDeviceKey.FromIndex(i),
-                    Label = FormatLabel(i, friendly, collisions.Contains(friendly.Trim())),
+                    Key = KeyFor(i, path),
+                    Label = FormatLabel(i, friendly, collisions.Contains(friendly.Trim()), path),
                     Rates = VideoDeviceFpsCaps.PeekRates(VideoDeviceKey.FromIndex(i))
                 });
             }
@@ -269,12 +282,64 @@ namespace Yaesu_Web_Control.Services.Video
                 .Select(g => g.Key)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        private static string FormatLabel(int index, string? friendly, bool nameCollision)
+        private static string FormatLabel(
+            int index,
+            string? friendly,
+            bool nameCollision,
+            string? devicePath = null)
         {
             var name = string.IsNullOrWhiteSpace(friendly) ? $"Camera {index}" : friendly.Trim();
-            if (nameCollision)
-                name = $"{name} (#{index})";
-            return name;
+            if (!nameCollision)
+                return name;
+
+            // Two dongles of the same model report the same friendly name, so the
+            // label is all the operator has to tell one radio's from the other's.
+            // The index alone will not do: the index is the thing that moves.
+            var tag = ShortDeviceTag(devicePath);
+            return tag is null ? $"{name} (#{index})" : $"{name} (#{index}, {tag})";
+        }
+
+        private static string? DevicePathFor(int index, IReadOnlyDictionary<int, string>? devicePaths) =>
+            devicePaths is not null &&
+            devicePaths.TryGetValue(index, out var path) &&
+            !string.IsNullOrWhiteSpace(path)
+                ? path
+                : null;
+
+        /// <summary>
+        /// The key to persist: the device's own identity where the platform gives
+        /// us one, the bare index otherwise.
+        /// </summary>
+        private static string KeyFor(int index, string? devicePath) =>
+            string.IsNullOrWhiteSpace(devicePath)
+                ? VideoDeviceKey.FromIndex(index)
+                : VideoDeviceKey.FromUniqueId(devicePath);
+
+        /// <summary>
+        /// Short stable discriminator from a DirectShow DevicePath. The third
+        /// <c>#</c> segment is the device instance — the USB serial where the
+        /// dongle has one, a hash of hub and port where it has not — so it holds
+        /// across a replug into the same socket, which the index does not.
+        /// </summary>
+        private static string? ShortDeviceTag(string? devicePath)
+        {
+            if (string.IsNullOrWhiteSpace(devicePath))
+                return null;
+
+            var parts = devicePath.Split('#');
+            if (parts.Length < 3)
+                return null;
+
+            var token = parts[2]
+                .Split('&')
+                .Where(t => t.Length > 0)
+                .OrderByDescending(t => t.Length)
+                .FirstOrDefault();
+
+            if (string.IsNullOrWhiteSpace(token))
+                return null;
+
+            return token.Length > 8 ? token[..8] : token;
         }
 
         [SupportedOSPlatform("linux")]
@@ -510,7 +575,8 @@ namespace Yaesu_Web_Control.Services.Video
 
         private static List<VideoDeviceInfo> ProbeNamedIndices(
             VideoCaptureAPIs api,
-            IReadOnlyDictionary<int, string> friendlyNames)
+            IReadOnlyDictionary<int, string> friendlyNames,
+            IReadOnlyDictionary<int, string>? devicePaths = null)
         {
             var collisions = CollidingNames(friendlyNames);
             var result = new List<VideoDeviceInfo>();
@@ -518,7 +584,7 @@ namespace Yaesu_Web_Control.Services.Video
             {
                 if (index < 0 || index > MaxProbeIndex)
                     continue;
-                TryProbeOne(api, index, friendlyNames, collisions, result);
+                TryProbeOne(api, index, friendlyNames, collisions, result, devicePaths);
             }
 
             return result;
@@ -526,12 +592,13 @@ namespace Yaesu_Web_Control.Services.Video
 
         private static List<VideoDeviceInfo> ProbeIndices(
             VideoCaptureAPIs api,
-            IReadOnlyDictionary<int, string> friendlyNames)
+            IReadOnlyDictionary<int, string> friendlyNames,
+            IReadOnlyDictionary<int, string>? devicePaths = null)
         {
             var collisions = CollidingNames(friendlyNames);
             var result = new List<VideoDeviceInfo>();
             for (var i = 0; i <= MaxProbeIndex; i++)
-                TryProbeOne(api, i, friendlyNames, collisions, result);
+                TryProbeOne(api, i, friendlyNames, collisions, result, devicePaths);
             return result;
         }
 
@@ -540,7 +607,8 @@ namespace Yaesu_Web_Control.Services.Video
             int index,
             IReadOnlyDictionary<int, string> friendlyNames,
             HashSet<string> collisions,
-            List<VideoDeviceInfo> result)
+            List<VideoDeviceInfo> result,
+            IReadOnlyDictionary<int, string>? devicePaths = null)
         {
             try
             {
@@ -551,13 +619,13 @@ namespace Yaesu_Web_Control.Services.Video
                 friendlyNames.TryGetValue(index, out var friendly);
                 var collision = !string.IsNullOrWhiteSpace(friendly) && collisions.Contains(friendly.Trim());
 
-                var key = VideoDeviceKey.FromIndex(index);
+                var path = DevicePathFor(index, devicePaths);
                 result.Add(new VideoDeviceInfo
                 {
                     Index = index,
-                    Key = key,
-                    Label = FormatLabel(index, friendly, collision),
-                    Rates = VideoDeviceFpsCaps.PeekRates(key)
+                    Key = KeyFor(index, path),
+                    Label = FormatLabel(index, friendly, collision, path),
+                    Rates = VideoDeviceFpsCaps.PeekRates(VideoDeviceKey.FromIndex(index))
                 });
             }
             catch

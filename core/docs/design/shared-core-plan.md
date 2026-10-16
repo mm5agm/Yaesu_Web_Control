@@ -76,7 +76,6 @@ themselves. **✅ = moved · ☐ = still local, move on next touch.**
 - [ ] `Memories`
 - [ ] `UserManual`
 - [ ] `Calibration/MeterCalibration`
-- [ ] `Calibration/SMeterCalibration`
 - [ ] `Shared/_BandButtonsPartial`
 
 **Services/**

@@ -44,6 +44,26 @@
         "font/fonts/bootstrap-icons.woff2",
         "font/fonts/bootstrap-icons.woff"
       ]
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "@fontsource/barlow-condensed@5.3.0",
+      "destination": "wwwroot/lib/fonts/barlow-condensed/",
+      "files": [
+        "files/barlow-condensed-latin-500-normal.woff2",
+        "files/barlow-condensed-latin-600-normal.woff2",
+        "files/barlow-condensed-latin-700-normal.woff2",
+        "LICENSE"
+      ]
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "@fontsource/share-tech-mono@5.3.0",
+      "destination": "wwwroot/lib/fonts/share-tech-mono/",
+      "files": [
+        "files/share-tech-mono-latin-400-normal.woff2",
+        "LICENSE"
+      ]
     }
   ]
 }

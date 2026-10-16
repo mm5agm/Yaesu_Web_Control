@@ -10,7 +10,11 @@
 //   * the ANT / ATT / IPO / R.FIL / AGC readouts cycle their setting on click,
 //     over the same /api/cat endpoints the toolbar selects already use;
 //   * the scope soft-buttons drive the CAT scope control; the ones with no
-//     CAT equivalent say so instead of pretending.
+//     CAT equivalent say so instead of pretending;
+//   * the meter opens a pop-up for choosing the TX meters. The radio's own
+//     selection screen cannot be opened over CAT - nothing touches the TFT -
+//     so YWC draws its own, from /api/cat/meters, and the choice goes to the
+//     radio as MS. The captured picture then shows the new meter.
 //
 // A zone is WHERE something is drawn AND WHAT clicking it should do, because
 // the same soft-key means different things on different radios. EXPAND is the
@@ -36,7 +40,9 @@
 //
 // holds in all three without needing to know where the axis starts. The
 // marker is found by drawing the current frame to an off-screen canvas and
-// looking for the tallest red vertical run inside the spectrum rows. When no
+// looking first for the small red triangle the FTdx101 draws at the top of
+// the marker line (the line itself is WHITE - a frame grabbed 2026-10-14),
+// then for the tallest red vertical run inside the spectrum rows. When no
 // marker is visible (FIX placement with the VFO off the edge) CENTER falls
 // back to the box centre and the other placements report "no marker".
 //
@@ -106,6 +112,8 @@ const ACTIONS = {
     'scope.size':      { hint: 'Next scope size',       call: sc => sc.cycleSize?.() },
     'scope.3dss':      { hint: 'W/F ↔ 3DSS',            call: sc => sc.toggle3dss?.() },
     'scope.hold':      { hint: 'HOLD',                  call: sc => sc.toggleHold?.() },
+    'meter.select':    { hint: 'Choose the TX meters',  popup: 'meters' },
+    'freq.digit':      { hint: 'Mouse wheel over a digit moves that digit up or down' },
     'none':            { hint: 'No CAT command — press it on the radio' },
 };
 
@@ -128,20 +136,93 @@ const CONDITIONS = {
 // for the red VFO line (spectrum only — the waterfall can hold red streaks in
 // the hotter colour schemes).
 //
+// `scope.screen` says how to tell that the frame really is the scope screen
+// (#179). The zones only fit that screen: on the RTTY / CW decode screen the
+// radio puts DEC LVL where CURSOR is, and a click there cycled the scope
+// placement on every press. A screen check names zones by id: at least `min`
+// of `lit` must hold label text and every one of `dark` must hold none. With
+// no `scope.screen` every frame counts as the scope screen.
+//
+// `decode` is the RTTY / PSK / CW decode screen: its own check and zones,
+// used only when that check passes, so a menu or any other screen stays
+// dead. Built-in only — layout overrides and measure() leave it alone.
+//
 // Add a radio by adding an entry: the zones it has, what each does, and
 // rects once someone has measured them (a zone with no rect is inert but
 // still listed by measure()).
+// The big frequency readout, one cell per digit: [id, left, right, step Hz].
+// Measured 2026-10-14 on an 800x600 FTdx101MP frame reading 14.057.330: the
+// glyphs are y 0.335-0.388, between the meters (end 0.300) and the ANT..AGC
+// row (0.416). The font is italic, so each dot goes to the digit before it.
+// The cells are fixed: below 10 MHz the 10 MHz cell is taken to be blank
+// (right-aligned digits). Not yet seen on a frame below 10 MHz.
+const FTDX101_DIGITS = [
+    ['f10M',  0.088, 0.130, 10_000_000],
+    ['f1M',   0.130, 0.190, 1_000_000],
+    ['f100k', 0.190, 0.240, 100_000],
+    ['f10k',  0.240, 0.286, 10_000],
+    ['f1k',   0.286, 0.340, 1_000],
+    ['f100',  0.340, 0.394, 100],
+    ['f10',   0.394, 0.440, 10],
+    ['f1',    0.440, 0.492, 1],
+];
+
+function digitZones(digits, top, bottom) {
+    const out = {};
+    for (const [id, l, r, step] of digits)
+        out[id] = { rect: [l, top, r, bottom], action: 'freq.digit', step };
+    return out;
+}
+
+const FREQ_MIN_HZ = 30_000;
+const FREQ_MAX_HZ = 75_000_000;
+
 const LAYOUTS = {
     // FTdx101MP / FTdx101D, MONO layout, W/F display. Measured from
     // pictures/Radio_Display_Docked.png and bench-confirmed 2026-09-12.
-    // MONO / MULTI / EXPAND / MEM CH have no CAT command on this radio —
+    // MONO / MULTI / EXPAND have no CAT command on this radio —
     // EXPAND here is the vertical expand, not L/N/S.
     FTdx101: {
         scope: {
-            plot:   [0.003, 0.520, 0.986, 0.812],
-            marker: [0.003, 0.540, 0.986, 0.720],
+            // The plot's sides are the scope grid's outer lines, x = 1 and 798
+            // on an 800x600 frame of the '101MP (2026-10-14, ten 20 kHz
+            // divisions at 200 kHz span); 0.986 had the scale 1.3 % long.
+            plot:   [0.001, 0.520, 0.998, 0.812],
+            marker: [0.001, 0.540, 0.998, 0.720],
+            // Measured 2026-09-26 on the FTdx101MP: 3DSS..HOLD are 8-12 %
+            // bright pixels on the scope screen and exactly 0 % on both the
+            // RTTY and CW decode screens, whose button row is empty there.
+            screen: { lit: ['dss3', 'mono', 'multi', 'expand', 'hold'], min: 3 },
+        },
+        // Neither soft-key has a CAT command (CAT manual 2308-L): nothing
+        // opens or closes the decode screen, and the threshold is set by
+        // touching DEC LVL and turning MULTI, which SF cannot assign it to.
+        // DEC LVL / DEC OFF cells are 12-13 % text on both decode screens,
+        // but CENTER / SPAN fill the same cells on the scope screen, so the
+        // check also needs the scope's own cells empty.
+        // The meters, frequency and ANT..AGC readout row are drawn in the same
+        // place on the decode screen (same frames), so those zones stay live
+        // there: `keep`.
+        decode: {
+            screen: {
+                lit: ['declvl', 'decoff'], min: 2,
+                dark: ['dss3', 'mono', 'multi', 'expand', 'hold'],
+            },
+            keep: ['meter', 'ant', 'att', 'ipo', 'rfil', 'agc', 'multifn', ...FTDX101_DIGITS.map(d => d[0])],
+            zones: {
+                declvl: { rect: [0.003, 0.847, 0.124, 0.902], action: 'none',
+                          hint: 'DEC LVL has no CAT command — touch it on the radio, then turn MULTI to set the decode threshold' },
+                decoff: { rect: [0.128, 0.847, 0.247, 0.902], action: 'none',
+                          hint: 'DEC OFF has no CAT command — touch it on the radio to close the decode screen' },
+            },
         },
         zones: {
+            // Both meters, top left: the S/PO/COMP/TEMP arc and the
+            // ALC/VDD/ID/SWR arc. Bench-checked on the FTdx101MP 2026-09-23
+            // (0.499 had cut the SWR meter in half). Right of it is the
+            // filter display.
+            meter:  { rect: [0.000, 0.095, 0.700, 0.300], action: 'meter.select' },
+            ...digitZones(FTDX101_DIGITS, 0.325, 0.400),
             ant:    { rect: [0.003, 0.416, 0.196, 0.476], action: 'readout.ant' },
             att:    { rect: [0.199, 0.416, 0.392, 0.476], action: 'readout.att' },
             ipo:    { rect: [0.395, 0.416, 0.591, 0.476], action: 'readout.ipo' },
@@ -154,7 +235,10 @@ const LAYOUTS = {
             multi:  { rect: [0.487, 0.847, 0.606, 0.902], action: 'none', hint: 'MULTI has no CAT command — press it on the radio' },
             expand: { rect: [0.609, 0.847, 0.729, 0.902], action: 'none', hint: 'EXPAND has no CAT command — press it on the radio' },
             hold:   { rect: [0.732, 0.847, 0.851, 0.902], action: 'scope.hold' },
-            memch:  { rect: [0.854, 0.847, 0.971, 0.902], action: 'none', hint: 'MEM CH has no CAT command' },
+            // The right-hand box shows what the MULTI knob is set to (MONI LEVEL,
+            // MEM CH, ...), not a MEM CH key: it read MEM CH in the picture
+            // this was measured from. Colin 2026-09-26: MULTI / MONI LEVEL.
+            multifn: { rect: [0.854, 0.847, 0.971, 0.902], action: 'none', hint: 'What the MULTI knob is set to — set it on the radio' },
         },
     },
     // FTdx10 MONO W/F. Pixel boxes from Fabio 2026-09-12 on an 800-wide
@@ -207,6 +291,9 @@ function normalizeLayout(raw, builtin) {
     const out = emptyLayout();
     if (!raw || typeof raw !== 'object') return out;
     out.scope = { ...(raw.scope || {}) };
+    // An override saved before the screen check existed still gets it.
+    if (!out.scope.screen && builtin?.scope?.screen) out.scope.screen = builtin.scope.screen;
+    if (builtin?.decode) out.decode = builtin.decode;
     const src = {};
     for (const group of ['readouts', 'buttons'])
         for (const [id, z] of Object.entries(raw[group] || {})) src[id] = z;
@@ -217,9 +304,14 @@ function normalizeLayout(raw, builtin) {
         if (!zone.action && base?.action) zone.action = base.action;
         if (!zone.hint && base?.hint) zone.hint = base.hint;
         if (!zone.hideWhen && base?.hideWhen) zone.hideWhen = base.hideWhen;
+        if (zone.step === undefined && base?.step !== undefined) zone.step = base.step;
         if (!zone.action) zone.action = 'none';
         out.zones[id] = zone;
     }
+    // Zones added to the built-in table after an override was saved (the
+    // frequency digits, 2026-10-14) still appear.
+    for (const [id, z] of Object.entries(builtin?.zones || {}))
+        if (!out.zones[id]) out.zones[id] = { ...z };
     return out;
 }
 
@@ -270,6 +362,21 @@ function inZone(z, fx, fy, nw, nh) {
     return !!r && fx >= r[0] && fx <= r[2] && fy >= r[1] && fy <= r[3];
 }
 
+// Share of pixels in an RGBA block bright enough to be label text (white or
+// the blue of a selected soft-key). An empty soft-key cell reads 0.
+export function textFraction(rgba) {
+    const n = rgba.length / 4;
+    if (!n) return 0;
+    let lit = 0;
+    for (let i = 0; i < rgba.length; i += 4)
+        if (Math.max(rgba[i], rgba[i + 1], rgba[i + 2]) > 150) lit++;
+    return lit / n;
+}
+
+// A soft-key cell holds a label when this share of it is text. The labels
+// measure 8-12 %, an empty cell 0 %, so anything in between would do.
+const LABEL_MIN_FRACTION = 0.02;
+
 // Generic measure list for a radio with no built-in table; a model with one
 // measures the zones it declares instead.
 const MEASURE_GENERIC = [
@@ -294,9 +401,63 @@ function setPath(obj, path, value) {
     o[parts[parts.length - 1]] = value;
 }
 
+function formatStep(hz) {
+    if (hz >= 1_000_000) return `${hz / 1_000_000} MHz`;
+    if (hz >= 1_000) return `${hz / 1_000} kHz`;
+    return `${hz} Hz`;
+}
+
 function formatHz(hz) {
     const s = String(Math.round(hz)).padStart(7, '0');
     return `${s.slice(0, -6)}.${s.slice(-6, -3)}.${s.slice(-3)}`;
+}
+
+// The pop-up's styles travel with the module rather than going in site.css:
+// the overlay is hosted on two pages, and site.css is where the theme work is.
+function ensureMeterPopupStyle() {
+    if (document.getElementById('rdh-meters-style')) return;
+    const st = document.createElement('style');
+    st.id = 'rdh-meters-style';
+    st.textContent = `
+.radio-display-hotspots .rdh-meters {
+    position: absolute; z-index: 3; margin-top: 2px;
+    min-width: 11em; padding: 6px 8px 8px;
+    background: rgba(12, 16, 28, 0.94); color: #fff;
+    border: 1px solid #5b6b8c; border-radius: 4px;
+    font: 13px/1.3 system-ui, sans-serif;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+}
+.radio-display-hotspots .rdh-meters-head {
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 600; margin-bottom: 6px;
+}
+.radio-display-hotspots .rdh-meters-close {
+    width: 26px; height: 26px; margin-left: 12px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #2a3450; color: #fff; font-size: 20px; font-weight: 700; line-height: 1;
+    border: 1px solid #8fa2cc; border-radius: 4px; cursor: pointer;
+}
+.radio-display-hotspots .rdh-meters-close:hover { background: #c0392b; border-color: #e06050; }
+.radio-display-hotspots .rdh-meters-hint { margin-top: 6px; font-size: 11px; color: #aab; }
+.radio-display-hotspots .rdh-meters-body { display: flex; gap: 10px; }
+.radio-display-hotspots .rdh-meters-col { display: flex; flex-direction: column; gap: 4px; }
+.radio-display-hotspots .rdh-meters-label { font-size: 11px; color: #aab; }
+.radio-display-hotspots .rdh-meters-col button {
+    min-width: 5em; padding: 3px 8px; cursor: pointer;
+    background: #1d2536; color: #fff; border: 1px solid #45526e; border-radius: 3px;
+}
+.radio-display-hotspots .rdh-meters-col button:hover { border-color: #9fb3dd; }
+.radio-display-hotspots .rdh-meters-col button.rdh-on { background: #0d6efd; border-color: #0d6efd; }
+.radio-display-hotspots .rdh-meters-note { margin-top: 6px; font-size: 11px; color: #f5c46b; max-width: 16em; }
+.radio-display-hotspots .rdh-meters-note:empty { display: none; }
+.radio-display-hotspots .rdh-digit {
+    position: absolute; box-sizing: border-box; pointer-events: none;
+    border: 1px solid rgba(255, 210, 90, 0.9); border-radius: 2px;
+    background: rgba(255, 210, 90, 0.12);
+}
+.radio-display-hotspots .rdh-digit[hidden] { display: none; }
+`;
+    document.head.appendChild(st);
 }
 
 export class RadioDisplayHotspots {
@@ -329,9 +490,13 @@ export class RadioDisplayHotspots {
         this._canvas = document.createElement('canvas');
         this._ctx = this._canvas.getContext('2d', { willReadFrequently: true });
         this._marker = { at: 0, x: null };
+        this._screen = { at: 0, name: 'scope' };
         this._busy = false;
         this._lastScopeRefresh = 0;
-        this._debug = localStorage.getItem(DEBUG_KEY) === '1';
+        // opts.debug === false keeps the zone outlines off whatever the shared
+        // localStorage flag says - the Radio panel page never wants them.
+        this._noDebug = opts.debug === false;
+        this._debug = !this._noDebug && localStorage.getItem(DEBUG_KEY) === '1';
         this._measureQueue = [];
         this._measureDrag = null;
 
@@ -361,10 +526,14 @@ export class RadioDisplayHotspots {
             return;
         }
         if (p === 'ActiveVfo') this.state.activeVfo = Number(v) || 0;
+        // Someone changed the meters (on the radio's own panel, or from
+        // another tab) while the pop-up is open: re-read, so it never shows
+        // a stale choice. The server does the digit parsing.
+        if (p === 'MeterSelection' && this._meterPopup) this._refreshMeterPopup();
     }
 
     debug(on) {
-        this._debug = !!on;
+        this._debug = !!on && !this._noDebug;
         localStorage.setItem(DEBUG_KEY, on ? '1' : '0');
         this._drawDebug();
     }
@@ -450,17 +619,22 @@ export class RadioDisplayHotspots {
         ov.innerHTML =
             '<canvas class="rdh-debug"></canvas>' +
             '<div class="rdh-cursor"></div>' +
+            '<div class="rdh-digit" hidden></div>' +
             '<div class="rdh-label"></div>';
         this.pane.appendChild(ov);
         this.overlay = ov;
         this.debugCanvas = ov.querySelector('.rdh-debug');
         this.cursorEl = ov.querySelector('.rdh-cursor');
         this.labelEl = ov.querySelector('.rdh-label');
+        this.digitEl = ov.querySelector('.rdh-digit');
+        ensureMeterPopupStyle();
 
         ov.addEventListener('pointerdown', e => this._onDown(e));
         ov.addEventListener('pointermove', e => this._onMove(e));
         ov.addEventListener('pointerup', e => this._onUp(e));
+        ov.addEventListener('wheel', e => this._onWheel(e), { passive: false });
         ov.addEventListener('pointerleave', () => {
+            this._showDigit(null);
             if (!this._measureDrag) this._hideCursor();
         });
         ov.addEventListener('click', e => this._onClick(e));
@@ -479,6 +653,11 @@ export class RadioDisplayHotspots {
         const nw = this.img.naturalWidth, nh = this.img.naturalHeight;
         if (!(nw > 0 && nh > 0) || box.width <= 0 || box.height <= 0) return null;
         const fit = getComputedStyle(this.img).objectFit || 'contain';
+        // 'fill' stretches the frame to the box (the Radio panel page);
+        // zones are fractions of the frame, so they stretch with it.
+        if (fit === 'fill') {
+            return { left: box.left, top: box.top, width: box.width, height: box.height };
+        }
         const scale = fit === 'cover'
             ? Math.max(box.width / nw, box.height / nh)
             : Math.min(box.width / nw, box.height / nh);
@@ -497,13 +676,25 @@ export class RadioDisplayHotspots {
         const r = this._imageRect();
         const pr = this.pane.getBoundingClientRect();
         if (!r) return;
+        const k = this._localPerScreenPx();
         Object.assign(this.overlay.style, {
-            left:   `${r.left - pr.left}px`,
-            top:    `${r.top - pr.top}px`,
-            width:  `${r.width}px`,
-            height: `${r.height}px`,
+            left:   `${(r.left - pr.left) * k}px`,
+            top:    `${(r.top - pr.top) * k}px`,
+            width:  `${r.width * k}px`,
+            height: `${r.height * k}px`,
         });
         this._drawDebug();
+    }
+
+    /**
+     * CSS pixels inside the pane per screen pixel. 1 on the Radio Display
+     * page; not 1 on the Radio panel page, which scales its whole board with
+     * a transform to fit the window. getBoundingClientRect() reports screen
+     * pixels, so the overlay's own left/top/width/height need converting back.
+     */
+    _localPerScreenPx() {
+        const w = this.pane.getBoundingClientRect().width;
+        return w > 0 && this.pane.offsetWidth > 0 ? this.pane.offsetWidth / w : 1;
     }
 
     /** Pointer event -> fractional frame coordinates. */
@@ -520,12 +711,27 @@ export class RadioDisplayHotspots {
     _hit(fx, fy) {
         const L = this.layout;
         const { nw, nh } = this._nat();
+        const screen = this._screenNow();
+        if (screen === 'decode') {
+            for (const [id, zone] of this._decodeZones())
+                if (inZone(zone.rect, fx, fy, nw, nh)) return { kind: 'zone', id, zone };
+            return null;
+        }
+        if (screen !== 'scope') return null;
         for (const [id, zone] of Object.entries(L.zones || {})) {
             if (this._zoneHidden(zone)) continue;
             if (inZone(zone.rect, fx, fy, nw, nh)) return { kind: 'zone', id, zone };
         }
         if (inZone(L.scope?.plot, fx, fy, nw, nh)) return { kind: 'scope' };
         return null;
+    }
+
+    /** [id, zone] pairs live on the decode screen: the kept scope zones, then its own. */
+    _decodeZones() {
+        const D = this.layout.decode;
+        if (!D) return [];
+        const kept = (D.keep || []).filter(id => this.layout.zones?.[id]).map(id => [id, this.layout.zones[id]]);
+        return [...kept, ...Object.entries(D.zones || {})];
     }
 
     /** True when one of the zone's hideWhen conditions holds for the scope now. */
@@ -570,15 +776,81 @@ export class RadioDisplayHotspots {
 
         const hit = this._hit(f.fx, f.fy);
         this.overlay.style.cursor = hit ? (hit.kind === 'scope' ? 'crosshair' : 'pointer') : 'default';
+        this._showDigit(hit?.zone?.action === 'freq.digit' ? hit.zone : null);
 
-        if (!hit) { this._hideCursor(); return; }
+        if (!hit) {
+            // Say why nothing is clickable, rather than going quiet.
+            // The decode screen keeps the top half clickable, so only a screen
+            // with no zones at all gets the warning.
+            if (this._screenNow() === 'other') this._showCursor(null, 'Radio is not on the scope screen — clicks are off');
+            else this._hideCursor();
+            return;
+        }
 
         if (hit.kind === 'scope') {
             const r = this._freqAt(f.fx);
-            this._showCursor(e.clientX - f.rect.left, r.ok ? formatHz(r.hz) : r.why);
+            this._showCursor((e.clientX - f.rect.left) * this._localPerScreenPx(), r.ok ? formatHz(r.hz) : r.why);
             return;
         }
         this._showCursor(null, this._describe(hit));
+    }
+
+    // ── frequency digits ─────────────────────────────────────────────────────
+
+    /** Wheel over a digit: up a notch adds that digit's step, down takes it off. */
+    _onWheel(e) {
+        if (this._measureQueue.length || this._meterPopup) return;
+        const f = this._frac(e);
+        if (!f) return;
+        const zone = this._hit(f.fx, f.fy)?.zone;
+        if (zone?.action !== 'freq.digit' || !(zone.step > 0)) return;
+        e.preventDefault();
+        if (!e.deltaY) return;
+        const vfo = this._vfo();
+        const from = this._digitTarget?.vfo === vfo ? this._digitTarget.hz : this.state[vfo].hz;
+        if (!(from > 0)) { this._flash('Frequency not known yet'); return; }
+        const to = from + (e.deltaY < 0 ? zone.step : -zone.step);
+        if (to < FREQ_MIN_HZ || to > FREQ_MAX_HZ) { this._flash(`${formatHz(to)} is out of range`); return; }
+        this._digitTarget = { vfo, hz: to };
+        this._showCursor(null, this._describe({ zone }));
+        this._sendDigitTarget();
+    }
+
+    /**
+     * Send the latest wheel target. Notches that arrive while a write is in
+     * flight are folded into the next write rather than dropped, so a fast
+     * spin lands where the operator stopped.
+     */
+    async _sendDigitTarget() {
+        if (this._digitSending) return;
+        this._digitSending = true;
+        try {
+            while (this._digitTarget && this._digitTarget.sent !== this._digitTarget.hz) {
+                const t = this._digitTarget;
+                t.sent = t.hz;
+                // Never overlap another of this overlay's writes (a click-to-tune).
+                while (this._busy) await new Promise(r => setTimeout(r, 20));
+                await this._post(`/api/cat/frequency/${t.vfo.toLowerCase()}`, { frequencyHz: t.hz });
+            }
+        } finally {
+            this._digitSending = false;
+            // Once the spin stops, the radio's own FA/FB echo takes over again.
+            clearTimeout(this._digitIdle);
+            this._digitIdle = setTimeout(() => { if (!this._digitSending) this._digitTarget = null; }, 600);
+        }
+    }
+
+    /** Box the digit under the pointer, or hide the box. */
+    _showDigit(zone) {
+        const el = this.digitEl;
+        if (!el) return;
+        if (!zone) { el.hidden = true; return; }
+        const [l, t, r, b] = zone.rect;
+        Object.assign(el.style, {
+            left: `${l * 100}%`, top: `${t * 100}%`,
+            width: `${(r - l) * 100}%`, height: `${(b - t) * 100}%`,
+        });
+        el.hidden = false;
     }
 
     _onUp(e) {
@@ -609,6 +881,9 @@ export class RadioDisplayHotspots {
 
     _onClick(e) {
         if (this._measureQueue.length) { e.preventDefault(); e.stopPropagation(); return; }
+        // A click anywhere else on the picture dismisses the meter pop-up and
+        // does nothing more, so closing it cannot also retune the radio.
+        if (this._meterPopup) { this._closeMeterPopup(); return; }
         const f = this._frac(e);
         if (!f || this._busy) return;
         const hit = this._hit(f.fx, f.fy);
@@ -625,6 +900,7 @@ export class RadioDisplayHotspots {
     _activate(zone) {
         const action = ACTIONS[zone.action] || ACTIONS.none;
         if (action.key) return this._cycleReadout(action.key);
+        if (action.popup === 'meters') return this._openMeterPopup(zone);
         if (action.call) {
             const sc = this.getScopeControl();
             return sc ? action.call(sc) : undefined;
@@ -655,6 +931,10 @@ export class RadioDisplayHotspots {
         if (action.key) {
             const s = this.state[this._vfo()];
             return `${action.label} ${s[action.key] || '?'} — click to cycle`;
+        }
+        if (zone?.action === 'freq.digit') {
+            const hz = this._digitTarget?.hz ?? this.state[this._vfo()].hz;
+            return `${hz > 0 ? formatHz(hz) + ' — ' : ''}wheel ± ${formatStep(zone.step)}`;
         }
         return zone?.hint || action.hint || hit.id;
     }
@@ -718,7 +998,8 @@ export class RadioDisplayHotspots {
     }
 
     /**
-     * Fractional x of the VFO marker, or null. Scans the spectrum rows for the
+     * Fractional x of the VFO marker, or null. First the red triangle at the
+     * top of the plot (see _findMarkerTriangle); failing that, scans the spectrum rows for the
      * column holding the longest contiguous run of saturated red; the marker
      * has to span at least half the scanned band to count, so a red trace or
      * a red waterfall streak does not pass for it. Cached for 250 ms — this is
@@ -732,6 +1013,8 @@ export class RadioDisplayHotspots {
 
         if (!this._grabFrame()) return null;
         const { nw, nh } = this._nat();
+        const tri = this._findMarkerTriangle(nw, nh);
+        if (tri !== null) return (this._marker.x = tri);
         const z = normalizeZone(this.layout?.scope?.marker, nw, nh);
         if (!z) return null;
         const W = this._canvas.width, H = this._canvas.height;
@@ -755,6 +1038,80 @@ export class RadioDisplayHotspots {
         if (bestRun < h * 0.5) return null;
         this._marker.x = (x0 + bestX + 0.5) / W;
         return this._marker.x;
+    }
+
+    /**
+     * Fractional x of the red triangle the radio draws on top of the VFO
+     * marker, in the strip at the top of the plot, or null. On the FTdx101's
+     * 800x600 frame it is ~9 px wide and ~35 saturated-red pixels; anything
+     * spread wider than 3% of the plot is not it. This is what makes CURSOR
+     * and FIX placement clickable: there the marker is not at the centre,
+     * and the white line under the triangle cannot be told from the trace.
+     */
+    _findMarkerTriangle(nw, nh) {
+        const plot = normalizeZone(this.layout?.scope?.plot, nw, nh);
+        if (!plot) return null;
+        const W = this._canvas.width, H = this._canvas.height;
+        const x0 = Math.round(plot[0] * W), x1 = Math.round(plot[2] * W);
+        const y0 = Math.round(plot[1] * H), y1 = Math.round((plot[1] + 0.035) * H);
+        const w = x1 - x0, h = y1 - y0;
+        if (w <= 0 || h <= 0) return null;
+        const px = this._ctx.getImageData(x0, y0, w, h).data;
+        let n = 0, sum = 0, lo = w, hi = -1;
+        for (let y = 0; y < h; y++)
+            for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                if (px[i] > 150 && px[i + 1] < 90 && px[i + 2] < 90) {
+                    n++; sum += x;
+                    if (x < lo) lo = x;
+                    if (x > hi) hi = x;
+                }
+            }
+        if (n < 8 || hi - lo > w * 0.03) return null;
+        return (x0 + sum / n + 0.5) / W;
+    }
+
+    /**
+     * Which screen the frame shows: 'scope' (the zones were measured on it),
+     * 'decode', or 'other'. A layout with no scope check, or no frame to look
+     * at yet, counts as the scope screen. Cached for 250 ms, like the marker.
+     */
+    _screenNow() {
+        if (!this.layout?.scope?.screen) return 'scope';
+        const now = Date.now();
+        if (now - this._screen.at < 250) return this._screen.name;
+        this._screen.at = now;
+        this._screen.name = 'scope';
+        if (!this._grabFrame()) return 'scope';
+
+        if (this._checkPasses(this.layout.scope.screen) !== false) this._screen.name = 'scope';
+        else if (this.layout.decode?.screen && this._checkPasses(this.layout.decode.screen)) this._screen.name = 'decode';
+        else this._screen.name = 'other';
+        return this._screen.name;
+    }
+
+    /**
+     * Run one screen check against the frame already in the canvas. Zone ids
+     * are looked up in the scope zones, then the decode zones. null when no
+     * cell could be measured (nothing to judge by).
+     */
+    _checkPasses(check) {
+        const { nw, nh } = this._nat();
+        const W = this._canvas.width, H = this._canvas.height;
+        const labelled = id => {
+            const rect = (this.layout.zones?.[id] || this.layout.decode?.zones?.[id])?.rect;
+            const z = normalizeZone(rect, nw, nh);
+            if (!z) return null;
+            const x0 = Math.round(z[0] * W), y0 = Math.round(z[1] * H);
+            const w = Math.round(z[2] * W) - x0, h = Math.round(z[3] * H) - y0;
+            if (w <= 0 || h <= 0) return null;
+            return textFraction(this._ctx.getImageData(x0, y0, w, h).data) >= LABEL_MIN_FRACTION;
+        };
+        const lit = (check.lit || []).map(labelled).filter(v => v !== null);
+        const dark = (check.dark || []).map(labelled).filter(v => v !== null);
+        if (!lit.length && !dark.length) return null;
+        const min = Math.min(check.min ?? lit.length, lit.length);
+        return lit.filter(Boolean).length >= min && !dark.some(Boolean);
     }
 
     // ── actions ──────────────────────────────────────────────────────────────
@@ -820,6 +1177,141 @@ export class RadioDisplayHotspots {
         }
     }
 
+    // ── meter pop-up ─────────────────────────────────────────────────────────
+
+    // Drawn inside the overlay, under the meter zone, so it moves and scales
+    // with the picture. Everything it offers comes from the server's
+    // FrontPanelMeters table; nothing about MS digits lives in the browser.
+    async _openMeterPopup(zone) {
+        this._closeMeterPopup();
+        ensureMeterPopupStyle();
+        const pop = document.createElement('div');
+        pop.className = 'rdh-meters';
+        pop.setAttribute('role', 'dialog');
+        pop.setAttribute('aria-label', 'TX meter selection');
+        pop.innerHTML = '<div class="rdh-meters-head"><span>TX meters</span>' +
+            '<button type="button" class="rdh-meters-close" aria-label="Close" title="Close">×</button></div>' +
+            '<div class="rdh-meters-body">Reading the radio…</div>' +
+            '<div class="rdh-meters-note"></div>' +
+            '<div class="rdh-meters-hint">Pick a meter on each side, or × / Esc when done.</div>';
+        // Keep the overlay's own hover / click / measure handling off the pop-up.
+        for (const t of ['pointerdown', 'pointermove', 'pointerup', 'click'])
+            pop.addEventListener(t, e => e.stopPropagation());
+        pop.querySelector('.rdh-meters-close').addEventListener('click', () => this._closeMeterPopup());
+
+        const { nw, nh } = this._nat();
+        const r = normalizeZone(zone.rect, nw, nh) || [0, 0, 0.5, 0.3];
+        pop.style.left = `${r[0] * 100}%`;
+        pop.style.top = `${r[3] * 100}%`;
+        this.overlay.appendChild(pop);
+        this._meterPopup = pop;
+        this._hideCursor();
+
+        this._onMeterKey = e => { if (e.key === 'Escape') this._closeMeterPopup(); };
+        document.addEventListener('keydown', this._onMeterKey);
+
+        try {
+            const res = await fetch('/api/cat/meters');
+            const data = await res.json();
+            if (this._meterPopup === pop) this._renderMeterPopup(data);
+        } catch (err) {
+            console.error('[radio-display-hotspots] meters', err);
+            if (this._meterPopup === pop)
+                pop.querySelector('.rdh-meters-body').textContent = 'Could not read the meters.';
+        }
+    }
+
+    async _refreshMeterPopup() {
+        const pop = this._meterPopup;
+        try {
+            const data = await (await fetch('/api/cat/meters')).json();
+            if (this._meterPopup === pop) this._renderMeterPopup(data);
+        } catch (err) {
+            console.error('[radio-display-hotspots] meters', err);
+        }
+    }
+
+    _closeMeterPopup() {
+        this._meterPopup?.remove();
+        this._meterPopup = null;
+        if (this._onMeterKey) document.removeEventListener('keydown', this._onMeterKey);
+        this._onMeterKey = null;
+    }
+
+    _renderMeterPopup(data) {
+        const pop = this._meterPopup;
+        const body = pop.querySelector('.rdh-meters-body');
+        const note = pop.querySelector('.rdh-meters-note');
+        if (!data || !data.supported) {
+            body.textContent = `No meter selection for ${data?.radioModel || 'this radio'}.`;
+            return;
+        }
+        const selected = data.selected || [];
+        body.textContent = '';
+        data.slots.forEach((slot, i) => {
+            const col = document.createElement('div');
+            col.className = 'rdh-meters-col';
+            col.setAttribute('role', 'group');
+            col.setAttribute('aria-label', slot.label);
+            if (data.slots.length > 1) {
+                const h = document.createElement('div');
+                h.className = 'rdh-meters-label';
+                h.textContent = slot.label;
+                col.appendChild(h);
+            }
+            for (const opt of slot.options) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.textContent = opt.label;
+                const on = selected[i] === opt.code;
+                b.classList.toggle('rdh-on', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+                b.addEventListener('click', () => this._chooseMeter(data, i, opt.code));
+                col.appendChild(b);
+            }
+            body.appendChild(col);
+        });
+        // The radio only drives these needles in TX, and a pick keeps YWC off
+        // them while you transmit - which costs YWC whichever of its own COMP /
+        // SWR gauges the panel is no longer showing.
+        const lost = data.txGaugesLost || [];
+        note.textContent = data.pinned && lost.length
+            ? `In TX the radio shows your choice; YWC's ${lost.join(' and ')} gauge${lost.length > 1 ? 's stay' : ' stays'} blank.`
+            : '';
+    }
+
+    async _chooseMeter(data, slotIndex, code) {
+        // MS sets every meter at once. A slot not known yet (the radio never
+        // answered MS) takes its first option, which is the radio's default.
+        const codes = data.slots.map((s, i) =>
+            i === slotIndex ? code : (data.selected?.[i] ?? s.options[0].code));
+        try {
+            const res = await fetch('/api/cat/meters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codes }),
+            });
+            const reply = await res.json().catch(() => null);
+            if (!this._meterPopup) return;
+            if (!res.ok || !reply) {
+                this._meterPopup.querySelector('.rdh-meters-note').textContent =
+                    reply?.error || 'The radio did not take that.';
+                return;
+            }
+            // Close once every meter has had a pick, so on the FTdx101 both
+            // sides can be changed in one visit; × / Esc for just one side.
+            // A warning about YWC's own gauges stays up long enough to read.
+            const pop = this._meterPopup;
+            this._renderMeterPopup(reply);
+            pop._picked = (pop._picked || new Set()).add(slotIndex);
+            if (pop._picked.size < data.slots.length) return;
+            if (!(reply.txGaugesLost || []).length) this._closeMeterPopup();
+            else setTimeout(() => { if (this._meterPopup === pop) this._closeMeterPopup(); }, 4000);
+        } catch (err) {
+            console.error('[radio-display-hotspots] set meters', err);
+        }
+    }
+
     // ── seed ─────────────────────────────────────────────────────────────────
 
     async _seed() {
@@ -872,6 +1364,20 @@ export class RadioDisplayHotspots {
             g.fillStyle = colour; g.fillText(hidden ? `${label} (hidden)` : label, x + 3, y + 12);
         };
         const L = this.layout;
+        // On some other screen the scope boxes would only be drawn over
+        // controls that are not there, so say so and draw nothing else — bar
+        // the decode screen's own hint zones when that is the screen.
+        const screen = this._measureDrag || this._measureQueue.length ? 'scope' : this._screenNow();
+        if (screen !== 'scope') {
+            if (screen === 'decode')
+                for (const [id, zone] of this._decodeZones())
+                    box(zone.rect, (zone.action || '').startsWith('readout.') ? '#0f0' : '#aaa', id);
+            g.fillStyle = '#f66';
+            g.fillText(screen === 'decode'
+                ? 'decode screen: readouts live, scope zones off, DEC LVL / DEC OFF are hints only'
+                : 'not the scope screen: all zones off', 6, c.height - 6);
+            return;
+        }
         // Green = readout, yellow = scope soft-key, grey = no CAT action;
         // dashed = hidden by a hideWhen condition right now.
         for (const [id, zone] of Object.entries(L.zones || {})) {

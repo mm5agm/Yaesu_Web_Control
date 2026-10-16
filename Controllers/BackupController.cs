@@ -52,6 +52,7 @@ namespace Yaesu_Web_Control.Controllers
             "memory-banks.json",
             "calibration.user.json",
             "labels.user.json",
+            "flex-layouts.json",
         };
 
         [HttpGet("export")]

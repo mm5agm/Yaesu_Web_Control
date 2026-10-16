@@ -463,8 +463,21 @@ namespace Yaesu_Web_Control.Services.Video
                     string.IsNullOrWhiteSpace(settings.VideoCaptureDeviceKey) ||
                     !VideoDeviceKey.TryResolveOpenIndex(settings.VideoCaptureDeviceKey, out var index))
                 {
-                    SetStatus("unconfigured");
-                    _lastError = "No capture device configured.";
+                    // A uid: key names a device, so failing to resolve it means that
+                    // device is unplugged, not that nothing was chosen. Say so, and
+                    // keep the panel on screen: "unconfigured" hides it. It reopens
+                    // on its own when the device comes back.
+                    if (settings.VideoDisplayEnabled &&
+                        !string.IsNullOrWhiteSpace(settings.VideoCaptureDeviceKey))
+                    {
+                        SetStatus("notconnected");
+                        _lastError = "The selected capture device is not connected. Plug it back into the same USB socket, or choose another device.";
+                    }
+                    else
+                    {
+                        SetStatus("unconfigured");
+                        _lastError = "No capture device configured.";
+                    }
                     SleepOrCancel(1000, ct);
                     continue;
                 }

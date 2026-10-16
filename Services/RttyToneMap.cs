@@ -21,6 +21,7 @@ namespace Yaesu_Web_Control.Services
     ///   FTdx10       EX 01 05 07 POLARITY-RX,  15 MARK FREQUENCY, 16 SHIFT FREQUENCY
     ///   FT-710       EX 01 05    (no RX pol),  15 MARK FREQUENCY, 16 SHIFT FREQUENCY
     ///   FTDX3000     EX 094 POLARITY-RX, 097 SHIFT, 098 MARK   (flat addressing)
+    ///   FT-991A      EX 097 POLARITY-RX, 100 SHIFT, 101 MARK   (flat addressing)
     ///
     /// The FT-710 CAT manual lists only POLARITY-TX in this group, so RX
     /// polarity is left at its default there. A radio that isn't in the table
@@ -43,6 +44,7 @@ namespace Yaesu_Web_Control.Services
             ["FTdx10"]    = new("010507", "010515", "010516"),
             ["FT-710"]    = new(null,     "010515", "010516"),
             ["FTDX3000"]  = new("094",    "098",    "097"),
+            ["FT-991A"]   = new("097",    "101",    "100"),
         };
 
         /// <summary>Yaesu's own defaults: 2125 Hz mark, 170 Hz shift, normal polarity.</summary>
@@ -82,6 +84,41 @@ namespace Yaesu_Web_Control.Services
             "1" => 200,
             "2" => 425,
             "3" => 850,
+            _   => null,
+        };
+
+        // ---- the same two tables, run backwards -------------------------
+        //
+        // For the tuner pushing its Mark and Shift into the radio, so the
+        // radio's own decoder does not have to be set twice from the front
+        // panel. Both return null for a figure the menu has no rung for, and
+        // that is the interesting half of the answer rather than an error: the
+        // menu items are one-byte indexes into a short fixed list, and the
+        // tuner deliberately offers figures that are not on it. 450 Hz is the
+        // one that matters - the DWD weather stations send it all day and the
+        // decoder here copies it perfectly - and a mark anywhere but 1275 or
+        // 2125 has nowhere to go at all.
+        //
+        // The caller reports a null rather than snapping to the nearest rung.
+        // Snapping would quietly set the radio's decoder to a shift the
+        // operator is not copying, which is worse than leaving it where the
+        // operator put it and saying so.
+
+        /// <summary>MARK FREQUENCY: the answer code for an audio mark, or null for no rung.</summary>
+        public static string? CodeForMarkHz(int markHz) => markHz switch
+        {
+            1275 => "0",
+            2125 => "1",
+            _    => null,
+        };
+
+        /// <summary>SHIFT FREQUENCY: the answer code for a shift, or null for no rung.</summary>
+        public static string? CodeForShiftHz(int shiftHz) => shiftHz switch
+        {
+            170 => "0",
+            200 => "1",
+            425 => "2",
+            850 => "3",
             _   => null,
         };
     }

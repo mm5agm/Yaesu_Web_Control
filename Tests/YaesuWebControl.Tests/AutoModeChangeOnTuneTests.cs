@@ -92,7 +92,7 @@ namespace YaesuWebControl.Tests
 
         [Theory]
         [InlineData("wwwroot/js/sdr/spectrum-panel.js")]      // click-to-tune
-        [InlineData("wwwroot/js/ui/dx-spots-panel.js")]       // clicking a spot row
+        [InlineData("core/js/dx/dx-spots-panel.js")]           // clicking a spot row
         [InlineData("wwwroot/js/ui/keyboard-shortcuts.js")]   // stepping spots from the keyboard
         public void EveryUnaskedForModeChangeGoesThroughTheGate(string relative)
         {
@@ -103,6 +103,20 @@ namespace YaesuWebControl.Tests
             // A call to the ungated modeForHz here would bypass the setting.
             // Comments mentioning it by name are fine; calls are not.
             Assert.DoesNotMatch(@"(?<!auto)(?<!\w)modeForHz\s*\(", StripComments(js));
+        }
+
+        [Fact]
+        public void TheSharedDxPanelIsHandedTheGatedLookup()
+        {
+            // core's DxSpotsPanel doesn't import the band plan (a second URL
+            // would load a second copy of the module), so it changes mode on
+            // a spot click only if the page hands it autoModeForHz. Handing it
+            // nothing silently drops the mode follow; handing it modeForHz
+            // would bypass the setting.
+            string page = File.ReadAllText(LocateRepoPath("Pages/Index.cshtml"));
+
+            Assert.Matches(@"new DxSpotsPanel\(\s*\{[^}]*\bautoModeForHz\b[^}]*\}\s*\)", page);
+            Assert.Matches(@"import\s*\{[^}]*\bautoModeForHz\b[^}]*\}\s*from\s*""/js/ui/band-plan\.js", page);
         }
 
         [Fact]

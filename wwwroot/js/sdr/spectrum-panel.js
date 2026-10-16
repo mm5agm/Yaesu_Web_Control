@@ -13,6 +13,11 @@ import { tuningStep } from '../ui/tuning-step.js?v=1';
 import { formatTuningStep } from '../tuning/tuning-step-store.js?v=1';
 import { loadRttySettings, afskMidpointAudioHz } from '../rtty/rtty-settings.js?v=1';
 
+// Drag-to-tune: CSS pixels a press may wander and still count as a click,
+// and the shortest gap between frequency writes while dragging.
+const TUNE_DRAG_DEADZONE_PX = 4;
+const TUNE_DRAG_SEND_MS     = 60;
+
 export class SpectrumPanel {
 
     /**
@@ -100,6 +105,8 @@ export class SpectrumPanel {
         // Last received spectrum data; held so the canvas can be redrawn on resize.
         this._lastBins    = null;
         this._lastCentreHz = 0;
+        // True while frames come from the radio's own scope (see update()).
+        this._rfOrdered = false;
         this._lastSpanHz   = 0;
 
         // DX cluster spots overlaid on the spectrum. Each entry is the JSON
@@ -129,6 +136,24 @@ export class SpectrumPanel {
         this._bandPlan = null;
 
         this._resizeObserver = null;
+
+        // Panel height. Off until enableHeightControl() is called, so a host
+        // that sizes the container itself is left alone. See the panel-height
+        // section below.
+        this._heightPersist   = false;
+        this._heightSaveTimer = null;
+        this._onHeightChange  = null;
+
+        // The height we last asked for, which is NOT always the height the
+        // container measures: the whole panel is display:none until the SDR
+        // streams (see setStatus), and a hidden element measures 0. Without
+        // this, a saved height would read back as the default on every page
+        // load, and the preset control would say "Normal" while the panel was
+        // in fact set to 560.
+        this._panelH = null;
+
+        // The resize grip, once a page attaches one (attachResizeGrip).
+        this._grip = null;
 
         // Spectrum/waterfall split ratio — fraction of canvas height given to
         // the spectrum trace (top zone); remainder goes to the waterfall.
@@ -198,6 +223,231 @@ export class SpectrumPanel {
         } catch (e) { /* localStorage may be unavailable */ }
     }
 
+    // ── Panel height ─────────────────────────────────────────────────────────
+    //
+    // The canvas takes its height from its container (see _sizeCanvas), so
+    // "resize the panel" means "set the container's height and let the
+    // ResizeObserver do the rest".
+    //
+    // This used CSS `resize: vertical` at first, letting the browser draw the
+    // handle. That shipped to the bench and failed there: the browser puts its
+    // handle in the bottom-right CORNER, which on a 1920x1080 window sits
+    // below the fold at the default height and moves further off-screen every
+    // time the panel is made taller — so growing the panel pushed its own
+    // control out of reach, and shrinking it again meant hunting for an almost
+    // invisible 16px triangle on a dark card. Miss it and you hit the canvas,
+    // which is click-to-tune, so a missed grab moved the radio.
+    //
+    // attachResizeGrip replaces it with a grip we draw ourselves, the full
+    // width of the panel, which can also take the keyboard. Note the verified
+    // behaviour was never the resize itself — that always worked in both
+    // directions; it was only ever reachability.
+    //
+    // Persistence is opt-in through enableHeightControl() rather than
+    // automatic, because not every host wants it: a container sized to fill
+    // its window has a height of its own already, and putting a saved pixel
+    // height back would fight it.
+
+    _clampPanelHeight(px) {
+        const v = Math.round(Number(px));
+        if (!isFinite(v)) return SpectrumPanel.DEFAULT_PANEL_H;
+        return Math.max(SpectrumPanel.MIN_PANEL_H,
+               Math.min(SpectrumPanel.MAX_PANEL_H, v));
+    }
+
+    _loadPanelHeight() {
+        try {
+            const v = parseInt(localStorage.getItem('ywc.spectrumHeight.' + this._vfo), 10);
+            if (isFinite(v) && v >= SpectrumPanel.MIN_PANEL_H && v <= SpectrumPanel.MAX_PANEL_H) return v;
+        } catch (e) { /* localStorage may be unavailable */ }
+        return SpectrumPanel.DEFAULT_PANEL_H;
+    }
+
+    _savePanelHeight(px) {
+        try {
+            localStorage.setItem('ywc.spectrumHeight.' + this._vfo, String(this._clampPanelHeight(px)));
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    /** The canvas's container — the element whose height this panel occupies. */
+    _panelWrap() {
+        return document.getElementById(this._canvasId)?.parentElement ?? null;
+    }
+
+    // Debounced so a drag writes once when it settles rather than on every
+    // frame of the drag. 250 ms matches makeResizable in Index.cshtml.
+    _queueHeightSave() {
+        if (!this._heightPersist) return;
+        clearTimeout(this._heightSaveTimer);
+        this._heightSaveTimer = setTimeout(() => {
+            const h = this.getPanelHeight();
+            this._savePanelHeight(h);
+            try { this._onHeightChange?.(h); } catch { /* handler's problem, not ours */ }
+        }, 250);
+    }
+
+    /**
+     * Put the operator's saved height back and start persisting changes to it.
+     * Call once per panel, from the page that owns the resizable container.
+     */
+    enableHeightControl() {
+        this._heightPersist = true;
+        this.setPanelHeight(this._loadPanelHeight());
+    }
+
+    /**
+     * Notified with the new height (px) shortly after the operator changes it,
+     * however they changed it. Lets a page keep a preset control in step with
+     * a height that was reached by dragging the corner instead.
+     */
+    setHeightChangeHandler(fn) { this._onHeightChange = fn; }
+
+    /** Current panel height in px, clamped; the default if there is no container. */
+    getPanelHeight() {
+        const wrap = this._panelWrap();
+        const h = wrap ? wrap.clientHeight : 0;
+        if (h > 0) return this._clampPanelHeight(h);
+        return this._panelH ?? SpectrumPanel.DEFAULT_PANEL_H;
+    }
+
+    /**
+     * Set the panel height in px. The ResizeObserver installed in _init picks
+     * the change up and does the canvas resize, waterfall rebuild, repaint and
+     * save, so this deliberately does none of those itself.
+     */
+    setPanelHeight(px) {
+        const h = this._clampPanelHeight(px);
+        this._panelH = h;
+        const wrap = this._panelWrap();
+        if (!wrap) return;
+        wrap.style.height = h + 'px';
+    }
+
+    /**
+     * Make `grip` resize this panel: press and drag it, or focus it and use
+     * the arrow keys. The element is expected to be a full-width strip under
+     * the canvas, so there is nothing to hunt for and nothing to miss.
+     *
+     * Pointer events rather than mouse events, so a finger on a tablet works
+     * the same as a mouse; pointer capture so the drag survives the pointer
+     * leaving the strip, which it does immediately in practice.
+     */
+    attachResizeGrip(grip) {
+        if (!grip) return;
+        this._grip = grip;
+
+        let activeId = null, startY = 0, startH = 0;
+
+        const end = () => {
+            if (activeId === null) return;
+            try { grip.releasePointerCapture(activeId); } catch { /* already gone */ }
+            activeId = null;
+            grip.classList.remove('dragging');
+            document.body.classList.remove('spectrum-resizing');
+        };
+
+        grip.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            activeId = e.pointerId;
+            // pageY, not clientY. Shrinking the panel makes the document
+            // shorter, which makes the browser clamp the scroll position,
+            // which slides the whole page down under a stationary pointer.
+            // Measured in viewport coordinates each drag pixel is then partly
+            // cancelled by that slide, so the panel crawls downward and feels
+            // stuck — and only ever when shrinking, because growing the page
+            // never clamps. pageY includes the scroll offset, so it stays
+            // true no matter what the scroll position does mid-drag.
+            startY   = e.pageY;
+            startH   = this.getPanelHeight();
+            try { grip.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+            grip.classList.add('dragging');
+            // Stops the drag selecting the page text it passes over.
+            document.body.classList.add('spectrum-resizing');
+            // preventDefault below suppresses the browser's default
+            // mousedown behaviour, and giving this element the focus is part
+            // of that behaviour — so without this line the grip can never be
+            // focused by clicking it, and every key press goes to the page
+            // instead. That is what made the arrow keys look dead and
+            // PageUp/PageDown scroll the whole window.
+            // preventScroll matters: focusing a partly-visible grip would
+            // otherwise scroll it into view, and the drag maths is now tied to
+            // the scroll position, so the panel would jump the moment it was
+            // grabbed.
+            grip.focus({ preventScroll: true });
+            e.preventDefault();
+        });
+
+        grip.addEventListener('pointermove', (e) => {
+            if (e.pointerId !== activeId) return;
+            this.setPanelHeight(startH + (e.pageY - startY));
+            this._syncGripAria();
+        });
+
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
+        grip.addEventListener('lostpointercapture', end);
+
+        // Keyboard, which the browser's own handle never offered. Voice and
+        // screen-reader operators are a real part of this audience, so a
+        // mouse-only control is not good enough on its own.
+        grip.addEventListener('keydown', (e) => {
+            const step = e.shiftKey ? 50 : 10;
+            let h = null;
+            switch (e.key) {
+                case 'ArrowDown': h = this.getPanelHeight() + step; break;
+                case 'ArrowUp':   h = this.getPanelHeight() - step; break;
+                case 'PageDown':  h = this.getPanelHeight() + 100;  break;
+                case 'PageUp':    h = this.getPanelHeight() - 100;  break;
+                case 'Home':      h = SpectrumPanel.MIN_PANEL_H;    break;
+                case 'End':       h = SpectrumPanel.MAX_PANEL_H;    break;
+                default: return;
+            }
+            e.preventDefault();
+            this.setPanelHeight(h);
+            this._syncGripAria();
+            this.ensureGripVisible();
+        });
+
+        // Double-click the grip to go back to the default height — the quick
+        // way out of a size that turned out to be wrong.
+        grip.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            this.setPanelHeight(SpectrumPanel.DEFAULT_PANEL_H);
+            this._syncGripAria();
+        });
+
+        grip.setAttribute('aria-valuemin', String(SpectrumPanel.MIN_PANEL_H));
+        grip.setAttribute('aria-valuemax', String(SpectrumPanel.MAX_PANEL_H));
+        this._syncGripAria();
+    }
+
+    /**
+     * Bring the grip back into view if a height change has pushed it off the
+     * bottom of the window. A full-width grip is easy to see and easy to hit,
+     * but it still lives at the bottom EDGE of the panel, so making the panel
+     * taller moves it down — the same trap that made the browser's corner
+     * handle unusable. Only for changes the operator made from somewhere else
+     * (the preset box, the arrow keys): during a drag the pointer is already
+     * on the grip, and scrolling under a live drag would be horrible.
+     */
+    ensureGripVisible() {
+        const grip = this._grip;
+        if (!grip) return;
+        const r = grip.getBoundingClientRect();
+        const margin = 8;
+        if (r.bottom > window.innerHeight - margin || r.top < margin) {
+            grip.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+
+    /** Keep the grip's reported value in step with the height it controls. */
+    _syncGripAria() {
+        if (!this._grip) return;
+        const h = this.getPanelHeight();
+        this._grip.setAttribute('aria-valuenow', String(h));
+        this._grip.setAttribute('aria-valuetext', h + ' pixels tall');
+    }
+
     // Valid waterfall speed divisors — 1 (full speed) through 128 (1/128
     // speed). Index into this array (not the divisor itself) is what the
     // UI slider in Index.cshtml drags across, since the divisors themselves
@@ -260,6 +510,45 @@ export class SpectrumPanel {
     // axis labels. The trace maps into the area above this; _drawFrequencyAxis
     // paints its strip into it. One constant so the two never disagree.
     static AXIS_H = 20;
+
+    /**
+     * How much of a spectrum zone `specH` px tall to give the frequency axis.
+     *
+     * Zero once the zone is too short to spare it. The axis is a fixed 20px,
+     * so on a very short panel it would take most of the spectrum zone and
+     * leave the trace a sliver — labels nobody asked for, crowding out the
+     * one thing the panel is for. Below twice its own height it steps aside
+     * and the trace uses the whole zone; the axis is a convenience, the trace
+     * is the point.
+     */
+    static axisHeightFor(specH) {
+        return specH < SpectrumPanel.AXIS_H * 2 ? 0 : SpectrumPanel.AXIS_H;
+    }
+
+    // Panel height limits, in CSS pixels of canvas — the whole panel, trace and
+    // waterfall together, which _splitRatio then divides between them.
+    //
+    // DEFAULT_PANEL_H is the height this panel was fixed at before it became
+    // adjustable, so an operator who never touches the control sees exactly
+    // what they saw before. MIN keeps the frequency-axis strip (AXIS_H) from
+    // crowding out the trace above it.
+    //
+    // MAX is a guard rather than a measured limit. Both waterfall costs per
+    // frame — the copyWithin row shift and the putImageData — are linear in
+    // W x wfH, so dragging the panel to four times the height is four times
+    // the per-frame pixel work. That is nothing on a desktop and may well be
+    // something on the Pi/Docker rig, which is why there is a ceiling at all.
+    // Requested by Bruce VK2RT, discussion #171.
+    // The floor was 160, then 80, and is now 40: each time because the bench
+    // found the panel would not go as short as an operator wanted, and a short
+    // panel is a legitimate thing to want when the waterfall is only there to
+    // be glanced at. What used to stop it was the frequency-axis strip — a
+    // fixed 20px out of the spectrum zone, which at a short panel is most of
+    // it. axisHeightFor now drops the axis when the zone is too small to spare
+    // it, so the trace keeps its room and the panel can keep going down.
+    static MIN_PANEL_H     = 40;
+    static MAX_PANEL_H     = 1000;
+    static DEFAULT_PANEL_H = 280;   // 126px spectrum + 154px waterfall at the default split
 
     // Load the persisted Range (dB headroom) for this VFO, clamped to the valid
     // slider band so a corrupt value can't produce an unusable scale.
@@ -560,7 +849,7 @@ export class SpectrumPanel {
     // ── Public API ───────────────────────────────────────────────────────────
 
     /** Update the spectrum/waterfall with a new frame of FFT data. */
-    update({ bins, centreHz, spanHz }) {
+    update({ bins, centreHz, spanHz, rfOrdered = false }) {
         // Hold mode (set via setHold(true)) freezes the display at the
         // last received frame so the operator can inspect a fleeting signal
         // without it scrolling off the waterfall. Incoming frames are
@@ -585,7 +874,14 @@ export class SpectrumPanel {
         // side and one flip covers every band. No other Yaesu model has been
         // measured; if one turns out not to be inverted, this is where the
         // per-model switch belongs.
-        bins = Array.prototype.slice.call(bins).reverse();
+        //
+        // rfOrdered frames are the exception: the FT-710's own scope, read
+        // from the radio over USB, arrives LOW to HIGH frequency already, and
+        // centred on the dial rather than on an IF (see Ft710ScopeFrame.cs).
+        this._rfOrdered = !!rfOrdered;
+        bins = this._rfOrdered
+            ? Array.prototype.slice.call(bins)
+            : Array.prototype.slice.call(bins).reverse();
 
         // A span change (span buttons restart the worker at a new sample rate) or
         // a bin-count change means the previous band/scale no longer applies —
@@ -638,6 +934,11 @@ export class SpectrumPanel {
     /** Store the latest error detail string for display alongside status overlays. */
     setError(detail) {
         this._errorDetail = detail;
+        // The detail can arrive just after the status it explains; redraw so
+        // it is not left off until the next status heartbeat.
+        if (this._status === 'noft4222' || this._status === 'scopeplacement' || this._status === 'disconnected') {
+            this._drawStatusOverlay(this._status);
+        }
     }
 
     /**
@@ -803,6 +1104,12 @@ export class SpectrumPanel {
      * @returns {number}
      */
     _axisOffsetHz() {
+        // The radio's own scope is centred where the server says (the dial
+        // when the frame was sent), with no IF slide to correct for.
+        if (this._rfOrdered) {
+            const v = this._lastCentreHz - this._vfoHz;
+            return Number.isFinite(v) ? v : 0;
+        }
         if (!this._axisOffsetProvider) return 0;
         try {
             const v = this._axisOffsetProvider(this._lastCentreHz);
@@ -959,11 +1266,17 @@ export class SpectrumPanel {
         // Size the canvas to match its CSS layout width.
         this._sizeCanvas(canvas);
 
-        // Rebuild waterfall buffer whenever the canvas is resized.
+        // Rebuild waterfall buffer whenever the canvas is resized. This fires
+        // for height changes as readily as width ones, which is the whole
+        // mechanism behind the resizable panel — every route to a new height
+        // (the grip, the arrow keys, the preset box, the window getting
+        // wider) lands here and everything downstream follows.
         this._resizeObserver = new ResizeObserver(() => {
             this._sizeCanvas(canvas);
             this._waterfallData = null;  // force rebuild on next frame
             if (this._lastBins) this._render();
+            this._queueHeightSave();
+            this._syncGripAria();
         });
         this._resizeObserver.observe(canvas.parentElement ?? canvas);
 
@@ -988,10 +1301,13 @@ export class SpectrumPanel {
                 this._splitterDragging = true;
                 e.preventDefault();
                 if (this._lastBins) this._render();
+                return;
             }
+            this._beginTuneDrag(e);
         });
 
         window.addEventListener('mousemove', (e) => {
+            if (this._tuneDrag) { this._moveTuneDrag(e); return; }
             if (!this._splitterDragging) return;
             const c = document.getElementById(this._canvasId);
             if (!c) return;
@@ -1002,6 +1318,7 @@ export class SpectrumPanel {
         });
 
         window.addEventListener('mouseup', () => {
+            if (this._tuneDrag) { this._endTuneDrag(); return; }
             if (!this._splitterDragging) return;
             this._splitterDragging = false;
             this._saveSplitRatio();
@@ -1016,9 +1333,11 @@ export class SpectrumPanel {
 
             // Swap cursor to row-resize when over the splitter so the
             // affordance is obvious before the user tries to drag.
-            canvas.style.cursor = this._isOnSplitter(this._crosshairY, canvas.height)
-                ? 'row-resize'
-                : 'crosshair';
+            canvas.style.cursor = this._tuneDrag?.moved
+                ? 'grabbing'
+                : this._isOnSplitter(this._crosshairY, canvas.height)
+                    ? 'row-resize'
+                    : 'crosshair';
 
             if (this._lastBins) this._render();
             // Announce cursor frequency to screen readers via a live region (debounced to 1 s).
@@ -1059,7 +1378,82 @@ export class SpectrumPanel {
         return Math.abs(canvasY - splitY) <= 6;
     }
 
+    // ── Drag to tune ─────────────────────────────────────────────────────────
+    //
+    // Grab the spectrum and slide it: the signals follow the pointer, the way
+    // other SDR programs do it, so dragging right tunes DOWN (Bruce VK2RT,
+    // 2026-10-01). The target is always worked out from where the drag
+    // started, never from the dial the radio has echoed back since, so the
+    // spectrum recentring under the pointer cannot make the drag run away.
+    // A press that moves less than TUNE_DRAG_DEADZONE_PX is still a click.
+    // A drag never changes mode; a click does, from the band plan.
+
+    _beginTuneDrag(e) {
+        if (e.button !== 0 || e.shiftKey) return;
+        if (!this._lastBins || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
+        this._tuneDrag = {
+            startClientX: e.clientX,
+            startHz:      this._vfoHz,
+            spanHz:       this._lastSpanHz,
+            moved:        false,
+            pendingHz:    null,
+            sendTimer:    null,
+        };
+    }
+
+    _moveTuneDrag(e) {
+        const d = this._tuneDrag;
+        const canvas = document.getElementById(this._canvasId);
+        if (!canvas) return;
+        const dxCss = e.clientX - d.startClientX;
+        if (!d.moved && Math.abs(dxCss) < TUNE_DRAG_DEADZONE_PX) return;
+        if (!d.moved) {
+            d.moved = true;
+            canvas.style.cursor = 'grabbing';
+            e.preventDefault();
+        }
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const hz = Math.round((d.startHz - (dxCss / rect.width) * d.spanHz) / 10) * 10;
+        d.pendingHz = Math.max(30_000, Math.min(75_000_000, hz));
+        // At most one CAT write per TUNE_DRAG_SEND_MS; the last one wins.
+        if (!d.sendTimer) {
+            d.sendTimer = setTimeout(() => {
+                d.sendTimer = null;
+                this._sendTuneDrag(d);
+            }, TUNE_DRAG_SEND_MS);
+        }
+    }
+
+    _endTuneDrag() {
+        const d = this._tuneDrag;
+        this._tuneDrag = null;
+        if (!d.moved) return;   // a plain click; let the click handler tune
+        clearTimeout(d.sendTimer);
+        d.sendTimer = null;
+        this._sendTuneDrag(d);
+        // The browser still fires click after mouseup at the drop point. It
+        // fires before any timer, so the flag cannot outlive this mouseup and
+        // swallow a later real click when the drop was off the canvas.
+        this._suppressNextClick = true;
+        setTimeout(() => { this._suppressNextClick = false; }, 0);
+        const canvas = document.getElementById(this._canvasId);
+        if (canvas) canvas.style.cursor = 'crosshair';
+    }
+
+    _sendTuneDrag(d) {
+        if (d.pendingHz == null) return;
+        const hz = d.pendingHz;
+        d.pendingHz = null;
+        fetch(`/api/cat/frequency/${this._vfoLower}`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ frequencyHz: hz }),
+        }).catch(() => {});
+    }
+
     _onCanvasClick(e) {
+        if (this._suppressNextClick) { this._suppressNextClick = false; return; }
         if (!this._lastBins || this._lastSpanHz <= 0 || this._vfoHz <= 0) return;
 
         const canvas = document.getElementById(this._canvasId);
@@ -1276,11 +1670,20 @@ export class SpectrumPanel {
     }
 
     _sizeCanvas(canvas) {
-        const w = canvas.parentElement
-            ? canvas.parentElement.clientWidth || 800
-            : 800;
+        const parent = canvas.parentElement;
+        const w = parent ? parent.clientWidth || 800 : 800;
+
+        // Height follows the container, the same way the width always has, so
+        // the operator can make the panel taller by dragging it or by picking
+        // a size. A container with no height of its own falls back to the
+        // height this panel was fixed at before, so nothing that does not opt
+        // in changes at all.
+        const h = (parent && parent.clientHeight)
+                  || this._panelH
+                  || SpectrumPanel.DEFAULT_PANEL_H;
+
         canvas.width  = w;
-        canvas.height = 280;   // 126px spectrum + 154px waterfall
+        canvas.height = h;
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────
@@ -1348,8 +1751,10 @@ export class SpectrumPanel {
         if (this._pinnedCursorHz < leftHz || this._pinnedCursorHz > rightHz) return;
 
         const x = ((this._pinnedCursorHz - leftHz) / this._lastSpanHz) * W;
-        const axisH = 20;
-        const specTop = specH - axisH;
+        // Through the helper, not a hardcoded 20: on a short panel the axis
+        // strip is not drawn at all, and the cursor has to reach the bottom
+        // of the zone rather than stopping 20px short of it.
+        const specTop = specH - SpectrumPanel.axisHeightFor(specH);
 
         ctx.save();
 
@@ -1769,7 +2174,7 @@ export class SpectrumPanel {
         // scale into the area *above* that strip so the noise floor can sit right on
         // top of the labels instead of hiding behind them — that's what removes the
         // dead space between the floor and the waterfall.
-        const H = Math.max(1, specH - SpectrumPanel.AXIS_H);
+        const H = Math.max(1, specH - SpectrumPanel.axisHeightFor(specH));
 
         // Background — fill the whole zone (incl. the axis strip's backing) so no
         // gap shows; the axis strip repaints its own darker band over the bottom.
@@ -1887,7 +2292,8 @@ export class SpectrumPanel {
     // ── Frequency axis ───────────────────────────────────────────────────────
 
     _drawFrequencyAxis(ctx, bins, W, specH, centreHz, spanHz) {
-        const axisH  = SpectrumPanel.AXIS_H;
+        const axisH  = SpectrumPanel.axisHeightFor(specH);
+        if (!axisH) return;                 // too short to spare the strip
         const tickY0 = specH - axisH;       // top of axis strip
         const labelY = specH - 4;           // baseline for text
 
@@ -1982,9 +2388,9 @@ export class SpectrumPanel {
         const x = this._crosshairX;
         const y = this._crosshairY;
 
-        // Only draw inside the spectrum area (above the axis strip).
-        const axisH = 20;
-        const specTop = specH - axisH;
+        // Only draw inside the spectrum area (above the axis strip), and
+        // through the helper because on a short panel there is no strip.
+        const specTop = specH - SpectrumPanel.axisHeightFor(specH);
         if (y < 0 || y > specTop) return;
 
         // Vertical line
@@ -2095,10 +2501,13 @@ export class SpectrumPanel {
             connecting:   'Connecting to SDR device…',
             disconnected: 'SDR device unavailable — retrying every 5 s',
             nodll:        'SoapySDR.dll not found — install SoapySDR + device driver',
+            noft4222:     "FTDI's FT4222 libraries are not installed",
+            scopeplacement: "Can't place the radio's scope on the axis",
         };
 
+        const withDetail = status === 'disconnected' || status === 'noft4222' || status === 'scopeplacement';
         const line1 = messages[status] ?? `SDR status: ${status}`;
-        const line2 = status === 'disconnected' && this._errorDetail
+        const line2 = withDetail && this._errorDetail
             ? this._errorDetail
             : null;
 
@@ -2108,14 +2517,35 @@ export class SpectrumPanel {
         ctx.fillStyle = '#8899bb';
         ctx.textAlign = 'center';
 
-        ctx.font = '14px sans-serif';
-        ctx.fillText(line1, W / 2, H / 2 - (line2 ? 10 : 0));
+        // The detail can be a paragraph (the FTDI install instructions), so
+        // it is wrapped to the canvas rather than run off both edges.
+        ctx.font = '11px sans-serif';
+        const detailLines = line2 ? this._wrapText(ctx, line2, W - 24) : [];
 
-        if (line2) {
-            ctx.font      = '11px sans-serif';
-            ctx.fillStyle = '#cc6655';
-            ctx.fillText(line2, W / 2, H / 2 + 12);
+        const top = H / 2 - (detailLines.length * 14) / 2 - (line2 ? 10 : 0);
+        ctx.font = '14px sans-serif';
+        ctx.fillText(line1, W / 2, top);
+
+        ctx.font      = '11px sans-serif';
+        ctx.fillStyle = '#cc6655';
+        detailLines.forEach((text, i) => ctx.fillText(text, W / 2, top + 22 + i * 14));
+    }
+
+    /** Split text into lines no wider than maxWidth in the context's current font. */
+    _wrapText(ctx, text, maxWidth) {
+        const lines = [];
+        let line = '';
+        for (const word of String(text).split(/\s+/)) {
+            const next = line ? `${line} ${word}` : word;
+            if (line && ctx.measureText(next).width > maxWidth) {
+                lines.push(line);
+                line = word;
+            } else {
+                line = next;
+            }
         }
+        if (line) lines.push(line);
+        return lines;
     }
 
     // ── Accessibility ────────────────────────────────────────────────────────

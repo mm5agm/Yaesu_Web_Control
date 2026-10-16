@@ -28,6 +28,135 @@ namespace Yaesu_Web_Control.Services.Video
         }
 
         /// <summary>
+        /// DirectShow <c>DevicePath</c> per OpenCV index — the symbolic link that
+        /// identifies the physical device. Two dongles of the same model share a
+        /// friendly name but never a DevicePath, so this is what still tells them
+        /// apart after a replug has renumbered the indexes.
+        /// </summary>
+        public static IReadOnlyDictionary<int, string> ListDevicePaths()
+        {
+            if (!OperatingSystem.IsWindows())
+                return new Dictionary<int, string>();
+
+            return RunSta<IReadOnlyDictionary<int, string>>(
+                ListDevicePathsWindows, new Dictionary<int, string>());
+        }
+
+        /// <summary>
+        /// OpenCV index of the device with this <c>DevicePath</c>, or -1 if it is
+        /// not plugged in. Case-insensitive: Windows hands the same path back in
+        /// different cases depending on who was asked.
+        /// </summary>
+        public static int IndexOfDevicePath(string? devicePath)
+        {
+            if (string.IsNullOrWhiteSpace(devicePath) || !OperatingSystem.IsWindows())
+                return -1;
+
+            var want = devicePath.Trim();
+            foreach (var kv in ListDevicePaths())
+            {
+                if (string.Equals(kv.Value, want, StringComparison.OrdinalIgnoreCase))
+                    return kv.Key;
+            }
+
+            return -1;
+        }
+
+        /// <summary>
+        /// Run <paramref name="work"/> on an STA thread, because DirectShow's
+        /// system device enumerator is STA and an MTA thread-pool thread often
+        /// gets no monikers at all. Same hop the friendly-name path makes.
+        /// </summary>
+        [SupportedOSPlatform("windows")]
+        private static T RunSta<T>(Func<T> work, T fallback)
+        {
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+            {
+                try { return work(); }
+                catch { return fallback; }
+            }
+
+            var result = fallback;
+            using var done = new ManualResetEventSlim(false);
+            var thread = new Thread(() =>
+            {
+                try { result = work(); }
+                catch { result = fallback; }
+                finally { done.Set(); }
+            })
+            {
+                IsBackground = true,
+                Name = "IWC-DShowSta"
+            };
+
+            try { thread.SetApartmentState(ApartmentState.STA); }
+            catch (InvalidOperationException) { /* ignore */ }
+
+            thread.Start();
+            return done.Wait(4000) ? result : fallback;
+        }
+
+        [SupportedOSPlatform("windows")]
+        private static IReadOnlyDictionary<int, string> ListDevicePathsWindows()
+        {
+            var map = new Dictionary<int, string>();
+            object? deviceEnumObj = null;
+            IEnumMoniker? enumerator = null;
+            try
+            {
+                var clsidType = Type.GetTypeFromCLSID(ClsidSystemDeviceEnum, throwOnError: false);
+                if (clsidType is null)
+                    return map;
+
+                deviceEnumObj = Activator.CreateInstance(clsidType);
+                if (deviceEnumObj is not ICreateDevEnum createDevEnum)
+                    return map;
+
+                var category = VideoInputDeviceCategory;
+                if (createDevEnum.CreateClassEnumerator(ref category, out enumerator, 0) != 0 || enumerator is null)
+                    return map;
+
+                var monikers = new IMoniker[1];
+                var index = 0;
+                while (true)
+                {
+                    var nhr = enumerator.Next(1, monikers, IntPtr.Zero);
+                    if (nhr != 0 || monikers[0] is null)
+                        break;
+
+                    var moniker = monikers[0];
+                    monikers[0] = null!;
+                    try
+                    {
+                        // A device with no DevicePath still consumes its index, or
+                        // every later device would be keyed one place out.
+                        var path = ReadBagString(moniker, "DevicePath");
+                        if (!string.IsNullOrWhiteSpace(path))
+                            map[index] = path.Trim();
+                        index++;
+                    }
+                    finally
+                    {
+                        Marshal.ReleaseComObject(moniker);
+                    }
+                }
+            }
+            catch
+            {
+                // Caller falls back to index-only keys.
+            }
+            finally
+            {
+                if (enumerator != null)
+                    Marshal.ReleaseComObject(enumerator);
+                if (deviceEnumObj != null)
+                    Marshal.ReleaseComObject(deviceEnumObj);
+            }
+
+            return map;
+        }
+
+        /// <summary>
         /// DirectShow's system device enumerator is STA. HTTP/thread-pool
         /// threads are MTA and often return no monikers (empty dropdown).
         /// </summary>

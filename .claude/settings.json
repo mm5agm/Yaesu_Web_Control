@@ -12,7 +12,11 @@
       "Read(//c/Users/colin/source/repos/Icom_Web_Control/**)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:mm5agm.github.io)",
-      "WebFetch(domain:www.qrz.com)"
+      "WebFetch(domain:www.qrz.com)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh pr close:*)",
+      "PowerShell(gh pr merge:*)",
+      "PowerShell(gh pr close:*)"
     ],
     "additionalDirectories": [
       "C:\\build",

@@ -407,7 +407,7 @@
     // ── SignalR connection ────────────────────────────────────────────────────
     const statusBadge = document.getElementById('diag-status');
 
-    const conn = window.ywcHubConnection('/radioHub');
+    const conn = window.rwcHubConnection('/radioHub');
 
     conn.on('RadioStateUpdate', function (data) {
         let { property, value } = data;

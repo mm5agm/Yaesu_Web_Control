@@ -1,0 +1,2167 @@
+/* EXPERIMENTAL UI FORK — flex-only copy. Do not edit here expecting the
+   Classic UI to change; Classic uses the originals under wwwroot/css/.
+   Source: feature/experimental-ui @ a0467e5. See integration/experimental-ui. */
+/* Gauge label overlays */
+.gauge-labels-overlay {
+    pointer-events: none;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+}
+.gauge-label {
+    position: absolute;
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: var(--ywc-gauge-tick, #c8c8c8);
+    text-shadow: 0 1px 2px #000, 0 0 2px #000;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+}
+/* Ensure analog meter containers allow overlays to position absolutely */
+.analog-meter-container {
+    position: relative;
+}
+/* Outline for gauge containers */
+.gauge-outline {
+    border: 6px solid magenta !important;
+    border-radius: 12px !important;
+    padding: 8px !important;
+    background: #fff !important;
+    box-shadow: 0 0 16px 2px magenta;
+    z-index: 1000 !important;
+    min-width: 220px;
+    min-height: 120px;
+    position: relative;
+}
+/* Stronger fullscreen override: target body.fullscreen-mode and descendants */
+body.fullscreen-mode,
+body.fullscreen-mode html,
+body.fullscreen-mode > main[role="main"],
+body.fullscreen-mode main[role="main"],
+body.fullscreen-mode main[role="main"] > .row:first-of-type,
+body.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
+body.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
+    height: 100vh !important;
+    min-height: 100vh !important;
+    width: 98vw !important;
+    max-width: 98vw !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}
+
+body.fullscreen-mode main[role="main"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: stretch !important;
+    align-items: stretch !important;
+}
+body.fullscreen-mode main[role="main"] > .row:first-of-type {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+}
+body.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
+body.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
+    flex: 1 1 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+/* Ensure fullscreen fills viewport vertically */
+.fullscreen-mode,
+.fullscreen-mode html,
+.fullscreen-mode body {
+    height: 100vh !important;
+    min-height: 100vh !important;
+    width: 100vw !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Flex layout for main and first row in fullscreen */
+.fullscreen-mode main[role="main"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: stretch !important;
+    align-items: stretch !important;
+}
+.fullscreen-mode main[role="main"] > .row:first-of-type {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    height: 100% !important;
+    min-height: 100% !important;
+}
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
+    flex: 1 1 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    min-height: 100% !important;
+}
+.fullscreen-mode main[role="main"] > .row:first-of-type {
+    height: 100% !important;
+    min-height: 100% !important;
+}
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
+    height: 100% !important;
+    min-height: 100% !important;
+}
+
+/* Meter Calibration fullscreen fix */
+.fullscreen-mode .meter-calibration-container {
+    width: 100vw !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+}
+/* --- Fullscreen mode overrides --- */
+
+.fullscreen-mode footer {
+    display: none !important;
+}
+
+
+/* Fullscreen main area: fill viewport vertically, restrict width to avoid horizontal scrollbar */
+.fullscreen-mode main[role="main"] {
+    height: 100vh !important;
+    min-height: 100vh !important;
+    width: 98vw !important;
+    max-width: 98vw !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    margin: 0 auto !important;
+    padding-bottom: 0 !important;
+    box-sizing: border-box;
+}
+
+.fullscreen-mode .navbar {
+    margin-bottom: 0 !important;
+}
+
+/* Keep maintenance links visually separate from everyday navigation. */
+.ywc-nav-maintenance {
+    border-top: 1px solid var(--yaesu-edge, #555);
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+}
+
+@media (min-width: 576px) {
+    .ywc-nav-maintenance {
+        border-top: 0;
+        border-left: 1px solid var(--yaesu-edge, #555);
+        margin-top: 0;
+        padding-top: 0;
+    }
+}
+
+/* Ensure first row and columns fill vertical space in fullscreen */
+.fullscreen-mode main[role="main"] > .row:first-of-type {
+    height: 100% !important;
+    min-height: 100% !important;
+}
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class^="col-"],
+.fullscreen-mode main[role="main"] > .row:first-of-type > [class*=" col-"] {
+    height: 100% !important;
+    min-height: 100% !important;
+}
+.fullscreen-mode main[role="main"].pb-3 {
+    padding-bottom: 0 !important;
+}
+html {
+    font-size: 14px;
+}
+
+@media (min-width: 768px) {
+    html {
+        font-size: 16px;
+    }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+    box-shadow: 0 0 0 0.1rem var(--yaesu-face, #2a2a2a), 0 0 0 0.25rem rgba(255, 179, 71, 0.45);
+}
+
+html {
+    position: relative;
+    min-height: 100%;
+}
+
+body {
+    margin-bottom: 60px;
+    color: var(--yaesu-ink, #e6e6e6);
+    font-weight: 700;
+}
+
+.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
+    color: var(--bs-secondary-color);
+    text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
+    text-align: start;
+}
+
+
+.d-flex {
+    display: flex;
+}
+
+.flex-wrap {
+    flex-wrap: wrap;
+}
+
+
+/* Ensure band buttons with negative margin aren't clipped */
+.flex-grow-1 {
+    overflow: visible !important;
+    position: relative;
+}
+
+.d-flex.flex-nowrap {
+    overflow: visible !important;
+}
+
+@media (min-width: 992px) {
+    .receiver-card {
+        width: 100%;
+    }
+}
+
+/* Frequency display: large, readable, monospace, matches h3 size */
+.frequency-display {
+    font-size: 1.8rem;
+    font-family: 'Consolas', 'Courier New', monospace;
+    letter-spacing: 0.05em;
+    line-height: 1.1;
+    vertical-align: middle;
+}
+
+/* Highlight the currently-selected digit inside a frequency display.
+   The `selected` class is added by site.js when the user clicks a digit,
+   wheels over one, or uses ArrowUp/Down on a focused display -- it marks
+   which digit will be stepped by ▲/▼, ArrowUp/Down, and PageUp/PageDown.
+   Without this rule the selection was invisible. */
+.frequency-display .digit.selected {
+    background-color: var(--ywc-lcd-selected, #ffe066);
+    color: #000;
+    border-radius: 0.15em;
+    box-shadow: inset 0 0 0 1px var(--ywc-lcd-selected-edge, #b58900);
+    padding: 0 0.05em;
+}
+
+/* Focus ring on the freq display itself -- helps keyboard-only users
+   see that the display is focused (so ArrowUp/Down will step a digit). */
+.frequency-display:focus,
+.frequency-display:focus-visible {
+    outline: 2px solid var(--ywc-focus, #ffb347);
+    outline-offset: 2px;
+}
+
+/* Band/mode/antenna buttons - optimized for 2-line layout with good touch targets */
+.btn-outline-primary.btn-sm,
+.btn-outline-success.btn-sm {
+    min-width: 3rem;
+    margin-bottom: 0.2rem;
+    font-size: 0.95rem;
+    padding: 0.3rem 0.6rem;
+}
+
+/* Active button state */
+.btn-outline-primary.active {
+    background-color: var(--ywc-vfo-a, #4fb4e6);
+    color: #121212;
+    border-color: var(--ywc-vfo-a, #4fb4e6);
+}
+
+
+/* Focus state for accessibility */
+#powerSliderA:focus {
+    outline: none;
+    outline-offset: 0;
+}
+
+
+
+/* TX Indicator Blink Animation */
+
+pre, code { tab-size: 4; }
+
+/* ==========================================================================
+   Radio button visibility fix - mode, antenna, and band selectors
+   Bootstrap's .form-check-input radio circles are faint by default because
+   they use a light grey border (#adb5bd) and a thin 1px stroke.
+   These rules give all radio inputs a larger circle with a dark, clear border
+   to match the visibility of the native band-button circles.
+   ========================================================================== */
+
+/* Larger circle with a clearly visible dark border */
+.form-check-input[type="radio"],
+.band-radio-group input[type="radio"] {
+    width: 1.15rem;
+    height: 1.15rem;
+    border: 2px solid #9aa3ad; /* visible on charcoal */
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* When checked, colour the dot to match the receiver panel colour */
+.border-primary .form-check-input[type="radio"],
+.border-primary .band-radio-group input[type="radio"] {
+    accent-color: var(--ywc-vfo-a, #4fb4e6); /* blue for Receiver A */
+}
+
+.border-success .form-check-input[type="radio"],
+.border-success .band-radio-group input[type="radio"],
+.border-success .band-radio-grid input[type="radio"] {
+    accent-color: var(--ywc-vfo-b, #58cf9a); /* green for Receiver B */
+}
+
+/* Labels are clickable */
+.form-check-label,
+.band-radio-group label,
+.band-radio-grid label {
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Band buttons container - handles positioning independently */
+.band-buttons-container {
+    position: relative;
+    /* No fixed width or negative margin */
+}
+
+/* Form controls: ink colour comes from theme-yaesu.css (charcoal + amber). */
+.form-select,
+.form-control {
+    font-weight: 700;
+}
+
+/* Outline-secondary: ink on charcoal — theme-yaesu.css owns colour tokens.
+   Dark dialogs no longer need a special-case override. */
+.btn-outline-secondary {
+    font-weight: 700;
+}
+
+/* Dialog close (✕) button - a solid red so it stands out clearly against
+   the dark dialog header. The default btn-outline-secondary was a faint
+   grey outline that several operators found hard to spot. It lived in
+   Index.cshtml until the pop-out windows, which have their own pages,
+   showed their ✕ as a bare unstyled button. */
+.ywc-dialog-close {
+    background: #c0392b;
+    color: #fff;
+    border: 1px solid #e74c3c;
+    font-weight: bold;
+    line-height: 1;
+}
+.ywc-dialog-close:hover,
+.ywc-dialog-close:focus {
+    background: #e74c3c;
+    color: #fff;
+    border-color: #ff6b5a;
+}
+/* Folded sections (js/layout/fold-panel.js). The targets carry d-flex or an
+   inline display, either of which beats the browser's own [hidden] rule, so
+   this one has to say !important. */
+.fold-target[hidden] { display: none !important; }
+.fold-btn { white-space: nowrap; }
+
+/* Mode select - sized to fit longest option (D-FM-N), sits below band buttons */
+.vfo-mode-select {
+    width: 7rem;
+    font-size: 0.85rem;
+    font-weight: bold;
+}
+
+/* Three-column VFO body: tune | band/filter | remaining keys */
+.vfo-body-grid {
+    display: grid;
+    grid-template-columns: minmax(17.5rem, 1.2fr) minmax(8.75rem, auto) minmax(15rem, 1fr);
+    column-gap: 0.75rem;
+    row-gap: 0.4rem;
+    align-items: start;
+}
+
+.vfo-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.vfo-freq-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.35rem 0.45rem;
+    width: 100%;
+}
+
+.vfo-freq-row .frequency-display {
+    flex: 0 0 auto;
+}
+
+/* RF / AF / squelch — same width as the frequency row; labels share one column. */
+.vfo-gain-stack {
+    display: grid;
+    grid-template-columns: 4.4rem minmax(0, 1fr) 2.2rem;
+    column-gap: 0.4rem;
+    row-gap: 0.2rem;
+    align-items: center;
+    width: 100%;
+}
+
+.vfo-gain-stack .vfo-control-item {
+    display: contents;
+}
+
+.vfo-gain-stack .vfo-control-item[style*="display: none"],
+.vfo-gain-stack .vfo-control-item[style*="display:none"] {
+    display: none;
+}
+
+.vfo-gain-stack input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    height: 16px;
+}
+
+/* Band / Segment / Mode sit under AF Gain in the tune column. */
+.vfo-band-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.35fr);
+    column-gap: 0.3rem;
+    align-items: center;
+    width: 100%;
+}
+
+.vfo-band-row__band-controls {
+    display: contents;
+}
+
+.vfo-band-row__mode-controls {
+    min-width: 0;
+}
+
+.vfo-band-row__mode-controls .toggle-dd {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.vfo-band-row--ftdx101 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    row-gap: 0.65rem;
+}
+
+.vfo-band-row--ftdx101 .vfo-band-row__band-controls,
+.vfo-band-row--ftdx101 .vfo-band-row__mode-controls {
+    grid-column: 1 / -1;
+}
+
+.vfo-band-row--ftdx101 .vfo-band-row__band-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 0.3rem;
+    align-items: center;
+}
+
+.vfo-band-row .vfo-ant-select,
+.vfo-band-row .save-mem-key {
+    flex: 0 0 auto;
+}
+
+.filter-scope-vfo-slot {
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+}
+
+.filter-scope-vfo-slot canvas {
+    display: block;
+    width: 100%;
+    height: 2.75rem;
+    border-radius: 4px;
+}
+
+/* Right-hand remaining keys — 2-column grid */
+.vfo-controls-column {
+    flex-shrink: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(110px, 1fr));
+    gap: 0.3rem 0.4rem;
+    align-content: start;
+    width: 100%;
+}
+
+.vfo-control-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.vfo-control-item select {
+    font-size: 0.78rem;
+    font-weight: bold;
+    padding: 0.1rem 1.6rem 0.1rem 0.25rem;
+    flex: 1;
+    min-width: 52px;
+}
+
+.vfo-control-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--yaesu-ink, #e6e6e6);
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+/* Compact band button grid layout - 4 columns, sized to content */
+.band-radio-grid {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    justify-content: start;
+    gap: 0.4rem;
+}
+
+.band-radio-label {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #555;
+    border-radius: 0.25rem;
+    background-color: var(--yaesu-face-lo, #1a1a1a);
+    transition: all 0.15s ease-in-out;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.9rem;
+    color: var(--yaesu-ink, #e6e6e6);
+}
+
+.band-radio-label:hover {
+    background-color: var(--yaesu-face-hi, #3d3d3d);
+    border-color: var(--ywc-focus, #ffb347);
+}
+
+.band-radio-label input[type="radio"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.band-radio-label span {
+    user-select: none;
+    font-weight: bold;
+    pointer-events: none;
+}
+
+.band-radio-label input[type="radio"]:checked + span {
+    font-weight: bold;
+}
+
+/* Receiver A (blue) checked state */
+.border-primary .band-radio-label:has(input:checked) {
+    background-color: rgba(79, 180, 230, 0.28);
+    border-color: var(--ywc-vfo-a, #4fb4e6);
+    color: #d6effa;
+}
+
+/* Receiver B (green) checked state */
+.border-success .band-radio-label:has(input:checked) {
+    background-color: rgba(88, 207, 154, 0.28);
+    border-color: var(--ywc-vfo-b, #58cf9a);
+    color: #d6f5e8;
+}
+
+/* Out-of-band marker: nearest band in the operator's region is flagged red
+   when the radio is parked outside every allocation. Applied by
+   applyBandOutOfBand() in site.js. Kept distinct from the checked states above
+   so it reads as a warning, not a selection. */
+.band-radio-label.band-oob,
+.band-radio-label.band-oob:hover {
+    background-color: var(--ywc-tx, #dc3545);
+    border-color: #842029;
+    color: #fff;
+}
+.band-radio-label.band-oob span { font-weight: bold; }
+
+/* Responsive: 3 columns on smaller screens, still sized to content */
+@media (max-width: 768px) {
+    .band-radio-grid {
+        grid-template-columns: repeat(3, auto);
+    }
+}
+
+/* Band segment dropdown — narrow, bold text */
+.segment-select {
+    width: fit-content;
+    min-width: 3.5rem;
+    max-width: 5.8rem;
+    font-weight: bold;
+    font-size: 0.8rem;
+    padding-right: 2.25rem;
+}
+
+/* Out-of-band segment dropdown: the frequency is outside every allocation in
+   the operator's region, so the dropdown shows "OOB" and goes red. The
+   :disabled qualifier is what outranks Bootstrap's own .form-select:disabled
+   background; opacity:1 undoes Bootstrap's dimming so the red reads as a
+   warning, not a greyed-out control. .segment-select is already bold. */
+.segment-select.segment-oob,
+.segment-select.segment-oob:disabled,
+.segment-select.segment-oob:hover,
+.segment-select.segment-oob:focus {
+    background-color: var(--ywc-tx, #dc3545);
+    border-color: #842029;
+    color: #fff;
+    font-weight: bold;
+    opacity: 1;
+}
+
+/* Maximize usable width for receiver panels */
+.container-fluid {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+}
+
+/* Shift band buttons and mode selector left (closer to S-meter) */
+
+
+/* Move the power meter gauge closer to the SWR meter */
+.power-meter-container .gauge-wrapper {
+    margin-left: -200px !important;
+}
+#powerSliderA {
+    width: 260px !important;
+    height: 18px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+/* WebKit (Chrome, Edge, Safari) */
+#powerSliderA::-webkit-slider-runnable-track {
+    height: 18px;
+    background: linear-gradient(90deg, #1a3a24 0%, #2a2a2a 60%, #1a1a1a 100%);
+    border-radius: 9px;
+}
+#powerSliderA::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--yaesu-led-on, #ff7a18);
+    border: 2px solid #ffd39a;
+    border-radius: 50%;
+    cursor: pointer;
+    margin-top: 0; /* Center thumb on track */
+}
+
+/* Firefox */
+#powerSliderA::-moz-range-track {
+    height: 18px;
+    background: linear-gradient(90deg, #1a3a24 0%, #2a2a2a 60%, #1a1a1a 100%);
+    border-radius: 9px;
+}
+#powerSliderA::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: var(--yaesu-led-on, #ff7a18);
+    border: 2px solid #ffd39a;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+/* IE/Edge */
+#powerSliderA::-ms-fill-lower,
+#powerSliderA::-ms-fill-upper {
+    background: linear-gradient(90deg, #1a3a24 0%, #2a2a2a 60%, #1a1a1a 100%);
+    border-radius: 9px;
+}
+#powerSliderA::-ms-thumb {
+    width: 18px;
+    height: 18px;
+    background: var(--yaesu-led-on, #ff7a18);
+    border: 2px solid #ffd39a;
+    border-radius: 50%;
+    cursor: pointer;
+}
+#powerSliderA {
+    /* Remove default styles for IE/Edge */
+    background: transparent;
+    border: none;
+}
+
+
+/* IF Shift slider: visible track outline matching Notch slider style */
+.ifshift-slider::-webkit-slider-runnable-track {
+    height: 6px;
+    background: #141414;
+    border-radius: 3px;
+    border: 1px solid #555;
+}
+.ifshift-slider::-moz-range-track {
+    height: 6px;
+    background: #141414;
+    border-radius: 3px;
+    border: 1px solid #555;
+}
+.ifshift-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--yaesu-led-on, #ff7a18);
+    border: 2px solid #ffd39a;
+    border-radius: 50%;
+    cursor: pointer;
+    margin-top: -6px;
+}
+.ifshift-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--yaesu-led-on, #ff7a18);
+    border: 2px solid #ffd39a;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+/* Calibration page container for meter tables */
+/* Calibration: Prevent flex-grow and force compact width for meter columns */
+.calibration-col {
+    flex: 0 0 auto !important;
+    max-width: 320px;
+    min-width: 0;
+}
+
+.calibration-container {
+    width: max-content;
+    min-width: 340px;
+    margin-bottom: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 0.5rem 1rem 0.5rem 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+/* Calibration Page Modern Look */
+.calibration-bg {
+    background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 100%);
+    min-height: 100vh;
+    padding: 2rem 0;
+}
+
+fieldset.calibration-card {
+    background: #fff;
+    border-radius: 1rem;
+    box-shadow: 0 4px 24px 0 rgba(80, 120, 200, 0.10);
+    padding: 1rem 0.5rem 1rem 0.5rem;
+    margin-bottom: 2rem;
+    width: 270px;
+    max-width: 270px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 3px solid #4f8cff;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    transition: height 0.25s cubic-bezier(.4,2,.6,1), max-height 0.25s cubic-bezier(.4,2,.6,1), padding 0.2s;
+    overflow: visible !important;
+}
+.calibration-card.swr { border-color: #38bdf8; }
+.calibration-card.power { border-color: #22c55e; }
+.calibration-card.alc { border-color: #f59e42; }
+
+.calibration-card legend {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #2563eb;
+    margin-bottom: 0.7rem;
+    text-align: center;
+}
+.calibration-card.swr legend { color: #0891b2; }
+.calibration-card.power legend { color: #16a34a; }
+.calibration-card.alc legend { color: #ea580c; }
+
+.calibration-card .table-sm {
+    table-layout: auto;
+    width: 100%;
+    margin-bottom: 0.5rem;
+}
+.calibration-card .table-sm th {
+    background: #f1f5f9;
+    color: #475569;
+    border-top: none;
+    text-align: center;
+    padding: 0.3rem 0.5rem;
+}
+.calibration-card .table-sm td {
+    background: #f8fafc;
+    border-top: none;
+    text-align: center;
+    vertical-align: middle;
+    padding: 0.2rem 0.2rem;
+}
+.calibration-card .form-control {
+    border-radius: 0.5rem;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    transition: border-color 0.2s;
+    width: 6ch;
+    min-width: 0;
+    display: inline-block;
+    padding-left: 0.3em;
+    padding-right: 0.3em;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 1rem;
+    margin-right: 0.1em;
+}
+
+/* S-Meter GaugeValue input: wider for S9+60 */
+.s-meter-gauge-input {
+    width: 8ch !important;
+}
+.calibration-card .form-control:focus {
+    border-color: #4f8cff;
+    box-shadow: 0 0 0 2px #dbeafe;
+}
+.calibration-card .btn-secondary {
+    background: linear-gradient(90deg, #4f8cff 0%, #38bdf8 100%);
+    color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+.calibration-card .btn-secondary:hover {
+    background: linear-gradient(90deg, #2563eb 0%, #0891b2 100%);
+}
+.calibration-card .btn-link.text-danger {
+    color: #ef4444;
+    font-size: 1.2em;
+    opacity: 0.8;
+    transition: color 0.2s, opacity 0.2s;
+    margin-left: 0.2em;
+    margin-right: 0;
+    padding: 0 0.2em;
+    vertical-align: middle;
+}
+.calibration-card .btn-link.text-danger:hover {
+    color: #b91c1c;
+    opacity: 1;
+}
+.calibration-save-btn {
+    background: linear-gradient(90deg, #22c55e 0%, #4f8cff 100%);
+    color: #fff;
+    border: none;
+    border-radius: 0.7rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    padding: 0.7rem 2.5rem;
+    margin-top: 1.5rem;
+    box-shadow: 0 2px 8px 0 rgba(34,197,94,0.08);
+    transition: background 0.2s;
+}
+.calibration-save-btn:hover {
+    background: linear-gradient(90deg, #16a34a 0%, #2563eb 100%);
+}
+.calibration-status {
+    background: #e0f2fe;
+    color: #0369a1;
+    border-radius: 0.5rem;
+    border: 1px solid #bae6fd;
+    margin-top: 1.2rem;
+    padding: 0.7rem 1.2rem;
+    font-size: 1rem;
+}
+
+.calibration-card canvas,
+.calibration-card .gauge-wrapper {
+    max-width: 180px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+}
+
+@media (max-width: 1200px) {
+    .calibration-col {
+        max-width: 100% !important;
+    }
+    .calibration-card {
+        width: 100%;
+        max-width: 100%;
+    }
+    .calibration-card canvas,
+    .calibration-card .gauge-wrapper {
+        max-width: 140px !important;
+    }
+}
+
+/* Raw meter label for calibration support */
+.raw-meter-label {
+    background: rgba(255, 122, 24, 0.2);
+    color: var(--ywc-lcd, #f2a33c);
+    border-radius: 6px;
+    padding: 2px 4px;
+    position: relative;
+    top: -1.2em;
+    font-family: 'Consolas', 'Courier New', monospace;
+    letter-spacing: 0.01em;
+    transition: background 0.2s;
+    user-select: all;
+    font-size: 0.9rem; /* Match band radio button font size */
+    display: inline-block;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    white-space: nowrap;
+}
+#raw-powerout-label {
+    background: rgba(255, 122, 24, 0.2);
+    color: var(--ywc-lcd, #f2a33c);
+    border-radius: 6px;
+    padding: 2px 10px 2px 10px;
+    margin-bottom: 2px;
+    margin-top: -65px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    letter-spacing: 0.01em;
+    transition: background 0.2s;
+    user-select: all;
+    margin-left: -200px !important;
+    font-size: 0.9rem; /* Match band radio button font size */
+}
+
+/* Move Power, Mic Gain, IDD, and PA Temp controls closer to Raw Power Out label (minimal gap) */
+.closer-to-raw-power {
+    margin-top: 8px !important; /* Minimal gap to visually group with Raw Power Out */
+}
+
+/* Operating controls bar — Bootstrap row below the gauges partial.
+   Not layout-coupled to the S-meter history strip any more.
+   Resize with Bootstrap col-* on each .op-col in Index.cshtml. */
+#operatingControlsRow {
+    margin-top: 0.35rem;
+    margin-bottom: 0.5rem;
+}
+
+#operatingControlsRow .op-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+}
+
+#operatingControlsRow .radio-display-toggle,
+#operatingControlsRow .radio-display-toggle > .radio-display-tip,
+#operatingControlsRow .radio-display-toggle > .radio-display-tip > #radioDisplayShowBtn {
+    width: 100%;
+}
+
+/* The TX level keys and VFO B visibility key form a compact 2-column,
+   3-row control table. */
+#operatingControlsRow .op-col--levels {
+    display: grid;
+    grid-template-columns: repeat(2, 10rem);
+    grid-auto-rows: minmax(2.65rem, auto);
+    align-items: stretch;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+/* Level keys use a stable compact face. Their labels contain changing numeric
+   values, so the default intrinsic button width would make each face resize
+   when the value changes (e.g. 5 W versus 100 W). */
+#operatingControlsRow .op-col--levels > .toggle-dd,
+#operatingControlsRow .op-col--levels > .toggle-dd > .toggle-dd__btn,
+#operatingControlsRow .op-col--levels > .toggle-dd__btn {
+    width: 10rem;
+    max-width: 100%;
+}
+
+#operatingControlsRow .op-col--levels > #vfoBToggleBtn {
+    grid-column: 1;
+    grid-row: 3;
+}
+
+#operatingControlsRow .op-col--levels > #txButton {
+    grid-column: 2;
+    grid-row: 3;
+}
+
+/* Compact linear SWR / Power bars — leftmost column of the
+   operating-controls row. */
+#operatingControlsRow .op-col--linear-meters {
+    min-width: 0;
+    gap: 0.35rem;
+}
+
+#operatingControlsRow .linear-meter-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+#operatingControlsRow .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--yaesu-ink, #e6e6e6);
+    line-height: 1;
+}
+
+#operatingControlsRow .linear-meter-row canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+#operatingControlsRow .linear-meter-value {
+    flex: 0 0 3.6rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #dc3545;
+    color: #fff;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+#operatingControlsRow .linear-meter-value--comp {
+    background: #ffc107;
+    color: #000;
+}
+
+#operatingControlsRow .linear-meter-value--alc {
+    background: #0dcaf0;
+    color: #000;
+}
+
+/* Per-VFO linear S-meter (between frequency row and RF/AF stack). */
+.linear-meter-row--vfo {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+    width: 100%;
+    margin: 0.15rem 0 0.25rem;
+    transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+.linear-meter-row--vfo .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--yaesu-ink, #e6e6e6);
+    line-height: 1;
+}
+
+.linear-meter-row--vfo canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+.linear-meter-row--vfo .linear-meter-value {
+    flex: 0 0 3.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #198754;
+    color: #fff;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+/* Single-receiver: inactive VFO's S-meter is not a live reading for that
+   panel — grey it the same way TX freezes the radial S-meters. */
+.linear-meter-row--vfo.linear-smeter-inactive {
+    filter: grayscale(1);
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+/* TX freeze dimming for VFO linear S-meters (class toggled on the row). */
+.linear-meter-row--vfo.meters-tx-dim {
+    filter: grayscale(1);
+    opacity: 0.3;
+}
+
+#operatingControlsRow .op-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: nowrap;
+}
+
+#operatingControlsRow .op-slider-row input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 4.5rem;
+    height: 18px;
+}
+
+#operatingControlsRow .op-col--buttons > .btn {
+    width: 100%;
+}
+
+/* col-auto in the markup, like the level column it sits beside. The keys keep
+   their own width here instead of filling the column as elsewhere in this row.
+   The auto margins take whatever width the row has left once the extras column
+   hits its cap, as equal space either side of these keys — without them that
+   slack collects at the end of the row instead. */
+#operatingControlsRow .op-col--vfo-actions {
+    align-items: center;
+    margin-inline: auto;
+}
+
+#operatingControlsRow .op-col--vfo-actions > .btn {
+    width: auto;
+}
+
+/* .col in the markup, capped: the Remote Audio and Clarifier blocks stay on the
+   same number of lines as the key columns beside them down to about 32rem, and
+   wrap into a taller block below that. Letting the column grow past the cap only
+   spreads the same controls over more width. */
+#operatingControlsRow .op-col--extras {
+    max-width: 34rem;
+    min-width: 0;
+}
+
+#operatingControlsRow .op-extras-block {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.45rem;
+    min-width: 0;
+    max-width: 100%;
+}
+
+#operatingControlsRow .op-extras-meters {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 12rem;
+    flex: 1 1 12rem;
+}
+
+.remote-audio-meter-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.remote-audio-meter-row .linear-meter-label {
+    flex: 0 0 2.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+    color: var(--yaesu-ink, #e6e6e6);
+    line-height: 1;
+}
+
+.remote-audio-meter-canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    display: block;
+}
+
+.remote-audio-meter-value {
+    flex: 0 0 3.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1;
+    background: #0dcaf0;
+    color: #000;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+.remote-audio-meter-value--tx {
+    background: #ffc107;
+}
+
+.remote-audio-popout-meters {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 18rem;
+}
+
+.remote-audio-popout-meters .remote-audio-meter-row {
+    flex: 1 1 9rem;
+}
+
+#operatingControlsRow #clarifierRow {
+    min-width: 0;
+    max-width: 100%;
+}
+
+#operatingControlsRow #clarifierRow .toggle-dd {
+    flex: 0 0 auto;
+}
+
+#operatingControlsRow #clarifierRow .toggle-dd__btn {
+    min-height: 2.65rem;
+    height: 2.65rem;
+    padding: 0.22rem 0.7rem 0.4rem;
+    box-sizing: border-box;
+}
+
+#operatingControlsRow #clarifierRow .toggle-dd__btn--toolbar {
+    min-width: 4.75rem;
+}
+
+#operatingControlsRow #clarVfoButton .toggle-dd__btn {
+    width: 5.5rem;
+}
+
+#operatingControlsRow #clarModeButton .toggle-dd__btn {
+    width: 7rem;
+}
+
+#operatingControlsRow #clarOffsetButton .toggle-dd__btn {
+    width: 10rem;
+}
+
+#operatingControlsRow #clarifierRow .toggle-dd__label {
+    font-size: 0.8rem;
+}
+
+#operatingControlsRow .clarifier-label {
+    flex: 0 0 100%;
+}
+
+#operatingControlsRow .remote-audio-label {
+    flex: 0 0 100%;
+}
+
+.remote-audio-status-row {
+    flex: 0 0 100%;
+    line-height: 1;
+}
+
+/* ── VOX / CW / FM Repeater floating panels ─────────────────────────────── */
+/* Non-modal: all three can be open simultaneously, draggable, positioned across the top */
+#voxDialog > div:first-child,
+#cwDialog  > div:first-child,
+#fmDialog  > div:first-child {
+    cursor: grab;
+    user-select: none;
+}
+#voxDialog > div:first-child:active,
+#cwDialog  > div:first-child:active,
+#fmDialog  > div:first-child:active {
+    cursor: grabbing;
+}
+/* Every modeless dialog (opened with show(), not showModal()) stacks with the
+   page instead of going into the browser's top layer. Without a z-index of
+   its own, anything on the page that has one (gauge label overlays at 10,
+   spectrum controls at 2, Bootstrap's focused button-group button at 1)
+   paints straight through it. The CW Reader, RTTY Tuner, DX Watch and the
+   rest showed the meters and buttons underneath them for exactly that reason.
+   1040 is the bottom of the band that js/dialogs/dialog-stack.js (shared,
+   from core/) renumbers to put the clicked dialog in front; it stays under
+   Bootstrap's modal backdrop (1050), so a message box still covers them all. */
+dialog[open]:not(:modal) {
+    z-index: 1040;
+}
+
+#voxDialog {
+    position: fixed;
+    top: 80px;
+    left: 5%;
+    z-index: 1050;
+    margin: 0;
+}
+#cwDialog {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1050;
+    margin: 0;
+}
+#fmDialog {
+    position: fixed;
+    top: 80px;
+    right: 5%;
+    z-index: 1050;
+    margin: 0;
+}
+
+/* Remote Audio Levels — must sit above spectrum / meter stacks (modeless show()). */
+#remoteAudioLevelsDialog {
+    position: fixed;
+    top: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9998;
+    margin: 0;
+}
+#remoteAudioLevelsDialog > div:first-child {
+    cursor: grab;
+    user-select: none;
+}
+#remoteAudioLevelsDialog > div:first-child:active {
+    cursor: grabbing;
+}
+/* Bootstrap form-text / text-muted are dark-on-light; lighten for this dark dialog. */
+#remoteAudioLevelsDialog .form-text,
+#remoteAudioLevelsDialog .text-muted {
+    color: #9aa0a6 !important;
+    font-size: 0.75rem;
+    line-height: 1.35;
+}
+
+/* ── Frequency Keyboard Dialog ──────────────────────────────────────────── */
+
+.fkb-dialog {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    padding: 0;
+    border: 2px solid #444;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    min-width: 280px;
+    min-height: 340px;
+    resize: both;
+    overflow: auto;
+    background: #1e1e2e;
+    color: #e0e0e0;
+    font-family: 'Consolas', 'Courier New', monospace;
+    z-index: 9999;
+}
+
+.fkb-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.fkb-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #2d2d44;
+    border-radius: 8px 8px 0 0;
+    cursor: grab;
+    user-select: none;
+    border-bottom: 1px solid #444;
+}
+
+.fkb-header:active { cursor: grabbing; }
+
+.fkb-title {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #c0c8ff;
+    font-family: sans-serif;
+}
+
+.fkb-close {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.fkb-close:hover { background: #c0392b; color: #fff; }
+
+.fkb-display-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px 4px;
+}
+
+.fkb-display {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    background: #111;
+    border: 1px solid #555;
+    border-radius: 6px;
+    padding: 6px 10px;
+    flex: 1;
+    min-height: 44px;
+}
+
+.fkb-digit {
+    display: inline-block;
+    width: 22px;
+    text-align: center;
+    font-size: 1.6rem;
+    color: #e0e0e0;
+    border-radius: 3px;
+    padding: 0 1px;
+}
+
+.fkb-digit-cursor {
+    background: #3a5fa8;
+    color: #fff;
+    outline: 2px solid #6699ff;
+}
+
+.fkb-decimal {
+    font-size: 1.6rem;
+    color: #888;
+    padding: 0 2px;
+}
+
+.fkb-mhz-label {
+    font-size: 1.1rem;
+    color: #aaa;
+    font-family: sans-serif;
+    white-space: nowrap;
+}
+
+.fkb-error {
+    min-height: 20px;
+    padding: 0 12px 2px;
+    font-size: 0.8rem;
+    color: #ff6b6b;
+    font-family: sans-serif;
+}
+
+.fkb-pad {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    padding: 8px 12px 14px;
+}
+
+.fkb-key {
+    padding: 12px 0;
+    font-size: 1.2rem;
+    font-weight: bold;
+    border: 1px solid #555;
+    border-radius: 7px;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.1s, transform 0.08s;
+}
+
+.fkb-key:active {
+    transform: scale(0.94);
+}
+
+.fkb-num {
+    background: #2a2a3e;
+    color: #e0e0e0;
+}
+.fkb-num:hover  { background: #3a3a5e; }
+
+.fkb-nav {
+    background: #1e3a2e;
+    color: #6dffb3;
+    font-size: 1rem;
+}
+.fkb-nav:hover  { background: #254d3a; }
+
+.fkb-backspace {
+    background: #3a2020;
+    color: #ffaaaa;
+}
+.fkb-backspace:hover { background: #552828; }
+
+.fkb-clear {
+    background: #3a2a10;
+    color: #ffcc66;
+    font-size: 1rem;
+}
+.fkb-clear:hover { background: #553d18; }
+
+.fkb-enter {
+    grid-column: span 2;
+    background: #1a4a1a;
+    color: #88ff88;
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+}
+.fkb-enter:hover { background: #256025; }
+
+/* Open button next to MHz label */
+.fkb-open-btn {
+    padding: 1px 6px;
+    font-size: 0.9rem;
+    color: var(--ywc-lcd, #f2a33c) !important;
+}
+
+/* ── Memories Panel Dialog ───────────────────────────────────────────────── */
+
+.mem-dialog {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0;
+    border: 2px solid #444;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    width: max-content;
+    min-width: 320px;
+    max-width: min(95vw, 900px);
+    max-height: 80vh;
+    overflow: hidden;
+    background: #1e1e2e;
+    color: #e0e0e0;
+    z-index: 9998;
+    font-family: sans-serif;
+}
+
+.mem-dialog[open] {
+    display: flex;
+    flex-direction: column;
+}
+
+.mem-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 12px;
+    background: #2d2d44;
+    border-radius: 8px 8px 0 0;
+    cursor: grab;
+    user-select: none;
+    border-bottom: 1px solid #444;
+    flex-shrink: 0;
+}
+
+.mem-header:active { cursor: grabbing; }
+
+.mem-title {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #c0c8ff;
+}
+
+.mem-close,
+.mem-refresh {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.mem-close:hover  { background: #c0392b; color: #fff; }
+.mem-refresh:hover { background: #2d4a2d; color: #8f8; }
+
+.mem-edit-link {
+    color: #8bd;
+    font-size: 0.8rem;
+    text-decoration: none;
+}
+.mem-edit-link:hover { color: #adf; text-decoration: underline; }
+
+.mem-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    background: #232335;
+    border-bottom: 1px solid #444;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+}
+
+.mem-tool-btn {
+    background: #2d2d44;
+    border: 1px solid #555;
+    color: #ccc;
+    font-size: 0.72rem;
+    padding: 2px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.mem-tool-btn:hover { background: #3a3a58; border-color: #88aaff; color: #fff; }
+.mem-tool-btn:disabled { opacity: 0.5; cursor: default; }
+
+.mem-tool-status {
+    font-size: 0.72rem;
+    color: #aaa;
+    margin-left: 4px;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mem-bank-select {
+    background: #2d2d44;
+    border: 1px solid #555;
+    color: #ccc;
+    font-size: 0.72rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.mem-bank-select:focus { outline: none; border-color: #88aaff; }
+
+.mem-tiles {
+    contain: inline-size;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-content: flex-start;
+}
+
+.mem-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 120px;
+    min-height: 64px;
+    background: #2a2a3e;
+    border: 1px solid #555;
+    border-radius: 8px;
+    cursor: pointer;
+    padding: 6px 4px;
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s;
+    color: #e0e0e0;
+}
+.mem-tile:hover { background: #3a3a58; border-color: #88aaff; }
+
+.mem-tile-active { background: #1a4a1a !important; border-color: #88ff88 !important; }
+
+.mem-tile-label {
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: #c0c8ff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 108px;
+}
+
+.mem-tile-freq {
+    font-size: 0.8rem;
+    font-family: 'Consolas', 'Courier New', monospace;
+    color: #88ff88;
+    white-space: nowrap;
+}
+
+.mem-tile-mode {
+    font-size: 0.7rem;
+    color: #aaa;
+}
+
+.radio-display-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9a9a9a;
+    font-size: 0.95rem;
+    text-align: center;
+    padding: 1.25rem;
+    pointer-events: none;
+    user-select: none;
+}
+.radio-display-placeholder .bi {
+    vertical-align: -0.08em;
+}
+.radio-display-placeholder[hidden] {
+    display: none !important;
+}
+
+/* Radio Display body: video pane + optional docked scope column. */
+.radio-display-body {
+    position: relative;
+}
+.radio-display-video-pane {
+    position: relative;
+    text-align: center;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.radio-display-body:not(.controls-docked) .radio-display-video-pane {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    width: 100%;
+}
+.card:fullscreen {
+    display: flex;
+    flex-direction: column;
+}
+.card:fullscreen .radio-display-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+}
+.card:fullscreen .radio-display-video-pane {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    width: 100%;
+}
+.card:fullscreen .radio-display-body.controls-docked {
+    flex-direction: row;
+}
+.card:fullscreen #radioDisplayImg {
+    object-position: center center;
+}
+.radio-display-body.controls-docked {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    overflow: hidden;
+    min-height: inherit;
+}
+.radio-display-body.controls-docked .radio-display-video-pane {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Radio Display hotspot overlay (radio-display-hotspots.js). Positioned by
+   script to match the DRAWN image inside the <img> box, so Fit / Fill /
+   docking cannot move it off the picture. */
+.radio-display-hotspots {
+    position: absolute;
+    z-index: 2;
+    overflow: hidden;
+    /* Clicks here are for the radio; a double-click must not select the
+       hover label's text. */
+    user-select: none;
+    -webkit-user-select: none;
+}
+.radio-display-hotspots .rdh-debug {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.radio-display-hotspots .rdh-cursor {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-left: 1px dashed rgba(255, 255, 255, 0.7);
+    pointer-events: none;
+}
+.radio-display-hotspots .rdh-label.rdh-label-flash {
+    background: #b02a37;
+}
+.radio-display-hotspots .rdh-label {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font: 12px/1.4 monospace;
+    /* One line when it fits; a long hint wraps inside the picture rather
+       than running off both edges of it. */
+    width: max-content;
+    max-width: calc(100% - 8px);
+    box-sizing: border-box;
+    text-align: center;
+    pointer-events: none;
+}
+
+/* Radio Display CAT scope — modeless dialog; overlay by default CSS, docked in-column below. */
+#radioDisplayScopeDialog {
+    position: fixed;
+    top: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9998;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #555;
+    border-radius: 8px;
+    background: #222;
+    color: #eee;
+    min-width: min(420px, 96vw);
+    max-width: min(720px, 96vw);
+    max-height: 80vh;
+    overflow: visible;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog {
+    /* relative so the absolute splitter anchors to this column. */
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    z-index: auto;
+    /* Width is driven by --radio-display-scope-width (set from JS / localStorage).
+       Default 33rem fits Span/Color on one row; see SCOPE_WIDTH_DEFAULT_REM. */
+    flex: 0 0 var(--radio-display-scope-width, 33rem);
+    width: var(--radio-display-scope-width, 33rem);
+    max-width: none;
+    min-width: 0;
+    min-height: 0;
+    max-height: none;
+    height: auto;
+    align-self: stretch;
+    border-radius: 0;
+    border: none;
+    border-left: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+/* Drag handle on the left edge of the docked column. Hidden when floating. */
+.radio-display-scope-splitter {
+    display: none;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 10px;
+    z-index: 2;
+    cursor: col-resize !important;
+    touch-action: none;
+    background: transparent;
+}
+/* Thin separator line (::after) */
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    transform: translateX(-50%);
+    background: #555;
+    transition: background 0.15s, width 0.15s;
+}
+/* Grip dots (::before) — three dots centred vertically */
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 4px;
+    height: 20px;
+    background-image: radial-gradient(circle, #666 1.5px, transparent 1.5px);
+    background-size: 4px 7px;
+    background-repeat: repeat-y;
+    border-radius: 2px;
+    transition: background-image 0.15s;
+    pointer-events: none;
+}
+/* Hover / drag: brighten line and dots */
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:hover::after,
+.radio-display-body.controls-docked #radioDisplayScopeDialog.scope-resizing .radio-display-scope-splitter::after {
+    width: 3px;
+    background: var(--yaesu-led-on, #ff7a18);
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:hover::before,
+.radio-display-body.controls-docked #radioDisplayScopeDialog.scope-resizing .radio-display-scope-splitter::before {
+    background-image: radial-gradient(circle, var(--yaesu-led-on, #ff7a18) 1.5px, transparent 1.5px);
+}
+/* Keyboard focus — yellow, distinct from hover */
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus {
+    outline: none;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus-visible {
+    outline: 2px solid #ffc107;
+    outline-offset: -2px;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus-visible::after {
+    width: 3px;
+    background: #ffc107;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-splitter:focus-visible::before {
+    background-image: radial-gradient(circle, #ffc107 1.5px, transparent 1.5px);
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog.scope-resizing {
+    user-select: none;
+}
+.radio-display-body:not(.controls-docked) #radioDisplayScopeDialog:not([open]) {
+    display: none;
+}
+.radio-display-scope-undock-btn,
+.radio-display-scope-dock-btn,
+.radio-display-scope-close-btn {
+    display: none;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog[open] .radio-display-scope-undock-btn {
+    display: inline-block;
+}
+.radio-display-body:not(.controls-docked) #radioDisplayScopeDialog[open] .radio-display-scope-dock-btn {
+    display: inline-block;
+}
+#radioDisplayScopeDialog[open] .radio-display-scope-close-btn {
+    display: inline-block;
+}
+#radioDisplayScopeDialog .tooltip {
+    z-index: 10050;
+}
+#radioDisplayScopeDialog .radio-display-scope-dialog-header {
+    cursor: grab;
+    user-select: none;
+    border-bottom: 1px solid #444;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-dialog-header {
+    cursor: default;
+    flex-shrink: 0;
+}
+#radioDisplayScopeDialog .radio-display-scope-dialog-header:active {
+    cursor: grabbing;
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-dialog-header:active {
+    cursor: default;
+}
+#radioDisplayScopeDialog .radio-display-scope-dialog-body {
+    overflow-y: auto;
+    max-height: calc(80vh - 2.75rem);
+}
+.radio-display-body.controls-docked #radioDisplayScopeDialog .radio-display-scope-dialog-body {
+    flex: 1 1 auto;
+    max-height: none;
+    min-height: 0;
+}
+#radioDisplayScopeDialog .text-muted,
+#radioDisplayScopeDialog .form-text,
+#radioDisplayScopeDialog .radio-scope-label,
+#radioDisplayScopeDialog .radio-scope-sublabel,
+#radioDisplayScopeDialog .scope-level-label,
+#radioDisplayScopeDialog .radio-scope-multi-toggle {
+    color: #9aa0a6 !important;
+}
+#radioDisplayScopeDialog .scope-level-slider {
+    accent-color: var(--yaesu-led-on, #ff7a18);
+}
+
+/* Compact even rows: global .btn-outline-secondary is font-weight 700 for VFO
+   toggles, which plus Bootstrap's focus ring made the selected scope button
+   jump taller than its neighbours. */
+.radio-scope-controls .radio-scope-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.radio-scope-controls .radio-scope-row:last-child {
+    margin-bottom: 0;
+}
+.radio-scope-controls .radio-scope-multi {
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+    margin-top: 0.15rem;
+    padding-top: 0.25rem;
+}
+.radio-scope-controls .radio-scope-multi > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 1.75rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.radio-scope-controls .radio-scope-multi > summary::-webkit-details-marker {
+    display: none;
+}
+.radio-scope-controls .radio-scope-multi > summary::before {
+    content: "▸";
+    display: inline-block;
+    color: #6c757d;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+.radio-scope-controls .radio-scope-multi[open] > summary::before {
+    transform: rotate(90deg);
+}
+.radio-scope-controls .radio-scope-multi > summary:focus-visible {
+    outline: 2px solid var(--ywc-focus, #ffb347);
+    outline-offset: 1px;
+}
+.radio-scope-controls .radio-scope-multi-body {
+    padding-top: 0.4rem;
+}
+.radio-scope-controls .radio-scope-label {
+    flex: 0 0 4.4em;
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: help;
+}
+.radio-scope-controls .radio-scope-sublabel {
+    font-size: 0.8rem;
+    line-height: 1;
+    margin-left: 0.15rem;
+    cursor: help;
+}
+.radio-scope-controls .btn-group {
+    flex-wrap: nowrap;
+}
+.radio-scope-controls .btn {
+    box-sizing: border-box;
+    height: 1.75rem;
+    padding: 0 0.5rem;
+    line-height: 1;
+    font-size: 0.8rem;
+    font-weight: 500;
+    box-shadow: none !important;
+}
+.radio-scope-controls .btn-group > .btn {
+    z-index: auto;
+}
+.radio-scope-controls .btn-group > .btn.active {
+    z-index: 1;
+}
+.radio-scope-controls .scope-span-btn {
+    min-width: 2.65rem;
+}
+.radio-scope-controls .scope-peak-btn,
+.radio-scope-controls .scope-color-btn,
+.radio-scope-controls .scope-nbcolor-btn {
+    min-width: 2.15rem;
+}
+.radio-scope-controls .scope-fftatt-btn,
+.radio-scope-controls .scope-oscatt-btn,
+.radio-scope-controls .scope-osctime-btn {
+    min-width: 3.4rem;
+}
+.radio-scope-controls .scope-level-slider {
+    flex: 0 1 140px;
+    min-width: 90px;
+    width: 140px;
+    height: 1.75rem;
+    margin: 0;
+}
+.radio-scope-controls .scope-level-label {
+    min-width: 4.5em;
+    font-size: 0.8rem;
+    line-height: 1;
+}
+.radio-scope-controls .btn:focus-visible {
+    outline: 2px solid var(--ywc-focus, #ffb347);
+    outline-offset: 1px;
+}
+
+#radioDisplayScopeDialog .btn-outline-secondary {
+    color: #eee;
+    background-color: #3d3d3d;
+    border-color: #6e6e6e;
+    --bs-btn-color: #eee;
+    --bs-btn-bg: #3d3d3d;
+    --bs-btn-border-color: #6e6e6e;
+    --bs-btn-hover-bg: #4c4c4c;
+    --bs-btn-hover-border-color: #8a8a8a;
+    --bs-btn-hover-color: #fff;
+    --bs-btn-active-bg: var(--yaesu-led-on, #ff7a18);
+    --bs-btn-active-border-color: var(--yaesu-led-on, #ff7a18);
+    --bs-btn-active-color: #121212;
+    --bs-btn-disabled-color: #8a8a8a;
+    --bs-btn-disabled-bg: #2c2c2c;
+    --bs-btn-disabled-border-color: #4a4a4a;
+}
+#radioDisplayScopeDialog .btn-outline-secondary:hover {
+    color: #fff;
+    background-color: #4c4c4c;
+    border-color: #8a8a8a;
+}
+#radioDisplayScopeDialog .btn-outline-secondary.active {
+    background-color: var(--yaesu-led-on, #ff7a18);
+    border-color: var(--yaesu-led-on, #ff7a18);
+    color: #121212;
+}
+#radioDisplayScopeDialog .btn-outline-secondary:disabled,
+#radioDisplayScopeDialog .btn-outline-secondary.disabled {
+    color: #8a8a8a;
+    background-color: #2c2c2c;
+    border-color: #4a4a4a;
+    opacity: 1;
+}
+#radioDisplayScopeDialog .radio-scope-multi {
+    border-top-color: #444;
+}
+#radioDisplayScopeDialog .radio-scope-multi > summary::before {
+    color: #9aa0a6;
+}
+#radioDisplayScopeDialog .ywc-dialog-close {
+    background: #c0392b;
+    color: #fff;
+    border: 1px solid #e74c3c;
+    font-weight: bold;
+    line-height: 1;
+}
+#radioDisplayScopeDialog .ywc-dialog-close:hover,
+#radioDisplayScopeDialog .ywc-dialog-close:focus {
+    background: #e74c3c;
+    color: #fff;
+    border-color: #ff6b5a;
+}

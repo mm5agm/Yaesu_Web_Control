@@ -14,7 +14,7 @@
 // Requires signalr.min.js and hub-connection.js to have been loaded already:
 //
 //   <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
-//   <script src="~/js/ui/hub-connection.js"></script>
+//   <script src="~/js/hub/hub-connection.js"></script>
 //   <script type="module">
 //       import { keepHostAlive } from "/js/ui/host-presence.js";
 //       keepHostAlive();
@@ -36,15 +36,15 @@ let connection = null;
 export function keepHostAlive() {
     if (connection) return connection;
 
-    if (typeof window.ywcHubConnection !== "function") {
+    if (typeof window.rwcHubConnection !== "function") {
         console.warn(
-            "host-presence: signalr.min.js and /js/ui/hub-connection.js must both " +
+            "host-presence: signalr.min.js and /js/hub/hub-connection.js must both " +
             "be loaded before this module, so this page will not hold the host " +
             "open. Add the script tags.");
         return null;
     }
 
-    connection = window.ywcHubConnection("/radioHub");
+    connection = window.rwcHubConnection("/radioHub");
 
     // The hub replays a state snapshot to every client on connect. Nothing
     // here wants it, but ignoring it costs nothing and registering no handler

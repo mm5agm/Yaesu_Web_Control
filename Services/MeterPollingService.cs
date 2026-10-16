@@ -95,6 +95,9 @@ namespace Yaesu_Web_Control.Services
         // when a video stream of the front panel is worth watching anyway.
         private DateTime _lastTxSeenUtc = DateTime.MinValue;
         private bool _metersBorrowed = false;
+        // The MS digits currently borrowed (see TxMeterBorrow): COMP+SWR in
+        // voice modes, POW+SWR in CW/RTTY/data.
+        private string _borrowedSelection = TxMeterBorrow.CompAndSwr;
         private static readonly TimeSpan MeterReturnDelay = TimeSpan.FromSeconds(10);
 
         // Wall-clock settle window after MS13. The radio needs a moment to settle
@@ -103,6 +106,11 @@ namespace Yaesu_Web_Control.Services
         // until this deadline passes. If bench testing shows SWR coming up a beat
         // late, this is the knob.
         private DateTime _borrowSettleUntilUtc = DateTime.MinValue;
+
+        // The operator's own meters, once they have picked some in YWC (see
+        // RadioStateService.MetersPinnedByOperator). Tracked so a pick made
+        // mid-over gets the same settle window as the borrow does.
+        private string? _pinnedSelectionSeen;
         private static readonly TimeSpan BorrowSettleWindow = TimeSpan.FromMilliseconds(500);
 
         public MeterPollingService(
@@ -290,24 +298,59 @@ namespace Yaesu_Web_Control.Services
                         if (useRm0Pair)
                         {
                             _lastTxSeenUtc = DateTime.UtcNow;
-                            if (!_metersBorrowed)
+                            bool pinned = _stateService.MetersPinnedByOperator;
+                            var pinnedSel = _stateService.RadioMeterSelection;
+                            var txMode = _stateService.TxVfo == 1 ? _stateService.ModeB : _stateService.ModeA;
+                            var wanted = TxMeterBorrow.SelectionFor(txMode);
+                            if (pinned)
+                            {
+                                // The operator chose these meters to watch them
+                                // on the radio, so no borrow. If one was already
+                                // running (a pick made mid-over), the pop-up has
+                                // just sent their MS; stand down without a restore.
+                                if (_metersBorrowed)
+                                {
+                                    _metersBorrowed = false;
+                                    _stateService.MetersBorrowed = false;
+                                    _logger.LogInformation("[MeterPolling] Operator picked meters MS{Sel} - no longer borrowing them in TX", pinnedSel);
+                                }
+                                if (pinnedSel != _pinnedSelectionSeen)
+                                {
+                                    _pinnedSelectionSeen = pinnedSel;
+                                    _borrowSettleUntilUtc = DateTime.UtcNow.Add(BorrowSettleWindow);
+                                }
+                            }
+                            else if (!_metersBorrowed || wanted != _borrowedSelection)
                             {
                                 // Flag before the write: the radio echoes MS via auto-
                                 // information, and the dispatcher must not mistake our
-                                // own MS13 for an operator choice.
+                                // own MS write for an operator choice.
                                 _stateService.MetersBorrowed = true;
                                 _metersBorrowed = true;
+                                _borrowedSelection = wanted;
                                 _borrowSettleUntilUtc = DateTime.UtcNow.Add(BorrowSettleWindow);
-                                _logger.LogDebug("[MeterPolling] TX started — borrowing front-panel meters (MS13)");
-                                await _multiplexer.SendCommandAsync(CatCommands.SetMetersCompAndSWR + ";", "MeterPoll", stoppingToken);
+                                _logger.LogDebug("[MeterPolling] TX in {Mode} — borrowing front-panel meters (MS{Sel})", txMode, wanted);
+                                await _multiplexer.SendCommandAsync($"MS{wanted};", "MeterPoll", stoppingToken);
                             }
 
                             var compSwrResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterBoth + ";", "MeterPoll", stoppingToken);
                             _logger.LogDebug("[MeterPolling][DEBUG] RM0 response: '{Raw}'", compSwrResponse);
                             int? compRaw = CatCommands.ParseRm0LeftMeter(compSwrResponse ?? "");
                             int? swrRaw  = CatCommands.ParseRm0RightMeter(compSwrResponse ?? "");
-                            compression = compRaw ?? 0;
+                            // Under MS03 the left value is PO, already read by RM5;
+                            // compression means nothing in CW/RTTY/data, so show 0.
+                            compression = pinned || TxMeterBorrow.LeftIsCompression(_borrowedSelection) ? (compRaw ?? 0) : 0;
                             swr         = swrRaw  ?? 0;
+
+                            // On the operator's meters RM0 only means COMP / SWR
+                            // when those are what the panel shows; anything else
+                            // is TEMP or VDD or ALC and must not reach those gauges.
+                            if (pinned)
+                            {
+                                var (hasComp, hasSwr) = FrontPanelMeters.Rm0Carries(pinnedSel);
+                                if (!hasComp) { compression = 0; compRaw ??= 0; }
+                                if (!hasSwr)  { swr = 0;         swrRaw  ??= 0; }
+                            }
 
                             // A dropped or malformed RM0 is not a reading of zero.
                             // Publishing it as one made the SWR needle dip to 1.0
@@ -400,14 +443,23 @@ namespace Yaesu_Web_Control.Services
                         int vdd = CatCommands.ParseMeterReading(vddResponse ?? "");
                         _stateService.VDDMeter = vdd;
 
-                        var tempResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterTemp + ";", "MeterPoll", stoppingToken);
-                        int temp = CatCommands.ParseMeterReading(tempResponse ?? "");
-                        _stateService.Temperature = temp;
+                        // The FT-991A has no RM9 - see RadioCapabilities.PollsTemperature.
+                        if (RadioCapabilities.PollsTemperature(settings.RadioModel))
+                        {
+                            var tempResponse = await _multiplexer.SendCommandAsync(CatCommands.MeterTemp + ";", "MeterPoll", stoppingToken);
+                            int temp = CatCommands.ParseMeterReading(tempResponse ?? "");
+                            _stateService.Temperature = temp;
+                        }
 
-                        var an0 = await _multiplexer.SendCommandAsync("AN0;", "MeterPoll", stoppingToken);
-                        if (!string.IsNullOrEmpty(an0)) _dispatcher.DispatchMessage(an0);
-                        var an1 = await _multiplexer.SendCommandAsync("AN1;", "MeterPoll", stoppingToken);
-                        if (!string.IsNullOrEmpty(an1)) _dispatcher.DispatchMessage(an1);
+                        // Single-antenna radios have no AN command, so asking only
+                        // earns a "?;" every two seconds.
+                        if (RadioCapabilities.HasAntennaSelector(settings.RadioModel))
+                        {
+                            var an0 = await _multiplexer.SendCommandAsync("AN0;", "MeterPoll", stoppingToken);
+                            if (!string.IsNullOrEmpty(an0)) _dispatcher.DispatchMessage(an0);
+                            var an1 = await _multiplexer.SendCommandAsync("AN1;", "MeterPoll", stoppingToken);
+                            if (!string.IsNullOrEmpty(an1)) _dispatcher.DispatchMessage(an1);
+                        }
                     }
 
                     // Frequency backstop poll — single-receiver radios only (see field comment).

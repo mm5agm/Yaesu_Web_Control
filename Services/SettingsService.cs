@@ -9,6 +9,13 @@ namespace Yaesu_Web_Control.Services
         private readonly ILogger<SettingsService> _logger;
         private readonly SemaphoreSlim _semaphore = new(1, 1);
         private volatile ApplicationSettings? _cachedSettings;
+        // What GetCachedSettings hands out while _cachedSettings is null. The
+        // watcher below nulls the cache on every save, our own included, and
+        // until the next GetSettingsAsync the capture thread used to get a
+        // fresh ApplicationSettings - VideoDisplayEnabled false - and closed
+        // and reopened the dongle, blanking the Radio Display (seen on an ANT
+        // change, which saves the band profile).
+        private volatile ApplicationSettings? _lastSettings;
         private readonly FileSystemWatcher _watcher;
 
         public SettingsService(IWebHostEnvironment environment, ILogger<SettingsService> logger)
@@ -36,7 +43,7 @@ namespace Yaesu_Web_Control.Services
         public void Dispose() => _watcher.Dispose();
 
         public ApplicationSettings GetCachedSettings() =>
-            _cachedSettings ?? new ApplicationSettings();
+            _cachedSettings ?? _lastSettings ?? new ApplicationSettings();
 
         public async Task<ApplicationSettings> GetSettingsAsync()
         {
@@ -138,7 +145,11 @@ namespace Yaesu_Web_Control.Services
         public void InvalidateCache()
         {
             _semaphore.Wait();
-            try { _cachedSettings = null; }
+            try
+            {
+                if (_cachedSettings != null) _lastSettings = _cachedSettings;
+                _cachedSettings = null;
+            }
             finally { _semaphore.Release(); }
         }
 

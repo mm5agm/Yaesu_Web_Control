@@ -8,6 +8,11 @@
         private readonly RadioStateService _stateService;
         private readonly ILogger<CatMessageDispatcher> _logger;
 
+        // BI says on/off, the CW BK-IN TYPE menu says Semi/Full; CwBreakIn
+        // ("0"/"1"/"2") is built from the two.
+        private bool _bkInOn;
+        private bool _bkInFull;
+
         // Callback for initialization complete
         public Action? OnInitializationComplete { get; set; }
 
@@ -163,25 +168,7 @@
                         if (message.Length >= 5)
                         {
                             var modeCode = message[3];
-                            string? mode = modeCode switch
-                            {
-                                '1' => "LSB",
-                                '2' => "USB",
-                                '3' => "CW-U",
-                                '4' => "FM",
-                                '5' => "AM",
-                                '6' => "RTTY-L",
-                                '7' => "CW-L",
-                                '8' => "DATA-L",
-                                '9' => "RTTY-U",
-                                'A' => "DATA-FM",
-                                'B' => "FM-N",
-                                'C' => "DATA-U",
-                                'D' => "AM-N",
-                                'E' => "PSK",
-                                'F' => "DATA-FM-N",
-                                _ => null
-                            };
+                            string? mode = CatCommands.ModeFromCode(modeCode, _stateService.RadioModel);
                             if (mode != null)
                             {
                                 if (message[2] == '1') _stateService.ModeB = mode;
@@ -339,10 +326,14 @@
                         }
                         break;
                     case "SH":
-                        // SH{vfo}0{nn}; — vfo: 0=Main 1=Sub; [3]='0' fixed; [4-5]=2-digit code
+                        // SH{vfo}0{nn}; — vfo: 0=Main 1=Sub; [3]='0' fixed; [4-5]=2-digit code.
+                        // The FT-991A answers SH{vfo}{nn}; with no fixed '0', so its
+                        // code starts one character earlier. Reading it at [4] took
+                        // the last digit and the ';' ("1;" in a tester's log).
                         if (message.Length >= 6)
                         {
-                            var rawCode = message.Substring(4, 2).TrimStart('0');
+                            int codeAt = message.Length == 6 ? 3 : 4;
+                            var rawCode = message.Substring(codeAt, 2).TrimStart('0');
                             var code = string.IsNullOrEmpty(rawCode) ? "0" : rawCode;
                             SetPerVfo(message[2], routeB => {
                                 if (routeB) _stateService.IfWidthB = code;
@@ -351,11 +342,14 @@
                         }
                         break;
                     case "IS":
-                        // IS{vfo}0{sign}{nnnn}; — sign '+'/'-', nnnn=absolute Hz
+                        // IS{vfo}0{sign}{nnnn}; — sign '+'/'-', nnnn=absolute Hz.
+                        // The FT-991A has no fixed '0': IS{vfo}{sign}{nnnn};, so
+                        // the sign is at [3] there. Find it rather than assume.
                         if (message.Length >= 9)
                         {
-                            var sign = message[4];
-                            if (int.TryParse(message.Substring(5, 4), out int absHz))
+                            int signAt = message[3] is '+' or '-' ? 3 : 4;
+                            var sign = message[signAt];
+                            if (int.TryParse(message.Substring(signAt + 1, 4), out int absHz))
                             {
                                 var shiftHz = sign == '-' ? -absHz : absHz;
                                 SetPerVfo(message[2], routeB => {
@@ -471,6 +465,11 @@
                         // PL{PPP}; — speech processor level 000-100
                         if (message.Length >= 6 && int.TryParse(message.Substring(2, 3), out var procLevel))
                             _stateService.ProcLevel = Math.Clamp(procLevel, 0, 100);
+                        break;
+                    case "AO":
+                        // AO{nnn}; — AMC output level 001-100 (FTdx101)
+                        if (AmcCodes.ParseAmcLevel(message) is int amc)
+                            _stateService.AmcLevel = amc;
                         break;
                     case "ST":
                         // ST{mode}; — 0=OFF, 1=ON (VFO A=RX / VFO B=TX), 2=ON+5kHz Quick Split
@@ -724,14 +723,39 @@
                             _stateService.CwSpeed = Math.Clamp(ksVal, 4, 60);
                         break;
                     case "BI":
-                        // BI{n}; — CW break-in: 0=off, 1=semi BK-IN, 2=full BK-IN
+                        // BI{n}; — CW break-in 0 = off, 1 = on. Semi vs Full is
+                        // the CW BK-IN TYPE menu (see the EX case), so "on" is
+                        // reported as "2" when that menu last read FULL.
                         if (message.Length >= 4)
-                            _stateService.CwBreakIn = message[2].ToString();
+                        {
+                            _bkInOn = message[2] != '0';
+                            _stateService.CwBreakIn = !_bkInOn ? "0" : _bkInFull ? "2" : "1";
+                        }
                         break;
                     case "SD":
-                        // SD{nnnn}; — semi BK-IN delay 0000-2500 ms
-                        if (message.Length >= 7 && int.TryParse(message.Substring(2, 4), out int sdVal))
-                            _stateService.CwBreakInDelay = Math.Clamp(sdVal, 0, 2500);
+                        // SD{nn}; step number on FTdx101/FTdx10/FT-710,
+                        // SD{nnnn}; ms on FTDX3000 — see CwBreakInCodes.
+                        if (CwBreakInCodes.ParseDelayMs(message) is int sdMs)
+                            _stateService.CwBreakInDelay = sdMs;
+                        break;
+                    case "EX":
+                        // Only CW BK-IN TYPE and PROC TYPE are tracked here,
+                        // and only at the address confirmed for this model.
+                        if (CwBreakInCodes.BkInTypeExAddress(_stateService.RadioModel) is string bkAddr
+                            && message.StartsWith("EX" + bkAddr, StringComparison.Ordinal)
+                            && message.Length > 2 + bkAddr.Length)
+                        {
+                            _bkInFull = message[2 + bkAddr.Length] == '1';
+                            if (_bkInOn) _stateService.CwBreakIn = _bkInFull ? "2" : "1";
+                        }
+                        // PROC TYPE: 0 = COMP, 1 = AMC - see AmcCodes.
+                        else if (AmcCodes.ProcTypeExAddress(_stateService.RadioModel) is string ptAddr
+                            && message.StartsWith("EX" + ptAddr, StringComparison.Ordinal)
+                            && message.Length > 2 + ptAddr.Length
+                            && message[2 + ptAddr.Length] is '0' or '1')
+                        {
+                            _stateService.ProcType = message[2 + ptAddr.Length] - '0';
+                        }
                         break;
                     case "ID":
                         // ID{nnnn}; — hardware revision identifier e.g. ID0682;

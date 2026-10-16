@@ -17,6 +17,7 @@ namespace Yaesu_Web_Control.Controllers
         private readonly RadioStatePersistenceService _statePersistence;
         private readonly RadioInitializationService _radioInitService;
         private readonly AudioFilterMapService _audioFilterMap;
+        private readonly CatMultiplexerService _multiplexer;
         private static readonly SemaphoreSlim _requestSemaphore = new(1, 1);
 
         // -- P1=0-Fixed outgoing-command helpers -------------------------------
@@ -183,6 +184,38 @@ namespace Yaesu_Web_Control.Controllers
             }
         }
 
+        // AMC output level (AO, 1-100): what the radio's PROC knob sets while
+        // the processor is off, or always with PROC TYPE on AMC - see AmcCodes.
+        [HttpPost("amclevel")]
+        public async Task<IActionResult> SetAmcLevel([FromBody] ProcLevelRequest request)
+        {
+            if (!AmcCodes.SupportsAmc(_radioStateService.RadioModel))
+                return BadRequest(new { error = "AMC level is not supported on this radio" });
+            if (request.Value < 1 || request.Value > 100)
+                return BadRequest(new { error = "AMC level out of range (1-100)" });
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                await _catClient.SendCommandAsync($"AO{request.Value:D3};", "WebUI", CancellationToken.None);
+                // Read back: the radio is the source of truth.
+                var response = await _catClient.SendCommandAsync("AO;", "WebUI", CancellationToken.None);
+                int actual = AmcCodes.ParseAmcLevel(response ?? "") ?? request.Value;
+                _radioStateService.AmcLevel = actual;
+                return Ok(new { actual });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting AMC level");
+                return StatusCode(500, new { error = "Failed to set AMC level" });
+            }
+            finally
+            {
+                _requestSemaphore.Release();
+            }
+        }
+
         [HttpPost("radiopower")]
         public async Task<IActionResult> SetRadioPower([FromBody] RadioPowerRequest request)
         {
@@ -289,26 +322,9 @@ namespace Yaesu_Web_Control.Controllers
             { "160m", 1840000 }, { "80m", 3700000 }, { "60m", 5357000 },
             { "40m", 7100000 }, { "30m", 10136000 }, { "20m", 14074000 },
             { "17m", 18110000 }, { "15m", 21074000 }, { "12m", 24915000 },
-            { "10m", 28074000 }, { "6m", 50313000 }, { "4m", 70100000 }
-        };
-
-        private static readonly Dictionary<string, string> CatCodeToMode = new()
-        {
-            { "1", "LSB" },
-            { "2", "USB" },
-            { "3", "CW-U" },
-            { "4", "FM" },
-            { "5", "AM" },
-            { "6", "RTTY-L" },
-            { "7", "CW-L" },
-            { "8", "DATA-L" },
-            { "9", "RTTY-U" },
-            { "A", "DATA-FM" },
-            { "B", "FM-N" },
-            { "C", "DATA-U" },
-            { "D", "AM-N" },
-            { "E", "PSK" },
-            { "F", "DATA-FM-N" }
+            { "10m", 28074000 }, { "6m", 50313000 }, { "4m", 70100000 },
+            // FT-991A only; SetBand refuses them on a radio whose range stops short.
+            { "2m", 144300000 }, { "70cm", 432200000 }
         };
 
         public CatController(
@@ -318,7 +334,8 @@ namespace Yaesu_Web_Control.Controllers
             RadioStateService radioStateService,
             RadioStatePersistenceService statePersistence,
             RadioInitializationService radioInitService,
-            AudioFilterMapService audioFilterMap)
+            AudioFilterMapService audioFilterMap,
+            CatMultiplexerService multiplexer)
         {
             _catClient = catClient;
             _settingsService = settingsService;
@@ -327,6 +344,7 @@ namespace Yaesu_Web_Control.Controllers
             _statePersistence = statePersistence;
             _radioInitService = radioInitService;
             _audioFilterMap = audioFilterMap;
+            _multiplexer = multiplexer;
         }
 
         private async Task EnsureConnectedAsync()
@@ -502,6 +520,8 @@ namespace Yaesu_Web_Control.Controllers
                     return BadRequest(new { error = "Invalid band" });
 
                 var settings = await _settingsService.GetSettingsAsync();
+                if (freq > RadioCapabilities.FrequencyRangeHz(settings.RadioModel).MaxHz)
+                    return BadRequest(new { error = $"{request.Band} is outside the {settings.RadioModel}'s range" });
 
                 // Save current band profile before switching
                 var oldBand = _radioStateService.BandA;
@@ -529,11 +549,10 @@ namespace Yaesu_Web_Control.Controllers
                 {
                     if (!string.IsNullOrEmpty(profile.IfWidthCode))
                     {
-                        await _catClient.SendCommandAsync($"SH00{int.Parse(profile.IfWidthCode):D2};", "WebUI", CancellationToken.None);
+                        await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "0", int.Parse(profile.IfWidthCode)), "WebUI", CancellationToken.None);
                         _radioStateService.IfWidthA = profile.IfWidthCode;
                     }
-                    var sign = profile.IfShiftHz >= 0 ? '+' : '-';
-                    await _catClient.SendCommandAsync($"IS00{sign}{Math.Abs(profile.IfShiftHz):D4};", "WebUI", CancellationToken.None);
+                    await _catClient.SendCommandAsync(CatCommands.FormatIfShift(settings.RadioModel, "0", profile.IfShiftHz), "WebUI", CancellationToken.None);
                     _radioStateService.IfShiftA = profile.IfShiftHz;
                     if (!string.IsNullOrEmpty(profile.Mode))
                     {
@@ -576,6 +595,8 @@ namespace Yaesu_Web_Control.Controllers
                     return BadRequest(new { error = "Invalid band" });
 
                 var settings = await _settingsService.GetSettingsAsync();
+                if (freq > RadioCapabilities.FrequencyRangeHz(settings.RadioModel).MaxHz)
+                    return BadRequest(new { error = $"{request.Band} is outside the {settings.RadioModel}'s range" });
 
                 // Save current band profile before switching
                 var oldBand = _radioStateService.BandB;
@@ -603,11 +624,10 @@ namespace Yaesu_Web_Control.Controllers
                 {
                     if (!string.IsNullOrEmpty(profile.IfWidthCode))
                     {
-                        await _catClient.SendCommandAsync($"SH10{int.Parse(profile.IfWidthCode):D2};", "WebUI", CancellationToken.None);
+                        await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(settings.RadioModel, "1", int.Parse(profile.IfWidthCode)), "WebUI", CancellationToken.None);
                         _radioStateService.IfWidthB = profile.IfWidthCode;
                     }
-                    var sign = profile.IfShiftHz >= 0 ? '+' : '-';
-                    await _catClient.SendCommandAsync($"IS10{sign}{Math.Abs(profile.IfShiftHz):D4};", "WebUI", CancellationToken.None);
+                    await _catClient.SendCommandAsync(CatCommands.FormatIfShift(settings.RadioModel, "1", profile.IfShiftHz), "WebUI", CancellationToken.None);
                     _radioStateService.IfShiftB = profile.IfShiftHz;
                     if (!string.IsNullOrEmpty(profile.Mode))
                     {
@@ -773,10 +793,9 @@ namespace Yaesu_Web_Control.Controllers
 
                 var settings = await _settingsService.GetSettingsAsync();
                 bool isFtdx10  = settings.RadioModel == "FTdx10";
-                bool isFt710   = settings.RadioModel == "FT-710";
                 bool isFtdx3000 = settings.RadioModel == "FTDX3000";
 
-                if (isFt710)
+                if (!RadioCapabilities.HasRoofingFilterCat(settings.RadioModel))
                     return Ok(new { message = "Roofing filter is selected automatically by the radio" });
 
                 if (isFtdx10)
@@ -842,10 +861,9 @@ namespace Yaesu_Web_Control.Controllers
 
                 var settings = await _settingsService.GetSettingsAsync();
                 bool isFtdx10  = settings.RadioModel == "FTdx10";
-                bool isFt710   = settings.RadioModel == "FT-710";
                 bool isFtdx3000 = settings.RadioModel == "FTDX3000";
 
-                if (isFt710)
+                if (!RadioCapabilities.HasRoofingFilterCat(settings.RadioModel))
                     return Ok(new { message = "Roofing filter is selected automatically by the radio" });
 
                 if (isFtdx10)
@@ -977,7 +995,9 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                string displayMode = CatCodeToMode.TryGetValue(request.Mode, out var modeName) ? modeName : request.Mode;
+                string displayMode = (request.Mode?.Length == 1
+                    ? CatCommands.ModeFromCode(request.Mode[0], _radioStateService.RadioModel)
+                    : null) ?? request.Mode ?? "";
 
                 var recv = receiver.ToUpperInvariant();
                 if (recv != "A" && recv != "B")
@@ -1092,7 +1112,13 @@ namespace Yaesu_Web_Control.Controllers
                 await EnsureConnectedAsync();
 
                 var settings = await _settingsService.GetSettingsAsync();
-                int maxPower = RadioCapabilities.MaxPowerWatts(settings.RadioModel);
+                // Same rule as effectiveTxVfo() in site.js: on a single-receiver
+                // radio split moves TX to the other VFO.
+                int txVfoIdx = _radioStateService.IsSingleReceiver
+                    ? (_radioStateService.SplitMode > 0 ? 1 - _radioStateService.ActiveVfo : _radioStateService.ActiveVfo)
+                    : _radioStateService.TxVfo;
+                long txHz = txVfoIdx == 1 ? _radioStateService.FrequencyB : _radioStateService.FrequencyA;
+                int maxPower = RadioCapabilities.MaxPowerWattsAt(settings.RadioModel, txHz);
 
                 _logger.LogInformation("[API] Received SetPower request: receiver={Receiver}, Watts={Watts}, Model={Model}", receiver, request.Watts, settings.RadioModel);
                 _logger.LogInformation("[API] DEBUG: Received slider value = {Watts}", request.Watts);
@@ -1515,7 +1541,7 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                await _catClient.SendCommandAsync($"SH{VfoP1Outgoing(receiver)}0{int.Parse(request.Code):D2};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfWidth(_radioStateService.RadioModel, VfoP1Outgoing(receiver), codeNum), "WebUI", CancellationToken.None);
                 if (VfoIsB(receiver)) _radioStateService.IfWidthB = request.Code;
                 else                  _radioStateService.IfWidthA = request.Code;
                 return Ok();
@@ -1539,9 +1565,7 @@ namespace Yaesu_Web_Control.Controllers
             try
             {
                 await EnsureConnectedAsync();
-                var sign = request.ShiftHz >= 0 ? '+' : '-';
-                var abs = Math.Abs(request.ShiftHz);
-                await _catClient.SendCommandAsync($"IS{VfoP1Outgoing(receiver)}0{sign}{abs:D4};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync(CatCommands.FormatIfShift(_radioStateService.RadioModel, VfoP1Outgoing(receiver), request.ShiftHz), "WebUI", CancellationToken.None);
                 if (VfoIsB(receiver)) _radioStateService.IfShiftB = request.ShiftHz;
                 else                  _radioStateService.IfShiftA = request.ShiftHz;
                 return Ok();
@@ -1797,7 +1821,7 @@ namespace Yaesu_Web_Control.Controllers
                 // / FT1 (TX=B). The other supported models (FTdx101/FTdx10/FT-710) all
                 // have ST, so they fall through to the ST path below.
                 var splitSettings = await _settingsService.GetSettingsAsync();
-                if (splitSettings.RadioModel == "FTDX3000")
+                if (RadioCapabilities.SplitViaFtOnly(splitSettings.RadioModel))
                 {
                     if (mode == 2)
                     {
@@ -1806,7 +1830,7 @@ namespace Yaesu_Web_Control.Controllers
                         if (!string.IsNullOrWhiteSpace(faQs) && faQs.StartsWith("FA") &&
                             long.TryParse(faQs.Substring(2).TrimEnd(';'), out long freqAqs))
                         {
-                            long freqBqs = Math.Min(freqAqs + 5000, 75_000_000);
+                            long freqBqs = Math.Min(freqAqs + 5000, RadioCapabilities.FrequencyRangeHz(splitSettings.RadioModel).MaxHz);
                             await _catClient.SendCommandAsync($"FB{freqBqs:D9};", "WebUI", CancellationToken.None);
                             _radioStateService.FrequencyB = freqBqs;
                         }
@@ -1822,7 +1846,7 @@ namespace Yaesu_Web_Control.Controllers
                     _radioStateService.TxVfo = ftTxVfo;
                     int ftSplitMode = ftTxVfo == 1 ? 1 : 0;
                     _radioStateService.SplitMode = ftSplitMode;
-                    _logger.LogInformation("Split (FTDX3000) via FT: TX VFO = {TxVfo}, splitMode = {Mode}",
+                    _logger.LogInformation("Split ({Model}) via FT: TX VFO = {TxVfo}, splitMode = {Mode}", splitSettings.RadioModel,
                         ftTxVfo == 1 ? "B" : "A", ftSplitMode);
                     return Ok(new { splitMode = ftSplitMode });
                 }
@@ -1837,7 +1861,7 @@ namespace Yaesu_Web_Control.Controllers
                     if (!string.IsNullOrWhiteSpace(faResponse) && faResponse.StartsWith("FA") &&
                         long.TryParse(faResponse.Substring(2).TrimEnd(';'), out long freqA))
                     {
-                        long freqB = Math.Min(freqA + 5000, 75_000_000);
+                        long freqB = Math.Min(freqA + 5000, RadioCapabilities.FrequencyRangeHz(splitSettings.RadioModel).MaxHz);
                         await _catClient.SendCommandAsync($"FB{freqB:D9};", "WebUI", CancellationToken.None);
                         _radioStateService.FrequencyB = freqB;
                     }
@@ -1914,6 +1938,81 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
+        // The front panel's M▸VFO and VFO▸M (CAT manual: MC, MA, MB, AM).
+        // Both act on the radio's CURRENT memory channel, which MC; reads:
+        //   GET  memvfo           → { channel: "012" }
+        //   POST memvfo/mtovfo-a  → MA;  current channel to MAIN (VFO-A)
+        //   POST memvfo/mtovfo-b  → MB;  current channel to SUB  (VFO-B)
+        //   POST memvfo/vfotom    → AM;  MAIN (VFO-A) over the current channel
+        // AM; overwrites a channel on the radio, so it needs { channel } - the
+        // one the operator was shown - and is refused if MC; now says another
+        // (the front panel may have moved it in between). There is no SUB to
+        // memory command.
+        [HttpGet("memvfo")]
+        public async Task<IActionResult> ReadMemoryChannel()
+        {
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                return Ok(new { channel = await ReadMemoryChannelAsync() });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading memory channel");
+                return StatusCode(500, new { error = "Failed to read memory channel" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        public sealed class MemoryVfoRequest { public string? Channel { get; set; } }
+
+        [HttpPost("memvfo/{op}")]
+        public async Task<IActionResult> MemoryVfo(string op, [FromBody] MemoryVfoRequest? req)
+        {
+            var a = op.ToLowerInvariant();
+            string command = a switch
+            {
+                "mtovfo-a" => "MA;",
+                "mtovfo-b" => "MB;",
+                "vfotom"   => "AM;",
+                _          => ""
+            };
+            if (command.Length == 0)
+                return BadRequest(new { error = "op must be 'mtovfo-a', 'mtovfo-b' or 'vfotom'" });
+            if (a == "vfotom" && string.IsNullOrWhiteSpace(req?.Channel))
+                return BadRequest(new { error = "VFO to memory needs the channel it will overwrite" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                await EnsureConnectedAsync();
+                var channel = await ReadMemoryChannelAsync();
+                if (a == "vfotom" && !string.Equals(channel, req!.Channel!.Trim(), StringComparison.OrdinalIgnoreCase))
+                    return Conflict(new { error = "The memory channel changed", channel });
+                await _catClient.SendCommandAsync(command, "WebUI", CancellationToken.None);
+                _logger.LogInformation("Memory/VFO {Op} ({Command}) channel {Channel}", a, command, channel);
+                return Ok(new { op = a, channel });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending memory/VFO {Op}", a);
+                return StatusCode(500, new { error = "Failed to send memory/VFO command" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        // MC; → "MC012;" → "012". Null if the radio answers in another shape.
+        private async Task<string?> ReadMemoryChannelAsync()
+        {
+            var response = await _catClient.SendCommandAsync("MC;", "WebUI", CancellationToken.None);
+            if (string.IsNullOrWhiteSpace(response)) return null;
+            var body = response.Trim().TrimEnd(';');
+            return body.Length > 2 && body.StartsWith("MC", StringComparison.OrdinalIgnoreCase) ? body.Substring(2) : null;
+        }
+
         // Set the active/operating band on dual-receiver radios (FTdx101).
         // VS selects which band the main tuning knob controls: 0 = MAIN (VFO A),
         // 1 = SUB (VFO B). The radio auto-broadcasts VS, so the UI highlight
@@ -1964,6 +2063,11 @@ namespace Yaesu_Web_Control.Controllers
                 var rxSettings = await _settingsService.GetSettingsAsync();
                 var rx = v == "B" ? 1 : 0;
 
+                // FT-991A: no VS and no FR, so the receiver cannot be moved to
+                // VFO B over CAT. The page disables the button; this covers the API.
+                if (!RadioCapabilities.CanSelectRxVfo(rxSettings.RadioModel) && rx != _radioStateService.ActiveVfo)
+                    return BadRequest(new { error = "This radio cannot choose its receive VFO over CAT. Use Swap A/B instead." });
+
                 // Capture TX before ActiveVfo moves — EffectiveTxVfo() depends on it.
                 var wasSplit = _radioStateService.SplitMode > 0;
                 var previousTx = EffectiveTxVfo();
@@ -1975,7 +2079,7 @@ namespace Yaesu_Web_Control.Controllers
                 // VS, the same command the active-vfo endpoint already sends.
                 if (rxSettings.RadioModel == "FTDX3000")
                     await _catClient.SendCommandAsync(v == "B" ? "FR4;" : "FR0;", "WebUI", CancellationToken.None);
-                else
+                else if (RadioCapabilities.CanSelectRxVfo(rxSettings.RadioModel))
                     await _catClient.SendCommandAsync($"VS{rx};", "WebUI", CancellationToken.None);
 
                 _radioStateService.ActiveVfo = rx;
@@ -2006,7 +2110,7 @@ namespace Yaesu_Web_Control.Controllers
                             // FTdx10 / FT-710 / FT-991A: nudge FT to match so a
                             // later SetTxVfo / split derive sees a coherent value.
                             // Harmless when the radio ignores FT outside split.
-                            await _catClient.SendCommandAsync($"FT{rx};", "WebUI", CancellationToken.None);
+                            await _catClient.SendCommandAsync(FtSetCommand(rxSettings.RadioModel, rx), "WebUI", CancellationToken.None);
                         }
                     }
                     else
@@ -2016,7 +2120,7 @@ namespace Yaesu_Web_Control.Controllers
                         if (_radioStateService.SplitMode == 0)
                         {
                             // Cleared split by moving RX onto the TX VFO.
-                            if (rxSettings.RadioModel == "FTDX3000")
+                            if (RadioCapabilities.SplitViaFtOnly(rxSettings.RadioModel))
                                 await _catClient.SendCommandAsync("FT2;", "WebUI", CancellationToken.None);
                             else
                                 await _catClient.SendCommandAsync("ST0;", "WebUI", CancellationToken.None);
@@ -2044,6 +2148,12 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
+        // FT set form for "transmit on VFO A / B". The FT-991A's CAT manual
+        // documents only P1 = 2 (A) / 3 (B) for a set; its read still answers
+        // 0 / 1. The other models keep the FT0 / FT1 that #78 proved.
+        private static string FtSetCommand(string radioModel, int txVfo) =>
+            radioModel == "FT-991A" ? $"FT{txVfo + 2};" : $"FT{txVfo};";
+
         [HttpPost("tx-vfo/{vfo}")]
         public async Task<IActionResult> SetTxVfo(string vfo)
         {
@@ -2063,11 +2173,11 @@ namespace Yaesu_Web_Control.Controllers
                 // FT selects the transmit VFO: FT0; = TX on A, FT1; = TX on B.
                 // Proven on FTDX3000 for the independent TX selector (#78).
                 // (The Split button path on FTDX3000 uses FT2/FT3 instead.)
-                await _catClient.SendCommandAsync($"FT{tx};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync(FtSetCommand(txSettings.RadioModel, tx), "WebUI", CancellationToken.None);
 
-                // FTdx10 / FT-710 / FT-991A also need ST to engage/clear split;
-                // FTDX3000 has no ST (FT alone is enough for its firmware).
-                if (_radioStateService.IsSingleReceiver && txSettings.RadioModel != "FTDX3000")
+                // FTdx10 / FT-710 also need ST to engage/clear split; the
+                // FTDX3000 and FT-991A have no ST (FT alone does it).
+                if (_radioStateService.IsSingleReceiver && !RadioCapabilities.SplitViaFtOnly(txSettings.RadioModel))
                     await _catClient.SendCommandAsync(splitOn ? "ST1;" : "ST0;", "WebUI", CancellationToken.None);
 
                 _radioStateService.TxVfo = tx;
@@ -2384,6 +2494,95 @@ namespace Yaesu_Web_Control.Controllers
             finally { _requestSemaphore.Release(); }
         }
 
+        // --- FRONT-PANEL TX METERS (MS) ---
+        // Backs the Radio Display meter pop-up: the choices come from
+        // FrontPanelMeters, so the browser never carries its own copy of the
+        // per-model MS table.
+        //
+        // The FTdx101's meters are borrowed (MS13) while transmitting so RM0 can
+        // read COMP + SWR. A choice made during a borrow is recorded and NOT sent:
+        // writing MS then would break the TX meter read, and the TX-idle restore
+        // in MeterPollingService puts the recorded choice on the panel anyway.
+        public class MeterSelectionRequest { public List<string> Codes { get; set; } = new(); }
+
+        [HttpGet("meters")]
+        public async Task<IActionResult> GetMeterSelection()
+        {
+            var model = (await _settingsService.GetSettingsAsync()).RadioModel;
+            var layout = FrontPanelMeters.For(model);
+            if (layout is null)
+                return Ok(new { supported = false, radioModel = model });
+
+            if (!_radioStateService.MetersBorrowed && await _requestSemaphore.WaitAsync(2000))
+            {
+                // Read it fresh: the cache only moves on the radio's own MS
+                // auto-info, and a reply read here never reaches the dispatcher.
+                try
+                {
+                    await EnsureConnectedAsync();
+                    var reply = await _catClient.SendCommandAsync("MS;", "WebUI", CancellationToken.None);
+                    var digits = reply?.TrimEnd(';');
+                    if (digits is { Length: >= 3 } && digits.StartsWith("MS") && !_radioStateService.MetersBorrowed)
+                        _radioStateService.ReportMeterSelection(digits.Substring(2));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "MS read failed; answering from the cached meter selection");
+                }
+                finally { _requestSemaphore.Release(); }
+            }
+
+            return Ok(MeterSelectionResponse(model, layout));
+        }
+
+        [HttpPost("meters")]
+        public async Task<IActionResult> SetMeterSelection([FromBody] MeterSelectionRequest request)
+        {
+            var model = (await _settingsService.GetSettingsAsync()).RadioModel;
+            var layout = FrontPanelMeters.For(model);
+            if (layout is null)
+                return BadRequest(new { error = $"No meter selection for {model}" });
+
+            var digits = FrontPanelMeters.BuildDigits(model, request.Codes);
+            if (digits is null)
+                return BadRequest(new { error = "Invalid meter selection" });
+
+            if (!await _requestSemaphore.WaitAsync(2000))
+                return StatusCode(503, new { error = "Radio busy" });
+            try
+            {
+                // Record (and pin) first, then send: the pin tells the meter
+                // poller to stop borrowing, even mid-over, and to treat the next
+                // RM0 read as belonging to these meters.
+                _radioStateService.SetOperatorMeterSelection(digits);
+                await EnsureConnectedAsync();
+                await _catClient.SendCommandAsync($"MS{digits};", "WebUI", CancellationToken.None);
+                return Ok(MeterSelectionResponse(model, layout));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting front-panel meters");
+                return StatusCode(500, new { error = "Failed to set meters" });
+            }
+            finally { _requestSemaphore.Release(); }
+        }
+
+        private object MeterSelectionResponse(string model, FrontPanelMeters.Layout layout) => new
+        {
+            supported = true,
+            radioModel = model,
+            borrowed = _radioStateService.MetersBorrowed,
+            pinned = _radioStateService.MetersPinnedByOperator,
+            txGaugesLost = FrontPanelMeters.TxGaugesLost(model, _radioStateService.RadioMeterSelection),
+            slots = layout.Slots.Select(s => new
+            {
+                id = s.Id,
+                label = s.Label,
+                options = s.Options.Select(o => new { code = o.Code, label = o.Label })
+            }),
+            selected = FrontPanelMeters.ParseDigits(model, _radioStateService.RadioMeterSelection)
+        };
+
         // --- NB LEVEL ---
         public class NbLevelRequest { public int Level { get; set; } = 10; }
 
@@ -2597,10 +2796,20 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("disconnect")]
         public async Task<IActionResult> Disconnect()
         {
+            // Closing the port while the radio is keyed would leave nothing to
+            // unkey it, so a transmitting radio keeps its link.
+            if (_radioStateService.IsTransmitting)
+                return Ok(new { success = false, message = "Transmitting - unkey before disconnecting" });
             try
             {
-                await _catClient.DisconnectAsync();
+                // The multiplexer owns the port. _catClient.DisconnectAsync is
+                // deliberately a no-op, so calling it left the port open and the
+                // key only changed colour. Closing it here frees the COM port for
+                // other programs until Connect opens it again.
+                await _multiplexer.DisconnectAsync();
+                _radioStateService.IsConnected = false;
                 AppStatus.InitializationStatus = "disconnected";
+                _logger.LogInformation("CAT link closed by the operator");
                 return Ok(new { success = true });
             }
             catch (Exception ex)
@@ -2822,14 +3031,30 @@ namespace Yaesu_Web_Control.Controllers
         {
             if (!new[] { "0", "1", "2" }.Contains(request.Mode))
                 return BadRequest(new { error = "Break-in mode 0/1/2" });
+            // BI is only off/on. Semi/Full is the CW BK-IN TYPE menu, written
+            // only where its address is confirmed; elsewhere Full isn't offered.
+            // Until 2026-10-02 "2" went out as BI2;, which the radio ignored.
+            var bkAddr = CwBreakInCodes.BkInTypeExAddress(_radioStateService.RadioModel);
+            if (request.Mode == "2" && bkAddr == null)
+                return BadRequest(new { error = "Full break-in isn't available for this radio" });
             if (!await _requestSemaphore.WaitAsync(2000))
                 return StatusCode(503, new { error = "Radio busy" });
             try
             {
                 await EnsureConnectedAsync();
-                await _catClient.SendCommandAsync($"BI{request.Mode};", "WebUI", CancellationToken.None);
-                _radioStateService.CwBreakIn = request.Mode;
-                return Ok();
+                if (request.Mode != "0" && bkAddr != null)
+                    await _catClient.SendCommandAsync($"EX{bkAddr}{(request.Mode == "2" ? '1' : '0')};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync(request.Mode == "0" ? "BI0;" : "BI1;", "WebUI", CancellationToken.None);
+
+                // The radio is the source of truth: report what it now holds.
+                var on = await ReadBreakInAsync();
+                var type = bkAddr != null ? await ReadExValueAsync(bkAddr) : null;
+                string actual = on == null ? request.Mode
+                              : on == "0" ? "0"
+                              : type == null ? (request.Mode == "0" ? "1" : request.Mode)
+                              : type == "1" ? "2" : "1";
+                _radioStateService.CwBreakIn = actual;
+                return Ok(new { mode = actual });
             }
             catch (Exception ex) { _logger.LogError(ex, "Error setting CW break-in"); return StatusCode(500, new { error = "Failed" }); }
             finally { _requestSemaphore.Release(); }
@@ -2838,16 +3063,23 @@ namespace Yaesu_Web_Control.Controllers
         [HttpPost("cw/breakindelay")]
         public async Task<IActionResult> SetCwBreakInDelay([FromBody] CwBreakInDelayRequest request)
         {
-            if (request.DelayMs < 0 || request.DelayMs > 2500)
-                return BadRequest(new { error = "Delay 0–2500 ms" });
+            if (request.DelayMs < CwBreakInCodes.MinDelayMs || request.DelayMs > CwBreakInCodes.MaxDelayMs)
+                return BadRequest(new { error = $"Delay {CwBreakInCodes.MinDelayMs}-{CwBreakInCodes.MaxDelayMs} ms" });
             if (!await _requestSemaphore.WaitAsync(2000))
                 return StatusCode(503, new { error = "Radio busy" });
             try
             {
                 await EnsureConnectedAsync();
-                await _catClient.SendCommandAsync($"SD{request.DelayMs:D4};", "WebUI", CancellationToken.None);
-                _radioStateService.CwBreakInDelay = request.DelayMs;
-                return Ok();
+                // FTdx101/FTdx10/FT-710 take a step number, FTDX3000 takes ms.
+                // Until 2026-10-02 every model was sent ms, which the
+                // step-number radios ignored.
+                var model = _radioStateService.RadioModel;
+                await _catClient.SendCommandAsync(CwBreakInCodes.SetDelayCommand(model, request.DelayMs), "WebUI", CancellationToken.None);
+                var answer = await _catClient.SendCommandAsync("SD;", "WebUI", CancellationToken.None, 400);
+                int delay = (answer != null ? CwBreakInCodes.ParseDelayMs(answer) : null)
+                            ?? CwBreakInCodes.SnapDelayMs(model, request.DelayMs);
+                _radioStateService.CwBreakInDelay = delay;
+                return Ok(new { delayMs = delay });
             }
             catch (Exception ex) { _logger.LogError(ex, "Error setting CW break-in delay"); return StatusCode(500, new { error = "Failed" }); }
             finally { _requestSemaphore.Release(); }
@@ -2859,6 +3091,14 @@ namespace Yaesu_Web_Control.Controllers
 
             /// <summary>Radio keyer slot 1-5 this message maps to (M1 = 1).</summary>
             public int Slot { get; set; } = 1;
+
+            /// <summary>
+            /// CW Send's second and later pieces of one line: write and play,
+            /// nothing else. The first piece already made every read below,
+            /// and each one is a CAT round trip heard as a long word space at
+            /// the join.
+            /// </summary>
+            public bool Continuation { get; set; }
         }
 
         // The radio's own limit on a keyer memory (KM, "up to 50 characters").
@@ -2882,9 +3122,21 @@ namespace Yaesu_Web_Control.Controllers
         // Store text in one of the radio's five keyer memories. The radio's own
         // '}' terminator is appended here; without it the previous, longer
         // message is left trailing after the new one.
-        private async Task WriteKeyerMemoryAsync(int slot, string text) =>
+        // KM and KY are set commands and the radio never answers them, so
+        // SendCommandAsync always waits out its whole timeout. The default 150 ms
+        // is harmless for a button press, but CW Send pays it at every join
+        // between pieces, as silence. waitMs is how long to leave the radio
+        // before the next command.
+        private async Task WriteKeyerMemoryAsync(int slot, string text, int waitMs = 150) =>
             await _catClient.SendCommandAsync(
-                $"KM{slot}{text}{KeyerMemoryTerminator};", "WebUI", CancellationToken.None);
+                $"KM{slot}{text}{KeyerMemoryTerminator};", "WebUI", CancellationToken.None, waitMs);
+
+        // Unmeasured: how soon the radio will take a KY after a KM. 30 ms is
+        // several times the ~4 ms a 15-character KM takes on the wire at 38400.
+        private const int CwContinuationKmWaitMs = 30;
+        // KY's wait is pure delay before the HTTP reply, and CW Send times the
+        // next piece from that reply, so it is silence at every join too.
+        private const int CwKyWaitMs = 10;
 
         private async Task<string?> ReadKeyerMemoryAsync(int slot)
         {
@@ -3003,7 +3255,8 @@ namespace Yaesu_Web_Control.Controllers
         // behind, and the next press sends rather than silently stopping.
         private static int _playingSlot;
 
-        // Read the break-in state: "BI;" -> "BI0" off / "BI1" semi / "BI2" full.
+        // Read the break-in state: "BI;" -> "BI0" off / "BI1" on (Semi or
+        // Full is the CW BK-IN TYPE menu, not BI).
         // Null when the radio did not answer, which is treated as "do not
         // block the send" rather than as off.
         private async Task<string?> ReadBreakInAsync()
@@ -3058,7 +3311,11 @@ namespace Yaesu_Web_Control.Controllers
                 // Sending KY again does not stop it either - it restarts the
                 // message from the beginning, which is the last thing a hand
                 // reaching for a stop button wants.
-                if (await ReadPlaybackActiveAsync() == true)
+                // A continuation piece skips this: the piece before it is the
+                // only thing that could be playing, CW Send has already waited
+                // it out, and RI4 has never asserted for a KY playback on the
+                // bench radio anyway.
+                if (!request.Continuation && await ReadPlaybackActiveAsync() == true)
                 {
                     _logger.LogInformation("CW M{Slot} pressed while playing - no stop exists", request.Slot);
                     return StatusCode(409, new
@@ -3067,8 +3324,33 @@ namespace Yaesu_Web_Control.Controllers
                     });
                 }
 
-                var stored = await ReadKeyerMemoryAsync(request.Slot);
-                if (stored is null)
+                // KY plays a memory only while the transmit VFO is in CW. In any
+                // other mode the radio accepts KM and KY without complaint and
+                // keys nothing - not even the monitor - which is what an
+                // operator in DATA-U saw on 2026-10-01. Refuse and say why, so
+                // the panel can offer to switch rather than look like it sent.
+                // The mode is the app's live copy (the radio announces MD
+                // changes), so this costs no CAT round trip between pieces of a
+                // CW Send line. Unknown is let through rather than blocked.
+                var txVfo = _radioStateService.TxVfo == 1 ? "B" : "A";
+                var txMode = txVfo == "B" ? _radioStateService.ModeB : _radioStateService.ModeA;
+                if (!string.IsNullOrEmpty(txMode) && txMode != "CW-U" && txMode != "CW-L")
+                {
+                    _logger.LogInformation("CW M{Slot} refused: transmit VFO {Vfo} is in {Mode}", request.Slot, txVfo, txMode);
+                    return StatusCode(409, new
+                    {
+                        error = $"VFO {txVfo} is in {txMode}, so the radio won't play CW. Switch VFO {txVfo} to CW first.",
+                        code = "notCw",
+                        vfo = txVfo,
+                        mode = txMode
+                    });
+                }
+
+                // A continuation always writes: the slot holds the previous
+                // piece, which by construction is different text, so reading it
+                // back first is a round trip that can only say "write it".
+                var stored = request.Continuation ? null : await ReadKeyerMemoryAsync(request.Slot);
+                if (stored is null && !request.Continuation)
                 {
                     _logger.LogWarning(
                         "Keyer memory {Slot} did not read back; writing it rather than refusing to send",
@@ -3078,7 +3360,7 @@ namespace Yaesu_Web_Control.Controllers
                 bool wroteMemory = stored is null
                     || !string.Equals(stored.TrimEnd(), clean, StringComparison.Ordinal);
                 if (wroteMemory)
-                    await WriteKeyerMemoryAsync(request.Slot, clean);
+                    await WriteKeyerMemoryAsync(request.Slot, clean, request.Continuation ? CwContinuationKmWaitMs : 150);
 
                 // Break-in decides whether a playback reaches the antenna. With
                 // it off the radio plays the memory to the sidetone monitor and
@@ -3098,14 +3380,17 @@ namespace Yaesu_Web_Control.Controllers
                 // "transmitted", and the panel's aria-live line reports it - an
                 // operator who cannot see the BK-IN lamp must still be told
                 // whether that message went out or only to the headphones.
-                var breakIn = await ReadBreakInAsync();
+                // A continuation uses the app's live copies of break-in and
+                // speed (the radio announces changes to both) instead of
+                // asking again - see CwMessageRequest.Continuation.
+                var breakIn = request.Continuation ? _radioStateService.CwBreakIn : await ReadBreakInAsync();
                 bool transmitted = breakIn != "0";
 
                 // Read the speed before starting, not after: once KY is away
                 // the radio is busy keying and a KS read competes with it.
-                var wpm = await ReadKeyerSpeedAsync();
+                int? wpm = request.Continuation ? _radioStateService.CwSpeed : await ReadKeyerSpeedAsync();
 
-                await _catClient.SendCommandAsync($"KY{KeyerPlaybackParam(request.Slot)};", "WebUI", CancellationToken.None);
+                await _catClient.SendCommandAsync($"KY{KeyerPlaybackParam(request.Slot)};", "WebUI", CancellationToken.None, CwKyWaitMs);
                 _playingSlot = request.Slot;
                 // Logged at Information, with the stop above it: an operator
                 // pressing a button is rare enough to be worth a line, and

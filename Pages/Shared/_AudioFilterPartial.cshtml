@@ -1,0 +1,81 @@
+@model (string Vfo, bool Popout)
+@{
+    // One VFO's Audio Filter dialog, shared by the main page (one per VFO, so
+    // both can be open at once on FTdx101-family dual-receiver radios) and
+    // the /AudioFilter?vfo= pop-out window. AudioFilterPanel
+    // (wwwroot/js/ui/audio-filter-panel.js) finds its elements by these ids.
+    //
+    // Popout: true swaps the Pop out button for Reattach, and its close
+    // button closes the window rather than the dialog.
+    var vfo = Model.Vfo;
+    var popout = Model.Popout;
+}
+<dialog id="audioFilterDialog@(vfo)" open="@popout"
+        class="@(popout ? "audio-filter-popout" : null)"
+        style="@(popout ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0; min-width:380px; max-width:520px; position:fixed; margin:0;")"
+        aria-labelledby="audioFilterDialogTitle@(vfo)">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444; @(popout ? "" : "cursor:move;")">
+        <strong id="audioFilterDialogTitle@(vfo)">Audio Filter — VFO @vfo <span id="audioFilterModeLabel@(vfo)" class="text-info ms-1"></span></strong>
+        <div class="d-flex align-items-center gap-1">
+            @if (popout)
+            {
+                <button id="audioFilterReattachBtn@(vfo)" class="btn btn-sm btn-outline-secondary" type="button"
+                        title="Put the VFO @vfo Audio Filter back in the main page"
+                        aria-label="Reattach the VFO @vfo Audio Filter to the main page">Reattach</button>
+                <button class="btn btn-sm ywc-dialog-close" type="button" onclick="window.close()"
+                        aria-label="Close the VFO @vfo Audio Filter window">✕</button>
+            }
+            else
+            {
+                <button id="audioFilterPopoutBtn@(vfo)" class="btn btn-sm btn-outline-secondary" type="button"
+                        title="Open the VFO @vfo Audio Filter in a window of its own, which can go on another monitor"
+                        aria-label="Pop the VFO @vfo Audio Filter out into its own window"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></button>
+                <button class="btn btn-sm ywc-dialog-close" type="button" onclick="document.getElementById('audioFilterDialog@(vfo)').close()" aria-label="Close VFO @vfo Audio Filter dialog">✕</button>
+            }
+        </div>
+    </div>
+    <div class="p-3 d-flex flex-column gap-3">
+        <div id="audioFilterStatus@(vfo)" class="small text-warning" style="min-height:1.2em;"></div>
+        <div id="audioFilterUnsupported@(vfo)" class="alert alert-secondary mb-0" style="display:none;">
+            Audio Filter is not available for this mode on this radio model.
+        </div>
+        <div id="audioFilterControls@(vfo)">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <label class="mb-0 fw-bold" style="min-width:90px;">LCUT FREQ:</label>
+                <input type="checkbox" id="audioFilterLcutFreqOff@(vfo)" class="form-check-input"
+                       title="Disable low-cut filter (OFF)" aria-label="LCUT FREQ off">
+                <label class="mb-0 small" for="audioFilterLcutFreqOff@(vfo)">Off</label>
+                <input type="range" id="audioFilterLcutFreqSlider@(vfo)"
+                       min="100" max="1000" step="50" value="100"
+                       style="flex:1; height:18px;"
+                       aria-label="LCUT FREQ Hz">
+                <span id="audioFilterLcutFreqLabel@(vfo)" class="text-end" style="min-width:64px;">—</span>
+            </div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <label class="mb-0 fw-bold" style="min-width:90px;">LCUT SLOPE:</label>
+                <button type="button" class="btn btn-sm btn-outline-light audio-filter-slope-btn"
+                        id="audioFilterLcutSlopeBtn@(vfo)" data-slope-code="0"
+                        title="Toggle LCUT slope between 6 dB/oct and 18 dB/oct"
+                        aria-label="LCUT slope">— dB/oct</button>
+            </div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <label class="mb-0 fw-bold" style="min-width:90px;">HCUT FREQ:</label>
+                <input type="checkbox" id="audioFilterHcutFreqOff@(vfo)" class="form-check-input"
+                       title="Disable high-cut filter (OFF)" aria-label="HCUT FREQ off">
+                <label class="mb-0 small" for="audioFilterHcutFreqOff@(vfo)">Off</label>
+                <input type="range" id="audioFilterHcutFreqSlider@(vfo)"
+                       min="700" max="4000" step="50" value="3000"
+                       style="flex:1; height:18px;"
+                       aria-label="HCUT FREQ Hz">
+                <span id="audioFilterHcutFreqLabel@(vfo)" class="text-end" style="min-width:64px;">—</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <label class="mb-0 fw-bold" style="min-width:90px;">HCUT SLOPE:</label>
+                <button type="button" class="btn btn-sm btn-outline-light audio-filter-slope-btn"
+                        id="audioFilterHcutSlopeBtn@(vfo)" data-slope-code="0"
+                        title="Toggle HCUT slope between 6 dB/oct and 18 dB/oct"
+                        aria-label="HCUT slope">— dB/oct</button>
+            </div>
+        </div>
+    </div>
+</dialog>

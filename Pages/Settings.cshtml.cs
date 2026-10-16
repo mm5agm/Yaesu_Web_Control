@@ -167,6 +167,19 @@ namespace Yaesu_Web_Control.Pages
                 return Page();
             }
 
+            // One SDR can only be open in one worker. With the same device on
+            // both VFOs, whichever worker opened it first kept it and the other
+            // VFO showed "SDR device unavailable" (#190, Rick W2JAZ).
+            if (!string.IsNullOrWhiteSpace(Settings.SdrDeviceKeyA) &&
+                string.Equals(Settings.SdrDeviceKeyA, Settings.SdrDeviceKeyB, StringComparison.Ordinal))
+            {
+                ModelState.AddModelError("Settings.SdrDeviceKeyB",
+                    "The same SDR is chosen for VFO A and VFO B. One SDR can only feed one VFO: choose (none) for the VFO it isn't wired to.");
+                StatusMessage = "❌ Settings not saved — the same SDR is chosen for VFO A and VFO B.";
+                NetworkAddresses = GetLocalIPAddresses();
+                return Page();
+            }
+
             // Remote Audio: refuse blank devices when enabled. Empty TX used to
             // open the PC speakers → browser-mic feedback into the room.
             if (Settings.AudioStreamingEnabled)
@@ -234,6 +247,7 @@ namespace Yaesu_Web_Control.Pages
                     ? Settings.HttpPort
                     : 8080;
                 current.AutoShutdownWhenNoBrowsers = Settings.AutoShutdownWhenNoBrowsers;
+                current.ReleaseSdrWhenBrowsersClose = Settings.ReleaseSdrWhenBrowsersClose;
                 current.OpenBrowserOnStartup = Settings.OpenBrowserOnStartup;
                 current.SerialPort        = Settings.SerialPort;
                 current.BaudRate          = Settings.BaudRate;
@@ -282,7 +296,7 @@ namespace Yaesu_Web_Control.Pages
                         .Concat(optionalSelected.Where(f => f is "A"))
                         .Distinct().ToList();
                 }
-                else if (Settings.RadioModel == "FT-710")
+                else if (Settings.RadioModel is "FT-710" or "FT-991A")
                 {
                     current.InstalledRoofingFilters = new List<string>();
                 }
@@ -305,6 +319,18 @@ namespace Yaesu_Web_Control.Pages
                 // for nothing.
                 current.CwReaderFilterHz = Math.Clamp(Settings.CwReaderFilterHz, 50, 1000);
                 current.CwReaderUseApf   = Settings.CwReaderUseApf;
+
+                // RTTY. These three have to be copied here like everything
+                // else: this handler writes field by field onto the stored
+                // settings, so a property with no line in it is thrown away on
+                // save while the page still says "saved successfully" and the
+                // old value is what comes back. All three were added with
+                // their checkboxes and without their copies, which is exactly
+                // how that looks from the outside - a switch that will not
+                // stay where it is put.
+                current.RttyContestMode    = Settings.RttyContestMode;
+                current.RttyTunerSetMode   = Settings.RttyTunerSetMode;
+                current.RttyAutoCentreMark = Settings.RttyAutoCentreMark;
 
                 // DX cluster settings — copy through. Normalise callsign to upper case.
                 current.DxClusterEnabled         = Settings.DxClusterEnabled;
