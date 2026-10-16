@@ -145,6 +145,29 @@ namespace RadioWebControl.Core.Services.Cw
         public double ReadabilitySpreadCeiling { get; set; } = 8.0;
 
         /// <summary>
+        /// Marks of dah length (2.5 x p10 or more) that overrule the spread
+        /// floor. Zero turns the exemption off.
+        ///
+        /// The floor reads p90 of a 16-mark window, so it needs three dahs in
+        /// sixteen marks to see one. Real Morse can go under that: on
+        /// bench/slow-cw-20261016e.wav, 13 wpm, "RST 5 5N 5 5N K" is ten dits
+        /// to every dah, the spread fell to 1.06 and the window read Chatter.
+        /// The text was held, went stale after HoldStaleSeconds and was
+        /// cleared - every character in it had decoded correctly. Chatter
+        /// on a near-threshold carrier has no dahs at all, so two is enough
+        /// to tell the difference. Scored 2026-10-16:
+        ///
+        ///   dahs   slow-cw-e           practice clean   practice noisy   dead band
+        ///   off    "RST 5 K"           62.9/67.5/88.0   43.8/44.7/46.8   no text
+        ///   2      "RST 5 5N 5 5N K"   63.3/68.6/89.3   44.1/44.8/47.4   no text
+        ///   3      "RST 5 K"           62.9/67.5/88.0   43.8/44.7/46.8   no text
+        ///
+        /// The NCDXF beacon scores were the same at all three. The dead-band
+        /// files are diag-dead, noise-15m-long, probe15d and mkii-14040-slow.
+        /// </summary>
+        public int ChatterExemptDahs { get; set; } = 2;
+
+        /// <summary>
         /// Fraction of recent key-down runs that may be thrown out as too short
         /// to be an element before the copy is called
         /// <see cref="CwReadability.Jumbled"/> whatever its spread says.
@@ -334,6 +357,38 @@ namespace RadioWebControl.Core.Services.Cw
         public double RejoinFragmentMaxGapDits { get; set; } = 0.0;
 
         /// <summary>
+        /// When a finished symbol is not a Morse character, split it at its
+        /// longest internal gap - provided that gap was at least this many
+        /// dits and both halves are characters. 0 disables it.
+        ///
+        /// WHY. A sender who runs two characters together leaves a gap under
+        /// <see cref="CharacterGapDits"/> between them, the two are read as
+        /// one symbol, and that symbol is usually not in the table - so
+        /// MorseTable.Decode returns null and both characters disappear with
+        /// nothing on the page. Measured 2026-10-16 on a clean 15 dB 20 m
+        /// signal (bench/good-sig-14017266-20261016d.wav, OY1CT at 21 WPM):
+        /// the gap between the third Q and the D of "CQ CQ CQ DE" was 105
+        /// ms, 1.8 dits, Q and D merged into --.--.., and the reader printed
+        /// "CQCQC E OY1CT".
+        ///
+        /// The split only ever acts on a symbol that would otherwise have
+        /// been thrown away, so it cannot damage a character that decodes
+        /// today. What it can do is pick the wrong place to split, and that
+        /// is what the floor is for. Across the bench corpus:
+        ///
+        ///   floor   characters   what the extra ones were
+        ///    off      34254
+        ///    1.7      34407      some of the below
+        ///    1.4      34497      I1YRL, TKS, INFO GOOD FB, SM5OMP, CQ CQ CQ
+        ///    1.0      34725      RK0UR read as RKT5OUR - real intra gaps split
+        ///
+        /// Clean practice files and the NCDXF beacons score identically at
+        /// every setting, and the dead-band recordings (noise-15m-long,
+        /// probe15d, diag-dead, mkii-14040-slow) print nothing new.
+        /// </summary>
+        public double SplitInvalidMinGapDits { get; set; } = 1.4;
+
+        /// <summary>
         /// How long <see cref="CwElementDecoder.IsLocked"/> keeps believing the
         /// speed estimate after the marks stop looking like Morse.
         ///
@@ -400,6 +455,9 @@ namespace RadioWebControl.Core.Services.Cw
     {
         private readonly CwElementDecoderOptions _opt;
         private readonly StringBuilder _symbol = new();
+        // The gaps inside _symbol, one fewer than its elements, so an
+        // invalid symbol can be split where the sender paused longest.
+        private readonly List<double> _symbolGaps = new();
         private readonly double[] _recentMarks = new double[3];
 
         private double _ditMs;
@@ -828,7 +886,11 @@ namespace RadioWebControl.Core.Services.Cw
         /// </summary>
         private string OnGap(double gapMs)
         {
-            if (gapMs < _opt.CharacterGapDits * _ditMs) return string.Empty;
+            if (gapMs < _opt.CharacterGapDits * _ditMs)
+            {
+                if (_symbol.Length > 0) _symbolGaps.Add(gapMs);
+                return string.Empty;
+            }
 
             var text = _opt.RejoinFragmentMaxGapDits > 0.0
                 ? FlushCharacterRejoining(gapMs)
@@ -998,6 +1060,19 @@ namespace RadioWebControl.Core.Services.Cw
 
             string sym = _symbol.ToString();
             _symbol.Clear();
+            var gaps = _symbolGaps.ToArray();
+            _symbolGaps.Clear();
+
+            if (_opt.SplitInvalidMinGapDits > 0.0 && MorseTable.Decode(sym) is null
+                && gaps.Length == sym.Length - 1 && gaps.Length > 0)
+            {
+                int k = 0;
+                for (int i = 1; i < gaps.Length; i++) if (gaps[i] > gaps[k]) k = i;
+                string left = sym[..(k + 1)], right = sym[(k + 1)..];
+                if (gaps[k] >= _opt.SplitInvalidMinGapDits * _ditMs
+                    && MorseTable.Decode(left) is not null && MorseTable.Decode(right) is not null)
+                    return DecodeSymbol(left) + DecodeSymbol(right);
+            }
             return DecodeSymbol(sym);
         }
 
@@ -1037,6 +1112,7 @@ namespace RadioWebControl.Core.Services.Cw
 
             string sym = _symbol.ToString();
             _symbol.Clear();
+            _symbolGaps.Clear();
 
             if (sym.Length == 1)
             {
@@ -1218,6 +1294,24 @@ namespace RadioWebControl.Core.Services.Cw
         /// The spread is then overruled by the share of runs the de-glitch
         /// threw away, which the spread cannot see by construction.
         /// </summary>
+        /// <summary>
+        /// Whether the mark window holds enough marks of dah length to be
+        /// Morse whatever its p90 says. See
+        /// <see cref="CwElementDecoderOptions.ChatterExemptDahs"/>.
+        /// </summary>
+        private bool HoldsDahs(double p10)
+        {
+            if (_opt.ChatterExemptDahs <= 0) return false;
+            int dahs = 0;
+            for (int i = 0; i < _markWindowCount; i++)
+                if (_markWindow[i] >= ChatterDahRatio * p10) dahs++;
+            return dahs >= _opt.ChatterExemptDahs;
+        }
+
+        // A dah is three dits; 2.5 leaves room for a light fist and still sits
+        // well clear of the 1.3 spread chatter produces.
+        private const double ChatterDahRatio = 2.5;
+
         private CwReadability AssessReadability(out double spread)
         {
             spread = 0.0;
@@ -1232,7 +1326,7 @@ namespace RadioWebControl.Core.Services.Cw
             if (p10 <= 0.0) return CwReadability.Unknown;
 
             spread = p90 / p10;
-            if (spread < _opt.ReadabilitySpreadFloor)   return CwReadability.Chatter;
+            if (spread < _opt.ReadabilitySpreadFloor && !HoldsDahs(p10)) return CwReadability.Chatter;
             if (spread > _opt.ReadabilitySpreadCeiling) return CwReadability.Jumbled;
 
             if (_runWindowCount >= _opt.ReadabilityMinMarks)
