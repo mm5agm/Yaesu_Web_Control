@@ -506,6 +506,21 @@ namespace RadioWebControl.Core.Services.Cw
         private const int WordGapPasses = 12;
 
         /// <summary>
+        /// How far the dit may have moved, as a ratio either way, since a gap
+        /// was measured before that gap stops counting towards the gap
+        /// estimates - see <see cref="CoherentGaps"/>. Measured 2026-10-16:
+        /// 1.3, 1.5 and 2.0 all fix the IW2BTA recording. At 1.5 and 2.0 the
+        /// practice corpus scores (clean, and with noise and fading), the NCDXF
+        /// beacon scores and the dead-band files do not move at all; across the
+        /// rest of bench/ only word spacing moved, in 13 files, the readable
+        /// ones for the better ("YO5IMGM5NN" became "YO5IMGM 5NN").
+        /// 1.5 is the middle of that range: well wider than a hand sender's
+        /// drift, well narrower than the factor of two to four that a QSB
+        /// burst can train the dit away by.
+        /// </summary>
+        private const double GapSpeedCoherence = 1.5;
+
+        /// <summary>
         /// The de-glitch floor as a fraction of the tracked dit, taking over
         /// from the fixed MinElementMs wherever it is the larger of the two.
         /// See the de-glitch itself for what it is protecting against.
@@ -563,6 +578,7 @@ namespace RadioWebControl.Core.Services.Cw
         private bool _idleFlushed;           // this gap has already had its idle flush
 
         private readonly double[] _gapWindow = new double[48];
+        private readonly double[] _gapDit = new double[48];
         private int _gapWindowCount;
         private int _gapWindowNext;
         private int  _unknownSymbols;
@@ -897,6 +913,7 @@ namespace RadioWebControl.Core.Services.Cw
                 : FlushCharacter();
 
             _gapWindow[_gapWindowNext] = gapMs;
+            _gapDit[_gapWindowNext] = _ditMs;
             _gapWindowNext = (_gapWindowNext + 1) % _gapWindow.Length;
             if (_gapWindowCount < _gapWindow.Length) _gapWindowCount++;
 
@@ -907,6 +924,39 @@ namespace RadioWebControl.Core.Services.Cw
             }
 
             return text;
+        }
+
+        /// <summary>
+        /// The separator gaps in the window that were measured at about the
+        /// speed being decoded now - within <see cref="GapSpeedCoherence"/> of
+        /// the current dit either way. The two gap estimates below work from
+        /// these only.
+        ///
+        /// Without this the window mixes speeds. Each gap is stored in
+        /// milliseconds, so a gap left behind by a fast stretch reads as short
+        /// against a slow sender's dit, and the window holds 48 of them. On
+        /// bench/iw2bta-cq-loop-14052-20261016f.wav, QSB fragments at
+        /// 211-253 s trained the dit down to 20-40 ms; IW2BTA's call at
+        /// 266-275 s runs at an 85-87 ms dit, and the dit climbed there by
+        /// ordinary tracking, with no resync to mark the change. The junk gaps
+        /// were then about one dit each, the lower quartile fell to the
+        /// three-dit floor, the word split landed near 5.4 dits, and his 7-8
+        /// dit letter gaps printed as word gaps: "I W 2 B TA". Storing gaps in
+        /// dits instead did not fix it, nor did clearing the window on resync.
+        /// Keeping only gaps from the current speed did: "IW2BTA".
+        ///
+        /// When a speed change leaves no coherent gaps, both estimates fall
+        /// back to their textbook rules until the new speed has supplied some,
+        /// which is the same not-yet-splitting start every transmission gets.
+        /// </summary>
+        private double[] CoherentGaps()
+        {
+            double limit = Math.Log(GapSpeedCoherence);
+            var gaps = new List<double>(_gapWindowCount);
+            for (int i = 0; i < _gapWindowCount; i++)
+                if (Math.Abs(Math.Log(_gapDit[i] / _ditMs)) <= limit)
+                    gaps.Add(_gapWindow[i]);
+            return gaps.ToArray();
         }
 
         /// <summary>
@@ -942,13 +992,12 @@ namespace RadioWebControl.Core.Services.Cw
         private double CharacterGapMs()
         {
             double textbook = 3.0 * _ditMs;
-            if (_gapWindowCount == 0) return textbook;
+            var g = CoherentGaps();
+            if (g.Length == 0) return textbook;
 
-            Span<double> sorted = stackalloc double[_gapWindowCount];
-            for (int i = 0; i < _gapWindowCount; i++) sorted[i] = _gapWindow[i];
-            sorted.Sort();
+            Array.Sort(g);
 
-            return Math.Max(textbook, sorted[(int)(0.25 * (_gapWindowCount - 1))]);
+            return Math.Max(textbook, g[(int)(0.25 * (g.Length - 1))]);
         }
 
         /// <summary>
@@ -1000,12 +1049,13 @@ namespace RadioWebControl.Core.Services.Cw
         {
             double charGap = CharacterGapMs();
             double ratio = WordGapRatio * charGap;
-            if (_gapWindowCount < WordGapMinGaps) return ratio;
+            var g = CoherentGaps();
+            if (g.Length < WordGapMinGaps) return ratio;
 
             double clip = WordGapClipDits * charGap;
-            Span<double> logs = stackalloc double[_gapWindowCount];
-            for (int i = 0; i < _gapWindowCount; i++)
-                logs[i] = Math.Log(Math.Min(_gapWindow[i], clip));
+            Span<double> logs = stackalloc double[g.Length];
+            for (int i = 0; i < g.Length; i++)
+                logs[i] = Math.Log(Math.Min(g[i], clip));
 
             double lo = Math.Log(charGap);
             double hi = Math.Log(ratio);
@@ -1047,7 +1097,7 @@ namespace RadioWebControl.Core.Services.Cw
             double boundary = 0.5 * (lo + hi);
             int upper = 0;
             foreach (double v in logs) if (v >= boundary) upper++;
-            double share = (double)upper / _gapWindowCount;
+            double share = (double)upper / g.Length;
             if (share < WordGapMinShare || share > WordGapMaxShare) return ratio;
 
             double split = Math.Exp(boundary);
