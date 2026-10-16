@@ -141,6 +141,10 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  * @param {object} opts
  *   brandShort, brandName, model, dual (bool),
  *   views:  [{ label, href, on }]          layout switch in the top strip
+ *   menu:   [{ group, items: [{ label, href, title }] }]  optional: a MENU key at the
+ *                                          right of the top strip, dropping down the
+ *                                          app's other pages. Each opens in a new tab,
+ *                                          so the panel keeps running behind it
  *   lamps:  [{ id, label, click, title }]  `click` makes the lamp a key: act('lamp', id)
  *   keys:   [{ id, label, inert, title }]  left column, two per row; `inert` keeps
  *                                          one key display-only even with onAction
@@ -316,6 +320,42 @@ export function mountRadioPanel(root, opts = {}) {
     for (const z of SIZES) sizeSel.append(Object.assign(h('option', null, z === 'fit' ? 'Fit' : z + '%'), { value: z }));
     settings.append(themeSel, sizeSel);
     right.append(lamps, settings);
+
+    // MENU: the app's other pages, one key wide. Closes on a pick, a click
+    // anywhere else, or Esc.
+    if (opts.menu?.length) {
+        const wrap = h('div', 'rp-menu');
+        const menuKey = h('button', 'rp-viewbtn', 'MENU');
+        menuKey.type = 'button';
+        menuKey.title = 'Settings, memories, the manual and the other pages, each in a new tab';
+        menuKey.setAttribute('aria-haspopup', 'true');
+        const list = h('div', 'rp-menu-list');
+        list.hidden = true;
+        for (const g of opts.menu) {
+            if (g.group) list.append(h('div', 'rp-menu-group', g.group));
+            for (const it of g.items ?? []) {
+                const a = h('a', 'rp-menu-item', it.label);
+                a.href = it.href;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                if (it.title) a.title = it.title;
+                a.addEventListener('click', () => show(false));
+                list.append(a);
+            }
+        }
+        const show = on => {
+            list.hidden = !on;
+            menuKey.classList.toggle('on', on);
+            menuKey.setAttribute('aria-expanded', String(on));
+        };
+        menuKey.addEventListener('click', () => show(list.hidden));
+        document.addEventListener('pointerdown', e => { if (!list.hidden && !wrap.contains(e.target)) show(false); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !list.hidden) show(false); });
+        wrap.append(menuKey, list);
+        const bar = h('div', 'rp-bar');
+        bar.append(wrap);
+        right.append(bar);
+    }
     top.append(brand, views, right);
 
     // ---- body ----------------------------------------------------------
@@ -949,6 +989,17 @@ export function mountRadioPanel(root, opts = {}) {
 
     panel.append(top, body, bottom);
 
+    // A drop-down list under a key, for a key whose press is a choice (YWC's
+    // M.STORE: which bank). Board pixels, as the VFO pickers are.
+    const keyList = h('div', 'rp-menu-list rp-keylist');
+    keyList.hidden = true;
+    panel.append(keyList);
+    function closeKeyList() { keyList.hidden = true; keyList.dataset.for = ''; }
+    document.addEventListener('pointerdown', e => {
+        if (!keyList.hidden && !keyList.contains(e.target) && !keyList.anchor?.contains(e.target)) closeKeyList();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeKeyList(); });
+
     // ---- state ---------------------------------------------------------
     const st = {
         freq: { A: 0, B: 0 }, mode: { A: '', B: '' }, widthHz: { A: null, B: null },
@@ -1279,6 +1330,33 @@ export function mountRadioPanel(root, opts = {}) {
         setBand(id) { for (const [b, el] of Object.entries(bandEls)) el.classList.toggle('on', b === id); },
         // `vfo` names a receiver group's key ('A' or 'B'; on a single-receiver
         // radio the one group is 'A').
+        // Opens a list under key `id` (vfo as setKey's: 'mem' for a Memory
+        // key). Items are { group } headings or { label, title, on, run };
+        // a click runs one and closes the list. A second press closes it.
+        openKeyList(id, items, vfo) {
+            const k = keyEls[vfo ? vfo + ':' + id : id];
+            const tag = (vfo ?? '') + ':' + id;
+            if (!k || (!keyList.hidden && keyList.dataset.for === tag)) return closeKeyList();
+            keyList.textContent = '';
+            for (const it of items ?? []) {
+                if (it.group != null) { keyList.append(h('div', 'rp-menu-group', it.group)); continue; }
+                const b = h('button', 'rp-menu-item' + (it.on ? ' on' : ''), it.label);
+                b.type = 'button';
+                if (it.title) b.title = it.title;
+                b.addEventListener('click', () => { closeKeyList(); it.run?.(); });
+                keyList.append(b);
+            }
+            keyList.dataset.for = tag;
+            keyList.anchor = k.b;
+            keyList.hidden = false;
+            const pr = panel.getBoundingClientRect(), kr = k.b.getBoundingClientRect();
+            const f = panel.offsetWidth / (pr.width || 1);
+            const left = (kr.left - pr.left) * f;
+            keyList.style.right = 'auto';
+            keyList.style.left = Math.max(0, Math.min(left, panel.offsetWidth - keyList.offsetWidth)) + 'px';
+            keyList.style.top = ((kr.bottom - pr.top) * f + 6) + 'px';
+        },
+        closeKeyList,
         setKey(id, { on = false, tx = false, sub } = {}, vfo) {
             const k = keyEls[vfo ? vfo + ':' + id : id];
             if (!k) return;
