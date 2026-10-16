@@ -13,9 +13,7 @@
 
 **Since v2.5.3** — in the code, not yet in a full release:
 
-| Fixed | Issue | In build |
-|---|---|---|
-| Radio panel: the SWR needle no longer jumps to full scale on a good aerial while transmitting CW. It ignores readings taken when the radio puts out under 1 W, and averages the rest as the Classic page does. | - | *Not yet in a build* |
+Nothing yet.
 
 **New in v2.5.3:**
 
@@ -90,7 +88,9 @@ Every one of these is written up in full in the [release notes](RELEASE_HISTORY.
 
 One line per fix, newest first, with the build that has it. A pre-release installs exactly like a release and carries everything before it; each one is written up under [Release Notes](#release-notes). *Not yet in a build* means the fix is in the code and will be in the next pre-release or release.
 
-Nothing since v2.5.3 yet. Everything fixed in the v2.5.3 pre-releases is in [v2.5.3](#2026-10-16---v253).
+| Fixed | Issue | In build |
+|---|---|---|
+| Radio panel: the SWR needle no longer jumps to full scale on a good aerial while transmitting CW. It ignores readings taken when the radio puts out under 1 W, and averages the rest as the Classic page does. | - | *Not yet in a build* |
 
 **Supported transceivers:**
 
