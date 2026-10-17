@@ -168,6 +168,31 @@ namespace RadioWebControl.Core.Services.Cw
         public int ChatterExemptDahs { get; set; } = 2;
 
         /// <summary>
+        /// A window in which every mark is a dah is Morse, not Chatter, when
+        /// the decoder already knows the sender's dit. On by default.
+        ///
+        /// The spread floor reads "every recent mark is about the same length"
+        /// as a detector flickering on noise, and so does
+        /// <see cref="ChatterExemptDahs"/>, because it measures dahs against
+        /// the window's own p10. Neither can see a window with no dits in it.
+        /// Real text does that: OM, TO, MO, 0. On the Morse Code Ninja
+        /// Speed-Racing file, OM sent five times is 25 dahs in a row, the
+        /// window read Chatter for 11 s while every character had decoded
+        /// correctly, and the held text went stale and was cleared, so it
+        /// printed "OM OM ORPRT" where it had copied OM five times. The dit
+        /// stayed at 43-48 ms through it, against dahs of 120-180.
+        ///
+        /// The test is that the window's p10 is nearer the trained dah than
+        /// the trained dit - the geometric mean of the two, the same split
+        /// marks are classified on - and that the two have been learned
+        /// apart, a dah at least twice a dit. Chatter cannot pass it: the
+        /// detector's blips train the dit onto themselves, so they sit at
+        /// about one dit, and a band that has gone quiet has its speed reset
+        /// to the starting guess before the next blip arrives.
+        /// </summary>
+        public bool ChatterExemptAllDahs { get; set; } = true;
+
+        /// <summary>
         /// Fraction of recent key-down runs that may be thrown out as too short
         /// to be an element before the copy is called
         /// <see cref="CwReadability.Jumbled"/> whatever its spread says.
@@ -1454,6 +1479,15 @@ namespace RadioWebControl.Core.Services.Cw
             return dahs >= _opt.ChatterExemptDahs;
         }
 
+        /// <summary>
+        /// Whether every mark in the window is a dah by the speed already
+        /// learned. See <see cref="CwElementDecoderOptions.ChatterExemptAllDahs"/>.
+        /// </summary>
+        private bool AllDahs(double p10)
+            => _opt.ChatterExemptAllDahs
+            && _dahMs >= 2.0 * _ditMs
+            && p10 >= Math.Sqrt(_ditMs * _dahMs);
+
         // A dah is three dits; 2.5 leaves room for a light fist and still sits
         // well clear of the 1.3 spread chatter produces.
         private const double ChatterDahRatio = 2.5;
@@ -1472,7 +1506,7 @@ namespace RadioWebControl.Core.Services.Cw
             if (p10 <= 0.0) return CwReadability.Unknown;
 
             spread = p90 / p10;
-            if (spread < _opt.ReadabilitySpreadFloor && !HoldsDahs(p10)) return CwReadability.Chatter;
+            if (spread < _opt.ReadabilitySpreadFloor && !HoldsDahs(p10) && !AllDahs(p10)) return CwReadability.Chatter;
             if (spread > _opt.ReadabilitySpreadCeiling) return CwReadability.Jumbled;
 
             if (_runWindowCount >= _opt.ReadabilityMinMarks)
