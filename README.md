@@ -90,6 +90,7 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
+| Keyboard shortcuts: holding down a TX toggle key that is also a shortcut letter (say j) no longer runs that shortcut on every key repeat, so the radio is not retuned while you transmit. The ? list now names the TX key. | - | *Not yet in a build* |
 | Radio panel: the SWR needle no longer jumps to full scale on a good aerial while transmitting CW. It ignores readings taken when the radio puts out under 1 W, and averages the rest as the Classic page does. | - | *Not yet in a build* |
 | CW Reader: a slow sender heard straight after fast or fading signals no longer has his callsign broken into letters ("I W 2 B TA" for IW2BTA). Gaps measured at the old speed are no longer used to judge where words end at the new one. | - | *Not yet in a build* |
 
