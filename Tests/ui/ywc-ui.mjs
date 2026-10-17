@@ -138,20 +138,31 @@ test('/RadioWindow?g=cw: MEMORIES shows M1-M5, saves, and a key sends its slot',
     } finally { await page.close(); }
 });
 
-test('/RadioWindow?g=cw: BREAK-IN is a key that writes the next setting', async () => {
+test('/RadioWindow?g=cw: BREAK-IN click steps it, the wheel steps SPEED', async () => {
     const page = await open('/RadioWindow?g=cw', { settleMs: 2500 });
     try {
+        const vals = `[...document.querySelectorAll('.rp-wpanel[data-panel="keyer"] .rp-wval')]`;
+        await page.eval(`__rwcTest.state('CwSpeed', 22); __rwcTest.state('CwPitch', 30); __rwcTest.state('CwBreakIn', '1')`);
+        await sleep(200);
         const shown = await page.eval(`(() => {
-            const k = [...document.querySelectorAll('.rp-wpanel[data-panel="keyer"] .rp-wkey')].find(k => /^(OFF|SEMI|FULL|--)$/.test(k.textContent));
+            const k = ${vals}.find(k => /^(OFF|SEMI|FULL|--)$/.test(k.textContent));
             return k ? k.textContent : null;
         })()`);
-        expect(shown, 'no BREAK-IN key in the KEYER panel');
+        expect(shown, 'no BREAK-IN value in the KEYER panel');
         const next = { OFF: '1', SEMI: '2', FULL: '0', '--': '0' }[shown];
         await page.clearWrites();
-        await page.eval(`[...document.querySelectorAll('.rp-wpanel[data-panel="keyer"] .rp-wkey')].find(k => k.textContent === ${JSON.stringify(shown)}).click()`);
+        await page.eval(`${vals}.find(k => k.textContent === ${JSON.stringify(shown)}).click()`);
         await sleep(300);
-        const w = (await page.writes()).filter(x => x.path === '/api/cat/cw/breakin');
+        let w = (await page.writes()).filter(x => x.path === '/api/cat/cw/breakin');
         expect(w.length === 1 && w[0].body?.mode === next, `shown ${shown}, writes: ${JSON.stringify(w)}`);
+
+        // The wheel over SPEED steps it: up one notch is +1 wpm.
+        const wpm = await page.eval(`parseInt(${vals}[0].textContent, 10)`);
+        await page.clearWrites();
+        await page.eval(`${vals}[0].parentElement.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }))`);
+        await sleep(300);
+        w = (await page.writes()).filter(x => x.path === '/api/cat/cw/speed');
+        expect(Number.isFinite(wpm) && w.length === 1 && w[0].body?.speed === wpm + 1, `speed ${wpm}, writes: ${JSON.stringify(w)}`);
         expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
     } finally { await page.close(); }
 });

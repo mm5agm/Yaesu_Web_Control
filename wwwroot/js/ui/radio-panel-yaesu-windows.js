@@ -42,6 +42,7 @@ import { sMeterFraction, sMeterText, txMeterFraction } from '/js/radio-panel/pan
 import { SMeterHistoryPanel } from '/js/guages/smeter-history-panel.js';
 import { TxTimeout, stepTimeout, timeoutText } from '/js/radio-panel/tx-timeout.js';
 import { PopoutHost, screenShare } from '/js/popout/popout.js';
+import { wheelSteps } from '/js/radio-panel/window-kit.js';
 
 const LATER = 'Comes in a later build.';
 
@@ -244,14 +245,17 @@ export function startYaesuWindows(windows, ctx) {
         // Break-in decides whether CW keys the transmitter; changing it sends
         // nothing. The key cycles OFF -> SEMI -> FULL, as Classic's select.
         const bkLabel = h('span', 'rp-wlabel', 'BREAK-IN');
-        const bk = key('--', () => cycleBreakIn());
-        bk.style.flex = 'none';
-        bk.style.minWidth = '64px';
+        // Shown like SPEED and PITCH; clicking the value steps it.
+        const bk = h('span', 'rp-wval', '--');
+        bk.style.cursor = 'pointer';
         bk.title = 'Break-in: OFF, SEMI or FULL. Click for the next one';
+        bk.addEventListener('click', () => cycleBreakIn());
         const r = h('div', 'rp-wrow');
-        r.style.alignItems = 'center';
         r.append(bkLabel, bk);
         body.append(r);
+        // The mouse wheel over SPEED or PITCH steps it, as the - / + keys do.
+        wheelSteps(speed.parentElement, d => setSpeed(d));
+        wheelSteps(pitch.parentElement, d => setPitch(d));
         let bkBusy = false;
         async function cycleBreakIn() {
             if (bkBusy) return;
@@ -272,11 +276,13 @@ export function startYaesuWindows(windows, ctx) {
         function setSpeed(d) {
             const wpm = Math.max(4, Math.min(60, num(state.CwSpeed) + d));
             if (!state.CwSpeed || wpm === num(state.CwSpeed)) return;
+            state.CwSpeed = wpm;
             ctx.post('/api/cat/cw/speed', { speed: wpm });
         }
         function setPitch(d) {
             const code = Math.max(0, Math.min(75, num(state.CwPitch) + d));
             if (state.CwPitch == null || code === num(state.CwPitch)) return;
+            state.CwPitch = code;
             ctx.post('/api/cat/cwpitch', { code });
         }
         return {
