@@ -33,8 +33,8 @@
 // keys use. The TX timeout is core's (tx-timeout.js), sharing the main page's
 // limit; it only warns.
 //
-// What transmits: the Remote Audio page's TX key, CW send's Send and keyer
-// memories, and the ATU's TUNE, which asks for a second press before it keys
+// What transmits: the Remote Audio page's TX key, CW send's Send, the keyer
+// memories M1-M5 (CW's MEMORIES panel), and the ATU's TUNE, which asks for a second press before it keys
 // a carrier. Each says so in red.
 
 import { calibrateNumeric } from '/js/calibration/calibration-engine.js';
@@ -46,8 +46,9 @@ import { PopoutHost, screenShare } from '/js/popout/popout.js';
 const LATER = 'Comes in a later build.';
 
 export const YAESU_WINDOWS = [
-    { id: 'cw', key: 'CW', title: 'CW', tip: 'Open or close the CW window: reader, zero-in and keyboard send. Opening it switches the selected receiver to CW-U', pos: [330, 230, 980, 340], popout: { width: 1000, height: 400 }, panels: [
+    { id: 'cw', key: 'CW', title: 'CW', tip: 'Open or close the CW window: keyer, memories M1-M5, reader, zero-in and keyboard send. Opening it switches the selected receiver to CW-U', pos: [170, 230, 1280, 340], popout: { width: 1300, height: 400 }, panels: [
         { id: 'keyer', title: 'KEYER', w: 230 },
+        { id: 'cwMem', title: 'MEMORIES', w: 300 },
         { id: 'cwReader', title: 'READER', dpos: [380, 560, 760, 320],
           popout: { name: 'cw-reader', url: '/CwReader', size: () => screenShare(0.25, window.screen) } },
         { id: 'cwSend', title: 'SEND', w: 320, dpos: [420, 300, 520, 400],
@@ -263,6 +264,118 @@ export function startYaesuWindows(windows, ctx) {
             CwSpeed: v => { speed.textContent = num(v) + ' wpm'; },
             CwPitch: v => { pitch.textContent = (300 + num(v) * 10) + ' Hz'; },
             CwBreakIn: v => { bk.textContent = { 0: 'OFF', 1: 'SEMI', 2: 'FULL' }[String(v)] ?? String(v); },
+        };
+    })();
+
+    // ---- CW memories M1-M5 -----------------------------------------------
+    // Classic's Memory Keyer (the CW dialog), on the same endpoints: the texts
+    // are YWC's settings, and a key writes its text to that radio memory and
+    // plays it. Nothing can stop a playing memory (no CAT command for it), so
+    // while one plays it is marked and the others refuse, as on Classic. The
+    // radio's playing flag only reports a playback that keys the transmitter,
+    // so it ends the wait only after it has first said one started; until
+    // then the server's estimate holds the keys. CW send borrows M5 for a
+    // typed line and says so on a channel; the keys go busy while it does.
+    (() => {
+        const body = slot('cw', 'cwMem');
+        const keys = [], boxes = [];
+        for (let i = 0; i < 5; i++) {
+            const r = h('div', 'rp-wrow');
+            r.style.alignItems = 'center';
+            const k = key('M' + (i + 1), () => send(i), 'tx');
+            k.style.flex = 'none';
+            k.style.minWidth = '56px';
+            const box = h('input', 'rp-wselect');
+            box.type = 'text';
+            box.maxLength = 50;
+            box.placeholder = 'CW message ' + (i + 1);
+            box.spellcheck = false;
+            box.style.flex = '1';
+            box.style.minWidth = '0';
+            box.title = 'CW memory ' + (i + 1) + ' text. SAVE keeps it.';
+            r.append(k, box);
+            body.append(r);
+            keys.push(k);
+            boxes.push(box);
+        }
+        const save = h('div', 'rp-wbtns');
+        save.append(key('SAVE', saveTexts));
+        save.children[0].title = 'Save the five messages (they are also what Classic\'s CW keyer shows)';
+        const msg = h('div', 'rp-wnote', '');
+        body.append(save, msg, h('div', 'rp-wnote tx', 'M1-M5 transmit when break-in is on.'));
+        const say = (text, bad) => { msg.textContent = text; msg.classList.toggle('tx', !!bad); };
+
+        let follow = 0, pressing = false;
+        function mark(i, state) {             // 'idle' | 'playing' | 'busy'
+            const k = keys[i];
+            k.textContent = (state === 'playing' ? '▶ M' : 'M') + (i + 1);
+            k.classList.toggle('armed', state === 'playing');
+            k.disabled = state === 'busy';
+            k.title = state === 'playing' ? 'M' + (i + 1) + ' is sending - it cannot be stopped'
+                : state === 'busy' ? 'A message is sending' : 'Send CW message M' + (i + 1);
+        }
+        const markAll = state => { for (let i = 0; i < 5; i++) mark(i, state); };
+        markAll('idle');
+        async function playing(i, estimatedMs) {
+            const token = ++follow;
+            for (let j = 0; j < 5; j++) mark(j, j === i ? 'playing' : 'busy');
+            const endBy = Date.now() + Math.max(1000, estimatedMs || 0);
+            let started = false;
+            for (let n = 0; n < 240 && token === follow; n++) {
+                await new Promise(r => setTimeout(r, 500));
+                if (token !== follow) return;
+                const d = await getJson('/api/cat/cw/playing');
+                if (!d) break;
+                if (d.playing === true) { started = true; continue; }
+                if (d.playing === false && started) break;   // it started, it has finished
+                if (Date.now() >= endBy) break;              // the estimate has run out
+            }
+            if (token === follow) markAll('idle');
+        }
+        async function send(i) {
+            const n = i + 1;
+            if (!boxes[i].value.trim()) { say('M' + n + ' is empty - type a message first.', true); return; }
+            // A double click is one press arriving twice, not two decisions.
+            if (pressing) return;
+            pressing = true;
+            try {
+                const r = await fetch('/api/cat/cw/send', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: boxes[i].value, slot: n }),
+                });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok) { say(d.error || 'M' + n + ' was not sent (HTTP ' + r.status + ').', true); return; }
+                const secs = d.estimatedMs ? ' (about ' + Math.round(d.estimatedMs / 1000) + ' s)' : '';
+                // Whether it went on the air is the part that matters: never just "sent".
+                say(d.transmitted === false
+                    ? 'M' + n + ' played to the monitor only, not transmitted - break-in is off' + secs + '.'
+                    : 'Transmitted M' + n + secs + '.', d.transmitted !== false);
+                playing(i, d.estimatedMs);
+            } catch (e) {
+                say('M' + n + ' failed: ' + e.message, true);
+            } finally { pressing = false; }
+        }
+        async function saveTexts() {
+            try {
+                const r = await fetch('/api/cat/cw/messages', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(boxes.map(b => b.value)),
+                });
+                say(r.ok ? 'Saved.' : 'Not saved (HTTP ' + r.status + ').', !r.ok);
+            } catch { say('Not saved.', true); }
+        }
+        try {
+            new BroadcastChannel('ywc-cw-send-busy').addEventListener('message', ev => {
+                follow++;
+                markAll(ev.data?.busy ? 'busy' : 'idle');
+            });
+        } catch { /* no BroadcastChannel: the keys are not marked */ }
+        // Loaded when the panel is shown, never over a box being typed in.
+        shows['cw/cwMem'] = async shown => {
+            if (!shown) return;
+            const list = await getJson('/api/cat/cw/messages');
+            if (!Array.isArray(list)) return;
+            boxes.forEach((b, i) => { if (document.activeElement !== b) b.value = list[i] ?? ''; });
         };
     })();
 
