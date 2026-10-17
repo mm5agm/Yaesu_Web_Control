@@ -389,6 +389,43 @@ namespace RadioWebControl.Core.Services.Cw
         public double SplitInvalidMinGapDits { get; set; } = 1.4;
 
         /// <summary>
+        /// Withhold a one- or two-element character that stands alone between
+        /// word gaps when its loudest mark is under this fraction of the
+        /// station's (the upper quartile of the last 32 training-mark peaks).
+        /// Only characters that are all dits, or that hold a mark under 0.6
+        /// dit, qualify. 0 disables it.
+        ///
+        /// WHY. In the gaps between overs the reader stays locked and prints
+        /// what the noise gives it, which is mostly E, I and T. Measured
+        /// 2026-10-17 on bench/iwc-on8ga-7012-5k-1514z.wav (IC-7300, 300 Hz,
+        /// 29 WPM): ON8GA's marks peak at 0.28-0.31, and the marks that keyed
+        /// between his CQs peak at 0.12-0.22 and run 20-25 ms against a 45 ms
+        /// dit. The copy read "TEST E I E I CQ ON8GA".
+        ///
+        /// Each condition is there because a looser rule cost real copy:
+        ///
+        ///   - weak alone, up to two elements: a contest QSO's callers are
+        ///     quieter than the run station, and their T's went - "TU" read
+        ///     "U", "TEST" read "EST" (bench/fldigi/qso4-8k.wav). Those were
+        ///     85-130 ms dahs, nothing like the noise, hence the dit clause.
+        ///   - weak dit-only, anywhere: "HEIJO" read "HJO" (bench/follow.wav).
+        ///     Real E and I sit inside words; the stray ones stand alone,
+        ///     hence the word gaps on both sides.
+        ///
+        /// With all three, across the 140 bench files: lone E/I/T tokens 656
+        /// -> 202, characters 22457 -> 21953, and no file printed more characters
+        /// than before, so the dead-band recordings stay silent. The
+        /// Morse Code Ninja practice set (D:\cw-keep\score.py, whose spoken
+        /// glosses make exactly this junk) went 63.3 -> 72.8% raw and 68.6 ->
+        /// 81.5% through 500 Hz, with the speech-muted column unchanged at
+        /// 89.3%. The NCDXF beacons scored the same bar one stray E dropped
+        /// from CS3B's slot (sum-edit 3 -> 4 on ncdxf-18110000-20261015). The
+        /// ratio is not delicate: 0.6, 0.7, 0.8 and 0.9 score identically on
+        /// the practice set.
+        /// </summary>
+        public double IsolatedWeakCharRatio { get; set; } = 0.7;
+
+        /// <summary>
         /// How long <see cref="CwElementDecoder.IsLocked"/> keeps believing the
         /// speed estimate after the marks stop looking like Morse.
         ///
@@ -587,6 +624,45 @@ namespace RadioWebControl.Core.Services.Cw
         // non-empty when RejoinFragmentMaxGapDits is on.
         private readonly List<string> _joinRun = new();
 
+        // The isolated-weak-character gate. See IsolatedWeakCharRatio.
+        private readonly double[] _peakWindow = new double[32];   // peaks of recent training marks
+        private int    _peakWindowCount;
+        private int    _peakWindowNext;
+        private double _symbolPeak;                               // loudest mark of the symbol being built
+        private double _symbolShortestMs = double.MaxValue;
+        private bool   _afterBreak = true;                        // nothing printed since the last word gap
+        private bool   _symbolAfterBreak;                         // _afterBreak when this symbol's first mark landed
+        private bool   _symbolPendingCharGap;                     // _pendingCharGap at the same moment
+
+        /// <summary>The upper quartile of recent training-mark peaks, or 0 before there are enough.</summary>
+        private double ReferencePeak()
+        {
+            if (_peakWindowCount < 8) return 0.0;
+            var sorted = new double[_peakWindowCount];
+            Array.Copy(_peakWindow, sorted, _peakWindowCount);
+            Array.Sort(sorted);
+            return sorted[(int)(0.75 * (sorted.Length - 1))];
+        }
+
+        /// <summary>
+        /// True when the finished symbol is the stray character the gate is
+        /// for: one or two elements standing alone between word gaps, quieter
+        /// than the station, and either all dits or holding a mark under 0.6 of
+        /// one. Clears the per-symbol record either way.
+        /// </summary>
+        private bool IsIsolatedWeakChar(string sym, bool endsAtBreak)
+        {
+            double peak = _symbolPeak, shortest = _symbolShortestMs;
+            _symbolPeak = 0.0;
+            _symbolShortestMs = double.MaxValue;
+
+            if (_opt.IsolatedWeakCharRatio <= 0.0) return false;
+            if (!endsAtBreak || !_symbolAfterBreak || sym.Length > 2) return false;
+            if (sym.IndexOf('-') >= 0 && shortest >= 0.6 * _ditMs) return false;
+            double reference = ReferencePeak();
+            return reference > 0.0 && peak < _opt.IsolatedWeakCharRatio * reference;
+        }
+
         private readonly double[] _markWindow;
         private double _lastMarkAtMs = double.NegativeInfinity;
         private int _markWindowCount;
@@ -738,7 +814,9 @@ namespace RadioWebControl.Core.Services.Cw
                     && tMs - _edgeTimeMs >= _opt.IdleFlushMs)
                 {
                     _idleFlushed = true;
-                    return DrainJoinRun() + FlushCharacter();
+                    var idleText = DrainJoinRun() + FlushCharacter();
+                    _afterBreak = true;
+                    return idleText;
                 }
                 return string.Empty;
             }
@@ -814,6 +892,9 @@ namespace RadioWebControl.Core.Services.Cw
 
             bool isDah = ClassifyMark(markMs, out double distance);
             _symbol.Append(isDah ? '-' : '.');
+            if (_symbol.Length == 1) { _symbolAfterBreak = _afterBreak; _symbolPendingCharGap = _pendingCharGap; }
+            if (peakMag > _symbolPeak) _symbolPeak = peakMag;
+            if (markMs < _symbolShortestMs) _symbolShortestMs = markMs;
 
             // The symbol still goes out - whether to suppress text is a separate
             // question - but a mark far below the level real elements have been
@@ -821,6 +902,9 @@ namespace RadioWebControl.Core.Services.Cw
             // sending. Those are the ones that rail the estimate at MaxWpm.
             if (TrainOn(peakMag, noiseLevel))
             {
+                _peakWindow[_peakWindowNext] = peakMag;
+                _peakWindowNext = (_peakWindowNext + 1) % _peakWindow.Length;
+                if (_peakWindowCount < _peakWindow.Length) _peakWindowCount++;
                 if (_opt.EnableResync) TrackResync(markMs, distance);
                 UpdateCentroids(markMs, isDah);
                 _marksSeen++;
@@ -908,9 +992,11 @@ namespace RadioWebControl.Core.Services.Cw
                 return string.Empty;
             }
 
+            bool wordGap = gapMs >= WordGapMs();
             var text = _opt.RejoinFragmentMaxGapDits > 0.0
                 ? FlushCharacterRejoining(gapMs)
-                : FlushCharacter();
+                : FlushCharacter(wordGap);
+            if (wordGap) _afterBreak = true;
 
             _gapWindow[_gapWindowNext] = gapMs;
             _gapDit[_gapWindowNext] = _ditMs;
@@ -1104,7 +1190,7 @@ namespace RadioWebControl.Core.Services.Cw
             return Math.Clamp(split, WordGapFloor * charGap, ratio);
         }
 
-        private string FlushCharacter()
+        private string FlushCharacter(bool endsAtBreak = true)
         {
             if (_symbol.Length == 0) return string.Empty;
 
@@ -1112,6 +1198,16 @@ namespace RadioWebControl.Core.Services.Cw
             _symbol.Clear();
             var gaps = _symbolGaps.ToArray();
             _symbolGaps.Clear();
+            // Still decoded, so it is counted as evidence for readability -
+            // only the text is withheld. Dropping it from the counts would make
+            // a noisy channel look cleaner than it is.
+            if (IsIsolatedWeakChar(sym, endsAtBreak))
+            {
+                DecodeSymbol(sym);
+                _pendingCharGap = _symbolPendingCharGap;
+                return string.Empty;
+            }
+            _afterBreak = false;
 
             if (_opt.SplitInvalidMinGapDits > 0.0 && MorseTable.Decode(sym) is null
                 && gaps.Length == sym.Length - 1 && gaps.Length > 0)
