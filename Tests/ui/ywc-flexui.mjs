@@ -48,7 +48,7 @@ test('fork serves the flex modules and assets', async () => {
         '/js/flexui/app/ui/keyboard-shortcuts.js',
         '/js/flexui/app/ui/memories.js',
         '/js/flexui/app/ui/vfo-key-buttons.js',
-        '/js/flexui/app/ui/toggle-dropdown-button.js',
+        '/js/keys/toggle-dropdown-button.js',
         '/js/flexui/app/audio/remote-audio-ui.js',
         '/js/flexui/app/video/radio-display-ui.js',
         '/js/flexui/app/sdr/spectrum-panel.js',

@@ -5,7 +5,7 @@
  * Wire TX monitor to the Yaesu cycle key.
  * Left-click toggles MON; right-click opens the monitor level slider.
  */
-import { CycleContextButton } from "/js/flexui/app/ui/toggle-dropdown-button.js";
+import { CycleContextButton } from "/js/keys/toggle-dropdown-button.js";
 
 function debounce(fn, ms) {
     let timer = null;

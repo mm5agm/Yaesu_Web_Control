@@ -11,7 +11,7 @@ import {
     ToggleButton,
     CycleContextButton,
     ActionMenuButton,
-} from "/js/flexui/app/ui/toggle-dropdown-button.js";
+} from "/js/keys/toggle-dropdown-button.js";
 import { rebuildIfWidthSelect, ifWidthKeyConfig } from "/js/flexui/app/ui/if-width-tables.js";
 
 function debounce(fn, ms) {

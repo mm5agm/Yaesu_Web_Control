@@ -6,7 +6,7 @@
  * The power slider is available from the key's right-click context menu.
  * POWER is a value, not an on/off function, so the key has no LED state.
  */
-import { CycleContextButton } from "/js/flexui/app/ui/toggle-dropdown-button.js";
+import { CycleContextButton } from "/js/keys/toggle-dropdown-button.js";
 
 export function initPowerCycleButton(root = document.getElementById("powerButton")) {
     if (!root) return null;

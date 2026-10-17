@@ -6,7 +6,7 @@
  * Left-click toggles OFF/ON; right-click opens DNR level 1–15.
  * NR P2 is 0/1 on every supported radio — there is no NR1/NR2 (#144).
  */
-import { CycleContextButton } from "/js/flexui/app/ui/toggle-dropdown-button.js";
+import { CycleContextButton } from "/js/keys/toggle-dropdown-button.js";
 
 function debounce(fn, ms) {
     let timer = null;

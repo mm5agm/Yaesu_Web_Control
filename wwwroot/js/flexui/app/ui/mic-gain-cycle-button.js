@@ -5,7 +5,7 @@
  * Render MIC Gain / Data Out as a Yaesu key.
  * The level slider is available from the key's right-click context menu.
  */
-import { CycleContextButton } from "/js/flexui/app/ui/toggle-dropdown-button.js";
+import { CycleContextButton } from "/js/keys/toggle-dropdown-button.js";
 
 export function initMicGainCycleButton(root = document.getElementById("micGainButton")) {
     if (!root) return null;

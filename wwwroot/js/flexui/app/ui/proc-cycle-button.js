@@ -5,7 +5,7 @@
  * Wire the speech processor to the Yaesu cycle key.
  * Left-click toggles PROC; right-click opens the processor level slider.
  */
-import { CycleContextButton } from "/js/flexui/app/ui/toggle-dropdown-button.js";
+import { CycleContextButton } from "/js/keys/toggle-dropdown-button.js";
 
 function debounce(fn, ms) {
     let timer = null;
