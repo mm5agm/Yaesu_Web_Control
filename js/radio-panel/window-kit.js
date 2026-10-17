@@ -41,6 +41,22 @@ export function row(body, label) {
     body.append(r);
     return out;
 }
+/**
+ * The mouse wheel over `el` calls step(+1) for a notch up and step(-1) for a
+ * notch down, as a value's + / - keys do - at most once every 60 ms, so a
+ * trackpad's burst of events doesn't flood the radio.
+ */
+export function wheelSteps(el, step) {
+    let last = 0;
+    el.title = (el.title ? el.title + '. ' : '') + 'Mouse wheel to change';
+    el.addEventListener('wheel', e => {
+        e.preventDefault();
+        const now = Date.now();
+        if (now - last < 60 || !e.deltaY) return;
+        last = now;
+        step(e.deltaY < 0 ? 1 : -1);
+    }, { passive: false });
+}
 /** A line of keys: list is [label, onClick, cls?]; returns the line. */
 export function keys(body, list) {
     const b = h('div', 'rp-wbtns');
