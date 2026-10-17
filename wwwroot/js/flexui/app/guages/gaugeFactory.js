@@ -19,7 +19,9 @@
 // Once every user is past that upgrade the marker is inert, and bumping it
 // achieves nothing the version-tied parent import has not already done.
 import { SMeterGauge, PowerGauge, SWRGauge, ALCGauge, TempGauge, CompressionGauge, IDDGauge, VDDGauge } from '/js/flexui/app/guages/gauge.js?v=1';
-import { LinearPowerGauge, LinearSWRGauge, LinearALCGauge, LinearCompressionGauge, LinearSMeterGauge, LinearTempGauge, LinearIDDGauge, LinearVDDGauge, LinearAudioGauge } from '/js/flexui/app/guages/linear-gauge.js?v=1';
+// The bar meters are shared with Icom Web Control through core
+// (core/js/meters/linear-gauge.js, copied to /js/meters/ at build).
+import { LinearPowerGauge, LinearSWRGauge, LinearALCGauge, LinearCompressionGauge, LinearSMeterGauge, LinearTempGauge, LinearIDDGauge, LinearVDDGauge, LinearAudioGauge } from '/js/meters/linear-gauge.js';
 
 // Registry of gauge constructors.
 // Add new meter types here as your UI grows.

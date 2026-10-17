@@ -40,7 +40,7 @@ test('fork serves the flex modules and assets', async () => {
         '/js/flexui/app/guages/meter-panel.js',
         '/js/flexui/app/guages/gaugeFactory.js',
         '/js/flexui/app/guages/gauge.js',
-        '/js/flexui/app/guages/linear-gauge.js',
+        '/js/meters/linear-gauge.js',
         '/js/flexui/app/ui/band-plan.js',
         '/js/flexui/app/ui/filter-scope-panel.js',
         '/js/flexui/app/ui/if-width-tables.js',
