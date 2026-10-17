@@ -5,7 +5,7 @@ using Yaesu_Web_Control.Services.Audio;
 namespace Yaesu_Web_Control.Controllers
 {
     /// <summary>
-    /// Backs the "set this up now" pop-outs on the Home page.
+    /// Backs the "set this up now" pop-outs (core/js/dialogs/feature-setup.js).
     ///
     /// A panel on Home can be visible and offering a feature that cannot
     /// actually work until something is chosen in Settings — the CW reader
@@ -40,12 +40,33 @@ namespace Yaesu_Web_Control.Controllers
 
         // ── Current state ──────────────────────────────────────────────────
         // What the pop-outs pre-fill their fields from. Only the fields the
-        // pop-outs can write are returned.
+        // pop-outs can write are returned, plus the recording devices to
+        // choose from - in the shape the shared pop-out
+        // (core/js/dialogs/feature-setup.js) reads, keyed the way the
+        // capture code matches them. While Remote Audio holds the devices the
+        // enumerator can only offer its cached list, which may be empty.
 
         [HttpGet("state")]
         public async Task<IActionResult> State()
         {
             var s = await _settings.GetSettingsAsync();
+            object[] devices;
+            try
+            {
+                devices = AudioDeviceEnumerator.ListInputs()
+                    .Select(d => (object)new
+                    {
+                        key = d.PersistenceKey,
+                        name = d.DisplayName,
+                        likelyRadio = AudioDeviceEnumerator.LooksLikeRadioUsbCodec(d.Name)
+                    })
+                    .ToArray();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[FeatureSetup] Could not list recording devices");
+                devices = Array.Empty<object>();
+            }
             return Ok(new
             {
                 dxCluster = new
@@ -58,7 +79,8 @@ namespace Yaesu_Web_Control.Controllers
                 cwAudio = new
                 {
                     rxDevice = s.AudioRadioRxDevice ?? "",
-                    devicesOpen = _bridge.DevicesOpen
+                    devicesOpen = _bridge.DevicesOpen,
+                    devices
                 }
             });
         }
