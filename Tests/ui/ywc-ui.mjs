@@ -340,6 +340,23 @@ test('DxSpots pop-out shows a spot pushed over the hub', async () => {
 const dialogPos = page => page.eval(`(() => { const r = document.getElementById('dxSpotsDialog').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
 const allBands = page => page.eval(`document.getElementById('dxSpotsAllBandsChk').checked`);
 
+test('VOX buttons follow the radio on Classic and /flexui', async () => {
+    for (const path of ['/', '/flexui']) {
+        const page = await open(path, { settleMs: 3000 });
+        try {
+            const read = () => page.eval(`({ dlg: document.getElementById('voxOnBtn')?.classList.contains('btn-warning'),
+                                            key: document.getElementById('voxBtn')?.classList.contains('btn-warning') })`);
+            await page.state('VoxOn', true); await sleep(300);
+            const on = await read();
+            await page.state('VoxOn', false); await sleep(300);
+            const off = await read();
+            expect(on.dlg && !off.dlg, `${path}: VOX dialog button did not follow: on ${JSON.stringify(on)} off ${JSON.stringify(off)}`);
+            // Classic's toolbar key lights too; Fabio's /flexui key has no LED by design.
+            if (path === '/') expect(on.key && !off.key, `${path}: VOX toolbar key did not follow: on ${JSON.stringify(on)} off ${JSON.stringify(off)}`);
+        } finally { await page.close(); }
+    }
+});
+
 test('Index: All bands switch toggles from its input and its label', async () => {
     const page = await indexWithSpot();
     try {

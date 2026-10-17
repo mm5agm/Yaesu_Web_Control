@@ -5641,6 +5641,9 @@
         _updateSquelchVisibility('B', '@Model.RadioState.ModeB');
         window.toggleCatConnection = toggleCatConnection;
         window.toggleVox       = toggleVox;
+        // site.js calls this on every VoxOn push; without it the radio's VOX
+        // state never reached the VOX buttons.
+        window.updateVoxButton = updateVoxButton;
         window.setVoxGain      = setVoxGain;
         window.setVoxDelay     = setVoxDelay;
         window.setAntiVoxGain  = setAntiVoxGain;
