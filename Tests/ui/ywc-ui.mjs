@@ -138,6 +138,24 @@ test('/RadioWindow?g=cw: MEMORIES shows M1-M5, saves, and a key sends its slot',
     } finally { await page.close(); }
 });
 
+test('/RadioWindow?g=cw: BREAK-IN is a key that writes the next setting', async () => {
+    const page = await open('/RadioWindow?g=cw', { settleMs: 2500 });
+    try {
+        const shown = await page.eval(`(() => {
+            const k = [...document.querySelectorAll('.rp-wpanel[data-panel="keyer"] .rp-wkey')].find(k => /^(OFF|SEMI|FULL|--)$/.test(k.textContent));
+            return k ? k.textContent : null;
+        })()`);
+        expect(shown, 'no BREAK-IN key in the KEYER panel');
+        const next = { OFF: '1', SEMI: '2', FULL: '0', '--': '0' }[shown];
+        await page.clearWrites();
+        await page.eval(`[...document.querySelectorAll('.rp-wpanel[data-panel="keyer"] .rp-wkey')].find(k => k.textContent === ${JSON.stringify(shown)}).click()`);
+        await sleep(300);
+        const w = (await page.writes()).filter(x => x.path === '/api/cat/cw/breakin');
+        expect(w.length === 1 && w[0].body?.mode === next, `shown ${shown}, writes: ${JSON.stringify(w)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 async function modePopoutChecks({ path, pausedSel, announceSel, name, good, bad, note }) {
     const page = await open(path);
     try {
