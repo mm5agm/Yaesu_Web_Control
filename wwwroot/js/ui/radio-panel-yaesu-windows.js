@@ -243,12 +243,12 @@ export function startYaesuWindows(windows, ctx) {
         const speed = row('SPEED', () => setSpeed(-1), () => setSpeed(1));
         const pitch = row('PITCH', () => setPitch(-1), () => setPitch(1));
         // Break-in decides whether CW keys the transmitter; changing it sends
-        // nothing. The key cycles OFF -> SEMI -> FULL, as Classic's select.
+        // nothing. Clicking steps SEMI <-> FULL.
         const bkLabel = h('span', 'rp-wlabel', 'BREAK-IN');
         // Shown like SPEED and PITCH; clicking the value steps it.
         const bk = h('span', 'rp-wval', '--');
         bk.style.cursor = 'pointer';
-        bk.title = 'Break-in: OFF, SEMI or FULL. Click for the next one';
+        bk.title = 'Break-in: SEMI or FULL. Click to change';
         bk.addEventListener('click', () => cycleBreakIn());
         const r = h('div', 'rp-wrow');
         r.append(bkLabel, bk);
@@ -260,12 +260,10 @@ export function startYaesuWindows(windows, ctx) {
         async function cycleBreakIn() {
             if (bkBusy) return;
             const cur = state.CwBreakIn == null ? null : String(state.CwBreakIn);
-            const next = cur === '0' ? '1' : cur === '1' ? '2' : '0';
+            const next = cur === '1' ? '2' : '1';   // SEMI <-> FULL; the radio has no OFF to step to
             bkBusy = true;
             try {
-                const res = await ctx.post('/api/cat/cw/breakin', { mode: next });
-                // FULL is refused on radios without it: carry on round to OFF.
-                if (next === '2' && !res?.ok) await ctx.post('/api/cat/cw/breakin', { mode: '0' });
+                await ctx.post('/api/cat/cw/breakin', { mode: next });
             } finally { bkBusy = false; }
         }
         // Classic's ZIN: the radio nudges the selected receiver so the CW
