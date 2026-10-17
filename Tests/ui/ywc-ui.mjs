@@ -149,7 +149,7 @@ test('/RadioWindow?g=cw: BREAK-IN click steps it, the wheel steps SPEED', async 
             return k ? k.textContent : null;
         })()`);
         expect(shown, 'no BREAK-IN value in the KEYER panel');
-        const next = { OFF: '1', SEMI: '2', FULL: '1', '--': '1' }[shown];
+        const next = { OFF: '1', SEMI: '2', FULL: '0', '--': '0' }[shown];
         await page.clearWrites();
         await page.eval(`${vals}.find(k => k.textContent === ${JSON.stringify(shown)}).click()`);
         await sleep(300);
