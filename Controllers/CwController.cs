@@ -223,6 +223,13 @@ namespace Yaesu_Web_Control.Controllers
             {
                 return Ok(await _auto.RunAsync(ct));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // The browser went away mid-run (page closed or reloaded).
+                // Not a fault, and nobody is left to read a reply.
+                _logger.LogInformation("CW Auto cancelled by the client");
+                return new EmptyResult();
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "CW Auto failed");
