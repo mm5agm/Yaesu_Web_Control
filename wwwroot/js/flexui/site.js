@@ -1517,6 +1517,14 @@ connection.on("RadioStateUpdate", function (update) {
         if (label)  label.textContent = update.value;
     }
 
+    // --- MIC GAIN --- (#228: missing, so turning the radio's MIC knob never
+    // moved the key's level; the key still set the radio.)
+    if (update.property === "MicGain") {
+        if (window.micGainCycleButton) {
+            window.micGainCycleButton.setState({ value: Number(update.value) }, { silent: true });
+        }
+    }
+
     // --- FREQUENCY CHANGE ---
     //
     // Important: `state` in this scope refers to a variable defined inside an

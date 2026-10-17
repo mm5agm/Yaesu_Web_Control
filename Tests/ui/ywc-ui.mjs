@@ -31,7 +31,8 @@ let browser;
 const open = (path, opts) => browser.open(BASE + path, opts);
 const modeA = (page, mode) => page.state('ModeA', mode);
 const visible = (page, sel) => page.eval(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); return !!e && !e.hidden && e.getClientRects().length > 0; })()`);
-const text = (page, sel) => page.eval(`document.querySelector(${JSON.stringify(sel)})?.textContent ?? null`);
+const writesTo = async (page, prefix) => (await page.writes()).filter(w => w.path.startsWith(prefix));
+const text = (page, sel) =>page.eval(`document.querySelector(${JSON.stringify(sel)})?.textContent ?? null`);
 
 // Same-origin requests a page made that failed, minus ones that are about the
 // radio's state rather than the page (a disconnected radio 5xx's some reads).
@@ -316,6 +317,29 @@ test('Index: dragging the DX Spots title still moves the dialog', async () => {
         const pos1 = await dialogPos(page);
         expect(Math.abs(pos1.x - pos0.x - 120) < 4 && Math.abs(pos1.y - pos0.y - 60) < 4,
             `expected a move of 120, 60; got ${pos1.x - pos0.x}, ${pos1.y - pos0.y}`);
+    } finally { await page.close(); }
+});
+
+// ---------------------------------------------------------------- #228 MIC gain
+
+// The radio's MIC knob reaches the page as a MicGain update; until #228 neither
+// UI listened for it, so the control only ever showed the page-load value.
+test('Index: MIC gain slider follows a MicGain update from the radio', async () => {
+    const page = await open('/', { settleMs: 1500 });
+    try {
+        await page.state('MicGain', 37);
+        await page.waitFor(`document.getElementById('micGainSlider').value === '37' && document.getElementById('micGainValue').textContent === '37'`,
+            { timeoutMs: 2000, what: 'slider and label at 37' });
+        expect((await writesTo(page, '/api/cat/micgain')).length === 0, 'the update was written back to the radio');
+    } finally { await page.close(); }
+});
+
+test('/flexui: MIC gain key follows a MicGain update from the radio', async () => {
+    const page = await open('/flexui', { settleMs: 2500 });
+    try {
+        await page.state('MicGain', 41);
+        await page.waitFor(`window.micGainCycleButton?.getState().value === 41`, { timeoutMs: 2000, what: 'key level at 41' });
+        expect((await writesTo(page, '/api/cat/micgain')).length === 0, 'the update was written back to the radio');
     } finally { await page.close(); }
 });
 

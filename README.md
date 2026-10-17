@@ -90,6 +90,8 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
+| MIC gain: turning the radio's MIC knob now moves the slider on the Classic page and the MIC Gain key in the Experimental UI. Before, they only showed the value from when the page loaded, although setting the gain from the page always worked. | [#228](https://github.com/mm5agm/Yaesu_Web_Control/issues/228) | *Not yet in a build* |
+| Radio panel: a window popped out to its own browser window (Meters, Memories and the rest) now gets live updates. Before, it drew but never connected. | - | *Not yet in a build* |
 | Radio panel: the SWR needle no longer jumps to full scale on a good aerial while transmitting CW. It ignores readings taken when the radio puts out under 1 W, and averages the rest as the Classic page does. | - | *Not yet in a build* |
 | CW Reader: a slow sender heard straight after fast or fading signals no longer has his callsign broken into letters ("I W 2 B TA" for IW2BTA). Gaps measured at the old speed are no longer used to judge where words end at the new one. | - | *Not yet in a build* |
 

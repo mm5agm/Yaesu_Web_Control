@@ -1420,6 +1420,15 @@ connection.on("RadioStateUpdate", function (update) {
         if (label)  label.textContent = update.value;
     }
 
+    // --- MIC GAIN --- (#228: missing, so turning the radio's MIC knob never
+    // moved the slider; the slider still set the radio.)
+    if (update.property === "MicGain") {
+        const slider = document.getElementById('micGainSlider');
+        const label  = document.getElementById('micGainValue');
+        if (slider) slider.value = update.value;
+        if (label)  label.textContent = update.value;
+    }
+
     // --- FREQUENCY CHANGE ---
     //
     // Important: `state` in this scope refers to a variable defined inside an
