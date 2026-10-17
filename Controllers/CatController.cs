@@ -3053,6 +3053,10 @@ namespace Yaesu_Web_Control.Controllers
                               : on == "0" ? "0"
                               : type == null ? (request.Mode == "0" ? "1" : request.Mode)
                               : type == "1" ? "2" : "1";
+                // What was read back, for the dispatcher too: it pairs the
+                // radio's own BI reports with these.
+                if (on != null) _radioStateService.CwBreakInOn = on != "0";
+                if (type != null) _radioStateService.CwBreakInFull = type == "1";
                 _radioStateService.CwBreakIn = actual;
                 return Ok(new { mode = actual });
             }

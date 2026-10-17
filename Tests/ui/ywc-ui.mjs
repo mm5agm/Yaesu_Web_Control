@@ -100,6 +100,73 @@ test('/RadioWindow?g=mem: the window draws and its hub connects', async () => {
     } finally { await page.close(); }
 });
 
+// Classic's Memory Keyer on /radio: the CW window's MEMORIES panel. Writes are
+// stubbed, so M1 here never reaches the radio.
+test('/RadioWindow?g=cw: MEMORIES shows M1-M5, saves, and a key sends its slot', async () => {
+    const page = await open('/RadioWindow?g=cw', { settleMs: 2500 });
+    try {
+        await page.eval(`__rwcTest.getOverrides['/api/cat/cw/playing'] = { playing: false }`);
+        const r = await page.eval(`(() => {
+            const box = [...document.querySelectorAll('.rp-wpanel')].find(p => p.dataset.panel === 'cwMem');
+            return box ? { keys: [...box.querySelectorAll('.rp-wkey')].map(k => k.textContent), boxes: box.querySelectorAll('input').length } : null;
+        })()`);
+        expect(r, 'no MEMORIES panel in the CW window');
+        expect(r.boxes === 5, `expected 5 message boxes, got ${r.boxes}`);
+        expect(['M1', 'M2', 'M3', 'M4', 'M5', 'SAVE'].every(k => r.keys.includes(k)), `keys: ${r.keys.join(', ')}`);
+
+        await page.clearWrites();
+        await page.eval(`(() => {
+            const box = document.querySelector('.rp-wpanel[data-panel="cwMem"]');
+            const inputs = box.querySelectorAll('input');
+            inputs[0].value = 'CQ TEST';
+            [...box.querySelectorAll('.rp-wkey')].find(k => k.textContent === 'SAVE').click();
+        })()`);
+        await sleep(300);
+        let w = await page.writes();
+        const save = w.find(x => x.path === '/api/cat/cw/messages');
+        expect(save && Array.isArray(save.body) && save.body.length === 5 && save.body[0] === 'CQ TEST', `save write: ${JSON.stringify(w)}`);
+
+        await page.clearWrites();
+        await page.eval(`[...document.querySelectorAll('.rp-wpanel[data-panel="cwMem"] .rp-wkey')].find(k => k.textContent === 'M1').click()`);
+        await sleep(300);
+        w = await page.writes();
+        const send = w.find(x => x.path === '/api/cat/cw/send');
+        expect(send && send.body?.slot === 1 && send.body?.message === 'CQ TEST', `send write: ${JSON.stringify(w)}`);
+        const keys = await page.eval(`[...document.querySelectorAll('.rp-wpanel[data-panel="cwMem"] .rp-wkey')].slice(0, 5).map(k => ({ t: k.textContent, d: k.disabled }))`);
+        expect(keys[0].t.startsWith('▶') && keys.slice(1).every(k => k.d), `while playing: ${JSON.stringify(keys)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
+test('/RadioWindow?g=cw: BREAK-IN click steps it, the wheel steps SPEED', async () => {
+    const page = await open('/RadioWindow?g=cw', { settleMs: 2500 });
+    try {
+        const vals = `[...document.querySelectorAll('.rp-wpanel[data-panel="keyer"] .rp-wval')]`;
+        await page.eval(`__rwcTest.state('CwSpeed', 22); __rwcTest.state('CwPitch', 30); __rwcTest.state('CwBreakIn', '1')`);
+        await sleep(200);
+        const shown = await page.eval(`(() => {
+            const k = ${vals}.find(k => /^(OFF|SEMI|FULL|--)$/.test(k.textContent));
+            return k ? k.textContent : null;
+        })()`);
+        expect(shown, 'no BREAK-IN value in the KEYER panel');
+        const next = { OFF: '1', SEMI: '2', FULL: '0', '--': '0' }[shown];
+        await page.clearWrites();
+        await page.eval(`${vals}.find(k => k.textContent === ${JSON.stringify(shown)}).click()`);
+        await sleep(300);
+        let w = (await page.writes()).filter(x => x.path === '/api/cat/cw/breakin');
+        expect(w.length === 1 && w[0].body?.mode === next, `shown ${shown}, writes: ${JSON.stringify(w)}`);
+
+        // The wheel over SPEED steps it: up one notch is +1 wpm.
+        const wpm = await page.eval(`parseInt(${vals}[0].textContent, 10)`);
+        await page.clearWrites();
+        await page.eval(`${vals}[0].parentElement.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }))`);
+        await sleep(300);
+        w = (await page.writes()).filter(x => x.path === '/api/cat/cw/speed');
+        expect(Number.isFinite(wpm) && w.length === 1 && w[0].body?.speed === wpm + 1, `speed ${wpm}, writes: ${JSON.stringify(w)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 async function modePopoutChecks({ path, pausedSel, announceSel, name, good, bad, note }) {
     const page = await open(path);
     try {
