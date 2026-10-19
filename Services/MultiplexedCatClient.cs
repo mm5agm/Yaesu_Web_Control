@@ -135,27 +135,13 @@ namespace Yaesu_Web_Control.Services
         public async Task<long> QueryFrequencyAAsync(string clientId, CancellationToken cancellationToken = default)
         {
             var response = await SendCommandAsync("FA;", clientId, cancellationToken);
-            // Response format: "FA00014074000;" (example for 14.074 MHz)
-            if (!string.IsNullOrEmpty(response) && response.StartsWith("FA"))
-            {
-                var freqStr = response.Substring(2, 9); // 9 digits after "FA"
-                if (long.TryParse(freqStr, out var freq))
-                    return freq;
-            }
-            return 0;
+            return CatCommands.ParseFrequency(response);
         }
 
         public async Task<long> QueryFrequencyBAsync(string clientId, CancellationToken cancellationToken = default)
         {
             var response = await SendCommandAsync("FB;", clientId, cancellationToken);
-            // Response format: "FB00024915000;" (example for 24.915 MHz)
-            if (!string.IsNullOrEmpty(response) && response.StartsWith("FB"))
-            {
-                var freqStr = response.Substring(2, 9); // 9 digits after "FB"
-                if (long.TryParse(freqStr, out var freq))
-                    return freq;
-            }
-            return 0;
+            return CatCommands.ParseFrequency(response);
         }
     }
 }
