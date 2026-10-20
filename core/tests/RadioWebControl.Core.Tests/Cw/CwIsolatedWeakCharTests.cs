@@ -106,5 +106,24 @@ namespace RadioWebControl.Core.Tests.Cw
             string text = Over + " T CQ";
             Assert.Equal(text, Decode(Keying(text, text.Length - 4)));
         }
+
+        [Fact]
+        public void A_weak_run_of_dits_between_overs_is_withheld()
+        {
+            // "EEE" in the quiet: three blips, each too close to the next to
+            // be a lone character, and the word is nothing else.
+            string text = Over + " EEE CQ";
+            int at = Over.Length + 1;
+            Assert.Equal(Over + " CQ", Decode(Keying(text, at, at + 1, at + 2)));
+        }
+
+        [Fact]
+        public void A_weak_E_starting_a_word_is_printed()
+        {
+            // A fading caller's ER: the E is quiet, the R is not.
+            string text = Over + " ER CQ";
+            int at = Over.Length + 1;
+            Assert.Equal(text, Decode(Keying(text, at)));
+        }
     }
 }

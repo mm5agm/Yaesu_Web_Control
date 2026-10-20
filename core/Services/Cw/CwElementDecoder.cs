@@ -659,6 +659,19 @@ namespace RadioWebControl.Core.Services.Cw
         private bool   _symbolAfterBreak;                         // _afterBreak when this symbol's first mark landed
         private bool   _symbolPendingCharGap;                     // _pendingCharGap at the same moment
 
+        // Weak dits held at the start of a word: dropped if the word turns out
+        // to be nothing else, released in front of whatever follows otherwise.
+        // The lone-character gate above sees one character at a time, so a
+        // burst of noise dits run together - "EE", "EEE EE" - went through it.
+        // Across the 140 bench files this takes all-E/I words 300 -> 208 and
+        // removes nothing but E's (201 characters); no file gained one, and the
+        // practice set and beacons score as before. Dropping held dits when
+        // the next character is loud as well was tried and rejected: it read
+        // "ER" as "R" and "EST" as "ST" on a fading signal.
+        private readonly StringBuilder _weakRun = new();
+        private bool   _weakRunPendingCharGap;
+        private double _lastSymbolPeak;
+
         /// <summary>The upper quartile of recent training-mark peaks, or 0 before there are enough.</summary>
         private double ReferencePeak()
         {
@@ -680,6 +693,7 @@ namespace RadioWebControl.Core.Services.Cw
             double peak = _symbolPeak, shortest = _symbolShortestMs;
             _symbolPeak = 0.0;
             _symbolShortestMs = double.MaxValue;
+            _lastSymbolPeak = peak;
 
             if (_opt.IsolatedWeakCharRatio <= 0.0) return false;
             if (!endsAtBreak || !_symbolAfterBreak || sym.Length > 2) return false;
@@ -1028,6 +1042,14 @@ namespace RadioWebControl.Core.Services.Cw
             _gapWindowNext = (_gapWindowNext + 1) % _gapWindow.Length;
             if (_gapWindowCount < _gapWindow.Length) _gapWindowCount++;
 
+            // A word gap with weak dits still held means the word was nothing
+            // else. FlushCharacter judged the same gap a hair short of a break
+            // before the window update above moved the bar.
+            if (gapMs >= WordGapMs() && _weakRun.Length > 0)
+            {
+                _weakRun.Clear();
+                _pendingCharGap = _weakRunPendingCharGap;
+            }
             if (gapMs >= WordGapMs() && !_pendingCharGap)
             {
                 text += " ";
@@ -1229,10 +1251,37 @@ namespace RadioWebControl.Core.Services.Cw
             if (IsIsolatedWeakChar(sym, endsAtBreak))
             {
                 DecodeSymbol(sym);
-                _pendingCharGap = _symbolPendingCharGap;
+                _pendingCharGap = _weakRun.Length > 0 ? _weakRunPendingCharGap : _symbolPendingCharGap;
+                _weakRun.Clear();
                 return string.Empty;
             }
+
+            bool weak = WeakAgainstStation(_lastSymbolPeak);
+            if (sym == "." && weak && (_symbolAfterBreak || _weakRun.Length > 0))
+            {
+                if (_weakRun.Length == 0) _weakRunPendingCharGap = _symbolPendingCharGap;
+                _weakRun.Append(DecodeSymbol(sym));
+                if (!endsAtBreak) return string.Empty;
+                _pendingCharGap = _weakRunPendingCharGap;
+                _weakRun.Clear();
+                return string.Empty;
+            }
+            string held = _weakRun.ToString();
+            _weakRun.Clear();
             _afterBreak = false;
+            if (held.Length > 0) return held + FlushCharacterText(sym, gaps);
+            return FlushCharacterText(sym, gaps);
+        }
+
+        private bool WeakAgainstStation(double peak)
+        {
+            if (_opt.IsolatedWeakCharRatio <= 0.0) return false;
+            double reference = ReferencePeak();
+            return reference > 0.0 && peak < _opt.IsolatedWeakCharRatio * reference;
+        }
+
+        private string FlushCharacterText(string sym, double[] gaps)
+        {
 
             if (_opt.SplitInvalidMinGapDits > 0.0 && MorseTable.Decode(sym) is null
                 && gaps.Length == sym.Length - 1 && gaps.Length > 0)
