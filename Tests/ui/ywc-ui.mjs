@@ -268,6 +268,19 @@ test('Index: RTTY tuner dialog closes when the mode settles in CW, stays in USB'
     } finally { await page.close(); }
 });
 
+// ------------------------------------------------------- front-panel state
+
+// #228: the radio pushes MG over auto-information, the hub rebroadcasts it as
+// "MicGain", and the slider used to sit still because no branch handled it.
+test('Index: a MicGain broadcast moves the MIC Gain slider (#228)', async () => {
+    const page = await open('/', { settleMs: 2500 });
+    try {
+        await page.state('MicGain', 33);
+        await page.waitFor(`document.getElementById('micGainSlider')?.value === '33'`, { what: 'MIC Gain slider at 33' });
+        expect(await text(page, '#micGainValue') === '33', `label shows ${await text(page, '#micGainValue')}`);
+    } finally { await page.close(); }
+});
+
 // ---------------------------------------------------------------- DX spots
 
 const SPOT_HZ = 14_025_000;    // CW in every region's band plan

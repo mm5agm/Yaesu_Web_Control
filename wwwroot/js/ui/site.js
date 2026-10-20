@@ -1420,6 +1420,19 @@ connection.on("RadioStateUpdate", function (update) {
         if (label)  label.textContent = update.value;
     }
 
+    // --- MIC GAIN ---
+    // Front-panel MIC GAIN changes arrive as MG; auto-information, the
+    // dispatcher stores them in RadioStateService and the hub broadcasts
+    // "MicGain" — but nothing on this page was listening, so the Power /
+    // MIC Gain row's slider stayed put while the radio moved (linux150 #228).
+    // The value was correct in Diagnostics, which is what pointed here.
+    if (update.property === "MicGain") {
+        const slider = document.getElementById('micGainSlider');
+        const label  = document.getElementById('micGainValue');
+        if (slider) slider.value = update.value;
+        if (label)  label.textContent = update.value;
+    }
+
     // --- FREQUENCY CHANGE ---
     //
     // Important: `state` in this scope refers to a variable defined inside an
