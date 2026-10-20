@@ -399,6 +399,46 @@ test('Index: dragging the DX Spots title still moves the dialog', async () => {
     } finally { await page.close(); }
 });
 
+// The TX toggle key is site.js's. A shortcut on the same letter (u = USB)
+// must not act too, held or not, and the ? list must say the key is taken.
+const press = (page, key, code, extra = {}) => page.eval(`document.dispatchEvent(new KeyboardEvent('keydown',
+    ${JSON.stringify({ key, code, bubbles: true, cancelable: true, ...extra })}))`);
+for (const path of ['/', '/flexui']) test(`Keys: the TX key is not also a shortcut (${path})`, async () => {
+    const page = await open(path, { settleMs: 2500 });
+    try {
+        for (const [p, v] of [['IsConnected', true], ['ActiveVfo', 0], ['FrequencyA', 14_074_000], ['ModeA', 'LSB']]) await page.state(p, v);
+        // Control: with no TX key, u is USB, so the check below can fail.
+        await page.eval(`window.ywcTxToggleKey = ''`);
+        await page.clearWrites();
+        await press(page, 'u', 'KeyU');
+        expect(modeWrites(await page.writes()).length === 1, 'u did not set a mode with no TX key');
+
+        await page.eval(`window.ywcTxToggleKey = 'u'`);
+        await page.clearWrites();
+        await press(page, 'u', 'KeyU');
+        await press(page, 'u', 'KeyU', { repeat: true });
+        const ws = await page.writes();
+        expect(modeWrites(ws).length === 0, `the TX key also set the mode: ${JSON.stringify(modeWrites(ws))}`);
+        const tx = ws.filter(w => w.path.startsWith('/api/cat/tx'));
+        expect(tx.length === 1, `TX toggled ${tx.length} times for one press and one repeat`);
+
+        // A held key: site.js ignores its repeats, so they reached the
+        // shortcuts unmarked, and j (tune down) acted on every one.
+        await page.eval(`window.ywcTxToggleKey = 'j'`);
+        await page.clearWrites();
+        await press(page, 'j', 'KeyJ', { repeat: true });
+        await press(page, 'j', 'KeyJ', { repeat: true });
+        await new Promise(r => setTimeout(r, 800));
+        const held = freqWrites(await page.writes());
+        expect(held.length === 0, `holding the TX key tuned: ${JSON.stringify(held)}`);
+
+        await page.eval(`window.ywcTxToggleKey = 'u'`);
+        await press(page, '?', 'Slash', { shiftKey: true });
+        const help = await text(page, '#keyboardShortcutsDialog');
+        expect(/no shortcut acts on this key/.test(help ?? ''), 'the ? list does not name the TX key');
+    } finally { await page.close(); }
+});
+
 // ----------------------------------------------------------------
 
 try {
