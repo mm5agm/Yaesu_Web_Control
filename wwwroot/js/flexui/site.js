@@ -1224,7 +1224,11 @@ connection.on("FrequencyRejected", function (info) {
 
 
 function sMeterLabel(val) {
-    return window.calibrationEngine.calibrateSMeterLabel(val);
+    // The engine is set by a module script in the layout, and module scripts
+    // run after this classic one, so the first SignalR update can arrive
+    // before it exists. null tells updateSMeter to leave the label for the
+    // next reading rather than throw.
+    return window.calibrationEngine?.calibrateSMeterLabel?.(val) ?? null;
 }
 
 
@@ -3457,6 +3461,7 @@ window.setApfFreq = setApfFreq;
         if (receiver === 'A' && typeof updateRawSMeterValueA === 'function') updateRawSMeterValueA(value);
         const canvas = document.getElementById(canvasId);
         const sUnit = sMeterLabel(value);
+        if (sUnit == null) return;
         if (canvas) canvas.dataset.reading = sUnit;
         // Update the "S-Meter S5" title label under the gauge (matches SWR /
         // Power / Temp / etc. format). Element is rendered by SMeterGauge
