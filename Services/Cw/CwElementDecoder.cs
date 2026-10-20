@@ -168,6 +168,31 @@ namespace RadioWebControl.Core.Services.Cw
         public int ChatterExemptDahs { get; set; } = 2;
 
         /// <summary>
+        /// A window in which every mark is a dah is Morse, not Chatter, when
+        /// the decoder already knows the sender's dit. On by default.
+        ///
+        /// The spread floor reads "every recent mark is about the same length"
+        /// as a detector flickering on noise, and so does
+        /// <see cref="ChatterExemptDahs"/>, because it measures dahs against
+        /// the window's own p10. Neither can see a window with no dits in it.
+        /// Real text does that: OM, TO, MO, 0. On the Morse Code Ninja
+        /// Speed-Racing file, OM sent five times is 25 dahs in a row, the
+        /// window read Chatter for 11 s while every character had decoded
+        /// correctly, and the held text went stale and was cleared, so it
+        /// printed "OM OM ORPRT" where it had copied OM five times. The dit
+        /// stayed at 43-48 ms through it, against dahs of 120-180.
+        ///
+        /// The test is that the window's p10 is nearer the trained dah than
+        /// the trained dit - the geometric mean of the two, the same split
+        /// marks are classified on - and that the two have been learned
+        /// apart, a dah at least twice a dit. Chatter cannot pass it: the
+        /// detector's blips train the dit onto themselves, so they sit at
+        /// about one dit, and a band that has gone quiet has its speed reset
+        /// to the starting guess before the next blip arrives.
+        /// </summary>
+        public bool ChatterExemptAllDahs { get; set; } = true;
+
+        /// <summary>
         /// Fraction of recent key-down runs that may be thrown out as too short
         /// to be an element before the copy is called
         /// <see cref="CwReadability.Jumbled"/> whatever its spread says.
@@ -634,6 +659,19 @@ namespace RadioWebControl.Core.Services.Cw
         private bool   _symbolAfterBreak;                         // _afterBreak when this symbol's first mark landed
         private bool   _symbolPendingCharGap;                     // _pendingCharGap at the same moment
 
+        // Weak dits held at the start of a word: dropped if the word turns out
+        // to be nothing else, released in front of whatever follows otherwise.
+        // The lone-character gate above sees one character at a time, so a
+        // burst of noise dits run together - "EE", "EEE EE" - went through it.
+        // Across the 140 bench files this takes all-E/I words 300 -> 208 and
+        // removes nothing but E's (201 characters); no file gained one, and the
+        // practice set and beacons score as before. Dropping held dits when
+        // the next character is loud as well was tried and rejected: it read
+        // "ER" as "R" and "EST" as "ST" on a fading signal.
+        private readonly StringBuilder _weakRun = new();
+        private bool   _weakRunPendingCharGap;
+        private double _lastSymbolPeak;
+
         /// <summary>The upper quartile of recent training-mark peaks, or 0 before there are enough.</summary>
         private double ReferencePeak()
         {
@@ -655,6 +693,7 @@ namespace RadioWebControl.Core.Services.Cw
             double peak = _symbolPeak, shortest = _symbolShortestMs;
             _symbolPeak = 0.0;
             _symbolShortestMs = double.MaxValue;
+            _lastSymbolPeak = peak;
 
             if (_opt.IsolatedWeakCharRatio <= 0.0) return false;
             if (!endsAtBreak || !_symbolAfterBreak || sym.Length > 2) return false;
@@ -1003,6 +1042,14 @@ namespace RadioWebControl.Core.Services.Cw
             _gapWindowNext = (_gapWindowNext + 1) % _gapWindow.Length;
             if (_gapWindowCount < _gapWindow.Length) _gapWindowCount++;
 
+            // A word gap with weak dits still held means the word was nothing
+            // else. FlushCharacter judged the same gap a hair short of a break
+            // before the window update above moved the bar.
+            if (gapMs >= WordGapMs() && _weakRun.Length > 0)
+            {
+                _weakRun.Clear();
+                _pendingCharGap = _weakRunPendingCharGap;
+            }
             if (gapMs >= WordGapMs() && !_pendingCharGap)
             {
                 text += " ";
@@ -1204,10 +1251,37 @@ namespace RadioWebControl.Core.Services.Cw
             if (IsIsolatedWeakChar(sym, endsAtBreak))
             {
                 DecodeSymbol(sym);
-                _pendingCharGap = _symbolPendingCharGap;
+                _pendingCharGap = _weakRun.Length > 0 ? _weakRunPendingCharGap : _symbolPendingCharGap;
+                _weakRun.Clear();
                 return string.Empty;
             }
+
+            bool weak = WeakAgainstStation(_lastSymbolPeak);
+            if (sym == "." && weak && (_symbolAfterBreak || _weakRun.Length > 0))
+            {
+                if (_weakRun.Length == 0) _weakRunPendingCharGap = _symbolPendingCharGap;
+                _weakRun.Append(DecodeSymbol(sym));
+                if (!endsAtBreak) return string.Empty;
+                _pendingCharGap = _weakRunPendingCharGap;
+                _weakRun.Clear();
+                return string.Empty;
+            }
+            string held = _weakRun.ToString();
+            _weakRun.Clear();
             _afterBreak = false;
+            if (held.Length > 0) return held + FlushCharacterText(sym, gaps);
+            return FlushCharacterText(sym, gaps);
+        }
+
+        private bool WeakAgainstStation(double peak)
+        {
+            if (_opt.IsolatedWeakCharRatio <= 0.0) return false;
+            double reference = ReferencePeak();
+            return reference > 0.0 && peak < _opt.IsolatedWeakCharRatio * reference;
+        }
+
+        private string FlushCharacterText(string sym, double[] gaps)
+        {
 
             if (_opt.SplitInvalidMinGapDits > 0.0 && MorseTable.Decode(sym) is null
                 && gaps.Length == sym.Length - 1 && gaps.Length > 0)
@@ -1454,6 +1528,15 @@ namespace RadioWebControl.Core.Services.Cw
             return dahs >= _opt.ChatterExemptDahs;
         }
 
+        /// <summary>
+        /// Whether every mark in the window is a dah by the speed already
+        /// learned. See <see cref="CwElementDecoderOptions.ChatterExemptAllDahs"/>.
+        /// </summary>
+        private bool AllDahs(double p10)
+            => _opt.ChatterExemptAllDahs
+            && _dahMs >= 2.0 * _ditMs
+            && p10 >= Math.Sqrt(_ditMs * _dahMs);
+
         // A dah is three dits; 2.5 leaves room for a light fist and still sits
         // well clear of the 1.3 spread chatter produces.
         private const double ChatterDahRatio = 2.5;
@@ -1472,7 +1555,7 @@ namespace RadioWebControl.Core.Services.Cw
             if (p10 <= 0.0) return CwReadability.Unknown;
 
             spread = p90 / p10;
-            if (spread < _opt.ReadabilitySpreadFloor && !HoldsDahs(p10)) return CwReadability.Chatter;
+            if (spread < _opt.ReadabilitySpreadFloor && !HoldsDahs(p10) && !AllDahs(p10)) return CwReadability.Chatter;
             if (spread > _opt.ReadabilitySpreadCeiling) return CwReadability.Jumbled;
 
             if (_runWindowCount >= _opt.ReadabilityMinMarks)
