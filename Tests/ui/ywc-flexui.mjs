@@ -91,6 +91,22 @@ test('/flexui loads the Classic page without the fork', async () => {
     } finally { await page.close(); }
 });
 
+// ---------------------------------------------------------------- front-panel
+
+test('/flexui: a MicGain broadcast moves the MIC Gain key (#228)', async () => {
+    // The Classic UI has a range input; this fork renders MIC Gain as a
+    // CycleContextButton whose slider lives in its context menu, so the value
+    // has to go into the widget rather than an <input>.
+    const page = await open('/flexui', { settleMs: 3000 });
+    try {
+        await page.waitFor('!!window.micGainCycleButton', { timeoutMs: 8000, what: 'the MIC Gain key' });
+        await page.state('MicGain', 33);
+        await page.waitFor('window.micGainCycleButton.getState().value === 33', { what: 'MIC Gain key at 33' });
+        const shown = await page.eval(`document.querySelector('#micGainButton .toggle-dd__slider-value')?.textContent ?? null`);
+        expect(shown === '33', `the key's slider value shows ${shown}`);
+    } finally { await page.close(); }
+});
+
 // ----------------------------------------------------------------
 
 try {
