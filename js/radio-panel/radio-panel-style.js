@@ -29,6 +29,7 @@ ${bc(500)}${bc(600)}${bc(700)}
 html,body{margin:0;background:${v('page')}}
 .rp-page{min-height:100vh;box-sizing:border-box;background:${v('page')};font-family:${SANS};color:${v('text')};overflow:hidden}
 .rp-scale{width:1600px;transform-origin:0 0;padding:20px;box-sizing:border-box}
+.rp-board-grip{position:absolute;right:0;bottom:0;width:26px;height:26px;cursor:nwse-resize;touch-action:none;z-index:50;background:linear-gradient(135deg,transparent 52%,${v('legend-dim')} 52% 58%,transparent 58% 68%,${v('legend-dim')} 68% 74%,transparent 74% 84%,${v('legend-dim')} 84% 90%,transparent 90%)}
 .rp-panel{box-sizing:border-box;padding:22px 26px 24px;border-radius:18px;background:${v('panel')};border:1px solid ${v('panel-border')};box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 18px 40px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:18px}
 .rp-panel *{box-sizing:border-box}
 .rp-panel button{font-family:${SANS}}
@@ -111,7 +112,7 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-skey{appearance:none;border:1px solid ${v('key-border')};background:${v('key-bg')};color:${v('key-fg')};border-radius:6px;height:40px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;padding:0;box-shadow:0 2px 0 ${v('key-shadow')}}
 .rp-skey .rp-led{width:22px;height:4px}
 .rp-skey-label{font:600 14px ${SANS};letter-spacing:.06em;white-space:nowrap}
-.rp-skey .rp-sub{font-size:11px;min-height:11px;line-height:11px}
+.rp-skey .rp-sub{font-size:11px;min-height:11px;line-height:11px;color:${v('key-fg')};opacity:.75}
 .rp-skey.suits{border-color:${v('highlight')}}
 .rp-skey:active{transform:translateY(2px);box-shadow:none}
 .rp-win{position:absolute;z-index:10;border-radius:8px;overflow:hidden;background:${v('panel')};border:1px solid ${v('key-border')};box-shadow:0 18px 44px rgba(0,0,0,.75);display:flex;flex-direction:column;min-width:200px;min-height:120px}
@@ -229,7 +230,7 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-spec-tools .rp-wkey.on{background:${v('tx')};border-color:${v('tx')};color:${v('tx-fg')}}
 .rp-specpane{position:relative}
 .rp-specpane.held .rp-spectrum{outline:2px solid ${v('tx')};outline-offset:-2px}
-.rp-spec-settings{display:none;position:absolute;left:6px;bottom:42px;z-index:6;padding:10px 12px;gap:6px;flex-direction:column;border-radius:6px;background:${v('bar-bg')};border:1px solid ${v('well-border')};color:${v('soft-fg')};font:500 13px ${SANS};box-shadow:0 6px 18px rgba(0,0,0,.45);cursor:default}
+.rp-spec-settings{display:none;position:absolute;left:6px;bottom:42px;z-index:6;padding:10px 12px;gap:6px;flex-direction:column;border-radius:6px;background:${v('soft-bg')};border:1px solid ${v('soft-border')};color:${v('soft-fg')};font:500 13px ${SANS};box-shadow:0 6px 18px rgba(0,0,0,.45);cursor:default}
 .rp-spec-settings.open{display:flex}
 .rp-spec-row{display:grid;grid-template-columns:64px 150px 56px;align-items:center;gap:8px}
 .rp-spec-row input[type=range]{width:150px}
@@ -245,6 +246,9 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-sdrview.both .rp-specpane.sel{border-color:${v('highlight')}}
 .rp-sdrview.both .rp-spectrum{min-height:0}
 .rp-sdrview.both .rp-waterfall{height:56px}
+/* setWaterfall(id, false): a strip that keeps the span, HOLD and SCOPE keys */
+.rp-specpane.no-wf .rp-waterfall{height:36px;background:none;border-color:transparent}
+.rp-specpane.no-wf .rp-waterfall>:not(.rp-spec-tools){display:none}
 .rp-altview{flex:1;min-height:360px;position:relative;border:1px solid ${v('screen-line')};border-radius:4px;overflow:hidden;background:${v('spec-bg')}}
 .rp-viewtabs{position:absolute;right:6px;bottom:6px;display:flex;gap:2px;padding:2px;border-radius:5px;background:${v('bar-bg')};border:1px solid ${v('well-border')};z-index:3}
 .rp-viewtab{font:600 13px ${SANS};letter-spacing:.1em;text-transform:uppercase;color:${v('legend-dim')};background:none;border:0;border-radius:3px;padding:3px 9px;cursor:pointer}
@@ -253,6 +257,8 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-modes{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
 
 .rp-right{display:flex;flex-direction:column;align-items:center;gap:14px}
+.rp-dial-vfo{display:inline-block;margin-left:10px;padding:0 7px;border:1px solid currentColor;border-radius:4px;font:700 15px ${MONO};letter-spacing:0;color:${v('vfo-a')}}
+.rp-dial-vfo[data-vfo=B]{color:${v('vfo-b')}}
 .rp-dial{width:300px;height:300px;border-radius:50%;background:repeating-conic-gradient(${v('dial-a')} 0deg 2deg,${v('dial-b')} 2deg 4deg);box-shadow:0 10px 24px rgba(0,0,0,.7),inset 0 0 0 1px ${v('dial-rim')};display:flex;align-items:center;justify-content:center}
 .rp-dial-inner{width:250px;height:250px;border-radius:50%;background:${v('dial-inner')};box-shadow:inset 0 2px 0 rgba(255,255,255,.07),inset 0 -6px 14px rgba(0,0,0,.45);position:relative}
 .rp-dial-dimple{position:absolute;width:52px;height:52px;border-radius:50%;left:154px;top:42px;background:${v('dial-dimple')};box-shadow:inset 0 3px 6px rgba(0,0,0,.7)}
@@ -327,18 +333,22 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-spec-away{position:absolute;inset:0;z-index:4;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;border:1px dashed ${v('screen-line')};border-radius:4px;background:${v('spec-bg')};font:600 20px ${SANS};letter-spacing:.14em;text-transform:uppercase;color:${v('spec-label')}}
 .rp-spec-away.on{display:flex}
 
-.rp-spop{height:100vh;display:flex;flex-direction:column}
-.rp-spop-top{height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 10px;background:${v('key-bg')};border-bottom:1px solid ${v('key-border')}}
-.rp-spop-title{font:700 16px ${SANS};letter-spacing:.1em;color:${v('title')};white-space:nowrap}
+.rp-spop{height:100vh;display:flex;flex-direction:column;position:relative}
+.rp-spop-grip{position:absolute;right:0;bottom:0;width:24px;height:24px;cursor:nwse-resize;touch-action:none;z-index:5;background:linear-gradient(135deg,transparent 52%,${v('legend-dim')} 52% 58%,transparent 58% 68%,${v('legend-dim')} 68% 74%,transparent 74% 84%,${v('legend-dim')} 84% 90%,transparent 90%)}
+.rp-spop-top{height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 10px;background:${v('key-bg')};border-bottom:1px solid ${v('key-border')}}
+.rp-spop-title{font:700 18px ${SANS};letter-spacing:.1em;color:${v('key-fg')};white-space:nowrap}
 .rp-spop-tabs{display:flex;gap:2px;padding:2px;border-radius:5px;background:${v('bar-bg')};border:1px solid ${v('well-border')}}
-.rp-spop-tab{font:600 14px ${SANS};letter-spacing:.1em;text-transform:uppercase;color:${v('legend-dim')};background:none;border:0;border-radius:3px;padding:3px 12px;cursor:pointer}
+.rp-spop-tab{font:600 16px ${SANS};letter-spacing:.1em;text-transform:uppercase;color:${v('legend-dim')};background:none;border:0;border-radius:3px;padding:3px 12px;cursor:pointer}
 .rp-spop-tab.on{background:${v('bar-on')};color:${v('title')}}
 .rp-spop-gap{flex:1}
-.rp-spop-key{appearance:none;border:1px solid ${v('soft-border')};background:${v('soft-bg')};color:${v('soft-fg')};border-radius:5px;min-height:28px;padding:2px 10px;font:600 14px ${SANS};letter-spacing:.06em;cursor:pointer}
+.rp-spop-key{appearance:none;border:1px solid ${v('soft-border')};background:${v('soft-bg')};color:${v('soft-fg')};border-radius:5px;min-height:32px;padding:2px 12px;font:600 16px ${SANS};letter-spacing:.06em;cursor:pointer}
 .rp-spop-key.on{background:${v('soft-on-bg')};border-color:${v('highlight')};color:${v('soft-on-fg')}}
 .rp-spop-x{min-width:30px;background:${v('accent-bg')};color:${v('accent-soft')};border-color:transparent}
 .rp-spop-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:10px}
 .rp-spop-holder{flex:1;min-height:0;display:flex}
+/* A pane with no waterfall needs room for its trace only: about what the
+   trace has in a pane with one (1 of the 1 + 1.2 below), the rest to that pane */
+.rp-spop-holder:has(>.rp-pane.no-wf){flex:.45}
 /* window-popout.js: one window group in a page of its own. The board's
    frame is undone; the panel boxes fill the page. */
 .rp-wpop-board{flex:1;min-height:0;padding:0;border:0;border-radius:0;box-shadow:none;gap:0}
@@ -346,9 +356,18 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-pane{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:6px}
 .rp-pane .rp-spectrum{flex:1;min-height:80px}
 .rp-pane .rp-waterfall{height:auto;flex:1.2;min-height:60px}
-.rp-pane-bar{display:flex;align-items:center;gap:10px;min-height:26px}
-.rp-pane-label{flex:1;font:400 15px ${MONO};color:${v('spec-label')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rp-pane.no-wf .rp-waterfall{display:none}
+/* In the pop-out each pane sits on the radio's screen, as on the board: its
+   label and scale are screen colours, which on the page itself (grey in
+   Silver) could not be read */
+.rp-spop .rp-pane{position:relative;padding:6px 8px 8px;border-radius:6px;background:${v('screen')};border:1px solid ${v('screen-line')}}
+.rp-spop .rp-axis{font-size:17px;min-height:18px}
+.rp-pane>.rp-spec-settings{left:auto;right:8px;top:44px;bottom:auto;font-size:16px}
+.rp-pane>.rp-spec-settings .rp-spec-row{grid-template-columns:84px 180px 70px}
+.rp-pane>.rp-spec-settings .rp-spec-row input[type=range]{width:180px}
+.rp-pane-bar{display:flex;align-items:center;gap:10px;min-height:32px}
+.rp-pane-label{flex:1;font:400 18px ${MONO};color:${v('chip-fg')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rp-pane-tools{display:flex;gap:6px}
-.rp-spop-span{font:500 14px ${SANS};background:${v('chipbtn-bg')};color:${v('chipbtn-fg')};border:1px solid ${v('key-border')};border-radius:4px;padding:2px 6px}
+.rp-spop-span{font:500 16px ${SANS};min-height:32px;background:${v('chipbtn-bg')};color:${v('chipbtn-fg')};border:1px solid ${v('key-border')};border-radius:4px;padding:2px 6px}
 `;
 }

@@ -23,7 +23,7 @@ export class SpectrumPane {
     /**
      * @param {HTMLElement} container  the pane fills it
      * @param {object} [opts]
-     * @param {string} [opts.empty='No SDR']  shown until the first frame
+     * @param {string} [opts.empty='Waiting for data']  shown until the first frame
      */
     constructor(container, opts = {}) {
         this.el = h('div', 'rp-pane');
@@ -34,7 +34,7 @@ export class SpectrumPane {
         const spec = h('div', 'rp-spectrum');
         this._pb = h('div', 'rp-passband');
         this._spots = h('div');
-        this._empty = h('div', 'rp-spec-empty', opts.empty ?? 'No SDR');
+        this._empty = h('div', 'rp-spec-empty', opts.empty ?? 'Waiting for data');
         spec.append(this._pb, h('div', 'rp-cursor'), this._spots, this._empty);
         this._axis = h('div', 'rp-axis');
         const wf = h('div', 'rp-waterfall');
@@ -79,6 +79,9 @@ export class SpectrumPane {
     }
 
     clear() { this._view.clear(); }
+
+    /** Show or hide the waterfall; hidden, the trace takes its room. */
+    setWaterfall(show) { this.el.classList.toggle('no-wf', !show); }
 
     _drawLabel() {
         const s = this._st;
