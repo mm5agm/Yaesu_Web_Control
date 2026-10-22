@@ -69,6 +69,31 @@ flag it if you think `rules.md` should be extended to cover them explicitly.
 6. Pushing to `origin`, tagging, releasing, and opening PRs all need Colin's
    explicit word, as before.
 
+### Claude: the connected radio - change anything, never transmit
+
+Colin gave standing permission on 2026-10-22 for Claude to change any receive
+or operating setting on the connected radio while testing, through the running
+YWC (its API, its pages or the UI tests): frequency, band, mode, VFO, split,
+filters and widths, IF shift/width, AGC, NR/NB/notch, preamp (IPO) and
+attenuator, AF/RF/SQL, clarifier, scope span and mode, memory recall, and
+stored levels such as RF power, mic gain and processor. Restore what you
+changed when you finish, and say what you changed.
+
+**Never transmit.** No exceptions, and not to "just check" something. That rules
+out:
+
+- `/api/cat/tx` (PTT), `/api/cat/atu/tune` (the tuner keys the radio),
+  `/api/cat/cw/send` and `/api/cat/cw/messages` (keyer and message playback),
+  anything that sends audio to the transmitter, and switching VOX on;
+- raw CAT that keys the radio: `TX1;`/`TX2;`, `AC002;` (tune), `KY…;`
+  (keyer playback), `PB…;` (voice message playback), sent by any route;
+- WSJT-X or any other program's TX path through YWC.
+
+Also leave alone: `/api/cat/radiopower` (do not switch the radio off), and
+writing or clearing memory channels or keyer memories (`PUT cw/keyer/{slot}`);
+ask first. Choosing the TX VFO or split is fine; it does not transmit. If you
+are not sure whether something keys the radio, do not do it: ask Colin.
+
 ### Issue triage: minor vs serious, and who closes an issue
 
 Pre-releases are batched — one is cut for something serious, or once four
