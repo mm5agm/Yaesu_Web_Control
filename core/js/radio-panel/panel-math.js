@@ -98,14 +98,15 @@ export function meterGeometry(frac, lower = LOWER_SCALES.PO) {
 
 // Where the receive passband sits relative to the dial, in Hz. Upper-sideband
 // modes listen above the dial, lower-sideband below, the rest either side.
-// The 100 Hz SSB offset is the conventional low edge of a voice filter; it is
+// Data modes come by the radio's name (DATA-U) or the one the board shows
+// (USB-D); both are upper sideband. The 100 Hz SSB offset is the conventional low edge of a voice filter; it is
 // drawing, not a measurement of any particular radio.
 export function passbandHz(mode, widthHz) {
     const w = Math.max(0, Number(widthHz) || 0);
     const m = String(mode || '').toUpperCase();
     if (!w) return null;
-    if (m === 'USB' || m === 'DATA-U' || m === 'PSK' || m === 'DATA-USB') return { lo: 100, hi: 100 + w };
-    if (m === 'LSB' || m === 'DATA-L' || m === 'DATA-LSB') return { lo: -100 - w, hi: -100 };
+    if (m === 'USB' || m === 'DATA-U' || m === 'USB-D' || m === 'PSK' || m === 'DATA-USB') return { lo: 100, hi: 100 + w };
+    if (m === 'LSB' || m === 'DATA-L' || m === 'LSB-D' || m === 'DATA-LSB') return { lo: -100 - w, hi: -100 };
     return { lo: -w / 2, hi: w / 2 };
 }
 

@@ -17,6 +17,8 @@ const CONSOLE = {
         panel: '#1c1e22', 'panel-border': '#34373d',
         legend: '#c3c9d0', 'legend-dim': '#9aa1a9', sub: '#a3aab2',
         accent: '#ffb02e', 'accent-soft': '#ffd58a', 'accent-bg': '#3a2c12',
+        // The VFO the main dial tunes: A, and B in a hue that cannot pass for A.
+        'vfo-a': '#ffb02e', 'vfo-b': '#5cc8ff',
 
         'key-bg': '#2a2d32', 'key-border': '#3c4048', 'key-shadow': '#111215', 'key-fg': '#e1e5ea',
         'led-off': '#3d3220', 'led-on': '#ffb02e',
@@ -61,6 +63,7 @@ const NIGHT = {
         panel: '#0b0606', 'panel-border': '#2a1210',
         legend: '#b84a3e', 'legend-dim': '#8a3a30', sub: '#9a4236',
         accent: '#ff4a36', 'accent-soft': '#ff8a78', 'accent-bg': '#2a0c08',
+        'vfo-a': '#ff4a36', 'vfo-b': '#ffa898',
 
         'key-bg': '#160909', 'key-border': '#2e1411', 'key-shadow': '#000000', 'key-fg': '#d8584a',
         'led-off': '#2a0e0b', 'led-on': '#ff4a36',
@@ -105,6 +108,7 @@ const SILVER = {
         panel: '#c4c8cd', 'panel-border': '#9ca0a5',
         legend: '#2a2e33', 'legend-dim': '#555a60', sub: '#41464c',
         accent: '#8a5a00', 'accent-soft': '#b07a1a', 'accent-bg': '#e6d3a4',
+        'vfo-a': '#8a5a00', 'vfo-b': '#0b4f8a',
 
         'key-bg': '#2a2c30', 'key-border': '#15171a', 'key-shadow': '#7d8186', 'key-fg': '#f2f4f6',
         'led-off': '#4a3d22', 'led-on': '#ffb02e',
@@ -149,6 +153,7 @@ const DAYLIGHT = {
         panel: '#f6f7f9', 'panel-border': '#c3c9d1',
         legend: '#2d343c', 'legend-dim': '#5b636d', sub: '#46505a',
         accent: '#c4520a', 'accent-soft': '#e07a30', 'accent-bg': '#fde6d2',
+        'vfo-a': '#c4520a', 'vfo-b': '#1a5fb4',
 
         'key-bg': '#e6e9ed', 'key-border': '#b9c0c8', 'key-shadow': '#a9b0b8', 'key-fg': '#1b2128',
         'led-off': '#d6cbbd', 'led-on': '#e8660c',
@@ -193,6 +198,7 @@ const GREEN = {
         panel: '#0a120c', 'panel-border': '#1c3322',
         legend: '#7ccf8a', 'legend-dim': '#4f8a5a', sub: '#62a86e',
         accent: '#5cff7a', 'accent-soft': '#a0ffb0', 'accent-bg': '#0f2a15',
+        'vfo-a': '#5cff7a', 'vfo-b': '#ffe066',
 
         'key-bg': '#111c13', 'key-border': '#24402a', 'key-shadow': '#000000', 'key-fg': '#9be8a8',
         'led-off': '#14301a', 'led-on': '#5cff7a',
@@ -237,6 +243,7 @@ const CONTRAST = {
         panel: '#000000', 'panel-border': '#ffffff',
         legend: '#ffffff', 'legend-dim': '#d0d0d0', sub: '#e0e0e0',
         accent: '#ffd400', 'accent-soft': '#ffe866', 'accent-bg': '#332a00',
+        'vfo-a': '#ffd400', 'vfo-b': '#00e5ff',
 
         'key-bg': '#000000', 'key-border': '#ffffff', 'key-shadow': '#000000', 'key-fg': '#ffffff',
         'led-off': '#333333', 'led-on': '#ffd400',

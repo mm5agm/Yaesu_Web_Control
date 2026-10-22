@@ -15,7 +15,8 @@
 
 import { injectRadioPanelStyle } from './radio-panel-style.js';
 import { applyTheme, themeIds, resolveTheme, DEFAULT_THEME, SYSTEM_THEME } from './radio-panel-themes.js';
-import { SpectrumView, SPECTRUM_SPEEDS, cleanSpectrumSettings } from './spectrum-view.js';
+import { SpectrumView } from './spectrum-view.js';
+import { spectrumSettingsPanel, tidySpectrumSettings } from './spectrum-settings.js';
 import {
     formatFrequency, sMeterFraction, sMeterText, meterGeometry, LOWER_SCALES,
     passbandPercent, axisLabels, spanText, widthText, knobAngle,
@@ -24,6 +25,7 @@ import { mountPanelWindows } from './panel-windows.js';
 
 const DESIGN_WIDTH = 1600;
 const SIZES = ['fit', '50', '67', '75', '90', '100', '110', '125', '150'];
+const MIN_SIZE = 30, MAX_SIZE = 200;   // percent, for the corner grip
 const METERS = ['PO', 'SWR', 'ALC', 'COMP', 'IDD'];
 
 const store = {
@@ -559,7 +561,7 @@ export function mountRadioPanel(root, opts = {}) {
         const spotsEl = h('div');
         const marksEl = h('div');
         const label = h('div', 'rp-spec-label', '');
-        const empty = h('div', 'rp-spec-empty', 'No SDR');
+        const empty = h('div', 'rp-spec-empty', 'Waiting for data');
         const oob = h('div', 'rp-spec-oob', 'OUT OF BAND');
         spec.append(pb, marksEl, h('div', 'rp-cursor'), spotsEl, label, oob, empty);
         const axis = h('div', 'rp-axis');
@@ -696,47 +698,16 @@ export function mountRadioPanel(root, opts = {}) {
         const key = prefix + 'spectrum.' + id;
         let saved = {};
         try { saved = JSON.parse(store.get(key, '{}')) ?? {}; } catch { /* keep defaults */ }
-        let cur = { ...cleanSpectrumSettings(saved), passband: saved.passband !== false };
-        const el = h('div', 'rp-spec-settings');
-        for (const ev of ['pointerdown', 'click', 'wheel']) el.addEventListener(ev, e => e.stopPropagation());
-        const rows = {};
-        const slider = (name, label, min, max, toVal, fromVal, text, title) => {
-            const row = h('label', 'rp-spec-row');
-            row.title = title;
-            const inp = h('input');
-            inp.type = 'range'; inp.min = String(min); inp.max = String(max); inp.step = '1';
-            inp.dataset.set = name;
-            const out = h('span', 'rp-spec-val');
-            inp.addEventListener('input', () => change({ [name]: toVal(Number(inp.value)) }));
-            row.append(h('span', null, label), inp, out);
-            el.append(row);
-            rows[name] = () => { inp.value = String(fromVal(cur[name])); out.textContent = text(cur[name]); };
-        };
-        const same = x => x;
-        slider('range', 'Range', 5, 160, same, same, x => x + ' dB', 'dB from the bottom of the trace to the top');
-        slider('speed', 'Speed', 0, SPECTRUM_SPEEDS.length - 1, i => SPECTRUM_SPEEDS[i], x => SPECTRUM_SPEEDS.indexOf(x),
-            x => x === 1 ? 'Full' : '1/' + x, 'How fast the waterfall scrolls');
-        slider('bright', 'Bright', 0, 60, same, same, x => x ? '+' + x + ' dB' : 'Off', 'Lifts weak signals in the waterfall only');
-        slider('smooth', 'Smooth', 0, 8, same, same, x => x ? String(x) : 'Off', 'Averages neighbouring bins across the trace');
-        const pbRow = h('label', 'rp-spec-row');
-        const pbBox = h('input');
-        pbBox.type = 'checkbox';
-        pbBox.dataset.set = 'passband';
-        pbBox.addEventListener('change', () => change({ passband: pbBox.checked }));
-        pbRow.append(h('span', null, 'Passband'), pbBox, h('span', 'rp-spec-val', ''));
-        el.append(pbRow);
-        rows.passband = () => { pbBox.checked = cur.passband; };
-        const reset = h('button', 'rp-wkey', 'DEFAULTS');
-        reset.type = 'button';
-        reset.addEventListener('click', () => change({ ...cleanSpectrumSettings({}), passband: true }));
-        el.append(reset);
+        let cur = tidySpectrumSettings(saved);
+        const panel = spectrumSettingsPanel(p => change(p));
+        const el = panel.el;
         function change(p) {
-            cur = { ...cleanSpectrumSettings({ ...cur, ...p }), passband: (p.passband ?? cur.passband) !== false };
+            cur = tidySpectrumSettings({ ...cur, ...p });
             store.set(key, JSON.stringify(cur));
             apply();
         }
         function apply() {
-            for (const f of Object.values(rows)) f();
+            panel.show(cur);
             const pn = panes[id];
             if (!pn) return;
             pn.view?.setSettings(cur);
@@ -744,12 +715,12 @@ export function mountRadioPanel(root, opts = {}) {
             pn.box.classList.toggle('held', cur.hold);
             drawOverlays(id);
         }
-        // The pop-out window's HOLD writes the same key.
+        // The pop-out window's HOLD and SCOPE panel write the same key.
         window.addEventListener('storage', e => {
             if (e.key !== key) return;
             let s = {};
             try { s = JSON.parse(e.newValue ?? '{}') ?? {}; } catch { return; }
-            cur = { ...cleanSpectrumSettings(s), passband: s.passband !== false };
+            cur = tidySpectrumSettings(s);
             apply();
         });
         return { el, change, apply, get: () => cur };
@@ -932,7 +903,16 @@ export function mountRadioPanel(root, opts = {}) {
         turnable(clarKnob.svg, { onStep: (_, dir) => act('knob', 'clar', undefined, dir) });
         clarKnob.svg.append(s('title', {}, 'Clarifier offset: mouse wheel or drag to turn'));
     }
-    rightCol.append(h('span', 'rp-legend', 'Main dial'), dial);
+    // A single dial tunes whichever VFO is selected: say which, in that VFO's
+    // display colour. A dual dial's tags say it instead.
+    const dialLegend = h('span', 'rp-legend', 'Main dial');
+    const dialVfo = h('span', 'rp-dial-vfo', 'A');
+    if (!dualDial) {
+        dialVfo.dataset.vfo = 'A';
+        dialVfo.title = 'The dial tunes VFO-A';
+        dialLegend.append(dialVfo);
+    }
+    rightCol.append(dialLegend, dial);
     if (dualDial) rightCol.append(dialTagRow);
     rightCol.append(stepRow, vfoKeys);
     if (memBox) rightCol.append(memBox);
@@ -1178,8 +1158,11 @@ export function mountRadioPanel(root, opts = {}) {
             t.el.classList.toggle('on', t.view === st.screenView && (t.view !== 'sdr' || t.spec === st.specView));
     }
 
+    // setMode is given the mode as shown, which can be the key's label rather
+    // than its id (IWC's DATA-U key is labelled USB-D), so either one lights it.
     function markModeKeys() {
-        for (const [id, el] of Object.entries(modeEls)) el.classList.toggle('on', id === st.mode[st.sel]);
+        const m = st.mode[st.sel];
+        for (const [id, el] of Object.entries(modeEls)) el.classList.toggle('on', !!m && (id === m || el.textContent === m));
     }
 
     function setVfoText(vfo) {
@@ -1220,6 +1203,7 @@ export function mountRadioPanel(root, opts = {}) {
         sizer.style.height = Math.floor(natH * scale) + 'px';
         sizer.style.margin = '0 auto';
         sizer.style.overflow = 'hidden';
+        sizer.style.position = 'relative';
         root.style.overflow = z === 'fit' ? 'hidden' : 'auto';
         root.style.height = '100vh';
     }
@@ -1245,8 +1229,49 @@ export function mountRadioPanel(root, opts = {}) {
             if (st.theme?.id === SYSTEM_THEME) { setTheme(SYSTEM_THEME); drawMeterFace(); }
         });
     } catch { /* no matchMedia: nothing to follow */ }
-    sizeSel.value = SIZES.includes(store.get(prefix + 'size', 'fit')) ? store.get(prefix + 'size', 'fit') : 'fit';
-    sizeSel.addEventListener('change', () => { store.set(prefix + 'size', sizeSel.value); rescale(); });
+    // A size from the corner grip is a percentage the list does not have: it
+    // gets an entry of its own, one at a time.
+    function setSize(z) {
+        if (![...sizeSel.options].some(o => o.value === z)) {
+            sizeSel.querySelector('option.custom')?.remove();
+            sizeSel.append(Object.assign(h('option', 'custom', z + '%'), { value: z }));
+        }
+        sizeSel.value = z;
+        store.set(prefix + 'size', z);
+        rescale();
+    }
+    const savedSize = store.get(prefix + 'size', 'fit');
+    const sizeOk = z => SIZES.includes(z) || (/^\d+$/.test(z) && +z >= MIN_SIZE && +z <= MAX_SIZE);
+    setSize(sizeOk(savedSize) ? savedSize : 'fit');
+    sizeSel.addEventListener('change', () => setSize(sizeSel.value));
+
+    // The corner grip scales the board by dragging. It keeps its shape, so the
+    // way the pointer has gone further, across or up and down, sets the size.
+    const grip = h('div', 'rp-board-grip');
+    grip.title = 'Drag to resize the panel';
+    sizer.append(grip);
+    grip.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        grip.setPointerCapture?.(e.pointerId);
+        const natH = scaler.offsetHeight;
+        const k0 = sizer.getBoundingClientRect().width / DESIGN_WIDTH;
+        const move = m => {
+            const rc = sizer.getBoundingClientRect(), page = root.getBoundingClientRect();
+            // Centred while it fits, the right edge moves half as far as the width.
+            const w = rc.width < page.width ? 2 * (m.clientX - (page.left + page.width / 2)) : m.clientX - rc.left;
+            const kw = w / DESIGN_WIDTH, kh = (m.clientY - rc.top) / natH;
+            const k = Math.abs(kw - k0) > Math.abs(kh - k0) ? kw : kh;
+            setSize(String(Math.round(Math.min(MAX_SIZE, Math.max(MIN_SIZE, 100 * k)))));
+        };
+        const up = () => {
+            grip.removeEventListener('pointermove', move);
+            grip.removeEventListener('pointerup', up);
+            grip.removeEventListener('pointercancel', up);
+        };
+        grip.addEventListener('pointermove', move);
+        grip.addEventListener('pointerup', up);
+        grip.addEventListener('pointercancel', up);
+    });
     window.addEventListener('resize', rescale);
 
     // The TX warning is fixed across the top of the browser window, outside the
@@ -1354,6 +1379,8 @@ export function mountRadioPanel(root, opts = {}) {
             // The dial part that tunes the selected receiver glows.
             dial.classList.toggle('sel-a', dualDial && st.sel === 'A');
             dial.classList.toggle('sel-b', dualDial && st.sel === 'B');
+            dialVfo.textContent = dialVfo.dataset.vfo = st.sel;
+            dialVfo.title = 'The dial tunes VFO-' + st.sel;
             for (const [id, t] of Object.entries(dialTags)) {
                 t.t.classList.toggle('on', id === st.sel);
                 t.lamp.classList.toggle('on', id === st.sel);
@@ -1509,6 +1536,10 @@ export function mountRadioPanel(root, opts = {}) {
         },
         // One pane, or every pane when `vfo` is left out.
         clearSpectrum(vfo) { for (const [id, pn] of Object.entries(panes)) if (!vfo || id === vfo) pn.view.clear(); },
+        // Show or hide a pane's waterfall. Hidden, it shrinks to a strip that
+        // keeps its keys, for a pane whose waterfall could not fill (e.g. one
+        // only refreshed by an occasional cross-band peek).
+        setWaterfall(vfo, show) { panes[vfo]?.box.classList.toggle('no-wf', !show); },
         setSpots(list) { st.spots = list ?? []; drawOverlays(); },
         // Band edges in Hz, and band-plan marks as { hz, label }, drawn on every pane.
         setBandMarks({ edges, ticks } = {}) { st.marks = { edges: edges ?? [], ticks: ticks ?? [] }; drawOverlays(); },
