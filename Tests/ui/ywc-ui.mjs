@@ -439,6 +439,31 @@ for (const path of ['/', '/flexui']) test(`Keys: the TX key is not also a shortc
     } finally { await page.close(); }
 });
 
+test('/RadioSpectrum: a click tunes there, and the readout names it first', async () => {
+    const page = await open('/RadioSpectrum', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the spectrum hub handler' });
+        await page.state('FrequencyA', 14_074_000);
+        await page.state('ModeA', 'USB');
+        const bins = Array.from({ length: 475 }, () => -110);
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_074_000, spanHz: 10_000, rfOrdered: true });
+        // Three quarters of the way across a 10 kHz span on 14.074 is 14.0765.
+        const read = await page.eval(`(() => {
+            const el = document.querySelector('[data-pane="A"] .rp-spectrum');
+            const rc = el.getBoundingClientRect(), x = rc.left + rc.width * 0.75, y = rc.top + rc.height / 2;
+            el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
+            const t = el.querySelector('.rp-xread').textContent;
+            el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
+            return t;
+        })()`);
+        expect(read === '14.076.500', `the readout said "${read}"`);
+        await sleep(300);
+        const w = (await page.writes()).filter(x => x.path === '/api/cat/frequency/a');
+        expect(w.length === 1 && w[0].body?.frequencyHz === 14_076_500, `frequency wrote ${JSON.stringify(w)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 // ----------------------------------------------------------------
 
 try {

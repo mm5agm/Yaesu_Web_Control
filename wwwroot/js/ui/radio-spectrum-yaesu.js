@@ -4,12 +4,15 @@
 // One pane per SDR: SDR A follows VFO-A (MAIN), SDR B follows VFO-B (SUB),
 // as on Classic. What is Yaesu lives here, as it does in radio-panel-yaesu.js:
 // the bin order, the IF OUT axis correction and the SH-code-to-Hz widths.
-// Nothing here writes to the radio; the span picker changes the SDR only.
+// The span picker changes the SDR only. A click on a pane tunes that VFO as
+// a click on the board does (spectrum-tune-yaesu.js).
 
 import { mountSpectrumPopout } from '/js/radio-panel/spectrum-popout.js';
 import { alignBins, spanText } from '/js/radio-panel/panel-math.js';
 import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor } from '/js/ui/if-width-tables.js';
+import { loadBandPlanFromServer } from '/js/ui/band-plan.js';
+import { MODE_CAT, spectrumTuner } from '/js/ui/spectrum-tune-yaesu.js';
 
 const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
 const SPOT_MAX_AGE_MS = 30 * 60 * 1000;
@@ -19,6 +22,12 @@ const STATUS_TEXT = {
 };
 
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+
+function post(url, body) {
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(res => { if (!res.ok) console.warn('spectrum:', url, res.status); return res; })
+        .catch(e => console.warn('spectrum:', url, e));
+}
 
 /**
  * @param {HTMLElement} root
@@ -30,6 +39,8 @@ export function startYaesuSpectrumPopout(root, cfg) {
     const panes = dual
         ? [{ id: 'A', tab: 'Main', name: 'MAIN · SDR A' }, { id: 'B', tab: 'Sub', name: 'SUB · SDR B' }]
         : [{ id: 'A', tab: 'VFO-A', name: 'VFO-A · SDR A' }, { id: 'B', tab: 'VFO-B', name: 'VFO-B · SDR B' }];
+    const tuner = spectrumTuner();
+    loadBandPlanFromServer();
 
     const pop = mountSpectrumPopout(root, {
         title: 'SPECTRUM',
@@ -40,6 +51,13 @@ export function startYaesuSpectrumPopout(root, cfg) {
                 .then(res => { if (!res.ok) console.warn('spectrum: span', res.status); })
                 .catch(e => console.warn('spectrum: span', e));
         },
+        onTune: (vfo, hz) => {
+            if (!(hz > 0)) return;
+            const { mode, to } = tuner.target(hz, r.mode[vfo]);
+            post(`/api/cat/frequency/${vfo.toLowerCase()}`, { frequencyHz: to });
+            if (mode && mode !== r.mode[vfo]) post(`/api/cat/mode/${vfo.toLowerCase()}`, { mode: MODE_CAT[mode] });
+        },
+        tuneTo: (vfo, hz) => tuner.target(hz, r.mode[vfo]).to,
         onReattach: () => cfg.popout?.reattach(),
         onClose: () => window.close(),
         storagePrefix: 'ywc.radioPanel.',
@@ -95,7 +113,7 @@ export function startYaesuSpectrumPopout(root, cfg) {
 
     const perVfo = vfo => ({
         ['Frequency' + vfo]: v => { r.freq[vfo] = num(v); pop.pane(vfo).setFrequency(r.freq[vfo]); },
-        ['Mode' + vfo]: v => { r.mode[vfo] = String(v ?? ''); refreshPassband(vfo); readDataShift(r.mode[vfo]); },
+        ['Mode' + vfo]: v => { r.mode[vfo] = String(v ?? ''); refreshPassband(vfo); readDataShift(r.mode[vfo]); tuner.askTones(r.mode[vfo]); },
         ['IfWidth' + vfo]: v => { r.widthCode[vfo] = v; refreshPassband(vfo); },
         ['IfShift' + vfo]: v => { r.shift[vfo] = num(v); },
         ['Band' + vfo]: () => pop.pane(vfo).clear(),

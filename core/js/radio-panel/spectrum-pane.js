@@ -8,9 +8,13 @@
 //
 // Needs the radio panel's stylesheet (injectRadioPanelStyle) and a theme on
 // an ancestor (applyTheme): every colour is a --rp-* property.
+//
+// Given onTune it is tunable as the board's panes are: a click on the
+// spectrum or waterfall tunes there, and a hairline and readout follow the
+// pointer naming the frequency a click would send.
 
 import { SpectrumView } from './spectrum-view.js';
-import { axisLabels, passbandPercent, spanText } from './panel-math.js';
+import { axisLabels, formatFrequency, passbandPercent, spanText, spectrumHzAt } from './panel-math.js';
 
 function h(tag, cls, text) {
     const el = document.createElement(tag);
@@ -24,6 +28,9 @@ export class SpectrumPane {
      * @param {HTMLElement} container  the pane fills it
      * @param {object} [opts]
      * @param {string} [opts.empty='Waiting for data']  shown until the first frame
+     * @param {(hz:number) => void} [opts.onTune]  a click on the spectrum or waterfall
+     * @param {(hz:number) => number} [opts.tuneTo]  where the dial lands for a click
+     *        at hz, when the app tunes somewhere else (Yaesu RTTY); the readout shows it
      */
     constructor(container, opts = {}) {
         this.el = h('div', 'rp-pane');
@@ -42,6 +49,50 @@ export class SpectrumPane {
         container.append(this.el);
         this._view = new SpectrumView(spec, wf);
         this._st = { hz: 0, mode: '', widthHz: null, spanHz: 0, spots: [], showSpots: true, name: '', status: null, passband: true };
+        if (opts.onTune) this._tunable(spec, wf, opts.onTune, opts.tuneTo);
+    }
+
+    // The board's rules (radio-panel.js): within 8 px of a DX spot is the
+    // spot's own frequency, and the readout names exactly what a click there
+    // would send. A click's clientX is whole CSS pixels while a pointer's is
+    // fractional, so the click takes the pointer's last x when it is within a
+    // pixel of it, or the readout and the radio disagree at wide spans.
+    _tunable(spec, wf, onTune, tuneTo) {
+        const at = (el, clientX) => {
+            const s = this._st, rc = el.getBoundingClientRect();
+            if (!rc.width) return null;
+            return spectrumHzAt((clientX - rc.left) / rc.width, s.hz, s.spanHz,
+                s.showSpots ? s.spots : [], 8 / rc.width * s.spanHz);
+        };
+        const read = h('div', 'rp-xread');
+        const lines = [spec, wf].map(el => { const x = h('div', 'rp-xhair'); el.append(x); return x; });
+        spec.append(read);
+        const hide = () => { read.style.display = 'none'; for (const x of lines) x.style.display = 'none'; };
+        hide();
+        let lastX = null;
+        for (const el of [spec, wf]) {
+            el.classList.add('rp-tunable');
+            el.title = 'Click to tune there';
+            el.addEventListener('pointermove', e => {
+                lastX = e.clientX;
+                const a = at(el, e.clientX);
+                if (!a) return hide();
+                const fr = formatFrequency(a.hz);
+                const to = tuneTo?.(a.hz);
+                const dial = Number.isFinite(to) && Math.round(to) !== a.hz ? formatFrequency(Math.round(to)) : null;
+                for (const x of lines) { x.style.left = a.frac * 100 + '%'; x.style.display = 'block'; }
+                read.textContent = fr.big + fr.small + (a.spot ? ' ' + a.spot.call : '')
+                    + (dial ? ' → dial ' + dial.big + dial.small : '');
+                read.style.display = 'block';
+                read.classList.toggle('left', a.frac > 0.75);
+                read.style.left = a.frac * 100 + '%';
+            });
+            el.addEventListener('pointerleave', () => { lastX = null; hide(); });
+            el.addEventListener('click', e => {
+                const a = at(el, lastX != null && Math.abs(lastX - e.clientX) < 1 ? lastX : e.clientX);
+                if (a) onTune(a.hz);
+            });
+        }
     }
 
     /** The board's drawing settings: SpectrumView's, plus passband on or off. */

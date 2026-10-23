@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     formatFrequency, sMeterFraction, sMeterText, passbandPercent, passbandHz,
-    axisLabels, spanText, widthText, knobAngle, binsToColumns, percentile,
+    axisLabels, spectrumHzAt, spanText, widthText, knobAngle, binsToColumns, percentile,
     meterGeometry, waterfallColour,
 } from '../../js/radio-panel/panel-math.js';
 
@@ -181,4 +181,22 @@ test('every theme defines every colour, so none falls back half-drawn', async ()
     assert.equal(resolveTheme('system', false).applied, 'daylight');
     assert.equal(resolveTheme('system', false).id, 'system');
     assert.equal(resolveTheme('nope').id, 'console');
+});
+
+test('spectrumHzAt names the frequency under the pointer, or a spot near it', () => {
+    // 10 kHz span on 14.074: the left edge, the middle and three quarters across.
+    assert.equal(spectrumHzAt(0, 14_074_000, 10_000).hz, 14_069_000);
+    assert.equal(spectrumHzAt(0.5, 14_074_000, 10_000).hz, 14_074_000);
+    assert.equal(spectrumHzAt(0.75, 14_074_000, 10_000).hz, 14_076_500);
+    // Off either end is the edge.
+    assert.equal(spectrumHzAt(1.2, 14_074_000, 10_000).hz, 14_079_000);
+    // A spot within reach is its own frequency; one out of reach is not.
+    const spots = [{ call: 'K1ABC', hz: 14_076_550 }];
+    const at = spectrumHzAt(0.75, 14_074_000, 10_000, spots, 100);
+    assert.equal(at.hz, 14_076_550);
+    assert.equal(at.spot.call, 'K1ABC');
+    assert.equal(spectrumHzAt(0.75, 14_074_000, 10_000, spots, 20).spot, null);
+    // Nothing to go on yet.
+    assert.equal(spectrumHzAt(0.5, 0, 10_000), null);
+    assert.equal(spectrumHzAt(0.5, 14_074_000, 0), null);
 });

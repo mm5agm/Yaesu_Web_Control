@@ -124,6 +124,23 @@ export function passbandPercent(mode, widthHz, spanHz) {
     return { left, width: right - left };
 }
 
+// The frequency under a point a fraction (0 left, 1 right) of the way across
+// a span centred on the dial, or a DX spot's own frequency when one is within
+// snapHz of it - what a click there tunes to. Null until there is a span and
+// a dial.
+export function spectrumHzAt(frac, centreHz, spanHz, spots = [], snapHz = 0) {
+    const c = Number(centreHz) || 0, s = Number(spanHz) || 0;
+    if (!(c > 0 && s > 0)) return null;
+    const f = Math.max(0, Math.min(1, Number(frac) || 0));
+    let hz = Math.round(c + (f - 0.5) * s), spot = null, best = snapHz;
+    for (const sp of spots ?? []) {
+        const gap = Math.abs(sp.hz - hz);
+        if (gap <= best) { best = gap; spot = sp; }
+    }
+    if (spot) hz = spot.hz;
+    return { hz, frac: f, spot };
+}
+
 // Axis labels for a span centred on the dial, in kHz: five evenly spaced.
 export function axisLabels(centreHz, spanHz, count = 5) {
     const c = Number(centreHz) || 0, s = Number(spanHz) || 0;

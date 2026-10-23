@@ -27,8 +27,8 @@
 import { mountRadioPanel } from '/js/radio-panel/radio-panel.js';
 import { YAESU_WINDOWS, startYaesuWindows } from '/js/ui/radio-panel-yaesu-windows.js';
 import { alignBins, txMeterFraction, rangeLegends } from '/js/radio-panel/panel-math.js';
-import { BAND_PLANS, BAND_EDGES, nearestBandForHz, loadBandPlanFromServer, autoModeForHz, getSegments, segmentForHz } from '/js/ui/band-plan.js';
-import { loadRttySettings, afskMidpointAudioHz } from '/js/rtty/rtty-settings.js';
+import { BAND_PLANS, BAND_EDGES, nearestBandForHz, loadBandPlanFromServer, getSegments, segmentForHz } from '/js/ui/band-plan.js';
+import { MODE_CAT, spectrumTuner } from '/js/ui/spectrum-tune-yaesu.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor, ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
@@ -40,7 +40,6 @@ import { txTimeoutBeep, txTimeoutWarning } from '/js/radio-panel/tx-timeout.js';
 const BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
 const MODES = ['LSB', 'USB', 'CW-U', 'CW-L', 'AM', 'FM', 'RTTY-L', 'DATA-U'];
 // Classic's mode-to-MD-code table (site.js setMode), for the modes above.
-const MODE_CAT = { 'LSB': '1', 'USB': '2', 'CW-U': '3', 'FM': '4', 'AM': '5', 'RTTY-L': '6', 'CW-L': '7', 'DATA-U': 'C' };
 const AGC = { '0': 'OFF', '1': 'FAST', '2': 'MID', '3': 'SLOW', '4': 'AUTO', '5': 'AUTO', '6': 'AUTO' };
 const IPO = { '0': 'IPO', '1': 'AMP1', '2': 'AMP2' };
 // What a press moves to next: FAST > MID > SLOW > AUTO > OFF > FAST. OFF is
@@ -704,28 +703,10 @@ export function startYaesuRadioPanel(root, cfg) {
     }
 
     // ---- click-to-tune on the SDR spectrum ---------------------------------
-    // Classic's rules (spectrum-panel.js): the band plan may pick the mode
-    // (unless Settings turns that off), and in RTTY / DATA-L the dial goes
-    // the tone offset away from the clicked signal, which is the midpoint.
-    const rttyTones = { shiftHz: 170, polarityRev: false, asked: false };
-    function askRttyTones(mode) {
-        if (rttyTones.asked || !String(mode).startsWith('RTTY')) return;
-        rttyTones.asked = true;
-        fetch('/api/cat/rtty').then(res => res.ok ? res.json() : null).then(t => {
-            if (Number(t?.shiftHz) > 0) rttyTones.shiftHz = Number(t.shiftHz);
-            if (typeof t?.polarityRev === 'boolean') rttyTones.polarityRev = t.polarityRev;
-        }).catch(() => { rttyTones.asked = false; });
-    }
-    function toneOffsetHz(mode) {
-        if (mode === 'RTTY-L' || mode === 'RTTY-U') return (rttyTones.polarityRev ? -1 : 1) * rttyTones.shiftHz / 2;
-        if (mode === 'DATA-L') return afskMidpointAudioHz(loadRttySettings());
-        return 0;
-    }
-    function spectrumTarget(v, hz) {
-        const auto = autoModeForHz(hz);
-        const mode = auto && MODE_CAT[auto] ? auto : null;
-        return { mode, to: Math.round(hz + toneOffsetHz(mode || r.mode[v])) };
-    }
+    // The rules are in spectrum-tune-yaesu.js, shared with the pop-out spectrum.
+    const tuner = spectrumTuner();
+    const askRttyTones = mode => tuner.askTones(mode);
+    const spectrumTarget = (v, hz) => tuner.target(hz, r.mode[v]);
     function spectrumTune(v, hz) {
         if (!(hz > 0)) return;
         const { mode, to } = spectrumTarget(v, hz);
