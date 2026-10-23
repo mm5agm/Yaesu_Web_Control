@@ -47,6 +47,10 @@ test('passband: USB above the dial, LSB below, CW centred', () => {
     assert.deepEqual(passbandHz('USB', 2400), { lo: 100, hi: 2500 });
     assert.deepEqual(passbandHz('LSB', 2400), { lo: -2500, hi: -100 });
     assert.deepEqual(passbandHz('CW-U', 500), { lo: -250, hi: 250 });
+    // The board is handed the name it shows; the pop-out the radio's.
+    assert.deepEqual(passbandHz('USB-D', 3000), passbandHz('DATA-U', 3000));
+    assert.deepEqual(passbandHz('LSB-D', 3000), passbandHz('DATA-L', 3000));
+    assert.deepEqual(passbandHz('USB-D', 3000), { lo: 100, hi: 3100 });
     assert.equal(passbandHz('USB', 0), null);
     const pct = passbandPercent('CW-U', 500, 10000);
     assert.equal(pct.left, 47.5);

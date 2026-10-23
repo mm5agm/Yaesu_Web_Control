@@ -4,14 +4,15 @@
 // The page around it is the app's: it opens the hub, orders the bins and
 // feeds each pane (spectrum-pane.js). This draws the window - title, the
 // Main / Sub / Both tabs, the DX spots switch, REATTACH and close - and
-// keeps the operator's choices. Colours follow the radio panel's theme, and
-// each pane the board's Range / Speed / Bright / Smooth / Passband / Hold for
-// that receiver, including a change made on the board while this is open.
+// keeps the operator's choices. Colours follow the radio panel's theme. Each
+// pane has the board's HOLD and SCOPE panel (Range / Speed / Bright / Smooth /
+// Passband) for that receiver: both write the same setting, so a change made
+// in either place shows in the other.
 
 import { injectRadioPanelStyle } from './radio-panel-style.js';
 import { applyTheme, DEFAULT_THEME } from './radio-panel-themes.js';
 import { SpectrumPane } from './spectrum-pane.js';
-import { cleanSpectrumSettings } from './spectrum-view.js';
+import { spectrumSettingsPanel, tidySpectrumSettings } from './spectrum-settings.js';
 
 const store = {
     get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
@@ -72,9 +73,31 @@ export function mountSpectrumPopout(root, opts) {
     const body = h('div', 'rp-spop-body');
     root.append(top, body);
 
+    // A grip in the bottom-right corner sizes the window from inside the page,
+    // for when its frame is hard to reach. Browsers let script resize a window
+    // that script opened, which this one is; elsewhere resizeTo does nothing.
+    const grip = h('div', 'rp-spop-grip');
+    grip.title = 'Drag to resize the window';
+    grip.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        grip.setPointerCapture(e.pointerId);
+        const x0 = e.screenX, y0 = e.screenY, w0 = window.outerWidth, h0 = window.outerHeight;
+        const move = m => window.resizeTo(Math.max(400, w0 + m.screenX - x0), Math.max(300, h0 + m.screenY - y0));
+        const up = () => {
+            grip.removeEventListener('pointermove', move);
+            grip.removeEventListener('pointerup', up);
+            grip.removeEventListener('pointercancel', up);
+        };
+        grip.addEventListener('pointermove', move);
+        grip.addEventListener('pointerup', up);
+        grip.addEventListener('pointercancel', up);
+    });
+    root.append(grip);
+
     const panes = {};
     const spanSel = {};
     const holdKeys = {};
+    const setPanels = {};
     for (const p of opts.panes) {
         const holder = h('div', 'rp-spop-holder');
         holder.dataset.pane = p.id;
@@ -89,28 +112,33 @@ export function mountSpectrumPopout(root, opts) {
             pane.tools.append(sel);
             spanSel[p.id] = sel;
         }
-        const hold = btn('rp-spop-key rp-spop-hold', 'HOLD', () => {
-            const s = readSettings(p.id);
-            s.hold = !s.hold;
-            store.set(prefix + 'spectrum.' + p.id, JSON.stringify(s));
-            applySettings(p.id);
-        });
+        const hold = btn('rp-spop-key rp-spop-hold', 'HOLD', () => changeSettings(p.id, { hold: !readSettings(p.id).hold }));
         hold.title = 'Freeze the spectrum and waterfall';
-        pane.tools.append(hold);
+        const sets = spectrumSettingsPanel(patch => changeSettings(p.id, patch));
+        const setKey = btn('rp-spop-key rp-spop-setkey', 'SCOPE', () => setKey.classList.toggle('on', sets.el.classList.toggle('open')));
+        setKey.title = 'Range, waterfall speed and brightness, smoothing, passband';
+        pane.tools.append(hold, setKey);
+        pane.el.append(sets.el);
         panes[p.id] = pane;
         holdKeys[p.id] = hold;
+        setPanels[p.id] = sets;
     }
 
     // The board writes these; this window reads and follows them.
     function readSettings(id) {
         let s = {};
         try { s = JSON.parse(store.get(prefix + 'spectrum.' + id, '{}')) ?? {}; } catch { /* defaults */ }
-        return { ...cleanSpectrumSettings(s), passband: s.passband !== false };
+        return tidySpectrumSettings(s);
+    }
+    function changeSettings(id, patch) {
+        store.set(prefix + 'spectrum.' + id, JSON.stringify(tidySpectrumSettings({ ...readSettings(id), ...patch })));
+        applySettings(id);
     }
     function applySettings(id) {
         const s = readSettings(id);
         panes[id].setSettings(s);
         holdKeys[id].classList.toggle('on', s.hold);
+        setPanels[id].show(s);
     }
     for (const id of ids) applySettings(id);
 
