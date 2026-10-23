@@ -1,4 +1,4 @@
-﻿# Yaesu Web Control — User Manual
+# Yaesu Web Control — User Manual
 
 > 🔍 **Searching this manual:** press **Ctrl + F** (Windows / Linux) or **⌘ + F** (Mac) to open your browser's find-in-page box. Type any term — a band name like "60m", a control like "Speech Processor", an error message you've hit — to jump straight to the relevant section.
 
@@ -432,7 +432,7 @@ If the radio is powered on and the serial connection is correct, a brief "Initia
 
 ### 5.1 Top Bar
 
-The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.3**) are shown in the top-left corner.
+The top bar contains navigation links, external application buttons, and the radio power button. The app name and current version number (e.g., **Yaesu Web Control v2.5.4**) are shown in the top-left corner.
 
 **Update notification** — on startup the app silently checks the GitHub releases page for a newer version. If one is available, a small banner appears in the bottom-right corner listing what has changed, with a **Download** link that opens the releases page in your browser, and a **Dismiss** button. No banner appears if you are already on the newest version or if the internet is not available.
 
@@ -1378,7 +1378,7 @@ Everything on it works the radio: the keys, the knobs, the main dial and the win
 
 **The windows.** The keys under the meter open windows on top of the panel. Drag a window by its title bar and resize it from its corner. Each part of a window can be closed (**×**), or torn off into a window of its own and put back into its group again; pressing the key again brings back anything you closed. Where each window was, and which were open, is remembered by this browser.
 
-- **CW** (switches to CW-U): the keyer, the CW Reader ([§20](#20-cw-reader)) and CW Send ([§21](#21-cw-send)).
+- **CW** (switches to CW-U): the keyer, the memory keyer, the CW Reader ([§20](#20-cw-reader)) and CW Send ([§21](#21-cw-send)). In the keyer, turn the mouse wheel over **SPEED** or **PITCH** to step it as the − and + keys do, and click **BREAK-IN** to step it OFF → SEMI → FULL. A SEMI or FULL change made on the radio shows within a couple of seconds. **MEMORIES** has the five memory keys, M1 to M5, with their messages and **SAVE**. They are the same messages as the Classic page's CW Keyer ([§5.12](#512-cw-keyer-panel)), and the line under them says whether a memory went on the air or only to the monitor.
 - **RTTY** (switches to RTTY-L): the RTTY tuner and reader ([§22](#22-rtty)). Its send part only explains that this radio can't send RTTY text over CAT.
 - **MEMORIES**: YWC's own memories ([§8](#8-radio-memories)), not the radio's channels. **CHANNELS** shows the memories you have now; click one to tune there. **SAVE MAIN** and **SAVE SUB** (**SAVE VFO-A** and **SAVE VFO-B** on radios with one receiver) add a receiver to them, as **M.STORE** does, and **EDIT…** opens the Memories page. In **BANK**, choose a bank, then **LOAD** replaces the memories you have now with it, and **SAVE TO BANK** writes the memories you have now over it. Both take two presses. To put the receiver into a bank, **M.STORE** is quicker: press it and click the bank. The built-in starter bank can be loaded but not saved over; to make a new bank, use **Save As…** on the Memories page ([§8.5](#85-memory-banks)).
 - **DX**: the DX spots list and the watch list ([§5.17](#517-dx-spots-list)).
@@ -1390,7 +1390,7 @@ Everything on it works the radio: the keys, the knobs, the main dial and the win
 
 The CW Reader, CW Send, the RTTY tuner and the DX spots each have a **⇱** key that opens them in a browser window of their own. Unlike a window on the panel, that one can go on another screen. In the CW and RTTY windows, **⇱ WINDOW** in the title bar does the same for the whole window. Only three things in the windows make the radio transmit, and each is marked in red: the Remote Audio TX key, CW Send's Send key and keyer memories, and the ATU's TUNE. The TUNE key on the left of the panel is the fourth.
 
-**Theme and size.** The two boxes at the right of the top strip choose the colours and the size. **Dark console** is the usual look; **Night (red)**, **Silver classic**, **Daylight**, **Green display** and **High contrast** are the others, and **Match computer** follows Windows' light or dark setting. **Fit** makes the whole panel fit the window; the percentages fix its size and let you scroll. Both are remembered by this browser, so a tablet and a PC can each have their own.
+**Theme and size.** The two boxes at the right of the top strip choose the colours and the size. **Dark console** is the usual look; **Night (red)**, **Silver classic**, **Daylight**, **Green display** and **High contrast** are the others, and **Match computer** follows Windows' light or dark setting. **Fit** makes the whole panel fit the window; the percentages fix its size and let you scroll. Or drag the grip in the panel's bottom-right corner to any size; the size box then lists it as a percentage and keeps it. Both are remembered by this browser, so a tablet and a PC can each have their own.
 
 ![The Radio panel in the Night (red) theme, for operating in the dark](pictures/Radio_Night_Console.png)
 

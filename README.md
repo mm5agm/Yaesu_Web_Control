@@ -11,9 +11,12 @@
 
 > **v2.5.3 brings two new ways of working the radio.** Fabio Valente's (CR7CDC) **Experimental UI** is a dark workspace of panels you can drag, dock, tab together and save as named layouts. The **Radio panel** is laid out like the front of a transceiver, with keys, knobs and a main dial that work, both receivers on the FTdx101, and windows for CW, RTTY, memories and the rest. The Classic page is unchanged and is still where YWC opens. RTTY now prints the text as well as drawing the cross, and its **Auto** button works the settings out from the signal; the CW Reader has an **Auto** button that tunes the station in. Everything is written up in the [v2.5.3 notes](#2026-10-16---v253).
 
-**Since v2.5.3** — in the code, not yet in a full release:
+**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release)):
 
-Nothing yet.
+- **The Radio panel's CW window has the memory keyer** (M1 to M5, with SAVE), and **BREAK-IN is a key** that steps OFF → SEMI → FULL. The mouse wheel steps SPEED and PITCH. [§5.23](USER_MANUAL.md#523-radio-panel).
+- **The pop-out spectrum window tunes on a click or the mouse wheel**, with a readout of the frequency under the mouse, and has the panel's SCOPE settings on each pane. [§5.23](USER_MANUAL.md#523-radio-panel).
+- **A corner grip scales the Radio panel** to any size.
+- **The CW Reader prints less junk between overs.**
 
 **New in v2.5.3:**
 
@@ -90,9 +93,14 @@ One line per fix, newest first, with the build that has it. A pre-release instal
 
 | Fixed | Issue | In build |
 |---|---|---|
-| Keyboard shortcuts: holding down a TX toggle key that is also a shortcut letter (say j) no longer runs that shortcut on every key repeat, so the radio is not retuned while you transmit. The ? list now names the TX key. | - | *Not yet in a build* |
-| Radio panel: the SWR needle no longer jumps to full scale on a good aerial while transmitting CW. It ignores readings taken when the radio puts out under 1 W, and averages the rest as the Classic page does. | - | *Not yet in a build* |
-| CW Reader: a slow sender heard straight after fast or fading signals no longer has his callsign broken into letters ("I W 2 B TA" for IW2BTA). Gaps measured at the old speed are no longer used to judge where words end at the new one. | - | *Not yet in a build* |
+| Pop-out windows: a window on a screen too short for it never kept its size, and opened at the default size every time, which didn't fit either. | - | v2.5.4-pre1 |
+| Radio panel and pop-out spectrum: with the mouse held still, the readout of the frequency under it went stale while the dial moved. It now follows the trace. | - | v2.5.4-pre1 |
+| A Radio panel window popped out to its own browser window drew and then never updated. It now gets live updates. | - | v2.5.4-pre1 |
+| The Mic Gain slider did not follow MIC GAIN turned on the radio's front panel. It now follows, on Classic and the Experimental UI. | [#228](https://github.com/mm5agm/Yaesu_Web_Control/issues/228) | v2.5.4-pre1 |
+| Radio panel: CW BREAK-IN showed FULL after you set SEMI, and did not follow a SEMI/FULL change made on the radio. | - | v2.5.4-pre1 |
+| Keyboard shortcuts: holding down a TX toggle key that is also a shortcut letter (say j) no longer runs that shortcut on every key repeat, so the radio is not retuned while you transmit. The ? list now names the TX key. | - | v2.5.4-pre1 |
+| Radio panel: the SWR needle no longer jumps to full scale on a good aerial while transmitting CW. It ignores readings taken when the radio puts out under 1 W, and averages the rest as the Classic page does. | - | v2.5.4-pre1 |
+| CW Reader: a slow sender heard straight after fast or fading signals no longer has his callsign broken into letters ("I W 2 B TA" for IW2BTA). Gaps measured at the old speed are no longer used to judge where words end at the new one. | - | v2.5.4-pre1 |
 
 **Supported transceivers:**
 
@@ -323,6 +331,35 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 **Only the version you are installing is listed here.** Earlier releases are in
 [RELEASE_HISTORY.md](RELEASE_HISTORY.md); their installers are still on the
 [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
+
+## 2026-10-23 - v2.5.4-pre1 (pre-release)
+
+*The Radio panel's CW window gets the memory keyer and a BREAK-IN key, the pop-out spectrum window tunes on a click or the mouse wheel, and the CW Reader prints less junk. Install it over v2.5.3; your settings are kept.*
+
+**Radio panel**
+
+- **The CW window has the memory keyer.** A **MEMORIES** panel beside KEYER has the five memory keys, M1 to M5, with their messages, **SAVE**, and a line saying whether a memory went on the air or only to the monitor. The messages are the same ones as in the Classic page's Memory Keyer. [§5.23](USER_MANUAL.md#523-radio-panel).
+- **BREAK-IN is a key.** Click it to step OFF → SEMI → FULL, and the mouse wheel over **SPEED** or **PITCH** steps them as the − and + keys do. A change of SEMI or FULL made on the radio's front panel now shows within a couple of seconds, and the app no longer shows FULL after you set SEMI. Not yet checked on every model.
+- **The pop-out spectrum window tunes like the panel.** Click it to tune there, and turn the mouse wheel to move the dial by the panel's **STEP** a notch. A line and a readout follow the mouse and show the frequency a click would send, with **→ dial** in RTTY. Each pane has the panel's **SCOPE** settings beside **HOLD**, the window can be resized from its corner, and its text is larger and readable in every theme. [§5.23](USER_MANUAL.md#523-radio-panel).
+- **A corner grip scales the Radio panel.** Drag it to any size; the size picker lists it as a percentage and keeps it.
+- The labels under the keys are drawn in each key's own colour, so they can be read on the dark keys.
+- **The manual explains the passband shading**: where the shaded passband sits for each mode, and why it can sit above or below the dial. [§5.23](USER_MANUAL.md#523-radio-panel).
+
+**CW Reader**
+
+- **Less junk between overs.** It no longer prints the lone weak E, I and T, or words made only of weak dits, that noise produces when nobody is sending, and it drops held text that nothing has followed for five seconds. A run of real dahs, such as a slow `TTT` or `MMM`, is no longer thrown away as chatter.
+
+**Fixed**
+
+- **The SWR needle on the Radio panel jumped to full scale on a good aerial while sending CW.** It now ignores readings taken when the radio puts out under 1 W, and averages the rest as the Classic page does.
+- **A slow sender heard straight after fast or fading signals had his callsign broken up** ("I W 2 B TA" for IW2BTA) in the CW Reader.
+- **Holding down a TX toggle key that is also a shortcut letter** (say j) ran that shortcut on every key repeat, so the radio was retuned while you transmitted. The **?** list now names the TX key.
+- **The Mic Gain slider didn't follow the radio** when MIC GAIN was turned on its front panel ([#228](https://github.com/mm5agm/Yaesu_Web_Control/issues/228)). It now follows, on Classic and the Experimental UI.
+- **A Radio panel window popped out to its own browser window never updated.** It drew and then sat still. It now gets live updates.
+- **The readout under the mouse went stale while the dial moved.** With the mouse held still over the spectrum, the readout now keeps showing the frequency under it as the trace moves.
+- **A pop-out window on a screen too short for it never kept its size**, and opened at the default size every time, which didn't fit either.
+- Spectrum panes say **Waiting for data** rather than **No SDR** until the first frame arrives.
+- The User Manual explains how to update the Docker container to a new release. [§2.3](USER_MANUAL.md#23-linux-docker-including-raspberry-pi).
 
 ## 2026-10-16 - v2.5.3
 
