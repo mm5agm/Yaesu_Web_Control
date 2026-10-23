@@ -5,7 +5,8 @@
 // as on Classic. What is Yaesu lives here, as it does in radio-panel-yaesu.js:
 // the bin order, the IF OUT axis correction and the SH-code-to-Hz widths.
 // The span picker changes the SDR only. A click on a pane tunes that VFO as
-// a click on the board does (spectrum-tune-yaesu.js).
+// a click on the board does (spectrum-tune-yaesu.js), and the mouse wheel
+// steps it by the board's STEP.
 
 import { mountSpectrumPopout } from '/js/radio-panel/spectrum-popout.js';
 import { alignBins, spanText } from '/js/radio-panel/panel-math.js';
@@ -13,6 +14,7 @@ import { axisOffsetHz } from '/js/sdr/if-out-offset.js';
 import { ifWidthHzFor } from '/js/ui/if-width-tables.js';
 import { loadBandPlanFromServer } from '/js/ui/band-plan.js';
 import { MODE_CAT, spectrumTuner } from '/js/ui/spectrum-tune-yaesu.js';
+import { dialStepper } from '/js/radio-panel/dial-stepper.js';
 
 const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
 const SPOT_MAX_AGE_MS = 30 * 60 * 1000;
@@ -21,7 +23,16 @@ const STATUS_TEXT = {
     nodll: 'SDR driver not found', disconnected: 'SDR disconnected',
 };
 
+// The board's STEP (radio-panel-yaesu.js), saved in this browser.
+const STEP_KEY = 'ywc.radioPanel.stepHz';
+const STEPS_HZ = [10, 50, 100, 500, 1000, 5000, 10000];
+
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+function boardStepHz() {
+    let hz = 0;
+    try { hz = num(localStorage.getItem(STEP_KEY)); } catch { /* private window */ }
+    return STEPS_HZ.includes(hz) ? hz : 100;
+}
 
 function post(url, body) {
     return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -58,6 +69,7 @@ export function startYaesuSpectrumPopout(root, cfg) {
             if (mode && mode !== r.mode[vfo]) post(`/api/cat/mode/${vfo.toLowerCase()}`, { mode: MODE_CAT[mode] });
         },
         tuneTo: (vfo, hz) => tuner.target(hz, r.mode[vfo]).to,
+        onStep: (vfo, dir) => stepper.turn(vfo, dir),
         onReattach: () => cfg.popout?.reattach(),
         onClose: () => window.close(),
         storagePrefix: 'ywc.radioPanel.',
@@ -71,6 +83,12 @@ export function startYaesuSpectrumPopout(root, cfg) {
     const pitchHz = () => 300 + num(r.pitchCode) * 10;
     const widthHz = vfo => (r.widthCode[vfo] == null ? null : ifWidthHzFor(model, r.mode[vfo], parseInt(r.widthCode[vfo], 10)));
     const refreshPassband = vfo => pop.pane(vfo).setPassband(r.mode[vfo], widthHz(vfo));
+    const stepper = dialStepper({
+        stepHz: boardStepHz,
+        freq: vfo => r.freq[vfo],
+        show: (vfo, hz) => { r.freq[vfo] = hz; pop.pane(vfo).setFrequency(hz); },
+        write: (vfo, hz) => post(`/api/cat/frequency/${vfo.toLowerCase()}`, { frequencyHz: hz }),
+    });
 
     // Same convention as the board and Classic: true RF of the frame's centre
     // = dial + offset; null (an unmeasured radio) is no correction.
@@ -112,7 +130,7 @@ export function startYaesuSpectrumPopout(root, cfg) {
     setInterval(publishSpots, 60_000);
 
     const perVfo = vfo => ({
-        ['Frequency' + vfo]: v => { r.freq[vfo] = num(v); pop.pane(vfo).setFrequency(r.freq[vfo]); },
+        ['Frequency' + vfo]: v => { if (stepper.holds(vfo)) return; r.freq[vfo] = num(v); pop.pane(vfo).setFrequency(r.freq[vfo]); },
         ['Mode' + vfo]: v => { r.mode[vfo] = String(v ?? ''); refreshPassband(vfo); readDataShift(r.mode[vfo]); tuner.askTones(r.mode[vfo]); },
         ['IfWidth' + vfo]: v => { r.widthCode[vfo] = v; refreshPassband(vfo); },
         ['IfShift' + vfo]: v => { r.shift[vfo] = num(v); },

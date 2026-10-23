@@ -30,6 +30,7 @@ export class SpectrumPane {
      * @param {string} [opts.empty='Waiting for data']  shown until the first frame
      * @param {(hz:number) => void} [opts.onTune]  a click on the spectrum or waterfall
      * @param {(hz:number) => number} [opts.tuneTo]  where the dial lands for a click
+     * @param {(dir:number) => void} [opts.onStep]  a mouse wheel notch, +1 up or -1 down
      *        at hz, when the app tunes somewhere else (Yaesu RTTY); the readout shows it
      */
     constructor(container, opts = {}) {
@@ -50,6 +51,17 @@ export class SpectrumPane {
         this._view = new SpectrumView(spec, wf);
         this._st = { hz: 0, mode: '', widthHz: null, spanHz: 0, spots: [], showSpots: true, name: '', status: null, passband: true };
         if (opts.onTune) this._tunable(spec, wf, opts.onTune, opts.tuneTo);
+        // The wheel steps the dial a notch at a time, as on the board.
+        if (opts.onStep) {
+            for (const el of [spec, wf]) {
+                el.title = opts.onTune ? 'Click to tune there; mouse wheel steps the dial' : 'Mouse wheel steps the dial';
+                el.addEventListener('wheel', e => {
+                    if (!e.deltaY || e.target.closest('select')) return;
+                    e.preventDefault();
+                    opts.onStep(e.deltaY < 0 ? 1 : -1);
+                }, { passive: false });
+            }
+        }
     }
 
     // The board's rules (radio-panel.js): within 8 px of a DX spot is the
@@ -69,25 +81,32 @@ export class SpectrumPane {
         spec.append(read);
         const hide = () => { read.style.display = 'none'; for (const x of lines) x.style.display = 'none'; };
         hide();
-        let lastX = null;
+        let lastX = null, over = null;
+        const show = (el, clientX) => {
+            const a = at(el, clientX);
+            if (!a) return hide();
+            const fr = formatFrequency(a.hz);
+            const to = tuneTo?.(a.hz);
+            const dial = Number.isFinite(to) && Math.round(to) !== a.hz ? formatFrequency(Math.round(to)) : null;
+            for (const x of lines) { x.style.left = a.frac * 100 + '%'; x.style.display = 'block'; }
+            read.textContent = fr.big + fr.small + (a.spot ? ' ' + a.spot.call : '')
+                + (dial ? ' → dial ' + dial.big + dial.small : '');
+            read.style.display = 'block';
+            read.classList.toggle('left', a.frac > 0.75);
+            read.style.left = a.frac * 100 + '%';
+        };
+        // When the dial moves (the wheel, or the radio's knob) the trace slides
+        // under a still pointer: name what is under it now, not what was.
+        this._reread = () => { if (over && lastX != null) show(over, lastX); };
         for (const el of [spec, wf]) {
             el.classList.add('rp-tunable');
             el.title = 'Click to tune there';
             el.addEventListener('pointermove', e => {
                 lastX = e.clientX;
-                const a = at(el, e.clientX);
-                if (!a) return hide();
-                const fr = formatFrequency(a.hz);
-                const to = tuneTo?.(a.hz);
-                const dial = Number.isFinite(to) && Math.round(to) !== a.hz ? formatFrequency(Math.round(to)) : null;
-                for (const x of lines) { x.style.left = a.frac * 100 + '%'; x.style.display = 'block'; }
-                read.textContent = fr.big + fr.small + (a.spot ? ' ' + a.spot.call : '')
-                    + (dial ? ' → dial ' + dial.big + dial.small : '');
-                read.style.display = 'block';
-                read.classList.toggle('left', a.frac > 0.75);
-                read.style.left = a.frac * 100 + '%';
+                over = el;
+                show(el, e.clientX);
             });
-            el.addEventListener('pointerleave', () => { lastX = null; hide(); });
+            el.addEventListener('pointerleave', () => { lastX = null; over = null; hide(); });
             el.addEventListener('click', e => {
                 const a = at(el, lastX != null && Math.abs(lastX - e.clientX) < 1 ? lastX : e.clientX);
                 if (a) onTune(a.hz);
@@ -114,8 +133,8 @@ export class SpectrumPane {
         this._st.spanHz = s;
         this._draw();
     }
-    setSpots(list) { this._st.spots = list ?? []; this._drawSpots(); }
-    setShowSpots(show) { this._st.showSpots = !!show; this._drawSpots(); }
+    setSpots(list) { this._st.spots = list ?? []; this._drawSpots(); this._reread?.(); }
+    setShowSpots(show) { this._st.showSpots = !!show; this._drawSpots(); this._reread?.(); }
 
     /** A message across the spectrum (e.g. 'SDR disconnected'), or null for none. */
     setStatus(text) {
@@ -151,6 +170,7 @@ export class SpectrumPane {
         if (s.spanHz > 0 && s.hz > 0) for (const t of axisLabels(s.hz, s.spanHz, 9)) this._axis.append(h('span', null, t));
         this._drawLabel();
         this._drawSpots();
+        this._reread?.();
     }
 
     _drawSpots() {

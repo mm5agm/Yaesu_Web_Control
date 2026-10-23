@@ -5,8 +5,8 @@
 // feeds each pane (spectrum-pane.js). This draws the window - title, the
 // Main / Sub / Both tabs, the DX spots switch, REATTACH and close - and
 // keeps the operator's choices. Colours follow the radio panel's theme. A
-// click on a pane tunes its receiver there, as on the board, when the page
-// says how (onTune). Each
+// click on a pane tunes its receiver there, and the mouse wheel steps it, as
+// on the board, when the page says how (onTune, onStep). Each
 // pane has the board's HOLD and SCOPE panel (Range / Speed / Bright / Smooth /
 // Passband) for that receiver: both write the same setting, so a change made
 // in either place shows in the other.
@@ -43,6 +43,7 @@ function btn(cls, text, onClick) {
  * @param {(id:string, hz:number) => void} [opts.onSpan]
  * @param {(id:string, hz:number) => void} [opts.onTune]  a click on a pane; none, the panes do not tune
  * @param {(id:string, hz:number) => number} [opts.tuneTo]  where the dial lands for a click at hz
+ * @param {(id:string, dir:number) => void} [opts.onStep]  a mouse wheel notch over a pane, +1 up or -1 down
  * @param {() => void} [opts.onReattach]
  * @param {() => void} [opts.onClose]
  * @param {string} [opts.storagePrefix='rwc.radioPanel.']  the board's: the theme is read from it
@@ -106,10 +107,11 @@ export function mountSpectrumPopout(root, opts) {
         const holder = h('div', 'rp-spop-holder');
         holder.dataset.pane = p.id;
         body.append(holder);
-        const pane = new SpectrumPane(holder, opts.onTune ? {
-            onTune: hz => opts.onTune(p.id, hz),
-            tuneTo: opts.tuneTo && (hz => opts.tuneTo(p.id, hz)),
-        } : {});
+        const pane = new SpectrumPane(holder, {
+            onTune: opts.onTune && (hz => opts.onTune(p.id, hz)),
+            tuneTo: opts.onTune && opts.tuneTo && (hz => opts.tuneTo(p.id, hz)),
+            onStep: opts.onStep && (dir => opts.onStep(p.id, dir)),
+        });
         pane.setName(p.name);
         if (opts.spans?.length) {
             const sel = h('select', 'rp-spop-span');

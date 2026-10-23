@@ -464,6 +464,39 @@ test('/RadioSpectrum: a click tunes there, and the readout names it first', asyn
     } finally { await page.close(); }
 });
 
+test('/RadioSpectrum: the mouse wheel steps the dial by the board STEP', async () => {
+    const page = await open('/RadioSpectrum', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the spectrum hub handler' });
+        await page.state('FrequencyA', 12_000_550);
+        const bins = Array.from({ length: 475 }, () => -110);
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 12_000_550, spanHz: 10_000, rfOrdered: true });
+        await page.eval(`localStorage.setItem('ywc.radioPanel.stepHz', '1000')`);
+        // Off the bands, so no DX spot is near to snap to. The pointer stays
+        // mid-pane: the readout follows the trace as it slides.
+        const reads = await page.eval(`(() => {
+            const el = document.querySelector('[data-pane="A"] .rp-spectrum');
+            const rc = el.getBoundingClientRect(), x = rc.left + rc.width / 2, y = rc.top + rc.height / 2;
+            el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
+            const before = el.querySelector('.rp-xread').textContent;
+            el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: x, clientY: y, deltaY: -100 }));
+            return [before, el.querySelector('.rp-xread').textContent];
+        })()`);
+        expect(reads[0] === '12.000.550' && reads[1] === '12.001.000', `the readout said ${JSON.stringify(reads)}`);
+        await sleep(300);
+        let w = (await page.writes()).filter(x => x.path === '/api/cat/frequency/a');
+        expect(w.length === 1 && w[0].body?.frequencyHz === 12_001_000, `a notch up wrote ${JSON.stringify(w)}`);
+        await page.eval(`(() => {
+            const el = document.querySelector('[data-pane="A"] .rp-waterfall');
+            el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 100 }));
+        })()`);
+        await sleep(300);
+        w = (await page.writes()).filter(x => x.path === '/api/cat/frequency/a');
+        expect(w.length === 2 && w[1].body?.frequencyHz === 12_000_000, `a notch down wrote ${JSON.stringify(w)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.eval(`localStorage.removeItem('ywc.radioPanel.stepHz')`).catch(() => {}); await page.close(); }
+});
+
 // ----------------------------------------------------------------
 
 try {

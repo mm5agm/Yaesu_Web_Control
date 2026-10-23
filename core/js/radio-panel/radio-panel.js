@@ -662,33 +662,42 @@ export function mountRadioPanel(root, opts = {}) {
         spec.append(xRead);
         const xHide = () => { xRead.style.display = 'none'; for (const x of xLines) x.style.display = 'none'; };
         xHide();
+        let xOver = null;
+        const xShow = (el, clientX) => {
+            const at = hzAt(el, clientX);
+            if (!at) return xHide();
+            const { frac } = at;
+            const fr = formatFrequency(at.hz);
+            for (const x of xLines) { x.style.left = frac * 100 + '%'; x.style.display = 'block'; }
+            // Where the dial will land, when the app tunes somewhere other than
+            // the click (Yaesu RTTY puts mark on the dial, half the shift
+            // above the clicked midpoint) - so the readout never surprises.
+            const to = opts.spectrumTuneTo?.(at.hz, d.id);
+            const dial = Number.isFinite(to) && Math.round(to) !== at.hz ? formatFrequency(Math.round(to)) : null;
+            xRead.textContent = fr.big + fr.small + (at.spot ? ' ' + at.spot.call : '')
+                + (dial ? ' → dial ' + dial.big + dial.small : '');
+            xRead.style.display = 'block';
+            xRead.classList.toggle('left', frac > 0.75);
+            xRead.style.left = frac * 100 + '%';
+        };
+        // When the dial moves (the wheel, or the radio's knob) the trace slides
+        // under a still pointer: name what is under it now, not what was.
+        const xReread = () => { if (xOver && lastX != null) xShow(xOver, lastX); };
         for (const el of [spec, wf]) {
             el.addEventListener('pointermove', e => {
                 lastX = e.clientX;
-                const at = e.target.closest('select, button, .rp-spec-tools') ? null : hzAt(el, e.clientX);
-                if (!at) return xHide();
-                const { frac } = at;
-                const fr = formatFrequency(at.hz);
-                for (const x of xLines) { x.style.left = frac * 100 + '%'; x.style.display = 'block'; }
-                // Where the dial will land, when the app tunes somewhere other than
-                // the click (Yaesu RTTY puts mark on the dial, half the shift
-                // above the clicked midpoint) - so the readout never surprises.
-                const to = opts.spectrumTuneTo?.(at.hz, d.id);
-                const dial = Number.isFinite(to) && Math.round(to) !== at.hz ? formatFrequency(Math.round(to)) : null;
-                xRead.textContent = fr.big + fr.small + (at.spot ? ' ' + at.spot.call : '')
-                    + (dial ? ' → dial ' + dial.big + dial.small : '');
-                xRead.style.display = 'block';
-                xRead.classList.toggle('left', frac > 0.75);
-                xRead.style.left = frac * 100 + '%';
+                xOver = e.target.closest('select, button, .rp-spec-tools') ? null : el;
+                if (!xOver) return xHide();
+                xShow(el, e.clientX);
             });
-            el.addEventListener('pointerleave', () => { lastX = null; xHide(); });
+            el.addEventListener('pointerleave', () => { lastX = null; xOver = null; xHide(); });
         }
         const pinLines = [spec, wf].map(el => { const x = h('div', 'rp-pin'); el.append(x); return x; });
         const pinRead = h('div', 'rp-pin-read');
         spec.append(pinRead);
         sdrView.append(box);
         panes[d.id] = { box, spec, pb, spots: spotsEl, marks: marksEl, label, empty, oob, spanSel, holdKey, sets, axis, wf, name: d.name ?? '', text: '',
-            pinHz: null, pinLines, pinRead };
+            pinHz: null, pinLines, pinRead, reread: xReread };
         drawPin(panes[d.id], 0, 0);
     }
 
@@ -1085,6 +1094,7 @@ export function mountRadioPanel(root, opts = {}) {
                 pn.spots.append(el);
             }
         }
+        pn.reread();
     }
     // The Shift+click mark: a solid line through spectrum and waterfall and
     // its frequency, hidden while it is off the pane.
