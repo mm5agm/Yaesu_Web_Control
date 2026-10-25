@@ -22,7 +22,7 @@ namespace Yaesu_Web_Control.Controllers
         private const int SetTimeoutMs = 50;
         private const int MaxFileChars = 256 * 1024;
 
-        /// <summary>Where YWC keeps a copy of every save, so the user can find it again.</summary>
+        /// <summary>Where saves go: with the rest of YWC's files, so the user can find them.</summary>
         public static string SavesFolder => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "MM5AGM", "Yaesu Web Control", "Radio menus");
@@ -42,11 +42,14 @@ namespace Yaesu_Web_Control.Controllers
         }
 
         /// <summary>
-        /// GET /api/radiomenu/export — reads every menu item and returns an .ini file.
+        /// POST /api/radiomenu/save — reads every menu item and writes an .ini file
+        /// into <see cref="SavesFolder"/>, with YWC's other files, rather than
+        /// downloading it: a page cannot choose where a browser's download goes,
+        /// so the user could not be told where to find it.
         /// About 200 reads on an FTdx101, a few seconds at 38400 bps.
         /// </summary>
-        [HttpGet("export")]
-        public async Task<IActionResult> Export(CancellationToken ct)
+        [HttpPost("save")]
+        public async Task<IActionResult> Save(CancellationToken ct)
         {
             var model = _settings.GetCachedSettings().RadioModel;
             var table = RadioMenuCat.TableFor(model);
@@ -68,23 +71,20 @@ namespace Yaesu_Web_Control.Controllers
             var now = DateTime.Now;
             var ini = RadioMenuCat.ToIni(model, now, readings);
             var name = $"YWC radio menu {model} {now:yyyy-MM-dd HHmm}.ini";
-            Response.Headers["X-Menu-Missing"] = missing.ToString();
             // UTF-8 with BOM so older Notepad opens it as UTF-8.
             var bytes = System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(ini)).ToArray();
-            // The browser decides where its download goes and does not say,
-            // so keep a copy where the page can tell the user it is.
+            var path = Path.Combine(SavesFolder, name);
             try
             {
                 Directory.CreateDirectory(SavesFolder);
-                var copy = Path.Combine(SavesFolder, name);
-                await System.IO.File.WriteAllBytesAsync(copy, bytes, ct);
-                Response.Headers["X-Menu-Copy"] = Uri.EscapeDataString(copy);
+                await System.IO.File.WriteAllBytesAsync(path, bytes, ct);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                _logger.LogWarning(ex, "Radio menu save: could not keep a copy in {Folder}", SavesFolder);
+                _logger.LogError(ex, "Radio menu save: could not write {Path}", path);
+                return StatusCode(500, new { error = $"Could not write {path}: {ex.Message}" });
             }
-            return File(bytes, "text/plain", name);
+            return Ok(new { name, path, missing });
         }
 
         /// <summary>GET /api/radiomenu/files — the copies YWC kept, newest first.</summary>
@@ -99,9 +99,12 @@ namespace Yaesu_Web_Control.Controllers
             return Ok(new { folder = SavesFolder, files });
         }
 
-        /// <summary>GET /api/radiomenu/files/{name} — one kept copy, as text, for Load.</summary>
+        /// <summary>
+        /// GET /api/radiomenu/files/{name} — one saved file, as text, for Load.
+        /// With ?download=true, as a download, for a browser on another PC.
+        /// </summary>
         [HttpGet("files/{name}")]
-        public async Task<IActionResult> ReadFile(string name, CancellationToken ct)
+        public async Task<IActionResult> ReadFile(string name, [FromQuery] bool download, CancellationToken ct)
         {
             // A bare file name in the folder, nothing that could climb out of it.
             if (name != Path.GetFileName(name) || !name.EndsWith(".ini", StringComparison.OrdinalIgnoreCase))
@@ -109,6 +112,8 @@ namespace Yaesu_Web_Control.Controllers
             var path = Path.Combine(SavesFolder, name);
             if (!System.IO.File.Exists(path))
                 return NotFound(new { error = $"{name} is not in {SavesFolder}." });
+            if (download)
+                return PhysicalFile(path, "text/plain", name);
             return Ok(new { name, text = await System.IO.File.ReadAllTextAsync(path, ct) });
         }
 

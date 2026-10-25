@@ -1768,7 +1768,7 @@ If the connection drops, the app reconnects automatically after 15 seconds. Disa
 | **What it saves** | YWC's own settings: COM port, band plan, memories, DX cluster, per-band memory and the rest | The radio's own menu settings: what you see when you press **FUNC** and touch **MENU** on the radio |
 | **Where those settings live** | On this PC, in `%APPDATA%\MM5AGM\Yaesu Web Control` | Inside the radio |
 | **Button** | **Export full backup** | **Save radio menu to file** |
-| **File** | `ywc-backup-YYYYMMDD-HHMMSS.zip` | `YWC radio menu <model> <date> <time>.ini` |
+| **File** | `ywc-backup-YYYYMMDD-HHMMSS.zip`, in your browser's Downloads folder | `YWC radio menu <model> <date> <time>.ini`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus` |
 | **Open it with** | Unzip it; the files inside are JSON | Notepad, or any text editor |
 | **Putting it back** | **Import full backup…**, then restart YWC | **Load this one** or **Load from another file…**, then tick what to send |
 | **Does it change the radio?** | No | Saving only reads the radio. Loading changes only the items you tick |
@@ -1812,14 +1812,9 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 
 #### Radio Menu
 
-Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, a few seconds, and downloads the file. Available for the FTdx101MP and FTdx101D.
+Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, a few seconds, and writes the file. Available for the FTdx101MP and FTdx101D.
 
-The file goes to two places:
-
-- Your browser's **Downloads** folder, usually `C:\Users\<you>\Downloads`.
-- A copy that YWC keeps in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus`, on the PC that runs YWC. The page shows the full path after each save, and **Open that folder** opens it in Explorer.
-
-Edit whichever copy you like, but remember which one you edited when you load it.
+The file goes in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus`, with YWC's other files, on the PC that runs YWC. The page shows the full path after each save, and **Open that folder** opens it in Explorer. If you use YWC from a browser on another PC, pick the file under **Saved files** and click **Download a copy** to get it on that PC.
 
 The file is grouped the way the radio's menu is. Each line shows the item and its value as the radio's screen shows it. After the `;` come the EX menu number and what the radio answered:
 
@@ -1840,7 +1835,7 @@ Saving only reads the radio. Nothing on the radio changes.
 
 **Loading a file**
 
-Pick one of YWC's kept copies from **Saved copies** and click **Load this one**, or click **Load from another file…** to pick a file from anywhere else, such as your Downloads folder. YWC reads the radio again and shows a table of what would change: the item, its value on the radio now, and its value in the file. **Nothing is sent at this point.**
+Pick a file from **Saved files** and click **Load this one**, or click **Load from another file…** to pick a file from anywhere else, such as one a friend emailed you. YWC reads the radio again and shows a table of what would change: the item, its value on the radio now, and its value in the file. **Nothing is sent at this point.**
 
 - Items that would change have a tick box. Items marked **TX** start unticked; tick them only if you want them.
 - Items already the same are hidden. Tick **Show items that are already the same** to see them.

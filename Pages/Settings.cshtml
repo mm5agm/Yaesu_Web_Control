@@ -2903,23 +2903,24 @@
             </p>
             <div class="d-flex flex-wrap gap-2 align-items-center">
                 <button type="button" class="btn btn-outline-primary" id="radioMenuSaveBtn">
-                    <i class="bi bi-download"></i> Save radio menu to file
+                    <i class="bi bi-save"></i> Save radio menu to file
                 </button>
                 <span id="radioMenuSaveStatus" class="ms-2 small" role="status"></span>
             </div>
             <p class="text-muted small mt-2">
                 Saving only reads from the radio; nothing on the radio is changed. It takes a few seconds.
-                Your browser puts the file in its Downloads folder, and YWC keeps a copy in
-                <code id="radioMenuFolder">%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus</code>.
+                The file goes in <code id="radioMenuFolder">%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus</code>,
+                with YWC's other files.
                 <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="radioMenuOpenFolderBtn">Open that folder</button>
             </p>
 
             <div class="d-flex flex-wrap gap-2 align-items-center">
-                <label for="radioMenuSavedSelect" class="mb-0">Saved copies:</label>
+                <label for="radioMenuSavedSelect" class="mb-0">Saved files:</label>
                 <select id="radioMenuSavedSelect" class="form-select form-select-sm w-auto"></select>
                 <button type="button" class="btn btn-outline-warning" id="radioMenuLoadSavedBtn">
                     <i class="bi bi-upload"></i> Load this one
                 </button>
+                <a id="radioMenuDownloadLink" class="small" href="#">Download a copy</a>
                 <span class="text-muted small">or</span>
                 <label class="btn btn-outline-warning mb-0" for="radioMenuLoadFile">
                     <i class="bi bi-folder2-open"></i> Load from another file…
@@ -2974,28 +2975,17 @@
             statusEl.textContent = 'Reading the radio menu…';
             statusEl.className = 'ms-2 small text-muted';
             try {
-                const r = await fetch('/api/radiomenu/export');
+                const r = await fetch('/api/radiomenu/save', { method: 'POST' });
+                const data = await r.json().catch(() => ({}));
                 if (!r.ok) {
-                    const data = await r.json().catch(() => ({}));
                     statusEl.textContent = `Not saved: ${data.error || r.statusText}`;
                     statusEl.className = 'ms-2 small text-danger';
                     return;
                 }
-                const missing = Number(r.headers.get('X-Menu-Missing') || 0);
-                const name = (/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(r.headers.get('Content-Disposition') || '') || [])[1];
-                const url = URL.createObjectURL(await r.blob());
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = name ? decodeURIComponent(name) : 'radio-menu.ini';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(url);
-                const copy = decodeURIComponent(r.headers.get('X-Menu-Copy') || '');
-                statusEl.textContent = `Saved as "${a.download}" in your browser's Downloads folder.` +
-                    (copy ? ` YWC kept a copy at ${copy}.` : '') +
-                    (missing ? ` ${missing} item${missing === 1 ? '' : 's'} did not answer and are marked in the file.` : '');
-                document.dispatchEvent(new Event('radiomenu-saved'));
+                const missing = Number(data.missing || 0);
+                statusEl.textContent = `Saved to ${data.path}` +
+                    (missing ? `. ${missing} item${missing === 1 ? '' : 's'} did not answer and are marked in the file.` : '.');
+                document.dispatchEvent(new CustomEvent('radiomenu-saved', { detail: data.name }));
                 statusEl.className = `ms-2 small ${missing ? 'text-warning' : 'text-success'}`;
             } catch (e) {
                 statusEl.textContent = `Not saved: ${e.message}`;
@@ -3087,15 +3077,27 @@
         const loadSavedBtn = document.getElementById('radioMenuLoadSavedBtn');
         const folderEl = document.getElementById('radioMenuFolder');
 
-        async function listSaved() {
+        const downloadLink = document.getElementById('radioMenuDownloadLink');
+
+        function updateDownload() {
+            const name = savedSelect.value;
+            downloadLink.hidden = !name;
+            downloadLink.href = name ? `/api/radiomenu/files/${encodeURIComponent(name)}?download=true` : '#';
+            downloadLink.setAttribute('download', name || '');
+        }
+        savedSelect.addEventListener('change', updateDownload);
+
+        async function listSaved(e) {
             try {
                 const r = await fetch('/api/radiomenu/files');
                 const data = await r.json();
                 folderEl.textContent = data.folder;
                 savedSelect.replaceChildren(...data.files.map(f => new Option(`${f.name} (changed ${f.modified})`, f.name)));
                 if (data.files.length === 0) savedSelect.appendChild(new Option('None yet: save one first', ''));
+                if (e && e.detail) savedSelect.value = e.detail;
                 loadSavedBtn.disabled = data.files.length === 0;
                 savedSelect.disabled = data.files.length === 0;
+                updateDownload();
             } catch { /* the file picker still works */ }
         }
         listSaved();
