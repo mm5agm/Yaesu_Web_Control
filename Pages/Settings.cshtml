@@ -3095,6 +3095,10 @@
                     box.checked = !row.tx;
                     box.dataset.address = row.address;
                     box.dataset.raw = row.raw;
+                    box.dataset.function = row.function;
+                    box.dataset.from = row.current ?? '';
+                    box.dataset.to = row.wanted ?? '';
+                    box.dataset.tx = row.tx ? '1' : '';
                     box.setAttribute('aria-label',
                         `Send ${row.function}: ${row.current} to ${row.wanted}${row.tx ? ', changes transmit' : ''}`);
                     send.appendChild(box);
@@ -3222,9 +3226,9 @@
                 setStatus(applyStatus, 'Nothing is ticked.', 'warning');
                 return;
             }
-            const tx = boxes.filter(b => b.closest('tr').querySelector('.badge')).length;
-            if (!confirm(`Send ${boxes.length} item${boxes.length === 1 ? '' : 's'} to the radio's menu?` +
-                (tx ? `\n\n${tx} of them change how the radio transmits.` : ''))) return;
+            if (!await window.radioMenuConfirm(boxes.map(b => ({
+                function: b.dataset.function, from: b.dataset.from, to: b.dataset.to, tx: !!b.dataset.tx,
+            })))) return;
             applyBtn.disabled = true;
             setStatus(applyStatus, 'Sending…', 'muted');
             try {
@@ -3421,7 +3425,7 @@
                     control.type = 'text';
                     control.className = 'form-control form-control-sm w-auto';
                     control.maxLength = row.textMax;
-                    control.value = row.raw;
+                    control.value = row.raw.trim();
                     control.spellcheck = false;
                     control.style.textTransform = 'uppercase';
                 } else {
@@ -3432,7 +3436,9 @@
                     control.setAttribute('aria-label', `${row.function}, ${row.section}${row.tx ? ', changes transmit' : ''}`);
                     control.addEventListener(kind === 'select' ? 'change' : 'input', refresh);
                     setting.appendChild(control);
-                    items.push({ address: row.address, function: row.function, tx: row.tx, raw: row.raw, shown: row.shown,
+                    // Text is sent space-padded; the radio may answer padded too, which is not a change.
+                    const raw = kind === 'text' ? row.raw.trim() : row.raw;
+                    items.push({ address: row.address, function: row.function, tx: row.tx, raw, shown: row.shown,
                         kind, choices: row.choices || [], control, tr, note, result: false });
                 }
                 tr.appendChild(setting);
@@ -3481,10 +3487,9 @@
         sendBtn.addEventListener('click', async () => {
             const list = changed();
             if (list.length === 0) return;
-            const lines = list.map(it => `${it.function}: ${it.shown} to ${shownFor(it, wanted(it))}${it.tx ? '  (TX)' : ''}`);
-            const tx = list.filter(it => it.tx).length;
-            if (!confirm(`Send ${list.length} change${list.length === 1 ? '' : 's'} to the radio's menu?\n\n` + lines.join('\n') +
-                (tx ? `\n\n${tx} of them change how the radio transmits.` : ''))) return;
+            if (!await window.radioMenuConfirm(list.map(it => ({
+                function: it.function, from: it.shown, to: shownFor(it, wanted(it)), tx: it.tx,
+            })))) return;
             sendBtn.disabled = undoBtn.disabled = editBtn.disabled = true;
             setStatus(sendStatus, 'Sending…', 'muted');
             try {
@@ -3607,6 +3612,94 @@
             }
         });
     })();
+</script>
+
+<!-- Radio menu: confirm before sending changes to the radio -->
+<div class="modal fade" id="radioMenuConfirmModal" tabindex="-1" aria-labelledby="radioMenuConfirmTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="radioMenuConfirmTitle">Send to the radio?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cancel"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-sm align-middle mb-2">
+                    <caption id="radioMenuConfirmCaption" class="caption-top"></caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Item</th>
+                            <th scope="col">On the radio now</th>
+                            <th scope="col">Will be</th>
+                        </tr>
+                    </thead>
+                    <tbody id="radioMenuConfirmRows"></tbody>
+                </table>
+                <div id="radioMenuConfirmTx" class="alert alert-warning py-2 mb-0" hidden></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="radioMenuConfirmCancel">Cancel</button>
+                <button type="button" class="btn btn-warning" id="radioMenuConfirmSend"><i class="bi bi-send"></i> Send to radio</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    // Asks before sending menu changes. changes: [{ function, from, to, tx }].
+    // Resolves true for Send, false for Cancel, Escape or the close button.
+    window.radioMenuConfirm = function (changes) {
+        const modalEl = document.getElementById('radioMenuConfirmModal');
+        const tbody = document.getElementById('radioMenuConfirmRows');
+        const n = changes.length;
+        document.getElementById('radioMenuConfirmTitle').textContent =
+            `Send ${n} change${n === 1 ? '' : 's'} to the radio?`;
+        document.getElementById('radioMenuConfirmCaption').textContent =
+            'Each change is sent to the radio\'s menu and read back.';
+        tbody.replaceChildren(...changes.map(c => {
+            const tr = document.createElement('tr');
+            const th = document.createElement('th');
+            th.scope = 'row';
+            th.className = 'fw-normal';
+            th.textContent = c.function;
+            if (c.tx) {
+                const tag = document.createElement('span');
+                tag.className = 'badge text-bg-warning ms-1';
+                tag.textContent = 'TX';
+                th.appendChild(tag);
+            }
+            tr.appendChild(th);
+            for (const v of [c.from, c.to]) {
+                const td = document.createElement('td');
+                td.textContent = v ?? '';
+                tr.appendChild(td);
+            }
+            return tr;
+        }));
+        const tx = changes.filter(c => c.tx).length;
+        const txEl = document.getElementById('radioMenuConfirmTx');
+        txEl.hidden = tx === 0;
+        txEl.textContent = tx === n
+            ? (n === 1 ? 'This changes how or when the radio transmits.' : 'All of these change how or when the radio transmits.')
+            : `${tx} of these change how or when the radio transmits.`;
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        const sendBtn = document.getElementById('radioMenuConfirmSend');
+        return new Promise(resolve => {
+            let answer = false;
+            const onSend = () => { answer = true; modal.hide(); };
+            // With a TX item in the list, a stray Enter cancels rather than sends.
+            const onShown = () => document.getElementById(tx ? 'radioMenuConfirmCancel' : 'radioMenuConfirmSend').focus();
+            const onHidden = () => {
+                sendBtn.removeEventListener('click', onSend);
+                modalEl.removeEventListener('shown.bs.modal', onShown);
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                resolve(answer);
+            };
+            sendBtn.addEventListener('click', onSend);
+            modalEl.addEventListener('shown.bs.modal', onShown);
+            modalEl.addEventListener('hidden.bs.modal', onHidden);
+            modal.show();
+        });
+    };
 </script>
 
 <!-- SDR Help Modal -->

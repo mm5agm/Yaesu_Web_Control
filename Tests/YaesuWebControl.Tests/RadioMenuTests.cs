@@ -141,7 +141,7 @@ namespace YaesuWebControl.Tests
         [InlineData("020112", "400 ms", "04", "07")]
         [InlineData("030401", "100 W", "200", "100")]
         [InlineData("030403", "40", "050", "040")]
-        [InlineData("040101", " mm5agm ", "MM5AGM", "MM5AGM")]
+        [InlineData("040101", " mm5agm ", "MM5AGM", "MM5AGM      ")]
         [InlineData("010110", "300-2700", "0", "3")]
         public void Values_encode_back_to_what_EX_sends(string address, string text, string current, string expected)
             => Assert.Equal(expected, Encode(address, text, current));
@@ -223,7 +223,7 @@ namespace YaesuWebControl.Tests
         [InlineData("030117", "+03", "+05", "+03")]
         [InlineData("030401", "201", "200", null)]
         [InlineData("030401", "1e2", "200", null)]
-        [InlineData("040101", "mm5agm", "MM5AGM", "MM5AGM")]
+        [InlineData("040101", "mm5agm/p", "MM5AGM", "MM5AGM/P    ")]
         public void Values_from_the_page_are_checked_again(string address, string raw, string current, string? expected)
             => Assert.Equal(expected, RadioMenuLoad.CheckRaw(Item(address), raw, current, out _));
 

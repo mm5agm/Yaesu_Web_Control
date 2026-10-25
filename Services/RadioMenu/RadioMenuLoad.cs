@@ -170,7 +170,9 @@ public static class RadioMenuLoad
         if (t.Length > item.TextMax) return Fail(out error, $"Too long: at most {item.TextMax} characters.");
         if (t.Any(c => c < ' ' || c > '~' || c == ';'))
             return Fail(out error, "Only letters, numbers and plain symbols (no ';').");
-        return t;
+        // Fixed width, space-padded, as the radio's other text fields (MT) take it:
+        // EX040101MM5AGM/P; was not taken by an FTdx101MP.
+        return t.PadRight(item.TextMax);
     }
 
     /// <summary>True if the radio's answer after a set is the value sent.</summary>
