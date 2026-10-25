@@ -2889,7 +2889,69 @@
             </p>
         </div>
     </details>
+
+    <!-- Radio menu save — the radio's own EX menu, not YWC's settings -->
+    <details class="settings-section">
+        <summary><i class="bi bi-list-columns" aria-hidden="true"></i>&nbsp;Radio Menu</summary>
+        <div class="section-body">
+            <p class="text-muted">
+                Save the radio's own menu settings (the MENU button on the radio) to a CSV file you can open in Excel.
+                It is like the radio's MENU SAVE to SD card, but the file shows every item by name and value.
+                Available for the FTdx101MP and FTdx101D.
+            </p>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button type="button" class="btn btn-outline-primary" id="radioMenuSaveBtn">
+                    <i class="bi bi-download"></i> Save radio menu to file
+                </button>
+                <span id="radioMenuSaveStatus" class="ms-2 small" role="status"></span>
+            </div>
+            <p class="text-muted small mt-2 mb-0">
+                This only reads from the radio; nothing on the radio is changed. It takes a few seconds.
+            </p>
+        </div>
+    </details>
 </div>
+
+<script>
+    (function () {
+        const btn = document.getElementById('radioMenuSaveBtn');
+        const statusEl = document.getElementById('radioMenuSaveStatus');
+        if (!btn) return;
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            statusEl.textContent = 'Reading the radio menu…';
+            statusEl.className = 'ms-2 small text-muted';
+            try {
+                const r = await fetch('/api/radiomenu/export');
+                if (!r.ok) {
+                    const data = await r.json().catch(() => ({}));
+                    statusEl.textContent = `Not saved: ${data.error || r.statusText}`;
+                    statusEl.className = 'ms-2 small text-danger';
+                    return;
+                }
+                const missing = Number(r.headers.get('X-Menu-Missing') || 0);
+                const name = (/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(r.headers.get('Content-Disposition') || '') || [])[1];
+                const url = URL.createObjectURL(await r.blob());
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = name ? decodeURIComponent(name) : 'radio-menu.csv';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                statusEl.textContent = missing
+                    ? `Saved. ${missing} item${missing === 1 ? '' : 's'} did not answer and are marked in the file.`
+                    : 'Saved.';
+                statusEl.className = `ms-2 small ${missing ? 'text-warning' : 'text-success'}`;
+            } catch (e) {
+                statusEl.textContent = `Not saved: ${e.message}`;
+                statusEl.className = 'ms-2 small text-danger';
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    })();
+</script>
 
 <script>
     (function () {
