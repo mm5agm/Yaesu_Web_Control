@@ -2908,6 +2908,50 @@
                 Available for the FTdx101MP and FTdx101D.
             </p>
             <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button type="button" class="btn btn-outline-primary" id="radioMenuEditBtn">
+                    <i class="bi bi-pencil-square"></i> Change radio settings…
+                </button>
+                <span id="radioMenuEditStatus" class="ms-2 small" role="status"></span>
+            </div>
+            <p class="text-muted small mt-2">
+                Reads every menu item from the radio and lists it with its value now, so you can change any of them here
+                instead of on the radio's screen. Nothing is sent until you press <strong>Send my changes to the radio</strong>.
+                After sending, YWC saves a new file of the radio's menu, so you have a record of the change.
+            </p>
+            <div id="radioMenuEditor" class="mb-4" hidden>
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                    <label for="radioMenuEditFilter" class="mb-0">Find an item:</label>
+                    <input type="search" id="radioMenuEditFilter" class="form-control form-control-sm w-auto" placeholder="for example MIC or AGC">
+                    <div class="form-check mb-0 ms-2">
+                        <input class="form-check-input" type="checkbox" id="radioMenuEditOnlyChanged">
+                        <label class="form-check-label" for="radioMenuEditOnlyChanged">Show only what I have changed</label>
+                    </div>
+                </div>
+                <div class="table-responsive" style="max-height: 32rem; overflow-y: auto;">
+                    <table class="table table-sm align-middle">
+                        <caption id="radioMenuEditCaption" class="caption-top"></caption>
+                        <thead class="sticky-top bg-body">
+                            <tr>
+                                <th scope="col">Item</th>
+                                <th scope="col">Setting</th>
+                                <th scope="col">Note</th>
+                            </tr>
+                        </thead>
+                        <tbody id="radioMenuEditRows"></tbody>
+                    </table>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                    <button type="button" class="btn btn-warning" id="radioMenuEditSendBtn" disabled>
+                        <i class="bi bi-send"></i><span> Send my changes to the radio</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="radioMenuEditUndoBtn" disabled>
+                        <i class="bi bi-arrow-counterclockwise"></i> Undo my changes
+                    </button>
+                    <span id="radioMenuEditSendStatus" class="ms-2 small" role="status"></span>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 align-items-center">
                 <button type="button" class="btn btn-outline-primary" id="radioMenuSaveBtn">
                     <i class="bi bi-save"></i> Save radio menu to file
                 </button>
@@ -3215,6 +3259,279 @@
                 setStatus(applyStatus, `Not sent: ${e.message}`, 'danger');
             } finally {
                 applyBtn.disabled = tbody.querySelectorAll('input[type=checkbox]').length === 0;
+            }
+        });
+    })();
+</script>
+
+<script>
+    (function () {
+        const editBtn = document.getElementById('radioMenuEditBtn');
+        const statusEl = document.getElementById('radioMenuEditStatus');
+        const editor = document.getElementById('radioMenuEditor');
+        const tbody = document.getElementById('radioMenuEditRows');
+        const caption = document.getElementById('radioMenuEditCaption');
+        const filterEl = document.getElementById('radioMenuEditFilter');
+        const onlyChanged = document.getElementById('radioMenuEditOnlyChanged');
+        const sendBtn = document.getElementById('radioMenuEditSendBtn');
+        const undoBtn = document.getElementById('radioMenuEditUndoBtn');
+        const sendStatus = document.getElementById('radioMenuEditSendStatus');
+        if (!editBtn) return;
+
+        // One entry per item that can be changed: its row, its control and the value the radio has now.
+        let items = [];
+
+        function setStatus(el, text, kind) {
+            el.textContent = text;
+            el.className = `ms-2 small text-${kind}`;
+        }
+
+        // Above this many choices a dropdown is no use, so the item gets a box to type in.
+        const TYPE_IN_OVER = 500;
+
+        // As the server matches: case, spaces and a leading "+" do not count.
+        function norm(s) {
+            const t = s.replace(/\s+/g, '').toLowerCase();
+            return t.startsWith('+') ? t.slice(1) : t;
+        }
+
+        // The raw value to send, or null if what is typed is not one the radio offers.
+        function wanted(it) {
+            if (it.kind === 'select') return it.control.value;
+            if (it.kind === 'text') return it.control.value.trim().toUpperCase();
+            const t = norm(it.control.value);
+            const hit = it.choices.find(c => norm(c.label) === t)
+                || it.choices.find(c => norm(c.label.replace(/\s*[A-Za-z/]+$/, '')) === t);
+            return hit ? hit.raw : null;
+        }
+
+        function shownFor(it, raw) {
+            if (it.kind === 'text') return raw;
+            const hit = it.choices.find(c => c.raw === raw);
+            return hit ? hit.label : raw;
+        }
+
+        function changed() {
+            return items.filter(it => wanted(it) !== it.raw);
+        }
+
+        function refresh() {
+            let invalid = 0;
+            for (const it of items) {
+                const want = wanted(it);
+                const isChanged = want !== it.raw;
+                it.tr.classList.toggle('table-warning', isChanged);
+                if (want === null) {
+                    invalid++;
+                    it.note.textContent = `Not a setting the radio offers. It takes ${it.choices[0].label} to ${it.choices[it.choices.length - 1].label}.`;
+                    it.note.className = 'small text-danger';
+                } else if (isChanged) {
+                    it.note.textContent = `Was ${it.shown}. Not sent yet.`;
+                    it.note.className = 'small';
+                } else if (!it.result) {
+                    it.note.textContent = '';
+                }
+            }
+            const n = changed().length;
+            sendBtn.disabled = n === 0 || invalid > 0;
+            undoBtn.disabled = n === 0;
+            sendBtn.querySelector('span').textContent = n
+                ? ` Send my ${n} change${n === 1 ? '' : 's'} to the radio`
+                : ' Send my changes to the radio';
+            filter();
+        }
+
+        function filter() {
+            const q = filterEl.value.trim().toLowerCase();
+            let header = null, anyInGroup = false;
+            for (const tr of tbody.rows) {
+                if (tr.dataset.header) {
+                    if (header) header.hidden = !anyInGroup;
+                    header = tr;
+                    anyInGroup = false;
+                    continue;
+                }
+                const text = `${tr.dataset.section} ${tr.dataset.function}`.toLowerCase();
+                const show = (!q || text.includes(q)) && (!onlyChanged.checked || tr.classList.contains('table-warning'));
+                tr.hidden = !show;
+                if (show) anyInGroup = true;
+            }
+            if (header) header.hidden = !anyInGroup;
+        }
+
+        function render(rows) {
+            tbody.replaceChildren();
+            items = [];
+            let section = null;
+            for (const row of rows) {
+                if (row.section !== section) {
+                    section = row.section;
+                    const h = document.createElement('tr');
+                    h.dataset.header = '1';
+                    const th = document.createElement('th');
+                    th.colSpan = 3;
+                    th.scope = 'colgroup';
+                    th.className = 'table-light';
+                    th.textContent = section;
+                    h.appendChild(th);
+                    tbody.appendChild(h);
+                }
+                const tr = document.createElement('tr');
+                tr.dataset.section = row.section;
+                tr.dataset.function = row.function;
+                const name = document.createElement('th');
+                name.scope = 'row';
+                name.className = 'fw-normal';
+                name.textContent = row.function;
+                if (row.tx) {
+                    const tag = document.createElement('span');
+                    tag.className = 'badge text-bg-warning ms-1';
+                    tag.textContent = 'TX';
+                    name.appendChild(tag);
+                }
+                tr.appendChild(name);
+                const setting = document.createElement('td');
+                const note = document.createElement('td');
+                note.className = 'small';
+                let control = null, kind = null;
+                if (row.raw === null) {
+                    setting.textContent = '(no answer)';
+                    note.textContent = 'The radio did not answer this item.';
+                } else if (row.link) {
+                    setting.textContent = row.shown;
+                    note.textContent = 'Sets the CAT link itself, so change it on the radio.';
+                } else if (row.choices && row.choices.length > TYPE_IN_OVER) {
+                    kind = 'typed';
+                    control = document.createElement('input');
+                    control.type = 'text';
+                    control.className = 'form-control form-control-sm w-auto';
+                    control.value = row.shown;
+                    control.spellcheck = false;
+                } else if (row.choices) {
+                    kind = 'select';
+                    control = document.createElement('select');
+                    control.className = 'form-select form-select-sm w-auto';
+                    for (const c of row.choices) control.appendChild(new Option(c.label, c.raw));
+                    control.value = row.raw;
+                } else if (row.textMax > 0) {
+                    kind = 'text';
+                    control = document.createElement('input');
+                    control.type = 'text';
+                    control.className = 'form-control form-control-sm w-auto';
+                    control.maxLength = row.textMax;
+                    control.value = row.raw;
+                    control.spellcheck = false;
+                    control.style.textTransform = 'uppercase';
+                } else {
+                    setting.textContent = row.shown;
+                    note.textContent = 'YWC cannot set this item.';
+                }
+                if (control) {
+                    control.setAttribute('aria-label', `${row.function}, ${row.section}${row.tx ? ', changes transmit' : ''}`);
+                    control.addEventListener(kind === 'select' ? 'change' : 'input', refresh);
+                    setting.appendChild(control);
+                    items.push({ address: row.address, function: row.function, tx: row.tx, raw: row.raw, shown: row.shown,
+                        kind, choices: row.choices || [], control, tr, note, result: false });
+                }
+                tr.appendChild(setting);
+                tr.appendChild(note);
+                tbody.appendChild(tr);
+            }
+            refresh();
+        }
+
+        editBtn.addEventListener('click', async () => {
+            if (changed().length && !confirm('Read the radio again? The changes you have not sent will be lost.')) return;
+            editBtn.disabled = true;
+            sendStatus.textContent = '';
+            setStatus(statusEl, 'Reading the radio menu… This takes a few seconds. Nothing is sent.', 'muted');
+            try {
+                const r = await fetch('/api/radiomenu/current');
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    setStatus(statusEl, `Could not read the radio: ${data.error || r.statusText}`, 'danger');
+                    return;
+                }
+                render(data.rows);
+                caption.textContent = `${data.model} menu, read at ${new Date().toLocaleTimeString()}: ${items.length} items you can change.`;
+                editor.hidden = false;
+                editBtn.lastChild.textContent = ' Read the radio again';
+                setStatus(statusEl, data.missing
+                    ? `Read. ${data.missing} item${data.missing === 1 ? '' : 's'} did not answer.`
+                    : 'Read. Change what you want below; nothing is sent yet.', data.missing ? 'warning' : 'success');
+                filterEl.focus();
+            } catch (e) {
+                setStatus(statusEl, `Could not read the radio: ${e.message}`, 'danger');
+            } finally {
+                editBtn.disabled = false;
+            }
+        });
+
+        filterEl.addEventListener('input', filter);
+        onlyChanged.addEventListener('change', filter);
+
+        undoBtn.addEventListener('click', () => {
+            for (const it of items) it.control.value = it.kind === 'typed' ? it.shown : it.raw;
+            sendStatus.textContent = '';
+            refresh();
+        });
+
+        sendBtn.addEventListener('click', async () => {
+            const list = changed();
+            if (list.length === 0) return;
+            const lines = list.map(it => `${it.function}: ${it.shown} to ${shownFor(it, wanted(it))}${it.tx ? '  (TX)' : ''}`);
+            const tx = list.filter(it => it.tx).length;
+            if (!confirm(`Send ${list.length} change${list.length === 1 ? '' : 's'} to the radio's menu?\n\n` + lines.join('\n') +
+                (tx ? `\n\n${tx} of them change how the radio transmits.` : ''))) return;
+            sendBtn.disabled = undoBtn.disabled = editBtn.disabled = true;
+            setStatus(sendStatus, 'Sending…', 'muted');
+            try {
+                const r = await fetch('/api/radiomenu/load/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: list.map(it => ({ address: it.address, raw: wanted(it) })) }),
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    setStatus(sendStatus, `Not sent: ${data.error || r.statusText}`, 'danger');
+                    return;
+                }
+                let ok = 0, bad = 0;
+                for (const res of data.results) {
+                    const it = list.find(x => x.address === res.address);
+                    if (!it) continue;
+                    const good = res.status === 'ok' || res.status === 'same';
+                    if (good) {
+                        ok++;
+                        it.raw = wanted(it);
+                        it.shown = shownFor(it, it.raw);
+                    } else {
+                        bad++;
+                    }
+                    it.result = true;
+                    it.note.textContent = good ? 'Sent and read back.' : res.message || 'Not sent.';
+                    it.note.className = `small text-${good ? 'success' : 'danger'}`;
+                }
+                refresh();
+                const sent = bad
+                    ? `${ok} set, ${bad} not set. See the Note column.`
+                    : `${ok} change${ok === 1 ? '' : 's'} set on the radio and read back.`;
+                if (ok === 0) {
+                    setStatus(sendStatus, sent, 'danger');
+                    return;
+                }
+                setStatus(sendStatus, `${sent} Saving the radio menu to a file…`, 'muted');
+                const s = await fetch('/api/radiomenu/save', { method: 'POST' });
+                const saved = await s.json().catch(() => ({}));
+                if (s.ok) document.dispatchEvent(new CustomEvent('radiomenu-saved', { detail: saved.name }));
+                setStatus(sendStatus, s.ok
+                    ? `${sent} Saved the radio's menu to ${saved.path}.`
+                    : `${sent} The file was not saved: ${saved.error || s.statusText}`, bad || !s.ok ? 'danger' : 'success');
+            } catch (e) {
+                setStatus(sendStatus, `Not sent: ${e.message}`, 'danger');
+            } finally {
+                editBtn.disabled = false;
+                refresh();
             }
         });
     })();

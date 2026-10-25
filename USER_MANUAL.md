@@ -1771,6 +1771,7 @@ If the connection drops, the app reconnects automatically after 15 seconds. Disa
 | **File** | `ywc-backup-YYYYMMDD-HHMMSS.zip`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Backups` | `YWC radio menu <model> <date> <time>.ini`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus` |
 | **Open it with** | Unzip it; the files inside are JSON | Notepad, or any text editor |
 | **Putting it back** | **Import full backup…**, then restart YWC | **Load this one** or **Load from another file…**, then tick what to send |
+| **Changing one setting** | Change it on the Settings page | **Change radio settings…**, pick the new value, then send |
 | **Does it change the radio?** | No | Saving only reads the radio. Loading changes only the items you tick |
 
 Use **Backup & Restore** to move YWC to a new PC or undo a change to YWC's settings. Use **Radio Menu** to keep a record of how the radio itself is set up, for example before a factory reset or a firmware update, or to keep one file for contesting and another for everyday use. Neither save includes the other: the backup zip has no radio menu settings in it, and the radio menu file has none of YWC's settings.
@@ -1811,6 +1812,20 @@ Click **Import full backup…**, pick a previously exported zip (they are in the
 The files inside the zip are plain JSON; you can extract and inspect or hand-edit them if needed. They live at `%APPDATA%\MM5AGM\Yaesu Web Control\` and are also accessible directly without going through the export.
 
 #### Radio Menu
+
+**Change radio settings…**
+
+The quickest way to change one of the radio's menu items is **Change radio settings…** in the **Radio Menu** section. YWC reads every item from the radio, a few seconds, and lists them, grouped as the radio's menu is, each with its value now:
+
+- Pick a new value from the item's list. Every list holds only the settings the radio offers. **CONTEST NUMBER** has too many settings for a list, so type the number instead; if it is not one the radio takes, the Note column says so and nothing can be sent.
+- **MY CALL** is a box to type in: up to 12 letters, numbers and symbols, except `;`.
+- Type in **Find an item** to show only matching items, for example `MIC` or `AGC`. Tick **Show only what I have changed** to check your changes before sending.
+- Each changed item is highlighted and its Note says what it was. **Undo my changes** puts them all back. Items marked **TX** change how or when the radio transmits.
+- The CAT rate, time-out and RTS items are shown but cannot be changed here, because a wrong one would cut YWC off from the radio.
+
+**Nothing is sent until you press Send my changes to the radio** and confirm the list. YWC sends each change, reads it back, and shows **Sent and read back** or what went wrong. Then it saves a new radio menu file (below), so you have a record of the radio after the change. **Read the radio again** refreshes the list, for example after changing something on the radio itself.
+
+**Save radio menu to file**
 
 Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, a few seconds, and writes the file. Available for the FTdx101MP and FTdx101D.
 

@@ -101,25 +101,14 @@ public static class RadioMenuLoad
         if (item.Values is null)
             return item.TextMax > 0 ? EncodeText(item, text, out error) : Fail(out error, "Load cannot set this item.");
 
-        bool signed = currentRaw.StartsWith('+') || currentRaw.StartsWith('-');
-        int width = currentRaw.Length - (signed ? 1 : 0);
-        if (width < 1 || !int.TryParse(currentRaw, out _))
+        var candidates = Choices(item, currentRaw);
+        if (candidates is null)
             return Fail(out error, $"The radio's answer '{currentRaw}' is not a number, so Load cannot set it.");
 
-        string? Format(int v)
-        {
-            if (v < 0 && !signed) return null;
-            var digits = Math.Abs(v).ToString().PadLeft(width, '0');
-            if (digits.Length > width) return null;
-            return signed ? (v < 0 ? "-" : "+") + digits : digits;
-        }
-
         // The saved raw value, when the line has not been edited and it fits the radio now.
-        if (savedRaw is not null && int.TryParse(savedRaw, out var saved) && item.Values.Contains(saved)
-            && Format(saved) == savedRaw && Matches(text, item.Decode(savedRaw), loose: false))
+        if (savedRaw is not null && candidates.Contains(savedRaw) && Matches(text, item.Decode(savedRaw), loose: false))
             return savedRaw;
 
-        var candidates = item.Values.Select(Format).Where(r => r is not null).Cast<string>().ToList();
         var hit = candidates.FirstOrDefault(r => Matches(text, item.Decode(r), loose: false))
                ?? candidates.FirstOrDefault(r => Matches(text, item.Decode(r), loose: true));
         if (hit is not null) return hit;
@@ -129,6 +118,28 @@ public static class RadioMenuLoad
             ? string.Join(", ", shown)
             : $"{shown[0]}, {shown[1]}, {shown[2]} … {shown[^1]}";
         return Fail(out error, $"'{text}' is not a setting the radio offers. It takes: {list}.");
+    }
+
+    /// <summary>
+    /// Every raw value the item accepts, in the width and sign of the radio's
+    /// current answer, in table order. Null for a text item, or when the
+    /// answer is not a number.
+    /// </summary>
+    public static IReadOnlyList<string>? Choices(RadioMenuItem item, string currentRaw)
+    {
+        if (item.Values is null) return null;
+        bool signed = currentRaw.StartsWith('+') || currentRaw.StartsWith('-');
+        int width = currentRaw.Length - (signed ? 1 : 0);
+        if (width < 1 || !int.TryParse(currentRaw, out _)) return null;
+
+        string? Format(int v)
+        {
+            if (v < 0 && !signed) return null;
+            var digits = Math.Abs(v).ToString().PadLeft(width, '0');
+            if (digits.Length > width) return null;
+            return signed ? (v < 0 ? "-" : "+") + digits : digits;
+        }
+        return item.Values.Select(Format).Where(r => r is not null).Cast<string>().ToList();
     }
 
     /// <summary>

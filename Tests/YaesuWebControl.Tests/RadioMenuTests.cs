@@ -259,6 +259,21 @@ namespace YaesuWebControl.Tests
         }
 
         [Fact]
+        public void Choices_follow_the_radios_width_and_sign()
+        {
+            var eq = RadioMenuLoad.Choices(Item("030312"), "00")!;
+            Assert.Equal("00", eq[0]);
+            Assert.All(eq, c => Assert.Equal(2, c.Length));
+
+            var level = RadioMenuLoad.Choices(Item("030304"), "+05")!;
+            Assert.Contains("+00", level);
+            Assert.Contains("+05", level);
+            Assert.All(level, c => Assert.True(c[0] is '+' or '-'));
+
+            Assert.Null(RadioMenuLoad.Choices(Item("040101"), "MM5AGM"));
+        }
+
+        [Fact]
         public void A_line_without_its_comment_is_found_by_section_and_name()
         {
             var file = RadioMenuLoad.Parse("[OPERATION SETTING > TX AUDIO]\nP PRMTRC EQ1 FREQ = 100 Hz\n[NOWHERE]\nP PRMTRC EQ1 FREQ = 100 Hz\n");

@@ -137,6 +137,46 @@ namespace Yaesu_Web_Control.Controllers
             }
         }
 
+        /// <summary>
+        /// GET /api/radiomenu/current — reads every item for the Change radio
+        /// settings editor: its value now and, for each item that can be
+        /// changed, the choices the radio offers. Writes nothing.
+        /// </summary>
+        [HttpGet("current")]
+        public async Task<IActionResult> Current(CancellationToken ct)
+        {
+            var model = _settings.GetCachedSettings().RadioModel;
+            var table = RadioMenuCat.TableFor(model);
+            if (table is null)
+                return BadRequest(new { error = $"Changing the radio menu is not available for the {model} yet." });
+            if (!_cat.IsConnected)
+                return BadRequest(new { error = "The radio is not connected." });
+
+            var rows = new List<object>(table.Count);
+            int missing = 0;
+            foreach (var item in table)
+            {
+                var raw = await ReadAsync(item.Address, ct);
+                if (raw is null) missing++;
+                var choices = raw is null || item.Link ? null : RadioMenuLoad.Choices(item, raw);
+                rows.Add(new
+                {
+                    address = item.Address,
+                    section = $"{item.Section} > {item.Group}",
+                    function = item.Function,
+                    raw,
+                    shown = raw is null ? null : item.Decode(raw),
+                    tx = item.Tx,
+                    link = item.Link,
+                    textMax = raw is null || item.Link ? 0 : item.TextMax,
+                    choices = choices?.Select(c => new { raw = c, label = item.Decode(c) }),
+                });
+            }
+            if (missing == table.Count)
+                return StatusCode(504, new { error = "The radio did not answer any menu reads." });
+            return Ok(new { model, missing, rows });
+        }
+
         public sealed record PreviewRequest(string? Text);
 
         /// <summary>
