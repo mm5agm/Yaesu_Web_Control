@@ -3096,6 +3096,7 @@
                     box.dataset.address = row.address;
                     box.dataset.raw = row.raw;
                     box.dataset.function = row.function;
+                    box.dataset.section = row.section ?? '';
                     box.dataset.from = row.current ?? '';
                     box.dataset.to = row.wanted ?? '';
                     box.dataset.tx = row.tx ? '1' : '';
@@ -3227,7 +3228,7 @@
                 return;
             }
             if (!await window.radioMenuConfirm(boxes.map(b => ({
-                function: b.dataset.function, from: b.dataset.from, to: b.dataset.to, tx: !!b.dataset.tx,
+                function: b.dataset.function, section: b.dataset.section, from: b.dataset.from, to: b.dataset.to, tx: !!b.dataset.tx,
             })))) return;
             applyBtn.disabled = true;
             setStatus(applyStatus, 'Sending…', 'muted');
@@ -3438,7 +3439,7 @@
                     setting.appendChild(control);
                     // Text is sent space-padded; the radio may answer padded too, which is not a change.
                     const raw = kind === 'text' ? row.raw.trim() : row.raw;
-                    items.push({ address: row.address, function: row.function, tx: row.tx, raw, shown: row.shown,
+                    items.push({ address: row.address, function: row.function, section: row.section, tx: row.tx, raw, shown: row.shown,
                         kind, choices: row.choices || [], control, tr, note, result: false });
                 }
                 tr.appendChild(setting);
@@ -3488,7 +3489,7 @@
             const list = changed();
             if (list.length === 0) return;
             if (!await window.radioMenuConfirm(list.map(it => ({
-                function: it.function, from: it.shown, to: shownFor(it, wanted(it)), tx: it.tx,
+                function: it.function, section: it.section, from: it.shown, to: shownFor(it, wanted(it)), tx: it.tx,
             })))) return;
             sendBtn.disabled = undoBtn.disabled = editBtn.disabled = true;
             setStatus(sendStatus, 'Sending…', 'muted');
@@ -3665,6 +3666,12 @@
                 tag.className = 'badge text-bg-warning ms-1';
                 tag.textContent = 'TX';
                 th.appendChild(tag);
+            }
+            if (c.section) {
+                const where = document.createElement('div');
+                where.className = 'small text-muted';
+                where.textContent = c.section;
+                th.appendChild(where);
             }
             tr.appendChild(th);
             for (const v of [c.from, c.to]) {

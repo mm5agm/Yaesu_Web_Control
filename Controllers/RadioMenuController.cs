@@ -233,6 +233,12 @@ namespace Yaesu_Web_Control.Controllers
                     rows.Add(Row(item, line, "noanswer", null, null, "The radio did not answer, so this cannot be checked."));
                     continue;
                 }
+                // Already what the radio shows: same, even where Load could not send it (a blank MY CALL).
+                if (item.Decode(current) == line.Value.Trim())
+                {
+                    rows.Add(Row(item, line, "same", current, null, null));
+                    continue;
+                }
                 var raw = RadioMenuLoad.Encode(item, line.Value, line.SavedRaw, current, out var error);
                 if (raw is null)
                     rows.Add(Row(item, line, "error", current, null, error));
