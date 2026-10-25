@@ -2869,20 +2869,26 @@
         <summary><i class="bi bi-box-arrow-up" aria-hidden="true"></i>&nbsp;Backup &amp; Restore</summary>
         <div class="section-body">
             <p class="text-muted">
-                Download a single zip file containing everything you've customised in YWC — settings, memories, memory banks, calibration, and accessible-label overrides.
+                Save a single zip file containing everything you've customised in YWC — settings, memories, memory banks, calibration, and accessible-label overrides.
                 Use it to safeguard your configuration, move to a new PC, or share a setup with another operator.
                 It does not include the radio's own menu settings; save those with <strong>Radio Menu</strong> below.
             </p>
             <div class="d-flex flex-wrap gap-2 align-items-center">
-                <a class="btn btn-outline-primary" href="/api/backup/export">
-                    <i class="bi bi-download"></i> Export full backup
-                </a>
+                <button type="button" class="btn btn-outline-primary" id="backupSaveBtn">
+                    <i class="bi bi-save"></i> Export full backup
+                </button>
                 <label class="btn btn-outline-warning mb-0" for="backupImportFile">
                     <i class="bi bi-upload"></i> Import full backup…
                 </label>
                 <input type="file" id="backupImportFile" accept="application/zip,.zip" hidden>
-                <span id="backupImportStatus" class="ms-2 small"></span>
+                <span id="backupImportStatus" class="ms-2 small" role="status"></span>
+                <a id="backupDownloadLink" class="small" href="#" hidden>Download a copy</a>
             </div>
+            <p class="text-muted small mt-2 mb-0">
+                The zip goes in <code>%APPDATA%\MM5AGM\Yaesu Web Control\Backups</code>, with YWC's other files.
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="backupOpenFolderBtn">Open that folder</button>
+                To import one, pick it from that folder.
+            </p>
             <p class="text-muted small mt-2 mb-0">
                 Import overwrites the matching files in your user-data folder. Each replaced file is kept as a <code>.bak</code> so you can recover.
                 After importing, <strong>restart the app</strong> so the radio-connection, DX-cluster, SDR and rigctld services pick up the new values.
@@ -3219,6 +3225,39 @@
         const fileInput = document.getElementById('backupImportFile');
         const statusEl  = document.getElementById('backupImportStatus');
         if (!fileInput) return;
+        const downloadLink = document.getElementById('backupDownloadLink');
+
+        document.getElementById('backupSaveBtn').addEventListener('click', async () => {
+            statusEl.textContent = 'Saving…';
+            statusEl.className = 'ms-2 small text-muted';
+            downloadLink.hidden = true;
+            try {
+                const r = await fetch('/api/backup/save', { method: 'POST' });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    statusEl.textContent = `Not saved: ${data.error || r.statusText}`;
+                    statusEl.className = 'ms-2 small text-danger';
+                    return;
+                }
+                statusEl.textContent = `Saved to ${data.path}`;
+                statusEl.className = 'ms-2 small text-success';
+                downloadLink.href = `/api/backup/files/${encodeURIComponent(data.name)}`;
+                downloadLink.setAttribute('download', data.name);
+                downloadLink.hidden = false;
+            } catch (e) {
+                statusEl.textContent = `Not saved: ${e.message}`;
+                statusEl.className = 'ms-2 small text-danger';
+            }
+        });
+
+        document.getElementById('backupOpenFolderBtn').addEventListener('click', async () => {
+            const r = await fetch('/api/backup/open-folder', { method: 'POST' });
+            const data = await r.json().catch(() => ({}));
+            statusEl.textContent = r.ok
+                ? `Opened ${data.path} in Explorer on the PC that runs YWC.`
+                : `Could not open the folder: ${data.error || r.statusText}`;
+            statusEl.className = 'ms-2 small ' + (r.ok ? 'text-muted' : 'text-danger');
+        });
         fileInput.addEventListener('change', async () => {
             if (!fileInput.files || fileInput.files.length === 0) return;
             const file = fileInput.files[0];

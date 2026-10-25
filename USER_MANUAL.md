@@ -1768,7 +1768,7 @@ If the connection drops, the app reconnects automatically after 15 seconds. Disa
 | **What it saves** | YWC's own settings: COM port, band plan, memories, DX cluster, per-band memory and the rest | The radio's own menu settings: what you see when you press **FUNC** and touch **MENU** on the radio |
 | **Where those settings live** | On this PC, in `%APPDATA%\MM5AGM\Yaesu Web Control` | Inside the radio |
 | **Button** | **Export full backup** | **Save radio menu to file** |
-| **File** | `ywc-backup-YYYYMMDD-HHMMSS.zip`, in your browser's Downloads folder | `YWC radio menu <model> <date> <time>.ini`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus` |
+| **File** | `ywc-backup-YYYYMMDD-HHMMSS.zip`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Backups` | `YWC radio menu <model> <date> <time>.ini`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus` |
 | **Open it with** | Unzip it; the files inside are JSON | Notepad, or any text editor |
 | **Putting it back** | **Import full backup…**, then restart YWC | **Load this one** or **Load from another file…**, then tick what to send |
 | **Does it change the radio?** | No | Saving only reads the radio. Loading changes only the items you tick |
@@ -1793,11 +1793,11 @@ Plus a small `README.txt` recording when the backup was taken and which YWC vers
 
 **Export full backup**
 
-Click **Export full backup** to download a single file named `ywc-backup-YYYYMMDD-HHMMSS.zip`. Keep it somewhere safe — OneDrive, a USB stick, or your shack laptop. Re-export occasionally as your setup evolves.
+Click **Export full backup** to save a single file named `ywc-backup-YYYYMMDD-HHMMSS.zip` in `%APPDATA%\MM5AGM\Yaesu Web Control\Backups`. The page shows where it went. **Open that folder** opens it in Explorer on the PC that runs YWC, and **Download a copy** fetches the zip to the browser you are using, which helps when that is another PC. Copy it somewhere safe as well — OneDrive, a USB stick, or your shack laptop — because a backup on the same PC is lost with that PC. Re-export occasionally as your setup evolves.
 
 **Import full backup…**
 
-Click **Import full backup…**, pick a previously exported zip, and confirm the replacement. Each replaced file is preserved as a `.bak` in `%APPDATA%\MM5AGM\Yaesu Web Control\` so you can recover if the import causes problems. If anything goes wrong mid-import, every file written so far is rolled back automatically.
+Click **Import full backup…**, pick a previously exported zip (they are in the `Backups` folder unless you moved them), and confirm the replacement. Each replaced file is preserved as a `.bak` in `%APPDATA%\MM5AGM\Yaesu Web Control\` so you can recover if the import causes problems. If anything goes wrong mid-import, every file written so far is rolled back automatically.
 
 **You must restart YWC after importing.** Most services (radio connection, DX cluster, SDR streaming, rigctld server) only read their files at startup, so changes only take full effect after a restart. The app displays a reminder when the import completes.
 
