@@ -2895,7 +2895,7 @@
         <summary><i class="bi bi-list-columns" aria-hidden="true"></i>&nbsp;Radio Menu</summary>
         <div class="section-body">
             <p class="text-muted">
-                Save the radio's own menu settings (the MENU button on the radio) to a CSV file you can open in Excel.
+                Save the radio's own menu settings (the MENU button on the radio) to a text file you can open in Notepad.
                 It is like the radio's MENU SAVE to SD card, but the file shows every item by name and value.
                 Available for the FTdx101MP and FTdx101D.
             </p>
@@ -2934,7 +2934,7 @@
                 const url = URL.createObjectURL(await r.blob());
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = name ? decodeURIComponent(name) : 'radio-menu.csv';
+                a.download = name ? decodeURIComponent(name) : 'radio-menu.ini';
                 document.body.appendChild(a);
                 a.click();
                 a.remove();

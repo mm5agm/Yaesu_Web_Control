@@ -6,7 +6,7 @@ namespace Yaesu_Web_Control.Controllers
 {
     /// <summary>
     /// Saves the radio's own menu settings to a file, like the radio's
-    /// MENU SAVE to SD card but readable in a spreadsheet. Read-only: every
+    /// MENU SAVE to SD card but readable in Notepad. Read-only: every
     /// item is fetched with an EX read and nothing is written to the radio.
     /// </summary>
     [ApiController]
@@ -29,7 +29,7 @@ namespace Yaesu_Web_Control.Controllers
         }
 
         /// <summary>
-        /// GET /api/radiomenu/export — reads every menu item and returns a CSV.
+        /// GET /api/radiomenu/export — reads every menu item and returns an .ini file.
         /// About 200 reads on an FTdx101, a few seconds at 38400 bps.
         /// </summary>
         [HttpGet("export")]
@@ -53,12 +53,12 @@ namespace Yaesu_Web_Control.Controllers
                 return StatusCode(504, new { error = "The radio did not answer any menu reads." });
 
             var now = DateTime.Now;
-            var csv = RadioMenuCat.ToCsv(model, now, readings);
-            var name = $"YWC radio menu {model} {now:yyyy-MM-dd HHmm}.csv";
+            var ini = RadioMenuCat.ToIni(model, now, readings);
+            var name = $"YWC radio menu {model} {now:yyyy-MM-dd HHmm}.ini";
             Response.Headers["X-Menu-Missing"] = missing.ToString();
-            // UTF-8 with BOM so Excel opens it as UTF-8.
-            var bytes = System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(csv)).ToArray();
-            return File(bytes, "text/csv", name);
+            // UTF-8 with BOM so older Notepad opens it as UTF-8.
+            var bytes = System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(ini)).ToArray();
+            return File(bytes, "text/plain", name);
         }
 
         private async Task<string?> ReadAsync(string address, CancellationToken ct)

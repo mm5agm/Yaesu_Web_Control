@@ -5,7 +5,7 @@ namespace YaesuWebControl.Tests
 {
     /// <summary>
     /// The FTdx101 menu save: the table transcribed from the CAT manual's
-    /// Table 2, the read-only EX traffic, and the CSV.
+    /// Table 2, the read-only EX traffic, and the save file.
     /// </summary>
     public class RadioMenuTests
     {
@@ -96,20 +96,24 @@ namespace YaesuWebControl.Tests
             => Assert.Equal(has, RadioMenuCat.TableFor(model) is not null);
 
         [Fact]
-        public void Csv_keeps_raw_zeros_and_marks_unanswered_items()
+        public void Ini_groups_items_and_keeps_raw_values()
         {
-            var csv = RadioMenuCat.ToCsv("FTdx101MP", new DateTime(2026, 10, 25, 13, 5, 0), new[]
+            var ini = RadioMenuCat.ToIni("FTdx101MP", new DateTime(2026, 10, 25, 13, 5, 0), new[]
             {
                 new RadioMenuReading(Item("010101"), "0160"),
-                new RadioMenuReading(Item("030401"), null),
                 new RadioMenuReading(Item("010303"), "1500"),
+                new RadioMenuReading(Item("030401"), null),
             }).Split(Environment.NewLine);
 
-            Assert.Equal("# YWC radio menu,FTdx101MP,2026-10-25 13:05", csv[0]);
-            Assert.Equal("Section,Group,Function,Value,EX,Raw,TX", csv[1]);
-            Assert.Equal("RADIO SETTING,MODE SSB,AGC FAST DELAY,160 ms,010101,=\"0160\",", csv[2]);
-            Assert.Equal("OPERATION SETTING,TX GNRL,HF MAX POWER,(no answer),030401,,yes", csv[3]);
-            Assert.Equal("RADIO SETTING,MODE FM,AGC SLOW DELAY,1500 ms,010303,=\"1500\",", csv[4]);
+            Assert.Contains("[File]", ini);
+            Assert.Contains("Radio = FTdx101MP", ini);
+            Assert.Contains("Saved = 2026-10-25 13:05", ini);
+            Assert.Contains("[RADIO SETTING > MODE SSB]", ini);
+            Assert.Contains("AGC FAST DELAY = 160 ms".PadRight(40) + " ; 010101 = 0160", ini);
+            Assert.Contains("[RADIO SETTING > MODE FM]", ini);
+            Assert.Contains("[OPERATION SETTING > TX GNRL]", ini);
+            Assert.Contains("HF MAX POWER = (no answer)".PadRight(40) + " ; 030401  [TX]", ini);
+            Assert.Single(ini, l => l == "[RADIO SETTING > MODE SSB]");
         }
     }
 }
