@@ -1761,6 +1761,23 @@ If the connection drops, the app reconnects automatically after 15 seconds. Disa
 
 ### 6.7 Backup & Restore
 
+**Two different saves.** The Settings page has two ways to save, and they save different things:
+
+| | Backup & Restore | Radio Menu |
+|---|---|---|
+| **What it saves** | YWC's own settings: COM port, band plan, memories, DX cluster, per-band memory and the rest | The radio's own menu settings: what you see when you press **FUNC** and touch **MENU** on the radio |
+| **Where those settings live** | On this PC, in `%APPDATA%\MM5AGM\Yaesu Web Control` | Inside the radio |
+| **Button** | **Export full backup** | **Save radio menu to file** |
+| **File** | `ywc-backup-YYYYMMDD-HHMMSS.zip`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Backups` | `YWC radio menu <model> <date> <time>.ini`, in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus` |
+| **Open it with** | Unzip it; the files inside are JSON | Notepad, or any text editor |
+| **Putting it back** | **Import full backup…**, then restart YWC | **Load this one** or **Load from another file…**, then tick what to send |
+| **Changing one setting** | Change it on the Settings page | **Change radio settings…**, pick the new value, then send |
+| **Does it change the radio?** | No | Saving only reads the radio. Loading changes only the items you tick |
+
+Use **Backup & Restore** to move YWC to a new PC or undo a change to YWC's settings. Use **Radio Menu** to keep a record of how the radio itself is set up, for example before a factory reset or a firmware update, or to keep one file for contesting and another for everyday use. Neither save includes the other: the backup zip has no radio menu settings in it, and the radio menu file has none of YWC's settings.
+
+#### Backup & Restore
+
 At the bottom of the Settings page (below the Save Settings button) are two buttons for exporting and importing your complete YWC user data as a **single zip file**. This rolls up everything you've customised across the app into one file:
 
 | File in the zip | What it contains |
@@ -1777,11 +1794,11 @@ Plus a small `README.txt` recording when the backup was taken and which YWC vers
 
 **Export full backup**
 
-Click **Export full backup** to download a single file named `ywc-backup-YYYYMMDD-HHMMSS.zip`. Keep it somewhere safe — OneDrive, a USB stick, or your shack laptop. Re-export occasionally as your setup evolves.
+Click **Export full backup** to save a single file named `ywc-backup-YYYYMMDD-HHMMSS.zip` in `%APPDATA%\MM5AGM\Yaesu Web Control\Backups`. The page shows where it went. **Open that folder** opens it in Explorer on the PC that runs YWC, and **Download a copy** fetches the zip to the browser you are using, which helps when that is another PC. Copy it somewhere safe as well — OneDrive, a USB stick, or your shack laptop — because a backup on the same PC is lost with that PC. Re-export occasionally as your setup evolves.
 
 **Import full backup…**
 
-Click **Import full backup…**, pick a previously exported zip, and confirm the replacement. Each replaced file is preserved as a `.bak` in `%APPDATA%\MM5AGM\Yaesu Web Control\` so you can recover if the import causes problems. If anything goes wrong mid-import, every file written so far is rolled back automatically.
+Click **Import full backup…**, pick a previously exported zip (they are in the `Backups` folder unless you moved them), and confirm the replacement. Each replaced file is preserved as a `.bak` in `%APPDATA%\MM5AGM\Yaesu Web Control\` so you can recover if the import causes problems. If anything goes wrong mid-import, every file written so far is rolled back automatically.
 
 **You must restart YWC after importing.** Most services (radio connection, DX cluster, SDR streaming, rigctld server) only read their files at startup, so changes only take full effect after a restart. The app displays a reminder when the import completes.
 
@@ -1793,6 +1810,64 @@ Click **Import full backup…**, pick a previously exported zip, and confirm the
 - **Experimenting safely** — export before trying something risky; import the file to revert if it goes wrong.
 
 The files inside the zip are plain JSON; you can extract and inspect or hand-edit them if needed. They live at `%APPDATA%\MM5AGM\Yaesu Web Control\` and are also accessible directly without going through the export.
+
+#### Radio Menu
+
+**Change radio settings…**
+
+The quickest way to change one of the radio's menu items is **Change radio settings…** in the **Radio Menu** section. YWC reads every item from the radio, a few seconds, and lists them, grouped as the radio's menu is, each with its value now:
+
+- Pick a new value from the item's list. Every list holds only the settings the radio offers. **CONTEST NUMBER** has too many settings for a list, so type the number instead; if it is not one the radio takes, the Note column says so and nothing can be sent.
+- **MY CALL** is a box to type in: up to 12 letters, numbers and symbols, except `;`.
+- Type in **Find an item** to show only matching items, for example `MIC` or `AGC`. Tick **Show only what I have changed** to check your changes before sending.
+- Each changed item is highlighted and its Note says what it was. **Undo my changes** puts them all back. Items marked **TX** change how or when the radio transmits.
+- The CAT rate, time-out and RTS items are shown but cannot be changed here, because a wrong one would cut YWC off from the radio.
+
+**Nothing is sent until you press Send my changes to the radio** and confirm the list. YWC sends each change, reads it back, and shows **Sent and read back** or what went wrong. Then it saves a new radio menu file (below), so you have a record of the radio after the change. **Read the radio again** refreshes the list, for example after changing something on the radio itself.
+
+**Save radio menu to file**
+
+Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, a few seconds, and writes the file. Available for the FTdx101MP and FTdx101D.
+
+The file goes in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus`, with YWC's other files, on the PC that runs YWC. The page shows the full path after each save, and **Open that folder** opens it in Explorer. If you use YWC from a browser on another PC, pick the file under **Saved files** and click **Download a copy** to get it on that PC.
+
+The file is grouped the way the radio's menu is. Each line shows the item and its value as the radio's screen shows it. After the `;` come the EX menu number and what the radio answered:
+
+```ini
+[CW SETTING > MODE CW]
+CW WAVE SHAPE = 6 ms                     ; 020113 = 1  [TX]
+
+[DISPLAY SETTING > DISPLAY]
+MY CALL = MM5AGM                         ; 040101 = MM5AGM
+MY CALL TIME = 1 s                       ; 040102 = 01
+```
+
+- **`[TX]`** marks items that change how or when the radio transmits. Load leaves these unticked.
+- **`(no answer)`** means the radio did not reply for that item, usually because it does not apply to the radio's current setup.
+- Save as many files as you like and rename them for how you use the radio, for example `YWC radio menu contest.ini`.
+
+Saving only reads the radio. Nothing on the radio changes.
+
+**Loading a file**
+
+Pick a file from **Saved files** and click **Load this one**, or click **Load from another file…** to pick a file from anywhere else, such as one a friend emailed you. YWC reads the radio again and shows a table of what would change: the item, its value on the radio now, and its value in the file. **Nothing is sent at this point.**
+
+- Items that would change have a tick box. Items marked **TX** start unticked; tick them only if you want them.
+- Items already the same are hidden. Tick **Show items that are already the same** to see them.
+- Items that cannot be loaded say why in the Note column, for example a value the radio does not offer.
+- **232C RATE, 232C TIME OUT TIMER, CAT RATE, CAT TIME OUT TIMER and CAT RTS are never loaded.** A wrong one would cut YWC off from the radio. Change them on the radio if you need to.
+
+Press **Send ticked items to the radio** and confirm. YWC sends each ticked item, reads it back, and shows **Sent and read back** or what went wrong.
+
+**Editing the file.** You can change a value in Notepad before loading it. Change the text after `=`, as the radio's screen would show it, and leave the part after `;` alone. For example, to turn on the first band of the processor-on equaliser at 300 Hz:
+
+```ini
+P PRMTRC EQ1 FREQ = 300 Hz               ; 030312 = 00  [TX]
+```
+
+The value after `=` is what counts; the number after `;` is only used when you have not changed the value. Capitals, spaces and a leading `+` do not matter, and you can leave the unit off (`300` works as well as `300 Hz`). The value must be one the radio offers: `ON` is not, because this item's settings are OFF and 100 to 700 Hz. If you type something the radio does not offer, the Note column says so and lists what the item takes. MY CALL takes up to 12 letters, numbers and symbols, except `;`.
+
+A file saved from an FTdx101MP can be loaded into an FTdx101D, and the other way round. YWC warns you, and any power setting above the D's 100 W is refused.
 
 ---
 

@@ -2869,19 +2869,26 @@
         <summary><i class="bi bi-box-arrow-up" aria-hidden="true"></i>&nbsp;Backup &amp; Restore</summary>
         <div class="section-body">
             <p class="text-muted">
-                Download a single zip file containing everything you've customised in YWC — settings, memories, memory banks, calibration, and accessible-label overrides.
+                Save a single zip file containing everything you've customised in YWC — settings, memories, memory banks, calibration, and accessible-label overrides.
                 Use it to safeguard your configuration, move to a new PC, or share a setup with another operator.
+                It does not include the radio's own menu settings; save those with <strong>Radio Menu</strong> below.
             </p>
             <div class="d-flex flex-wrap gap-2 align-items-center">
-                <a class="btn btn-outline-primary" href="/api/backup/export">
-                    <i class="bi bi-download"></i> Export full backup
-                </a>
+                <button type="button" class="btn btn-outline-primary" id="backupSaveBtn">
+                    <i class="bi bi-save"></i> Export full backup
+                </button>
                 <label class="btn btn-outline-warning mb-0" for="backupImportFile">
                     <i class="bi bi-upload"></i> Import full backup…
                 </label>
                 <input type="file" id="backupImportFile" accept="application/zip,.zip" hidden>
-                <span id="backupImportStatus" class="ms-2 small"></span>
+                <span id="backupImportStatus" class="ms-2 small" role="status"></span>
+                <a id="backupDownloadLink" class="small" href="#" hidden>Download a copy</a>
             </div>
+            <p class="text-muted small mt-2 mb-0">
+                The zip goes in <code>%APPDATA%\MM5AGM\Yaesu Web Control\Backups</code>, with YWC's other files.
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="backupOpenFolderBtn">Open that folder</button>
+                To import one, pick it from that folder.
+            </p>
             <p class="text-muted small mt-2 mb-0">
                 Import overwrites the matching files in your user-data folder. Each replaced file is kept as a <code>.bak</code> so you can recover.
                 After importing, <strong>restart the app</strong> so the radio-connection, DX-cluster, SDR and rigctld services pick up the new values.
@@ -2889,13 +2896,701 @@
             </p>
         </div>
     </details>
+
+    <!-- Radio menu save — the radio's own EX menu, not YWC's settings -->
+    <details class="settings-section">
+        <summary><i class="bi bi-list-columns" aria-hidden="true"></i>&nbsp;Radio Menu</summary>
+        <div class="section-body">
+            <p class="text-muted">
+                Save the radio's own menu settings (the MENU button on the radio) to a text file you can open in Notepad,
+                and load them back. It is like the radio's MENU SAVE and MENU LOAD with an SD card, but the file shows every item by name and value.
+                This is not the same as Backup &amp; Restore above, which saves YWC's own settings, not the radio's.
+                Available for the FTdx101MP and FTdx101D.
+            </p>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button type="button" class="btn btn-outline-primary" id="radioMenuEditBtn">
+                    <i class="bi bi-pencil-square"></i> Change radio settings…
+                </button>
+                <span id="radioMenuEditStatus" class="ms-2 small" role="status"></span>
+            </div>
+            <p class="text-muted small mt-2">
+                Reads every menu item from the radio and lists it with its value now, so you can change any of them here
+                instead of on the radio's screen. Nothing is sent until you press <strong>Send my changes to the radio</strong>.
+                After sending, YWC saves a new file of the radio's menu, so you have a record of the change.
+            </p>
+            <div id="radioMenuEditor" class="mb-4" hidden>
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                    <label for="radioMenuEditFilter" class="mb-0">Find an item:</label>
+                    <input type="search" id="radioMenuEditFilter" class="form-control form-control-sm w-auto" placeholder="for example MIC or AGC">
+                    <div class="form-check mb-0 ms-2">
+                        <input class="form-check-input" type="checkbox" id="radioMenuEditOnlyChanged">
+                        <label class="form-check-label" for="radioMenuEditOnlyChanged">Show only what I have changed</label>
+                    </div>
+                </div>
+                <div class="table-responsive" style="max-height: 32rem; overflow-y: auto;">
+                    <table class="table table-sm align-middle">
+                        <caption id="radioMenuEditCaption" class="caption-top"></caption>
+                        <thead class="sticky-top bg-body">
+                            <tr>
+                                <th scope="col">Item</th>
+                                <th scope="col">Setting</th>
+                                <th scope="col">Note</th>
+                            </tr>
+                        </thead>
+                        <tbody id="radioMenuEditRows"></tbody>
+                    </table>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                    <button type="button" class="btn btn-warning" id="radioMenuEditSendBtn" disabled>
+                        <i class="bi bi-send"></i><span> Send my changes to the radio</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="radioMenuEditUndoBtn" disabled>
+                        <i class="bi bi-arrow-counterclockwise"></i> Undo my changes
+                    </button>
+                    <span id="radioMenuEditSendStatus" class="ms-2 small" role="status"></span>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button type="button" class="btn btn-outline-primary" id="radioMenuSaveBtn">
+                    <i class="bi bi-save"></i> Save radio menu to file
+                </button>
+                <span id="radioMenuSaveStatus" class="ms-2 small" role="status"></span>
+            </div>
+            <p class="text-muted small mt-2">
+                Saving only reads from the radio; nothing on the radio is changed. It takes a few seconds.
+                The file goes in <code id="radioMenuFolder">%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus</code>,
+                with YWC's other files.
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="radioMenuOpenFolderBtn">Open that folder</button>
+            </p>
+
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <label for="radioMenuSavedSelect" class="mb-0">Saved files:</label>
+                <select id="radioMenuSavedSelect" class="form-select form-select-sm w-auto"></select>
+                <button type="button" class="btn btn-outline-warning" id="radioMenuLoadSavedBtn">
+                    <i class="bi bi-upload"></i> Load this one
+                </button>
+                <a id="radioMenuDownloadLink" class="small" href="#">Download a copy</a>
+                <span class="text-muted small">or</span>
+                <label class="btn btn-outline-warning mb-0" for="radioMenuLoadFile">
+                    <i class="bi bi-folder2-open"></i> Load from another file…
+                </label>
+                <input type="file" id="radioMenuLoadFile" accept=".ini,text/plain" hidden>
+                <span id="radioMenuLoadStatus" class="ms-2 small" role="status"></span>
+            </div>
+            <p class="text-muted small mt-2 mb-0">
+                Loading first shows what would change, and sends nothing. Tick the items you want and press
+                <strong>Send ticked items to the radio</strong>. Items marked TX change how the radio transmits and start unticked.
+                The CAT rate, time-out and RTS items are never loaded, because a wrong one would cut YWC off from the radio.
+                You can edit the file in Notepad first: change the value after <code>=</code>, as the radio shows it.
+            </p>
+
+            <div id="radioMenuLoadPreview" class="mt-3" hidden>
+                <div id="radioMenuLoadWarning" class="alert alert-warning py-2 small" hidden></div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="radioMenuShowSame">
+                    <label class="form-check-label" for="radioMenuShowSame">Show items that are already the same</label>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <caption id="radioMenuLoadCaption" class="caption-top"></caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Send</th>
+                                <th scope="col">Item</th>
+                                <th scope="col">On the radio</th>
+                                <th scope="col">In the file</th>
+                                <th scope="col">Note</th>
+                            </tr>
+                        </thead>
+                        <tbody id="radioMenuLoadRows"></tbody>
+                    </table>
+                </div>
+                <button type="button" class="btn btn-warning" id="radioMenuApplyBtn">
+                    <i class="bi bi-send"></i> Send ticked items to the radio
+                </button>
+                <span id="radioMenuApplyStatus" class="ms-2 small" role="status"></span>
+            </div>
+        </div>
+    </details>
 </div>
+
+<script>
+    // "2 items did not answer: Display Language, Japanese Morse Decode. That usually means ..."
+    window.radioMenuUnanswered = function (data) {
+        const n = Number(data.missing || 0);
+        const names = Array.isArray(data.unanswered) ? data.unanswered : [];
+        return `${n} item${n === 1 ? '' : 's'} did not answer` +
+            (names.length ? `: ${names.join(', ')}.` : '.') +
+            ' That usually means they do not apply to this radio or how it is set up.';
+    };
+</script>
+<script>
+    (function () {
+        const btn = document.getElementById('radioMenuSaveBtn');
+        const statusEl = document.getElementById('radioMenuSaveStatus');
+        if (!btn) return;
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            statusEl.textContent = 'Reading the radio menu…';
+            statusEl.className = 'ms-2 small text-muted';
+            try {
+                const r = await fetch('/api/radiomenu/save', { method: 'POST' });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    statusEl.textContent = `Not saved: ${data.error || r.statusText}`;
+                    statusEl.className = 'ms-2 small text-danger';
+                    return;
+                }
+                statusEl.textContent = `Saved to ${data.path}.` +
+                    (data.missing ? ` ${window.radioMenuUnanswered(data)} The file marks them (no answer).` : '');
+                document.dispatchEvent(new CustomEvent('radiomenu-saved', { detail: data.name }));
+                statusEl.className = 'ms-2 small text-success';
+            } catch (e) {
+                statusEl.textContent = `Not saved: ${e.message}`;
+                statusEl.className = 'ms-2 small text-danger';
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    })();
+</script>
+
+<script>
+    (function () {
+        const fileInput = document.getElementById('radioMenuLoadFile');
+        const statusEl = document.getElementById('radioMenuLoadStatus');
+        const preview = document.getElementById('radioMenuLoadPreview');
+        const warningEl = document.getElementById('radioMenuLoadWarning');
+        const caption = document.getElementById('radioMenuLoadCaption');
+        const tbody = document.getElementById('radioMenuLoadRows');
+        const showSame = document.getElementById('radioMenuShowSame');
+        const applyBtn = document.getElementById('radioMenuApplyBtn');
+        const applyStatus = document.getElementById('radioMenuApplyStatus');
+        if (!fileInput) return;
+
+        const notes = {
+            same: 'Already the same.',
+            blocked: 'Never loaded.',
+            skipped: 'Not in the file.',
+            unknown: 'Not loaded.',
+            noanswer: 'Not checked.',
+            error: 'Not loaded.',
+        };
+
+        function setStatus(el, text, kind) {
+            el.textContent = text;
+            el.className = `ms-2 small text-${kind}`;
+        }
+
+        function cell(tr, text) {
+            const td = document.createElement('td');
+            td.textContent = text ?? '';
+            tr.appendChild(td);
+            return td;
+        }
+
+        function render(rows) {
+            tbody.replaceChildren();
+            for (const row of rows) {
+                const tr = document.createElement('tr');
+                tr.dataset.status = row.status;
+                tr.dataset.address = row.address || '';
+                const send = document.createElement('td');
+                if (row.status === 'change') {
+                    const box = document.createElement('input');
+                    box.type = 'checkbox';
+                    box.className = 'form-check-input';
+                    box.checked = !row.tx;
+                    box.dataset.address = row.address;
+                    box.dataset.raw = row.raw;
+                    box.dataset.function = row.function;
+                    box.dataset.section = row.section ?? '';
+                    box.dataset.from = row.current ?? '';
+                    box.dataset.to = row.wanted ?? '';
+                    box.dataset.tx = row.tx ? '1' : '';
+                    box.setAttribute('aria-label',
+                        `Send ${row.function}: ${row.current} to ${row.wanted}${row.tx ? ', changes transmit' : ''}`);
+                    send.appendChild(box);
+                }
+                tr.appendChild(send);
+                const name = cell(tr, row.function);
+                if (row.tx) {
+                    const tag = document.createElement('span');
+                    tag.className = 'badge text-bg-warning ms-1';
+                    tag.textContent = 'TX';
+                    name.appendChild(tag);
+                }
+                name.title = row.section || '';
+                cell(tr, row.current);
+                cell(tr, row.wanted);
+                cell(tr, row.message || (row.status === 'change' ? '' : notes[row.status] || ''));
+                if (row.status === 'error' || row.status === 'unknown') tr.className = 'table-danger';
+                tbody.appendChild(tr);
+            }
+            filter();
+        }
+
+        function filter() {
+            for (const tr of tbody.rows)
+                tr.hidden = tr.dataset.status === 'same' && !showSame.checked;
+        }
+        showSame.addEventListener('change', filter);
+
+        const savedSelect = document.getElementById('radioMenuSavedSelect');
+        const loadSavedBtn = document.getElementById('radioMenuLoadSavedBtn');
+        const folderEl = document.getElementById('radioMenuFolder');
+
+        const downloadLink = document.getElementById('radioMenuDownloadLink');
+
+        function updateDownload() {
+            const name = savedSelect.value;
+            downloadLink.hidden = !name;
+            downloadLink.href = name ? `/api/radiomenu/files/${encodeURIComponent(name)}?download=true` : '#';
+            downloadLink.setAttribute('download', name || '');
+        }
+        savedSelect.addEventListener('change', updateDownload);
+
+        async function listSaved(e) {
+            try {
+                const r = await fetch('/api/radiomenu/files');
+                const data = await r.json();
+                folderEl.textContent = data.folder;
+                savedSelect.replaceChildren(...data.files.map(f => new Option(`${f.name} (changed ${f.modified})`, f.name)));
+                if (data.files.length === 0) savedSelect.appendChild(new Option('None yet: save one first', ''));
+                if (e && e.detail) savedSelect.value = e.detail;
+                loadSavedBtn.disabled = data.files.length === 0;
+                savedSelect.disabled = data.files.length === 0;
+                updateDownload();
+            } catch { /* the file picker still works */ }
+        }
+        listSaved();
+        document.addEventListener('radiomenu-saved', listSaved);
+
+        document.getElementById('radioMenuOpenFolderBtn').addEventListener('click', async () => {
+            const r = await fetch('/api/radiomenu/open-folder', { method: 'POST' });
+            const data = await r.json().catch(() => ({}));
+            setStatus(statusEl, r.ok
+                ? `Opened ${data.path} in Explorer on the PC that runs YWC.`
+                : `Could not open the folder: ${data.error || r.statusText}`, r.ok ? 'muted' : 'danger');
+        });
+
+        loadSavedBtn.addEventListener('click', async () => {
+            const name = savedSelect.value;
+            if (!name) return;
+            const r = await fetch(`/api/radiomenu/files/${encodeURIComponent(name)}`);
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                setStatus(statusEl, `Not loaded: ${data.error || r.statusText}`, 'danger');
+                return;
+            }
+            await previewText(name, data.text);
+        });
+
+        fileInput.addEventListener('change', async () => {
+            if (!fileInput.files || fileInput.files.length === 0) return;
+            const file = fileInput.files[0];
+            try {
+                await previewText(file.name, await file.text());
+            } finally {
+                fileInput.value = '';
+            }
+        });
+
+        async function previewText(fileName, text) {
+            const file = { name: fileName };
+            preview.hidden = true;
+            applyStatus.textContent = '';
+            setStatus(statusEl, `Reading the radio to compare with "${file.name}"… Nothing is sent yet.`, 'muted');
+            try {
+                const r = await fetch('/api/radiomenu/load/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text }),
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    setStatus(statusEl, `Not loaded: ${data.error || r.statusText}`, 'danger');
+                    return;
+                }
+                const count = s => data.rows.filter(x => x.status === s).length;
+                const changes = count('change'), errors = count('error') + count('unknown');
+                warningEl.textContent = data.warning || '';
+                warningEl.hidden = !data.warning;
+                caption.textContent = `${file.name}: ${changes} to change, ${count('same')} already the same` +
+                    (errors ? `, ${errors} that cannot be loaded` : '') + '.';
+                render(data.rows);
+                preview.hidden = false;
+                applyBtn.disabled = changes === 0;
+                setStatus(statusEl, changes
+                    ? `${changes} item${changes === 1 ? '' : 's'} would change. Nothing has been sent; tick what you want below.`
+                    : 'The radio already matches the file. Nothing to send.', changes ? 'warning' : 'success');
+            } catch (e) {
+                setStatus(statusEl, `Not loaded: ${e.message}`, 'danger');
+            }
+        }
+
+        applyBtn.addEventListener('click', async () => {
+            const boxes = [...tbody.querySelectorAll('input[type=checkbox]:checked')];
+            if (boxes.length === 0) {
+                setStatus(applyStatus, 'Nothing is ticked.', 'warning');
+                return;
+            }
+            if (!await window.radioMenuConfirm(boxes.map(b => ({
+                function: b.dataset.function, section: b.dataset.section, from: b.dataset.from, to: b.dataset.to, tx: !!b.dataset.tx,
+            })))) return;
+            applyBtn.disabled = true;
+            setStatus(applyStatus, 'Sending…', 'muted');
+            try {
+                const r = await fetch('/api/radiomenu/load/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: boxes.map(b => ({ address: b.dataset.address, raw: b.dataset.raw })) }),
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    setStatus(applyStatus, `Not sent: ${data.error || r.statusText}`, 'danger');
+                    return;
+                }
+                let ok = 0, bad = 0;
+                for (const res of data.results) {
+                    const tr = [...tbody.rows].find(t => t.dataset.address === res.address);
+                    if (!tr) continue;
+                    const good = res.status === 'ok' || res.status === 'same';
+                    good ? ok++ : bad++;
+                    tr.cells[2].textContent = res.now ?? tr.cells[2].textContent;
+                    tr.cells[4].textContent = good ? 'Sent and read back.' : res.message || 'Not sent.';
+                    tr.className = good ? 'table-success' : 'table-danger';
+                    if (good) {
+                        tr.dataset.status = 'done';
+                        tr.cells[0].replaceChildren();
+                    }
+                }
+                setStatus(applyStatus, bad
+                    ? `${ok} set, ${bad} not set. See the Note column.`
+                    : `${ok} item${ok === 1 ? '' : 's'} set on the radio and read back.`, bad ? 'danger' : 'success');
+            } catch (e) {
+                setStatus(applyStatus, `Not sent: ${e.message}`, 'danger');
+            } finally {
+                applyBtn.disabled = tbody.querySelectorAll('input[type=checkbox]').length === 0;
+            }
+        });
+    })();
+</script>
+
+<script>
+    (function () {
+        const editBtn = document.getElementById('radioMenuEditBtn');
+        const statusEl = document.getElementById('radioMenuEditStatus');
+        const editor = document.getElementById('radioMenuEditor');
+        const tbody = document.getElementById('radioMenuEditRows');
+        const caption = document.getElementById('radioMenuEditCaption');
+        const filterEl = document.getElementById('radioMenuEditFilter');
+        const onlyChanged = document.getElementById('radioMenuEditOnlyChanged');
+        const sendBtn = document.getElementById('radioMenuEditSendBtn');
+        const undoBtn = document.getElementById('radioMenuEditUndoBtn');
+        const sendStatus = document.getElementById('radioMenuEditSendStatus');
+        if (!editBtn) return;
+
+        // One entry per item that can be changed: its row, its control and the value the radio has now.
+        let items = [];
+
+        function setStatus(el, text, kind) {
+            el.textContent = text;
+            el.className = `ms-2 small text-${kind}`;
+        }
+
+        // Above this many choices a dropdown is no use, so the item gets a box to type in.
+        const TYPE_IN_OVER = 500;
+
+        // As the server matches: case, spaces and a leading "+" do not count.
+        function norm(s) {
+            const t = s.replace(/\s+/g, '').toLowerCase();
+            return t.startsWith('+') ? t.slice(1) : t;
+        }
+
+        // The raw value to send, or null if what is typed is not one the radio offers.
+        function wanted(it) {
+            if (it.kind === 'select') return it.control.value;
+            if (it.kind === 'text') return it.control.value.trim().toUpperCase();
+            const t = norm(it.control.value);
+            const hit = it.choices.find(c => norm(c.label) === t)
+                || it.choices.find(c => norm(c.label.replace(/\s*[A-Za-z/]+$/, '')) === t);
+            return hit ? hit.raw : null;
+        }
+
+        function shownFor(it, raw) {
+            if (it.kind === 'text') return raw;
+            const hit = it.choices.find(c => c.raw === raw);
+            return hit ? hit.label : raw;
+        }
+
+        function changed() {
+            return items.filter(it => wanted(it) !== it.raw);
+        }
+
+        function refresh() {
+            let invalid = 0;
+            for (const it of items) {
+                const want = wanted(it);
+                const isChanged = want !== it.raw;
+                it.tr.classList.toggle('table-warning', isChanged);
+                if (want === null) {
+                    invalid++;
+                    it.note.textContent = `Not a setting the radio offers. It takes ${it.choices[0].label} to ${it.choices[it.choices.length - 1].label}.`;
+                    it.note.className = 'small text-danger';
+                } else if (isChanged) {
+                    it.note.textContent = `Was ${it.shown}. Not sent yet.`;
+                    it.note.className = 'small';
+                } else if (!it.result) {
+                    it.note.textContent = '';
+                }
+            }
+            const n = changed().length;
+            sendBtn.disabled = n === 0 || invalid > 0;
+            undoBtn.disabled = n === 0;
+            sendBtn.querySelector('span').textContent = n
+                ? ` Send my ${n} change${n === 1 ? '' : 's'} to the radio`
+                : ' Send my changes to the radio';
+            filter();
+        }
+
+        function filter() {
+            // Spaces do not count either way: "mycall" finds MY CALL.
+            const squash = s => s.replace(/\s+/g, '').toLowerCase();
+            const q = squash(filterEl.value);
+            let header = null, anyInGroup = false;
+            for (const tr of tbody.rows) {
+                if (tr.dataset.header) {
+                    if (header) header.hidden = !anyInGroup;
+                    header = tr;
+                    anyInGroup = false;
+                    continue;
+                }
+                const text = squash(`${tr.dataset.section} ${tr.dataset.function}`);
+                const show = (!q || text.includes(q)) && (!onlyChanged.checked || tr.classList.contains('table-warning'));
+                tr.hidden = !show;
+                if (show) anyInGroup = true;
+            }
+            if (header) header.hidden = !anyInGroup;
+        }
+
+        function render(rows) {
+            tbody.replaceChildren();
+            items = [];
+            let section = null;
+            for (const row of rows) {
+                if (row.section !== section) {
+                    section = row.section;
+                    const h = document.createElement('tr');
+                    h.dataset.header = '1';
+                    const th = document.createElement('th');
+                    th.colSpan = 3;
+                    th.scope = 'colgroup';
+                    th.className = 'table-light';
+                    th.textContent = section;
+                    h.appendChild(th);
+                    tbody.appendChild(h);
+                }
+                const tr = document.createElement('tr');
+                tr.dataset.section = row.section;
+                tr.dataset.function = row.function;
+                const name = document.createElement('th');
+                name.scope = 'row';
+                name.className = 'fw-normal';
+                name.textContent = row.function;
+                if (row.tx) {
+                    const tag = document.createElement('span');
+                    tag.className = 'badge text-bg-warning ms-1';
+                    tag.textContent = 'TX';
+                    name.appendChild(tag);
+                }
+                tr.appendChild(name);
+                const setting = document.createElement('td');
+                const note = document.createElement('td');
+                note.className = 'small';
+                let control = null, kind = null;
+                if (row.raw === null) {
+                    setting.textContent = '(no answer)';
+                    note.textContent = 'The radio did not answer this item.';
+                } else if (row.link) {
+                    setting.textContent = row.shown;
+                    note.textContent = 'Sets the CAT link itself, so change it on the radio.';
+                } else if (row.choices && row.choices.length > TYPE_IN_OVER) {
+                    kind = 'typed';
+                    control = document.createElement('input');
+                    control.type = 'text';
+                    control.className = 'form-control form-control-sm w-auto';
+                    control.value = row.shown;
+                    control.spellcheck = false;
+                } else if (row.choices) {
+                    kind = 'select';
+                    control = document.createElement('select');
+                    control.className = 'form-select form-select-sm w-auto';
+                    for (const c of row.choices) control.appendChild(new Option(c.label, c.raw));
+                    control.value = row.raw;
+                } else if (row.textMax > 0) {
+                    kind = 'text';
+                    control = document.createElement('input');
+                    control.type = 'text';
+                    control.className = 'form-control form-control-sm w-auto';
+                    control.maxLength = row.textMax;
+                    control.value = row.raw.trim();
+                    control.spellcheck = false;
+                    control.style.textTransform = 'uppercase';
+                } else {
+                    setting.textContent = row.shown;
+                    note.textContent = 'YWC cannot set this item.';
+                }
+                if (control) {
+                    control.setAttribute('aria-label', `${row.function}, ${row.section}${row.tx ? ', changes transmit' : ''}`);
+                    control.addEventListener(kind === 'select' ? 'change' : 'input', refresh);
+                    setting.appendChild(control);
+                    // Text is sent space-padded; the radio may answer padded too, which is not a change.
+                    const raw = kind === 'text' ? row.raw.trim() : row.raw;
+                    items.push({ address: row.address, function: row.function, section: row.section, tx: row.tx, raw, shown: row.shown,
+                        kind, choices: row.choices || [], control, tr, note, result: false });
+                }
+                tr.appendChild(setting);
+                tr.appendChild(note);
+                tbody.appendChild(tr);
+            }
+            refresh();
+        }
+
+        editBtn.addEventListener('click', async () => {
+            if (changed().length && !confirm('Read the radio again? The changes you have not sent will be lost.')) return;
+            editBtn.disabled = true;
+            sendStatus.textContent = '';
+            setStatus(statusEl, 'Reading the radio menu… This takes a few seconds. Nothing is sent.', 'muted');
+            try {
+                const r = await fetch('/api/radiomenu/current');
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    setStatus(statusEl, `Could not read the radio: ${data.error || r.statusText}`, 'danger');
+                    return;
+                }
+                render(data.rows);
+                caption.textContent = `${data.model} menu, read at ${new Date().toLocaleTimeString()}: ${items.length} items you can change.`;
+                editor.hidden = false;
+                editBtn.lastChild.textContent = ' Read the radio again';
+                setStatus(statusEl, 'Read. ' + (data.missing ? window.radioMenuUnanswered(data) + ' ' : '') +
+                    'Change what you want below; nothing is sent yet.', 'success');
+                filterEl.focus();
+            } catch (e) {
+                setStatus(statusEl, `Could not read the radio: ${e.message}`, 'danger');
+            } finally {
+                editBtn.disabled = false;
+            }
+        });
+
+        filterEl.addEventListener('input', filter);
+        onlyChanged.addEventListener('change', filter);
+
+        undoBtn.addEventListener('click', () => {
+            for (const it of items) it.control.value = it.kind === 'typed' ? it.shown : it.raw;
+            sendStatus.textContent = '';
+            refresh();
+        });
+
+        sendBtn.addEventListener('click', async () => {
+            const list = changed();
+            if (list.length === 0) return;
+            if (!await window.radioMenuConfirm(list.map(it => ({
+                function: it.function, section: it.section, from: it.shown, to: shownFor(it, wanted(it)), tx: it.tx,
+            })))) return;
+            sendBtn.disabled = undoBtn.disabled = editBtn.disabled = true;
+            setStatus(sendStatus, 'Sending…', 'muted');
+            try {
+                const r = await fetch('/api/radiomenu/load/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: list.map(it => ({ address: it.address, raw: wanted(it) })) }),
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    setStatus(sendStatus, `Not sent: ${data.error || r.statusText}`, 'danger');
+                    return;
+                }
+                let ok = 0, bad = 0;
+                for (const res of data.results) {
+                    const it = list.find(x => x.address === res.address);
+                    if (!it) continue;
+                    const good = res.status === 'ok' || res.status === 'same';
+                    if (good) {
+                        ok++;
+                        it.raw = wanted(it);
+                        it.shown = shownFor(it, it.raw);
+                    } else {
+                        bad++;
+                    }
+                    it.result = true;
+                    it.note.textContent = good ? 'Sent and read back.' : res.message || 'Not sent.';
+                    it.note.className = `small text-${good ? 'success' : 'danger'}`;
+                }
+                refresh();
+                const sent = bad
+                    ? `${ok} set, ${bad} not set. See the Note column.`
+                    : `${ok} change${ok === 1 ? '' : 's'} set on the radio and read back.`;
+                if (ok === 0) {
+                    setStatus(sendStatus, sent, 'danger');
+                    return;
+                }
+                setStatus(sendStatus, `${sent} Saving the radio menu to a file…`, 'muted');
+                const s = await fetch('/api/radiomenu/save', { method: 'POST' });
+                const saved = await s.json().catch(() => ({}));
+                if (s.ok) document.dispatchEvent(new CustomEvent('radiomenu-saved', { detail: saved.name }));
+                setStatus(sendStatus, s.ok
+                    ? `${sent} Saved the radio's menu to ${saved.path}.`
+                    : `${sent} The file was not saved: ${saved.error || s.statusText}`, bad || !s.ok ? 'danger' : 'success');
+            } catch (e) {
+                setStatus(sendStatus, `Not sent: ${e.message}`, 'danger');
+            } finally {
+                editBtn.disabled = false;
+                refresh();
+            }
+        });
+    })();
+</script>
 
 <script>
     (function () {
         const fileInput = document.getElementById('backupImportFile');
         const statusEl  = document.getElementById('backupImportStatus');
         if (!fileInput) return;
+        const downloadLink = document.getElementById('backupDownloadLink');
+
+        document.getElementById('backupSaveBtn').addEventListener('click', async () => {
+            statusEl.textContent = 'Saving…';
+            statusEl.className = 'ms-2 small text-muted';
+            downloadLink.hidden = true;
+            try {
+                const r = await fetch('/api/backup/save', { method: 'POST' });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    statusEl.textContent = `Not saved: ${data.error || r.statusText}`;
+                    statusEl.className = 'ms-2 small text-danger';
+                    return;
+                }
+                statusEl.textContent = `Saved to ${data.path}`;
+                statusEl.className = 'ms-2 small text-success';
+                downloadLink.href = `/api/backup/files/${encodeURIComponent(data.name)}`;
+                downloadLink.setAttribute('download', data.name);
+                downloadLink.hidden = false;
+            } catch (e) {
+                statusEl.textContent = `Not saved: ${e.message}`;
+                statusEl.className = 'ms-2 small text-danger';
+            }
+        });
+
+        document.getElementById('backupOpenFolderBtn').addEventListener('click', async () => {
+            const r = await fetch('/api/backup/open-folder', { method: 'POST' });
+            const data = await r.json().catch(() => ({}));
+            statusEl.textContent = r.ok
+                ? `Opened ${data.path} in Explorer on the PC that runs YWC.`
+                : `Could not open the folder: ${data.error || r.statusText}`;
+            statusEl.className = 'ms-2 small ' + (r.ok ? 'text-muted' : 'text-danger');
+        });
         fileInput.addEventListener('change', async () => {
             if (!fileInput.files || fileInput.files.length === 0) return;
             const file = fileInput.files[0];
@@ -2926,6 +3621,100 @@
             }
         });
     })();
+</script>
+
+<!-- Radio menu: confirm before sending changes to the radio -->
+<div class="modal fade" id="radioMenuConfirmModal" tabindex="-1" aria-labelledby="radioMenuConfirmTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="radioMenuConfirmTitle">Send to the radio?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cancel"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-sm align-middle mb-2">
+                    <caption id="radioMenuConfirmCaption" class="caption-top"></caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Item</th>
+                            <th scope="col">On the radio now</th>
+                            <th scope="col">Will be</th>
+                        </tr>
+                    </thead>
+                    <tbody id="radioMenuConfirmRows"></tbody>
+                </table>
+                <div id="radioMenuConfirmTx" class="alert alert-warning py-2 mb-0" hidden></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="radioMenuConfirmCancel">Cancel</button>
+                <button type="button" class="btn btn-warning" id="radioMenuConfirmSend"><i class="bi bi-send"></i> Send to radio</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    // Asks before sending menu changes. changes: [{ function, from, to, tx }].
+    // Resolves true for Send, false for Cancel, Escape or the close button.
+    window.radioMenuConfirm = function (changes) {
+        const modalEl = document.getElementById('radioMenuConfirmModal');
+        const tbody = document.getElementById('radioMenuConfirmRows');
+        const n = changes.length;
+        document.getElementById('radioMenuConfirmTitle').textContent =
+            `Send ${n} change${n === 1 ? '' : 's'} to the radio?`;
+        document.getElementById('radioMenuConfirmCaption').textContent =
+            'Each change is sent to the radio\'s menu and read back.';
+        tbody.replaceChildren(...changes.map(c => {
+            const tr = document.createElement('tr');
+            const th = document.createElement('th');
+            th.scope = 'row';
+            th.className = 'fw-normal';
+            th.textContent = c.function;
+            if (c.tx) {
+                const tag = document.createElement('span');
+                tag.className = 'badge text-bg-warning ms-1';
+                tag.textContent = 'TX';
+                th.appendChild(tag);
+            }
+            if (c.section) {
+                const where = document.createElement('div');
+                where.className = 'small text-muted';
+                where.textContent = c.section;
+                th.appendChild(where);
+            }
+            tr.appendChild(th);
+            for (const v of [c.from, c.to]) {
+                const td = document.createElement('td');
+                td.textContent = v ?? '';
+                tr.appendChild(td);
+            }
+            return tr;
+        }));
+        const tx = changes.filter(c => c.tx).length;
+        const txEl = document.getElementById('radioMenuConfirmTx');
+        txEl.hidden = tx === 0;
+        txEl.textContent = tx === n
+            ? (n === 1 ? 'This changes how or when the radio transmits.' : 'All of these change how or when the radio transmits.')
+            : `${tx} of these change how or when the radio transmits.`;
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        const sendBtn = document.getElementById('radioMenuConfirmSend');
+        return new Promise(resolve => {
+            let answer = false;
+            const onSend = () => { answer = true; modal.hide(); };
+            // With a TX item in the list, a stray Enter cancels rather than sends.
+            const onShown = () => document.getElementById(tx ? 'radioMenuConfirmCancel' : 'radioMenuConfirmSend').focus();
+            const onHidden = () => {
+                sendBtn.removeEventListener('click', onSend);
+                modalEl.removeEventListener('shown.bs.modal', onShown);
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                resolve(answer);
+            };
+            sendBtn.addEventListener('click', onSend);
+            modalEl.addEventListener('shown.bs.modal', onShown);
+            modalEl.addEventListener('hidden.bs.modal', onHidden);
+            modal.show();
+        });
+    };
 </script>
 
 <!-- SDR Help Modal -->
