@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Yaesu_Web_Control.Services;
 using Yaesu_Web_Control.Services.RadioMenu;
@@ -20,6 +21,11 @@ namespace Yaesu_Web_Control.Controllers
         private const int Attempts = 3;
         private const int SetTimeoutMs = 50;
         private const int MaxFileChars = 256 * 1024;
+
+        /// <summary>Where YWC keeps a copy of every save, so the user can find it again.</summary>
+        public static string SavesFolder => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MM5AGM", "Yaesu Web Control", "Radio menus");
 
         /// <summary>One load at a time, so two browsers cannot interleave writes.</summary>
         private static readonly SemaphoreSlim LoadGate = new(1, 1);
@@ -65,7 +71,65 @@ namespace Yaesu_Web_Control.Controllers
             Response.Headers["X-Menu-Missing"] = missing.ToString();
             // UTF-8 with BOM so older Notepad opens it as UTF-8.
             var bytes = System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(ini)).ToArray();
+            // The browser decides where its download goes and does not say,
+            // so keep a copy where the page can tell the user it is.
+            try
+            {
+                Directory.CreateDirectory(SavesFolder);
+                var copy = Path.Combine(SavesFolder, name);
+                await System.IO.File.WriteAllBytesAsync(copy, bytes, ct);
+                Response.Headers["X-Menu-Copy"] = Uri.EscapeDataString(copy);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "Radio menu save: could not keep a copy in {Folder}", SavesFolder);
+            }
             return File(bytes, "text/plain", name);
+        }
+
+        /// <summary>GET /api/radiomenu/files — the copies YWC kept, newest first.</summary>
+        [HttpGet("files")]
+        public IActionResult Files()
+        {
+            var dir = new DirectoryInfo(SavesFolder);
+            var files = dir.Exists
+                ? dir.GetFiles("*.ini").OrderByDescending(f => f.LastWriteTime)
+                    .Select(f => new { name = f.Name, modified = f.LastWriteTime.ToString("yyyy-MM-dd HH:mm") }).ToList<object>()
+                : new List<object>();
+            return Ok(new { folder = SavesFolder, files });
+        }
+
+        /// <summary>GET /api/radiomenu/files/{name} — one kept copy, as text, for Load.</summary>
+        [HttpGet("files/{name}")]
+        public async Task<IActionResult> ReadFile(string name, CancellationToken ct)
+        {
+            // A bare file name in the folder, nothing that could climb out of it.
+            if (name != Path.GetFileName(name) || !name.EndsWith(".ini", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { error = "Not a radio menu file name." });
+            var path = Path.Combine(SavesFolder, name);
+            if (!System.IO.File.Exists(path))
+                return NotFound(new { error = $"{name} is not in {SavesFolder}." });
+            return Ok(new { name, text = await System.IO.File.ReadAllTextAsync(path, ct) });
+        }
+
+        /// <summary>
+        /// POST /api/radiomenu/open-folder — opens the folder in Explorer on the PC
+        /// YWC runs on. Created if missing so the user lands somewhere real.
+        /// </summary>
+        [HttpPost("open-folder")]
+        public IActionResult OpenFolder()
+        {
+            try
+            {
+                Directory.CreateDirectory(SavesFolder);
+                Process.Start(new ProcessStartInfo { FileName = SavesFolder, UseShellExecute = true });
+                return Ok(new { path = SavesFolder });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Radio menu: could not open {Folder}", SavesFolder);
+                return StatusCode(500, new { error = ex.Message, path = SavesFolder });
+            }
         }
 
         public sealed record PreviewRequest(string? Text);

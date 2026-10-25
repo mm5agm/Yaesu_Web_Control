@@ -1770,7 +1770,7 @@ If the connection drops, the app reconnects automatically after 15 seconds. Disa
 | **Button** | **Export full backup** | **Save radio menu to file** |
 | **File** | `ywc-backup-YYYYMMDD-HHMMSS.zip` | `YWC radio menu <model> <date> <time>.ini` |
 | **Open it with** | Unzip it; the files inside are JSON | Notepad, or any text editor |
-| **Putting it back** | **Import full backup…**, then restart YWC | **Load radio menu from file…**, then tick what to send |
+| **Putting it back** | **Import full backup…**, then restart YWC | **Load this one** or **Load from another file…**, then tick what to send |
 | **Does it change the radio?** | No | Saving only reads the radio. Loading changes only the items you tick |
 
 Use **Backup & Restore** to move YWC to a new PC or undo a change to YWC's settings. Use **Radio Menu** to keep a record of how the radio itself is set up, for example before a factory reset or a firmware update, or to keep one file for contesting and another for everyday use. Neither save includes the other: the backup zip has no radio menu settings in it, and the radio menu file has none of YWC's settings.
@@ -1814,6 +1814,13 @@ The files inside the zip are plain JSON; you can extract and inspect or hand-edi
 
 Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, a few seconds, and downloads the file. Available for the FTdx101MP and FTdx101D.
 
+The file goes to two places:
+
+- Your browser's **Downloads** folder, usually `C:\Users\<you>\Downloads`.
+- A copy that YWC keeps in `%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus`, on the PC that runs YWC. The page shows the full path after each save, and **Open that folder** opens it in Explorer.
+
+Edit whichever copy you like, but remember which one you edited when you load it.
+
 The file is grouped the way the radio's menu is. Each line shows the item and its value as the radio's screen shows it. After the `;` come the EX menu number and what the radio answered:
 
 ```ini
@@ -1831,9 +1838,9 @@ MY CALL TIME = 1 s                       ; 040102 = 01
 
 Saving only reads the radio. Nothing on the radio changes.
 
-**Load radio menu from file…**
+**Loading a file**
 
-Click **Load radio menu from file…** and pick a file you saved. YWC reads the radio again and shows a table of what would change: the item, its value on the radio now, and its value in the file. **Nothing is sent at this point.**
+Pick one of YWC's kept copies from **Saved copies** and click **Load this one**, or click **Load from another file…** to pick a file from anywhere else, such as your Downloads folder. YWC reads the radio again and shows a table of what would change: the item, its value on the radio now, and its value in the file. **Nothing is sent at this point.**
 
 - Items that would change have a tick box. Items marked **TX** start unticked; tick them only if you want them.
 - Items already the same are hidden. Tick **Show items that are already the same** to see them.

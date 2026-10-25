@@ -2909,11 +2909,20 @@
             </div>
             <p class="text-muted small mt-2">
                 Saving only reads from the radio; nothing on the radio is changed. It takes a few seconds.
+                Your browser puts the file in its Downloads folder, and YWC keeps a copy in
+                <code id="radioMenuFolder">%APPDATA%\MM5AGM\Yaesu Web Control\Radio menus</code>.
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="radioMenuOpenFolderBtn">Open that folder</button>
             </p>
 
             <div class="d-flex flex-wrap gap-2 align-items-center">
+                <label for="radioMenuSavedSelect" class="mb-0">Saved copies:</label>
+                <select id="radioMenuSavedSelect" class="form-select form-select-sm w-auto"></select>
+                <button type="button" class="btn btn-outline-warning" id="radioMenuLoadSavedBtn">
+                    <i class="bi bi-upload"></i> Load this one
+                </button>
+                <span class="text-muted small">or</span>
                 <label class="btn btn-outline-warning mb-0" for="radioMenuLoadFile">
-                    <i class="bi bi-upload"></i> Load radio menu from file…
+                    <i class="bi bi-folder2-open"></i> Load from another file…
                 </label>
                 <input type="file" id="radioMenuLoadFile" accept=".ini,text/plain" hidden>
                 <span id="radioMenuLoadStatus" class="ms-2 small" role="status"></span>
@@ -2982,9 +2991,11 @@
                 a.click();
                 a.remove();
                 URL.revokeObjectURL(url);
-                statusEl.textContent = missing
-                    ? `Saved. ${missing} item${missing === 1 ? '' : 's'} did not answer and are marked in the file.`
-                    : 'Saved.';
+                const copy = decodeURIComponent(r.headers.get('X-Menu-Copy') || '');
+                statusEl.textContent = `Saved as "${a.download}" in your browser's Downloads folder.` +
+                    (copy ? ` YWC kept a copy at ${copy}.` : '') +
+                    (missing ? ` ${missing} item${missing === 1 ? '' : 's'} did not answer and are marked in the file.` : '');
+                document.dispatchEvent(new Event('radiomenu-saved'));
                 statusEl.className = `ms-2 small ${missing ? 'text-warning' : 'text-success'}`;
             } catch (e) {
                 statusEl.textContent = `Not saved: ${e.message}`;
@@ -3072,14 +3083,60 @@
         }
         showSame.addEventListener('change', filter);
 
+        const savedSelect = document.getElementById('radioMenuSavedSelect');
+        const loadSavedBtn = document.getElementById('radioMenuLoadSavedBtn');
+        const folderEl = document.getElementById('radioMenuFolder');
+
+        async function listSaved() {
+            try {
+                const r = await fetch('/api/radiomenu/files');
+                const data = await r.json();
+                folderEl.textContent = data.folder;
+                savedSelect.replaceChildren(...data.files.map(f => new Option(`${f.name} (changed ${f.modified})`, f.name)));
+                if (data.files.length === 0) savedSelect.appendChild(new Option('None yet: save one first', ''));
+                loadSavedBtn.disabled = data.files.length === 0;
+                savedSelect.disabled = data.files.length === 0;
+            } catch { /* the file picker still works */ }
+        }
+        listSaved();
+        document.addEventListener('radiomenu-saved', listSaved);
+
+        document.getElementById('radioMenuOpenFolderBtn').addEventListener('click', async () => {
+            const r = await fetch('/api/radiomenu/open-folder', { method: 'POST' });
+            const data = await r.json().catch(() => ({}));
+            setStatus(statusEl, r.ok
+                ? `Opened ${data.path} in Explorer on the PC that runs YWC.`
+                : `Could not open the folder: ${data.error || r.statusText}`, r.ok ? 'muted' : 'danger');
+        });
+
+        loadSavedBtn.addEventListener('click', async () => {
+            const name = savedSelect.value;
+            if (!name) return;
+            const r = await fetch(`/api/radiomenu/files/${encodeURIComponent(name)}`);
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                setStatus(statusEl, `Not loaded: ${data.error || r.statusText}`, 'danger');
+                return;
+            }
+            await previewText(name, data.text);
+        });
+
         fileInput.addEventListener('change', async () => {
             if (!fileInput.files || fileInput.files.length === 0) return;
             const file = fileInput.files[0];
+            try {
+                await previewText(file.name, await file.text());
+            } finally {
+                fileInput.value = '';
+            }
+        });
+
+        async function previewText(fileName, text) {
+            const file = { name: fileName };
             preview.hidden = true;
             applyStatus.textContent = '';
             setStatus(statusEl, `Reading the radio to compare with "${file.name}"… Nothing is sent yet.`, 'muted');
             try {
-                const text = await file.text();
                 const r = await fetch('/api/radiomenu/load/preview', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3104,10 +3161,8 @@
                     : 'The radio already matches the file. Nothing to send.', changes ? 'warning' : 'success');
             } catch (e) {
                 setStatus(statusEl, `Not loaded: ${e.message}`, 'danger');
-            } finally {
-                fileInput.value = '';
             }
-        });
+        }
 
         applyBtn.addEventListener('click', async () => {
             const boxes = [...tbody.querySelectorAll('input[type=checkbox]:checked')];
