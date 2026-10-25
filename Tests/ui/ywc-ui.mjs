@@ -47,12 +47,68 @@ const knownFaults = page => [...new Set(page.failed.filter(f => KNOWN.some(k => 
 
 test('build serves the core modules and not the deleted local copies', async () => {
     const status = async p => (await fetch(BASE + p)).status;
-    for (const p of ['/js/hub/hub-connection.js', '/js/dx/dx-spots-panel.js', '/js/popout/popout-mode-pause.js', '/js/modes/mode-panel-guard.js']) {
+    for (const p of ['/js/hub/hub-connection.js', '/js/dx/dx-spots-panel.js', '/js/popout/popout-mode-pause.js', '/js/modes/mode-panel-guard.js', '/js/dialogs/feature-setup.js']) {
         expect(await status(p) === 200, `${p} is not served - is the app built from this branch?`);
     }
-    for (const p of ['/js/ui/hub-connection.js', '/js/ui/dx-spots-panel.js']) {
+    for (const p of ['/js/ui/hub-connection.js', '/js/ui/dx-spots-panel.js', '/js/ui/feature-setup.js']) {
         expect(await status(p) === 404, `${p} is still served - the app is running an older build`);
     }
+});
+
+// ------------------------------------------------------- feature set-up pop-outs
+// core/js/dialogs/feature-setup.js, shared with IWC. The state is faked, so
+// no test reads or writes the real settings.
+const FS_STATE = {
+    dxCluster: { enabled: false, host: '', port: 7300, callsign: '' },
+    cwAudio: { rxDevice: 'Line (USB AUDIO  CODEC) [Windows WASAPI]', devices: [
+        { key: 'Microphone (Webcam) [Windows WASAPI]', name: 'Microphone (Webcam) [Windows WASAPI]', likelyRadio: false },
+        { key: 'Line (USB AUDIO  CODEC) [Windows WASAPI]', name: 'Line (USB AUDIO  CODEC) [Windows WASAPI]', likelyRadio: true },
+    ] },
+};
+const fsOpen = path => open(path, { settleMs: 1500, before: `__rwcTest.getOverrides['/api/feature-setup/state'] = ${JSON.stringify(FS_STATE)};` });
+
+for (const path of ['/', '/flexui'])
+    test(`${path}: provides the CW audio and DX cluster set-up pop-outs`, async () => {
+        const page = await fsOpen(path);
+        try {
+            await page.waitFor(`!!window.radioFeatureSetup`, { timeoutMs: 8000, what: 'window.radioFeatureSetup' });
+            expect(await page.eval(`radioFeatureSetup.provides('cw-audio') && radioFeatureSetup.provides('dx-cluster')`), 'a pop-out is missing');
+        } finally { await page.close(); }
+    });
+
+test('CW audio pop-out: lists the devices from /state, saves only the one picked', async () => {
+    const page = await fsOpen('/');
+    try {
+        await page.waitFor(`!!window.radioFeatureSetup`, { timeoutMs: 8000, what: 'window.radioFeatureSetup' });
+        await page.eval(`radioFeatureSetup.open('cw-audio')`);
+        await page.waitFor(`document.getElementById('featureSetupDialog')?.open`, { what: 'the dialog' });
+        const sel = await page.eval(`(() => { const s = document.getElementById('fsCwRx'); return { v: s.value, opts: [...s.options].map(o => o.textContent) }; })()`);
+        expect(sel.v === 'Line (USB AUDIO  CODEC) [Windows WASAPI]', `selected "${sel.v}"`);
+        expect(sel.opts.some(t => /CODEC\) \[Windows WASAPI\] \(looks like the radio\)/.test(t)), `options ${JSON.stringify(sel.opts)}`);
+        await page.eval(`(() => { const s = document.getElementById('fsCwRx'); s.value = 'Microphone (Webcam) [Windows WASAPI]'; document.getElementById('featureSetupSave').click(); })()`);
+        await page.waitFor(`__rwcTest.writes.length > 0`, { what: 'the save' });
+        const w = await page.writes();
+        expect(w.length === 1 && w[0].path === '/api/feature-setup/audio-rx' && w[0].body.device === 'Microphone (Webcam) [Windows WASAPI]', `wrote ${JSON.stringify(w)}`);
+    } finally { await page.close(); }
+});
+
+test('DX cluster pop-out: saves the four cluster fields', async () => {
+    const page = await fsOpen('/');
+    try {
+        await page.waitFor(`!!window.radioFeatureSetup`, { timeoutMs: 8000, what: 'window.radioFeatureSetup' });
+        await page.eval(`radioFeatureSetup.open('dx-cluster')`);
+        await page.waitFor(`document.getElementById('featureSetupDialog')?.open`, { what: 'the dialog' });
+        await page.eval(`(() => {
+            document.getElementById('fsDxHost').value = 'dx.example.org';
+            document.getElementById('fsDxCall').value = 'n0call';
+            document.getElementById('featureSetupSave').click();
+        })()`);
+        await page.waitFor(`__rwcTest.writes.length > 0`, { what: 'the save' });
+        const w = await page.writes();
+        expect(w.length === 1 && w[0].path === '/api/feature-setup/dx-cluster'
+            && JSON.stringify(w[0].body) === JSON.stringify({ enabled: true, host: 'dx.example.org', port: 7300, callsign: 'n0call' }),
+            `wrote ${JSON.stringify(w)}`);
+    } finally { await page.close(); }
 });
 
 // ---------------------------------------------------------------- every page

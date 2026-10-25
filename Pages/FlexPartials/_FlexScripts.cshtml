@@ -41,7 +41,7 @@
         // Side-effect import: publishes window.radioFeatureSetup, which the
         // shared CW panel calls if the host app provides it. Loaded before
         // the panels that offer it so the global is there when they render.
-        import "/js/ui/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import "/js/dialogs/feature-setup.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { CwReaderPanel }        from "/js/cw/cw-reader-panel.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RttyTuner }            from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { RttyReader }           from "/js/rtty/rtty-reader.js?v=@Yaesu_Web_Control.AppVersion.Current";
