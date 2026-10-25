@@ -142,9 +142,9 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  * @param {HTMLElement} root
  * @param {object} opts
  *   brandShort, brandName, model, dual (bool),
- *   views:  [{ label, href, on }]          layout switch: a key in the top strip
- *                                          showing the current view (the `on` one),
- *                                          dropping down the others
+ *   views:  [{ label, href, on }]          layout switch: a VIEWS key in the top
+ *                                          strip dropping down the views, the `on`
+ *                                          one highlighted
  *   menu:   [{ group, items: [{ label, href, title }] }]  optional: a MENU key at the
  *                                          right of the top strip, dropping down the
  *                                          app's other pages. Each opens in a new tab,
@@ -340,10 +340,11 @@ export function mountRadioPanel(root, opts = {}) {
         return bar;
     };
 
+    // Reads VIEWS, never the current view's name, so it is plain there
+    // are others to pick.
     const viewList = opts.views ?? [];
-    const current = viewList.find(vw => vw.on);
     const views = viewList.length
-        ? dropKey((current?.label ?? 'View') + ' ▾', 'Choose a view. The one you used last opens when the app starts.',
+        ? dropKey('Views ▾', 'Choose a view. The one you used last opens when the app starts.',
             [{ items: viewList }], { alignLeft: true })
         : h('div', 'rp-bar');
 

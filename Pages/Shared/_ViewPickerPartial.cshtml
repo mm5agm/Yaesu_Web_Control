@@ -3,20 +3,18 @@
 @* The View dropdown: Classic, Experimental or Radio. The model is the
    button's class, so it can match the nav bar it sits in. Opening a view
    saves it as ApplicationSettings.LastView (IndexModel.OnGetAsync), and the
-   app opens that one at start-up through /start. On any other page the
-   button just reads "View". *@
+   app opens that one at start-up through /start. The button always reads
+   "Views", never the current view's name, so it is plain there are others
+   to pick; the current one is highlighted in the list. *@
 @{
     var current = AppViews.ForPath(Context.Request.Path.Value);
 }
 <button class="@Model dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"
         title="Choose a view. The one you used last opens when the app starts.">
+    <i class="bi bi-window-stack" aria-hidden="true"></i> Views
     @if (current != null)
     {
-        <i class="bi @current.Icon" aria-hidden="true"></i> <span class="visually-hidden">View: </span>@current.Label
-    }
-    else
-    {
-        <i class="bi bi-window" aria-hidden="true"></i> @:View
+        <span class="visually-hidden">(now @current.Label)</span>
     }
 </button>
 <ul class="dropdown-menu">
