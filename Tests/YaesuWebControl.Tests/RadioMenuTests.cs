@@ -117,5 +117,153 @@ namespace YaesuWebControl.Tests
             Assert.Contains("HF MAX POWER = (no answer)".PadRight(40) + " ; 030401  [TX]", ini);
             Assert.Single(ini, l => l == "[RADIO SETTING > MODE SSB]");
         }
+
+        // ── Load
+
+        private static string? Encode(string address, string text, string current, string? saved = null) =>
+            RadioMenuLoad.Encode(Item(address), text, saved, current, out _);
+
+        [Theory]
+        [InlineData("030312", "100 Hz", "00", "01")]      // P PRMTRC EQ1 FREQ
+        [InlineData("030312", "100", "00", "01")]         // unit left off
+        [InlineData("030312", "off", "05", "00")]
+        [InlineData("010101", "200 ms", "0160", "0200")]  // width from the radio's answer
+        [InlineData("010101", "200MS", "0160", "0200")]
+        [InlineData("030117", "-3 kHz", "+05", "-03")]    // signed like the answer
+        [InlineData("030117", "3", "+05", "+03")]
+        [InlineData("030117", "0", "+05", "+00")]
+        [InlineData("030304", "+5 dB", "+00", "+05")]
+        [InlineData("010212", "MCVR", "0050", "1000")]
+        [InlineData("010212", "fix 20", "1000", "0020")]
+        [InlineData("020113", "8 ms", "1", "2")]
+        [InlineData("040102", "OFF", "01", "00")]
+        [InlineData("020205", "3.5", "30", "35")]
+        [InlineData("020112", "400 ms", "04", "07")]
+        [InlineData("030401", "100 W", "200", "100")]
+        [InlineData("030403", "40", "050", "040")]
+        [InlineData("040101", " mm5agm ", "MM5AGM", "MM5AGM")]
+        [InlineData("010110", "300-2700", "0", "3")]
+        public void Values_encode_back_to_what_EX_sends(string address, string text, string current, string expected)
+            => Assert.Equal(expected, Encode(address, text, current));
+
+        [Theory]
+        [InlineData("030312", "ON", "00")]          // not a choice: OFF or 100-700 Hz
+        [InlineData("030312", "800 Hz", "00")]      // off the end
+        [InlineData("010101", "170 ms", "0160")]    // between steps
+        [InlineData("030401", "250 W", "200")]      // over the MP's 200 W
+        [InlineData("030401", "4 W", "200")]
+        [InlineData("030117", "21", "+05")]
+        [InlineData("040101", "ABCDEFGHIJKLM", "MM5AGM")]  // 13 characters
+        [InlineData("040101", "MM5;AGM", "MM5AGM")]
+        [InlineData("040101", "", "MM5AGM")]
+        [InlineData("030111", "38400 bps", "3")]    // CAT RATE: never written
+        public void Values_the_radio_does_not_offer_are_refused(string address, string text, string current)
+        {
+            Assert.Null(RadioMenuLoad.Encode(Item(address), text, null, current, out var error));
+            Assert.False(string.IsNullOrEmpty(error));
+        }
+
+        [Fact]
+        public void Error_lists_what_the_item_takes()
+        {
+            RadioMenuLoad.Encode(Item("030312"), "ON", null, "00", out var error);
+            Assert.Contains("OFF, 100 Hz", error);
+            Assert.Contains("700 Hz", error);
+        }
+
+        [Fact]
+        public void The_D_is_held_to_100_W()
+        {
+            var hf = Ftdx101Menu.ItemsD.Single(i => i.Address == "030401");
+            Assert.Null(RadioMenuLoad.Encode(hf, "200 W", null, "100", out _));
+            Assert.Equal("050", RadioMenuLoad.Encode(hf, "50 W", null, "100", out _));
+            Assert.Same(Ftdx101Menu.ItemsD, RadioMenuCat.TableFor("FTdx101D"));
+        }
+
+        [Fact]
+        public void An_unedited_line_goes_back_as_saved()
+            => Assert.Equal("+00", Encode("030121", "0", "+07", saved: "+00"));
+
+        [Fact]
+        public void An_edited_line_wins_over_the_saved_value()
+            => Assert.Equal("01", Encode("030312", "100 Hz", "00", saved: "00"));
+
+        [Fact]
+        public void Every_value_decodes_to_text_that_encodes_back_to_it()
+        {
+            // So no two values of an item show the same, and a saved file
+            // always loads back to exactly what was read.
+            foreach (var table in new[] { Ftdx101Menu.Items, Ftdx101Menu.ItemsD })
+                foreach (var item in table.Where(i => i.Values is not null && !i.Link))
+                {
+                    bool signed = item.Values!.Min() < 0;
+                    int width = item.Values!.Max(v => Math.Abs(v).ToString().Length);
+                    foreach (var v in item.Values!)
+                    {
+                        var raw = (signed ? (v < 0 ? "-" : "+") : "") + Math.Abs(v).ToString().PadLeft(width, '0');
+                        Assert.Equal(raw, RadioMenuLoad.Encode(item, item.Decode(raw), null, raw, out _));
+                    }
+                }
+        }
+
+        [Fact]
+        public void The_CAT_link_items_are_never_loadable()
+        {
+            var link = Ftdx101Menu.Items.Where(i => i.Link).Select(i => i.Address).ToArray();
+            Assert.Equal(new[] { "030109", "030110", "030111", "030112", "030113" }, link);
+            foreach (var a in link)
+                Assert.Null(RadioMenuLoad.CheckRaw(Item(a), "0", "0", out _));
+        }
+
+        [Theory]
+        [InlineData("030312", "01", "00", "01")]
+        [InlineData("030312", "08", "00", null)]    // not a choice
+        [InlineData("030312", "1", "00", null)]     // wrong width
+        [InlineData("030117", "03", "+05", null)]   // unsigned where the radio signs
+        [InlineData("030117", "+03", "+05", "+03")]
+        [InlineData("030401", "201", "200", null)]
+        [InlineData("030401", "1e2", "200", null)]
+        [InlineData("040101", "mm5agm", "MM5AGM", "MM5AGM")]
+        public void Values_from_the_page_are_checked_again(string address, string raw, string current, string? expected)
+            => Assert.Equal(expected, RadioMenuLoad.CheckRaw(Item(address), raw, current, out _));
+
+        [Fact]
+        public void Set_command_adds_the_value_and_refuses_a_second_command()
+        {
+            Assert.Equal("EX03031201;", RadioMenuCat.SetCommand("030312", "01"));
+            Assert.Equal("EX040101MM5AGM;", RadioMenuCat.SetCommand("040101", "MM5AGM"));
+            Assert.Throws<ArgumentException>(() => RadioMenuCat.SetCommand("030312", "01;TX1"));
+            Assert.Throws<ArgumentException>(() => RadioMenuCat.SetCommand("030312", ""));
+            Assert.Throws<ArgumentException>(() => RadioMenuCat.SetCommand("03031", "01"));
+        }
+
+        [Fact]
+        public void Saved_file_parses_back()
+        {
+            var ini = RadioMenuCat.ToIni("FTdx101MP", new DateTime(2026, 10, 25, 13, 5, 0), new[]
+            {
+                new RadioMenuReading(Item("010101"), "0160"),
+                new RadioMenuReading(Item("030304"), "+05"),
+                new RadioMenuReading(Item("040101"), "MM5AGM"),
+                new RadioMenuReading(Item("030401"), null),
+            });
+            var file = RadioMenuLoad.Parse("﻿" + ini.Replace("\n", "\r\n"));
+
+            Assert.Equal("YWC", file.Program);
+            Assert.Equal("FTdx101MP", file.Radio);
+            Assert.Equal(4, file.Items.Count);
+            Assert.Equal(new RadioMenuFileItem(file.Items[0].Line, "RADIO SETTING > MODE SSB", "AGC FAST DELAY", "160 ms", "010101", "0160"), file.Items[0]);
+            Assert.Equal(("+5 dB", "030304", "+05"), (file.Items[1].Value, file.Items[1].Address, file.Items[1].SavedRaw));
+            Assert.Equal("MM5AGM", file.Items[2].SavedRaw);
+            Assert.Equal((RadioMenuLoad.NoAnswer, "030401", (string?)null), (file.Items[3].Value, file.Items[3].Address, file.Items[3].SavedRaw));
+        }
+
+        [Fact]
+        public void A_line_without_its_comment_is_found_by_section_and_name()
+        {
+            var file = RadioMenuLoad.Parse("[OPERATION SETTING > TX AUDIO]\nP PRMTRC EQ1 FREQ = 100 Hz\n[NOWHERE]\nP PRMTRC EQ1 FREQ = 100 Hz\n");
+            Assert.Equal("030312", RadioMenuLoad.Find(Ftdx101Menu.Items, file.Items[0])?.Address);
+            Assert.Null(RadioMenuLoad.Find(Ftdx101Menu.Items, file.Items[1]));
+        }
     }
 }

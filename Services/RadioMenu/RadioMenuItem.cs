@@ -9,14 +9,22 @@ namespace Yaesu_Web_Control.Services.RadioMenu;
 /// <param name="Function">The item's name as the radio shows it.</param>
 /// <param name="Decode">Turns the answer's value into what the radio displays.</param>
 /// <param name="Tx">True when the item changes how or when the radio transmits.
-/// Not used by Save; it marks the items a later Load must not write unasked.</param>
+/// Load shows these unticked, so they are only written when asked for.</param>
+/// <param name="Values">The values the radio accepts, as numbers ("+05" is 5).
+/// Null for a text item, or for one Load cannot write.</param>
+/// <param name="TextMax">For a text item such as MY CALL, the most characters it takes.</param>
+/// <param name="Link">True for the items that set the CAT link itself (baud rate,
+/// time-out, RTS). Load never writes these: a wrong one would cut YWC off the radio.</param>
 public sealed record RadioMenuItem(
     string Address,
     string Section,
     string Group,
     string Function,
     Func<string, string> Decode,
-    bool Tx = false);
+    bool Tx = false,
+    IReadOnlyList<int>? Values = null,
+    int TextMax = 0,
+    bool Link = false);
 
 /// <summary>An item and what the radio answered for it (null if it did not).</summary>
 public sealed record RadioMenuReading(RadioMenuItem Item, string? Raw)
@@ -25,16 +33,18 @@ public sealed record RadioMenuReading(RadioMenuItem Item, string? Raw)
 }
 
 /// <summary>
-/// Read-only EX traffic for the menu save. There is no set command here on
-/// purpose: a read is "EX" plus the six-digit address and nothing else, and
-/// <see cref="ReadCommand"/> refuses anything that is not exactly that.
+/// EX traffic for the menu save and load. A read is "EX" plus the six-digit
+/// address and nothing else, and <see cref="ReadCommand"/> refuses anything
+/// that is not exactly that. A set adds the value; <see cref="SetCommand"/>
+/// only takes values that <see cref="RadioMenuLoad"/> has checked.
 /// </summary>
 public static class RadioMenuCat
 {
     /// <summary>The menu table for a model, or null if YWC has none for it yet.</summary>
     public static IReadOnlyList<RadioMenuItem>? TableFor(string? radioModel) => radioModel switch
     {
-        "FTdx101MP" or "FTdx101D" => Ftdx101Menu.Items,
+        "FTdx101MP" => Ftdx101Menu.Items,
+        "FTdx101D" => Ftdx101Menu.ItemsD,
         _ => null,
     };
 
@@ -43,6 +53,15 @@ public static class RadioMenuCat
         if (address.Length != 6 || !address.All(char.IsAsciiDigit))
             throw new ArgumentException($"Not a six-digit EX address: '{address}'", nameof(address));
         return $"EX{address};";
+    }
+
+    /// <summary>EX P1 P2 P3 P4; — sets one item. The radio does not answer a set.</summary>
+    public static string SetCommand(string address, string value)
+    {
+        ReadCommand(address);
+        if (value.Length == 0 || value.Any(c => c < ' ' || c > '~' || c == ';'))
+            throw new ArgumentException($"Not a value EX can send: '{value}'", nameof(value));
+        return $"EX{address}{value};";
     }
 
     /// <summary>

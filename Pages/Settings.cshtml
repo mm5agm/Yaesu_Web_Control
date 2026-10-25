@@ -2896,8 +2896,8 @@
         <summary><i class="bi bi-list-columns" aria-hidden="true"></i>&nbsp;Radio Menu</summary>
         <div class="section-body">
             <p class="text-muted">
-                Save the radio's own menu settings (the MENU button on the radio) to a text file you can open in Notepad.
-                It is like the radio's MENU SAVE to SD card, but the file shows every item by name and value.
+                Save the radio's own menu settings (the MENU button on the radio) to a text file you can open in Notepad,
+                and load them back. It is like the radio's MENU SAVE and MENU LOAD with an SD card, but the file shows every item by name and value.
                 This is not the same as Backup &amp; Restore above, which saves YWC's own settings, not the radio's.
                 Available for the FTdx101MP and FTdx101D.
             </p>
@@ -2907,9 +2907,50 @@
                 </button>
                 <span id="radioMenuSaveStatus" class="ms-2 small" role="status"></span>
             </div>
-            <p class="text-muted small mt-2 mb-0">
-                This only reads from the radio; nothing on the radio is changed. It takes a few seconds.
+            <p class="text-muted small mt-2">
+                Saving only reads from the radio; nothing on the radio is changed. It takes a few seconds.
             </p>
+
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <label class="btn btn-outline-warning mb-0" for="radioMenuLoadFile">
+                    <i class="bi bi-upload"></i> Load radio menu from file…
+                </label>
+                <input type="file" id="radioMenuLoadFile" accept=".ini,text/plain" hidden>
+                <span id="radioMenuLoadStatus" class="ms-2 small" role="status"></span>
+            </div>
+            <p class="text-muted small mt-2 mb-0">
+                Loading first shows what would change, and sends nothing. Tick the items you want and press
+                <strong>Send ticked items to the radio</strong>. Items marked TX change how the radio transmits and start unticked.
+                The CAT rate, time-out and RTS items are never loaded, because a wrong one would cut YWC off from the radio.
+                You can edit the file in Notepad first: change the value after <code>=</code>, as the radio shows it.
+            </p>
+
+            <div id="radioMenuLoadPreview" class="mt-3" hidden>
+                <div id="radioMenuLoadWarning" class="alert alert-warning py-2 small" hidden></div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="radioMenuShowSame">
+                    <label class="form-check-label" for="radioMenuShowSame">Show items that are already the same</label>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <caption id="radioMenuLoadCaption" class="caption-top"></caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Send</th>
+                                <th scope="col">Item</th>
+                                <th scope="col">On the radio</th>
+                                <th scope="col">In the file</th>
+                                <th scope="col">Note</th>
+                            </tr>
+                        </thead>
+                        <tbody id="radioMenuLoadRows"></tbody>
+                    </table>
+                </div>
+                <button type="button" class="btn btn-warning" id="radioMenuApplyBtn">
+                    <i class="bi bi-send"></i> Send ticked items to the radio
+                </button>
+                <span id="radioMenuApplyStatus" class="ms-2 small" role="status"></span>
+            </div>
         </div>
     </details>
 </div>
@@ -2950,6 +2991,167 @@
                 statusEl.className = 'ms-2 small text-danger';
             } finally {
                 btn.disabled = false;
+            }
+        });
+    })();
+</script>
+
+<script>
+    (function () {
+        const fileInput = document.getElementById('radioMenuLoadFile');
+        const statusEl = document.getElementById('radioMenuLoadStatus');
+        const preview = document.getElementById('radioMenuLoadPreview');
+        const warningEl = document.getElementById('radioMenuLoadWarning');
+        const caption = document.getElementById('radioMenuLoadCaption');
+        const tbody = document.getElementById('radioMenuLoadRows');
+        const showSame = document.getElementById('radioMenuShowSame');
+        const applyBtn = document.getElementById('radioMenuApplyBtn');
+        const applyStatus = document.getElementById('radioMenuApplyStatus');
+        if (!fileInput) return;
+
+        const notes = {
+            same: 'Already the same.',
+            blocked: 'Never loaded.',
+            skipped: 'Not in the file.',
+            unknown: 'Not loaded.',
+            noanswer: 'Not checked.',
+            error: 'Not loaded.',
+        };
+
+        function setStatus(el, text, kind) {
+            el.textContent = text;
+            el.className = `ms-2 small text-${kind}`;
+        }
+
+        function cell(tr, text) {
+            const td = document.createElement('td');
+            td.textContent = text ?? '';
+            tr.appendChild(td);
+            return td;
+        }
+
+        function render(rows) {
+            tbody.replaceChildren();
+            for (const row of rows) {
+                const tr = document.createElement('tr');
+                tr.dataset.status = row.status;
+                tr.dataset.address = row.address || '';
+                const send = document.createElement('td');
+                if (row.status === 'change') {
+                    const box = document.createElement('input');
+                    box.type = 'checkbox';
+                    box.className = 'form-check-input';
+                    box.checked = !row.tx;
+                    box.dataset.address = row.address;
+                    box.dataset.raw = row.raw;
+                    box.setAttribute('aria-label',
+                        `Send ${row.function}: ${row.current} to ${row.wanted}${row.tx ? ', changes transmit' : ''}`);
+                    send.appendChild(box);
+                }
+                tr.appendChild(send);
+                const name = cell(tr, row.function);
+                if (row.tx) {
+                    const tag = document.createElement('span');
+                    tag.className = 'badge text-bg-warning ms-1';
+                    tag.textContent = 'TX';
+                    name.appendChild(tag);
+                }
+                name.title = row.section || '';
+                cell(tr, row.current);
+                cell(tr, row.wanted);
+                cell(tr, row.message || (row.status === 'change' ? '' : notes[row.status] || ''));
+                if (row.status === 'error' || row.status === 'unknown') tr.className = 'table-danger';
+                tbody.appendChild(tr);
+            }
+            filter();
+        }
+
+        function filter() {
+            for (const tr of tbody.rows)
+                tr.hidden = tr.dataset.status === 'same' && !showSame.checked;
+        }
+        showSame.addEventListener('change', filter);
+
+        fileInput.addEventListener('change', async () => {
+            if (!fileInput.files || fileInput.files.length === 0) return;
+            const file = fileInput.files[0];
+            preview.hidden = true;
+            applyStatus.textContent = '';
+            setStatus(statusEl, `Reading the radio to compare with "${file.name}"… Nothing is sent yet.`, 'muted');
+            try {
+                const text = await file.text();
+                const r = await fetch('/api/radiomenu/load/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text }),
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    setStatus(statusEl, `Not loaded: ${data.error || r.statusText}`, 'danger');
+                    return;
+                }
+                const count = s => data.rows.filter(x => x.status === s).length;
+                const changes = count('change'), errors = count('error') + count('unknown');
+                warningEl.textContent = data.warning || '';
+                warningEl.hidden = !data.warning;
+                caption.textContent = `${file.name}: ${changes} to change, ${count('same')} already the same` +
+                    (errors ? `, ${errors} that cannot be loaded` : '') + '.';
+                render(data.rows);
+                preview.hidden = false;
+                applyBtn.disabled = changes === 0;
+                setStatus(statusEl, changes
+                    ? `${changes} item${changes === 1 ? '' : 's'} would change. Nothing has been sent; tick what you want below.`
+                    : 'The radio already matches the file. Nothing to send.', changes ? 'warning' : 'success');
+            } catch (e) {
+                setStatus(statusEl, `Not loaded: ${e.message}`, 'danger');
+            } finally {
+                fileInput.value = '';
+            }
+        });
+
+        applyBtn.addEventListener('click', async () => {
+            const boxes = [...tbody.querySelectorAll('input[type=checkbox]:checked')];
+            if (boxes.length === 0) {
+                setStatus(applyStatus, 'Nothing is ticked.', 'warning');
+                return;
+            }
+            const tx = boxes.filter(b => b.closest('tr').querySelector('.badge')).length;
+            if (!confirm(`Send ${boxes.length} item${boxes.length === 1 ? '' : 's'} to the radio's menu?` +
+                (tx ? `\n\n${tx} of them change how the radio transmits.` : ''))) return;
+            applyBtn.disabled = true;
+            setStatus(applyStatus, 'Sending…', 'muted');
+            try {
+                const r = await fetch('/api/radiomenu/load/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: boxes.map(b => ({ address: b.dataset.address, raw: b.dataset.raw })) }),
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    setStatus(applyStatus, `Not sent: ${data.error || r.statusText}`, 'danger');
+                    return;
+                }
+                let ok = 0, bad = 0;
+                for (const res of data.results) {
+                    const tr = [...tbody.rows].find(t => t.dataset.address === res.address);
+                    if (!tr) continue;
+                    const good = res.status === 'ok' || res.status === 'same';
+                    good ? ok++ : bad++;
+                    tr.cells[2].textContent = res.now ?? tr.cells[2].textContent;
+                    tr.cells[4].textContent = good ? 'Sent and read back.' : res.message || 'Not sent.';
+                    tr.className = good ? 'table-success' : 'table-danger';
+                    if (good) {
+                        tr.dataset.status = 'done';
+                        tr.cells[0].replaceChildren();
+                    }
+                }
+                setStatus(applyStatus, bad
+                    ? `${ok} set, ${bad} not set. See the Note column.`
+                    : `${ok} item${ok === 1 ? '' : 's'} set on the radio and read back.`, bad ? 'danger' : 'success');
+            } catch (e) {
+                setStatus(applyStatus, `Not sent: ${e.message}`, 'danger');
+            } finally {
+                applyBtn.disabled = tbody.querySelectorAll('input[type=checkbox]').length === 0;
             }
         });
     })();
