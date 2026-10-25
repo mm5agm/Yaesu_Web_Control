@@ -1761,6 +1761,22 @@ If the connection drops, the app reconnects automatically after 15 seconds. Disa
 
 ### 6.7 Backup & Restore
 
+**Two different saves.** The Settings page has two ways to save, and they save different things:
+
+| | Backup & Restore | Radio Menu |
+|---|---|---|
+| **What it saves** | YWC's own settings: COM port, band plan, memories, DX cluster, per-band memory and the rest | The radio's own menu settings: what you see when you press **FUNC** and touch **MENU** on the radio |
+| **Where those settings live** | On this PC, in `%APPDATA%\MM5AGM\Yaesu Web Control` | Inside the radio |
+| **Button** | **Export full backup** | **Save radio menu to file** |
+| **File** | `ywc-backup-YYYYMMDD-HHMMSS.zip` | `YWC radio menu <model> <date> <time>.ini` |
+| **Open it with** | Unzip it; the files inside are JSON | Notepad, or any text editor |
+| **Putting it back** | **Import full backup…**, then restart YWC | Not available yet |
+| **Does it change the radio?** | No | No, it only reads the radio |
+
+Use **Backup & Restore** to move YWC to a new PC or undo a change to YWC's settings. Use **Radio Menu** to keep a record of how the radio itself is set up, for example before a factory reset or a firmware update, or to keep one file for contesting and another for everyday use. Neither save includes the other: the backup zip has no radio menu settings in it, and the radio menu file has none of YWC's settings.
+
+#### Backup & Restore
+
 At the bottom of the Settings page (below the Save Settings button) are two buttons for exporting and importing your complete YWC user data as a **single zip file**. This rolls up everything you've customised across the app into one file:
 
 | File in the zip | What it contains |
@@ -1793,6 +1809,27 @@ Click **Import full backup…**, pick a previously exported zip, and confirm the
 - **Experimenting safely** — export before trying something risky; import the file to revert if it goes wrong.
 
 The files inside the zip are plain JSON; you can extract and inspect or hand-edit them if needed. They live at `%APPDATA%\MM5AGM\Yaesu Web Control\` and are also accessible directly without going through the export.
+
+#### Radio Menu
+
+Click **Save radio menu to file** in the **Radio Menu** section of the Settings page. YWC reads every item of the radio's menu, about 190 items, a few seconds, and downloads the file. Available for the FTdx101MP and FTdx101D.
+
+The file is grouped the way the radio's menu is. Each line shows the item and its value as the radio's screen shows it. After the `;` come the EX menu number and what the radio answered, which is what a future **Load** will use to put the item back exactly:
+
+```ini
+[CW SETTING > MODE CW]
+CW WAVE SHAPE = 6 ms                     ; 020113 = 1  [TX]
+
+[DISPLAY SETTING > DISPLAY]
+MY CALL = MM5AGM                         ; 040101 = MM5AGM
+MY CALL TIME = 1 s                       ; 040102 = 01
+```
+
+- **`[TX]`** marks items that change how or when the radio transmits. When Load is added, these will be left alone unless you choose them.
+- **`(no answer)`** means the radio did not reply for that item, usually because it does not apply to the radio's current setup.
+- Save as many files as you like and rename them for how you use the radio, for example `YWC radio menu contest.ini`.
+
+Saving only reads the radio. Nothing on the radio changes.
 
 ---
 
