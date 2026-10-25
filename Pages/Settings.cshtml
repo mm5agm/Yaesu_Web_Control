@@ -3342,7 +3342,9 @@
         }
 
         function filter() {
-            const q = filterEl.value.trim().toLowerCase();
+            // Spaces do not count either way: "mycall" finds MY CALL.
+            const squash = s => s.replace(/\s+/g, '').toLowerCase();
+            const q = squash(filterEl.value);
             let header = null, anyInGroup = false;
             for (const tr of tbody.rows) {
                 if (tr.dataset.header) {
@@ -3351,7 +3353,7 @@
                     anyInGroup = false;
                     continue;
                 }
-                const text = `${tr.dataset.section} ${tr.dataset.function}`.toLowerCase();
+                const text = squash(`${tr.dataset.section} ${tr.dataset.function}`);
                 const show = (!q || text.includes(q)) && (!onlyChanged.checked || tr.classList.contains('table-warning'));
                 tr.hidden = !show;
                 if (show) anyInGroup = true;
