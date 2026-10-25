@@ -16,10 +16,11 @@ namespace Yaesu_Web_Control.Services.RadioMenu;
 /// beside the decoded one, so a wrong guess shows up against the radio.
 /// Those three were read back on an FTdx101MP on 2026-10-25 and match.
 ///
-/// NOT CONFIRMED: the operating manual (2102P) disagrees with the CAT manual
-/// on two lists. CW WAVE SHAPE is 4/6/8 ms there (CAT: 1/2/4/6 ms) and
-/// MY CALL TIME is OFF/1-5 s (CAT: OFF/0.5/1/2/3/5 s). The CAT lists are used
-/// until someone compares a reading with the radio's own screen.
+/// The operating manual (2102P) disagrees with the CAT manual on two lists.
+/// CW WAVE SHAPE follows the operating manual, 4/6/8 ms (CAT: 1/2/4/6 ms):
+/// the radio showed 6 ms and answered 1 on 2026-10-25. NOT CONFIRMED:
+/// MY CALL TIME is OFF/1-5 s there (CAT: OFF/0.5/1/2/3/5 s); the CAT list is
+/// used until a reading is compared with the radio's own screen.
 /// </summary>
 public static class Ftdx101Menu
 {
@@ -149,7 +150,7 @@ public static class Ftdx101Menu
         Item(10, "CW AUTO MODE", Choice("OFF", "50 MHz", "ON"), tx: true);
         Item(11, "CW BK-IN TYPE", Choice("SEMI", "FULL"), tx: true);
         Item(12, "CW BK-IN DELAY", BreakInDelay, tx: true);
-        Item(13, "CW WAVE SHAPE", Choice("1 ms", "2 ms", "4 ms", "6 ms"), tx: true);
+        Item(13, "CW WAVE SHAPE", Choice("4 ms", "6 ms", "8 ms"), tx: true);
         Item(14, "CW FREQ DISPLAY", Choice("DIRECT FREQ", "PITCH OFFSET"));
         Item(15, "PC KEYING", Choice("OFF", "DAKY", "RTS", "DTR"), tx: true);
         Item(16, "QSK DELAY TIME", Choice("15 ms", "20 ms", "25 ms", "30 ms"), tx: true);

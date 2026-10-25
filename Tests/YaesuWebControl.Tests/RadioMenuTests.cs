@@ -46,6 +46,7 @@ namespace YaesuWebControl.Tests
         [InlineData("020112", "04", "200 ms")]
         [InlineData("020112", "07", "400 ms")]
         [InlineData("020112", "33", "3000 ms")]
+        [InlineData("020113", "1", "6 ms")]   // read on the radio
         [InlineData("020205", "30", "3.0")]
         [InlineData("030111", "3", "38400 bps")]
         [InlineData("030117", "+05", "+5 kHz")]
