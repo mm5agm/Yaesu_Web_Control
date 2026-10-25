@@ -16,11 +16,11 @@ namespace Yaesu_Web_Control.Services.RadioMenu;
 /// beside the decoded one, so a wrong guess shows up against the radio.
 /// Those three were read back on an FTdx101MP on 2026-10-25 and match.
 ///
-/// The operating manual (2102P) disagrees with the CAT manual on two lists.
-/// CW WAVE SHAPE follows the operating manual, 4/6/8 ms (CAT: 1/2/4/6 ms):
-/// the radio showed 6 ms and answered 1 on 2026-10-25. NOT CONFIRMED:
-/// MY CALL TIME is OFF/1-5 s there (CAT: OFF/0.5/1/2/3/5 s); the CAT list is
-/// used until a reading is compared with the radio's own screen.
+/// The operating manual (2102P) disagrees with the CAT manual on two lists,
+/// and the radio sides with the operating manual on both (read 2026-10-25):
+/// CW WAVE SHAPE is 4/6/8 ms (CAT: 1/2/4/6 ms), the radio showing 6 ms and
+/// answering 1; MY CALL TIME is OFF/1-5 s (CAT: OFF/0.5/1/2/3/5 s), the radio
+/// showing 1 s and answering 01.
 /// </summary>
 public static class Ftdx101Menu
 {
@@ -248,7 +248,7 @@ public static class Ftdx101Menu
 
         Group("01", "DISPLAY");
         Item(1, "MY CALL", raw => raw.Trim());
-        Item(2, "MY CALL TIME", Choice("OFF", "0.5 s", "1 s", "2 s", "3 s", "5 s"));
+        Item(2, "MY CALL TIME", Choice("OFF", "1 s", "2 s", "3 s", "4 s", "5 s"));
         Item(3, "SCREEN SAVER", Choice("OFF", "15 min", "30 min", "60 min"));
         Item(4, "TFT CONTRAST", Units(""));
         Item(5, "DIMMER TFT", Units(""));

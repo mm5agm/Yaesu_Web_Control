@@ -57,6 +57,7 @@ namespace YaesuWebControl.Tests
         [InlineData("030309", "18", "3200 Hz")]
         [InlineData("030401", "200", "200 W")]
         [InlineData("040101", "MM5AGM      ", "MM5AGM")]
+        [InlineData("040102", "01", "1 s")]    // read on the radio
         [InlineData("010110", "9", "9")]    // off the end of the list: shown as sent
         public void Values_decode_as_the_radio_shows_them(string address, string raw, string expected)
             => Assert.Equal(expected, Item(address).Decode(raw));
