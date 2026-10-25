@@ -10,6 +10,9 @@ namespace Yaesu_Web_Control.Pages
     /// </summary>
     public class RadioSpectrumModel : IndexModel
     {
+        // A pop-out, not a view: leaves the remembered view alone.
+        protected override string? ViewKey => null;
+
         public bool IsDual => RadioCapabilities.IsDualReceiver(RadioModel);
 
         public RadioSpectrumModel(RadioStateService radioStateService, ISettingsService settingsService)

@@ -48,6 +48,26 @@
     font-weight: 700;
 }
 
+/* The View dropdown (Pages/Shared/_ViewPickerPartial.cshtml): a plain
+   button that reads like the current-page link, and menu items in the
+   dropdown's own colours rather than the nav's. */
+.ywc-flex-view-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.ywc-flex-nav-links .dropdown-menu a {
+    color: var(--bs-dropdown-link-color);
+}
+
+.ywc-flex-nav-links .dropdown-menu a.active {
+    color: var(--bs-dropdown-link-active-color);
+}
+
 .ywc-flex-main {
     flex: 1 1 auto;
     min-height: 0;

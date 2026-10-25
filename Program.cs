@@ -55,7 +55,7 @@ if (!createdNew)
 
     if (choice == DialogResult.Yes)
     {
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+        try { Process.Start(new ProcessStartInfo(url + "/start") { UseShellExecute = true }); } catch { }
         mutex.Dispose();
         return;
     }
@@ -824,6 +824,11 @@ try
     app.MapRazorPages();
     app.MapControllers();
 
+    // Start-up, the tray and the already-running prompt open /start, which
+    // sends the browser to the view the operator used last.
+    app.MapGet("/start", async (Yaesu_Web_Control.Services.ISettingsService settingsService) =>
+        Results.Redirect(Yaesu_Web_Control.Models.AppViews.For((await settingsService.GetSettingsAsync()).LastView).Path));
+
     // MAP SIGNALR HUB:
     app.MapHub<Yaesu_Web_Control.Hubs.RadioHub>("/radioHub");
 
@@ -912,7 +917,7 @@ try
 
     lifetime.ApplicationStarted.Register(() =>
     {
-        browserLauncher.OpenOnce(portInfo.RootUrl);
+        browserLauncher.OpenOnce(portInfo.RootUrl + "/start");
     });
 
 #if !WINDOWS

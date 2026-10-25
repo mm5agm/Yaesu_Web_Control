@@ -45,9 +45,9 @@
             <small class="text-muted fw-normal" style="font-size:0.6em;">v@(AppVersion.Display)</small>
         </a>
         <nav class="ywc-flex-nav-links" aria-label="Site navigation">
-            <a asp-area="" asp-page="/Index">Classic Home</a>
-            <a asp-area="" asp-page="/FlexUi" aria-current="page"><i class="bi bi-grid-1x2-fill" aria-hidden="true"></i> Experimental UI</a>
-            <a asp-area="" asp-page="/RadioPanel"><i class="bi bi-broadcast" aria-hidden="true"></i> Radio</a>
+            <div class="dropdown">
+                <partial name="_ViewPickerPartial" model='"ywc-flex-view-btn"' />
+            </div>
             <a asp-area="" asp-page="/Settings">Settings</a>
             <a asp-area="" asp-page="/Memories">Memories</a>
             <a asp-area="" asp-page="/UserManual">User Manual</a>

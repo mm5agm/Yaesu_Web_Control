@@ -600,7 +600,7 @@ namespace Yaesu_Web_Control.Services
                 if (!Debugger.IsAttached && 
                     string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase))
                 {
-                    _browserLauncher.OpenOnce(_portInfo.RootUrl);
+                    _browserLauncher.OpenOnce(_portInfo.RootUrl + "/start");
                 }
             }
             catch (Exception ex)

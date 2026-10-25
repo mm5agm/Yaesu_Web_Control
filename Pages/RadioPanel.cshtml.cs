@@ -10,6 +10,8 @@ namespace Yaesu_Web_Control.Pages
     /// </summary>
     public class RadioPanelModel : IndexModel
     {
+        protected override string? ViewKey => Models.AppViews.Radio;
+
         public bool IsDual => RadioCapabilities.IsDualReceiver(RadioModel);
         public int MaxPower => RadioCapabilities.MaxPowerWatts(RadioModel);
         // Click-to-tune on the Radio screen needs the radio's scope span (SS).

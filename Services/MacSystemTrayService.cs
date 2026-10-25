@@ -158,7 +158,7 @@ public sealed class MacSystemTrayService : IDisposable
     {
         try
         {
-            Process.Start(new ProcessStartInfo(_portInfo.RootUrl) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(_portInfo.RootUrl + "/start") { UseShellExecute = true });
         }
         catch (Exception ex)
         {

@@ -122,6 +122,11 @@
         // choice of a segment, not a mode inferred from a frequency.
         public bool AutoModeChangeOnTune { get; set; } = true;
 
+        // The view last opened (an AppViews key: "classic", "experimental" or
+        // "radio"). Written when one of those pages loads; read by /start, which
+        // the app opens at start-up so the operator lands back where they were.
+        public string LastView { get; set; } = AppViews.Classic;
+
         // SDR Spectrum Display — per-VFO device assignment (v2.3.0+).
         //
         // SdrDeviceKeyA / SdrDeviceKeyB identify which physical SDR is wired

@@ -162,7 +162,7 @@ namespace Yaesu_Web_Control.Services
         {
             try
             {
-                Process.Start(new ProcessStartInfo(_portInfo.RootUrl) { UseShellExecute = true });
+                Process.Start(new ProcessStartInfo(_portInfo.RootUrl + "/start") { UseShellExecute = true });
             }
             catch (Exception ex)
             {

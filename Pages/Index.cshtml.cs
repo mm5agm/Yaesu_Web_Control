@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Yaesu_Web_Control.Models;
 using Yaesu_Web_Control.Services;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -128,6 +129,10 @@ namespace Yaesu_Web_Control.Pages
 
         public RadioStateViewModel State { get; set; } = new RadioStateViewModel();
 
+        // The AppViews key this page saves as the last view; null for a page
+        // that is not one of the views (the pop-outs).
+        protected virtual string? ViewKey => AppViews.Classic;
+
         public async Task<IActionResult> OnGetAsync()
         {
             // Deliberately no server-side redirect to Settings on
@@ -144,6 +149,12 @@ namespace Yaesu_Web_Control.Pages
 
             // Load app button visibility and names
             var settings = await _settingsService.GetSettingsAsync();
+            // Remember this view so the next start-up opens it (see /start).
+            if (ViewKey is { } view && settings.LastView != view)
+            {
+                settings.LastView = view;
+                await _settingsService.SaveSettingsAsync(settings);
+            }
             ShowApp1Button = settings.ShowWsjtxButton;
             ShowApp2Button = settings.ShowJtalertButton;
             ShowApp3Button = settings.ShowLog4omButton;

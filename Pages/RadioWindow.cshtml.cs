@@ -11,6 +11,9 @@ namespace Yaesu_Web_Control.Pages
     /// </summary>
     public class RadioWindowModel : IndexModel
     {
+        // A pop-out, not a view: leaves the remembered view alone.
+        protected override string? ViewKey => null;
+
         public bool IsDual => RadioCapabilities.IsDualReceiver(RadioModel);
         public int MaxPower => RadioCapabilities.MaxPowerWatts(RadioModel);
         public long MaxHz => RadioCapabilities.FrequencyRangeHz(RadioModel).MaxHz;

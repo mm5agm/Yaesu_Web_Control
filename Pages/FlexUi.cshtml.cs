@@ -14,6 +14,8 @@ namespace Yaesu_Web_Control.Pages
         /// <summary>Server-computed flags shared with Pages/FlexPartials/*.</summary>
         public FlexViewState View => _view ??= FlexViewState.Build(this);
 
+        protected override string? ViewKey => Models.AppViews.Experimental;
+
         public FlexUiModel(RadioStateService radioStateService, ISettingsService settingsService)
             : base(radioStateService, settingsService)
         {

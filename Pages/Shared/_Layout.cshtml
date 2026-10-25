@@ -70,20 +70,8 @@
                 </button>
                 <div class="navbar-collapse collapse d-sm-inline-flex align-items-center">
                     <ul class="navbar-nav">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">
-                                <i class="bi bi-house-door-fill" aria-hidden="true"></i> Home
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/FlexUi" title="Experimental UI — dockable workspace">
-                                <i class="bi bi-grid-1x2-fill" aria-hidden="true"></i> Experimental UI
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/RadioPanel" title="Radio-style front panel">
-                                <i class="bi bi-broadcast" aria-hidden="true"></i> Radio
-                            </a>
+                        <li class="nav-item dropdown">
+                            <partial name="_ViewPickerPartial" model='"nav-link text-dark"' />
                         </li>
                         <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-page="/Settings">
