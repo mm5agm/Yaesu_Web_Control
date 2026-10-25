@@ -48,9 +48,9 @@
     font-weight: 700;
 }
 
-/* The View dropdown (Pages/Shared/_ViewPickerPartial.cshtml): a plain
-   button that reads like the current-page link, and menu items in the
-   dropdown's own colours rather than the nav's. */
+/* The Views and Menu dropdowns (Pages/Shared/_ViewPickerPartial.cshtml,
+   _SiteMenuPartial.cshtml): plain buttons that read like nav links, and menu
+   items in the dropdown's own colours rather than the nav's. */
 .ywc-flex-view-btn {
     padding: 0;
     border: 0;

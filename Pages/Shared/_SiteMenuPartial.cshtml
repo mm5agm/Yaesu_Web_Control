@@ -1,0 +1,25 @@
+@model string
+@using Yaesu_Web_Control.Models
+@* The Menu dropdown: the app's other pages (AppMenu), each opening in a
+   new tab so the view keeps running behind it. The model is the button's
+   class, so it can match the nav bar it sits in. Used by every view's nav
+   except Classic, which keeps the pages as plain links for screen-reader
+   users. *@
+<button class="@Model dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+        title="Settings, memories, the manual and the other pages, each in a new tab">
+    <i class="bi bi-list" aria-hidden="true"></i> Menu
+</button>
+<ul class="dropdown-menu">
+    @foreach (var g in AppMenu.Groups)
+    {
+        <li><h6 class="dropdown-header">@g.Name</h6></li>
+        @foreach (var p in g.Pages)
+        {
+            <li>
+                <a class="dropdown-item" href="@p.Path" target="_blank" rel="noopener">
+                    <i class="bi @p.Icon" aria-hidden="true"></i> @p.Label
+                </a>
+            </li>
+        }
+    }
+</ul>
