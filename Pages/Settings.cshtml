@@ -3016,6 +3016,16 @@
 </div>
 
 <script>
+    // "2 items did not answer: Display Language, Japanese Morse Decode. That usually means ..."
+    window.radioMenuUnanswered = function (data) {
+        const n = Number(data.missing || 0);
+        const names = Array.isArray(data.unanswered) ? data.unanswered : [];
+        return `${n} item${n === 1 ? '' : 's'} did not answer` +
+            (names.length ? `: ${names.join(', ')}.` : '.') +
+            ' That usually means they do not apply to this radio or how it is set up.';
+    };
+</script>
+<script>
     (function () {
         const btn = document.getElementById('radioMenuSaveBtn');
         const statusEl = document.getElementById('radioMenuSaveStatus');
@@ -3032,11 +3042,10 @@
                     statusEl.className = 'ms-2 small text-danger';
                     return;
                 }
-                const missing = Number(data.missing || 0);
-                statusEl.textContent = `Saved to ${data.path}` +
-                    (missing ? `. ${missing} item${missing === 1 ? '' : 's'} did not answer and are marked in the file.` : '.');
+                statusEl.textContent = `Saved to ${data.path}.` +
+                    (data.missing ? ` ${window.radioMenuUnanswered(data)} The file marks them (no answer).` : '');
                 document.dispatchEvent(new CustomEvent('radiomenu-saved', { detail: data.name }));
-                statusEl.className = `ms-2 small ${missing ? 'text-warning' : 'text-success'}`;
+                statusEl.className = 'ms-2 small text-success';
             } catch (e) {
                 statusEl.textContent = `Not saved: ${e.message}`;
                 statusEl.className = 'ms-2 small text-danger';
@@ -3465,9 +3474,8 @@
                 caption.textContent = `${data.model} menu, read at ${new Date().toLocaleTimeString()}: ${items.length} items you can change.`;
                 editor.hidden = false;
                 editBtn.lastChild.textContent = ' Read the radio again';
-                setStatus(statusEl, data.missing
-                    ? `Read. ${data.missing} item${data.missing === 1 ? '' : 's'} did not answer.`
-                    : 'Read. Change what you want below; nothing is sent yet.', data.missing ? 'warning' : 'success');
+                setStatus(statusEl, 'Read. ' + (data.missing ? window.radioMenuUnanswered(data) + ' ' : '') +
+                    'Change what you want below; nothing is sent yet.', 'success');
                 filterEl.focus();
             } catch (e) {
                 setStatus(statusEl, `Could not read the radio: ${e.message}`, 'danger');

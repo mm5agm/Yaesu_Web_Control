@@ -63,6 +63,7 @@ namespace Yaesu_Web_Control.Controllers
                 readings.Add(new RadioMenuReading(item, await ReadAsync(item.Address, ct)));
 
             int missing = readings.Count(r => r.Raw is null);
+            var unanswered = readings.Where(r => r.Raw is null).Select(r => r.Item.Function).ToList();
             _logger.LogInformation("Radio menu save: {Read} of {Total} items read from the {Model}",
                 readings.Count - missing, readings.Count, model);
             if (missing == readings.Count)
@@ -84,7 +85,7 @@ namespace Yaesu_Web_Control.Controllers
                 _logger.LogError(ex, "Radio menu save: could not write {Path}", path);
                 return StatusCode(500, new { error = $"Could not write {path}: {ex.Message}" });
             }
-            return Ok(new { name, path, missing });
+            return Ok(new { name, path, missing, unanswered });
         }
 
         /// <summary>GET /api/radiomenu/files — the copies YWC kept, newest first.</summary>
@@ -154,10 +155,15 @@ namespace Yaesu_Web_Control.Controllers
 
             var rows = new List<object>(table.Count);
             int missing = 0;
+            var unanswered = new List<string>();
             foreach (var item in table)
             {
                 var raw = await ReadAsync(item.Address, ct);
-                if (raw is null) missing++;
+                if (raw is null)
+                {
+                    missing++;
+                    unanswered.Add(item.Function);
+                }
                 var choices = raw is null || item.Link ? null : RadioMenuLoad.Choices(item, raw);
                 rows.Add(new
                 {
@@ -174,7 +180,7 @@ namespace Yaesu_Web_Control.Controllers
             }
             if (missing == table.Count)
                 return StatusCode(504, new { error = "The radio did not answer any menu reads." });
-            return Ok(new { model, missing, rows });
+            return Ok(new { model, missing, unanswered, rows });
         }
 
         public sealed record PreviewRequest(string? Text);
