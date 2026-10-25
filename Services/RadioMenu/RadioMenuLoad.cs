@@ -171,7 +171,8 @@ public static class RadioMenuLoad
         if (t.Any(c => c < ' ' || c > '~' || c == ';'))
             return Fail(out error, "Only letters, numbers and plain symbols (no ';').");
         // Fixed width, space-padded, as the radio's other text fields (MT) take it:
-        // EX040101MM5AGM/P; was not taken by an FTdx101MP.
+        // On an FTdx101MP, EX040101MM5AGM/P; was not taken; padded to 12 it was,
+        // and the radio answers it unpadded.
         return t.PadRight(item.TextMax);
     }
 
