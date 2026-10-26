@@ -39,6 +39,8 @@ export class SpectrumPane {
      *        the trace (fit), and this is told so the range can be kept
      * @param {boolean} [opts.dbScale=false]  label the trace in dB above the noise floor
      * @param {boolean} [opts.waterfallFirst=false]  the waterfall above the spectrum (setOrder)
+     * @param {(hz:number) => void} [opts.onJump]  arrows at the left and right edges of the
+     *        part on top: a click asks for the dial one span down or up, at hz
      */
     constructor(container, opts = {}) {
         this.el = h('div', 'rp-pane');
@@ -59,8 +61,9 @@ export class SpectrumPane {
         this._wfEl = wf;
         if (opts.grip) this._grip(opts.onSplit, opts.onFit);
         this._view = new SpectrumView(spec, wf, { dbScale: opts.dbScale });
-        if (opts.waterfallFirst) this.setOrder(true);
         this._st = { hz: 0, mode: '', widthHz: null, spanHz: 0, spots: [], showSpots: true, name: '', status: null, passband: true };
+        if (opts.onJump) this._jumps(opts.onJump);
+        if (opts.waterfallFirst) this.setOrder(true);
         if (opts.onTune) this._tunable(spec, wf, opts.onTune, opts.tuneTo);
         // The wheel steps the dial a notch at a time, as on the board.
         if (opts.onStep) {
@@ -125,6 +128,31 @@ export class SpectrumPane {
         }
     }
 
+    // A pair of arrows, one span down and one span up. They sit on the part
+    // on top (_placeJumps), and a click on them is theirs, not a tune.
+    _jumps(onJump) {
+        this._jumpEls = [-1, 1].map(dir => {
+            const b = h('button', 'rp-jump ' + (dir < 0 ? 'rp-jump-dn' : 'rp-jump-up'), dir < 0 ? '◀' : '▶');
+            b.type = 'button';
+            b.title = dir < 0 ? 'One span down' : 'One span up';
+            b.setAttribute('aria-label', b.title);
+            for (const ev of ['pointerdown', 'pointermove', 'dblclick']) b.addEventListener(ev, e => e.stopPropagation());
+            b.addEventListener('click', e => {
+                e.stopPropagation();
+                const s = this._st;
+                if (s.hz > 0 && s.spanHz > 0) onJump(s.hz + dir * s.spanHz);
+            });
+            return b;
+        });
+        this._placeJumps();
+    }
+    _placeJumps() {
+        if (!this._jumpEls) return;
+        const c = this.el.classList;
+        const wfTop = c.contains('no-spec') || (this._wfFirst && !c.contains('no-wf'));
+        (wfTop ? this._wfEl : this._specEl).append(...this._jumpEls);
+    }
+
     // The spectrum's share of the height the two share, 0.15..0.85. The grip
     // sits under the axis, so the axis stays with the trace it labels.
     _grip(onSplit, onFit) {
@@ -176,6 +204,7 @@ export class SpectrumPane {
             ? [this._wfEl, this._gripEl, this._axis, this._specEl]
             : [this._specEl, this._axis, this._gripEl, this._wfEl];
         this.el.append(...parts.filter(x => x instanceof HTMLElement));
+        this._placeJumps();
     }
 
     /** SpectrumView's levels: { auto, ref } in, { auto, ref, floor, lo, hi } out. */
@@ -222,7 +251,7 @@ export class SpectrumPane {
     clear() { this._view.clear(); }
 
     /** Show or hide the waterfall; hidden, the trace takes its room. */
-    setWaterfall(show) { this.el.classList.toggle('no-wf', !show); }
+    setWaterfall(show) { this.el.classList.toggle('no-wf', !show); this._placeJumps(); }
 
     /**
      * Which parts to draw: 'both', 'spectrum', 'waterfall' or 'none'. The
@@ -234,6 +263,7 @@ export class SpectrumPane {
         this.el.hidden = !spec && !wf;
         this.el.classList.toggle('no-wf', !wf);
         this.el.classList.toggle('no-spec', !spec);
+        this._placeJumps();
     }
 
     _drawLabel() {

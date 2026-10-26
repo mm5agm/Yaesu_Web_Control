@@ -364,6 +364,10 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-pane.no-spec .rp-spectrum,.rp-pane.no-spec .rp-axis,.rp-pane.no-spec .rp-pane-grip{display:none}
 .rp-pane.no-spec .rp-waterfall{flex:1 1 0 !important}
 .rp-pane.no-wf .rp-spectrum{flex:1 1 0 !important}
+.rp-jump{position:absolute;top:50%;transform:translateY(-50%);z-index:4;width:30px;height:48px;padding:0;border:1px solid ${v('screen-line')};border-radius:4px;background:${v('spec-bg')};color:${v('spec-label')};font:700 18px ${SANS};line-height:1;cursor:pointer;opacity:.6}
+.rp-jump:hover,.rp-jump:focus-visible{opacity:1}
+.rp-jump-dn{left:4px}
+.rp-jump-up{right:4px}
 /* In the pop-out each pane sits on the radio's screen, as on the board: its
    label and scale are screen colours, which on the page itself (grey in
    Silver) could not be read */

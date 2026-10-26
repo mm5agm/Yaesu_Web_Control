@@ -25,7 +25,9 @@
 // each row shows, and can hide the second receiver (its tab and the band row
 // of the same id), kept in this browser. The wheel over a
 // digit of the frequency moves the dial by what that digit is worth
-// (opts.onNudge), as on the radio panel; a click on it types one.
+// (opts.onNudge), as on the radio panel; a click on it types one. Arrows at
+// the edges of the spectrum (or of the waterfall, on top) move the dial one
+// span down or up, as a typed frequency would.
 //
 // The operator sizes two boxes here, as windows are sized: the spectrum and
 // waterfall, and the docked tuner, each by its right edge, its bottom edge or
@@ -742,6 +744,10 @@ export function mountContestView(root, opts) {
             onTune: opts.onTune && (hz => opts.onTune(r.id, hz)),
             tuneTo: opts.onTune && opts.tuneTo && (hz => opts.tuneTo(r.id, hz)),
             onStep: opts.onStep && (dir => opts.onStep(r.id, dir)),
+            // Bruce VK2RT: arrows that move the dial one span, to look along the band.
+            onJump: opts.onFrequencyEntry && (hz => {
+                if (hz >= (opts.minHz ?? 30_000) && hz <= (opts.maxHz ?? 75_000_000)) opts.onFrequencyEntry(r.id, Math.round(hz));
+            }),
             grip: true,
             dbScale: true,
             waterfallFirst: wfFirst,

@@ -748,6 +748,39 @@ test('/rtty-contest: BANDS hides band keys per row, and SUB with its tab and ban
     } finally { await page.eval(clear).catch(() => {}); await page.close(); }
 });
 
+// Bruce VK2RT, 2026-10-26: arrows on the spectrum that move one span, to
+// look along the band. With the waterfall on top they go to the waterfall.
+test('/rtty-contest: the arrows move the dial one span down or up, and go with the part on top', async () => {
+    const page = await open('/rtty-contest', { settleMs: 2500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await page.state('FrequencyA', 14_080_000);
+        const bins = Array.from({ length: 400 }, () => 40);
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 10_000, rfOrdered: true });
+        await sleep(300);
+        const where = () => page.eval(`[...document.querySelectorAll('.rc-holder:not([hidden]) .rp-jump')].map(b => b.parentElement.className.split(' ')[0] + ':' + b.className.split(' ')[1]).join()`);
+        let w = await where();
+        expect(w === 'rp-spectrum:rp-jump-dn,rp-spectrum:rp-jump-up', `the arrows are on ${w}`);
+        await page.clearWrites();
+        await page.eval(`document.querySelector('.rc-holder:not([hidden]) .rp-jump-up').click()`);
+        await sleep(300);
+        await page.state('FrequencyA', 14_080_000);
+        await page.eval(`document.querySelector('.rc-holder:not([hidden]) .rp-jump-dn').click()`);
+        await sleep(300);
+        const all = await page.writes();
+        const f = all.filter(x => x.path === '/api/cat/frequency/a').map(x => x.body?.frequencyHz);
+        expect(f.length === 2 && f[0] === 14_090_000 && f[1] === 14_070_000, `the arrows wrote ${JSON.stringify(f)}`);
+        const cat = all.filter(x => x.path.startsWith('/api/cat/'));
+        expect(cat.length === 2, `the arrows wrote more than the frequency: ${JSON.stringify(cat)}`);
+
+        await page.eval(`document.querySelector('.rc-swap').click()`);
+        w = await where();
+        expect(w === 'rp-waterfall:rp-jump-dn,rp-waterfall:rp-jump-up', `with the waterfall on top the arrows are on ${w}`);
+        await page.eval(`document.querySelector('.rc-swap').click()`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.eval(`localStorage.removeItem('ywc.rttyContest.wfFirst')`).catch(() => {}); await page.close(); }
+});
+
 // Bruce's set-up (#169): AFSK in DATA-L with the software on Mark 1415 / 170.
 // The pair's midpoint is 1500 Hz of audio, so a click on a signal puts the
 // dial 1500 Hz above it, and the mark lands on 1415.
