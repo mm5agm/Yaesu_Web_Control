@@ -32,6 +32,8 @@
     var docked = ViewData["RttyTunerDocked"] is true;
     // The RTTY Contest view's tuner window is the Tune section only too.
     if (docked || ViewData["RttyTunerContest"] is true) contest = true;
+    // Its decoded-text window is the Decode section only, from the same markup.
+    var decodeOnly = ViewData["RttyTunerDecodeOnly"] is true;
 }
 <style>
     /* Wide enough for the two columns the layout is built around: the decode
@@ -88,10 +90,27 @@
     #rttyTunerDialog.rtty-contest .rtty-hint { display:none !important; }
     #rttyTunerDialog.rtty-contest:not(.rtty-popout) { width:360px; }
     #rttyTunerDialog.rtty-contest .rtty-col-tune { flex:1 1 auto; }
-    /* DECODE in the RTTY Contest view (contest-view.js) brings the Decode
-       section back, here and in the tuner's window, but not Send, which is
-       not built. Tones only still hides it. */
-    #rttyTunerDialog.rtty-contest.rtty-decoding:not(.rtty-compact) .rtty-col-main { display:flex !important; }
+    /* DECODE in the RTTY Contest view (contest-view.js) shows the Decode
+       section in a box of its own under the tuner: the page moves it out of
+       this panel into the view's box (.rc-dbox), so the tuner and the text
+       can each pop out by themselves. Not Send, which is not built. The box
+       takes the room the tuner leaves and the text scrolls in it, so the
+       tuner stays put while the text runs. */
+    .rc-dbox > .rtty-decode {
+        flex:1 1 auto; min-height:0; padding:0.5rem;
+        border:1px solid #555; border-radius:8px; background:#222; color:#eee;
+    }
+    .rc-dbox #rttyReaderOut { flex:1 1 0; }
+    /* With the text under it the docked tuner is as tall as its square scope,
+       as wide as the tuner, and shrinks with it when its grab makes it shorter. */
+    #rttyTunerDialog.rtty-docked.rtty-decoding .rtty-col-tune { flex:0 1 auto; min-height:0; }
+    #rttyTunerDialog.rtty-docked.rtty-decoding .rtty-scope-box { flex:0 1 auto; aspect-ratio:1 / 1; min-height:0; }
+    /* The decoded text's window (/RttyTuner?contest=true&decode=true): the
+       Decode section and nothing else. */
+    #rttyTunerDialog.rtty-decode-only .rtty-col-tune,
+    #rttyTunerDialog.rtty-decode-only #rttyTunerCompactBtn { display:none !important; }
+    #rttyTunerDialog.rtty-decode-only .rtty-col-main { display:flex !important; flex:1 1 0; min-height:0; }
+    #rttyTunerDialog.rtty-decode-only #rttyReaderOut { flex:1 1 0; }
     #rttyTunerDialog.rtty-contest .rtty-send { display:none; }
 
     /* The one thing Bruce VK2RT asked for and did not get: a panel that holds
@@ -142,17 +161,19 @@
         margin-bottom: 0.5rem;
     }
 
-    /* A section heading with a rule running off to the right of it. */
-    #rttyTunerDialog .rtty-section {
+    /* A section heading with a rule running off to the right of it. Not
+       under #rttyTunerDialog: docked in the RTTY Contest view the Decode
+       section is in a box of its own. */
+    .rtty-section {
         display:flex; align-items:center; gap:0.5rem;
         flex:0 0 auto; min-height:1.75rem;
     }
-    #rttyTunerDialog .rtty-section > .rtty-section-name {
+    .rtty-section > .rtty-section-name {
         font-size:0.68rem; letter-spacing:0.09em; text-transform:uppercase; color:#9ab; flex:0 0 auto;
     }
-    #rttyTunerDialog .rtty-section > .rtty-rule { flex:1 1 auto; height:1px; background:#3a3a3a; }
+    .rtty-section > .rtty-rule { flex:1 1 auto; height:1px; background:#3a3a3a; }
 
-    #rttyTunerDialog .rtty-decode { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:0.35rem; }
+    .rtty-decode { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:0.35rem; }
     #rttyReaderOut {
         flex:1 1 auto; min-height:4.5rem; overflow:auto;
         background:#111; border:1px solid #444; border-radius:6px;
@@ -177,11 +198,11 @@
      server's demodulator makes of the same audio. Non-modal so the VFO stays
      in reach. -->
 <dialog id="rttyTunerDialog" open="@(popout || docked)"
-        class="@(string.Join(" ", new[] { popout ? "rtty-popout user-sized" : null, docked ? "rtty-docked" : null, contest ? "rtty-contest" : null }.Where(c => c is not null)))"
+        class="@(string.Join(" ", new[] { popout ? "rtty-popout user-sized" : null, docked ? "rtty-docked" : null, contest ? "rtty-contest" : null, decodeOnly ? "rtty-decode-only" : null }.Where(c => c is not null)))"
         style="@(popout || docked ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0;")"
         aria-labelledby="rttyTunerTitle">
     <div class="rtty-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
-        <strong id="rttyTunerTitle">@(contest ? "RTTY Tuner" : "RTTY")</strong>
+        <strong id="rttyTunerTitle">@(decodeOnly ? "RTTY Decode" : contest ? "RTTY Tuner" : "RTTY")</strong>
         <div class="d-flex align-items-center gap-1">
             <button id="rttyTunerCompactBtn" class="btn btn-sm btn-outline-secondary" type="button" aria-pressed="false"
                     title="Tones only - show just the scope, without the settings, the readouts or the decoded text"

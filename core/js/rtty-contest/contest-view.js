@@ -82,14 +82,15 @@ export function parseFrequencyEntry(text, minHz = 30_000, maxHz = 75_000_000) {
 // The radio panel's faces (radio-panel-style.js loads them).
 export const STEP_CHOICES_HZ = [1, 10, 100, 1000];
 const DEFAULT_STEP_HZ = 10;
-export const POPOUT_PARTS = ['spectrum', 'waterfall', 'both', 'tuner'];
+export const POPOUT_PARTS = ['spectrum', 'waterfall', 'both', 'tuner', 'decode'];
 const POPOUT_SIZES = {
     spectrum: { width: 1100, height: 380 },
     waterfall: { width: 1100, height: 520 },
     both: { width: 1100, height: 760 },
     tuner: { width: 380, height: 620 },
+    decode: { width: 560, height: 420 },
 };
-const POPOUT_LABELS = { spectrum: 'SPECTRUM', waterfall: 'WATERFALL', both: 'BOTH', tuner: 'POP OUT' };
+const POPOUT_LABELS = { spectrum: 'SPECTRUM', waterfall: 'WATERFALL', both: 'BOTH', tuner: 'POP OUT', decode: 'POP OUT' };
 
 /**
  * What the main page still draws, given which windows are out:
@@ -114,6 +115,8 @@ export const BOX_SIZES = {
     tunerHeight: { min: 300 },
 };
 const GRAB_KEY_STEP = 20;
+// The least the decoded text under the tuner keeps when the tuner is made taller.
+const DECODE_MIN_H = 120;
 const BODY_GAP = 10;
 export function tidyBoxSize(name, w) {
     const r = BOX_SIZES[name];
@@ -188,11 +191,18 @@ const CSS = `
 .rc-stack{flex:1;min-width:0;display:flex;position:relative}
 .rc-stack.sized-w{flex:0 1 auto;min-width:320px}
 .rc-stack.sized-h,.rc-tuner.sized-h{max-height:100%}
+.rc-side{flex:none;display:flex;flex-direction:column;gap:10px;min-height:0}
+.rc-side[hidden]{display:none}
 .rc-holder{flex:1;min-width:0;display:flex}
 .rc-holder[hidden],.rc-holder:has(>.rp-pane[hidden]){display:none}
 .rc-page .rp-pane{position:relative;padding:6px 8px 8px;border-radius:6px;background:var(--rp-screen);border:1px solid var(--rp-screen-line)}
-.rc-tuner{flex:none;display:flex;flex-direction:column;min-height:0;position:relative}
+.rc-tuner{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;position:relative}
 .rc-tuner:empty{display:none}
+.rc-side.decoding .rc-tuner{flex:0 1 auto}
+.rc-tuner.sized-h{flex:none}
+.rc-dbox{flex:1 1 0;min-height:${DECODE_MIN_H}px;display:flex;flex-direction:column;width:var(--rc-tuner-w,360px)}
+.rc-dbox[hidden]{display:none}
+.rc-dbox.out{flex:none;min-height:0}
 .rc-scope{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:6px 10px 0}
 .rc-grp{display:flex;align-items:center;gap:3px}
 .rc-lbl{font:600 13px ${SANS};letter-spacing:.08em;color:var(--rp-legend-dim);margin-right:2px}
@@ -241,6 +251,8 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {{id:string, label:string}[]} [opts.meters]  compact bars in the strip, e.g. S, PO, SWR, ALC
  * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
  * @param {HTMLElement} [opts.tuner]  the RTTY tuner's element, docked at the side
+ * @param {HTMLElement} [opts.decode]  the decoded text, in a box of its own under the
+ *        tuner while DECODE is on, with its own POP OUT
  * @param {string} [opts.storagePrefix='rwc.rttyContest.']  this view's own choices
  * @param {string} [opts.themePrefix='rwc.radioPanel.']  the radio panel's: the theme is read from it
  * @param {string} [opts.fontBase]
@@ -255,6 +267,8 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  *        docked tuner must stand still while it is out, or the two fight over the audio
  * @param {string} [opts.layoutsApi]  the main page: the named-layouts API (the same as
  *        Experimental's); without it there is no LAYOUT
+ * @param {(out:boolean) => void} [opts.onDecodeOut]  the decoded text's window opened or
+ *        closed: the text here stands still while it is out
  * @param {(on:boolean) => void} [opts.onDecode]  the main page: DECODE was turned on or
  *        off, here or in another window, or at the start; without it there is no DECODE
  */
@@ -411,8 +425,13 @@ export function mountContestView(root, opts) {
     outNote.hidden = true;
     outNote.append(h('span', null, 'The spectrum and the waterfall are in their own windows'),
         key('DOCK THEM', 'Bring the spectrum and the waterfall back here', () => { for (const p of ['spectrum', 'waterfall', 'both']) hosts[p]?.recall(); }, 'on rc-dock-all'));
+    // The side column: the tuner, and under it the decoded text in a box of
+    // its own, so each can go out to a window by itself.
+    const side = h('div', 'rc-side');
     const tunerSlot = h('div', 'rc-tuner');
-    body.append(stack, tunerSlot);
+    const decodeSlot = h('div', 'rc-dbox');
+    side.append(tunerSlot);
+    body.append(stack, side);
     // Windows the browser would not open, with a key for each: one click, one window.
     const blockedBar = h('div', 'rc-blocked');
     blockedBar.hidden = true;
@@ -462,12 +481,29 @@ export function mountContestView(root, opts) {
         if (tbar.childElementCount) tunerSlot.append(tbar);
         tunerSlot.append(opts.tuner, tunerNote);
     }
+    // The decoded text, under the tuner while DECODE is on: POP OUT on its own
+    // bar, and a note keeps its place while it is out.
+    let decodePop = null;
+    const decodeNote = h('div', 'rc-tnote');
+    decodeNote.hidden = true;
+    if (isMain && opts.decode && decodeKey) {
+        const dbar = h('div', 'rc-tbar');
+        if (opts.windowUrl) {
+            decodePop = key(POPOUT_LABELS.decode, '', () => togglePopout('decode'), 'rc-pop-decode');
+            dbar.append(decodePop);
+        }
+        if (dbar.childElementCount) decodeSlot.append(dbar);
+        decodeSlot.append(opts.decode, decodeNote);
+        side.append(decodeSlot);
+    }
+    side.hidden = !opts.tuner || !isMain;
 
     // The boxes' sizes. Each is kept, and applied only here on the main page:
     // a window is its part and nothing else, the size of the window.
     const sizes = {};
     for (const name of Object.keys(BOX_SIZES)) sizes[name] = tidyBoxSize(name, store.get(own + name, ''));
-    const tunerShown = () => !!opts.tuner && tunerSlot.offsetWidth > 0;
+    const tunerShown = () => side.offsetWidth > 0;
+    const decodeDocked = () => decodeSlot.offsetHeight > 0;
     const room = {
         w: () => body.clientWidth - 2 * BODY_GAP,
         h: () => body.clientHeight - 2 * BODY_GAP,
@@ -475,14 +511,15 @@ export function mountContestView(root, opts) {
     const boxes = {
         stackWidth: { el: stack, axis: 'x', apply: v => { stack.style.width = v == null ? '' : v + 'px'; stack.classList.toggle('sized-w', v != null); },
             // The spectrum's right edge pushes the tuner along, not into it.
-            max: () => room.w() - (tunerShown() ? tunerSlot.offsetWidth + BODY_GAP : 0) },
+            max: () => room.w() - (tunerShown() ? side.offsetWidth + BODY_GAP : 0) },
         stackHeight: { el: stack, axis: 'y', apply: v => { stack.style.height = v == null ? '' : v + 'px'; stack.classList.toggle('sized-h', v != null); },
             max: () => room.h() },
         tunerWidth: { el: opts.tuner, axis: 'x', apply: v => { if (v == null) root.style.removeProperty('--rc-tuner-w'); else root.style.setProperty('--rc-tuner-w', v + 'px'); },
             // Wider than the room on its right squeezes the spectrum, down to its least.
             max: () => room.w() - BOX_SIZES.stackWidth.min - BODY_GAP },
         tunerHeight: { el: tunerSlot, axis: 'y', apply: v => { tunerSlot.style.height = v == null ? '' : v + 'px'; tunerSlot.classList.toggle('sized-h', v != null); },
-            max: () => room.h() },
+            // Taller squeezes the decoded text under it, down to its least.
+            max: () => room.h() - (decodeDocked() ? DECODE_MIN_H + BODY_GAP : 0) },
     };
     function setSize(name, v, keep) {
         sizes[name] = tidyBoxSize(name, v);
@@ -668,7 +705,7 @@ export function mountContestView(root, opts) {
     }
     // The pop-outs (main page only).
     const hosts = {};
-    const out = { spectrum: false, waterfall: false, both: false, tuner: false };
+    const out = { spectrum: false, waterfall: false, both: false, tuner: false, decode: false };
     function drawOut() {
         // A window shows its own part; the main page what has not gone out.
         const left = part ?? partsLeft(out);
@@ -698,12 +735,27 @@ export function mountContestView(root, opts) {
             onTopKey.classList.toggle('on', !!pip);
             onTopKey.disabled = out.tuner;
         }
+        if (decodeSlot.parentNode) {
+            // Shown only with DECODE on. Out, the box is its bar and the note,
+            // and the tuner has the column again.
+            decodeSlot.hidden = !decoding;
+            decodeSlot.classList.toggle('out', out.decode);
+            side.classList.toggle('decoding', decoding && !out.decode);
+            opts.decode.hidden = out.decode;
+            decodeNote.hidden = !out.decode;
+            decodeNote.textContent = 'The decoded text is in a window of its own. DOCK puts it back here.';
+        }
+        if (decodePop) {
+            decodePop.classList.toggle('on', out.decode);
+            decodePop.textContent = out.decode ? 'DOCK' : POPOUT_LABELS.decode;
+            decodePop.title = out.decode ? 'Put the decoded text back here and close its window' : 'Open the decoded text in a window of its own, for another monitor';
+        }
     }
     // A part is in one window at a time: BOTH takes the single ones back, and
     // either single one takes BOTH back. Also run when a window turns up by
     // itself (a reload, an address typed in), not only on a POP OUT click.
     function recallClashing(p) {
-        const clash = p === 'both' ? ['spectrum', 'waterfall'] : p === 'tuner' ? [] : ['both'];
+        const clash = p === 'both' ? ['spectrum', 'waterfall'] : p === 'tuner' || p === 'decode' ? [] : ['both'];
         for (const c of clash) if (hosts[c]?.isOpen) hosts[c].recall();
     }
     function togglePopout(p) {
@@ -728,7 +780,8 @@ export function mountContestView(root, opts) {
             ? 'The browser opened one window for that click. Click each to open the rest:'
             : 'The browser blocked a window. Click to open it, or allow pop-ups for this address:'));
         for (const p of blocked) {
-            blockedBar.append(key(p === 'tuner' ? 'TUNER' : POPOUT_LABELS[p], `Open the ${p === 'both' ? 'spectrum and waterfall' : p} window`,
+            const what = { both: 'spectrum and waterfall', decode: 'decoded text' }[p] ?? p;
+            blockedBar.append(key({ tuner: 'TUNER', decode: 'DECODE' }[p] ?? POPOUT_LABELS[p], `Open the ${what} window`,
                 () => togglePopout(p), 'on rc-open-' + p));
         }
         blockedBar.append(key('×', 'Leave them docked', () => showBlocked([]), 'rc-pm rc-blocked-close'));
@@ -755,6 +808,7 @@ export function mountContestView(root, opts) {
     if (isMain && opts.windowUrl) {
         for (const p of POPOUT_PARTS) {
             if (p === 'tuner' && !opts.tuner) continue;
+            if (p === 'decode' && !decodePop) continue;
             hosts[p] = new PopoutHost({
                 name: winName + p,
                 url: opts.windowUrl(p),
@@ -764,6 +818,7 @@ export function mountContestView(root, opts) {
                     out[p] = o;
                     drawOut();
                     if (p === 'tuner') opts.onTunerOut?.(o);
+                    if (p === 'decode') opts.onDecodeOut?.(o);
                 },
             }).start();
         }
@@ -826,6 +881,9 @@ export function mountContestView(root, opts) {
         if (keep) store.set(own + 'decode', on ? '1' : '0');
         decodeKey.classList.toggle('on', on);
         decodeKey.setAttribute('aria-pressed', on ? 'true' : 'false');
+        // Off, the decoded text's window goes too: there is nothing for it to show.
+        if (!on && hosts.decode?.isOpen) hosts.decode.recall();
+        drawOut();
         opts.onDecode(on);
     }
     function setMetersShown(on) {
@@ -873,7 +931,7 @@ export function mountContestView(root, opts) {
         if (pip && l.out.tuner) pip.dock();
         const fail = [];
         for (const [p, host] of Object.entries(hosts)) {
-            if (l.out[p] && !host.isOpen && !host.open()) fail.push(p);
+            if (l.out[p] && (p !== 'decode' || decoding) && !host.isOpen && !host.open()) fail.push(p);
         }
         showBlocked(fail);
     }
@@ -1029,7 +1087,7 @@ export function mountContestView(root, opts) {
         get showSpots() { return showSpots; },
         /** The wheel step the operator picked, in Hz. */
         get stepHz() { return stepHz; },
-        /** Which parts are in windows: { spectrum, waterfall, both, tuner }. */
+        /** Which parts are in windows: { spectrum, waterfall, both, tuner, decode }. */
         get out() { return { ...out }; },
         get onTop() { return !!pip; },
         /** What a saved layout would hold now. */

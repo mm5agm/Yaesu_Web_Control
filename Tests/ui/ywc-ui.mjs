@@ -22,7 +22,7 @@ const PAGES = [
     '/Calibration/MeterCalibration', '/MeterCalibration',
     '/CwReader', '/CwSend', '/Diagnostics', '/DxSpots', '/Labels', '/Memories',
     '/Ports', '/RadioDisplay', '/RemoteAudio', '/RttyTuner', '/Settings', '/UserManual',
-    '/rtty-contest/window?p=both', '/rtty-contest/window?p=waterfall', '/RttyTuner?contest=true',
+    '/rtty-contest/window?p=both', '/rtty-contest/window?p=waterfall', '/RttyTuner?contest=true', '/RttyTuner?contest=true&decode=true',
 ];
 
 const suite = new Suite(`Yaesu Web Control UI checks against ${BASE}`);
@@ -836,9 +836,10 @@ test('/rtty-contest: grabs size the spectrum and the tuner, the tuner scope stay
     } finally { await page.close(); }
 });
 
-test('/rtty-contest: DECODE shows the decoded text with the tuner and starts the decoder; off stops it and hides it', async () => {
+test('/rtty-contest: DECODE shows the decoded text in its own box under the tuner and starts the decoder; it pops out by itself; off stops it and hides it', async () => {
     const before = `try { localStorage.removeItem('ywc.rttyContest.decode'); } catch {}`;
     const page = await open('/rtty-contest', { before, settleMs: 1500 });
+    const wins = [];
     try {
         const shown = () => page.eval(`(e => !!e && e.offsetParent !== null)(document.getElementById('rttyReaderOut'))`);
         const posts = async what => (await page.writes()).filter(x => x.method === 'POST' && x.path === '/api/rtty/reader/' + what).length;
@@ -854,14 +855,38 @@ test('/rtty-contest: DECODE shows the decoded text with the tuner and starts the
         expect(await page.eval(`document.querySelector('.rc-decode').getAttribute('aria-pressed') === 'true' && localStorage.getItem('ywc.rttyContest.decode') === '1'`),
             'DECODE is not shown as on, or not kept');
         expect(await page.eval(`(e => !!e && e.offsetParent === null)(document.getElementById('rttySendInput'))`), 'Send shows with DECODE on');
+        expect(await page.eval(`!!document.querySelector('.rc-side > .rc-dbox > .rtty-decode #rttyReaderOut') && !document.querySelector('#rttyTunerDialog #rttyReaderOut')`),
+            'the decoded text is not in a box of its own');
+        expect(await page.eval(`(t => { const d = document.querySelector('.rc-dbox').getBoundingClientRect(); return d.top >= t.bottom && d.height > 100; })(document.getElementById('rttyTunerDialog').getBoundingClientRect())`),
+            'the decoded text is not under the tuner');
+        const sc = await page.eval(`(r => [Math.round(r.width), Math.round(r.height)])(document.getElementById('rttyTunerCanvas').getBoundingClientRect())`);
+        expect(sc[0] === sc[1] && sc[0] > 200, `the tuner scope is ${sc} with the text under it`);
+
+        // The text pops out by itself: the tuner stays, the window has the
+        // text and no tuner.
+        wins.push(await open('/RttyTuner?contest=true&decode=true', { settleMs: 1500 }));
+        await page.waitFor(`document.querySelector('.rc-pop-decode').textContent === 'DOCK'`, { what: 'the decode key to say DOCK' });
+        expect(await page.eval(`document.querySelector('.rtty-decode').hidden && !document.querySelector('.rc-dbox .rc-tnote').hidden && !document.getElementById('rttyTunerDialog').hidden`),
+            'with the text out the page still shows it, has no note, or lost the tuner');
+        expect(await page.eval(`document.querySelector('.rc-pop-tuner').textContent`) === 'POP OUT', 'the tuner went out with the text');
+        expect(await wins[0].eval(`(e => !!e && e.offsetParent !== null)(document.getElementById('rttyReaderOut')) && document.getElementById('rttyTunerCanvas').offsetParent === null`),
+            'the decode window does not show the text alone');
+        expect(!(await wins[0].writes()).some(x => x.path.startsWith('/api/rtty/tuner/start')), 'the decode window started a tuner');
+        await wins.pop().close();
+        await page.waitFor(`document.querySelector('.rc-pop-decode').textContent === 'POP OUT'`, { what: 'the text to come back', timeoutMs: 5000 });
+        expect(await shown(), 'the text did not come back when its window went');
 
         await page.clearWrites();
         await page.click('.rc-decode');
         await sleep(300);
         expect(!(await shown()), 'DECODE off did not hide the decoded text');
+        expect(await page.eval(`document.querySelector('.rc-dbox').hidden`), 'DECODE off left the decode box');
         expect(await posts('stop') === 1, 'DECODE off did not stop the decoder');
-        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
-    } finally { await page.close(); }
+        for (const p of [page, ...wins]) expect(p.exceptions.length === 0, `uncaught exceptions:\n${p.exceptions.join('\n')}`);
+    } finally {
+        for (const p of wins) await p.close().catch(() => {});
+        await page.close();
+    }
 });
 
 // ----------------------------------------------------------------

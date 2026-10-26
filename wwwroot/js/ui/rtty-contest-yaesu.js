@@ -71,6 +71,7 @@ export function startYaesuRttyContest(root, cfg) {
         meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
         views: cfg.views ?? [],
         tuner: cfg.tuner,
+        decode: cfg.decode,
         storagePrefix: 'ywc.rttyContest.',
         themePrefix: 'ywc.radioPanel.',
         fontBase: '/lib/fonts',
@@ -80,6 +81,7 @@ export function startYaesuRttyContest(root, cfg) {
         onDock: cfg.onDock,
         windowUrl: cfg.windowUrl,
         onTunerOut: cfg.onTunerOut,
+        onDecodeOut: cfg.onDecodeOut,
         layoutsApi: cfg.layoutsApi,
         onDecode: cfg.onDecode,
     });
