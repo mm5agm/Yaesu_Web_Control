@@ -21,7 +21,9 @@
 // and IF shift.
 //
 // Under the strip, a row of band keys for each receiver (opts.bandRows and
-// opts.bands): the app decides where a band key lands. The wheel over a
+// opts.bands): the app decides where a band key lands. BANDS picks which keys
+// each row shows, and can hide the second receiver (its tab and the band row
+// of the same id), kept in this browser. The wheel over a
 // digit of the frequency moves the dial by what that digit is worth
 // (opts.onNudge), as on the radio panel; a click on it types one.
 //
@@ -243,6 +245,12 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
 .rc-manage::backdrop{background:rgba(0,0,0,.5)}
 .rc-manage-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font:700 16px ${SANS};letter-spacing:.08em;border-bottom:1px solid var(--rp-key-border)}
 .rc-manage-body{padding:12px;overflow:auto}
+.rc-bandset{width:min(520px,95vw)}
+.rc-bandset .rc-manage-body{display:flex;flex-direction:column;gap:10px}
+.rc-bandrow{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:6px 10px 8px;border:1px solid var(--rp-key-border);border-radius:6px}
+.rc-bandrow legend{font:600 13px ${SANS};letter-spacing:.08em;color:var(--rp-legend-dim);padding:0 4px}
+.rc-tick{display:inline-flex;align-items:center;gap:5px;font:600 14px ${SANS};cursor:pointer}
+.rc-brow[hidden],.rc-bands[hidden],.rc-brow .rp-spop-key[hidden],.rp-spop-tabs[hidden],.rp-spop-tab[hidden]{display:none}
 `;
 
 /**
@@ -434,6 +442,11 @@ export function mountContestView(root, opts) {
     if (part !== 'waterfall') scope.append(refGrp, autoKey, rangeGrp, fitKey);
     if (isMain || part === 'both') scope.append(swapKey);
     scope.append(stepSel);
+    if (isMain && opts.bands?.length && opts.bandRows?.length) {
+        scope.append(key('BANDS', opts.receivers.length > 1
+            ? `Choose the band keys each row shows, and whether ${opts.receivers[1].tab.toUpperCase()} shows`
+            : 'Choose the band keys that show', () => chooseBands(), 'rc-bandset-key'));
+    }
 
     // The pop-out keys: each opens its part in a window, or docks it again.
     const popGrp = h('span', 'rc-pop');
@@ -467,7 +480,9 @@ export function mountContestView(root, opts) {
     // The band keys: a row per receiver, on the main page.
     const bandsEl = h('div', 'rc-bands');
     const bandKeys = {};
-    if (isMain && opts.bands?.length && opts.bandRows?.length) {
+    const bandRowEls = {};
+    const hasBands = isMain && !!opts.bands?.length && !!opts.bandRows?.length;
+    if (hasBands) {
         for (const r of opts.bandRows) {
             const row = h('div', 'rc-brow rc-brow-' + r.id);
             row.append(h('span', 'rc-lbl', r.label));
@@ -479,7 +494,27 @@ export function mountContestView(root, opts) {
                 row.append(k);
             }
             bandsEl.append(row);
+            bandRowEls[r.id] = row;
         }
+    }
+    // What the operator chose not to see: band keys, per row, and the
+    // receivers after the first. A hidden receiver loses its tab and the
+    // band row of the same id, and the page stays off it. Kept as what is
+    // hidden, so a band the app adds later shows.
+    const readSet = (k, keep) => {
+        try { const a = JSON.parse(store.get(own + k, '[]')); return new Set(Array.isArray(a) ? a.filter(keep) : []); } catch { return new Set(); }
+    };
+    const hiddenRx = readSet('hiddenReceivers', id => ids.indexOf(id) > 0);
+    const hiddenBands = {};
+    for (const r of opts.bandRows ?? []) hiddenBands[r.id] = readSet('hiddenBands.' + r.id, b => typeof b === 'string');
+    function drawHidden() {
+        for (const [rowId, keys] of Object.entries(bandKeys)) {
+            for (const [b, k] of Object.entries(keys)) k.hidden = hiddenBands[rowId].has(b);
+            bandRowEls[rowId].hidden = hiddenRx.has(rowId) || Object.values(keys).every(k => k.hidden);
+        }
+        for (const [id, el] of Object.entries(tabEls)) el.hidden = hiddenRx.has(id);
+        tabs.hidden = ids.filter(id => !hiddenRx.has(id)).length < 2;
+        bandsEl.hidden = Object.values(bandRowEls).every(el => el.hidden);
     }
     root.append(top);
     if (bandsEl.childElementCount) root.append(bandsEl);
@@ -963,7 +998,7 @@ export function mountContestView(root, opts) {
     }, 500);
 
     function setReceiver(id, byUser) {
-        if (!ids.includes(id)) id = ids[0];
+        if (!ids.includes(id) || hiddenRx.has(id)) id = ids[0];
         receiver = id;
         store.set(own + 'receiver', id);
         for (const [k, el] of Object.entries(tabEls)) el.classList.toggle('on', k === id);
@@ -1130,6 +1165,50 @@ export function mountContestView(root, opts) {
     }
     layoutSel?.addEventListener('change', () => onLayoutChoice(layoutSel.value));
 
+    // BANDS: which band keys show on each row, and whether the receivers
+    // after the first show at all.
+    let bandsDlg = null;
+    function chooseBands() {
+        if (!bandsDlg) {
+            bandsDlg = h('dialog', 'rc-manage rc-bandset');
+            const head = h('div', 'rc-manage-head');
+            head.append(h('span', null, 'BANDS'), key('×', 'Close', () => bandsDlg.close(), 'rc-pm'));
+            const box = h('div', 'rc-manage-body');
+            const tick = (text, checked, onChange, cls) => {
+                const l = h('label', 'rc-tick' + (cls ? ' ' + cls : ''));
+                const c = h('input');
+                c.type = 'checkbox';
+                c.checked = checked;
+                c.addEventListener('change', () => onChange(c.checked));
+                l.append(c, document.createTextNode(text));
+                return l;
+            };
+            for (const r of opts.receivers.slice(1)) {
+                box.append(tick('Show ' + r.tab.toUpperCase(), !hiddenRx.has(r.id), on => {
+                    if (on) hiddenRx.delete(r.id); else hiddenRx.add(r.id);
+                    store.set(own + 'hiddenReceivers', JSON.stringify([...hiddenRx]));
+                    drawHidden();
+                    if (!on && receiver === r.id) setReceiver(ids[0], true);
+                }, 'rc-tick-rx rc-tick-rx-' + r.id));
+            }
+            for (const r of opts.bandRows) {
+                const set = h('fieldset', 'rc-bandrow rc-bandrow-' + r.id);
+                set.append(h('legend', null, r.label));
+                for (const b of opts.bands) {
+                    set.append(tick(b.label, !hiddenBands[r.id].has(b.id), on => {
+                        if (on) hiddenBands[r.id].delete(b.id); else hiddenBands[r.id].add(b.id);
+                        store.set(own + 'hiddenBands.' + r.id, JSON.stringify([...hiddenBands[r.id]]));
+                        drawHidden();
+                    }));
+                }
+                box.append(set);
+            }
+            bandsDlg.append(head, box);
+            root.append(bandsDlg);
+        }
+        bandsDlg.showModal();
+    }
+
     function setTheme() {
         const t = applyTheme(root, store.get(themePrefix + 'theme', DEFAULT_THEME));
         for (const p of Object.values(panes)) p.setTheme(t);
@@ -1140,6 +1219,7 @@ export function mountContestView(root, opts) {
     } catch { /* nothing to follow */ }
 
     setTheme();
+    drawHidden();
     setReceiver(receiver, false);
     setShowSpots(showSpots);
     setMetersShown(metersShown);

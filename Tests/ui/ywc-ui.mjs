@@ -713,6 +713,41 @@ test('/rtty-contest: PWR, WIDTH and SHIFT show the radio and write what is picke
     } finally { await page.close(); }
 });
 
+// Bruce VK2RT, 2026-10-26: he never uses SUB, and wants only the bands he
+// works. BANDS hides band keys per row, and SUB with its tab and its row.
+test('/rtty-contest: BANDS hides band keys per row, and SUB with its tab and band row', async () => {
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    const clear = `['hiddenReceivers', 'hiddenBands.A', 'hiddenBands.B', 'receiver'].forEach(k => localStorage.removeItem('ywc.rttyContest.' + k))`;
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        expect(await page.eval(`!!document.querySelector('.rc-brow-B') && !!document.querySelector('.rp-spop-tab:nth-child(2)')`), 'this test wants a radio with SUB');
+        const seen = sel => page.eval(`[...document.querySelectorAll('${sel}')].filter(e => e.offsetParent !== null).length`);
+        await page.eval(`document.querySelector('.rc-bandset-key').click()`);
+        expect(await page.eval(`document.querySelector('.rc-bandset').open`), 'BANDS did not open its dialog');
+        // Untick 60 m on MAIN: gone from MAIN only.
+        const untick = (row, band) => page.eval(`(() => { const l = [...document.querySelectorAll('.rc-bandrow-${row} label')].find(l => l.textContent === '${band}'); const c = l.querySelector('input'); c.checked = false; c.dispatchEvent(new Event('change')); })()`);
+        await untick('A', '60m');
+        expect(await seen('.rc-brow-A .rc-band[data-band="60m"]') === 0, '60m still shows on MAIN');
+        expect(await seen('.rc-brow-B .rc-band[data-band="60m"]') === 1, '60m went from SUB too');
+
+        // Put the page on SUB, then hide SUB: the page goes back to MAIN.
+        await page.eval(`document.querySelector('.rp-spop-tab:nth-child(2)').click()`);
+        await page.eval(`(() => { const c = document.querySelector('.rc-tick-rx-B input'); c.checked = false; c.dispatchEvent(new Event('change')); })()`);
+        await page.eval(`document.querySelector('.rc-bandset').close()`);
+        expect(await seen('.rc-brow-B') === 0 && await seen('.rp-spop-tabs') === 0, 'the SUB row or the tabs still show');
+        const rx = await page.eval(`localStorage.getItem('ywc.rttyContest.receiver')`);
+        expect(rx === 'A', `the page is on ${rx} with SUB hidden`);
+
+        // The choices last.
+        await page.eval(`location.reload()`);
+        await sleep(1500);
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler after a reload' });
+        expect(await seen('.rc-brow-B') === 0 && await seen('.rc-brow-A .rc-band[data-band="60m"]') === 0 && await seen('.rc-brow-A .rc-band[data-band="20m"]') === 1,
+            'the choices did not last a reload');
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.eval(clear).catch(() => {}); await page.close(); }
+});
+
 // Bruce's set-up (#169): AFSK in DATA-L with the software on Mark 1415 / 170.
 // The pair's midpoint is 1500 Hz of audio, so a click on a signal puts the
 // dial 1500 Hz above it, and the mark lands on 1415.
