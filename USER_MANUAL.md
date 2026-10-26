@@ -1403,24 +1403,26 @@ The Radio panel has none of the screen-reader or voice-control work of the Class
 
 ### 5.24 RTTY Contest
 
-*New in v2.5.4-pre2, and still being tested.*
+*New in v2.5.4-pre2, with more in v2.5.4-pre3, and still being tested.*
 
 **RTTY Contest** has only what a contest RTTY operator uses, on one screen: the frequency, the spectrum over the waterfall, and the RTTY tuner docked at the side. Pick it from **Views** on the Radio panel ([§5.23](#523-radio-panel)), or go to `http://localhost:8080/rtty-contest`. **Views** on the page itself goes back to the other GUIs.
 
-While it is open, its tuner keeps the radio in RTTY. CW Reader Mode can't switch the radio to CW while the page is open, so close it, or use another GUI, for CW.
+While it is open, its tuner keeps the radio in the mode chosen in **MODE** (below). CW Reader Mode can't switch the radio to CW while the page is open, so close it, or use another GUI, for CW.
 
 **The top strip**
 
 - **The frequency** of the receiver on screen. Click it to type a frequency: `14.08` and `14080` and `14080000` all mean 14.080 MHz. Enter tunes there and Esc leaves it as it was. Hold the mouse over a digit and turn the wheel to move that digit up or down, as on the Radio panel.
-- **The mode**, then the tuner's **MARK / SHIFT**, then **RX** or **TX**.
+- **MODE** is a list of RTTY-L, RTTY-U, DATA-L and DATA-U: DATA-L for AFSK, where your RTTY software makes the tones. A pick is kept (it is the same setting as **RTTY mode** in Settings), the tuner holds the radio in it, and the band keys use it. A mode outside the four shows as itself, greyed. Then the tuner's **MARK / SHIFT**, then **RX** or **TX**.
 - **Meters:** S, and PO, SWR and ALC while transmitting. **METERS** hides or shows them.
-- **Main / Sub** chooses which receiver's spectrum is on screen, where there are two SDRs. The strip follows it.
+- **Main / Sub** chooses which receiver's spectrum is on screen, where there are two SDRs. The strip follows it. **BANDS** (below) can hide SUB.
 - **DX SPOTS** switches the spot tags on the spectrum on and off, and **SPAN** sets the SDR's span.
 - **LAYOUT** saves and recalls named layouts (below).
 
 **The band keys**
 
-Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101D one for SUB. A key tunes that receiver to the RTTY part of the band and puts it in RTTY-L. The spot comes from your band plan's RTTY segment where it has one. Where it doesn't, the keys use 1.838, 10.140, 18.105, 24.925 and 50.300 MHz. The band plan the other GUIs use is not changed. **60 m and 4 m** (and **2 m** and **70 cm** on the FT-991A) have no RTTY spot here: their keys go to the radio's own band memory, as the band keys on the other GUIs do, and then to RTTY-L. The key for the band each receiver is on is lit, however you got there.
+Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101D one for SUB. A key tunes that receiver to the RTTY part of the band and puts it in the mode chosen in **MODE**. The spot comes from your band plan's RTTY segment where it has one. Where it doesn't, the keys use 1.838, 10.140, 18.105, 24.925 and 50.300 MHz. The band plan the other GUIs use is not changed. **60 m and 4 m** (and **2 m** and **70 cm** on the FT-991A) have no RTTY spot here: their keys go to the radio's own band memory, as the band keys on the other GUIs do, and then to that mode. The key for the band each receiver is on is lit, however you got there.
+
+**BANDS**, in the scope row, opens a box with a tick for each band key on each row, and a **Show SUB** tick. Untick the bands you don't work and their keys go. Hiding SUB takes away its tab and its band row, and puts the page back on MAIN. The choices are kept in this browser; they are not part of a layout.
 
 **The scope row**
 
@@ -1428,19 +1430,29 @@ Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101
 - **RANGE** is how many dB the trace covers. **FIT** sets it so the strongest signal of the last few seconds just fits, as does a double-click on the bar between the spectrum and the waterfall.
 - **WF ON TOP** puts the waterfall above the spectrum.
 - **STEP** is how far one notch of the mouse wheel moves the dial over the spectrum, 1 Hz to 1 kHz.
+- **TRACE** is how thick the spectrum's line is: 0.5, 0.8 (the start), 1.2 or 2.
+- **BANDS** chooses the band keys and whether SUB shows (above).
 - **POP OUT** opens the spectrum, the waterfall, or both, in a window of their own.
 
 **Tuning**
 
-Click a signal on the spectrum or on the waterfall to tune to it. The page never changes the mode when you click, whatever the band plan says about that part of the band. In RTTY the dial goes where the tuner's Mark and Shift put the signal in the middle of the filter. With AFSK in DATA-L and the software on Mark 1415 / 170, a click puts the dial 1500 Hz above the signal, and the mark lands on 1415.
+Click a signal on the spectrum or on the waterfall to tune to it. The **arrows** at the left and right edges of the spectrum (of the waterfall, with WF ON TOP) move the dial down or up by one span, to look along the band a screen at a time. The page never changes the mode when you click, whatever the band plan says about that part of the band. In RTTY the dial goes where the tuner's Mark and Shift put the signal in the middle of the filter. With AFSK in DATA-L and the software on Mark 1415 / 170, a click puts the dial 1500 Hz above the signal, and the mark lands on 1415.
 
 **The tuner**
 
 The RTTY tuner ([§22](#22-rtty)) is docked at the right, as in Contest Mode ([§22.7](#227-contest-mode-the-tuner-on-its-own)). The keys on its bar:
 
-- **DECODE** shows the decoded text with the tuner and starts the decoder. Press it again to stop the decoder and hide the text.
+- **DECODE** shows the decoded text in a box of its own under the tuner, and starts the decoder. Press it again to stop the decoder and hide the text. The text box has its own **POP OUT**.
 - **POP OUT** moves the tuner into a window of its own, the same window every GUI pops its tuner out to.
 - **ON TOP** puts it in a small window that stays above other programs, such as your logger, where the browser allows it (Chrome and Edge do).
+
+The docked tuner starts small, 300 px wide; its grabs make it bigger. Under it is a box with the three controls a contest operator reaches for most:
+
+- **PWR**, 5 W to the radio's maximum.
+- **WIDTH**, the radio's IF widths for the mode (greyed in AM and FM).
+- **SHIFT**, IF shift from -1000 to +1000 Hz in 20 Hz steps. Double-click it to centre it.
+
+WIDTH and SHIFT follow the receiver on screen. A slider writes to the radio when you let go of it, or a moment after the last notch of the mouse wheel over it.
 
 **Sizes, windows and layouts**
 
