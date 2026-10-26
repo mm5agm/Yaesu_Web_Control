@@ -553,6 +553,63 @@ test('/RadioSpectrum: the mouse wheel steps the dial by the board STEP', async (
     } finally { await page.eval(`localStorage.removeItem('ywc.radioPanel.stepHz')`).catch(() => {}); await page.close(); }
 });
 
+test('/rtty-contest: the tuner is docked, the strip follows the radio, and a click never changes the mode (#169)', async () => {
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        const docked = await page.eval(`!!document.querySelector('.rc-tuner > #rttyTunerDialog[open]')`);
+        expect(docked, 'the RTTY tuner is not open in the side slot');
+        // 14.030 in USB: the band plan says CW there, which this page must not write.
+        await page.state('FrequencyA', 14_030_000);
+        await page.state('ModeA', 'USB');
+        const bins = Array.from({ length: 475 }, () => -110);
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_030_000, spanHz: 10_000, rfOrdered: true });
+        const strip = await page.eval(`document.querySelector('.rc-freq').textContent + ' ' + document.querySelector('.rc-top .rc-chip').textContent`);
+        expect(strip === '14.030.000 USB', `the strip said "${strip}"`);
+        await page.eval(`(() => {
+            const el = document.querySelector('.rc-holder:not([hidden]) .rp-spectrum');
+            const rc = el.getBoundingClientRect(), x = rc.left + rc.width * 0.75, y = rc.top + rc.height / 2;
+            el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
+            el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
+        })()`);
+        await sleep(300);
+        const all = await page.writes();
+        const f = all.filter(x => x.path === '/api/cat/frequency/a');
+        expect(f.length === 1 && f[0].body?.frequencyHz === 14_032_500, `frequency wrote ${JSON.stringify(f)}`);
+        const m = all.filter(x => x.path.startsWith('/api/cat/mode'));
+        expect(m.length === 0, `a mode was written: ${JSON.stringify(m)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
+test('/rtty-contest: a typed frequency tunes, and DX SPOTS hides the spot tags', async () => {
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await page.eval(`(() => {
+            document.querySelector('.rc-freq').click();
+            const i = document.querySelector('.rc-freq-in');
+            i.value = '7.0405';
+            i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        })()`);
+        await sleep(300);
+        const f = (await page.writes()).filter(x => x.path === '/api/cat/frequency/a');
+        expect(f.length === 1 && f[0].body?.frequencyHz === 7_040_500, `frequency wrote ${JSON.stringify(f)}`);
+
+        await page.eval(`localStorage.setItem('ywc.rttyContest.spots', '1')`);
+        await page.state('FrequencyA', 14_080_000);
+        const bins = Array.from({ length: 475 }, () => -110);
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 10_000, rfOrdered: true });
+        await page.state('DxSpot', { callsign: 'T3ST', frequencyHz: 14_081_000, receivedUtc: new Date().toISOString() });
+        const tags = () => page.eval(`document.querySelectorAll('.rc-holder:not([hidden]) .rp-spot').length`);
+        const before = await tags();
+        await page.eval(`[...document.querySelectorAll('.rc-top button')].find(b => b.textContent === 'DX SPOTS').click()`);
+        const after = await tags();
+        expect(before === 1 && after === 0, `spot tags before/after the switch: ${before}/${after}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.eval(`localStorage.removeItem('ywc.rttyContest.spots')`).catch(() => {}); await page.close(); }
+});
+
 // ----------------------------------------------------------------
 
 try {

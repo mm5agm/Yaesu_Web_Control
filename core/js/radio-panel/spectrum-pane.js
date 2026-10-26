@@ -32,6 +32,9 @@ export class SpectrumPane {
      * @param {(hz:number) => number} [opts.tuneTo]  where the dial lands for a click
      * @param {(dir:number) => void} [opts.onStep]  a mouse wheel notch, +1 up or -1 down
      *        at hz, when the app tunes somewhere else (Yaesu RTTY); the readout shows it
+     * @param {boolean} [opts.grip=false]  a bar between the spectrum and the waterfall
+     *        that drags their split (setSplit); off, the split is the stylesheet's
+     * @param {(frac:number) => void} [opts.onSplit]  the split after a drag, to keep
      */
     constructor(container, opts = {}) {
         this.el = h('div', 'rp-pane');
@@ -48,6 +51,9 @@ export class SpectrumPane {
         const wf = h('div', 'rp-waterfall');
         this.el.append(this.bar, spec, this._axis, wf);
         container.append(this.el);
+        this._specEl = spec;
+        this._wfEl = wf;
+        if (opts.grip) this._grip(opts.onSplit);
         this._view = new SpectrumView(spec, wf);
         this._st = { hz: 0, mode: '', widthHz: null, spanHz: 0, spots: [], showSpots: true, name: '', status: null, passband: true };
         if (opts.onTune) this._tunable(spec, wf, opts.onTune, opts.tuneTo);
@@ -112,6 +118,38 @@ export class SpectrumPane {
                 if (a) onTune(a.hz);
             });
         }
+    }
+
+    // The spectrum's share of the height the two share, 0.15..0.85. The grip
+    // sits under the axis, so the axis stays with the trace it labels.
+    _grip(onSplit) {
+        const grip = h('div', 'rp-pane-grip');
+        grip.title = 'Drag to share the height between the spectrum and the waterfall';
+        this._wfEl.before(grip);
+        grip.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            grip.setPointerCapture(e.pointerId);
+            const top = this._specEl.getBoundingClientRect().top;
+            const bottom = this._wfEl.getBoundingClientRect().bottom;
+            const move = m => { if (bottom > top) this.setSplit((m.clientY - top) / (bottom - top)); };
+            const up = () => {
+                grip.removeEventListener('pointermove', move);
+                grip.removeEventListener('pointerup', up);
+                grip.removeEventListener('pointercancel', up);
+                onSplit?.(this._split);
+            };
+            grip.addEventListener('pointermove', move);
+            grip.addEventListener('pointerup', up);
+            grip.addEventListener('pointercancel', up);
+        });
+    }
+
+    /** The spectrum's share of the height, 0.15..0.85; the waterfall has the rest. */
+    setSplit(frac) {
+        const f = Math.max(0.15, Math.min(0.85, Number(frac) || 0.5));
+        this._split = f;
+        this._specEl.style.flex = `${f} 1 0`;
+        this._wfEl.style.flex = `${1 - f} 1 0`;
     }
 
     /** The board's drawing settings: SpectrumView's, plus passband on or off. */

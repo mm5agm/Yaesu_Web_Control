@@ -24,6 +24,13 @@
     // rather than passed in, so the main page's dialog and the pop-out window
     // cannot end up disagreeing about it.
     var contest = (await SettingsSvc.GetSettingsAsync()).RttyContestMode;
+
+    // Docked in the RTTY Contest view (/rtty-contest): open from the start,
+    // the Tune section only whatever the setting says, a fixed size, and no
+    // message line under the scope, so nothing in it moves while tuning.
+    // The view has its own way out, so no pop-out or close buttons here.
+    var docked = ViewData["RttyTunerDocked"] is true;
+    if (docked) contest = true;
 }
 <style>
     /* Wide enough for the two columns the layout is built around: the decode
@@ -89,6 +96,17 @@
     #rttyTunerDialog.rtty-contest #rttyTunerInfo,
     #rttyTunerDialog.rtty-contest #rttyTunerStatus { min-height:2.4em; }
 
+    /* Docked in the RTTY Contest view: part of the page, not a dialog, and a
+       fixed size. The status line goes; the readouts above it stay. */
+    #rttyTunerDialog.rtty-docked {
+        position:static; display:flex; flex-direction:column;
+        width:340px; height:auto; max-height:100%; min-height:0; max-width:none;
+        margin:0; padding:0; resize:none; overflow:auto;
+        border:1px solid #555; border-radius:8px; background:#222; color:#eee;
+    }
+    #rttyTunerDialog.rtty-docked .rtty-header { cursor:default; }
+    #rttyTunerDialog.rtty-docked #rttyTunerStatus { display:none; }
+
     /* Shown only in the pop-out, which stays open when the mode changes
        rather than vanishing off a second monitor. */
     #rttyTunerPaused {
@@ -136,9 +154,9 @@
      oscilloscope; the reader (core/js/rtty/rtty-reader.js) prints what the
      server's demodulator makes of the same audio. Non-modal so the VFO stays
      in reach. -->
-<dialog id="rttyTunerDialog" open="@popout"
-        class="@(string.Join(" ", new[] { popout ? "rtty-popout user-sized" : null, contest ? "rtty-contest" : null }.Where(c => c is not null)))"
-        style="@(popout ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0;")"
+<dialog id="rttyTunerDialog" open="@(popout || docked)"
+        class="@(string.Join(" ", new[] { popout ? "rtty-popout user-sized" : null, docked ? "rtty-docked" : null, contest ? "rtty-contest" : null }.Where(c => c is not null)))"
+        style="@(popout || docked ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0;")"
         aria-labelledby="rttyTunerTitle">
     <div class="rtty-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
         <strong id="rttyTunerTitle">@(contest ? "RTTY Tuner" : "RTTY")</strong>
@@ -146,7 +164,10 @@
             <button id="rttyTunerCompactBtn" class="btn btn-sm btn-outline-secondary" type="button" aria-pressed="false"
                     title="Tones only - show just the scope, without the settings, the readouts or the decoded text"
                     aria-label="Tones only view"><i class="bi bi-fullscreen-exit" aria-hidden="true"></i></button>
-            @if (popout)
+            @if (docked)
+            {
+            }
+            else if (popout)
             {
                 <button id="rttyTunerReattachBtn" class="btn btn-sm btn-outline-secondary" type="button"
                         title="Put the RTTY panel back in the main page"

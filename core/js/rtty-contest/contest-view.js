@@ -1,0 +1,328 @@
+// contest-view.js - the RTTY Contest view: only what a contest RTTY operator
+// uses, on one screen. A top strip (frequency, mode, Mark/Shift, compact
+// meters, Main/Sub, DX SPOTS, SPAN, Views), the spectrum over the waterfall
+// with a grip between them, and the RTTY tuner docked at the side.
+//
+// Like the radio panel it has no radio in it. The app's adapter feeds each
+// receiver's pane (spectrum-pane.js) and the strip, and is told what the
+// operator did. The tuner's own markup is the app's too: the page hands its
+// element over and this only gives it a place.
+//
+// Needs the radio panel's stylesheet (injected here) and its themes.
+
+import { injectRadioPanelStyle } from '../radio-panel/radio-panel-style.js';
+import { applyTheme, DEFAULT_THEME } from '../radio-panel/radio-panel-themes.js';
+import { SpectrumPane } from '../radio-panel/spectrum-pane.js';
+import { formatFrequency } from '../radio-panel/panel-math.js';
+
+const store = {
+    get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+    set(k, val) { try { localStorage.setItem(k, val); } catch { /* private window */ } },
+};
+
+function h(tag, cls, text) {
+    const el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text != null) el.textContent = text;
+    return el;
+}
+function btn(cls, text, onClick) {
+    const b = h('button', cls, text);
+    b.type = 'button';
+    b.addEventListener('click', onClick);
+    return b;
+}
+
+/**
+ * A typed frequency, as an operator types it: 14.08 or 7.0405 is MHz,
+ * 14080 or 7040.5 is kHz, anything from 100000 up is Hz. Commas count as
+ * points. Null for anything else, or outside minHz..maxHz.
+ */
+export function parseFrequencyEntry(text, minHz = 30_000, maxHz = 75_000_000) {
+    const t = String(text ?? '').trim().replace(/,/g, '.').replace(/\s+/g, '');
+    if (!/^\d+(\.\d*)?$|^\.\d+$/.test(t)) return null;
+    const v = Number(t);
+    if (!(v > 0)) return null;
+    const hz = Math.round(v < 100 ? v * 1e6 : v < 100_000 ? v * 1e3 : v);
+    return hz >= minHz && hz <= maxHz ? hz : null;
+}
+
+// The radio panel's faces (radio-panel-style.js loads them).
+const SANS = "'Barlow Condensed', 'Arial Narrow', sans-serif";
+const MONO = "'Share Tech Mono', Consolas, monospace";
+
+const CSS = `
+.rc-page{height:100vh;display:flex;flex-direction:column}
+.rc-top{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:6px 10px;background:var(--rp-key-bg);border-bottom:1px solid var(--rp-key-border)}
+.rc-title{font:700 16px ${SANS};letter-spacing:.1em;color:var(--rp-key-fg);white-space:nowrap}
+.rc-freq{appearance:none;border:1px solid transparent;background:none;border-radius:4px;padding:0 4px;font:500 26px ${MONO};color:var(--rp-title);cursor:text;white-space:nowrap}
+.rc-freq small{font-size:18px;color:var(--rp-chip-fg)}
+.rc-freq:hover{border-color:var(--rp-soft-border)}
+.rc-freq-in{width:9em;font:500 22px ${MONO};background:var(--rp-spec-bg);color:var(--rp-title);border:1px solid var(--rp-highlight);border-radius:4px;padding:1px 6px}
+.rc-chip{font:600 15px ${SANS};letter-spacing:.06em;color:var(--rp-chip-fg);border:1px solid var(--rp-well-border);border-radius:4px;padding:2px 8px;white-space:nowrap}
+.rc-chip.tx{background:var(--rp-tx);border-color:var(--rp-tx);color:var(--rp-tx-fg)}
+.rc-meters{display:flex;gap:8px;align-items:center}
+.rc-meters[hidden]{display:none}
+.rc-meter{display:flex;align-items:center;gap:4px;font:600 13px ${SANS};color:var(--rp-legend-dim)}
+.rc-bar{width:48px;height:8px;border-radius:2px;background:var(--rp-bar-bg);border:1px solid var(--rp-well-border);overflow:hidden}
+.rc-fill{height:100%;width:0;background:var(--rp-highlight);transition:width .12s linear}
+.rc-meter.over .rc-fill{background:var(--rp-tx)}
+.rc-val{min-width:3.6em;font:400 13px ${MONO};color:var(--rp-chip-fg)}
+.rc-gap{flex:1}
+.rc-body{flex:1;min-height:0;display:flex;gap:10px;padding:10px}
+.rc-stack{flex:1;min-width:0;display:flex}
+.rc-holder{flex:1;min-width:0;display:flex}
+.rc-holder[hidden]{display:none}
+.rc-page .rp-pane{position:relative;padding:6px 8px 8px;border-radius:6px;background:var(--rp-screen);border:1px solid var(--rp-screen-line)}
+.rc-tuner{flex:none;display:flex;flex-direction:column;min-height:0}
+.rc-tuner:empty{display:none}
+.rc-views{font:500 15px ${SANS};min-height:32px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:2px 6px}
+`;
+
+/**
+ * @param {HTMLElement} root
+ * @param {object} opts
+ * @param {{id:string, tab:string, name:string}[]} opts.receivers  one or two; with one there is no Main/Sub switch
+ * @param {{hz:number, label:string}[]} [opts.spans]
+ * @param {(id:string, hz:number) => void} [opts.onSpan]
+ * @param {(id:string, hz:number) => void} [opts.onTune]  a click on a pane
+ * @param {(id:string, hz:number) => number} [opts.tuneTo]  where the dial lands for a click at hz
+ * @param {(id:string, dir:number) => void} [opts.onStep]  a mouse wheel notch
+ * @param {(id:string, hz:number) => void} [opts.onFrequencyEntry]  a typed frequency
+ * @param {(id:string) => void} [opts.onReceiver]  the operator picked Main or Sub
+ * @param {{id:string, label:string}[]} [opts.meters]  compact bars in the strip, e.g. S, PO, SWR, ALC
+ * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
+ * @param {HTMLElement} [opts.tuner]  the RTTY tuner's element, docked at the side
+ * @param {string} [opts.storagePrefix='rwc.rttyContest.']  this view's own choices
+ * @param {string} [opts.themePrefix='rwc.radioPanel.']  the radio panel's: the theme is read from it
+ * @param {string} [opts.fontBase]
+ * @param {number} [opts.minHz]
+ * @param {number} [opts.maxHz]
+ */
+export function mountContestView(root, opts) {
+    injectRadioPanelStyle(document, opts.fontBase);
+    if (!document.getElementById('rc-style')) {
+        const st = document.createElement('style');
+        st.id = 'rc-style';
+        st.textContent = CSS;
+        document.head.append(st);
+    }
+    const own = opts.storagePrefix ?? 'rwc.rttyContest.';
+    const themePrefix = opts.themePrefix ?? 'rwc.radioPanel.';
+    const ids = opts.receivers.map(r => r.id);
+
+    root.classList.add('rp-page', 'rc-page');
+    const top = h('div', 'rc-top');
+    top.append(h('span', 'rc-title', 'RTTY CONTEST'));
+
+    // The frequency: click it to type one.
+    const freqBtn = btn('rc-freq', '', () => editFrequency());
+    freqBtn.title = 'Click to type a frequency: 14.08 or 14080 or 14080000';
+    const freqIn = h('input', 'rc-freq-in');
+    freqIn.type = 'text';
+    freqIn.inputMode = 'decimal';
+    freqIn.hidden = true;
+    freqIn.setAttribute('aria-label', 'Frequency');
+    const modeChip = h('span', 'rc-chip', '');
+    modeChip.title = 'Mode';
+    const toneChip = h('span', 'rc-chip', '');
+    toneChip.title = "Mark and shift, as the RTTY tuner has them. A click on the spectrum puts the mark there";
+    const txChip = h('span', 'rc-chip', 'RX');
+    top.append(freqBtn, freqIn, modeChip, toneChip, txChip);
+
+    const meterRow = h('div', 'rc-meters');
+    const meterEls = {};
+    for (const m of opts.meters ?? []) {
+        const el = h('span', 'rc-meter');
+        const fill = h('div', 'rc-fill');
+        const bar = h('div', 'rc-bar');
+        bar.append(fill);
+        const val = h('span', 'rc-val', '');
+        el.append(h('span', null, m.label), bar, val);
+        meterRow.append(el);
+        meterEls[m.id] = { el, fill, val };
+    }
+    let metersShown = store.get(own + 'meters', '1') === '1';
+    const meterKey = btn('rp-spop-key', 'METERS', () => setMetersShown(!metersShown));
+    meterKey.title = 'Show or hide the meters';
+    if (opts.meters?.length) top.append(meterRow, meterKey);
+
+    const tabs = h('div', 'rp-spop-tabs');
+    const tabEls = {};
+    for (const r of opts.receivers) {
+        tabEls[r.id] = btn('rp-spop-tab', r.tab, () => setReceiver(r.id, true));
+        tabs.append(tabEls[r.id]);
+    }
+    if (ids.length > 1) top.append(tabs);
+
+    top.append(h('span', 'rc-gap'));
+    const spotsBtn = btn('rp-spop-key', 'DX SPOTS', () => setShowSpots(!showSpots));
+    spotsBtn.title = 'Show or hide the DX spot tags on the spectrum';
+    top.append(spotsBtn);
+
+    let spanSel = null;
+    if (opts.spans?.length) {
+        spanSel = h('select', 'rp-spop-span');
+        spanSel.title = 'Span';
+        for (const s of opts.spans) spanSel.append(new Option('SPAN ' + s.label, String(s.hz)));
+        spanSel.addEventListener('change', () => opts.onSpan?.(receiver, Number(spanSel.value)));
+        top.append(spanSel);
+    }
+
+    if (opts.views?.length) {
+        const views = h('select', 'rc-views');
+        views.title = 'Views';
+        views.setAttribute('aria-label', 'Views');
+        for (const v of opts.views) {
+            const o = new Option(v.label, v.href);
+            if (v.on) o.selected = true;
+            views.append(o);
+        }
+        views.addEventListener('change', () => { location.href = views.value; });
+        top.append(views);
+    }
+
+    const body = h('div', 'rc-body');
+    const stack = h('div', 'rc-stack');
+    const tunerSlot = h('div', 'rc-tuner');
+    body.append(stack, tunerSlot);
+    root.append(top, body);
+    if (opts.tuner) tunerSlot.append(opts.tuner);
+
+    const split = Number(store.get(own + 'split', '0.5')) || 0.5;
+    const panes = {};
+    const holders = {};
+    for (const r of opts.receivers) {
+        const holder = h('div', 'rc-holder');
+        stack.append(holder);
+        const pane = new SpectrumPane(holder, {
+            onTune: opts.onTune && (hz => opts.onTune(r.id, hz)),
+            tuneTo: opts.onTune && opts.tuneTo && (hz => opts.tuneTo(r.id, hz)),
+            onStep: opts.onStep && (dir => opts.onStep(r.id, dir)),
+            grip: true,
+            // One split for both receivers: switching Main to Sub should not move it.
+            onSplit: f => {
+                store.set(own + 'split', String(f));
+                for (const p of Object.values(panes)) if (p !== pane) p.setSplit(f);
+            },
+        });
+        pane.setName(r.name);
+        pane.setSplit(split);
+        panes[r.id] = pane;
+        holders[r.id] = holder;
+    }
+
+    // What the strip shows, per receiver; only the selected one's is drawn.
+    const shown = {};
+    for (const id of ids) shown[id] = { hz: 0, mode: '' };
+
+    let receiver = store.get(own + 'receiver', ids[0]);
+    let showSpots = store.get(own + 'spots', '1') === '1';
+
+    function drawStrip() {
+        const s = shown[receiver];
+        const f = formatFrequency(s.hz);
+        freqBtn.textContent = '';
+        if (s.hz > 0) {
+            freqBtn.append(f.big);
+            freqBtn.append(h('small', null, f.small));
+        } else freqBtn.textContent = '-.---.---';
+        modeChip.textContent = s.mode || '-';
+    }
+    function editFrequency() {
+        freqIn.value = '';
+        freqIn.placeholder = shown[receiver].hz ? (shown[receiver].hz / 1000).toFixed(3) : 'kHz';
+        freqBtn.hidden = true;
+        freqIn.hidden = false;
+        freqIn.focus();
+    }
+    function endEdit(take) {
+        if (freqIn.hidden) return;
+        const hz = take ? parseFrequencyEntry(freqIn.value, opts.minHz, opts.maxHz) : null;
+        freqIn.hidden = true;
+        freqBtn.hidden = false;
+        if (hz) opts.onFrequencyEntry?.(receiver, hz);
+    }
+    freqIn.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); endEdit(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); endEdit(false); }
+    });
+    freqIn.addEventListener('blur', () => endEdit(false));
+
+    function setReceiver(id, byUser) {
+        if (!ids.includes(id)) id = ids[0];
+        receiver = id;
+        store.set(own + 'receiver', id);
+        for (const [k, el] of Object.entries(tabEls)) el.classList.toggle('on', k === id);
+        for (const [k, el] of Object.entries(holders)) el.hidden = k !== id;
+        drawStrip();
+        if (byUser) opts.onReceiver?.(id);
+    }
+    function setShowSpots(on) {
+        showSpots = on;
+        store.set(own + 'spots', on ? '1' : '0');
+        spotsBtn.classList.toggle('on', on);
+        spotsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        for (const p of Object.values(panes)) p.setShowSpots(on);
+    }
+    function setMetersShown(on) {
+        metersShown = on;
+        store.set(own + 'meters', on ? '1' : '0');
+        meterRow.hidden = !on;
+        meterKey.classList.toggle('on', on);
+    }
+    function setTheme() {
+        const t = applyTheme(root, store.get(themePrefix + 'theme', DEFAULT_THEME));
+        for (const p of Object.values(panes)) p.setTheme(t);
+    }
+    window.addEventListener('storage', e => { if (e.key === themePrefix + 'theme') setTheme(); });
+    try {
+        window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', setTheme);
+    } catch { /* nothing to follow */ }
+
+    setTheme();
+    setReceiver(receiver, false);
+    setShowSpots(showSpots);
+    setMetersShown(metersShown);
+
+    return {
+        pane: id => panes[id],
+        get receiver() { return receiver; },
+        setReceiver: id => setReceiver(id, false),
+        setFrequency(id, hz) {
+            if (!shown[id]) return;
+            shown[id].hz = Number(hz) || 0;
+            if (id === receiver) drawStrip();
+        },
+        setMode(id, mode) {
+            if (!shown[id]) return;
+            shown[id].mode = mode ?? '';
+            if (id === receiver) drawStrip();
+        },
+        /** e.g. setTones(1415, 170) shows "MARK 1415 / 170". */
+        setTones(markHz, shiftHz) {
+            toneChip.textContent = markHz > 0 ? `MARK ${Math.round(markHz)} / ${Math.round(shiftHz)}` : '';
+            toneChip.hidden = !(markHz > 0);
+        },
+        /** frac 0..1 for the bar, text beside it; over lights it red. */
+        setMeter(id, frac, text, over = false) {
+            const m = meterEls[id];
+            if (!m) return;
+            m.fill.style.width = Math.max(0, Math.min(1, Number(frac) || 0)) * 100 + '%';
+            m.val.textContent = text ?? '';
+            m.el.classList.toggle('over', !!over);
+        },
+        setTx(on) {
+            txChip.textContent = on ? 'TX' : 'RX';
+            txChip.classList.toggle('tx', !!on);
+        },
+        /** Show the span the SDR is actually at. A frame's span is whole bins: 20 kHz arrives as 19989 Hz. */
+        setSpanValue(id, hz) {
+            if (!spanSel || id !== receiver) return;
+            const n = Number(hz) || 0;
+            const o = [...spanSel.options].find(x => Math.abs(Number(x.value) - n) <= Number(x.value) * 0.02);
+            if (o && spanSel.value !== o.value && document.activeElement !== spanSel) spanSel.value = o.value;
+        },
+        get showSpots() { return showSpots; },
+    };
+}
