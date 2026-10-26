@@ -222,6 +222,8 @@ export class SpectrumPane {
     }
 
     setTheme(theme) { this._view.setTheme(theme); }
+    /** The trace's width in CSS pixels (SpectrumView.setTraceWidth). */
+    setTraceWidth(px) { this._view.setTraceWidth(px); }
 
     /** What the label says before the frequency and span, e.g. 'MAIN · SDR A'. */
     setName(name) { this._st.name = name ?? ''; this._drawLabel(); }

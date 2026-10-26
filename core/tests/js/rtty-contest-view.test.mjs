@@ -63,7 +63,7 @@ test('a layout with nothing in it is the standard page', () => {
     for (const l of [undefined, null, {}, 'junk']) {
         assert.deepEqual(tidyLayout(l), {
             stackWidth: null, stackHeight: null, tunerWidth: null, tunerHeight: null, meters: true, spots: true, wfFirst: false, decode: false,
-            split: 0.5, step: 10,
+            split: 0.5, step: 10, trace: 0.8,
             out: { spectrum: false, waterfall: false, both: false, tuner: false, decode: false },
             places: {},
         });
@@ -96,4 +96,8 @@ test('a saved layout comes back as saved, less what is wrong in it', () => {
     assert.deepEqual(l.places, { both: place });
     assert.equal(tidyLayout({ split: 1.5, step: 7 }).split, 0.5);
     assert.equal(tidyLayout({ split: 1.5, step: 7 }).step, 10);
+    // The trace starts thinner than the radio panel's, and keeps only a choice it offers.
+    assert.equal(tidyLayout({}).trace, 0.8);
+    assert.equal(tidyLayout({ trace: 2 }).trace, 2);
+    assert.equal(tidyLayout({ trace: 9 }).trace, 0.8);
 });

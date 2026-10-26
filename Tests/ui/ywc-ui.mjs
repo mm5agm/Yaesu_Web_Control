@@ -781,6 +781,27 @@ test('/rtty-contest: the arrows move the dial one span down or up, and go with t
     } finally { await page.eval(`localStorage.removeItem('ywc.rttyContest.wfFirst')`).catch(() => {}); await page.close(); }
 });
 
+// Bruce VK2RT, 2026-10-26: the trace was too heavy. TRACE starts at 0.8 px
+// here, and what is picked is kept.
+test('/rtty-contest: TRACE starts thin and keeps what is picked', async () => {
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    try {
+        await page.eval(`localStorage.removeItem('ywc.rttyContest.trace')`);
+        await page.eval(`location.reload()`);
+        await sleep(1500);
+        const opts = await page.eval(`[...document.querySelectorAll('.rc-scope .rc-trace option')].map(o => o.value).join()`);
+        expect(opts === '0.5,0.8,1.2,2', `TRACE offers ${opts}`);
+        let v = await page.eval(`document.querySelector('.rc-scope .rc-trace').value`);
+        expect(v === '0.8', `TRACE starts at ${v}`);
+        await page.eval(`(() => { const s = document.querySelector('.rc-scope .rc-trace'); s.value = '2'; s.dispatchEvent(new Event('change')); })()`);
+        await page.eval(`location.reload()`);
+        await sleep(1500);
+        v = await page.eval(`document.querySelector('.rc-scope .rc-trace').value`);
+        expect(v === '2', `after a reload TRACE is ${v}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.eval(`localStorage.removeItem('ywc.rttyContest.trace')`).catch(() => {}); await page.close(); }
+});
+
 // Bruce's set-up (#169): AFSK in DATA-L with the software on Mark 1415 / 170.
 // The pair's midpoint is 1500 Hz of audio, so a click on a signal puts the
 // dial 1500 Hz above it, and the mark lands on 1415.

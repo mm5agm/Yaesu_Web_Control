@@ -88,6 +88,10 @@ export function parseFrequencyEntry(text, minHz = 30_000, maxHz = 75_000_000) {
 // The radio panel's faces (radio-panel-style.js loads them).
 export const STEP_CHOICES_HZ = [1, 10, 100, 1000];
 const DEFAULT_STEP_HZ = 10;
+// The trace's width in CSS pixels. Bruce VK2RT found the radio panel's 1.2
+// heavy here, so the view starts thinner.
+export const TRACE_CHOICES_PX = [0.5, 0.8, 1.2, 2];
+const DEFAULT_TRACE_PX = 0.8;
 export const POPOUT_PARTS = ['spectrum', 'waterfall', 'both', 'tuner', 'decode'];
 const POPOUT_SIZES = {
     spectrum: { width: 1100, height: 380 },
@@ -156,6 +160,7 @@ export function tidyLayout(l) {
         decode: o.decode === true,
         split: split > 0 && split < 1 ? split : 0.5,
         step: STEP_CHOICES_HZ.includes(Number(o.step)) ? Number(o.step) : DEFAULT_STEP_HZ,
+        trace: TRACE_CHOICES_PX.includes(Number(o.trace)) ? Number(o.trace) : DEFAULT_TRACE_PX,
         out,
         places,
     };
@@ -441,9 +446,18 @@ export function mountContestView(root, opts) {
     if (!STEP_CHOICES_HZ.includes(stepHz)) stepHz = DEFAULT_STEP_HZ;
     stepSel.value = String(stepHz);
     stepSel.addEventListener('change', () => { stepHz = Number(stepSel.value); store.set(own + 'step', String(stepHz)); });
+    const traceSel = h('select', 'rc-step rc-trace');
+    traceSel.title = 'How thick the spectrum trace is drawn';
+    traceSel.setAttribute('aria-label', 'Trace width');
+    for (const px of TRACE_CHOICES_PX) traceSel.append(new Option(`TRACE ${px}`, String(px)));
+    let tracePx = Number(store.get(own + 'trace', String(DEFAULT_TRACE_PX)));
+    if (!TRACE_CHOICES_PX.includes(tracePx)) tracePx = DEFAULT_TRACE_PX;
+    traceSel.value = String(tracePx);
+    traceSel.addEventListener('change', () => setTrace(Number(traceSel.value), true));
     if (part !== 'waterfall') scope.append(refGrp, autoKey, rangeGrp, fitKey);
     if (isMain || part === 'both') scope.append(swapKey);
     scope.append(stepSel);
+    if (part !== 'waterfall') scope.append(traceSel);
     if (isMain && opts.bands?.length && opts.bandRows?.length) {
         scope.append(key('BANDS', opts.receivers.length > 1
             ? `Choose the band keys each row shows, and whether ${opts.receivers[1].tab.toUpperCase()} shows`
@@ -767,6 +781,15 @@ export function mountContestView(root, opts) {
         holders[r.id] = holder;
     }
 
+    function setTrace(px, keep) {
+        if (!TRACE_CHOICES_PX.includes(px)) return;
+        tracePx = px;
+        traceSel.value = String(px);
+        if (keep) store.set(own + 'trace', String(px));
+        for (const p of Object.values(panes)) p.setTraceWidth(px);
+    }
+    setTrace(tracePx, false);
+
     stack.append(outNote);
     for (const p of Object.values(panes)) p.setParts(part ?? 'both');
 
@@ -983,6 +1006,7 @@ export function mountContestView(root, opts) {
         else if (name === 'split') { const f = Number(v); if (f > 0) for (const p of Object.values(panes)) p.setSplit(f); }
         else if (name in BOX_SIZES) setSize(name, v, false);
         else if (name === 'decode') setDecode(v === '1', false);
+        else if (name === 'trace') setTrace(Number(v), false);
         else if (name === 'step') { const n = Number(v); if (STEP_CHOICES_HZ.includes(n)) { stepHz = n; stepSel.value = v; } }
         else if (name.startsWith('levels.')) {
             const id = name.slice('levels.'.length);
@@ -1052,6 +1076,7 @@ export function mountContestView(root, opts) {
             meters: metersShown, spots: showSpots, wfFirst, decode: decoding,
             split: Number(store.get(own + 'split', '0.5')) || 0.5,
             step: stepHz,
+            trace: tracePx,
             out: { ...out },
             places,
         };
@@ -1068,6 +1093,7 @@ export function mountContestView(root, opts) {
         stepHz = l.step;
         stepSel.value = String(stepHz);
         store.set(own + 'step', String(stepHz));
+        setTrace(l.trace, true);
         // The windows: those not in the layout go back; the rest open where
         // the layout had them. One that is open already stays where it is.
         for (const [p, host] of Object.entries(hosts)) {
