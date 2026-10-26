@@ -1,7 +1,13 @@
 // contest-view.js - the RTTY Contest view: only what a contest RTTY operator
 // uses, on one screen. A top strip (frequency, mode, Mark/Shift, compact
-// meters, Main/Sub, DX SPOTS, SPAN, Views), the spectrum over the waterfall
-// with a grip between them, and the RTTY tuner docked at the side.
+// meters, Main/Sub, DX SPOTS, SPAN, Views), a row of scope controls (ref
+// level, auto floor, range, fit, swap, wheel step), the spectrum over the
+// waterfall with a grip between them, and the RTTY tuner docked at the side.
+//
+// The scale is dB above the noise floor. REF is where the bottom of the
+// trace sits from the floor, AUTO lets the floor follow the noise, FIT (or a
+// double-click on the grip) sets the range so the strongest recent signal
+// just fits. They are kept per receiver.
 //
 // Like the radio panel it has no radio in it. The app's adapter feeds each
 // receiver's pane (spectrum-pane.js) and the strip, and is told what the
@@ -48,6 +54,17 @@ export function parseFrequencyEntry(text, minHz = 30_000, maxHz = 75_000_000) {
 }
 
 // The radio panel's faces (radio-panel-style.js loads them).
+export const STEP_CHOICES_HZ = [1, 10, 100, 1000];
+const DEFAULT_STEP_HZ = 10;
+const REF_STEP_DB = 2;
+const RANGE_STEP_DB = 5;
+
+/** A receiver's kept levels, tidied: { auto, ref (null for the default), range (null for the default) }. */
+export function tidyLevels(l) {
+    const n = (x, lo, hi) => { const v = Number(x); return x != null && x !== '' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : null; };
+    return { auto: l?.auto !== false, ref: n(l?.ref, -40, 40), range: n(l?.range, 5, 160) };
+}
+
 const SANS = "'Barlow Condensed', 'Arial Narrow', sans-serif";
 const MONO = "'Share Tech Mono', Consolas, monospace";
 
@@ -76,6 +93,13 @@ const CSS = `
 .rc-page .rp-pane{position:relative;padding:6px 8px 8px;border-radius:6px;background:var(--rp-screen);border:1px solid var(--rp-screen-line)}
 .rc-tuner{flex:none;display:flex;flex-direction:column;min-height:0}
 .rc-tuner:empty{display:none}
+.rc-scope{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:6px 10px 0}
+.rc-grp{display:flex;align-items:center;gap:3px}
+.rc-lbl{font:600 13px ${SANS};letter-spacing:.08em;color:var(--rp-legend-dim);margin-right:2px}
+.rc-num{min-width:3em;text-align:center;font:400 14px ${MONO};color:var(--rp-chip-fg)}
+.rc-scope .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
+.rc-scope .rc-pm{min-width:28px;padding:1px 0}
+.rc-step{font:500 14px ${SANS};min-height:28px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:1px 4px}
 .rc-views{font:500 15px ${SANS};min-height:32px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:2px 6px}
 `;
 
@@ -182,14 +206,51 @@ export function mountContestView(root, opts) {
         top.append(views);
     }
 
+    // The scope row. Each control acts on the receiver on screen.
+    const scope = h('div', 'rc-scope');
+    const key = (text, title, onClick, cls = '') => { const b = btn('rp-spop-key ' + cls, text, onClick); b.title = title; return b; };
+    const refVal = h('span', 'rc-num', '');
+    const rangeVal = h('span', 'rc-num', '');
+    const refGrp = h('span', 'rc-grp');
+    refGrp.append(h('span', 'rc-lbl', 'REF'),
+        key('\u2212', 'Lower the bottom of the trace: more of what is under the noise floor', () => nudgeRef(-REF_STEP_DB), 'rc-pm rc-ref-dn'),
+        refVal,
+        key('+', 'Raise the bottom of the trace: less of the noise', () => nudgeRef(REF_STEP_DB), 'rc-pm rc-ref-up'));
+    refGrp.title = 'Where the bottom of the trace sits, in dB from the noise floor';
+    const autoKey = key('AUTO', 'The floor follows the noise. Off, it stays where it is now', () => setLevel({ auto: !levels[receiver].auto }), 'rc-auto');
+    const rangeGrp = h('span', 'rc-grp');
+    rangeGrp.append(h('span', 'rc-lbl', 'RANGE'),
+        key('\u2212', 'Less range: weak signals stand taller', () => nudgeRange(-RANGE_STEP_DB), 'rc-pm rc-range-dn'),
+        rangeVal,
+        key('+', 'More range: strong signals fit', () => nudgeRange(RANGE_STEP_DB), 'rc-pm rc-range-up'));
+    rangeGrp.title = 'dB from the bottom of the trace to the top';
+    const fitKey = key('FIT', 'Fit the range to the strongest signal of the last few seconds (or double-click the bar between the spectrum and the waterfall)', () => fitNow(), 'rc-fit');
+    const swapKey = key('WF ON TOP', 'Put the waterfall above the spectrum', () => setOrder(!wfFirst), 'rc-swap');
+    const stepSel = h('select', 'rc-step');
+    stepSel.title = 'How far one notch of the mouse wheel moves the dial';
+    stepSel.setAttribute('aria-label', 'Wheel step');
+    for (const hz of STEP_CHOICES_HZ) stepSel.append(new Option(`STEP ${hz >= 1000 ? hz / 1000 + ' kHz' : hz + ' Hz'}`, String(hz)));
+    let stepHz = Number(store.get(own + 'step', String(DEFAULT_STEP_HZ)));
+    if (!STEP_CHOICES_HZ.includes(stepHz)) stepHz = DEFAULT_STEP_HZ;
+    stepSel.value = String(stepHz);
+    stepSel.addEventListener('change', () => { stepHz = Number(stepSel.value); store.set(own + 'step', String(stepHz)); });
+    scope.append(refGrp, autoKey, rangeGrp, fitKey, swapKey, stepSel);
+
     const body = h('div', 'rc-body');
     const stack = h('div', 'rc-stack');
     const tunerSlot = h('div', 'rc-tuner');
     body.append(stack, tunerSlot);
-    root.append(top, body);
+    root.append(top, scope, body);
     if (opts.tuner) tunerSlot.append(opts.tuner);
 
     const split = Number(store.get(own + 'split', '0.5')) || 0.5;
+    let wfFirst = store.get(own + 'wfFirst', '0') === '1';
+    const levels = {};
+    for (const id of ids) {
+        let saved = null;
+        try { saved = JSON.parse(store.get(own + 'levels.' + id, 'null')); } catch { /* start again */ }
+        levels[id] = tidyLevels(saved);
+    }
     const panes = {};
     const holders = {};
     for (const r of opts.receivers) {
@@ -200,6 +261,9 @@ export function mountContestView(root, opts) {
             tuneTo: opts.onTune && opts.tuneTo && (hz => opts.tuneTo(r.id, hz)),
             onStep: opts.onStep && (dir => opts.onStep(r.id, dir)),
             grip: true,
+            dbScale: true,
+            waterfallFirst: wfFirst,
+            onFit: () => keepRange(r.id),
             // One split for both receivers: switching Main to Sub should not move it.
             onSplit: f => {
                 store.set(own + 'split', String(f));
@@ -208,6 +272,9 @@ export function mountContestView(root, opts) {
         });
         pane.setName(r.name);
         pane.setSplit(split);
+        const l = levels[r.id];
+        pane.setLevels({ auto: l.auto, ref: l.ref });
+        if (l.range != null) pane.setSettings({ range: l.range });
         panes[r.id] = pane;
         holders[r.id] = holder;
     }
@@ -249,6 +316,53 @@ export function mountContestView(root, opts) {
     });
     freqIn.addEventListener('blur', () => endEdit(false));
 
+    // The levels. The range lives in the pane's settings; it is kept here.
+    function saveLevels(id) { store.set(own + 'levels.' + id, JSON.stringify(levels[id])); }
+    function shownBottom(id) {
+        const lv = panes[id].levels;
+        return lv.ref ?? (lv.floor != null ? Math.round(lv.lo - lv.floor) : null);
+    }
+    function drawScope() {
+        const l = levels[receiver];
+        const b = shownBottom(receiver);
+        refVal.textContent = b == null ? '-' : (b > 0 ? '+' : '') + b;
+        rangeVal.textContent = String(panes[receiver].settings.range);
+        autoKey.classList.toggle('on', l.auto);
+        autoKey.setAttribute('aria-pressed', l.auto ? 'true' : 'false');
+        swapKey.classList.toggle('on', wfFirst);
+        swapKey.setAttribute('aria-pressed', wfFirst ? 'true' : 'false');
+    }
+    function setLevel(patch) {
+        const l = levels[receiver] = tidyLevels({ ...levels[receiver], ...patch });
+        panes[receiver].setLevels({ auto: l.auto, ref: l.ref });
+        if (l.range != null) panes[receiver].setSettings({ range: l.range });
+        saveLevels(receiver);
+        drawScope();
+    }
+    function nudgeRef(db) {
+        const b = shownBottom(receiver);
+        if (b != null) setLevel({ ref: b + db });
+    }
+    function nudgeRange(db) { setLevel({ range: panes[receiver].settings.range + db }); }
+    function keepRange(id) {
+        levels[id] = tidyLevels({ ...levels[id], range: panes[id].settings.range });
+        saveLevels(id);
+        if (id === receiver) drawScope();
+    }
+    function fitNow() { if (panes[receiver].fit() != null) keepRange(receiver); }
+    function setOrder(on) {
+        wfFirst = on;
+        store.set(own + 'wfFirst', on ? '1' : '0');
+        for (const p of Object.values(panes)) p.setOrder(on);
+        drawScope();
+    }
+    // The default bottom has no number until the first frames find the floor.
+    const scopeTimer = setInterval(() => {
+        if (shownBottom(receiver) == null) return;
+        drawScope();
+        clearInterval(scopeTimer);
+    }, 500);
+
     function setReceiver(id, byUser) {
         if (!ids.includes(id)) id = ids[0];
         receiver = id;
@@ -256,6 +370,7 @@ export function mountContestView(root, opts) {
         for (const [k, el] of Object.entries(tabEls)) el.classList.toggle('on', k === id);
         for (const [k, el] of Object.entries(holders)) el.hidden = k !== id;
         drawStrip();
+        drawScope();
         if (byUser) opts.onReceiver?.(id);
     }
     function setShowSpots(on) {
@@ -324,5 +439,7 @@ export function mountContestView(root, opts) {
             if (o && spanSel.value !== o.value && document.activeElement !== spanSel) spanSel.value = o.value;
         },
         get showSpots() { return showSpots; },
+        /** The wheel step the operator picked, in Hz. */
+        get stepHz() { return stepHz; },
     };
 }

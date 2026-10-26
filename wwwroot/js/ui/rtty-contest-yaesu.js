@@ -17,17 +17,8 @@ import { post, startYaesuSpectrumFeed } from '/js/ui/spectrum-feed-yaesu.js';
 
 const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
 
-// The board's STEP (radio-panel-yaesu.js), saved in this browser.
-const STEP_KEY = 'ywc.radioPanel.stepHz';
-const STEPS_HZ = [10, 50, 100, 500, 1000, 5000, 10000];
-
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const on = v => v === true || v === 'true' || v === 1 || (typeof v === 'string' && v !== '' && v !== '0' && v !== '00' && v !== 'false');
-function boardStepHz() {
-    let hz = 0;
-    try { hz = num(localStorage.getItem(STEP_KEY)); } catch { /* private window */ }
-    return STEPS_HZ.includes(hz) ? hz : 100;
-}
 
 /**
  * @param {HTMLElement} root
@@ -69,7 +60,8 @@ export function startYaesuRttyContest(root, cfg) {
         vfos: receivers.map(r => r.id),
     });
     const stepper = dialStepper({
-        stepHz: boardStepHz,
+        // The page's own STEP, 1 Hz to 1 kHz, not the board's.
+        stepHz: () => view.stepHz,
         freq: vfo => feed.state.freq[vfo],
         show: (vfo, hz) => { feed.showFrequency(vfo, hz); view.setFrequency(vfo, hz); },
         write: (vfo, hz) => post(`/api/cat/frequency/${vfo.toLowerCase()}`, { frequencyHz: hz }),

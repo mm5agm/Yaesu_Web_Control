@@ -601,13 +601,89 @@ test('/rtty-contest: a typed frequency tunes, and DX SPOTS hides the spot tags',
         const bins = Array.from({ length: 475 }, () => -110);
         await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 10_000, rfOrdered: true });
         await page.state('DxSpot', { callsign: 'T3ST', frequencyHz: 14_081_000, receivedUtc: new Date().toISOString() });
-        const tags = () => page.eval(`document.querySelectorAll('.rc-holder:not([hidden]) .rp-spot').length`);
+        // The live cluster may add its own spots near 14.080, so look for ours.
+        const tags = () => page.eval(`[...document.querySelectorAll('.rc-holder:not([hidden]) .rp-spot')].map(t => t.textContent)`);
         const before = await tags();
         await page.eval(`[...document.querySelectorAll('.rc-top button')].find(b => b.textContent === 'DX SPOTS').click()`);
         const after = await tags();
-        expect(before === 1 && after === 0, `spot tags before/after the switch: ${before}/${after}`);
+        expect(before.includes('T3ST') && after.length === 0, `spot tags before/after the switch: ${before}/${after}`);
         expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
     } finally { await page.eval(`localStorage.removeItem('ywc.rttyContest.spots')`).catch(() => {}); await page.close(); }
+});
+
+// Bruce's set-up (#169): AFSK in DATA-L with the software on Mark 1415 / 170.
+// The pair's midpoint is 1500 Hz of audio, so a click on a signal puts the
+// dial 1500 Hz above it, and the mark lands on 1415.
+test('/rtty-contest: in DATA-L with Mark 1415 / 170 a click puts the dial 1500 Hz above the signal', async () => {
+    const page = await open('/rtty-contest', {
+        settleMs: 1500,
+        before: `try { localStorage.setItem('rttyTuner', JSON.stringify({ markHz: 1415, shiftHz: 170, reverse: false })); } catch {}`,
+    });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await page.state('FrequencyA', 14_080_000);
+        await page.state('ModeA', 'DATA-L');
+        const bins = Array.from({ length: 475 }, () => -110);
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 10_000, rfOrdered: true });
+        await sleep(700);
+        const tones = await page.eval(`[...document.querySelectorAll('.rc-top .rc-chip')].map(c => c.textContent).join(' | ')`);
+        expect(tones.includes('MARK 1415 / 170'), `the strip said "${tones}"`);
+        await page.eval(`(() => {
+            const el = document.querySelector('.rc-holder:not([hidden]) .rp-spectrum');
+            const rc = el.getBoundingClientRect(), x = rc.left + rc.width * 0.75, y = rc.top + rc.height / 2;
+            el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
+            el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
+        })()`);
+        await sleep(300);
+        const all = await page.writes();
+        const f = all.filter(x => x.path === '/api/cat/frequency/a');
+        expect(f.length === 1 && f[0].body?.frequencyHz === 14_082_500 + 1500, `frequency wrote ${JSON.stringify(f)}`);
+        expect(!all.some(x => x.path.startsWith('/api/cat/mode')), 'a mode was written');
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.eval(`localStorage.removeItem('rttyTuner')`).catch(() => {}); await page.close(); }
+});
+
+test('/rtty-contest: the scope row swaps the waterfall on top, steps the wheel 1 Hz, and keeps REF and AUTO', async () => {
+    const clean = `['wfFirst', 'step', 'levels.A'].forEach(k => localStorage.removeItem('ywc.rttyContest.' + k))`;
+    const page = await open('/rtty-contest', { settleMs: 1500, before: `try { ${clean}; } catch {}` });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        await page.state('FrequencyA', 14_080_000);
+        await page.state('ModeA', 'USB');
+        const bins = Array.from({ length: 475 }, (_, i) => (i === 300 ? -60 : -110));
+        for (let i = 0; i < 3; i++) await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 10_000, rfOrdered: true });
+        await sleep(700);
+
+        const order = () => page.eval(`(() => {
+            const p = document.querySelector('.rc-holder:not([hidden]) .rp-pane');
+            const kids = [...p.children];
+            return kids.indexOf(p.querySelector('.rp-waterfall')) < kids.indexOf(p.querySelector('.rp-spectrum')) ? 'wf' : 'spec';
+        })()`);
+        expect(await order() === 'spec', 'the spectrum is not on top by default');
+        await page.eval(`document.querySelector('.rc-swap').click()`);
+        expect(await order() === 'wf', 'WF ON TOP did not move the waterfall up');
+        expect(await page.eval(`localStorage.getItem('ywc.rttyContest.wfFirst')`) === '1', 'the swap was not kept');
+
+        const ref = () => page.eval(`document.querySelector('.rc-scope .rc-num').textContent`);
+        const r0 = await ref();
+        await page.eval(`document.querySelector('.rc-ref-up').click()`);
+        const r1 = await ref();
+        expect(r0 === '-6' && r1 === '-4', `REF went ${r0} -> ${r1}`);
+        await page.eval(`document.querySelector('.rc-auto').click()`);
+        const kept = JSON.parse(await page.eval(`localStorage.getItem('ywc.rttyContest.levels.A')`));
+        expect(kept?.ref === -4 && kept?.auto === false, `levels kept as ${JSON.stringify(kept)}`);
+
+        await page.eval(`document.querySelector('.rc-fit').click()`);
+        const range = await page.eval(`document.querySelectorAll('.rc-scope .rc-num')[1].textContent`);
+        expect(range !== '60', `FIT left the range at ${range}`);
+
+        await page.eval(`(() => { const s = document.querySelector('.rc-step'); s.value = '1'; s.dispatchEvent(new Event('change')); })()`);
+        await page.eval(`document.querySelector('.rc-holder:not([hidden]) .rp-spectrum').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }))`);
+        await sleep(400);
+        const f = (await page.writes()).filter(x => x.path === '/api/cat/frequency/a');
+        expect(f.length === 1 && f[0].body?.frequencyHz === 14_080_001, `a notch up wrote ${JSON.stringify(f)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.eval(clean).catch(() => {}); await page.close(); }
 });
 
 // ----------------------------------------------------------------
