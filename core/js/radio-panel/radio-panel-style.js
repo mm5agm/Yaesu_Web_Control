@@ -79,6 +79,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-menu{position:relative}
 .rp-menu-list{position:absolute;right:-4px;top:calc(100% + 8px);z-index:99999;min-width:240px;display:flex;flex-direction:column;padding:6px 0;border-radius:6px;background:${v('bar-bg')};border:1px solid ${v('well-border')};box-shadow:0 10px 28px rgba(0,0,0,.6)}
 .rp-menu-list[hidden]{display:none}
+.rp-menu-list.rp-menu-left{left:-4px;right:auto}
 .rp-menu-group{padding:8px 16px 4px;font:600 13px ${SANS};letter-spacing:.14em;color:${v('legend-dim')}}
 .rp-menu-item{padding:7px 16px 7px 28px;font:500 17px ${SANS};color:${v('text')};text-decoration:none;white-space:nowrap}
 .rp-keylist{top:0;max-height:70vh;overflow-y:auto}
