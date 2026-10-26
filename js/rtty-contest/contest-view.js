@@ -1,5 +1,5 @@
 // contest-view.js - the RTTY Contest view: only what a contest RTTY operator
-// uses, on one screen. A top strip (frequency, mode, Mark/Shift, compact
+// uses, on one screen. A top strip (frequency, mode or a MODE list, Mark/Shift, compact
 // meters, Main/Sub, DX SPOTS, SPAN, Views), a row of scope controls (ref
 // level, auto floor, range, fit, swap, wheel step), the spectrum over the
 // waterfall with a grip between them, and the RTTY tuner docked at the side.
@@ -16,12 +16,18 @@
 // swap, step - through storage events, so there is one set of them. The
 // tuner can also go On top (pip-dock.js), where the browser allows it.
 // DECODE on the tuner's bar shows the decoded text with it (opts.onDecode:
-// the app shows its reader and starts or stops the decoder).
+// the app shows its reader and starts or stops the decoder). Between the
+// two, a box of settings the app names (opts.controls), e.g. power, IF width
+// and IF shift.
 //
 // Under the strip, a row of band keys for each receiver (opts.bandRows and
-// opts.bands): the app decides where a band key lands. The wheel over a
+// opts.bands): the app decides where a band key lands. BANDS picks which keys
+// each row shows, and can hide the second receiver (its tab and the band row
+// of the same id), kept in this browser. The wheel over a
 // digit of the frequency moves the dial by what that digit is worth
-// (opts.onNudge), as on the radio panel; a click on it types one.
+// (opts.onNudge), as on the radio panel; a click on it types one. Arrows at
+// the edges of the spectrum (or of the waterfall, on top) move the dial one
+// span down or up, as a typed frequency would.
 //
 // The operator sizes two boxes here, as windows are sized: the spectrum and
 // waterfall, and the docked tuner, each by its right edge, its bottom edge or
@@ -82,6 +88,10 @@ export function parseFrequencyEntry(text, minHz = 30_000, maxHz = 75_000_000) {
 // The radio panel's faces (radio-panel-style.js loads them).
 export const STEP_CHOICES_HZ = [1, 10, 100, 1000];
 const DEFAULT_STEP_HZ = 10;
+// The trace's width in CSS pixels. Bruce VK2RT found the radio panel's 1.2
+// heavy here, so the view starts thinner.
+export const TRACE_CHOICES_PX = [0.5, 0.8, 1.2, 2];
+const DEFAULT_TRACE_PX = 0.8;
 export const POPOUT_PARTS = ['spectrum', 'waterfall', 'both', 'tuner', 'decode'];
 const POPOUT_SIZES = {
     spectrum: { width: 1100, height: 380 },
@@ -111,7 +121,7 @@ const RANGE_STEP_DB = 5;
 export const BOX_SIZES = {
     stackWidth: { min: 320 },
     stackHeight: { min: 200 },
-    tunerWidth: { min: 300, max: 760 },
+    tunerWidth: { min: 240, max: 760 },
     tunerHeight: { min: 300 },
 };
 const GRAB_KEY_STEP = 20;
@@ -150,6 +160,7 @@ export function tidyLayout(l) {
         decode: o.decode === true,
         split: split > 0 && split < 1 ? split : 0.5,
         step: STEP_CHOICES_HZ.includes(Number(o.step)) ? Number(o.step) : DEFAULT_STEP_HZ,
+        trace: TRACE_CHOICES_PX.includes(Number(o.trace)) ? Number(o.trace) : DEFAULT_TRACE_PX,
         out,
         places,
     };
@@ -196,11 +207,16 @@ const CSS = `
 .rc-holder{flex:1;min-width:0;display:flex}
 .rc-holder[hidden],.rc-holder:has(>.rp-pane[hidden]){display:none}
 .rc-page .rp-pane{position:relative;padding:6px 8px 8px;border-radius:6px;background:var(--rp-screen);border:1px solid var(--rp-screen-line)}
-.rc-tuner{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;position:relative}
+.rc-tuner{flex:0 1 auto;display:flex;flex-direction:column;min-height:0;position:relative}
 .rc-tuner:empty{display:none}
-.rc-side.decoding .rc-tuner{flex:0 1 auto}
 .rc-tuner.sized-h{flex:none}
-.rc-dbox{flex:1 1 0;min-height:${DECODE_MIN_H}px;display:flex;flex-direction:column;width:var(--rc-tuner-w,360px)}
+.rc-ctl{flex:none;display:flex;flex-direction:column;gap:6px;width:var(--rc-tuner-w,300px);box-sizing:border-box;padding:8px 10px;border:1px solid var(--rp-well-border);border-radius:6px;background:var(--rp-key-bg)}
+.rc-crow{display:flex;align-items:center;gap:8px}
+.rc-crow .rc-lbl{min-width:3.6em}
+.rc-crow input[type=range]{flex:1;min-width:0;accent-color:var(--rp-highlight)}
+.rc-crow select{flex:1;min-width:0}
+.rc-crow .rc-num{min-width:4.6em;text-align:right}
+.rc-dbox{flex:1 1 0;min-height:${DECODE_MIN_H}px;display:flex;flex-direction:column;width:var(--rc-tuner-w,300px)}
 .rc-dbox[hidden]{display:none}
 .rc-dbox.out{flex:none;min-height:0}
 .rc-scope{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:6px 10px 0}
@@ -209,13 +225,14 @@ const CSS = `
 .rc-num{min-width:3em;text-align:center;font:400 14px ${MONO};color:var(--rp-chip-fg)}
 .rc-scope .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
 .rc-scope .rc-pm{min-width:28px;padding:1px 0}
-.rc-step{font:500 14px ${SANS};min-height:28px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:1px 4px}
+.rc-step,.rc-mode{font:500 14px ${SANS};min-height:28px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:1px 4px}
+.rc-mode{font:600 15px ${SANS};letter-spacing:.06em;color:var(--rp-chip-fg)}
 .rc-out{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:500 18px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
 .rc-out[hidden]{display:none}
 .rc-tbar{display:flex;gap:6px;justify-content:flex-end;padding:0 0 6px}
 .rc-tbar .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
 .rc-tbar .rp-spop-key:disabled{opacity:.45;cursor:default}
-.rc-tnote{width:var(--rc-tuner-w,360px);box-sizing:border-box;padding:14px;font:500 16px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
+.rc-tnote{width:var(--rc-tuner-w,300px);box-sizing:border-box;padding:14px;font:500 16px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
 .rc-tnote[hidden]{display:none}
 .rc-pop{display:flex;align-items:center;gap:4px}
 .rc-pop[hidden]{display:none}
@@ -235,6 +252,12 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
 .rc-manage::backdrop{background:rgba(0,0,0,.5)}
 .rc-manage-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font:700 16px ${SANS};letter-spacing:.08em;border-bottom:1px solid var(--rp-key-border)}
 .rc-manage-body{padding:12px;overflow:auto}
+.rc-bandset{width:min(520px,95vw)}
+.rc-bandset .rc-manage-body{display:flex;flex-direction:column;gap:10px}
+.rc-bandrow{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:6px 10px 8px;border:1px solid var(--rp-key-border);border-radius:6px}
+.rc-bandrow legend{font:600 13px ${SANS};letter-spacing:.08em;color:var(--rp-legend-dim);padding:0 4px}
+.rc-tick{display:inline-flex;align-items:center;gap:5px;font:600 14px ${SANS};cursor:pointer}
+.rc-brow[hidden],.rc-bands[hidden],.rc-brow .rp-spop-key[hidden],.rp-spop-tabs[hidden],.rp-spop-tab[hidden]{display:none}
 `;
 
 /**
@@ -248,6 +271,16 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {(id:string, dir:number) => void} [opts.onStep]  a mouse wheel notch
  * @param {(id:string, hz:number) => void} [opts.onFrequencyEntry]  a typed frequency
  * @param {(id:string) => void} [opts.onReceiver]  the operator picked Main or Sub
+ * @param {{id:string, label:string}[]} [opts.modes]  the modes the MODE list offers; without
+ *        them, or without opts.onMode, the mode is only shown
+ * @param {(id:string, mode:string) => void} [opts.onMode]  a mode picked for the receiver on screen
+ * @param {string} [opts.modeTitle]  the MODE list's tooltip
+ * @param {{id:string, label:string, kind:'range'|'list', title?:string, perReceiver?:boolean,
+ *          min?:number, max?:number, step?:number, reset?:number, unit?:string,
+ *          format?:(v:number) => string}[]} [opts.controls]  settings in a box under the tuner,
+ *        e.g. power, IF width and IF shift; their values come through setControl
+ * @param {(id:string, value:number|string, vfo:string|null) => void} [opts.onControl]  one was
+ *        changed here; vfo is the receiver on screen for a perReceiver one
  * @param {{id:string, label:string}[]} [opts.meters]  compact bars in the strip, e.g. S, PO, SWR, ALC
  * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
  * @param {HTMLElement} [opts.tuner]  the RTTY tuner's element, docked at the side
@@ -301,8 +334,19 @@ export function mountContestView(root, opts) {
     freqIn.inputMode = 'decimal';
     freqIn.hidden = true;
     freqIn.setAttribute('aria-label', 'Frequency');
-    const modeChip = h('span', 'rc-chip', '');
-    modeChip.title = 'Mode';
+    // The mode: a list to pick from when the app gives one (opts.modes),
+    // showing the receiver's mode, which may be none of them.
+    const modeSel = isMain && opts.modes?.length && opts.onMode ? h('select', 'rc-mode') : null;
+    const modeOther = new Option('-', '');
+    if (modeSel) {
+        modeOther.disabled = true;
+        modeSel.append(modeOther);
+        for (const m of opts.modes) modeSel.append(new Option(m.label, m.id));
+        modeSel.setAttribute('aria-label', 'Mode');
+        modeSel.addEventListener('change', () => { if (modeSel.value) opts.onMode(receiver, modeSel.value); });
+    }
+    const modeChip = modeSel ?? h('span', 'rc-chip', '');
+    modeChip.title = modeSel ? opts.modeTitle ?? 'Mode' : 'Mode';
     const toneChip = h('span', 'rc-chip', '');
     toneChip.title = "Mark and shift, as the RTTY tuner has them. A click on the spectrum puts the mark there";
     const txChip = h('span', 'rc-chip', 'RX');
@@ -402,9 +446,23 @@ export function mountContestView(root, opts) {
     if (!STEP_CHOICES_HZ.includes(stepHz)) stepHz = DEFAULT_STEP_HZ;
     stepSel.value = String(stepHz);
     stepSel.addEventListener('change', () => { stepHz = Number(stepSel.value); store.set(own + 'step', String(stepHz)); });
+    const traceSel = h('select', 'rc-step rc-trace');
+    traceSel.title = 'How thick the spectrum trace is drawn';
+    traceSel.setAttribute('aria-label', 'Trace width');
+    for (const px of TRACE_CHOICES_PX) traceSel.append(new Option(`TRACE ${px}`, String(px)));
+    let tracePx = Number(store.get(own + 'trace', String(DEFAULT_TRACE_PX)));
+    if (!TRACE_CHOICES_PX.includes(tracePx)) tracePx = DEFAULT_TRACE_PX;
+    traceSel.value = String(tracePx);
+    traceSel.addEventListener('change', () => setTrace(Number(traceSel.value), true));
     if (part !== 'waterfall') scope.append(refGrp, autoKey, rangeGrp, fitKey);
     if (isMain || part === 'both') scope.append(swapKey);
     scope.append(stepSel);
+    if (part !== 'waterfall') scope.append(traceSel);
+    if (isMain && opts.bands?.length && opts.bandRows?.length) {
+        scope.append(key('BANDS', opts.receivers.length > 1
+            ? `Choose the band keys each row shows, and whether ${opts.receivers[1].tab.toUpperCase()} shows`
+            : 'Choose the band keys that show', () => chooseBands(), 'rc-bandset-key'));
+    }
 
     // The pop-out keys: each opens its part in a window, or docks it again.
     const popGrp = h('span', 'rc-pop');
@@ -438,7 +496,9 @@ export function mountContestView(root, opts) {
     // The band keys: a row per receiver, on the main page.
     const bandsEl = h('div', 'rc-bands');
     const bandKeys = {};
-    if (isMain && opts.bands?.length && opts.bandRows?.length) {
+    const bandRowEls = {};
+    const hasBands = isMain && !!opts.bands?.length && !!opts.bandRows?.length;
+    if (hasBands) {
         for (const r of opts.bandRows) {
             const row = h('div', 'rc-brow rc-brow-' + r.id);
             row.append(h('span', 'rc-lbl', r.label));
@@ -450,7 +510,27 @@ export function mountContestView(root, opts) {
                 row.append(k);
             }
             bandsEl.append(row);
+            bandRowEls[r.id] = row;
         }
+    }
+    // What the operator chose not to see: band keys, per row, and the
+    // receivers after the first. A hidden receiver loses its tab and the
+    // band row of the same id, and the page stays off it. Kept as what is
+    // hidden, so a band the app adds later shows.
+    const readSet = (k, keep) => {
+        try { const a = JSON.parse(store.get(own + k, '[]')); return new Set(Array.isArray(a) ? a.filter(keep) : []); } catch { return new Set(); }
+    };
+    const hiddenRx = readSet('hiddenReceivers', id => ids.indexOf(id) > 0);
+    const hiddenBands = {};
+    for (const r of opts.bandRows ?? []) hiddenBands[r.id] = readSet('hiddenBands.' + r.id, b => typeof b === 'string');
+    function drawHidden() {
+        for (const [rowId, keys] of Object.entries(bandKeys)) {
+            for (const [b, k] of Object.entries(keys)) k.hidden = hiddenBands[rowId].has(b);
+            bandRowEls[rowId].hidden = hiddenRx.has(rowId) || Object.values(keys).every(k => k.hidden);
+        }
+        for (const [id, el] of Object.entries(tabEls)) el.hidden = hiddenRx.has(id);
+        tabs.hidden = ids.filter(id => !hiddenRx.has(id)).length < 2;
+        bandsEl.hidden = Object.values(bandRowEls).every(el => el.hidden);
     }
     root.append(top);
     if (bandsEl.childElementCount) root.append(bandsEl);
@@ -480,6 +560,76 @@ export function mountContestView(root, opts) {
         }
         if (tbar.childElementCount) tunerSlot.append(tbar);
         tunerSlot.append(opts.tuner, tunerNote);
+    }
+    // The settings an operator reaches for during a contest - power, the IF
+    // width and shift, as Bruce VK2RT asked (2026-10-26) - in a box under the
+    // tuner. The app names them (opts.controls) and writes them
+    // (opts.onControl); what the radio has comes back through setControl, per
+    // receiver for a setting each receiver has. A slider writes when it is
+    // let go, a wheel notch over it a moment after the last notch, and a
+    // double-click puts it to its reset value where it has one.
+    const ctlBox = h('div', 'rc-ctl');
+    const ctls = {};
+    const ctlVals = {};
+    const ctlKey = c => (c.perReceiver ? receiver : '');
+    const ctlText = (c, v) => (v == null || !Number.isFinite(Number(v)) ? '-' : c.format ? c.format(Number(v)) : `${v}${c.unit ?? ''}`);
+    if (isMain && opts.controls?.length && opts.onControl) {
+        for (const c of opts.controls) {
+            const row = h('label', 'rc-crow rc-c-' + c.id);
+            row.title = c.title ?? '';
+            const ctl = { c, row, val: h('span', 'rc-num', ''), held: false, timer: 0, opts: '' };
+            const send = v => opts.onControl(c.id, v, c.perReceiver ? receiver : null);
+            if (c.kind === 'list') {
+                ctl.input = h('select', 'rc-step');
+                ctl.input.addEventListener('change', () => { if (ctl.input.value !== '') send(ctl.input.value); });
+                row.append(h('span', 'rc-lbl', c.label), ctl.input);
+            } else {
+                const r = ctl.input = h('input');
+                r.type = 'range';
+                r.min = String(c.min); r.max = String(c.max); r.step = String(c.step ?? 1);
+                const now = () => Number(r.value);
+                r.addEventListener('pointerdown', () => { ctl.held = true; });
+                const letGo = () => { ctl.held = false; };
+                r.addEventListener('pointerup', letGo);
+                r.addEventListener('pointercancel', letGo);
+                r.addEventListener('input', () => { ctl.val.textContent = ctlText(c, now()); });
+                r.addEventListener('change', () => { letGo(); send(now()); });
+                r.addEventListener('wheel', e => {
+                    e.preventDefault();
+                    const step = Number(r.step) || 1;
+                    r.value = String(Math.max(Number(r.min), Math.min(Number(r.max), now() + (e.deltaY < 0 ? step : -step))));
+                    ctl.val.textContent = ctlText(c, now());
+                    ctl.held = true;
+                    clearTimeout(ctl.timer);
+                    ctl.timer = setTimeout(() => { ctl.held = false; send(now()); }, 300);
+                }, { passive: false });
+                if (c.reset != null) r.addEventListener('dblclick', () => { r.value = String(c.reset); ctl.val.textContent = ctlText(c, c.reset); send(Number(c.reset)); });
+                row.append(h('span', 'rc-lbl', c.label), r, ctl.val);
+            }
+            ctls[c.id] = ctl;
+            ctlBox.append(row);
+        }
+        side.append(ctlBox);
+    }
+    function drawControls() {
+        for (const ctl of Object.values(ctls)) {
+            const e = ctlVals[ctl.c.id]?.[ctlKey(ctl.c)];
+            if (ctl.c.kind === 'list') {
+                const list = e?.options ?? [];
+                const sig = JSON.stringify(list);
+                if (sig !== ctl.opts) {
+                    ctl.opts = sig;
+                    ctl.input.replaceChildren(...(list.length ? list.map(o => new Option(o.label, o.id)) : [new Option('-', '')]));
+                }
+                ctl.input.disabled = !list.length;
+                if (document.activeElement !== ctl.input) ctl.input.value = list.some(o => o.id === String(e?.value)) ? String(e.value) : '';
+            } else {
+                if (e?.max != null) ctl.input.max = String(e.max);
+                if (ctl.held) continue;
+                if (e?.value != null) ctl.input.value = String(e.value);
+                ctl.val.textContent = ctlText(ctl.c, e?.value);
+            }
+        }
     }
     // The decoded text, under the tuner while DECODE is on: POP OUT on its own
     // bar, and a note keeps its place while it is out.
@@ -518,8 +668,9 @@ export function mountContestView(root, opts) {
             // Wider than the room on its right squeezes the spectrum, down to its least.
             max: () => room.w() - BOX_SIZES.stackWidth.min - BODY_GAP },
         tunerHeight: { el: tunerSlot, axis: 'y', apply: v => { tunerSlot.style.height = v == null ? '' : v + 'px'; tunerSlot.classList.toggle('sized-h', v != null); },
-            // Taller squeezes the decoded text under it, down to its least.
-            max: () => room.h() - (decodeDocked() ? DECODE_MIN_H + BODY_GAP : 0) },
+            // Taller squeezes the decoded text under it, down to its least,
+            // and never pushes the controls box off the bottom.
+            max: () => room.h() - (decodeDocked() ? DECODE_MIN_H + BODY_GAP : 0) - (ctlBox.offsetHeight ? ctlBox.offsetHeight + BODY_GAP : 0) },
     };
     function setSize(name, v, keep) {
         sizes[name] = tidyBoxSize(name, v);
@@ -607,6 +758,10 @@ export function mountContestView(root, opts) {
             onTune: opts.onTune && (hz => opts.onTune(r.id, hz)),
             tuneTo: opts.onTune && opts.tuneTo && (hz => opts.tuneTo(r.id, hz)),
             onStep: opts.onStep && (dir => opts.onStep(r.id, dir)),
+            // Bruce VK2RT: arrows that move the dial one span, to look along the band.
+            onJump: opts.onFrequencyEntry && (hz => {
+                if (hz >= (opts.minHz ?? 30_000) && hz <= (opts.maxHz ?? 75_000_000)) opts.onFrequencyEntry(r.id, Math.round(hz));
+            }),
             grip: true,
             dbScale: true,
             waterfallFirst: wfFirst,
@@ -626,6 +781,15 @@ export function mountContestView(root, opts) {
         holders[r.id] = holder;
     }
 
+    function setTrace(px, keep) {
+        if (!TRACE_CHOICES_PX.includes(px)) return;
+        tracePx = px;
+        traceSel.value = String(px);
+        if (keep) store.set(own + 'trace', String(px));
+        for (const p of Object.values(panes)) p.setTraceWidth(px);
+    }
+    setTrace(tracePx, false);
+
     stack.append(outNote);
     for (const p of Object.values(panes)) p.setParts(part ?? 'both');
 
@@ -641,7 +805,11 @@ export function mountContestView(root, opts) {
         const f = formatFrequency(s.hz);
         if (s.hz > 0) { freqDigits(freqBig, f.big, 1000); freqDigits(freqSmall, f.small, 1); }
         else { freqBig.textContent = '-.---'; freqSmall.textContent = '.---'; }
-        modeChip.textContent = s.mode || '-';
+        if (!modeSel) { modeChip.textContent = s.mode || '-'; return; }
+        const known = opts.modes.some(m => m.id === s.mode);
+        modeOther.textContent = s.mode || '-';
+        modeOther.hidden = known;
+        modeSel.value = known ? s.mode : '';
     }
     function editFrequency() {
         freqIn.value = '';
@@ -838,6 +1006,7 @@ export function mountContestView(root, opts) {
         else if (name === 'split') { const f = Number(v); if (f > 0) for (const p of Object.values(panes)) p.setSplit(f); }
         else if (name in BOX_SIZES) setSize(name, v, false);
         else if (name === 'decode') setDecode(v === '1', false);
+        else if (name === 'trace') setTrace(Number(v), false);
         else if (name === 'step') { const n = Number(v); if (STEP_CHOICES_HZ.includes(n)) { stepHz = n; stepSel.value = v; } }
         else if (name.startsWith('levels.')) {
             const id = name.slice('levels.'.length);
@@ -859,13 +1028,14 @@ export function mountContestView(root, opts) {
     }, 500);
 
     function setReceiver(id, byUser) {
-        if (!ids.includes(id)) id = ids[0];
+        if (!ids.includes(id) || hiddenRx.has(id)) id = ids[0];
         receiver = id;
         store.set(own + 'receiver', id);
         for (const [k, el] of Object.entries(tabEls)) el.classList.toggle('on', k === id);
         for (const [k, el] of Object.entries(holders)) el.hidden = k !== id;
         drawStrip();
         drawScope();
+        drawControls();
         if (byUser) opts.onReceiver?.(id);
     }
     function setShowSpots(on) {
@@ -906,6 +1076,7 @@ export function mountContestView(root, opts) {
             meters: metersShown, spots: showSpots, wfFirst, decode: decoding,
             split: Number(store.get(own + 'split', '0.5')) || 0.5,
             step: stepHz,
+            trace: tracePx,
             out: { ...out },
             places,
         };
@@ -922,6 +1093,7 @@ export function mountContestView(root, opts) {
         stepHz = l.step;
         stepSel.value = String(stepHz);
         store.set(own + 'step', String(stepHz));
+        setTrace(l.trace, true);
         // The windows: those not in the layout go back; the rest open where
         // the layout had them. One that is open already stays where it is.
         for (const [p, host] of Object.entries(hosts)) {
@@ -1025,6 +1197,50 @@ export function mountContestView(root, opts) {
     }
     layoutSel?.addEventListener('change', () => onLayoutChoice(layoutSel.value));
 
+    // BANDS: which band keys show on each row, and whether the receivers
+    // after the first show at all.
+    let bandsDlg = null;
+    function chooseBands() {
+        if (!bandsDlg) {
+            bandsDlg = h('dialog', 'rc-manage rc-bandset');
+            const head = h('div', 'rc-manage-head');
+            head.append(h('span', null, 'BANDS'), key('×', 'Close', () => bandsDlg.close(), 'rc-pm'));
+            const box = h('div', 'rc-manage-body');
+            const tick = (text, checked, onChange, cls) => {
+                const l = h('label', 'rc-tick' + (cls ? ' ' + cls : ''));
+                const c = h('input');
+                c.type = 'checkbox';
+                c.checked = checked;
+                c.addEventListener('change', () => onChange(c.checked));
+                l.append(c, document.createTextNode(text));
+                return l;
+            };
+            for (const r of opts.receivers.slice(1)) {
+                box.append(tick('Show ' + r.tab.toUpperCase(), !hiddenRx.has(r.id), on => {
+                    if (on) hiddenRx.delete(r.id); else hiddenRx.add(r.id);
+                    store.set(own + 'hiddenReceivers', JSON.stringify([...hiddenRx]));
+                    drawHidden();
+                    if (!on && receiver === r.id) setReceiver(ids[0], true);
+                }, 'rc-tick-rx rc-tick-rx-' + r.id));
+            }
+            for (const r of opts.bandRows) {
+                const set = h('fieldset', 'rc-bandrow rc-bandrow-' + r.id);
+                set.append(h('legend', null, r.label));
+                for (const b of opts.bands) {
+                    set.append(tick(b.label, !hiddenBands[r.id].has(b.id), on => {
+                        if (on) hiddenBands[r.id].delete(b.id); else hiddenBands[r.id].add(b.id);
+                        store.set(own + 'hiddenBands.' + r.id, JSON.stringify([...hiddenBands[r.id]]));
+                        drawHidden();
+                    }));
+                }
+                box.append(set);
+            }
+            bandsDlg.append(head, box);
+            root.append(bandsDlg);
+        }
+        bandsDlg.showModal();
+    }
+
     function setTheme() {
         const t = applyTheme(root, store.get(themePrefix + 'theme', DEFAULT_THEME));
         for (const p of Object.values(panes)) p.setTheme(t);
@@ -1035,6 +1251,7 @@ export function mountContestView(root, opts) {
     } catch { /* nothing to follow */ }
 
     setTheme();
+    drawHidden();
     setReceiver(receiver, false);
     setShowSpots(showSpots);
     setMetersShown(metersShown);
@@ -1060,6 +1277,21 @@ export function mountContestView(root, opts) {
         setTones(markHz, shiftHz) {
             toneChip.textContent = markHz > 0 ? `MARK ${Math.round(markHz)} / ${Math.round(shiftHz)}` : '';
             toneChip.hidden = !(markHz > 0);
+        },
+        /**
+         * What the radio has for one of opts.controls. vfo names the receiver
+         * for a per-receiver setting; options is a list's choices
+         * ({id, label}[], empty when it does not apply), max a slider's top.
+         */
+        setControl(id, value, { vfo = null, options, max } = {}) {
+            const c = ctls[id]?.c;
+            if (!c) return;
+            const k = c.perReceiver ? vfo : '';
+            const e = ((ctlVals[id] ??= {})[k] ??= {});
+            e.value = value;
+            if (options !== undefined) e.options = options;
+            if (max != null) e.max = max;
+            if (!c.perReceiver || k === receiver) drawControls();
         },
         /** frac 0..1 for the bar, text beside it; over lights it red. */
         setMeter(id, frac, text, over = false) {
