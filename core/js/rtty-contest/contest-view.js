@@ -1,5 +1,5 @@
 // contest-view.js - the RTTY Contest view: only what a contest RTTY operator
-// uses, on one screen. A top strip (frequency, mode, Mark/Shift, compact
+// uses, on one screen. A top strip (frequency, mode or a MODE list, Mark/Shift, compact
 // meters, Main/Sub, DX SPOTS, SPAN, Views), a row of scope controls (ref
 // level, auto floor, range, fit, swap, wheel step), the spectrum over the
 // waterfall with a grip between them, and the RTTY tuner docked at the side.
@@ -209,7 +209,8 @@ const CSS = `
 .rc-num{min-width:3em;text-align:center;font:400 14px ${MONO};color:var(--rp-chip-fg)}
 .rc-scope .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
 .rc-scope .rc-pm{min-width:28px;padding:1px 0}
-.rc-step{font:500 14px ${SANS};min-height:28px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:1px 4px}
+.rc-step,.rc-mode{font:500 14px ${SANS};min-height:28px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:1px 4px}
+.rc-mode{font:600 15px ${SANS};letter-spacing:.06em;color:var(--rp-chip-fg)}
 .rc-out{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:500 18px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
 .rc-out[hidden]{display:none}
 .rc-tbar{display:flex;gap:6px;justify-content:flex-end;padding:0 0 6px}
@@ -248,6 +249,10 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {(id:string, dir:number) => void} [opts.onStep]  a mouse wheel notch
  * @param {(id:string, hz:number) => void} [opts.onFrequencyEntry]  a typed frequency
  * @param {(id:string) => void} [opts.onReceiver]  the operator picked Main or Sub
+ * @param {{id:string, label:string}[]} [opts.modes]  the modes the MODE list offers; without
+ *        them, or without opts.onMode, the mode is only shown
+ * @param {(id:string, mode:string) => void} [opts.onMode]  a mode picked for the receiver on screen
+ * @param {string} [opts.modeTitle]  the MODE list's tooltip
  * @param {{id:string, label:string}[]} [opts.meters]  compact bars in the strip, e.g. S, PO, SWR, ALC
  * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
  * @param {HTMLElement} [opts.tuner]  the RTTY tuner's element, docked at the side
@@ -301,8 +306,19 @@ export function mountContestView(root, opts) {
     freqIn.inputMode = 'decimal';
     freqIn.hidden = true;
     freqIn.setAttribute('aria-label', 'Frequency');
-    const modeChip = h('span', 'rc-chip', '');
-    modeChip.title = 'Mode';
+    // The mode: a list to pick from when the app gives one (opts.modes),
+    // showing the receiver's mode, which may be none of them.
+    const modeSel = isMain && opts.modes?.length && opts.onMode ? h('select', 'rc-mode') : null;
+    const modeOther = new Option('-', '');
+    if (modeSel) {
+        modeOther.disabled = true;
+        modeSel.append(modeOther);
+        for (const m of opts.modes) modeSel.append(new Option(m.label, m.id));
+        modeSel.setAttribute('aria-label', 'Mode');
+        modeSel.addEventListener('change', () => { if (modeSel.value) opts.onMode(receiver, modeSel.value); });
+    }
+    const modeChip = modeSel ?? h('span', 'rc-chip', '');
+    modeChip.title = modeSel ? opts.modeTitle ?? 'Mode' : 'Mode';
     const toneChip = h('span', 'rc-chip', '');
     toneChip.title = "Mark and shift, as the RTTY tuner has them. A click on the spectrum puts the mark there";
     const txChip = h('span', 'rc-chip', 'RX');
@@ -641,7 +657,11 @@ export function mountContestView(root, opts) {
         const f = formatFrequency(s.hz);
         if (s.hz > 0) { freqDigits(freqBig, f.big, 1000); freqDigits(freqSmall, f.small, 1); }
         else { freqBig.textContent = '-.---'; freqSmall.textContent = '.---'; }
-        modeChip.textContent = s.mode || '-';
+        if (!modeSel) { modeChip.textContent = s.mode || '-'; return; }
+        const known = opts.modes.some(m => m.id === s.mode);
+        modeOther.textContent = s.mode || '-';
+        modeOther.hidden = known;
+        modeSel.value = known ? s.mode : '';
     }
     function editFrequency() {
         freqIn.value = '';

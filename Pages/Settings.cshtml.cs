@@ -330,6 +330,8 @@ namespace Yaesu_Web_Control.Pages
                 // stay where it is put.
                 current.RttyContestMode    = Settings.RttyContestMode;
                 current.RttyTunerSetMode   = Settings.RttyTunerSetMode;
+                current.RttyTunerMode      = Yaesu_Web_Control.Services.Rtty.RttyTunerModeService.Normalise(Settings.RttyTunerMode)
+                                             ?? current.RttyTunerMode;
                 current.RttyAutoCentreMark = Settings.RttyAutoCentreMark;
 
                 // DX cluster settings — copy through. Normalise callsign to upper case.

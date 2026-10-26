@@ -26,11 +26,14 @@ namespace Yaesu_Web_Control.Services.Rtty
     /// <para><b>Two deliberate restraints</b>, both narrower than the CW
     /// equivalent:</para>
     ///
-    /// <para>1. <i>Opening the tuner puts the radio in RTTY</i> from any mode
-    /// that is not already one of its FSK modes - see <see cref="NeedsSwitching"/>.
+    /// <para>1. <i>Opening the tuner puts the radio in the operator's RTTY
+    /// mode</i> (<see cref="ApplicationSettings.RttyTunerMode"/>) from any mode
+    /// that is not already of the same kind - see <see cref="NeedsSwitching"/>.
     /// Until 2026-10-13 SSB and DATA were left alone for AFSK; Colin asked for
     /// RTTY on open, and an AFSK operator who wants the radio left alone turns
-    /// <see cref="ApplicationSettings.RttyTunerSetMode"/> off.</para>
+    /// <see cref="ApplicationSettings.RttyTunerSetMode"/> off. Since 2026-10-26
+    /// an AFSK operator can choose DATA-L or DATA-U instead, which Bruce VK2RT
+    /// asked for: the tuner then puts the radio in DATA and holds it there.</para>
     ///
     /// <para>2. <i>The filter is sized to the signal.</i> The narrowest rung
     /// at or above the floor <see cref="RttyIfWidth"/> computes, wider or
@@ -51,8 +54,8 @@ namespace Yaesu_Web_Control.Services.Rtty
     public sealed class RttyTunerModeService
     {
         /// <summary>
-        /// The mode the switch goes to: RTTY normal, the one the UI calls
-        /// "RTTY-L".
+        /// The mode the switch goes to unless the operator has chosen another:
+        /// RTTY normal, the one the UI calls "RTTY-L".
         ///
         /// Not RTTY-U (RTTY-R). Which of the two is right depends on the station,
         /// and the tuner already has a Reverse control for that; starting from
@@ -60,6 +63,35 @@ namespace Yaesu_Web_Control.Services.Rtty
         /// the mark and shift defaults are the normal-mode ones.
         /// </summary>
         public const string RttyMode = "RTTY-L";
+
+        /// <summary>
+        /// The modes an operator can choose for RTTY: the radio's two FSK modes,
+        /// and the two DATA modes AFSK software uses.
+        /// </summary>
+        public static readonly IReadOnlyList<string> Modes = ["RTTY-L", "RTTY-U", "DATA-L", "DATA-U"];
+
+        /// <summary>One of <see cref="Modes"/>, spelled as listed there, or null.</summary>
+        public static string? Normalise(string? mode) =>
+            Modes.FirstOrDefault(m => string.Equals(m, mode?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>The mode the tuner switches to and holds.</summary>
+        public static string TargetMode(ApplicationSettings settings) =>
+            Normalise(settings.RttyTunerMode) ?? RttyMode;
+
+        private static bool IsData(string? mode) =>
+            string.Equals(mode, "DATA-L", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(mode, "DATA-U", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Whether <paramref name="mode"/> is the same kind as
+        /// <paramref name="target"/>: both FSK, or both DATA. Either sideband
+        /// will do, as it always has for FSK: which one is right depends on the
+        /// station, and the tuner's Reverse is for that.
+        /// </summary>
+        public static bool SameKind(string? mode, string target) =>
+            IsData(target)
+                ? IsData(mode)
+                : RttyMarkCentre.SidebandForFskMode(mode) is not null;
 
         /// <summary>
         /// How wide Auto listens. A filter left narrow from the last signal - or
@@ -88,10 +120,10 @@ namespace Yaesu_Web_Control.Services.Rtty
 
         private Saved? _saved;
 
-        // The FSK mode the tuner is operating in and will put back if something
-        // else moves the radio out of it - null when the tuner is not holding
-        // the mode at all, which is every AFSK session: there the mode is the
-        // operator's software's business and nothing here may touch it.
+        // The mode the tuner is operating in and will put back if something
+        // else moves the radio out of its kind - null when the tuner is not
+        // holding the mode at all, which is every session with
+        // RttyTunerSetMode off: there the mode is the operator's business.
         private string? _heldMode;
 
         // The mark, shift and speed the filter was last sized for. Every poll of
@@ -128,7 +160,7 @@ namespace Yaesu_Web_Control.Services.Rtty
         public bool IsOn => _saved is not null;
 
         /// <summary>
-        /// The FSK mode being held for as long as the tuner runs, or null if
+        /// The mode being held for as long as the tuner runs, or null if
         /// none is. Read without the gate on purpose: it is a single reference
         /// and the only caller is deciding whether a re-assert is worth a task
         /// at all, which <see cref="ReassertAsync"/> then re-checks properly.
@@ -169,6 +201,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                 if (!_cat.IsConnected) return null;
                 if (_saved is not null && _sizedFor == (markHz, shiftHz, baud, reverse)) return null;
 
+                string target = TargetMode(settings);
                 string? switched = null;
                 if (_saved is null)
                 {
@@ -188,12 +221,12 @@ namespace Yaesu_Web_Control.Services.Rtty
                         mode, string.IsNullOrWhiteSpace(code) ? "unknown" : code,
                         WidthHz(settings, mode, code) is { } hz ? hz + " Hz" : "unknown");
 
-                    if (NeedsSwitching(mode))
+                    if (NeedsSwitching(mode, target))
                     {
-                        await SetModeAsync(RttyMode, ct);
-                        switched = $"Mode set to {RttyMode}.";
+                        await SetModeAsync(target, ct);
+                        switched = $"Mode set to {target}.";
                         _logger.LogInformation(
-                            "RTTY tuner: mode {From} set to {To}", mode, RttyMode);
+                            "RTTY tuner: mode {From} set to {To}", mode, target);
                     }
                 }
 
@@ -205,14 +238,11 @@ namespace Yaesu_Web_Control.Services.Rtty
                 var sized = await SizeFilterAsync(settings, markHz, shiftHz, baud, reverse, ct);
                 _sizedFor = (markHz, shiftHz, baud, reverse);
 
-                // What to hold. The mode the radio is in now, if it is one of
-                // the radio's own FSK modes - which is either the one just
-                // written or one it was already in. An AFSK session holds
-                // nothing: RTTY-L would be the wrong answer there, and the
-                // operator did not ask for it.
-                _heldMode = RttyMarkCentre.SidebandForFskMode(_state.ModeA) is not null
-                    ? _state.ModeA
-                    : null;
+                // What to hold. The mode the radio is in now, if it is the
+                // kind the operator chose - which is either the one just
+                // written or one it was already in. Anything else, which only
+                // a mode the switch could not write leaves, holds nothing.
+                _heldMode = SameKind(_state.ModeA, target) ? _state.ModeA : null;
 
                 return Join(switched, sized);
             }
@@ -351,13 +381,12 @@ namespace Yaesu_Web_Control.Services.Rtty
         ///
         /// <para><b>While the tuner is open the mode is the tuner's.</b> Leaving
         /// RTTY is done by closing it, which is also the only thing that puts
-        /// the operator's own mode back. Nothing is held in an AFSK session: see
-        /// <see cref="HeldMode"/>.</para>
+        /// the operator's own mode back. A move within the kind - RTTY to RTTY-R,
+        /// DATA-L to DATA-U - is left alone: see <see cref="SameKind"/>.</para>
         /// </summary>
         public async Task<string?> ReassertAsync(CancellationToken ct = default)
         {
-            if (_heldMode is null) return null;
-            if (RttyMarkCentre.SidebandForFskMode(_state.ModeA) is not null) return null;
+            if (_heldMode is not { } held || SameKind(_state.ModeA, held)) return null;
 
             await _gate.WaitAsync(ct);
             try
@@ -369,7 +398,7 @@ namespace Yaesu_Web_Control.Services.Rtty
                 // them.
                 if (_heldMode is not { } hold) return null;
                 var now = _state.ModeA;
-                if (RttyMarkCentre.SidebandForFskMode(now) is not null) return null;
+                if (SameKind(now, hold)) return null;
                 if (!_cat.IsConnected) return null;
 
                 await SetModeAsync(hold, ct);
@@ -382,22 +411,39 @@ namespace Yaesu_Web_Control.Services.Rtty
         }
 
         /// <summary>
-        /// Whether the radio is in a mode that cannot carry an RTTY tone pair at
-        /// all - and so the only modes this service will take the radio out of.
-        ///
-        /// <para>CW, because its filters go down to 50 Hz and an operator who was
-        /// just using CW is very likely sitting behind one of them. AM and FM
-        /// because their detectors destroy the phase relationship the figure is
-        /// drawn from. DATA-FM and the narrow variants for the same reason as FM.
-        /// Everything else - RTTY, RTTY-R, SSB, DATA, PSK - either is FSK already
-        /// or is a perfectly good way to receive an audio tone pair, and is left
-        /// alone.</para>
-        ///
-        /// <para>Wider than Icom Web Control's list, which has no C4FM and no
-        /// narrow FM or AM to name.</para>
+        /// The operator has picked <paramref name="mode"/> for RTTY, and is about
+        /// to put the radio in it. While the tuner is holding a mode, the hold
+        /// moves to the new one - otherwise the change would be undone as soon
+        /// as the radio reported it - and the filter is sized again on the next
+        /// start, because it belongs to the mode it was set in.
         /// </summary>
-        public static bool NeedsSwitching(string? mode) =>
-            RttyMarkCentre.SidebandForFskMode(mode) is null;
+        public async Task ChooseAsync(string mode, CancellationToken ct = default)
+        {
+            await _gate.WaitAsync(ct);
+            try
+            {
+                if (_heldMode is null) return;
+                _heldMode = mode;
+                _sizedFor = null;
+                _logger.LogInformation("RTTY tuner: operator chose {Mode}, now held", mode);
+            }
+            finally { _gate.Release(); }
+        }
+
+        /// <summary>
+        /// Whether the tuner needs to change the radio's mode to
+        /// <paramref name="target"/>: when it is not already of the same kind
+        /// (<see cref="SameKind"/>).
+        ///
+        /// <para>For RTTY that is every mode but RTTY and RTTY-R: CW, because its
+        /// filters go down to 50 Hz and an operator who was just using CW is very
+        /// likely sitting behind one of them; AM and FM because their detectors
+        /// destroy the phase relationship the figure is drawn from; and SSB and
+        /// DATA since 2026-10-13, when Colin asked for RTTY on open. For DATA it
+        /// is every mode but DATA-L and DATA-U.</para>
+        /// </summary>
+        public static bool NeedsSwitching(string? mode, string target) =>
+            !SameKind(mode, target);
 
         // ---- the radio -----------------------------------------------------
 

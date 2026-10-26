@@ -565,7 +565,7 @@ test('/rtty-contest: the tuner is docked, the strip follows the radio, and a cli
         await page.state('ModeA', 'USB');
         const bins = Array.from({ length: 475 }, () => -110);
         await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_030_000, spanHz: 10_000, rfOrdered: true });
-        const strip = await page.eval(`document.querySelector('.rc-freq').textContent + ' ' + document.querySelector('.rc-top .rc-chip').textContent`);
+        const strip = await page.eval(`document.querySelector('.rc-freq').textContent + ' ' + document.querySelector('.rc-top .rc-mode').selectedOptions[0]?.textContent`);
         expect(strip === '14.030.000 USB', `the strip said "${strip}"`);
         await page.eval(`(() => {
             const el = document.querySelector('.rc-holder:not([hidden]) .rp-spectrum');
@@ -652,13 +652,47 @@ test('/rtty-contest: a band key goes to the RTTY spot in RTTY-L, 60 m to the ban
     } finally { await page.close(); }
 });
 
+// Bruce VK2RT, 2026-10-26: he runs AFSK in DATA-L, so the band keys and
+// the tuner must not keep putting the radio in RTTY-L. The MODE list shows
+// the receiver's mode and keeps what is picked as the RTTY mode.
+test('/rtty-contest: MODE shows the mode, a pick is kept before it is written, and the band keys use it', async () => {
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        const shown = () => page.eval(`(() => { const s = document.querySelector('.rc-top .rc-mode'); return s.value + '|' + s.selectedOptions[0]?.textContent; })()`);
+        const opts = await page.eval(`[...document.querySelectorAll('.rc-top .rc-mode option:not([disabled])')].map(o => o.value).join()`);
+        expect(opts === 'RTTY-L,RTTY-U,DATA-L,DATA-U', `MODE offers ${opts}`);
+        await page.state('ModeA', 'RTTY-U');
+        let s = await shown();
+        expect(s === 'RTTY-U|RTTY-U', `in RTTY-U MODE shows ${s}`);
+        await page.state('ModeA', 'CW-U');
+        s = await shown();
+        expect(s === '|CW-U', `in CW-U MODE shows ${s}`);
+
+        await page.eval(`(() => { const s = document.querySelector('.rc-top .rc-mode'); s.value = 'DATA-L'; s.dispatchEvent(new Event('change')); })()`);
+        await sleep(400);
+        let all = (await page.writes()).filter(x => x.path === '/api/rtty/mode' || x.path.startsWith('/api/cat/mode'));
+        expect(all.length === 2 && all[0].path === '/api/rtty/mode' && all[0].body?.mode === 'DATA-L'
+            && all[1].path === '/api/cat/mode/a' && all[1].body?.mode === '8', `the pick wrote ${JSON.stringify(all)}`);
+
+        await page.eval(`document.querySelector('.rc-brow-A .rc-band[data-band="20m"]').click()`);
+        await sleep(400);
+        const m = (await page.writes()).filter(x => x.path === '/api/cat/mode/a');
+        expect(m.length === 2 && m[1].body?.mode === '8', `the 20m key wrote ${JSON.stringify(m)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 // Bruce's set-up (#169): AFSK in DATA-L with the software on Mark 1415 / 170.
 // The pair's midpoint is 1500 Hz of audio, so a click on a signal puts the
 // dial 1500 Hz above it, and the mark lands on 1415.
 test('/rtty-contest: in DATA-L with Mark 1415 / 170 a click puts the dial 1500 Hz above the signal', async () => {
     const page = await open('/rtty-contest', {
         settleMs: 1500,
-        before: `try { localStorage.setItem('rttyTuner', JSON.stringify({ markHz: 1415, shiftHz: 170, reverse: false })); } catch {}`,
+        // The tuner's status is faked too: a page left open on the real app
+        // runs the shared tuner host, and this page would join it on its tones.
+        before: `try { localStorage.setItem('rttyTuner', JSON.stringify({ markHz: 1415, shiftHz: 170, reverse: false })); } catch {}
+            __rwcTest.getOverrides['/api/rtty/tuner?'] = { running: false, hostRunning: false, points: [] };`,
     });
     try {
         await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });

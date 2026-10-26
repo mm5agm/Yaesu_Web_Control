@@ -8,12 +8,16 @@
 // that the band plan never changes the mode here (#169): the page sets
 // ywcAutoModeChangeOnTune false before this loads.
 //
-// The band keys land on the band's RTTY spot and put the receiver in
-// RTTY-L: the band plan's RTTY segment where it has one, else RTTY_SPOTS
-// below. RTTY is not added to the band plan itself, which every other GUI
-// reads for its segment keys and its mode-on-tune. A band with no spot here
-// (60 m, 4 m, 2 m, 70 cm) goes to the radio's own band memory, as the band
-// keys on the other GUIs do, and then to RTTY-L.
+// The band keys land on the band's RTTY spot and put the receiver in the
+// operator's RTTY mode: the band plan's RTTY segment where it has one, else
+// RTTY_SPOTS below. RTTY is not added to the band plan itself, which every
+// other GUI reads for its segment keys and its mode-on-tune. A band with no
+// spot here (60 m, 4 m, 2 m, 70 cm) goes to the radio's own band memory, as
+// the band keys on the other GUIs do, and then to that mode.
+//
+// The RTTY mode is RTTY-L, RTTY-U, DATA-L or DATA-U, kept in Settings
+// (RttyTunerMode) and picked on the strip's MODE list, which shows the mode
+// of the receiver on screen. Bruce VK2RT runs AFSK in DATA-L (2026-10-26).
 
 import { mountContestView } from '/js/rtty-contest/contest-view.js';
 import { spanText, sMeterFraction, sMeterText, txMeterFraction } from '/js/radio-panel/panel-math.js';
@@ -21,7 +25,6 @@ import { dialStepper } from '/js/radio-panel/dial-stepper.js';
 import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-engine.js';
 import { loadRttySettings } from '/js/rtty/rtty-settings.js';
 import { post, startYaesuSpectrumFeed } from '/js/ui/spectrum-feed-yaesu.js';
-import { MODE_CAT } from '/js/ui/spectrum-tune-yaesu.js';
 import { BAND_EDGES, getSegments, loadBandPlanFromServer } from '/js/ui/band-plan.js';
 
 const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
@@ -36,16 +39,22 @@ const RTTY_SPOTS = {
     '17m': 18_105_000, '15m': 21_080_000, '12m': 24_925_000, '10m': 28_080_000, '6m': 50_300_000,
 };
 
+// The RTTY modes and their MD digits. Not added to MODE_CAT, which the band
+// plan's mode-on-tune is checked against elsewhere.
+const RTTY_MODES = { 'RTTY-L': '6', 'RTTY-U': '9', 'DATA-L': '8', 'DATA-U': 'C' };
+
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const on = v => v === true || v === 'true' || v === 1 || (typeof v === 'string' && v !== '' && v !== '0' && v !== '00' && v !== 'false');
 
 /**
  * @param {HTMLElement} root
- * @param {object} cfg  { conn, model, dual, sdrB, maxPowerW, minHz, maxHz, bandPlan, views, tuner }
+ * @param {object} cfg  { conn, model, dual, sdrB, maxPowerW, minHz, maxHz, bandPlan, rttyMode, views, tuner }
  *        sdrB: a second SDR is configured, so Main/Sub can be switched
+ *        rttyMode: the operator's RTTY mode, from Settings
  */
 export function startYaesuRttyContest(root, cfg) {
     const dual = !!cfg.dual;
+    let rttyMode = RTTY_MODES[cfg.rttyMode] ? cfg.rttyMode : 'RTTY-L';
     const maxPowerW = num(cfg.maxPowerW) || 100;
     const receivers = cfg.sdrB
         ? [{ id: 'A', tab: dual ? 'Main' : 'VFO-A', name: dual ? 'MAIN · SDR A' : 'VFO-A · SDR A' },
@@ -68,6 +77,9 @@ export function startYaesuRttyContest(root, cfg) {
         tuneTo: (vfo, hz) => feed.tuneTo(vfo, hz),
         onStep: (vfo, dir) => stepper.turn(vfo, dir),
         onFrequencyEntry: (vfo, hz) => post(`/api/cat/frequency/${vfo.toLowerCase()}`, { frequencyHz: hz }),
+        modes: Object.keys(RTTY_MODES).map(m => ({ id: m, label: m })),
+        onMode: (vfo, mode) => chooseMode(vfo, mode),
+        modeTitle: 'The mode of the receiver on screen. What you pick is also kept, in Settings, as the mode the band keys and the RTTY tuner use',
         meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
         views: cfg.views ?? [],
         tuner: cfg.tuner,
@@ -102,14 +114,22 @@ export function startYaesuRttyContest(root, cfg) {
         write: (vfo, hz) => post(`/api/cat/frequency/${vfo.toLowerCase()}`, { frequencyHz: hz }),
     });
 
-    // A band key: to the band's RTTY spot, or the radio's band memory, then RTTY-L.
+    // A band key: to the band's RTTY spot, or the radio's band memory, then the RTTY mode.
     async function toBand(vfo, band) {
         const rx = vfo.toLowerCase();
         const spot = getSegments(bandPlan, band)?.RTTY?.freq ?? RTTY_SPOTS[band];
         const res = spot
             ? await post(`/api/cat/frequency/${rx}`, { frequencyHz: spot })
             : await post(`/api/cat/band/${rx}`, { band });
-        if (res?.ok) await post(`/api/cat/mode/${rx}`, { mode: MODE_CAT['RTTY-L'] });
+        if (res?.ok) await post(`/api/cat/mode/${rx}`, { mode: RTTY_MODES[rttyMode] });
+    }
+    // MODE: kept first, so a running tuner holds the new mode rather than
+    // putting the old one back, then written to the receiver on screen.
+    async function chooseMode(vfo, mode) {
+        if (!RTTY_MODES[mode]) return;
+        rttyMode = mode;
+        const res = await post('/api/rtty/mode', { mode });
+        if (res?.ok) await post(`/api/cat/mode/${vfo.toLowerCase()}`, { mode: RTTY_MODES[mode] });
     }
     // Which band key is lit follows the frequency, however it got there.
     const bandAt = hz => (BAND_EDGES[bandPlan] ?? BAND_EDGES.Region1).find(e => hz >= e.lo && hz <= e.hi)?.name ?? null;
