@@ -36,6 +36,7 @@
    - 5.21 [Pop-out windows](#521-pop-out-windows)
    - 5.22 [Experimental UI](#522-experimental-ui)
    - 5.23 [Radio panel](#523-radio-panel)
+   - 5.24 [RTTY Contest](#524-rtty-contest)
 6. [Settings Page](#6-settings-page)
    - 6.1 [Radio Connection](#61-radio-connection)
    - 6.2 [Web Server Settings](#62-web-server-settings)
@@ -1399,6 +1400,53 @@ The CW Reader, CW Send, the RTTY tuner and the DX spots each have a **⇱** key 
 The Radio panel has none of the screen-reader or voice-control work of the Classic page, and no launch buttons for WSJT-X or other programs. Those stay on the Classic page.
 
 ---
+
+### 5.24 RTTY Contest
+
+*New in v2.5.4-pre2, and still being tested.*
+
+**RTTY Contest** has only what a contest RTTY operator uses, on one screen: the frequency, the spectrum over the waterfall, and the RTTY tuner docked at the side. Pick it from **Views** on the Radio panel ([§5.23](#523-radio-panel)), or go to `http://localhost:8080/rtty-contest`. **Views** on the page itself goes back to the other GUIs.
+
+While it is open, its tuner keeps the radio in RTTY. CW Reader Mode can't switch the radio to CW while the page is open, so close it, or use another GUI, for CW.
+
+**The top strip**
+
+- **The frequency** of the receiver on screen. Click it to type a frequency: `14.08` and `14080` and `14080000` all mean 14.080 MHz. Enter tunes there and Esc leaves it as it was. Hold the mouse over a digit and turn the wheel to move that digit up or down, as on the Radio panel.
+- **The mode**, then the tuner's **MARK / SHIFT**, then **RX** or **TX**.
+- **Meters:** S, and PO, SWR and ALC while transmitting. **METERS** hides or shows them.
+- **Main / Sub** chooses which receiver's spectrum is on screen, where there are two SDRs. The strip follows it.
+- **DX SPOTS** switches the spot tags on the spectrum on and off, and **SPAN** sets the SDR's span.
+- **LAYOUT** saves and recalls named layouts (below).
+
+**The band keys**
+
+Under the strip is a row of band keys for MAIN, and on the FTdx101MP and FTdx101D one for SUB. A key tunes that receiver to the RTTY part of the band and puts it in RTTY-L. The spot comes from your band plan's RTTY segment where it has one. Where it doesn't, the keys use 1.838, 10.140, 18.105, 24.925 and 50.300 MHz. The band plan the other GUIs use is not changed. **60 m and 4 m** (and **2 m** and **70 cm** on the FT-991A) have no RTTY spot here: their keys go to the radio's own band memory, as the band keys on the other GUIs do, and then to RTTY-L. The key for the band each receiver is on is lit, however you got there.
+
+**The scope row**
+
+- **REF** moves the bottom of the trace up or down from the noise floor. **AUTO** lets the floor follow the noise; off, it stays where it is.
+- **RANGE** is how many dB the trace covers. **FIT** sets it so the strongest signal of the last few seconds just fits, as does a double-click on the bar between the spectrum and the waterfall.
+- **WF ON TOP** puts the waterfall above the spectrum.
+- **STEP** is how far one notch of the mouse wheel moves the dial over the spectrum, 1 Hz to 1 kHz.
+- **POP OUT** opens the spectrum, the waterfall, or both, in a window of their own.
+
+**Tuning**
+
+Click a signal on the spectrum or on the waterfall to tune to it. The page never changes the mode when you click, whatever the band plan says about that part of the band. In RTTY the dial goes where the tuner's Mark and Shift put the signal in the middle of the filter. With AFSK in DATA-L and the software on Mark 1415 / 170, a click puts the dial 1500 Hz above the signal, and the mark lands on 1415.
+
+**The tuner**
+
+The RTTY tuner ([§22](#22-rtty)) is docked at the right, as in Contest Mode ([§22.7](#227-contest-mode-the-tuner-on-its-own)). The keys on its bar:
+
+- **DECODE** shows the decoded text with the tuner and starts the decoder. Press it again to stop the decoder and hide the text.
+- **POP OUT** moves the tuner into a window of its own, the same window every GUI pops its tuner out to.
+- **ON TOP** puts it in a small window that stays above other programs, such as your logger, where the browser allows it (Chrome and Edge do).
+
+**Sizes, windows and layouts**
+
+Drag the right edge, the bottom edge or the bottom-right corner of the spectrum, or of the docked tuner, to size it. A box you haven't sized fills the room it has. Each part that pops out leaves the page, and comes back with **DOCK** in its window, or when its window closes.
+
+**LAYOUT** saves all of this by name, on the computer running YWC: the sizes, the choices above, which parts are in windows of their own, and where each window is. Recalling a layout puts every window back where it was, so each can go on its own monitor. If the browser blocks some of the windows, a bar says so with a key for each: one click opens one window.
 
 ## 6. Settings Page
 

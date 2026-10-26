@@ -11,8 +11,9 @@
 
 > **v2.5.3 brings two new ways of working the radio.** Fabio Valente's (CR7CDC) **Experimental UI** is a dark workspace of panels you can drag, dock, tab together and save as named layouts. The **Radio panel** is laid out like the front of a transceiver, with keys, knobs and a main dial that work, both receivers on the FTdx101, and windows for CW, RTTY, memories and the rest. The Classic page is unchanged and is still where YWC opens. RTTY now prints the text as well as drawing the cross, and its **Auto** button works the settings out from the signal; the CW Reader has an **Auto** button that tunes the station in. Everything is written up in the [v2.5.3 notes](#2026-10-16---v253).
 
-**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release)):
+**Since v2.5.3** — in the code, not yet in a full release (first in [v2.5.4-pre1](#2026-10-23---v254-pre1-pre-release) and [v2.5.4-pre2](#2026-10-26---v254-pre2-pre-release)):
 
+- **RTTY Contest, a new GUI for RTTY contesting** *(pre2, still being tested)*. Only what a contest RTTY operator uses, on one screen: the frequency, band keys for MAIN and SUB, the spectrum over the waterfall, and the RTTY tuner docked at the side with its decoded text. Each part pops out into a window of its own, and named layouts put every window back on its own monitor. Bruce VK2RT asked for it. [§5.24](USER_MANUAL.md#524-rtty-contest).
 - **The Radio panel's CW window has the memory keyer** (M1 to M5, with SAVE), and **BREAK-IN is a key** that steps OFF → SEMI → FULL. The mouse wheel steps SPEED and PITCH. [§5.23](USER_MANUAL.md#523-radio-panel).
 - **The pop-out spectrum window tunes on a click or the mouse wheel**, with a readout of the frequency under the mouse, and has the panel's SCOPE settings on each pane. [§5.23](USER_MANUAL.md#523-radio-panel).
 - **A corner grip scales the Radio panel** to any size.
@@ -331,6 +332,23 @@ YWC is mostly my own work, but I'm grateful for the community contributions that
 **Only the version you are installing is listed here.** Earlier releases are in
 [RELEASE_HISTORY.md](RELEASE_HISTORY.md); their installers are still on the
 [releases page](https://github.com/mm5agm/Yaesu_Web_Control/releases).
+
+## 2026-10-26 - v2.5.4-pre2 (pre-release)
+
+*A first look at RTTY Contest, a new GUI for RTTY contesting, for Bruce VK2RT and anyone else who wants to try it before the WAE DX RTTY Contest. Nothing else changes from v2.5.4-pre1. Install it over v2.5.3 or pre1; your settings are kept.*
+
+**RTTY Contest** - pick it from **Views** on the Radio panel, or go to `/rtty-contest`. [§5.24](USER_MANUAL.md#524-rtty-contest).
+
+- **One screen:** the frequency, mode, Mark/Shift and compact meters along the top, **Main / Sub**, **DX SPOTS** on and off, **SPAN**, the spectrum over the waterfall, and the RTTY tuner docked at the side.
+- **Band keys for MAIN and SUB** go to the RTTY part of the band in RTTY-L. 60 m and 4 m (2 m and 70 cm on the FT-991A) go to the radio's band memory, then RTTY-L.
+- **Tuning:** click a signal on the spectrum or the waterfall, turn the mouse wheel over the spectrum or over any digit of the frequency, or click the frequency and type one. A click never changes the mode ([#169](https://github.com/mm5agm/Yaesu_Web_Control/discussions/169)).
+- **REF, AUTO, RANGE and FIT** set the scale in dB above the noise floor. **WF ON TOP** swaps the spectrum and the waterfall.
+- **DECODE** on the tuner's bar shows the decoded text with the tuner.
+- **Pop-outs:** the spectrum, the waterfall, both, or the tuner each go into a window of their own. The tuner can also go **ON TOP**, above your logger, where the browser allows it.
+- **Sizes and layouts:** drag the edges and corner of the spectrum and the tuner. **LAYOUT** saves all of it by name, including which windows are open and where.
+- **The mouse wheel over a digit of the Radio panel's frequency** works as before; the panel and RTTY Contest now share that code.
+
+Known limits: while RTTY Contest is open its tuner holds the radio in RTTY, so CW Reader Mode can't switch to CW. The 60 m and 4 m keys have not yet been tried on the air. Receive has been tested on an FTdx101MP only, and nothing has been transmitted from this GUI yet.
 
 ## 2026-10-23 - v2.5.4-pre1 (pre-release)
 
