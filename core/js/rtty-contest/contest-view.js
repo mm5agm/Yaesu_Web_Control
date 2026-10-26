@@ -16,7 +16,9 @@
 // swap, step - through storage events, so there is one set of them. The
 // tuner can also go On top (pip-dock.js), where the browser allows it.
 // DECODE on the tuner's bar shows the decoded text with it (opts.onDecode:
-// the app shows its reader and starts or stops the decoder).
+// the app shows its reader and starts or stops the decoder). Between the
+// two, a box of settings the app names (opts.controls), e.g. power, IF width
+// and IF shift.
 //
 // Under the strip, a row of band keys for each receiver (opts.bandRows and
 // opts.bands): the app decides where a band key lands. The wheel over a
@@ -111,7 +113,7 @@ const RANGE_STEP_DB = 5;
 export const BOX_SIZES = {
     stackWidth: { min: 320 },
     stackHeight: { min: 200 },
-    tunerWidth: { min: 300, max: 760 },
+    tunerWidth: { min: 240, max: 760 },
     tunerHeight: { min: 300 },
 };
 const GRAB_KEY_STEP = 20;
@@ -196,11 +198,16 @@ const CSS = `
 .rc-holder{flex:1;min-width:0;display:flex}
 .rc-holder[hidden],.rc-holder:has(>.rp-pane[hidden]){display:none}
 .rc-page .rp-pane{position:relative;padding:6px 8px 8px;border-radius:6px;background:var(--rp-screen);border:1px solid var(--rp-screen-line)}
-.rc-tuner{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;position:relative}
+.rc-tuner{flex:0 1 auto;display:flex;flex-direction:column;min-height:0;position:relative}
 .rc-tuner:empty{display:none}
-.rc-side.decoding .rc-tuner{flex:0 1 auto}
 .rc-tuner.sized-h{flex:none}
-.rc-dbox{flex:1 1 0;min-height:${DECODE_MIN_H}px;display:flex;flex-direction:column;width:var(--rc-tuner-w,360px)}
+.rc-ctl{flex:none;display:flex;flex-direction:column;gap:6px;width:var(--rc-tuner-w,300px);box-sizing:border-box;padding:8px 10px;border:1px solid var(--rp-well-border);border-radius:6px;background:var(--rp-key-bg)}
+.rc-crow{display:flex;align-items:center;gap:8px}
+.rc-crow .rc-lbl{min-width:3.6em}
+.rc-crow input[type=range]{flex:1;min-width:0;accent-color:var(--rp-highlight)}
+.rc-crow select{flex:1;min-width:0}
+.rc-crow .rc-num{min-width:4.6em;text-align:right}
+.rc-dbox{flex:1 1 0;min-height:${DECODE_MIN_H}px;display:flex;flex-direction:column;width:var(--rc-tuner-w,300px)}
 .rc-dbox[hidden]{display:none}
 .rc-dbox.out{flex:none;min-height:0}
 .rc-scope{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:6px 10px 0}
@@ -216,7 +223,7 @@ const CSS = `
 .rc-tbar{display:flex;gap:6px;justify-content:flex-end;padding:0 0 6px}
 .rc-tbar .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
 .rc-tbar .rp-spop-key:disabled{opacity:.45;cursor:default}
-.rc-tnote{width:var(--rc-tuner-w,360px);box-sizing:border-box;padding:14px;font:500 16px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
+.rc-tnote{width:var(--rc-tuner-w,300px);box-sizing:border-box;padding:14px;font:500 16px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
 .rc-tnote[hidden]{display:none}
 .rc-pop{display:flex;align-items:center;gap:4px}
 .rc-pop[hidden]{display:none}
@@ -253,6 +260,12 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  *        them, or without opts.onMode, the mode is only shown
  * @param {(id:string, mode:string) => void} [opts.onMode]  a mode picked for the receiver on screen
  * @param {string} [opts.modeTitle]  the MODE list's tooltip
+ * @param {{id:string, label:string, kind:'range'|'list', title?:string, perReceiver?:boolean,
+ *          min?:number, max?:number, step?:number, reset?:number, unit?:string,
+ *          format?:(v:number) => string}[]} [opts.controls]  settings in a box under the tuner,
+ *        e.g. power, IF width and IF shift; their values come through setControl
+ * @param {(id:string, value:number|string, vfo:string|null) => void} [opts.onControl]  one was
+ *        changed here; vfo is the receiver on screen for a perReceiver one
  * @param {{id:string, label:string}[]} [opts.meters]  compact bars in the strip, e.g. S, PO, SWR, ALC
  * @param {{label:string, href:string, on?:boolean}[]} [opts.views]
  * @param {HTMLElement} [opts.tuner]  the RTTY tuner's element, docked at the side
@@ -497,6 +510,76 @@ export function mountContestView(root, opts) {
         if (tbar.childElementCount) tunerSlot.append(tbar);
         tunerSlot.append(opts.tuner, tunerNote);
     }
+    // The settings an operator reaches for during a contest - power, the IF
+    // width and shift, as Bruce VK2RT asked (2026-10-26) - in a box under the
+    // tuner. The app names them (opts.controls) and writes them
+    // (opts.onControl); what the radio has comes back through setControl, per
+    // receiver for a setting each receiver has. A slider writes when it is
+    // let go, a wheel notch over it a moment after the last notch, and a
+    // double-click puts it to its reset value where it has one.
+    const ctlBox = h('div', 'rc-ctl');
+    const ctls = {};
+    const ctlVals = {};
+    const ctlKey = c => (c.perReceiver ? receiver : '');
+    const ctlText = (c, v) => (v == null || !Number.isFinite(Number(v)) ? '-' : c.format ? c.format(Number(v)) : `${v}${c.unit ?? ''}`);
+    if (isMain && opts.controls?.length && opts.onControl) {
+        for (const c of opts.controls) {
+            const row = h('label', 'rc-crow rc-c-' + c.id);
+            row.title = c.title ?? '';
+            const ctl = { c, row, val: h('span', 'rc-num', ''), held: false, timer: 0, opts: '' };
+            const send = v => opts.onControl(c.id, v, c.perReceiver ? receiver : null);
+            if (c.kind === 'list') {
+                ctl.input = h('select', 'rc-step');
+                ctl.input.addEventListener('change', () => { if (ctl.input.value !== '') send(ctl.input.value); });
+                row.append(h('span', 'rc-lbl', c.label), ctl.input);
+            } else {
+                const r = ctl.input = h('input');
+                r.type = 'range';
+                r.min = String(c.min); r.max = String(c.max); r.step = String(c.step ?? 1);
+                const now = () => Number(r.value);
+                r.addEventListener('pointerdown', () => { ctl.held = true; });
+                const letGo = () => { ctl.held = false; };
+                r.addEventListener('pointerup', letGo);
+                r.addEventListener('pointercancel', letGo);
+                r.addEventListener('input', () => { ctl.val.textContent = ctlText(c, now()); });
+                r.addEventListener('change', () => { letGo(); send(now()); });
+                r.addEventListener('wheel', e => {
+                    e.preventDefault();
+                    const step = Number(r.step) || 1;
+                    r.value = String(Math.max(Number(r.min), Math.min(Number(r.max), now() + (e.deltaY < 0 ? step : -step))));
+                    ctl.val.textContent = ctlText(c, now());
+                    ctl.held = true;
+                    clearTimeout(ctl.timer);
+                    ctl.timer = setTimeout(() => { ctl.held = false; send(now()); }, 300);
+                }, { passive: false });
+                if (c.reset != null) r.addEventListener('dblclick', () => { r.value = String(c.reset); ctl.val.textContent = ctlText(c, c.reset); send(Number(c.reset)); });
+                row.append(h('span', 'rc-lbl', c.label), r, ctl.val);
+            }
+            ctls[c.id] = ctl;
+            ctlBox.append(row);
+        }
+        side.append(ctlBox);
+    }
+    function drawControls() {
+        for (const ctl of Object.values(ctls)) {
+            const e = ctlVals[ctl.c.id]?.[ctlKey(ctl.c)];
+            if (ctl.c.kind === 'list') {
+                const list = e?.options ?? [];
+                const sig = JSON.stringify(list);
+                if (sig !== ctl.opts) {
+                    ctl.opts = sig;
+                    ctl.input.replaceChildren(...(list.length ? list.map(o => new Option(o.label, o.id)) : [new Option('-', '')]));
+                }
+                ctl.input.disabled = !list.length;
+                if (document.activeElement !== ctl.input) ctl.input.value = list.some(o => o.id === String(e?.value)) ? String(e.value) : '';
+            } else {
+                if (e?.max != null) ctl.input.max = String(e.max);
+                if (ctl.held) continue;
+                if (e?.value != null) ctl.input.value = String(e.value);
+                ctl.val.textContent = ctlText(ctl.c, e?.value);
+            }
+        }
+    }
     // The decoded text, under the tuner while DECODE is on: POP OUT on its own
     // bar, and a note keeps its place while it is out.
     let decodePop = null;
@@ -534,8 +617,9 @@ export function mountContestView(root, opts) {
             // Wider than the room on its right squeezes the spectrum, down to its least.
             max: () => room.w() - BOX_SIZES.stackWidth.min - BODY_GAP },
         tunerHeight: { el: tunerSlot, axis: 'y', apply: v => { tunerSlot.style.height = v == null ? '' : v + 'px'; tunerSlot.classList.toggle('sized-h', v != null); },
-            // Taller squeezes the decoded text under it, down to its least.
-            max: () => room.h() - (decodeDocked() ? DECODE_MIN_H + BODY_GAP : 0) },
+            // Taller squeezes the decoded text under it, down to its least,
+            // and never pushes the controls box off the bottom.
+            max: () => room.h() - (decodeDocked() ? DECODE_MIN_H + BODY_GAP : 0) - (ctlBox.offsetHeight ? ctlBox.offsetHeight + BODY_GAP : 0) },
     };
     function setSize(name, v, keep) {
         sizes[name] = tidyBoxSize(name, v);
@@ -886,6 +970,7 @@ export function mountContestView(root, opts) {
         for (const [k, el] of Object.entries(holders)) el.hidden = k !== id;
         drawStrip();
         drawScope();
+        drawControls();
         if (byUser) opts.onReceiver?.(id);
     }
     function setShowSpots(on) {
@@ -1080,6 +1165,21 @@ export function mountContestView(root, opts) {
         setTones(markHz, shiftHz) {
             toneChip.textContent = markHz > 0 ? `MARK ${Math.round(markHz)} / ${Math.round(shiftHz)}` : '';
             toneChip.hidden = !(markHz > 0);
+        },
+        /**
+         * What the radio has for one of opts.controls. vfo names the receiver
+         * for a per-receiver setting; options is a list's choices
+         * ({id, label}[], empty when it does not apply), max a slider's top.
+         */
+        setControl(id, value, { vfo = null, options, max } = {}) {
+            const c = ctls[id]?.c;
+            if (!c) return;
+            const k = c.perReceiver ? vfo : '';
+            const e = ((ctlVals[id] ??= {})[k] ??= {});
+            e.value = value;
+            if (options !== undefined) e.options = options;
+            if (max != null) e.max = max;
+            if (!c.perReceiver || k === receiver) drawControls();
         },
         /** frac 0..1 for the bar, text beside it; over lights it red. */
         setMeter(id, frac, text, over = false) {

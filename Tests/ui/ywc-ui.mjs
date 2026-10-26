@@ -683,6 +683,36 @@ test('/rtty-contest: MODE shows the mode, a pick is kept before it is written, a
     } finally { await page.close(); }
 });
 
+// Bruce VK2RT, 2026-10-26: power, bandwidth and shift were the controls he
+// wanted most. They sit in a box under the tuner.
+test('/rtty-contest: PWR, WIDTH and SHIFT show the radio and write what is picked', async () => {
+    const page = await open('/rtty-contest', { settleMs: 1500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        for (const [p, v] of [['ModeA', 'RTTY-L'], ['IfWidthA', '11'], ['IfShiftA', 120], ['Power', 50]]) await page.state(p, v);
+        await sleep(200);
+        const shown = await page.eval(`['power', 'width', 'shift'].map(id => { const r = document.querySelector('.rc-ctl .rc-c-' + id); return r.querySelector('input,select').value + '|' + (r.querySelector('.rc-num')?.textContent ?? ''); }).join(' ')`);
+        expect(shown === '50|50 W 11| 120|+120 Hz', `the box showed "${shown}"`);
+        const widths = await page.eval(`document.querySelectorAll('.rc-ctl .rc-c-width option').length`);
+        expect(widths > 5, `WIDTH offers ${widths} widths in RTTY-L`);
+        await page.state('ModeA', 'FM');
+        expect(await page.eval(`document.querySelector('.rc-ctl .rc-c-width select').disabled`), 'WIDTH is not greyed in FM');
+        await page.state('ModeA', 'RTTY-L');
+
+        await page.clearWrites();
+        await page.eval(`(() => {
+            const w = document.querySelector('.rc-ctl .rc-c-width select'); w.value = '9'; w.dispatchEvent(new Event('change'));
+            const p = document.querySelector('.rc-ctl .rc-c-power input'); p.value = '30'; p.dispatchEvent(new Event('input')); p.dispatchEvent(new Event('change'));
+            document.querySelector('.rc-ctl .rc-c-shift input').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        })()`);
+        await sleep(400);
+        const w = (await page.writes()).map(x => `${x.path} ${JSON.stringify(x.body)}`);
+        expect(w.includes('/api/cat/ifwidth/a {"code":"9"}') && w.includes('/api/cat/power/a {"Watts":30}') && w.includes('/api/cat/ifshift/a {"shiftHz":0}') && w.length === 3,
+            `the box wrote ${JSON.stringify(w)}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 // Bruce's set-up (#169): AFSK in DATA-L with the software on Mark 1415 / 170.
 // The pair's midpoint is 1500 Hz of audio, so a click on a signal puts the
 // dial 1500 Hz above it, and the mark lands on 1415.
@@ -837,10 +867,12 @@ test('/rtty-contest: grabs size the spectrum and the tuner, the tuner scope stay
         const s2 = await stack();
         expect(s2.h === s1.h - 200 && s2.w === s1.w, `the spectrum went from ${s1.h} to ${s2.h} high, not ${s1.h - 200}`);
 
-        await drag('.rc-tuner > .rc-grab-rb', 150, -150);
+        // The tuner starts as small as its scope and readouts (Bruce VK2RT,
+        // 2026-10-26), so the corner makes it bigger here.
+        await drag('.rc-tuner > .rc-grab-rb', 150, 60);
         const t2 = await tuner();
         expect(t2.w === t1.w + 150, `the tuner went from ${t1.w} to ${t2.w} wide by its corner, not ${t1.w + 150}`);
-        expect(t2.h === t1.h - 150, `the tuner went from ${t1.h} to ${t2.h} high by its corner, not ${t1.h - 150}`);
+        expect(t2.h === t1.h + 60, `the tuner went from ${t1.h} to ${t2.h} high by its corner, not ${t1.h + 60}`);
         const sc = await box('#rttyTunerCanvas');
         expect(sc.w === sc.h && sc.w > 300, `the tuner scope is ${sc.w} x ${sc.h}, not a square`);
 
@@ -867,7 +899,11 @@ test('/rtty-contest: grabs size the spectrum and the tuner, the tuner scope stay
         expect(post?.body?.name === 'Mine' && l?.stackWidth === null && l?.stackHeight === 400 && l?.tunerWidth === 500 && l?.tunerHeight === 450,
             `the save did not send this page: ${JSON.stringify(post)}`);
         expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
-    } finally { await page.close(); }
+    } finally {
+        // The sizes, swap and step this left would carry into the next test.
+        await page.eval(`['stackWidth', 'stackHeight', 'tunerWidth', 'tunerHeight', 'wfFirst', 'step'].forEach(k => localStorage.removeItem('ywc.rttyContest.' + k))`).catch(() => {});
+        await page.close();
+    }
 });
 
 test('/rtty-contest: DECODE shows the decoded text in its own box under the tuner and starts the decoder; it pops out by itself; off stops it and hides it', async () => {

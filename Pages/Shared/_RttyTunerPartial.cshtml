@@ -88,7 +88,7 @@
        mostly empty space on a screen a contest is already fighting over. */
     #rttyTunerDialog.rtty-contest .rtty-col-main,
     #rttyTunerDialog.rtty-contest .rtty-hint { display:none !important; }
-    #rttyTunerDialog.rtty-contest:not(.rtty-popout) { width:360px; }
+    #rttyTunerDialog.rtty-contest:not(.rtty-popout) { width:300px; }
     #rttyTunerDialog.rtty-contest .rtty-col-tune { flex:1 1 auto; }
     /* DECODE in the RTTY Contest view (contest-view.js) shows the Decode
        section in a box of its own under the tuner: the page moves it out of
@@ -101,10 +101,12 @@
         border:1px solid #555; border-radius:8px; background:#222; color:#eee;
     }
     .rc-dbox #rttyReaderOut { flex:1 1 0; }
-    /* With the text under it the docked tuner is as tall as its square scope,
-       as wide as the tuner, and shrinks with it when its grab makes it shorter. */
-    #rttyTunerDialog.rtty-docked.rtty-decoding .rtty-col-tune { flex:0 1 auto; min-height:0; }
-    #rttyTunerDialog.rtty-docked.rtty-decoding .rtty-scope-box { flex:0 1 auto; aspect-ratio:1 / 1; min-height:0; }
+    /* Docked, the tuner is as tall as its square scope, as wide as the tuner,
+       and shrinks with it when its grab makes it shorter. It used to fill the
+       column when DECODE was off; Bruce VK2RT found it far too big (2026-10-26),
+       and the room under it now holds the controls and the decoded text. */
+    #rttyTunerDialog.rtty-docked .rtty-col-tune { flex:0 1 auto; min-height:0; }
+    #rttyTunerDialog.rtty-docked .rtty-scope-box { flex:0 1 auto; aspect-ratio:1 / 1; min-height:0; }
     /* The decoded text's window (/RttyTuner?contest=true&decode=true): the
        Decode section and nothing else. */
     #rttyTunerDialog.rtty-decode-only .rtty-col-tune,
@@ -144,7 +146,7 @@
     }
     /* The width the operator dragged it to, with its grabs (contest-view.js).
        The height is its place's, which the grabs set too. */
-    #rttyTunerDialog.rtty-docked:not(.rc-on-top) { width:var(--rc-tuner-w, 360px); }
+    #rttyTunerDialog.rtty-docked:not(.rc-on-top) { width:var(--rc-tuner-w, 300px); }
     #rttyTunerDialog.rtty-docked .rtty-header { cursor:default; }
     #rttyTunerDialog.rtty-docked #rttyTunerStatus { display:none; }
 

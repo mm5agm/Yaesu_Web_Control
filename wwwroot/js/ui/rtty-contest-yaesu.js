@@ -18,6 +18,11 @@
 // The RTTY mode is RTTY-L, RTTY-U, DATA-L or DATA-U, kept in Settings
 // (RttyTunerMode) and picked on the strip's MODE list, which shows the mode
 // of the receiver on screen. Bruce VK2RT runs AFSK in DATA-L (2026-10-26).
+//
+// Under the tuner, PWR, WIDTH and SHIFT, which Bruce named as the controls he
+// reaches for most: power for the radio, width and shift for the receiver on
+// screen. WIDTH offers the radio's widths for the mode, as the Radio panel's
+// width chip does (if-width-tables.js).
 
 import { mountContestView } from '/js/rtty-contest/contest-view.js';
 import { spanText, sMeterFraction, sMeterText, txMeterFraction } from '/js/radio-panel/panel-math.js';
@@ -26,6 +31,7 @@ import { calibrateNumeric, loadFromBackend } from '/js/calibration/calibration-e
 import { loadRttySettings } from '/js/rtty/rtty-settings.js';
 import { post, startYaesuSpectrumFeed } from '/js/ui/spectrum-feed-yaesu.js';
 import { BAND_EDGES, getSegments, loadBandPlanFromServer } from '/js/ui/band-plan.js';
+import { ifWidthOptionsFor } from '/js/ui/if-width-tables.js';
 
 const SPANS_HZ = [1e3, 2e3, 5e3, 10e3, 20e3, 50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
 
@@ -80,6 +86,16 @@ export function startYaesuRttyContest(root, cfg) {
         modes: Object.keys(RTTY_MODES).map(m => ({ id: m, label: m })),
         onMode: (vfo, mode) => chooseMode(vfo, mode),
         modeTitle: 'The mode of the receiver on screen. What you pick is also kept, in Settings, as the mode the band keys and the RTTY tuner use',
+        controls: [
+            { id: 'power', label: 'PWR', kind: 'range', min: 5, max: maxPowerW, step: 1, unit: ' W',
+              title: 'RF power. Drag and let go, or turn the mouse wheel over it' },
+            { id: 'width', label: 'WIDTH', kind: 'list', perReceiver: true,
+              title: 'IF width of the receiver on screen' },
+            { id: 'shift', label: 'SHIFT', kind: 'range', perReceiver: true, min: -1000, max: 1000, step: 20, reset: 0,
+              format: v => `${v > 0 ? '+' : ''}${v} Hz`,
+              title: 'IF shift of the receiver on screen. Double-click to centre it' },
+        ],
+        onControl: (id, value, vfo) => setControl(id, value, vfo),
         meters: [{ id: 'S', label: 'S' }, { id: 'PO', label: 'PO' }, { id: 'SWR', label: 'SWR' }, { id: 'ALC', label: 'ALC' }],
         views: cfg.views ?? [],
         tuner: cfg.tuner,
@@ -131,6 +147,22 @@ export function startYaesuRttyContest(root, cfg) {
         const res = await post('/api/rtty/mode', { mode });
         if (res?.ok) await post(`/api/cat/mode/${vfo.toLowerCase()}`, { mode: RTTY_MODES[mode] });
     }
+    // PWR, WIDTH and SHIFT. Power has no receiver; the URL names the one on
+    // screen, as the Radio panel's knob names the selected one.
+    function setControl(id, value, vfo) {
+        const rx = (vfo ?? view.receiver).toLowerCase();
+        if (id === 'power') return post(`/api/cat/power/${rx}`, { Watts: Math.round(num(value)) });
+        if (id === 'width') return post(`/api/cat/ifwidth/${rx}`, { code: String(value) });
+        if (id === 'shift') return post(`/api/cat/ifshift/${rx}`, { shiftHz: Math.round(num(value)) });
+    }
+    // WIDTH's choices change with the mode: in AM or FM there are none.
+    const widthOf = { A: null, B: null }, modeOf = { A: '', B: '' };
+    function showWidth(vfo) {
+        const opts = ifWidthOptionsFor(cfg.model, modeOf[vfo]) ?? [];
+        const code = widthOf[vfo] == null ? null : String(parseInt(widthOf[vfo], 10));
+        view.setControl('width', code, { vfo, options: opts.map(o => ({ id: o.code, label: o.label })) });
+    }
+
     // Which band key is lit follows the frequency, however it got there.
     const bandAt = hz => (BAND_EDGES[bandPlan] ?? BAND_EDGES.Region1).find(e => hz >= e.lo && hz <= e.hi)?.name ?? null;
     const showBand = (vfo, hz) => { if (bandRows.some(r => r.id === vfo)) view.setBand(vfo, bandAt(hz)); };
@@ -173,8 +205,13 @@ export function startYaesuRttyContest(root, cfg) {
     const handlers = {
         FrequencyA: v => { showBand('A', num(v)); if (!stepper.holds('A')) view.setFrequency('A', num(v)); },
         FrequencyB: v => { showBand('B', num(v)); if (!stepper.holds('B')) view.setFrequency('B', num(v)); },
-        ModeA: v => view.setMode('A', String(v ?? '')),
-        ModeB: v => view.setMode('B', String(v ?? '')),
+        ModeA: v => { modeOf.A = String(v ?? ''); view.setMode('A', modeOf.A); showWidth('A'); },
+        ModeB: v => { modeOf.B = String(v ?? ''); view.setMode('B', modeOf.B); showWidth('B'); },
+        IfWidthA: v => { widthOf.A = v; showWidth('A'); },
+        IfWidthB: v => { widthOf.B = v; showWidth('B'); },
+        IfShiftA: v => view.setControl('shift', num(v), { vfo: 'A' }),
+        IfShiftB: v => view.setControl('shift', num(v), { vfo: 'B' }),
+        Power: v => view.setControl('power', num(v)),
         SMeterA: v => { s.A = calibrateNumeric('SMETER', num(v)); drawS(); },
         SMeterB: v => { s.B = calibrateNumeric('SMETER', num(v)); drawS(); },
         IsTransmitting: v => {
