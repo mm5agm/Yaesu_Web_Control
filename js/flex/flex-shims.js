@@ -8,7 +8,9 @@
  *
  *   - Modal    -> drives <dialog> elements and Bootstrap .modal divs
  *   - Tooltip  -> inert (tooltips are a no-op on the flex page)
- *   - Dropdown -> toggles a sibling .dropdown-menu (apps launcher, Panels menu)
+ *   - Dropdown -> toggles a sibling .dropdown-menu (apps launcher, Panels menu,
+ *                 the nav's Views and Menu), with Bootstrap's keys: Down/Up to
+ *                 open and move between items, Esc to close
  *
  * It is loaded in _FlexLayout.cshtml *before* site.js.
  */
@@ -86,7 +88,7 @@
             const menu = menuFor(this._el);
             if (!menu) return;
             const willShow = !menu.classList.contains('show');
-            closeMenus(menu);
+            closeMenus(willShow ? menu : undefined);
             if (willShow) {
                 menu.classList.add('show');
                 menu.style.display = 'block';
@@ -106,6 +108,11 @@
             new Dropdown(toggle).toggle();
             return;
         }
+        // Picking a link closes its menu, as Bootstrap's do.
+        if (e.target.closest?.('.dropdown-menu a.dropdown-item[href]')) {
+            closeMenus();
+            return;
+        }
         const dismiss = e.target.closest?.('[data-bs-dismiss="modal"]');
         if (dismiss) {
             const modalEl = dismiss.closest('.modal, dialog');
@@ -116,6 +123,38 @@
         if (!e.target.closest?.('.dropdown-menu') && !e.target.closest?.('[data-bs-toggle="dropdown"]')) {
             closeMenus();
         }
+    });
+
+    // Keys, as Bootstrap's dropdowns: Down/Up on a toggle opens its menu at
+    // the first/last item, Down/Up in the menu moves between items (wrapping),
+    // Esc closes it and puts focus back on the toggle. Only this shim's menus.
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Escape') return;
+        let toggle = e.target.closest?.('[data-bs-toggle="dropdown"]');
+        if (!toggle) {
+            const inMenu = e.target.closest?.('.dropdown-menu');
+            if (!inMenu) return;
+            toggle = [...document.querySelectorAll('[data-bs-toggle="dropdown"]')].find(t => menuFor(t) === inMenu);
+        }
+        const menu = menuFor(toggle);
+        if (!menu) return;
+        const open = menu.classList.contains('show');
+        if (e.key === 'Escape') {
+            if (!open) return;
+            closeMenus();
+            toggle.focus();
+            e.preventDefault();
+            return;
+        }
+        const items = [...menu.querySelectorAll('.dropdown-item')].filter(i => !i.disabled && !i.classList.contains('disabled'));
+        if (!items.length) return;
+        e.preventDefault();
+        if (!open) new Dropdown(toggle).toggle();
+        const at = items.indexOf(document.activeElement);
+        const next = e.key === 'ArrowDown'
+            ? (at < 0 ? 0 : (at + 1) % items.length)
+            : (at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length);
+        items[next].focus();
     });
 
     window.bootstrap = { Modal, Tooltip, Dropdown };

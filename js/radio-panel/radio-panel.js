@@ -142,7 +142,9 @@ function turnable(el, { deg = 15, partAt = () => undefined, onStep, onTurn }) {
  * @param {HTMLElement} root
  * @param {object} opts
  *   brandShort, brandName, model, dual (bool),
- *   views:  [{ label, href, on }]          layout switch in the top strip
+ *   views:  [{ label, href, on }]          layout switch: a VIEWS key in the top
+ *                                          strip dropping down the views, the `on`
+ *                                          one highlighted
  *   menu:   [{ group, items: [{ label, href, title }] }]  optional: a MENU key at the
  *                                          right of the top strip, dropping down the
  *                                          app's other pages. Each opens in a new tab,
@@ -300,12 +302,51 @@ export function mountRadioPanel(root, opts = {}) {
     const model = h('span', 'rp-brand-model', opts.model ?? '');
     brand.append(h('span', 'rp-brand-short', opts.brandShort ?? ''), Object.assign(h('span', 'rp-legend', opts.brandName ?? ''), { style: 'color:var(--rp-legend-dim)' }), model);
 
-    const views = h('div', 'rp-bar');
-    for (const vw of opts.views ?? []) {
-        const a = h('a', 'rp-viewbtn' + (vw.on ? ' on' : ''), vw.label);
-        a.href = vw.href;
-        views.append(a);
-    }
+    // A key that drops down a list of links: the view switch and MENU.
+    // Closes on a pick, a click anywhere else, or Esc. `newTab` opens the
+    // links in a new tab, so the panel keeps running behind them.
+    const dropKey = (label, title, groups, { newTab = false, alignLeft = false } = {}) => {
+        const wrap = h('div', 'rp-menu');
+        const key = h('button', 'rp-viewbtn', label);
+        key.type = 'button';
+        key.title = title;
+        key.setAttribute('aria-haspopup', 'true');
+        key.setAttribute('aria-expanded', 'false');
+        const list = h('div', 'rp-menu-list' + (alignLeft ? ' rp-menu-left' : ''));
+        list.hidden = true;
+        for (const g of groups) {
+            if (g.group) list.append(h('div', 'rp-menu-group', g.group));
+            for (const it of g.items ?? []) {
+                const a = h('a', 'rp-menu-item' + (it.on ? ' on' : ''), it.label);
+                a.href = it.href;
+                if (newTab) { a.target = '_blank'; a.rel = 'noopener'; }
+                if (it.on) a.setAttribute('aria-current', 'page');
+                if (it.title) a.title = it.title;
+                a.addEventListener('click', () => show(false));
+                list.append(a);
+            }
+        }
+        const show = on => {
+            list.hidden = !on;
+            key.classList.toggle('on', on);
+            key.setAttribute('aria-expanded', String(on));
+        };
+        key.addEventListener('click', () => show(list.hidden));
+        document.addEventListener('pointerdown', e => { if (!list.hidden && !wrap.contains(e.target)) show(false); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !list.hidden) show(false); });
+        wrap.append(key, list);
+        const bar = h('div', 'rp-bar');
+        bar.append(wrap);
+        return bar;
+    };
+
+    // Reads VIEWS, never the current view's name, so it is plain there
+    // are others to pick.
+    const viewList = opts.views ?? [];
+    const views = viewList.length
+        ? dropKey('Views ▾', 'Choose a view. The one you used last opens when the app starts.',
+            [{ items: viewList }], { alignLeft: true })
+        : h('div', 'rp-bar');
 
     const right = h('div', 'rp-top-right');
     const lamps = h('div', 'rp-lamps rp-legend');
@@ -358,41 +399,10 @@ export function mountRadioPanel(root, opts = {}) {
     settings.append(themeSel, sizeSel);
     right.append(lamps, settings);
 
-    // MENU: the app's other pages, one key wide. Closes on a pick, a click
-    // anywhere else, or Esc.
-    if (opts.menu?.length) {
-        const wrap = h('div', 'rp-menu');
-        const menuKey = h('button', 'rp-viewbtn', 'MENU');
-        menuKey.type = 'button';
-        menuKey.title = 'Settings, memories, the manual and the other pages, each in a new tab';
-        menuKey.setAttribute('aria-haspopup', 'true');
-        const list = h('div', 'rp-menu-list');
-        list.hidden = true;
-        for (const g of opts.menu) {
-            if (g.group) list.append(h('div', 'rp-menu-group', g.group));
-            for (const it of g.items ?? []) {
-                const a = h('a', 'rp-menu-item', it.label);
-                a.href = it.href;
-                a.target = '_blank';
-                a.rel = 'noopener';
-                if (it.title) a.title = it.title;
-                a.addEventListener('click', () => show(false));
-                list.append(a);
-            }
-        }
-        const show = on => {
-            list.hidden = !on;
-            menuKey.classList.toggle('on', on);
-            menuKey.setAttribute('aria-expanded', String(on));
-        };
-        menuKey.addEventListener('click', () => show(list.hidden));
-        document.addEventListener('pointerdown', e => { if (!list.hidden && !wrap.contains(e.target)) show(false); });
-        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !list.hidden) show(false); });
-        wrap.append(menuKey, list);
-        const bar = h('div', 'rp-bar');
-        bar.append(wrap);
-        right.append(bar);
-    }
+    // MENU: the app's other pages, one key wide.
+    if (opts.menu?.length)
+        right.append(dropKey('MENU', 'Settings, memories, the manual and the other pages, each in a new tab',
+            opts.menu, { newTab: true }));
     top.append(brand, views, right);
 
     // ---- body ----------------------------------------------------------
