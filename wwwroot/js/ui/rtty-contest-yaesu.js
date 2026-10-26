@@ -45,8 +45,7 @@ const RTTY_SPOTS = {
     '17m': 18_105_000, '15m': 21_080_000, '12m': 24_925_000, '10m': 28_080_000, '6m': 50_300_000,
 };
 
-// The RTTY modes and their MD digits. Not added to MODE_CAT, which the band
-// plan's mode-on-tune is checked against elsewhere.
+// The modes MODE offers, and their MD digits (MODE_CAT's, which has them all).
 const RTTY_MODES = { 'RTTY-L': '6', 'RTTY-U': '9', 'DATA-L': '8', 'DATA-U': 'C' };
 
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };

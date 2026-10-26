@@ -802,6 +802,23 @@ test('/rtty-contest: TRACE starts thin and keeps what is picked', async () => {
     } finally { await page.eval(`localStorage.removeItem('ywc.rttyContest.trace')`).catch(() => {}); await page.close(); }
 });
 
+// Bruce VK2RT, 2026-10-26: the Radio panel's mode keys had no DATA-L.
+test('/radio: the mode keys include RTTY-U and DATA-L, and write MD 9 and 8', async () => {
+    const page = await open('/radio', { settleMs: 1500 });
+    try {
+        const keys = await page.eval(`[...document.querySelectorAll('.rp-modes .rp-soft')].map(b => b.textContent).join()`);
+        expect(keys === 'LSB,USB,CW-U,CW-L,AM,FM,RTTY-L,RTTY-U,DATA-L,DATA-U', `the mode keys are ${keys}`);
+        await page.clearWrites();
+        for (const m of ['DATA-L', 'RTTY-U']) {
+            await page.eval(`[...document.querySelectorAll('.rp-modes .rp-soft')].find(b => b.textContent === '${m}').click()`);
+            await sleep(300);
+        }
+        const w = (await page.writes()).filter(x => x.path.startsWith('/api/cat/mode/')).map(x => x.body?.mode).join();
+        expect(w === '8,9', `the keys wrote ${w}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 // Bruce's set-up (#169): AFSK in DATA-L with the software on Mark 1415 / 170.
 // The pair's midpoint is 1500 Hz of audio, so a click on a signal puts the
 // dial 1500 Hz above it, and the mark lands on 1415.
