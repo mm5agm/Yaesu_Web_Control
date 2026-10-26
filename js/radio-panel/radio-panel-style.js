@@ -358,6 +358,12 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-pane .rp-spectrum{flex:1;min-height:80px}
 .rp-pane .rp-waterfall{height:auto;flex:1.2;min-height:60px}
 .rp-pane.no-wf .rp-waterfall{display:none}
+.rp-pane-grip{flex:none;height:8px;margin:-2px 0;border-radius:3px;cursor:ns-resize;touch-action:none;background:linear-gradient(${v('legend-dim')},${v('legend-dim')}) center/40px 2px no-repeat}
+.rp-pane-grip:hover{background-color:${v('soft-bg')}}
+.rp-pane.no-wf .rp-pane-grip{display:none}
+.rp-pane.no-spec .rp-spectrum,.rp-pane.no-spec .rp-axis,.rp-pane.no-spec .rp-pane-grip{display:none}
+.rp-pane.no-spec .rp-waterfall{flex:1 1 0 !important}
+.rp-pane.no-wf .rp-spectrum{flex:1 1 0 !important}
 /* In the pop-out each pane sits on the radio's screen, as on the board: its
    label and scale are screen colours, which on the page itself (grey in
    Silver) could not be read */
