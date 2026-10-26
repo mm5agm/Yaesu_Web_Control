@@ -1,0 +1,121 @@
+@page "/rtty-contest"
+@model Yaesu_Web_Control.Pages.RttyContestModel
+@inject Yaesu_Web_Control.Services.ISettingsService SettingsSvc
+@{
+    Layout = null;
+    // Main/Sub only with a second SDR to show Sub on (Colin, 2026-10-26).
+    var settings = await SettingsSvc.GetSettingsAsync();
+    var sdrB = !string.IsNullOrWhiteSpace(settings.SdrDeviceKeyB);
+    ViewData["RttyTunerDocked"] = true;
+}
+@* The RTTY Contest view draws its own page, as /radio does. Bootstrap is here
+   only for the RTTY tuner's markup, which is the same partial as Classic's. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>RTTY Contest - Yaesu Web Control</title>
+    <link rel="icon" href="~/favicon.ico" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <style>html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }</style>
+</head>
+<body>
+    <div id="rttyContest"></div>
+    <partial name="_RttyTunerPartial" model="false" />
+    <div id="rttyTunerAnnounce" class="visually-hidden" role="status" aria-live="polite"></div>
+
+    @* The band plan never changes the mode on a click here, whatever Settings
+       says (#169): the operator has picked RTTY and means to stay in it. *@
+    <script>window.ywcAutoModeChangeOnTune = false;</script>
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script type="module">
+        import { RttyTuner } from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RttyReader } from "/js/rtty/rtty-reader.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { startModePausedPopout } from "/js/popout/popout-mode-pause.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { startYaesuRttyContest } from "/js/ui/rtty-contest-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current";
+
+        // Layout = null, so no site.js: this connection is what tells the host
+        // a browser is still here, as well as feeding the view.
+        const conn = window.rwcHubConnection('/radioHub');
+
+        // The docked tuner stops while the tuner has a window of its own
+        // (POP OUT on its bar), as well as while the radio is out of its modes.
+        const tunerState = { out: false, modePaused: false, decode: false };
+        let tuner = null;
+        const pauseTuner = msg => tuner?.setPaused(tunerState.out || tunerState.modePaused, msg);
+
+        // The reader in the tuner's Decode section, which shows only with
+        // DECODE on. It reads only then, and only while the tuner is here: in
+        // the tuner's window, that window's reader shows the text.
+        const reader = new RttyReader();
+        reader.init();
+        const pauseReader = () => reader.setPaused(tunerState.out || tunerState.modePaused || !tunerState.decode);
+        pauseReader();
+
+        startYaesuRttyContest(document.getElementById('rttyContest'), {
+            conn,
+            model: '@Model.RadioModel',
+            dual: @(Model.IsDual ? "true" : "false"),
+            sdrB: @(sdrB ? "true" : "false"),
+            maxPowerW: @Model.MaxPower,
+            minHz: @Model.MinHz,
+            maxHz: @Model.MaxHz,
+            bandPlan: '@Model.BandPlan',
+            tuner: document.getElementById('rttyTunerDialog'),
+            // The tuner's window is the one every GUI pops its tuner out to.
+            windowUrl: p => p === 'tuner' ? '/RttyTuner?contest=true' : '/rtty-contest/window?p=' + p,
+            // Named layouts, kept on the server apart from Experimental's.
+            layoutsApi: '/api/rttycontestlayouts',
+            onTunerOut: out => {
+                tunerState.out = out;
+                pauseTuner(out ? 'The tuner is in its own window.' : '');
+                pauseReader();
+            },
+            // DECODE: off stops the decoder too, so none is left running on
+            // the server with nothing showing it.
+            onDecode: on => {
+                tunerState.decode = on;
+                document.getElementById('rttyTunerDialog').classList.toggle('rtty-decoding', on);
+                pauseReader();
+                if (on) reader.start(); else reader.stop();
+            },
+            views: [
+                { label: 'Classic', href: '/' },
+                { label: 'Experimental', href: '/flexui' },
+                { label: 'Radio', href: '/radio' },
+                { label: 'RTTY Contest', href: '/rtty-contest', on: true },
+            ],
+        });
+
+        // The tuner, docked. It pauses rather than closes when the radio
+        // leaves the modes it works in, as the pop-out tuner does, and starts
+        // again when the radio comes back.
+        tuner = new RttyTuner();
+        tuner.init();
+        const tunerPanel = {
+            get isPaused() { return tunerState.modePaused; },
+            setPaused(paused, msg) { tunerState.modePaused = paused; pauseTuner(msg); pauseReader(); },
+        };
+        const belongs = m => typeof m === 'string'
+            && (m.startsWith('RTTY') || m.startsWith('DATA') || m === 'PSK' || m === 'LSB' || m === 'USB');
+        const modePause = startModePausedPopout({
+            name: 'RTTY tuner',
+            panel: tunerPanel,
+            belongs,
+            pausedText: m =>
+                `Not in an RTTY or data mode (the radio is in ${m}), so the tuner is paused. ` +
+                'It starts again when you go back to RTTY, DATA, LSB or USB.',
+            startNow: () => tunerState.out ? pauseTuner('The tuner is in its own window.') : tuner.start(),
+            initialMode: '@(Model.RadioState.ModeA ?? "")',
+            announceEl: document.getElementById('rttyTunerAnnounce'),
+        });
+        conn.on('RadioStateUpdate', update => {
+            if (update.property === 'ModeA') modePause.setMode(update.value);
+        });
+    </script>
+</body>
+</html>

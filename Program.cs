@@ -521,6 +521,20 @@ builder.Services.AddSingleton<RadioWebControl.Core.Services.Flex.IFlexLayoutStor
         msg => log.LogWarning("{Message}", msg));
 });
 
+// The RTTY Contest view's named layouts (rtty-contest-layouts.json): the same
+// store in a file of its own, so its layouts and Experimental's never mix.
+// RttyContestLayoutController asks for it by this key.
+builder.Services.AddKeyedSingleton<RadioWebControl.Core.Services.Flex.IFlexLayoutStore>(
+    Yaesu_Web_Control.Controllers.RttyContestLayoutController.StoreKey, (sp, _) =>
+{
+    var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("RttyContestLayoutStore");
+    return new RadioWebControl.Core.Services.Flex.FlexLayoutStore(
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MM5AGM", "Yaesu Web Control", "rtty-contest-layouts.json"),
+        msg => log.LogWarning("{Message}", msg));
+});
+
 // Remote radio audio (browser ↔ USB) — opt-in; devices open only while a client is connected.
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.AudioSessionManager>();
 builder.Services.AddSingleton<Yaesu_Web_Control.Services.Audio.RadioAudioBridgeService>();

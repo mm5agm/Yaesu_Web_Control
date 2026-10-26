@@ -32,6 +32,13 @@ export class SpectrumPane {
      * @param {(hz:number) => number} [opts.tuneTo]  where the dial lands for a click
      * @param {(dir:number) => void} [opts.onStep]  a mouse wheel notch, +1 up or -1 down
      *        at hz, when the app tunes somewhere else (Yaesu RTTY); the readout shows it
+     * @param {boolean} [opts.grip=false]  a bar between the spectrum and the waterfall
+     *        that drags their split (setSplit); off, the split is the stylesheet's
+     * @param {(frac:number) => void} [opts.onSplit]  the split after a drag, to keep
+     * @param {() => void} [opts.onFit]  a double-click on the grip; the pane has fitted
+     *        the trace (fit), and this is told so the range can be kept
+     * @param {boolean} [opts.dbScale=false]  label the trace in dB above the noise floor
+     * @param {boolean} [opts.waterfallFirst=false]  the waterfall above the spectrum (setOrder)
      */
     constructor(container, opts = {}) {
         this.el = h('div', 'rp-pane');
@@ -48,7 +55,11 @@ export class SpectrumPane {
         const wf = h('div', 'rp-waterfall');
         this.el.append(this.bar, spec, this._axis, wf);
         container.append(this.el);
-        this._view = new SpectrumView(spec, wf);
+        this._specEl = spec;
+        this._wfEl = wf;
+        if (opts.grip) this._grip(opts.onSplit, opts.onFit);
+        this._view = new SpectrumView(spec, wf, { dbScale: opts.dbScale });
+        if (opts.waterfallFirst) this.setOrder(true);
         this._st = { hz: 0, mode: '', widthHz: null, spanHz: 0, spots: [], showSpots: true, name: '', status: null, passband: true };
         if (opts.onTune) this._tunable(spec, wf, opts.onTune, opts.tuneTo);
         // The wheel steps the dial a notch at a time, as on the board.
@@ -114,6 +125,66 @@ export class SpectrumPane {
         }
     }
 
+    // The spectrum's share of the height the two share, 0.15..0.85. The grip
+    // sits under the axis, so the axis stays with the trace it labels.
+    _grip(onSplit, onFit) {
+        const grip = h('div', 'rp-pane-grip');
+        grip.title = 'Drag to share the height between the spectrum and the waterfall'
+            + (onFit ? '; double-click to fit the trace to the signals' : '');
+        this._gripEl = grip;
+        this._wfEl.before(grip);
+        if (onFit) grip.addEventListener('dblclick', () => { if (this.fit() != null) onFit(); });
+        grip.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            grip.setPointerCapture(e.pointerId);
+            const first = this._wfFirst ? this._wfEl : this._specEl;
+            const last = this._wfFirst ? this._specEl : this._wfEl;
+            const top = first.getBoundingClientRect().top;
+            const bottom = last.getBoundingClientRect().bottom;
+            const move = m => {
+                if (!(bottom > top)) return;
+                const f = (m.clientY - top) / (bottom - top);
+                this.setSplit(this._wfFirst ? 1 - f : f);
+            };
+            const up = () => {
+                grip.removeEventListener('pointermove', move);
+                grip.removeEventListener('pointerup', up);
+                grip.removeEventListener('pointercancel', up);
+                onSplit?.(this._split);
+            };
+            grip.addEventListener('pointermove', move);
+            grip.addEventListener('pointerup', up);
+            grip.addEventListener('pointercancel', up);
+        });
+    }
+
+    /** The spectrum's share of the height, 0.15..0.85; the waterfall has the rest. */
+    setSplit(frac) {
+        const f = Math.max(0.15, Math.min(0.85, Number(frac) || 0.5));
+        this._split = f;
+        this._specEl.style.flex = `${f} 1 0`;
+        this._wfEl.style.flex = `${1 - f} 1 0`;
+    }
+
+    /**
+     * The waterfall above the spectrum, or (false) below it as usual. The axis
+     * stays against the spectrum and the grip between the two.
+     */
+    setOrder(waterfallFirst) {
+        this._wfFirst = !!waterfallFirst;
+        const parts = this._wfFirst
+            ? [this._wfEl, this._gripEl, this._axis, this._specEl]
+            : [this._specEl, this._axis, this._gripEl, this._wfEl];
+        this.el.append(...parts.filter(x => x instanceof HTMLElement));
+    }
+
+    /** SpectrumView's levels: { auto, ref } in, { auto, ref, floor, lo, hi } out. */
+    setLevels(l) { return this._view.setLevels(l); }
+    get levels() { return this._view.levels; }
+    /** Fit the range to the recent peaks; the range in force, or null with no data. */
+    fit() { return this._view.fit(); }
+    get settings() { return this._view.settings; }
+
     /** The board's drawing settings: SpectrumView's, plus passband on or off. */
     setSettings(s) {
         this._view.setSettings(s);
@@ -152,6 +223,18 @@ export class SpectrumPane {
 
     /** Show or hide the waterfall; hidden, the trace takes its room. */
     setWaterfall(show) { this.el.classList.toggle('no-wf', !show); }
+
+    /**
+     * Which parts to draw: 'both', 'spectrum', 'waterfall' or 'none'. The
+     * other part keeps being fed, so it is ready when it comes back.
+     */
+    setParts(parts) {
+        const spec = parts === 'both' || parts === 'spectrum';
+        const wf = parts === 'both' || parts === 'waterfall';
+        this.el.hidden = !spec && !wf;
+        this.el.classList.toggle('no-wf', !wf);
+        this.el.classList.toggle('no-spec', !spec);
+    }
 
     _drawLabel() {
         const s = this._st;

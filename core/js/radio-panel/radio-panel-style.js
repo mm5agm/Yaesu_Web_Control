@@ -79,6 +79,7 @@ html,body{margin:0;background:${v('page')}}
 .rp-menu{position:relative}
 .rp-menu-list{position:absolute;right:-4px;top:calc(100% + 8px);z-index:99999;min-width:240px;display:flex;flex-direction:column;padding:6px 0;border-radius:6px;background:${v('bar-bg')};border:1px solid ${v('well-border')};box-shadow:0 10px 28px rgba(0,0,0,.6)}
 .rp-menu-list[hidden]{display:none}
+.rp-menu-list.rp-menu-left{left:-4px;right:auto}
 .rp-menu-group{padding:8px 16px 4px;font:600 13px ${SANS};letter-spacing:.14em;color:${v('legend-dim')}}
 .rp-menu-item{padding:7px 16px 7px 28px;font:500 17px ${SANS};color:${v('text')};text-decoration:none;white-space:nowrap}
 .rp-keylist{top:0;max-height:70vh;overflow-y:auto}
@@ -357,6 +358,12 @@ button.rp-menu-item{background:none;border:0;text-align:left;cursor:pointer}
 .rp-pane .rp-spectrum{flex:1;min-height:80px}
 .rp-pane .rp-waterfall{height:auto;flex:1.2;min-height:60px}
 .rp-pane.no-wf .rp-waterfall{display:none}
+.rp-pane-grip{flex:none;height:8px;margin:-2px 0;border-radius:3px;cursor:ns-resize;touch-action:none;background:linear-gradient(${v('legend-dim')},${v('legend-dim')}) center/40px 2px no-repeat}
+.rp-pane-grip:hover{background-color:${v('soft-bg')}}
+.rp-pane.no-wf .rp-pane-grip{display:none}
+.rp-pane.no-spec .rp-spectrum,.rp-pane.no-spec .rp-axis,.rp-pane.no-spec .rp-pane-grip{display:none}
+.rp-pane.no-spec .rp-waterfall{flex:1 1 0 !important}
+.rp-pane.no-wf .rp-spectrum{flex:1 1 0 !important}
 /* In the pop-out each pane sits on the radio's screen, as on the board: its
    label and scale are screen colours, which on the page itself (grey in
    Silver) could not be read */

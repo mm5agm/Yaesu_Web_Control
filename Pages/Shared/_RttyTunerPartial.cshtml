@@ -24,6 +24,14 @@
     // rather than passed in, so the main page's dialog and the pop-out window
     // cannot end up disagreeing about it.
     var contest = (await SettingsSvc.GetSettingsAsync()).RttyContestMode;
+
+    // Docked in the RTTY Contest view (/rtty-contest): open from the start,
+    // the Tune section only whatever the setting says, a fixed size, and no
+    // message line under the scope, so nothing in it moves while tuning.
+    // The view has its own way out, so no pop-out or close buttons here.
+    var docked = ViewData["RttyTunerDocked"] is true;
+    // The RTTY Contest view's tuner window is the Tune section only too.
+    if (docked || ViewData["RttyTunerContest"] is true) contest = true;
 }
 <style>
     /* Wide enough for the two columns the layout is built around: the decode
@@ -55,8 +63,10 @@
     /* Once the operator has sized the dialog, or in the pop-out, the scope
        takes whatever room is left in its column and stays square inside it.
        Positioned so that the canvas's own size cannot push the box bigger. */
-    #rttyTunerDialog.user-sized .rtty-scope-box { flex:1 1 auto; min-height:120px; position:relative; overflow:hidden; }
-    #rttyTunerDialog.user-sized #rttyTunerCanvas { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); }
+    #rttyTunerDialog.user-sized .rtty-scope-box,
+    #rttyTunerDialog.rtty-docked .rtty-scope-box { flex:1 1 auto; min-height:120px; position:relative; overflow:hidden; }
+    #rttyTunerDialog.user-sized #rttyTunerCanvas,
+    #rttyTunerDialog.rtty-docked #rttyTunerCanvas { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); }
 
     /* Tones only: once Mark is set the operator only needs the cross, so the
        settings, the readouts and the other two sections go, and the window can
@@ -78,6 +88,11 @@
     #rttyTunerDialog.rtty-contest .rtty-hint { display:none !important; }
     #rttyTunerDialog.rtty-contest:not(.rtty-popout) { width:360px; }
     #rttyTunerDialog.rtty-contest .rtty-col-tune { flex:1 1 auto; }
+    /* DECODE in the RTTY Contest view (contest-view.js) brings the Decode
+       section back, here and in the tuner's window, but not Send, which is
+       not built. Tones only still hides it. */
+    #rttyTunerDialog.rtty-contest.rtty-decoding:not(.rtty-compact) .rtty-col-main { display:flex !important; }
+    #rttyTunerDialog.rtty-contest .rtty-send { display:none; }
 
     /* The one thing Bruce VK2RT asked for and did not get: a panel that holds
        still. Both lines are live regions whose text changes length as the tuner
@@ -88,6 +103,31 @@
        clipped, and it is only the common case that has to stop jumping. */
     #rttyTunerDialog.rtty-contest #rttyTunerInfo,
     #rttyTunerDialog.rtty-contest #rttyTunerStatus { min-height:2.4em; }
+
+    /* Docked in the RTTY Contest view: part of the page, not a dialog. It
+       fills its place beside the spectrum, at the size the operator set with
+       its grabs, and the scope is the largest square that fits - as in
+       the pop-out - so a wider tuner is a bigger scope, never a stretched
+       one. The status line goes; the readouts above it stay. */
+    #rttyTunerDialog.rtty-docked {
+        position:static; display:flex; flex-direction:column;
+        width:340px; height:auto; flex:1 1 auto; max-height:100%; min-height:0; max-width:none;
+        margin:0; padding:0; resize:none; overflow:auto;
+        border:1px solid #555; border-radius:8px; background:#222; color:#eee;
+    }
+    /* On top (the always-on-top window, pip-dock.js): the docked tuner moves
+       there whole, so it fills that window instead of keeping its width, and
+       the scope sizes to it as in the pop-out - however small the operator
+       makes the window, or the browser makes it on a screen with another
+       scale. What still does not fit scrolls. */
+    #rttyTunerDialog.rtty-docked.rc-on-top {
+        width:100%; height:100vh; max-height:none; border:0; border-radius:0;
+    }
+    /* The width the operator dragged it to, with its grabs (contest-view.js).
+       The height is its place's, which the grabs set too. */
+    #rttyTunerDialog.rtty-docked:not(.rc-on-top) { width:var(--rc-tuner-w, 360px); }
+    #rttyTunerDialog.rtty-docked .rtty-header { cursor:default; }
+    #rttyTunerDialog.rtty-docked #rttyTunerStatus { display:none; }
 
     /* Shown only in the pop-out, which stays open when the mode changes
        rather than vanishing off a second monitor. */
@@ -136,9 +176,9 @@
      oscilloscope; the reader (core/js/rtty/rtty-reader.js) prints what the
      server's demodulator makes of the same audio. Non-modal so the VFO stays
      in reach. -->
-<dialog id="rttyTunerDialog" open="@popout"
-        class="@(string.Join(" ", new[] { popout ? "rtty-popout user-sized" : null, contest ? "rtty-contest" : null }.Where(c => c is not null)))"
-        style="@(popout ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0;")"
+<dialog id="rttyTunerDialog" open="@(popout || docked)"
+        class="@(string.Join(" ", new[] { popout ? "rtty-popout user-sized" : null, docked ? "rtty-docked" : null, contest ? "rtty-contest" : null }.Where(c => c is not null)))"
+        style="@(popout || docked ? null : "border:1px solid #555; border-radius:8px; background:#222; color:#eee; padding:0;")"
         aria-labelledby="rttyTunerTitle">
     <div class="rtty-header d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #444;">
         <strong id="rttyTunerTitle">@(contest ? "RTTY Tuner" : "RTTY")</strong>
@@ -146,7 +186,10 @@
             <button id="rttyTunerCompactBtn" class="btn btn-sm btn-outline-secondary" type="button" aria-pressed="false"
                     title="Tones only - show just the scope, without the settings, the readouts or the decoded text"
                     aria-label="Tones only view"><i class="bi bi-fullscreen-exit" aria-hidden="true"></i></button>
-            @if (popout)
+            @if (docked)
+            {
+            }
+            else if (popout)
             {
                 <button id="rttyTunerReattachBtn" class="btn btn-sm btn-outline-secondary" type="button"
                         title="Put the RTTY panel back in the main page"

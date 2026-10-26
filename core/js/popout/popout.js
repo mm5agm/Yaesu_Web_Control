@@ -215,6 +215,22 @@ function writeGeometry(name, geom) {
     catch { /* private browsing or storage off: the next open uses the default */ }
 }
 
+/**
+ * Where a pop-out was last left - { left, top, width, height, ... } - or
+ * null. An open pop-out keeps it up to date every two seconds, so a page
+ * can save it with its own layout and put it back with setPopoutPlace
+ * before the next open().
+ */
+export function popoutPlace(name) {
+    const g = readGeometry(name);
+    return g && typeof g === 'object' ? g : null;
+}
+
+/** Where the next open() of this pop-out puts it. See popoutPlace. */
+export function setPopoutPlace(name, geom) {
+    if (geom && typeof geom === 'object') writeGeometry(name, geom);
+}
+
 function makeChannel(name) {
     if (typeof BroadcastChannel === 'undefined') return null;
     try { return new BroadcastChannel(CHANNEL_PREFIX + name); }

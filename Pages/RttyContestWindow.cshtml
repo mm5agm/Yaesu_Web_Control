@@ -1,0 +1,63 @@
+@page "/rtty-contest/window"
+@model Yaesu_Web_Control.Pages.RttyContestWindowModel
+@inject Yaesu_Web_Control.Services.ISettingsService SettingsSvc
+@{
+    Layout = null;
+    var settings = await SettingsSvc.GetSettingsAsync();
+    var sdrB = !string.IsNullOrWhiteSpace(settings.SdrDeviceKeyB);
+    var title = Model.PartName switch
+    {
+        "spectrum" => "Spectrum",
+        "waterfall" => "Waterfall",
+        _ => "Spectrum and waterfall",
+    };
+}
+@* One part of the RTTY Contest view (/rtty-contest) in a window of its own:
+   the same view with only that part showing. The tuner is not here - it pops
+   out to /RttyTuner?contest=true, the tuner window every GUI uses. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
+    <title>@title - RTTY Contest - Yaesu Web Control</title>
+    <link rel="icon" href="~/favicon.ico" />
+    <style>
+        html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
+        .popout-screen-offer { padding: 6px 10px; border-radius: 4px; background: #1b2330; color: #dde; font: 14px sans-serif; }
+        .popout-screen-offer button { margin-left: 8px; }
+    </style>
+</head>
+<body>
+    <div id="rttyContest"></div>
+
+    @* As on /rtty-contest: the band plan never changes the mode on a click (#169). *@
+    <script>window.ywcAutoModeChangeOnTune = false;</script>
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
+    <script type="module">
+        import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { startYaesuRttyContest } from "/js/ui/rtty-contest-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        const part = '@Model.PartName';
+        const popout = new PopoutChild({ name: 'rtty-contest-' + part, fallbackUrl: '/rtty-contest' }).start();
+        // Layout = null, so no site.js: this connection is what tells the host
+        // a browser is still here, as well as feeding the window.
+        const conn = window.rwcHubConnection('/radioHub');
+
+        const root = document.getElementById('rttyContest');
+        startYaesuRttyContest(root, {
+            conn,
+            model: '@Model.RadioModel',
+            dual: @(Model.IsDual ? "true" : "false"),
+            sdrB: @(sdrB ? "true" : "false"),
+            maxPowerW: @Model.MaxPower,
+            minHz: @Model.MinHz,
+            maxHz: @Model.MaxHz,
+            part,
+            onDock: () => popout.reattach(),
+        });
+        offerScreenPermission(root.querySelector('.rc-body'));
+    </script>
+</body>
+</html>

@@ -17,12 +17,21 @@
 //   bright  dB of lift for the waterfall only, 0-60
 //   smooth  half-width in bins of a moving average across the trace, 0-8
 //   hold    true freezes trace and waterfall; frames are dropped, not queued
+//
+// Levels, which the RTTY Contest view sets and the radio panel leaves alone
+// (setLevels): `auto` false freezes the floor where it is, and `ref` puts
+// the bottom of the trace that many dB from the floor (negative is below it)
+// in place of the default share of the range. fit() sets the range so the
+// strongest peak of the last few seconds sits just under the top.
 
 import { binsToColumns, percentile, waterfallColour } from './panel-math.js';
 
 const WATERFALL_DB = 60;
 const FLOOR_MARGIN_DB = 6;
 const FLOOR_ALPHA = 0.08;
+const PEAK_FRAMES = 40;
+const HIDDEN_COLUMNS = 1000;
+const FIT_HEADROOM_DB = 3;
 
 export const SPECTRUM_SPEEDS = [1, 2, 4, 8, 16, 32, 64, 128];
 export const SPECTRUM_DEFAULTS = Object.freeze({ range: 60, speed: 1, bright: 0, smooth: 2, hold: false });
@@ -56,7 +65,11 @@ export function smoothBins(bins, r) {
 }
 
 export class SpectrumView {
-    constructor(spectrumEl, waterfallEl) {
+    /**
+     * @param {object} [opts]
+     * @param {boolean} [opts.dbScale=false]  label the grid in dB above the floor
+     */
+    constructor(spectrumEl, waterfallEl, opts = {}) {
         this._specEl = spectrumEl;
         this._wfEl = waterfallEl;
         this._spec = document.createElement('canvas');
@@ -66,6 +79,10 @@ export class SpectrumView {
         this._sctx = this._spec.getContext('2d');
         this._wctx = this._wf.getContext('2d', { willReadFrequently: false });
         this._floor = null;
+        this._auto = true;
+        this._ref = null;
+        this._peaks = [];
+        this._dbScale = !!opts.dbScale;
         this._last = null;
         this._set = { ...SPECTRUM_DEFAULTS };
         this._frames = 0;
@@ -93,6 +110,7 @@ export class SpectrumView {
     // stops, so the old band's levels do not linger.
     clear() {
         this._floor = null;
+        this._peaks = [];
         this._last = null;
         this._wctx.fillStyle = this._colours.bg || '#000';
         this._wctx.fillRect(0, 0, this._wf.width, this._wf.height);
@@ -109,12 +127,54 @@ export class SpectrumView {
 
     get settings() { return { ...this._set }; }
 
+    /**
+     * auto: the floor follows the noise (true, the default) or stays where it
+     * is. ref: dB from the floor to the bottom of the trace, -40..40, or null
+     * for the default. Returns the levels in force.
+     */
+    setLevels({ auto, ref } = {}) {
+        if (auto !== undefined) this._auto = auto !== false;
+        if (ref !== undefined) {
+            const n = Number(ref);
+            this._ref = ref === null || !Number.isFinite(n) ? null : Math.max(-40, Math.min(40, Math.round(n)));
+        }
+        this._draw();
+        return this.levels;
+    }
+
+    /** floor: the noise floor in the bins' dB (null before the first frame); lo, hi: the trace's window. */
+    get levels() {
+        const { lo, hi } = this._range();
+        return { auto: this._auto, ref: this._ref, floor: this._floor, lo, hi };
+    }
+
+    /**
+     * Set the range so the strongest peak of the last PEAK_FRAMES frames sits
+     * FIT_HEADROOM_DB under the top, keeping the bottom where it is. Returns
+     * the range in force, or null with nothing yet to fit.
+     */
+    fit() {
+        if (!this._peaks.length || this._floor == null) return null;
+        // dB above the floor that should land on the trace's top, which is
+        // 92% of the height (_draw). The default bottom moves with the range.
+        const top = Math.max(...this._peaks) + FIT_HEADROOM_DB - this._floor;
+        const r = this._ref == null ? top / (0.92 - FLOOR_MARGIN_DB / 60) : (top - this._ref) / 0.92;
+        return this.setSettings({ range: Math.ceil(r) }).range;
+    }
+
     push(bins) {
         if (!bins?.length || this._set.hold) return;
         bins = smoothBins(bins, this._set.smooth);
-        const cols = binsToColumns(bins, Math.max(1, this._spec.width));
+        // A hidden trace's canvas is 1 px wide, and a floor from one column
+        // is the average, not the floor: take the columns at the waterfall's
+        // width then (a waterfall-only pop-out), or at a screen's.
+        const sw = this._spec.width, ww = this._wf.width;
+        const cols = binsToColumns(bins, sw > 1 ? sw : ww > 1 ? ww : HIDDEN_COLUMNS);
         const f = percentile(cols, 0.25);
-        this._floor = this._floor == null ? f : this._floor + (f - this._floor) * FLOOR_ALPHA;
+        if (this._floor == null) this._floor = f;
+        else if (this._auto) this._floor += (f - this._floor) * FLOOR_ALPHA;
+        this._peaks.push(Math.max(...cols));
+        if (this._peaks.length > PEAK_FRAMES) this._peaks.shift();
         this._last = cols;
         this._draw();
         if (this._frames++ % this._set.speed === 0) this._waterfallRow(bins);
@@ -124,9 +184,11 @@ export class SpectrumView {
     // of the 60 dB default so a wide range does not push the floor up.
     _range() {
         const r = this._set.range;
-        const lo = (this._floor ?? -100) - FLOOR_MARGIN_DB * r / 60;
+        const lo = (this._floor ?? -100) + this._bottom(r);
         return { lo, hi: lo + r };
     }
+
+    _bottom(r) { return this._ref ?? -FLOOR_MARGIN_DB * r / 60; }
 
     _resize() {
         const dpr = window.devicePixelRatio || 1;
@@ -167,6 +229,7 @@ export class SpectrumView {
         if (!cols?.length) return;
         const { lo, hi } = this._range();
         const yOf = v => h - Math.max(0, Math.min(1, (v - lo) / (hi - lo))) * h * 0.92;
+        if (this._dbScale && this._floor != null) this._drawScale(ctx, h, lo, hi, yOf);
         const step = w / cols.length;
 
         ctx.beginPath();
@@ -185,6 +248,25 @@ export class SpectrumView {
         ctx.strokeStyle = this._colours.trace || '#7fdcff';
         ctx.lineWidth = Math.max(1, (window.devicePixelRatio || 1) * 1.2);
         ctx.stroke();
+    }
+
+    // dB above the floor at the left edge, every 5, 10 or 20 dB.
+    _drawScale(ctx, h, lo, hi, yOf) {
+        const dpr = window.devicePixelRatio || 1;
+        const r = hi - lo;
+        const step = r <= 30 ? 5 : r <= 90 ? 10 : 20;
+        const f = this._floor;
+        ctx.save();
+        ctx.font = `${Math.round(12 * dpr)}px 'Share Tech Mono', Consolas, monospace`;
+        ctx.fillStyle = this._colours.trace || '#7fdcff';
+        ctx.globalAlpha = 0.7;
+        ctx.textBaseline = 'middle';
+        for (let d = Math.ceil((lo - f) / step) * step; f + d <= hi; d += step) {
+            const y = yOf(f + d);
+            if (y < 8 * dpr || y > h - 6 * dpr) continue;
+            ctx.fillText(d > 0 ? '+' + d : String(d), 4 * dpr, y);
+        }
+        ctx.restore();
     }
 
     _waterfallRow(bins) {

@@ -3,6 +3,7 @@
 @{
     Layout = null;
     ViewData["Title"] = "RTTY Tuner";
+    if (Model.Contest) ViewData["RttyTunerContest"] = true;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -59,7 +60,11 @@
         import { startModePausedPopout } from "/js/popout/popout-mode-pause.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
-        const popout = new PopoutChild({ name: 'rtty-tuner', fallbackUrl: '/' }).start();
+        // From the RTTY Contest view its own window, so it never takes over
+        // (or is taken over by) another GUI's tuner pop-out.
+        const popout = new PopoutChild(@(Model.Contest
+            ? Html.Raw("{ name: 'rtty-contest-tuner', fallbackUrl: '/rtty-contest' }")
+            : Html.Raw("{ name: 'rtty-tuner', fallbackUrl: '/' }"))).start();
         offerScreenPermission(document.querySelector('#rttyTunerDialog .rtty-body'));
         document.getElementById('rttyTunerReattachBtn')
             ?.addEventListener('click', () => popout.reattach());
@@ -71,20 +76,38 @@
         // page loads and never closes, so the reader starts polling on init and
         // only the pause below ever stops it.
         //
-        // Unless Contest Mode (Settings) is on, which hides the Decode section
-        // and the reader's Start/Stop button with it: nothing would show the
-        // text, and a decode still running on the server from an earlier
-        // session would have no button left to stop it. The flag is read off
-        // the class the partial put on the dialog, so this window and the main
-        // page cannot disagree about it. See ApplicationSettings.RttyContestMode.
-        const contest = document.getElementById('rttyTunerDialog')
-            ?.classList.contains('rtty-contest');
-        let reader = null;
-        if (contest) {
+        // Unless Contest Mode is on in Settings, which hides the Decode
+        // section and the reader's Start/Stop button with it: nothing would
+        // show the text, and a decode still running on the server from an
+        // earlier session would have no button left to stop it. The flag is
+        // read off the class the partial put on the dialog, so this window and
+        // the main page cannot disagree about it. See
+        // ApplicationSettings.RttyContestMode.
+        //
+        // From the RTTY Contest view (?contest=true) the Decode section
+        // follows the view's DECODE key instead, which the view keeps under
+        // this name (contest-view.js, with YWC's prefix). The view starts and
+        // stops the decoder; this window only shows it.
+        const dialog = document.getElementById('rttyTunerDialog');
+        const contest = dialog?.classList.contains('rtty-contest');
+        const fromView = @(Model.Contest ? "true" : "false");
+        const DECODE_KEY = 'ywc.rttyContest.decode';
+        const decodeOn = () => { try { return localStorage.getItem(DECODE_KEY) === '1'; } catch { return false; } };
+        let reader = null, modePaused = false;
+        if (contest && !fromView) {
             fetch('/api/rtty/reader/stop', { method: 'POST' }).catch(() => { });
         } else {
             reader = new RttyReader();
             reader.init();
+        }
+        const pauseReader = () => reader?.setPaused(modePaused || (fromView && !decodeOn()));
+        function showDecode() {
+            dialog?.classList.toggle('rtty-decoding', decodeOn());
+            pauseReader();
+        }
+        if (fromView) {
+            showDecode();
+            window.addEventListener('storage', e => { if (e.key === DECODE_KEY) showDecode(); });
         }
 
         // One panel as far as the mode watcher is concerned: pausing the window
@@ -92,7 +115,7 @@
         // from a decoder listening to a radio that has left RTTY.
         const panel = {
             get isPaused() { return tuner.isPaused; },
-            setPaused(paused, text) { tuner.setPaused(paused, text); reader?.setPaused(paused); },
+            setPaused(paused, text) { tuner.setPaused(paused, text); modePaused = paused; pauseReader(); },
         };
 
         // The same modes the main page keeps its tuner open in: RTTY, and the
