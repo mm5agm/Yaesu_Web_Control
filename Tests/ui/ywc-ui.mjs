@@ -618,6 +618,11 @@ test('/rtty-contest: a band key goes to the RTTY spot in RTTY-L, 60 m to the ban
         await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
         const keys = await page.eval(`[...document.querySelectorAll('.rc-brow-A .rc-band')].map(b => b.dataset.band)`);
         expect(keys.includes('160m') && keys.includes('6m') && keys.includes('60m'), `MAIN band keys: ${keys}`);
+        // The page starts in the RTTY mode saved in Settings, which may not be
+        // RTTY-L on this PC. Pick it on the MODE list (the save is stubbed).
+        await page.eval(`(() => { const s = document.querySelector('.rc-top .rc-mode'); s.value = 'RTTY-L'; s.dispatchEvent(new Event('change')); })()`);
+        await sleep(400);
+        await page.clearWrites();
         const band = b => page.eval(`document.querySelector('.rc-brow-A .rc-band[data-band="${b}"]').click()`);
         await band('20m');
         await sleep(400);
