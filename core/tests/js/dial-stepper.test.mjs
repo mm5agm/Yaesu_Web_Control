@@ -49,3 +49,14 @@ test('nothing is sent with no frequency yet, or past the edges', async () => {
     e.s.turn('A', -1); await e.settle();
     assert.deepEqual([...r.writes, ...e.writes], []);
 });
+
+test('a nudge moves by what the digit is worth, off the grid, and folds as a turn does', async () => {
+    const r = rig(14_074_050);
+    r.s.nudge('A', 1000); r.s.nudge('A', 1000); r.s.nudge('A', -10);
+    assert.equal(r.at.A, 14_076_040);
+    await r.settle();
+    assert.deepEqual(r.writes, [14_075_050, 14_076_040]);
+    const e = rig(30_500);
+    e.s.nudge('A', -1000); await e.settle();
+    assert.deepEqual(e.writes, []);
+});

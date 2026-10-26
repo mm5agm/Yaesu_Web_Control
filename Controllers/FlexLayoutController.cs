@@ -10,13 +10,27 @@ namespace Yaesu_Web_Control.Controllers
     /// opaque JSON — see <see cref="FlexLayoutStore"/> and Models/FlexLayout.cs
     /// for why the server does not model tabs or components.
     /// </summary>
-    [ApiController]
     [Route("api/flexlayouts")]
-    public class FlexLayoutController : ControllerBase
+    public class FlexLayoutController : LayoutStoreController
+    {
+        public FlexLayoutController(IFlexLayoutStore store) : base(store)
+        {
+        }
+    }
+
+    /// <summary>
+    /// The named-layout API over one <see cref="IFlexLayoutStore"/>. It has no
+    /// route of its own: each GUI that keeps layouts derives from it with its
+    /// own route and store, so there is one copy of the API to maintain.
+    /// (A route on this class would be inherited as well as the derived one,
+    /// and two controllers would then answer the same URL.)
+    /// </summary>
+    [ApiController]
+    public abstract class LayoutStoreController : ControllerBase
     {
         private readonly IFlexLayoutStore _store;
 
-        public FlexLayoutController(IFlexLayoutStore store)
+        protected LayoutStoreController(IFlexLayoutStore store)
         {
             _store = store;
         }

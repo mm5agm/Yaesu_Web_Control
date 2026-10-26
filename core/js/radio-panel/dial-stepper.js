@@ -2,7 +2,8 @@
 // STEP a notch, landing on the step grid as the radio's dial does. Notches
 // that come while a write is in flight are folded into the next write, so a
 // fast spin lands where the operator stopped; holds(vfo) says to ignore the
-// radio's frequency echo until it has caught up.
+// radio's frequency echo until it has caught up. nudge(vfo, hz) moves by hz
+// off the grid, for the wheel over a digit, and folds the same way.
 
 /**
  * @param {object} o
@@ -15,13 +16,20 @@
  */
 export function dialStepper({ stepHz, freq, show, write, minHz = 30_000, maxHz = 75_000_000 }) {
     const wheel = { A: { to: null, busy: false, until: 0 }, B: { to: null, busy: false, until: 0 } };
-    async function turn(vfo, dir) {
+    const from = vfo => wheel[vfo]?.to ?? freq(vfo);
+    function turn(vfo, dir) {
+        const cur = from(vfo), s = stepHz();
+        if (!cur || !(s > 0) || !dir) return;
+        return go(vfo, dir > 0 ? Math.floor(cur / s) * s + s : Math.ceil(cur / s) * s - s);
+    }
+    function nudge(vfo, hz) {
+        const cur = from(vfo);
+        if (!cur || !hz) return;
+        return go(vfo, cur + hz);
+    }
+    async function go(vfo, to) {
         const w = wheel[vfo];
-        const cur = w?.to ?? freq(vfo);
-        const s = stepHz();
-        if (!w || !cur || !(s > 0) || !dir) return;
-        const to = dir > 0 ? Math.floor(cur / s) * s + s : Math.ceil(cur / s) * s - s;
-        if (to < minHz || to > maxHz) return;
+        if (!w || to < minHz || to > maxHz) return;
         w.to = to;
         w.until = Date.now() + 700;
         show(vfo, to);
@@ -38,5 +46,5 @@ export function dialStepper({ stepHz, freq, show, write, minHz = 30_000, maxHz =
             setTimeout(() => { if (!w.busy && Date.now() >= w.until) w.to = null; }, 700);
         }
     }
-    return { turn, holds: vfo => !!wheel[vfo] && (wheel[vfo].busy || Date.now() < wheel[vfo].until) };
+    return { turn, nudge, holds: vfo => !!wheel[vfo] && (wheel[vfo].busy || Date.now() < wheel[vfo].until) };
 }

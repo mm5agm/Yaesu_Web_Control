@@ -22,6 +22,7 @@ import {
     passbandPercent, axisLabels, spanText, widthText, knobAngle,
 } from './panel-math.js';
 import { mountPanelWindows } from './panel-windows.js';
+import { freqDigits, wheelDigits } from './freq-digits.js';
 
 const DESIGN_WIDTH = 1600;
 const SIZES = ['fit', '50', '67', '75', '90', '100', '110', '125', '150'];
@@ -548,15 +549,8 @@ export function mountRadioPanel(root, opts = {}) {
                 el.title = 'Type a frequency';
                 el.addEventListener('click', e => { e.stopPropagation(); act('entry', vfo, vfo); });
             }
-        for (const [freqEl, vfo] of [[mainFreq, 'A'], [subFreq, 'B']]) {
-            freqEl.classList.add('wheel');
-            freqEl.addEventListener('wheel', e => {
-                const step = Number(e.target?.dataset?.step);
-                if (!step) return;
-                e.preventDefault();
-                if (e.deltaY) act('tune', String(e.deltaY < 0 ? step : -step), vfo);
-            }, { passive: false });
-        }
+        for (const [freqEl, vfo] of [[mainFreq, 'A'], [subFreq, 'B']])
+            wheelDigits(freqEl, hz => act('tune', String(hz), vfo));
     }
 
     // One spectrum pane per SDR, each following its own VFO.
@@ -1192,23 +1186,9 @@ export function mountRadioPanel(root, opts = {}) {
             else { subBig.textContent = '-.---'; subSmall.textContent = '.---'; }
             return;
         }
-        if (vfo === 'A') { digits(mainBig, f.big, 1000); digits(mainSmall, f.small, 1); }
-        else { digits(subBig, f.big, 1000); digits(subSmall, f.small, 1); }
-    }
-
-    // One span per character; each digit carries the Hz it is worth, for the
-    // wheel. `unitHz` is what the last digit of `text` is worth.
-    function digits(el, text, unitHz) {
-        if (el.textContent === text) return;
-        el.textContent = '';
-        let step = unitHz;
-        const out = [];
-        for (let i = text.length - 1; i >= 0; i--) {
-            const span = h('span', null, text[i]);
-            if (text[i] >= '0' && text[i] <= '9') { span.dataset.step = String(step); step *= 10; }
-            out.unshift(span);
-        }
-        el.append(...out);
+        // Each digit carries the Hz it is worth, for the wheel.
+        if (vfo === 'A') { freqDigits(mainBig, f.big, 1000); freqDigits(mainSmall, f.small, 1); }
+        else { freqDigits(subBig, f.big, 1000); freqDigits(subSmall, f.small, 1); }
     }
 
     // ---- scaling, theme ------------------------------------------------

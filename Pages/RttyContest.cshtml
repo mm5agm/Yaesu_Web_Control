@@ -34,6 +34,7 @@
     <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
     <script type="module">
         import { RttyTuner } from "/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { RttyReader } from "/js/rtty/rtty-reader.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { startModePausedPopout } from "/js/popout/popout-mode-pause.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { startYaesuRttyContest } from "/js/ui/rtty-contest-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
@@ -43,9 +44,17 @@
 
         // The docked tuner stops while the tuner has a window of its own
         // (POP OUT on its bar), as well as while the radio is out of its modes.
-        const tunerState = { out: false, modePaused: false };
+        const tunerState = { out: false, modePaused: false, decode: false };
         let tuner = null;
         const pauseTuner = msg => tuner?.setPaused(tunerState.out || tunerState.modePaused, msg);
+
+        // The reader in the tuner's Decode section, which shows only with
+        // DECODE on. It reads only then, and only while the tuner is here: in
+        // the tuner's window, that window's reader shows the text.
+        const reader = new RttyReader();
+        reader.init();
+        const pauseReader = () => reader.setPaused(tunerState.out || tunerState.modePaused || !tunerState.decode);
+        pauseReader();
 
         startYaesuRttyContest(document.getElementById('rttyContest'), {
             conn,
@@ -55,12 +64,24 @@
             maxPowerW: @Model.MaxPower,
             minHz: @Model.MinHz,
             maxHz: @Model.MaxHz,
+            bandPlan: '@Model.BandPlan',
             tuner: document.getElementById('rttyTunerDialog'),
             // The tuner's window is the one every GUI pops its tuner out to.
             windowUrl: p => p === 'tuner' ? '/RttyTuner?contest=true' : '/rtty-contest/window?p=' + p,
+            // Named layouts, kept on the server apart from Experimental's.
+            layoutsApi: '/api/rttycontestlayouts',
             onTunerOut: out => {
                 tunerState.out = out;
                 pauseTuner(out ? 'The tuner is in its own window.' : '');
+                pauseReader();
+            },
+            // DECODE: off stops the decoder too, so none is left running on
+            // the server with nothing showing it.
+            onDecode: on => {
+                tunerState.decode = on;
+                document.getElementById('rttyTunerDialog').classList.toggle('rtty-decoding', on);
+                pauseReader();
+                if (on) reader.start(); else reader.stop();
             },
             views: [
                 { label: 'Classic', href: '/' },
@@ -77,7 +98,7 @@
         tuner.init();
         const tunerPanel = {
             get isPaused() { return tunerState.modePaused; },
-            setPaused(paused, msg) { tunerState.modePaused = paused; pauseTuner(msg); },
+            setPaused(paused, msg) { tunerState.modePaused = paused; pauseTuner(msg); pauseReader(); },
         };
         const belongs = m => typeof m === 'string'
             && (m.startsWith('RTTY') || m.startsWith('DATA') || m === 'PSK' || m === 'LSB' || m === 'USB');

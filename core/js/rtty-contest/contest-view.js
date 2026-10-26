@@ -15,6 +15,21 @@
 // what is out, and the windows follow its choices - receiver, spots, levels,
 // swap, step - through storage events, so there is one set of them. The
 // tuner can also go On top (pip-dock.js), where the browser allows it.
+// DECODE on the tuner's bar shows the decoded text with it (opts.onDecode:
+// the app shows its reader and starts or stops the decoder).
+//
+// Under the strip, a row of band keys for each receiver (opts.bandRows and
+// opts.bands): the app decides where a band key lands. The wheel over a
+// digit of the frequency moves the dial by what that digit is worth
+// (opts.onNudge), as on the radio panel; a click on it types one.
+//
+// The operator sizes two boxes here, as windows are sized: the spectrum and
+// waterfall, and the docked tuner, each by its right edge, its bottom edge or
+// its bottom-right corner. A box nobody has sized fills the room it has.
+// LAYOUT saves all of it by name on the server (opts.layoutsApi, the same
+// API and store as Experimental's layouts, in a file of its own): those
+// sizes, the choices above, which parts are out and where each window is,
+// so a layout can put every window back on its own monitor.
 //
 // Like the radio panel it has no radio in it. The app's adapter feeds each
 // receiver's pane (spectrum-pane.js) and the strip, and is told what the
@@ -27,7 +42,9 @@ import { injectRadioPanelStyle } from '../radio-panel/radio-panel-style.js';
 import { applyTheme, DEFAULT_THEME } from '../radio-panel/radio-panel-themes.js';
 import { SpectrumPane } from '../radio-panel/spectrum-pane.js';
 import { formatFrequency } from '../radio-panel/panel-math.js';
-import { PopoutHost } from '../popout/popout.js';
+import { freqDigits, wheelDigits } from '../radio-panel/freq-digits.js';
+import { PopoutHost, popoutPlace, setPopoutPlace } from '../popout/popout.js';
+import { initFlexLayoutsAdmin } from '../flex/flex-layouts-admin.js';
 import { pipDock, pipSupported } from './pip-dock.js';
 
 const store = {
@@ -86,6 +103,55 @@ export function partsLeft(out) {
 const REF_STEP_DB = 2;
 const RANGE_STEP_DB = 5;
 
+// The two boxes' sizes, from their grabs. Null is a box nobody has sized:
+// the spectrum fills what is left, the tuner is the partial's own width and
+// the full height. The tuner's least width is its own min-width
+// (_RttyTunerPartial).
+export const BOX_SIZES = {
+    stackWidth: { min: 320 },
+    stackHeight: { min: 200 },
+    tunerWidth: { min: 300, max: 760 },
+    tunerHeight: { min: 300 },
+};
+const GRAB_KEY_STEP = 20;
+const BODY_GAP = 10;
+export function tidyBoxSize(name, w) {
+    const r = BOX_SIZES[name];
+    const v = Number(w);
+    if (!r || w == null || w === '' || !Number.isFinite(v)) return null;
+    return Math.max(r.min, Math.min(r.max ?? Infinity, Math.round(v)));
+}
+
+/**
+ * A saved layout, tidied: whatever is missing or wrong is the default, so a
+ * layout saved by an older version, or edited by hand, still loads.
+ */
+export function tidyLayout(l) {
+    const o = l && typeof l === 'object' ? l : {};
+    const out = {};
+    for (const p of POPOUT_PARTS) out[p] = o.out?.[p] === true;
+    const places = {};
+    for (const p of POPOUT_PARTS) {
+        const g = o.places?.[p];
+        if (g && typeof g === 'object' && Number(g.width) > 0 && Number(g.height) > 0) places[p] = g;
+    }
+    const split = Number(o.split);
+    return {
+        stackWidth: tidyBoxSize('stackWidth', o.stackWidth),
+        stackHeight: tidyBoxSize('stackHeight', o.stackHeight),
+        tunerWidth: tidyBoxSize('tunerWidth', o.tunerWidth),
+        tunerHeight: tidyBoxSize('tunerHeight', o.tunerHeight),
+        meters: o.meters !== false,
+        spots: o.spots !== false,
+        wfFirst: o.wfFirst === true,
+        decode: o.decode === true,
+        split: split > 0 && split < 1 ? split : 0.5,
+        step: STEP_CHOICES_HZ.includes(Number(o.step)) ? Number(o.step) : DEFAULT_STEP_HZ,
+        out,
+        places,
+    };
+}
+
 /** A receiver's kept levels, tidied: { auto, ref (null for the default), range (null for the default) }. */
 export function tidyLevels(l) {
     const n = (x, lo, hi) => { const v = Number(x); return x != null && x !== '' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : null; };
@@ -102,6 +168,11 @@ const CSS = `
 .rc-freq{appearance:none;border:1px solid transparent;background:none;border-radius:4px;padding:0 4px;font:500 26px ${MONO};color:var(--rp-title);cursor:text;white-space:nowrap}
 .rc-freq small{font-size:18px;color:var(--rp-chip-fg)}
 .rc-freq:hover{border-color:var(--rp-soft-border)}
+.rc-freq.wheel span[data-step]:hover{background:var(--rp-accent-bg);border-radius:3px;cursor:ns-resize}
+.rc-bands{flex:none;display:flex;flex-direction:column;gap:4px;padding:6px 10px 0}
+.rc-brow{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+.rc-brow .rc-lbl{min-width:3.2em}
+.rc-brow .rp-spop-key{min-height:26px;min-width:44px;padding:1px 6px;font-size:14px}
 .rc-freq-in{width:9em;font:500 22px ${MONO};background:var(--rp-spec-bg);color:var(--rp-title);border:1px solid var(--rp-highlight);border-radius:4px;padding:1px 6px}
 .rc-chip{font:600 15px ${SANS};letter-spacing:.06em;color:var(--rp-chip-fg);border:1px solid var(--rp-well-border);border-radius:4px;padding:2px 8px;white-space:nowrap}
 .rc-chip.tx{background:var(--rp-tx);border-color:var(--rp-tx);color:var(--rp-tx-fg)}
@@ -114,11 +185,13 @@ const CSS = `
 .rc-val{min-width:3.6em;font:400 13px ${MONO};color:var(--rp-chip-fg)}
 .rc-gap{flex:1}
 .rc-body{flex:1;min-height:0;display:flex;gap:10px;padding:10px}
-.rc-stack{flex:1;min-width:0;display:flex}
+.rc-stack{flex:1;min-width:0;display:flex;position:relative}
+.rc-stack.sized-w{flex:0 1 auto;min-width:320px}
+.rc-stack.sized-h,.rc-tuner.sized-h{max-height:100%}
 .rc-holder{flex:1;min-width:0;display:flex}
 .rc-holder[hidden],.rc-holder:has(>.rp-pane[hidden]){display:none}
 .rc-page .rp-pane{position:relative;padding:6px 8px 8px;border-radius:6px;background:var(--rp-screen);border:1px solid var(--rp-screen-line)}
-.rc-tuner{flex:none;display:flex;flex-direction:column;min-height:0}
+.rc-tuner{flex:none;display:flex;flex-direction:column;min-height:0;position:relative}
 .rc-tuner:empty{display:none}
 .rc-scope{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:6px 10px 0}
 .rc-grp{display:flex;align-items:center;gap:3px}
@@ -132,12 +205,26 @@ const CSS = `
 .rc-tbar{display:flex;gap:6px;justify-content:flex-end;padding:0 0 6px}
 .rc-tbar .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
 .rc-tbar .rp-spop-key:disabled{opacity:.45;cursor:default}
-.rc-tnote{width:340px;padding:14px;font:500 16px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
+.rc-tnote{width:var(--rc-tuner-w,360px);box-sizing:border-box;padding:14px;font:500 16px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
 .rc-tnote[hidden]{display:none}
 .rc-pop{display:flex;align-items:center;gap:4px}
 .rc-pop[hidden]{display:none}
 body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;border-radius:0 !important}
 .rc-views{font:500 15px ${SANS};min-height:32px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:2px 6px}
+.rc-layouts{max-width:16em}
+.rc-grab{position:absolute;z-index:3;border-radius:4px;touch-action:none}
+.rc-grab:hover,.rc-grab:focus-visible,.rc-grab.drag{background:var(--rp-soft-border);outline:none}
+.rc-grab[hidden]{display:none}
+.rc-grab-r{top:0;bottom:12px;right:-10px;width:10px;cursor:ew-resize}
+.rc-grab-b{left:0;right:12px;bottom:-10px;height:10px;cursor:ns-resize}
+.rc-grab-rb{right:-10px;bottom:-10px;width:16px;height:16px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,var(--rp-soft-border) 50%)}
+.rc-blocked{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:6px 10px;font:500 15px ${SANS};color:var(--rp-chip-fg);background:var(--rp-key-bg);border-bottom:1px solid var(--rp-key-border)}
+.rc-blocked[hidden]{display:none}
+.rc-blocked .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
+.rc-manage{width:min(640px,95vw);max-height:85vh;padding:0;border:1px solid var(--rp-key-border);border-radius:8px;background:var(--rp-key-bg);color:var(--rp-chip-fg)}
+.rc-manage::backdrop{background:rgba(0,0,0,.5)}
+.rc-manage-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font:700 16px ${SANS};letter-spacing:.08em;border-bottom:1px solid var(--rp-key-border)}
+.rc-manage-body{padding:12px;overflow:auto}
 `;
 
 /**
@@ -166,6 +253,10 @@ body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;bor
  * @param {string} [opts.windowName='rtty-contest-']  names the pop-outs, their channels and places
  * @param {(out:boolean) => void} [opts.onTunerOut]  the tuner window opened or closed: the
  *        docked tuner must stand still while it is out, or the two fight over the audio
+ * @param {string} [opts.layoutsApi]  the main page: the named-layouts API (the same as
+ *        Experimental's); without it there is no LAYOUT
+ * @param {(on:boolean) => void} [opts.onDecode]  the main page: DECODE was turned on or
+ *        off, here or in another window, or at the start; without it there is no DECODE
  */
 export function mountContestView(root, opts) {
     injectRadioPanelStyle(document, opts.fontBase);
@@ -185,9 +276,12 @@ export function mountContestView(root, opts) {
     const top = h('div', 'rc-top');
     if (isMain) top.append(h('span', 'rc-title', 'RTTY CONTEST'));
 
-    // The frequency: click it to type one.
+    // The frequency: click it to type one, or turn the wheel over a digit.
     const freqBtn = btn('rc-freq', '', () => editFrequency());
-    freqBtn.title = 'Click to type a frequency: 14.08 or 14080 or 14080000';
+    freqBtn.title = 'Click to type a frequency: 14.08 or 14080 or 14080000. The mouse wheel over a digit moves it up or down';
+    const freqBig = h('span'), freqSmall = h('small');
+    freqBtn.append(freqBig, freqSmall);
+    if (opts.onNudge) wheelDigits(freqBtn, hz => opts.onNudge(receiver, hz));
     const freqIn = h('input', 'rc-freq-in');
     freqIn.type = 'text';
     freqIn.inputMode = 'decimal';
@@ -243,6 +337,14 @@ export function mountContestView(root, opts) {
         const dock = btn('rp-spop-key on rc-dock', 'DOCK', () => opts.onDock?.());
         dock.title = 'Put this back in the RTTY Contest page and close the window';
         top.append(dock);
+    }
+
+    // LAYOUT: the saved layouts, and saving one. Filled from the server.
+    const layoutSel = isMain && opts.layoutsApi ? h('select', 'rc-views rc-layouts') : null;
+    if (layoutSel) {
+        layoutSel.title = 'Layouts: the sizes, the choices on this page, and which windows are open and where. Saved on the server';
+        layoutSel.setAttribute('aria-label', 'Layout');
+        top.append(layoutSel);
     }
 
     if (isMain && opts.views?.length) {
@@ -311,11 +413,34 @@ export function mountContestView(root, opts) {
         key('DOCK THEM', 'Bring the spectrum and the waterfall back here', () => { for (const p of ['spectrum', 'waterfall', 'both']) hosts[p]?.recall(); }, 'on rc-dock-all'));
     const tunerSlot = h('div', 'rc-tuner');
     body.append(stack, tunerSlot);
-    root.append(top, scope, body);
+    // Windows the browser would not open, with a key for each: one click, one window.
+    const blockedBar = h('div', 'rc-blocked');
+    blockedBar.hidden = true;
+    // The band keys: a row per receiver, on the main page.
+    const bandsEl = h('div', 'rc-bands');
+    const bandKeys = {};
+    if (isMain && opts.bands?.length && opts.bandRows?.length) {
+        for (const r of opts.bandRows) {
+            const row = h('div', 'rc-brow rc-brow-' + r.id);
+            row.append(h('span', 'rc-lbl', r.label));
+            bandKeys[r.id] = {};
+            for (const b of opts.bands) {
+                const k = key(b.label, `${r.label}: to the RTTY part of ${b.label}`, () => opts.onBand?.(r.id, b.id), 'rc-band');
+                k.dataset.band = b.id;
+                bandKeys[r.id][b.id] = k;
+                row.append(k);
+            }
+            bandsEl.append(row);
+        }
+    }
+    root.append(top);
+    if (bandsEl.childElementCount) root.append(bandsEl);
+    root.append(scope, blockedBar, body);
 
     // The tuner, with its own bar: POP OUT into a window, ON TOP into the
     // always-on-top window. Out either way, a note keeps its place.
-    let tunerPop = null, onTopKey = null, pip = null;
+    let tunerPop = null, onTopKey = null, decodeKey = null, pip = null;
+    let decoding = store.get(own + 'decode', '0') === '1';
     const tunerNote = h('div', 'rc-tnote');
     tunerNote.hidden = true;
     if (isMain && opts.tuner) {
@@ -324,6 +449,11 @@ export function mountContestView(root, opts) {
             tunerPop = key(POPOUT_LABELS.tuner, '', () => togglePopout('tuner'), 'rc-pop-tuner');
             tbar.append(tunerPop);
         }
+        if (opts.onDecode) {
+            decodeKey = key('DECODE', 'Show the decoded text with the tuner, or stop decoding and hide it',
+                () => setDecode(!decoding, true), 'rc-decode');
+            tbar.append(decodeKey);
+        }
         if (pipSupported()) {
             onTopKey = key('ON TOP', 'Keep the tuner on top of every other window, the logging program too. Close that window to put it back',
                 () => toggleOnTop(), 'rc-ontop');
@@ -331,6 +461,96 @@ export function mountContestView(root, opts) {
         }
         if (tbar.childElementCount) tunerSlot.append(tbar);
         tunerSlot.append(opts.tuner, tunerNote);
+    }
+
+    // The boxes' sizes. Each is kept, and applied only here on the main page:
+    // a window is its part and nothing else, the size of the window.
+    const sizes = {};
+    for (const name of Object.keys(BOX_SIZES)) sizes[name] = tidyBoxSize(name, store.get(own + name, ''));
+    const tunerShown = () => !!opts.tuner && tunerSlot.offsetWidth > 0;
+    const room = {
+        w: () => body.clientWidth - 2 * BODY_GAP,
+        h: () => body.clientHeight - 2 * BODY_GAP,
+    };
+    const boxes = {
+        stackWidth: { el: stack, axis: 'x', apply: v => { stack.style.width = v == null ? '' : v + 'px'; stack.classList.toggle('sized-w', v != null); },
+            // The spectrum's right edge pushes the tuner along, not into it.
+            max: () => room.w() - (tunerShown() ? tunerSlot.offsetWidth + BODY_GAP : 0) },
+        stackHeight: { el: stack, axis: 'y', apply: v => { stack.style.height = v == null ? '' : v + 'px'; stack.classList.toggle('sized-h', v != null); },
+            max: () => room.h() },
+        tunerWidth: { el: opts.tuner, axis: 'x', apply: v => { if (v == null) root.style.removeProperty('--rc-tuner-w'); else root.style.setProperty('--rc-tuner-w', v + 'px'); },
+            // Wider than the room on its right squeezes the spectrum, down to its least.
+            max: () => room.w() - BOX_SIZES.stackWidth.min - BODY_GAP },
+        tunerHeight: { el: tunerSlot, axis: 'y', apply: v => { tunerSlot.style.height = v == null ? '' : v + 'px'; tunerSlot.classList.toggle('sized-h', v != null); },
+            max: () => room.h() },
+    };
+    function setSize(name, v, keep) {
+        sizes[name] = tidyBoxSize(name, v);
+        if (isMain) boxes[name].apply(sizes[name]);
+        if (keep) store.set(own + name, sizes[name] == null ? '' : String(sizes[name]));
+    }
+    const sizeNow = name => {
+        const r = boxes[name].el?.getBoundingClientRect();
+        return Math.round((boxes[name].axis === 'x' ? r?.width : r?.height) || sizes[name] || BOX_SIZES[name].min);
+    };
+    const sizeMax = name => Math.max(BOX_SIZES[name].min, Math.min(BOX_SIZES[name].max ?? Infinity, boxes[name].max()));
+    // A grab on a box's edge or corner: dragged, it sizes the box under the
+    // pointer; the arrow keys size it in steps; a double-click puts it back
+    // to filling its room.
+    function grab(where, names, label) {
+        const g = h('div', 'rc-grab rc-grab-' + where);
+        g.tabIndex = 0;
+        g.setAttribute('aria-label', label);
+        if (names.length === 1) {
+            g.setAttribute('role', 'separator');
+            g.setAttribute('aria-orientation', boxes[names[0]].axis === 'x' ? 'vertical' : 'horizontal');
+        }
+        g.title = `Drag to size the ${label.toLowerCase()}. Double-click to put it back`;
+        g.addEventListener('pointerdown', e => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            const from = names.map(n => ({ n, p0: boxes[n].axis === 'x' ? e.clientX : e.clientY, v0: sizeNow(n), max: sizeMax(n) }));
+            g.setPointerCapture(e.pointerId);
+            g.classList.add('drag');
+            const move = ev => {
+                for (const f of from) setSize(f.n, Math.min(f.max, f.v0 + (boxes[f.n].axis === 'x' ? ev.clientX : ev.clientY) - f.p0), false);
+            };
+            const end = () => {
+                g.classList.remove('drag');
+                g.removeEventListener('pointermove', move);
+                g.removeEventListener('pointerup', end);
+                g.removeEventListener('pointercancel', end);
+                for (const f of from) setSize(f.n, sizes[f.n], true);
+            };
+            g.addEventListener('pointermove', move);
+            g.addEventListener('pointerup', end);
+            g.addEventListener('pointercancel', end);
+        });
+        g.addEventListener('dblclick', () => { for (const n of names) setSize(n, null, true); });
+        g.addEventListener('keydown', e => {
+            const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+            if (!d) return;
+            let did = false;
+            for (const n of names) {
+                const step = d[boxes[n].axis === 'x' ? 0 : 1];
+                if (!step) continue;
+                setSize(n, Math.min(sizeMax(n), sizeNow(n) + step * GRAB_KEY_STEP), true);
+                did = true;
+            }
+            if (did) e.preventDefault();
+        });
+        return g;
+    }
+    const stackGrabs = [], tunerGrabs = [];
+    if (isMain) {
+        stackGrabs.push(grab('r', ['stackWidth'], 'Spectrum width'), grab('b', ['stackHeight'], 'Spectrum height'),
+            grab('rb', ['stackWidth', 'stackHeight'], 'Spectrum size'));
+        stack.append(...stackGrabs);
+        if (opts.tuner) {
+            tunerGrabs.push(grab('r', ['tunerWidth'], 'Tuner width'), grab('b', ['tunerHeight'], 'Tuner height'),
+                grab('rb', ['tunerWidth', 'tunerHeight'], 'Tuner size'));
+            tunerSlot.append(...tunerGrabs);
+        }
     }
 
     const split = Number(store.get(own + 'split', '0.5')) || 0.5;
@@ -382,11 +602,8 @@ export function mountContestView(root, opts) {
     function drawStrip() {
         const s = shown[receiver];
         const f = formatFrequency(s.hz);
-        freqBtn.textContent = '';
-        if (s.hz > 0) {
-            freqBtn.append(f.big);
-            freqBtn.append(h('small', null, f.small));
-        } else freqBtn.textContent = '-.---.---';
+        if (s.hz > 0) { freqDigits(freqBig, f.big, 1000); freqDigits(freqSmall, f.small, 1); }
+        else { freqBig.textContent = '-.---'; freqSmall.textContent = '.---'; }
         modeChip.textContent = s.mode || '-';
     }
     function editFrequency() {
@@ -457,6 +674,7 @@ export function mountContestView(root, opts) {
         const left = part ?? partsLeft(out);
         for (const p of Object.values(panes)) p.setParts(left);
         outNote.hidden = left !== 'none';
+        for (const g of stackGrabs) g.hidden = left === 'none';
         for (const [p, b] of Object.entries(popBtns)) {
             b.classList.toggle('on', out[p]);
             b.title = out[p] ? `The ${p === 'both' ? 'spectrum and waterfall are' : p + ' is'} in a window: click to dock`
@@ -468,6 +686,7 @@ export function mountContestView(root, opts) {
             tunerNote.hidden = !(out.tuner || pip);
             tunerNote.textContent = pip ? 'The tuner is on top, in its own window. Close that window to put it back here.'
                 : 'The tuner is in a window of its own. DOCK puts it back here.';
+            for (const g of tunerGrabs) g.hidden = out.tuner || !!pip;
         }
         if (tunerPop) {
             tunerPop.classList.toggle('on', out.tuner);
@@ -492,7 +711,27 @@ export function mountContestView(root, opts) {
         if (!host) return;
         if (host.isOpen) { host.recall(); return; }
         recallClashing(p);
-        if (!host.open()) alert('The browser blocked the pop-out window. Allow pop-ups for this address, then try again.');
+        if (!host.open()) showBlocked([p]);
+        else showBlocked(blocked.filter(b => b !== p));
+    }
+
+    // Blocked windows. A browser opens one window per click unless pop-ups
+    // are allowed for the address, so a layout with three windows out may
+    // get only the first: the rest wait here, a key each.
+    let blocked = [];
+    function showBlocked(parts) {
+        blocked = parts.filter(p => hosts[p] && !hosts[p].isOpen);
+        blockedBar.replaceChildren();
+        blockedBar.hidden = blocked.length === 0;
+        if (!blocked.length) return;
+        blockedBar.append(h('span', null, blocked.length > 1
+            ? 'The browser opened one window for that click. Click each to open the rest:'
+            : 'The browser blocked a window. Click to open it, or allow pop-ups for this address:'));
+        for (const p of blocked) {
+            blockedBar.append(key(p === 'tuner' ? 'TUNER' : POPOUT_LABELS[p], `Open the ${p === 'both' ? 'spectrum and waterfall' : p} window`,
+                () => togglePopout(p), 'on rc-open-' + p));
+        }
+        blockedBar.append(key('×', 'Leave them docked', () => showBlocked([]), 'rc-pm rc-blocked-close'));
     }
     async function toggleOnTop() {
         if (pip) { pip.dock(); return; }
@@ -512,12 +751,12 @@ export function mountContestView(root, opts) {
             alert('The browser would not open an always-on-top window: ' + (e?.message ?? e));
         }
     }
+    const winName = opts.windowName ?? 'rtty-contest-';
     if (isMain && opts.windowUrl) {
-        const name = opts.windowName ?? 'rtty-contest-';
         for (const p of POPOUT_PARTS) {
             if (p === 'tuner' && !opts.tuner) continue;
             hosts[p] = new PopoutHost({
-                name: name + p,
+                name: winName + p,
                 url: opts.windowUrl(p),
                 defaultSize: POPOUT_SIZES[p],
                 onChange: o => {
@@ -542,6 +781,8 @@ export function mountContestView(root, opts) {
         else if (name === 'spots') setShowSpots(v === '1');
         else if (name === 'wfFirst') setOrder(v === '1');
         else if (name === 'split') { const f = Number(v); if (f > 0) for (const p of Object.values(panes)) p.setSplit(f); }
+        else if (name in BOX_SIZES) setSize(name, v, false);
+        else if (name === 'decode') setDecode(v === '1', false);
         else if (name === 'step') { const n = Number(v); if (STEP_CHOICES_HZ.includes(n)) { stepHz = n; stepSel.value = v; } }
         else if (name.startsWith('levels.')) {
             const id = name.slice('levels.'.length);
@@ -579,12 +820,153 @@ export function mountContestView(root, opts) {
         spotsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
         for (const p of Object.values(panes)) p.setShowSpots(on);
     }
+    function setDecode(on, keep) {
+        decoding = on;
+        if (!decodeKey) return;
+        if (keep) store.set(own + 'decode', on ? '1' : '0');
+        decodeKey.classList.toggle('on', on);
+        decodeKey.setAttribute('aria-pressed', on ? 'true' : 'false');
+        opts.onDecode(on);
+    }
     function setMetersShown(on) {
         metersShown = on;
         store.set(own + 'meters', on ? '1' : '0');
         meterRow.hidden = !on;
         meterKey.classList.toggle('on', on);
     }
+    // Layouts: what this page is now, and putting one back.
+    function currentLayout() {
+        const places = {};
+        for (const p of Object.keys(hosts)) {
+            const g = popoutPlace(winName + p);
+            if (g) places[p] = g;
+        }
+        return {
+            kind: 'rtty-contest',
+            version: 1,
+            ...sizes,
+            meters: metersShown, spots: showSpots, wfFirst, decode: decoding,
+            split: Number(store.get(own + 'split', '0.5')) || 0.5,
+            step: stepHz,
+            out: { ...out },
+            places,
+        };
+    }
+    function applyLayout(raw) {
+        const l = tidyLayout(raw);
+        for (const name of Object.keys(BOX_SIZES)) setSize(name, l[name], true);
+        setMetersShown(l.meters);
+        setShowSpots(l.spots);
+        setOrder(l.wfFirst);
+        if (decodeKey && l.decode !== decoding) setDecode(l.decode, true);
+        store.set(own + 'split', String(l.split));
+        for (const p of Object.values(panes)) p.setSplit(l.split);
+        stepHz = l.step;
+        stepSel.value = String(stepHz);
+        store.set(own + 'step', String(stepHz));
+        // The windows: those not in the layout go back; the rest open where
+        // the layout had them. One that is open already stays where it is.
+        for (const [p, host] of Object.entries(hosts)) {
+            if (l.places[p]) setPopoutPlace(winName + p, l.places[p]);
+            if (host.isOpen && !l.out[p]) host.recall();
+        }
+        if (pip && l.out.tuner) pip.dock();
+        const fail = [];
+        for (const [p, host] of Object.entries(hosts)) {
+            if (l.out[p] && !host.isOpen && !host.open()) fail.push(p);
+        }
+        showBlocked(fail);
+    }
+
+    let layouts = [], activeLayout = null;
+    const layoutApi = opts.layoutsApi;
+    async function api(path, method = 'GET', bodyObj) {
+        const res = await fetch(layoutApi + path, {
+            method,
+            headers: bodyObj ? { 'Content-Type': 'application/json', Accept: 'application/json' } : { Accept: 'application/json' },
+            body: bodyObj ? JSON.stringify(bodyObj) : undefined,
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || `The server said ${res.status}.`);
+        return data;
+    }
+    async function loadLayouts() {
+        if (!layoutSel) return;
+        try {
+            const snap = await api('');
+            layouts = Array.isArray(snap?.layouts) ? snap.layouts : [];
+            activeLayout = layouts.find(l => l.id === snap?.activeId) ?? null;
+        } catch (e) {
+            console.warn('rtty contest: layouts', e);
+            layouts = [];
+            activeLayout = null;
+        }
+        drawLayouts();
+    }
+    function drawLayouts() {
+        const head = new Option(activeLayout ? 'LAYOUT: ' + activeLayout.name : 'LAYOUT', '');
+        const use = document.createElement('optgroup');
+        use.label = 'Use';
+        for (const l of layouts) use.append(new Option(l.name, 'use:' + l.id));
+        use.append(new Option('Standard', 'standard'));
+        const save = document.createElement('optgroup');
+        save.label = 'Save';
+        save.append(new Option('Save as a new layout…', 'save-new'));
+        if (activeLayout) save.append(new Option(`Save over “${activeLayout.name}”`, 'save-over'));
+        save.append(new Option('Manage layouts…', 'manage'));
+        layoutSel.replaceChildren(head, use, save);
+        layoutSel.value = '';
+    }
+    async function onLayoutChoice(v) {
+        layoutSel.value = '';
+        try {
+            if (v.startsWith('use:')) {
+                const id = v.slice(4);
+                // The windows open after this fetch. A browser lets a click
+                // open a window for a few seconds after it, which is plenty
+                // here; any it blocks wait in the bar (showBlocked).
+                const d = await api('/' + encodeURIComponent(id));
+                applyLayout(d?.layout);
+                await api('/active', 'PUT', { id });
+            } else if (v === 'standard') {
+                applyLayout({});
+                await api('/active', 'PUT', { id: '__default__' });
+            } else if (v === 'save-new') {
+                const name = prompt('A name for this layout:', '')?.trim();
+                if (!name) return;
+                await api('', 'POST', { name: name.slice(0, 40), layout: currentLayout(), setActive: true });
+            } else if (v === 'save-over' && activeLayout) {
+                if (!confirm(`Save what is on screen now as “${activeLayout.name}”?`)) return;
+                await api('/' + encodeURIComponent(activeLayout.id), 'PUT', { layout: currentLayout() });
+            } else if (v === 'manage') {
+                manageLayouts();
+                return;
+            } else return;
+        } catch (e) {
+            alert('Layouts: ' + (e?.message ?? e));
+        }
+        await loadLayouts();
+    }
+    let manageDlg = null;
+    function manageLayouts() {
+        if (!manageDlg) {
+            manageDlg = h('dialog', 'rc-manage');
+            const head = h('div', 'rc-manage-head');
+            head.append(h('span', null, 'RTTY CONTEST LAYOUTS'), key('×', 'Close', () => manageDlg.close(), 'rc-pm'));
+            const box = h('div', 'rc-manage-body');
+            manageDlg.append(head, box);
+            manageDlg.addEventListener('close', () => loadLayouts());
+            root.append(manageDlg);
+            manageDlg._admin = initFlexLayoutsAdmin(box, {
+                apiBase: layoutApi,
+                emptyText: 'No saved layouts yet. Arrange the page and its windows, then choose LAYOUT, Save as a new layout.',
+                onSelect: id => { manageDlg.close(); onLayoutChoice('use:' + id); },
+            });
+        } else manageDlg._admin.refresh();
+        manageDlg.showModal();
+    }
+    layoutSel?.addEventListener('change', () => onLayoutChoice(layoutSel.value));
+
     function setTheme() {
         const t = applyTheme(root, store.get(themePrefix + 'theme', DEFAULT_THEME));
         for (const p of Object.values(panes)) p.setTheme(t);
@@ -598,6 +980,9 @@ export function mountContestView(root, opts) {
     setReceiver(receiver, false);
     setShowSpots(showSpots);
     setMetersShown(metersShown);
+    setDecode(decoding, false);
+    for (const name of Object.keys(BOX_SIZES)) setSize(name, sizes[name], false);
+    loadLayouts();
 
     return {
         pane: id => panes[id],
@@ -626,6 +1011,10 @@ export function mountContestView(root, opts) {
             m.val.textContent = text ?? '';
             m.el.classList.toggle('over', !!over);
         },
+        /** Light the band key a receiver is on; null lights none. */
+        setBand(rowId, bandId) {
+            for (const [b, k] of Object.entries(bandKeys[rowId] ?? {})) k.classList.toggle('on', b === bandId);
+        },
         setTx(on) {
             txChip.textContent = on ? 'TX' : 'RX';
             txChip.classList.toggle('tx', !!on);
@@ -643,5 +1032,8 @@ export function mountContestView(root, opts) {
         /** Which parts are in windows: { spectrum, waterfall, both, tuner }. */
         get out() { return { ...out }; },
         get onTop() { return !!pip; },
+        /** What a saved layout would hold now. */
+        get layout() { return currentLayout(); },
+        applyLayout,
     };
 }
