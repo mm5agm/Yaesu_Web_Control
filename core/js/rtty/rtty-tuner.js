@@ -873,14 +873,20 @@ export class RttyTuner {
     _resize() {
         const c = this._canvas;
         if (!c) return;
-        const dpr = window.devicePixelRatio || 1;
+        // The window the canvas is in now: On top in the RTTY Contest view
+        // moves the whole panel into another window. Its size and its pixel
+        // ratio are what count, and a move to a screen with another scale
+        // changes the ratio without changing the box, so watch both.
+        const win = c.ownerDocument.defaultView || window;
+        const dpr = win.devicePixelRatio || 1;
+        if (win !== this._win || dpr !== this._dpr) this._watchWindow(win, dpr);
         // Two layouts. In the flow, the canvas is as wide as the panel and as
         // tall as it is wide, up to a cap. Positioned out of the flow - the
         // host page does that once the panel has been sized, and in a pop-out
         // window - it is the largest square that fits the box around it,
         // however big the operator makes the window.
         const box = c.parentElement;
-        const boxed = !!box && getComputedStyle(c).position === 'absolute';
+        const boxed = !!box && win.getComputedStyle(c).position === 'absolute';
         const css = boxed
             ? Math.max(100, Math.floor(Math.min(box.clientWidth, box.clientHeight)) - 2)
             : Math.max(160, Math.min(c.clientWidth || 280, 480));
@@ -893,9 +899,24 @@ export class RttyTuner {
         this._css = css;
     }
 
+    _watchWindow(win, dpr) {
+        this._onWindow ??= () => { this._resize(); this._draw(); };
+        if (win !== this._win) {
+            this._win?.removeEventListener('resize', this._onWindow);
+            win.addEventListener('resize', this._onWindow);
+            this._win = win;
+        }
+        this._dprQuery?.removeEventListener('change', this._onWindow);
+        this._dprQuery = win.matchMedia?.(`(resolution: ${dpr}dppx)`);
+        this._dprQuery?.addEventListener('change', this._onWindow);
+        this._dpr = dpr;
+    }
+
     _draw() {
         const ctx = this._ctx;
         if (!ctx || !this._css) return;
+        // Moved into another window since the last resize: size it there.
+        if (this._win && this._canvas.ownerDocument.defaultView !== this._win) this._resize();
         const s = this._css, mid = s / 2, rad = s * 0.44;
 
         ctx.clearRect(0, 0, s, s);

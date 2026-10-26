@@ -501,6 +501,8 @@ export function mountContestView(root, opts) {
             const rc = opts.tuner.getBoundingClientRect();
             pip = await pipDock(opts.tuner, {
                 width: Math.max(320, rc.width), height: Math.max(300, rc.height),
+                // The host styles the tuner by this to fill the window there.
+                className: 'rc-on-top',
                 onDock: () => { pip = null; drawOut(); },
             });
             drawOut();

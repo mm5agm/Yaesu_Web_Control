@@ -43,6 +43,8 @@ function copyStyles(from, to) {
  * @param {number} [opts.width], [opts.height]  the window's page area; default el's size
  * @param {string} [opts.bodyClass]  classes for the PiP body, e.g. for a theme
  * @param {string} [opts.background]  the PiP body's background
+ * @param {string} [opts.className]  classes on el while it is in the PiP window,
+ *        so the host's styles can make it fill the window there
  * @param {() => void} [opts.onDock]  el is back in the page
  * @returns {Promise<{ window: Window, dock: () => void }>}
  */
@@ -58,18 +60,26 @@ export async function pipDock(el, opts = {}) {
     for (const a of [...document.documentElement.attributes]) if (a.name !== 'style') html.setAttribute(a.name, a.value);
     const body = pip.document.body;
     body.style.margin = '0';
+    // The page may not scroll (the RTTY Contest view does not), but the PiP
+    // window is as small as the operator makes it: what does not fit has to
+    // scroll rather than be cut off.
+    html.style.overflow = body.style.overflow = 'auto';
+    html.style.height = body.style.height = '100%';
     body.style.background = opts.background ?? getComputedStyle(document.body).backgroundColor;
     if (opts.bodyClass) body.className = opts.bodyClass;
 
     // A marker where el was, so it goes back to the same place.
     const mark = document.createComment('pip-dock');
     el.before(mark);
+    const added = (opts.className ?? '').split(/\s+/).filter(c => c && !el.classList.contains(c));
+    el.classList.add(...added);
     body.append(el);
 
     let docked = false;
     const dock = () => {
         if (docked) return;
         docked = true;
+        el.classList.remove(...added);
         mark.replaceWith(el);
         try { pip.close(); } catch { /* already closing */ }
         opts.onDock?.();
