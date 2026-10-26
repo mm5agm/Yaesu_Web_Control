@@ -4,6 +4,7 @@
     Layout = null;
     ViewData["Title"] = "RTTY Tuner";
     if (Model.Contest) ViewData["RttyTunerContest"] = true;
+    if (Model.DecodeOnly) ViewData["RttyTunerDecodeOnly"] = true;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -11,7 +12,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
-    <title>RTTY Tuner - Yaesu Web Control</title>
+    <title>@(Model.DecodeOnly ? "RTTY Decode" : "RTTY Tuner") - Yaesu Web Control</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
@@ -61,16 +62,20 @@
         import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
         // From the RTTY Contest view its own window, so it never takes over
-        // (or is taken over by) another GUI's tuner pop-out.
+        // (or is taken over by) another GUI's tuner pop-out. The view's
+        // decoded text has a window of its own too.
+        const decodeOnly = @(Model.DecodeOnly ? "true" : "false");
         const popout = new PopoutChild(@(Model.Contest
-            ? Html.Raw("{ name: 'rtty-contest-tuner', fallbackUrl: '/rtty-contest' }")
+            ? Html.Raw("{ name: decodeOnly ? 'rtty-contest-decode' : 'rtty-contest-tuner', fallbackUrl: '/rtty-contest' }")
             : Html.Raw("{ name: 'rtty-tuner', fallbackUrl: '/' }"))).start();
         offerScreenPermission(document.querySelector('#rttyTunerDialog .rtty-body'));
         document.getElementById('rttyTunerReattachBtn')
             ?.addEventListener('click', () => popout.reattach());
 
-        const tuner = new RttyTuner();
-        tuner.init();
+        // The decoded-text window runs no tuner: the tuner is docked, or in
+        // its own window, and one is enough to listen to the audio.
+        const tuner = decodeOnly ? null : new RttyTuner();
+        tuner?.init();
 
         // The reader in the same panel. The dialog is open from the moment this
         // page loads and never closes, so the reader starts polling on init and
@@ -84,10 +89,11 @@
         // the main page cannot disagree about it. See
         // ApplicationSettings.RttyContestMode.
         //
-        // From the RTTY Contest view (?contest=true) the Decode section
-        // follows the view's DECODE key instead, which the view keeps under
-        // this name (contest-view.js, with YWC's prefix). The view starts and
-        // stops the decoder; this window only shows it.
+        // From the RTTY Contest view (?contest=true) the tuner's window has
+        // no Decode section: the view's decoded text has its own window
+        // (&decode=true), which reads while the view's DECODE key is on. The
+        // view keeps that under this name (contest-view.js, with YWC's
+        // prefix), and starts and stops the decoder; this window only shows it.
         const dialog = document.getElementById('rttyTunerDialog');
         const contest = dialog?.classList.contains('rtty-contest');
         const fromView = @(Model.Contest ? "true" : "false");
@@ -96,26 +102,22 @@
         let reader = null, modePaused = false;
         if (contest && !fromView) {
             fetch('/api/rtty/reader/stop', { method: 'POST' }).catch(() => { });
-        } else {
+        } else if (!fromView || decodeOnly) {
             reader = new RttyReader();
             reader.init();
         }
-        const pauseReader = () => reader?.setPaused(modePaused || (fromView && !decodeOn()));
-        function showDecode() {
-            dialog?.classList.toggle('rtty-decoding', decodeOn());
+        const pauseReader = () => reader?.setPaused(modePaused || (decodeOnly && !decodeOn()));
+        if (decodeOnly) {
             pauseReader();
-        }
-        if (fromView) {
-            showDecode();
-            window.addEventListener('storage', e => { if (e.key === DECODE_KEY) showDecode(); });
+            window.addEventListener('storage', e => { if (e.key === DECODE_KEY) pauseReader(); });
         }
 
         // One panel as far as the mode watcher is concerned: pausing the window
         // has to stop both pollers, or the reader would keep asking for text
         // from a decoder listening to a radio that has left RTTY.
         const panel = {
-            get isPaused() { return tuner.isPaused; },
-            setPaused(paused, text) { tuner.setPaused(paused, text); modePaused = paused; pauseReader(); },
+            get isPaused() { return tuner ? tuner.isPaused : modePaused; },
+            setPaused(paused, text) { tuner?.setPaused(paused, text); modePaused = paused; pauseReader(); },
         };
 
         // The same modes the main page keeps its tuner open in: RTTY, and the
@@ -136,7 +138,7 @@
             pausedText: m =>
                 `Not in an RTTY or data mode (the radio is in ${m}), so the panel is paused. ` +
                 'It starts again when you go back to RTTY, DATA, LSB or USB.',
-            startNow: () => tuner.start(),
+            startNow: () => tuner?.start(),
             initialMode: '@Model.ModeA',
             announceEl: document.getElementById('rttyTunerAnnounce'),
         });

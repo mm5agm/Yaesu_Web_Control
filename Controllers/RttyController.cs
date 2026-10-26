@@ -18,6 +18,7 @@ namespace Yaesu_Web_Control.Controllers
         private readonly RttyAutoService _auto;
         private readonly RttyRadioToneService _tones;
         private readonly RadioStateService _state;
+        private readonly ISettingsService _settings;
         private readonly ILogger<RttyController> _logger;
 
         public RttyController(RttyTunerService tuner,
@@ -25,6 +26,7 @@ namespace Yaesu_Web_Control.Controllers
                               RttyAutoService auto,
                               RttyRadioToneService tones,
                               RadioStateService state,
+                              ISettingsService settings,
                               ILogger<RttyController> logger)
         {
             _tuner = tuner;
@@ -32,6 +34,7 @@ namespace Yaesu_Web_Control.Controllers
             _auto = auto;
             _tones = tones;
             _state = state;
+            _settings = settings;
             _logger = logger;
         }
 
@@ -301,6 +304,32 @@ namespace Yaesu_Web_Control.Controllers
                 _logger.LogError(ex, "Failed to read the radio's RTTY tone settings");
                 return Ok(new { ok = false, reason = ex.Message });
             }
+        }
+
+        public sealed record ModeRequest(string? Mode);
+
+        /// <summary>
+        /// The operator picked an RTTY mode - RTTY-L, RTTY-U, DATA-L or DATA-U -
+        /// and is about to put the radio in it. Saved as the mode the tuner
+        /// switches to and the RTTY Contest band keys use, and handed to a
+        /// running tuner so it holds the new mode rather than putting the old
+        /// one back. Writes nothing to the radio: the page does that next, for
+        /// whichever receiver is on screen.
+        /// </summary>
+        [HttpPost("mode")]
+        public async Task<IActionResult> SetMode([FromBody] ModeRequest? req)
+        {
+            if (RttyTunerModeService.Normalise(req?.Mode) is not { } mode)
+                return BadRequest(new { error = "Mode must be one of " + string.Join(", ", RttyTunerModeService.Modes) + "." });
+
+            var settings = await _settings.GetSettingsAsync();
+            if (settings.RttyTunerMode != mode)
+            {
+                settings.RttyTunerMode = mode;
+                await _settings.SaveSettingsAsync(settings);
+            }
+            await _tuner.ChooseModeAsync(mode, HttpContext.RequestAborted);
+            return Ok(new { mode });
         }
 
         public sealed record RadioTonesRequest(int MarkHz, int ShiftHz);

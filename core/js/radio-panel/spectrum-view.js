@@ -128,6 +128,16 @@ export class SpectrumView {
     get settings() { return { ...this._set }; }
 
     /**
+     * The trace's width in CSS pixels, 0.5-3; 1.2 until set. Not one of the
+     * settings, so the radio panel's kept settings are untouched by it.
+     */
+    setTraceWidth(px) {
+        const n = Number(px);
+        this._traceW = Number.isFinite(n) ? Math.max(0.5, Math.min(3, n)) : 1.2;
+        this._draw();
+    }
+
+    /**
      * auto: the floor follows the noise (true, the default) or stays where it
      * is. ref: dB from the floor to the bottom of the trace, -40..40, or null
      * for the default. Returns the levels in force.
@@ -246,7 +256,9 @@ export class SpectrumView {
             if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.strokeStyle = this._colours.trace || '#7fdcff';
-        ctx.lineWidth = Math.max(1, (window.devicePixelRatio || 1) * 1.2);
+        // Thinner than a device pixel only when asked: below that it greys.
+        const tw = this._traceW ?? 1.2;
+        ctx.lineWidth = Math.max(tw < 1 ? 0.5 : 1, (window.devicePixelRatio || 1) * tw);
         ctx.stroke();
     }
 

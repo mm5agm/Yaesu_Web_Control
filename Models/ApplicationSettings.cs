@@ -301,6 +301,13 @@
         // puts mode and filter back when the tuner closes.
         public bool RttyTunerSetMode { get; set; } = true;
 
+        // The mode that switch puts the radio in, and that the RTTY Contest
+        // band keys use: RTTY-L, RTTY-U, DATA-L or DATA-U. Bruce VK2RT,
+        // 2026-10-26: he runs AFSK through the radio's codec in DATA-L, and
+        // with RTTY-L fixed here the tuner kept taking him out of it.
+        // Anything else reads as RTTY-L (RttyTunerModeService.TargetMode).
+        public string RttyTunerMode { get; set; } = "RTTY-L";
+
         // Whether a confident Auto answer also moves the VFO so the measured mark
         // lands on the tuner's mark.
         //

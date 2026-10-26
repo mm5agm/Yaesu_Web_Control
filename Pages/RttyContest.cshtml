@@ -44,16 +44,17 @@
 
         // The docked tuner stops while the tuner has a window of its own
         // (POP OUT on its bar), as well as while the radio is out of its modes.
-        const tunerState = { out: false, modePaused: false, decode: false };
+        const tunerState = { out: false, decodeOut: false, modePaused: false, decode: false };
         let tuner = null;
         const pauseTuner = msg => tuner?.setPaused(tunerState.out || tunerState.modePaused, msg);
 
-        // The reader in the tuner's Decode section, which shows only with
-        // DECODE on. It reads only then, and only while the tuner is here: in
-        // the tuner's window, that window's reader shows the text.
+        // The reader in the tuner's Decode section, which the view shows in a
+        // box of its own under the tuner, only with DECODE on. It reads only
+        // then, and only while the text is here: in the text's own window,
+        // that window's reader shows it.
         const reader = new RttyReader();
         reader.init();
-        const pauseReader = () => reader.setPaused(tunerState.out || tunerState.modePaused || !tunerState.decode);
+        const pauseReader = () => reader.setPaused(tunerState.decodeOut || tunerState.modePaused || !tunerState.decode);
         pauseReader();
 
         startYaesuRttyContest(document.getElementById('rttyContest'), {
@@ -65,14 +66,22 @@
             minHz: @Model.MinHz,
             maxHz: @Model.MaxHz,
             bandPlan: '@Model.BandPlan',
+            rttyMode: '@Model.RttyMode',
             tuner: document.getElementById('rttyTunerDialog'),
-            // The tuner's window is the one every GUI pops its tuner out to.
-            windowUrl: p => p === 'tuner' ? '/RttyTuner?contest=true' : '/rtty-contest/window?p=' + p,
+            decode: document.querySelector('#rttyTunerDialog .rtty-decode'),
+            // The tuner's window is the one every GUI pops its tuner out to,
+            // and the decoded text's is the same page showing only that.
+            windowUrl: p => p === 'tuner' ? '/RttyTuner?contest=true'
+                : p === 'decode' ? '/RttyTuner?contest=true&decode=true'
+                : '/rtty-contest/window?p=' + p,
             // Named layouts, kept on the server apart from Experimental's.
             layoutsApi: '/api/rttycontestlayouts',
             onTunerOut: out => {
                 tunerState.out = out;
                 pauseTuner(out ? 'The tuner is in its own window.' : '');
+            },
+            onDecodeOut: out => {
+                tunerState.decodeOut = out;
                 pauseReader();
             },
             // DECODE: off stops the decoder too, so none is left running on

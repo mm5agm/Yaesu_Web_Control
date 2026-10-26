@@ -38,7 +38,8 @@ import { PopoutHost } from '/js/popout/popout.js';
 import { txTimeoutBeep, txTimeoutWarning } from '/js/radio-panel/tx-timeout.js';
 
 const BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'];
-const MODES = ['LSB', 'USB', 'CW-U', 'CW-L', 'AM', 'FM', 'RTTY-L', 'DATA-U'];
+// DATA-L and RTTY-U too: Bruce VK2RT runs AFSK in DATA-L (2026-10-26).
+const MODES = ['LSB', 'USB', 'CW-U', 'CW-L', 'AM', 'FM', 'RTTY-L', 'RTTY-U', 'DATA-L', 'DATA-U'];
 // Classic's mode-to-MD-code table (site.js setMode), for the modes above.
 const AGC = { '0': 'OFF', '1': 'FAST', '2': 'MID', '3': 'SLOW', '4': 'AUTO', '5': 'AUTO', '6': 'AUTO' };
 const IPO = { '0': 'IPO', '1': 'AMP1', '2': 'AMP2' };

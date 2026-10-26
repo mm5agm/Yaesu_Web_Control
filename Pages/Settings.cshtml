@@ -2761,18 +2761,30 @@
                         <input type="hidden" name="Settings.RttyTunerSetMode" value="false" />
                         <label class="form-check-label" for="rttyTunerSetMode">Set RTTY mode when the tuner starts</label>
                     </div>
-                    <div class="form-text">
-                        Only from the modes RTTY cannot be received in at all - CW, AM and
-                        FM - and your mode and filter are put back when the tuner closes.
-                        SSB, DATA and PSK are left alone, because that is how AFSK software
-                        works.
+                    <div class="d-flex align-items-center gap-2 mt-2">
+                        <label class="form-label mb-0" for="rttyTunerMode">RTTY mode</label>
+                        <select class="form-select form-select-sm w-auto" id="rttyTunerMode" name="Settings.RttyTunerMode">
+                            @foreach (var m in Yaesu_Web_Control.Services.Rtty.RttyTunerModeService.Modes)
+                            {
+                                <option value="@m" selected="@(m == Yaesu_Web_Control.Services.Rtty.RttyTunerModeService.TargetMode(Model.Settings))">@m</option>
+                            }
+                        </select>
                     </div>
                     <div class="form-text">
-                        It also opens the IF filter if it is too narrow to carry the shift
-                        you are set to. It never narrows one: a narrow filter is how you dig
-                        a signal out of a crowded band, and only you know the band. Changing
-                        to RTTY brings your own stored RTTY filter width with it, which is
-                        better evidence about your band than any formula.
+                        The tuner puts the radio in this mode when it starts, and keeps it
+                        there while it is open: a band change that brings another mode is
+                        put back. Choose RTTY-L or RTTY-U for the radio's own FSK, or DATA-L
+                        or DATA-U if your software sends AFSK through the radio's audio.
+                        Either sideband of the kind you choose is left alone. The RTTY
+                        Contest band keys use this mode too, and choosing a mode on that
+                        page changes it here. Your own mode and filter are put back when
+                        the tuner closes.
+                    </div>
+                    <div class="form-text">
+                        It also sets the IF filter to the narrowest that carries the shift
+                        and speed you are set to, wider or narrower than it was: on a
+                        recorded contest station the narrower filter decoded more, and more
+                        so the weaker the signal.
                     </div>
                 </div>
 

@@ -9,7 +9,7 @@
 import { autoModeForHz } from '/js/ui/band-plan.js';
 import { loadRttySettings, afskMidpointAudioHz } from '/js/rtty/rtty-settings.js';
 
-export const MODE_CAT = { 'LSB': '1', 'USB': '2', 'CW-U': '3', 'FM': '4', 'AM': '5', 'RTTY-L': '6', 'CW-L': '7', 'DATA-U': 'C' };
+export const MODE_CAT = { 'LSB': '1', 'USB': '2', 'CW-U': '3', 'FM': '4', 'AM': '5', 'RTTY-L': '6', 'CW-L': '7', 'DATA-L': '8', 'RTTY-U': '9', 'DATA-U': 'C' };
 
 /**
  * One per page: it remembers the radio's RTTY shift and polarity once asked.
