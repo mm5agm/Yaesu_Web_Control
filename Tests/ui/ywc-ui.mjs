@@ -786,6 +786,38 @@ test('/rtty-contest: the arrows move the dial one span down or up, and go with t
     } finally { await page.eval(`localStorage.removeItem('ywc.rttyContest.wfFirst')`).catch(() => {}); await page.close(); }
 });
 
+// Colin, 2026-10-26: SPAN belongs with the frequency in the pane's label,
+// not on the top strip. It follows the SDR's span and sets it.
+test('/rtty-contest: SPAN is a list in the pane label that follows the SDR and sets its span', async () => {
+    const page = await open('/rtty-contest', { settleMs: 2500 });
+    try {
+        await page.waitFor('__rwcTest.handlers.some(h => h.name === "radiostateupdate")', { what: 'the contest hub handler' });
+        expect(await page.eval(`!document.querySelector('.rc-top select.rp-spop-span, .rc-top .rp-pane-span')`), 'SPAN is still on the top strip');
+        await page.state('FrequencyA', 14_080_000);
+        const bins = Array.from({ length: 400 }, () => 40);
+        // A frame's span is whole bins: 20 kHz arrives a little short.
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 19_989, rfOrdered: true });
+        await sleep(300);
+        const shown = () => page.eval(`(() => { const s = document.querySelector('.rc-holder:not([hidden]) .rp-pane-bar .rp-pane-span'); return s ? s.value + '|' + s.selectedOptions[0]?.textContent : 'none'; })()`);
+        let s = await shown();
+        expect(s === '20000|SPAN 20 kHz', `the label's SPAN showed ${s}`);
+        const label = await page.eval(`document.querySelector('.rc-holder:not([hidden]) .rp-pane-label').textContent`);
+        expect(label.includes('14.080.000') && !label.includes('SPAN'), `the label said "${label}"`);
+
+        await page.clearWrites();
+        await page.eval(`(() => { const s = document.querySelector('.rc-holder:not([hidden]) .rp-pane-span'); s.value = '5000'; s.dispatchEvent(new Event('change')); })()`);
+        await sleep(300);
+        const w = (await page.writes()).filter(x => x.path.startsWith('/api/sdr/span'));
+        expect(w.length === 1 && /hz=5000\b/.test(w[0].path) && /sdrId=A\b/i.test(w[0].path), `the pick wrote ${JSON.stringify(w)}`);
+
+        await page.state('SpectrumUpdate', { sdrId: 'A', bins, centreHz: 14_080_000, spanHz: 3_000, rfOrdered: true });
+        await sleep(300);
+        s = await shown();
+        expect(s === '3000|SPAN 3 kHz', `a span not on the list showed ${s}`);
+        expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
+    } finally { await page.close(); }
+});
+
 // Bruce VK2RT, 2026-10-26: the trace was too heavy. TRACE starts at 0.8 px
 // here, and what is picked is kept.
 test('/rtty-contest: TRACE starts thin and keeps what is picked', async () => {

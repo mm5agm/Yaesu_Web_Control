@@ -117,7 +117,6 @@ export function startYaesuRttyContest(root, cfg) {
         conn: cfg.conn,
         model: cfg.model,
         pane: vfo => view.pane(vfo),
-        onSpan: (vfo, span) => view.setSpanValue(vfo, span),
         holds: vfo => stepper.holds(vfo),
         vfos: receivers.map(r => r.id),
     });
