@@ -22,7 +22,7 @@ const PAGES = [
     '/Calibration/MeterCalibration', '/MeterCalibration',
     '/CwReader', '/CwSend', '/Diagnostics', '/DxSpots', '/Labels', '/Memories',
     '/Ports', '/RadioDisplay', '/RemoteAudio', '/RttyTuner', '/Settings', '/UserManual',
-    '/rtty-contest/window?p=both', '/rtty-contest/window?p=waterfall', '/rtty-contest/window?p=tuner',
+    '/rtty-contest/window?p=both', '/rtty-contest/window?p=waterfall', '/RttyTuner?contest=true',
 ];
 
 const suite = new Suite(`Yaesu Web Control UI checks against ${BASE}`);
@@ -711,11 +711,13 @@ test('/rtty-contest: a part in its own window leaves the page, and comes back wh
         await wins.pop().close();
         await main.waitFor(`[...document.querySelectorAll('.rp-pane')].every(p => !p.classList.contains('no-wf'))`, { what: 'the waterfall to come back', timeoutMs: 5000 });
 
-        // The tuner: hidden here, and stopped, while its window is out.
-        wins.push(await open('/rtty-contest/window?p=tuner', { settleMs: 1500 }));
+        // The tuner: hidden here, and stopped, while its window is out. The
+        // window is the tuner pop-out every GUI uses, Tune section only.
+        wins.push(await open('/RttyTuner?contest=true', { settleMs: 1500 }));
         await main.waitFor(`!document.querySelector('.rc-tnote').hidden`, { what: 'the tuner note' });
         expect(await main.eval(`document.getElementById('rttyTunerDialog').hidden`), 'the docked tuner is still showing');
         expect(await text(main, '.rc-pop-tuner') === 'DOCK', 'the tuner key does not say DOCK');
+        expect(await wins.at(-1).eval(`document.getElementById('rttyTunerDialog').classList.contains('rtty-contest')`), 'the tuner window shows more than the Tune section');
         const w = await main.writes();
         expect(w.some(x => x.path.startsWith('/api/rtty/tuner/stop')), `the docked tuner was not stopped: ${JSON.stringify(w.map(x => x.path))}`);
         for (const p of [main, ...wins]) expect(p.exceptions.length === 0, `uncaught exceptions:\n${p.exceptions.join('\n')}`);

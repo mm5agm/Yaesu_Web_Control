@@ -56,7 +56,8 @@
             minHz: @Model.MinHz,
             maxHz: @Model.MaxHz,
             tuner: document.getElementById('rttyTunerDialog'),
-            windowUrl: p => '/rtty-contest/window?p=' + p,
+            // The tuner's window is the one every GUI pops its tuner out to.
+            windowUrl: p => p === 'tuner' ? '/RttyTuner?contest=true' : '/rtty-contest/window?p=' + p,
             onTunerOut: out => {
                 tunerState.out = out;
                 pauseTuner(out ? 'The tuner is in its own window.' : '');

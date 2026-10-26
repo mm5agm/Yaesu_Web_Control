@@ -3,6 +3,7 @@
 @{
     Layout = null;
     ViewData["Title"] = "RTTY Tuner";
+    if (Model.Contest) ViewData["RttyTunerContest"] = true;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -59,7 +60,11 @@
         import { startModePausedPopout } from "/js/popout/popout-mode-pause.js?v=@Yaesu_Web_Control.AppVersion.Current";
         import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
 
-        const popout = new PopoutChild({ name: 'rtty-tuner', fallbackUrl: '/' }).start();
+        // From the RTTY Contest view its own window, so it never takes over
+        // (or is taken over by) another GUI's tuner pop-out.
+        const popout = new PopoutChild(@(Model.Contest
+            ? Html.Raw("{ name: 'rtty-contest-tuner', fallbackUrl: '/rtty-contest' }")
+            : Html.Raw("{ name: 'rtty-tuner', fallbackUrl: '/' }"))).start();
         offerScreenPermission(document.querySelector('#rttyTunerDialog .rtty-body'));
         document.getElementById('rttyTunerReattachBtn')
             ?.addEventListener('click', () => popout.reattach());
@@ -71,8 +76,9 @@
         // page loads and never closes, so the reader starts polling on init and
         // only the pause below ever stops it.
         //
-        // Unless Contest Mode (Settings) is on, which hides the Decode section
-        // and the reader's Start/Stop button with it: nothing would show the
+        // Unless Contest Mode is on (Settings, or ?contest=true from the RTTY
+        // Contest view), which hides the Decode section and the reader's
+        // Start/Stop button with it: nothing would show the
         // text, and a decode still running on the server from an earlier
         // session would have no button left to stop it. The flag is read off
         // the class the partial put on the dialog, so this window and the main

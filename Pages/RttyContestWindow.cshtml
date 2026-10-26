@@ -5,18 +5,16 @@
     Layout = null;
     var settings = await SettingsSvc.GetSettingsAsync();
     var sdrB = !string.IsNullOrWhiteSpace(settings.SdrDeviceKeyB);
-    ViewData["RttyTunerContest"] = true;
     var title = Model.PartName switch
     {
         "spectrum" => "Spectrum",
         "waterfall" => "Waterfall",
-        "tuner" => "RTTY Tuner",
         _ => "Spectrum and waterfall",
     };
 }
-@* One part of the RTTY Contest view (/rtty-contest) in a window of its own.
-   The spectrum parts are the same view with only that part showing; the
-   tuner is the same partial as the docked one, Tune section only. *@
+@* One part of the RTTY Contest view (/rtty-contest) in a window of its own:
+   the same view with only that part showing. The tuner is not here - it pops
+   out to /RttyTuner?contest=true, the tuner window every GUI uses. *@
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,36 +23,14 @@
     <meta name="x-app-version" content="@Yaesu_Web_Control.AppVersion.Current">
     <title>@title - RTTY Contest - Yaesu Web Control</title>
     <link rel="icon" href="~/favicon.ico" />
-    @if (Model.IsTuner)
-    {
-        <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-        <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
-        <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    }
     <style>
         html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
         .popout-screen-offer { padding: 6px 10px; border-radius: 4px; background: #1b2330; color: #dde; font: 14px sans-serif; }
         .popout-screen-offer button { margin-left: 8px; }
-        /* The tuner is the whole window here: the window's frame moves and sizes it. */
-        #rttyTunerDialog.rtty-popout {
-            position: static; display: flex; flex-direction: column;
-            width: 100%; height: 100%; min-width: 0; min-height: 0; max-width: none; max-height: none;
-            margin: 0; padding: 0; border: 0; border-radius: 0;
-            background: #222; color: #eee; resize: none; overflow: auto;
-        }
-        #rttyTunerDialog.rtty-popout .rtty-header { cursor: default; flex-wrap: wrap; gap: 0.4rem; }
     </style>
 </head>
 <body>
-    @if (Model.IsTuner)
-    {
-        <partial name="_RttyTunerPartial" model="true" />
-        <div id="rttyTunerAnnounce" class="visually-hidden" role="status" aria-live="polite"></div>
-    }
-    else
-    {
-        <div id="rttyContest"></div>
-    }
+    <div id="rttyContest"></div>
 
     @* As on /rtty-contest: the band plan never changes the mode on a click (#169). *@
     <script>window.ywcAutoModeChangeOnTune = false;</script>
@@ -62,52 +38,26 @@
     <script src="~/js/hub/hub-connection.js" asp-append-version="true"></script>
     <script type="module">
         import { PopoutChild, offerScreenPermission } from "/js/popout/popout.js?v=@Yaesu_Web_Control.AppVersion.Current";
+        import { startYaesuRttyContest } from "/js/ui/rtty-contest-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current";
         const part = '@Model.PartName';
         const popout = new PopoutChild({ name: 'rtty-contest-' + part, fallbackUrl: '/rtty-contest' }).start();
         // Layout = null, so no site.js: this connection is what tells the host
         // a browser is still here, as well as feeding the window.
         const conn = window.rwcHubConnection('/radioHub');
 
-        if (part === 'tuner') {
-            const { RttyTuner } = await import("/js/rtty/rtty-tuner.js?v=@Yaesu_Web_Control.AppVersion.Current");
-            const { startModePausedPopout } = await import("/js/popout/popout-mode-pause.js?v=@Yaesu_Web_Control.AppVersion.Current");
-            document.getElementById('rttyTunerReattachBtn')?.addEventListener('click', () => popout.reattach());
-            offerScreenPermission(document.querySelector('#rttyTunerDialog .rtty-body'));
-            const tuner = new RttyTuner();
-            tuner.init();
-            const belongs = m => typeof m === 'string'
-                && (m.startsWith('RTTY') || m.startsWith('DATA') || m === 'PSK' || m === 'LSB' || m === 'USB');
-            const modePause = startModePausedPopout({
-                name: 'RTTY tuner',
-                panel: tuner,
-                belongs,
-                pausedText: m =>
-                    `Not in an RTTY or data mode (the radio is in ${m}), so the tuner is paused. ` +
-                    'It starts again when you go back to RTTY, DATA, LSB or USB.',
-                startNow: () => tuner.start(),
-                initialMode: '@(Model.RadioState.ModeA ?? "")',
-                announceEl: document.getElementById('rttyTunerAnnounce'),
-            });
-            conn.on('RadioStateUpdate', update => {
-                if (update.property === 'ModeA') modePause.setMode(update.value);
-            });
-            conn.start().catch(err => console.error('[rtty-contest-tuner]', err));
-        } else {
-            const { startYaesuRttyContest } = await import("/js/ui/rtty-contest-yaesu.js?v=@Yaesu_Web_Control.AppVersion.Current");
-            const root = document.getElementById('rttyContest');
-            startYaesuRttyContest(root, {
-                conn,
-                model: '@Model.RadioModel',
-                dual: @(Model.IsDual ? "true" : "false"),
-                sdrB: @(sdrB ? "true" : "false"),
-                maxPowerW: @Model.MaxPower,
-                minHz: @Model.MinHz,
-                maxHz: @Model.MaxHz,
-                part,
-                onDock: () => popout.reattach(),
-            });
-            offerScreenPermission(root.querySelector('.rc-body'));
-        }
+        const root = document.getElementById('rttyContest');
+        startYaesuRttyContest(root, {
+            conn,
+            model: '@Model.RadioModel',
+            dual: @(Model.IsDual ? "true" : "false"),
+            sdrB: @(sdrB ? "true" : "false"),
+            maxPowerW: @Model.MaxPower,
+            minHz: @Model.MinHz,
+            maxHz: @Model.MaxHz,
+            part,
+            onDock: () => popout.reattach(),
+        });
+        offerScreenPermission(root.querySelector('.rc-body'));
     </script>
 </body>
 </html>
