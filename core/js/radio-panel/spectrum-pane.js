@@ -224,6 +224,18 @@ export class SpectrumPane {
     /** Show or hide the waterfall; hidden, the trace takes its room. */
     setWaterfall(show) { this.el.classList.toggle('no-wf', !show); }
 
+    /**
+     * Which parts to draw: 'both', 'spectrum', 'waterfall' or 'none'. The
+     * other part keeps being fed, so it is ready when it comes back.
+     */
+    setParts(parts) {
+        const spec = parts === 'both' || parts === 'spectrum';
+        const wf = parts === 'both' || parts === 'waterfall';
+        this.el.hidden = !spec && !wf;
+        this.el.classList.toggle('no-wf', !wf);
+        this.el.classList.toggle('no-spec', !spec);
+    }
+
     _drawLabel() {
         const s = this._st;
         const p3 = n => String(n).padStart(3, '0');

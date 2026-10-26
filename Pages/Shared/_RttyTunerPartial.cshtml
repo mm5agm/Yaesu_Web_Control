@@ -30,7 +30,8 @@
     // message line under the scope, so nothing in it moves while tuning.
     // The view has its own way out, so no pop-out or close buttons here.
     var docked = ViewData["RttyTunerDocked"] is true;
-    if (docked) contest = true;
+    // The RTTY Contest view's tuner window is the Tune section only too.
+    if (docked || ViewData["RttyTunerContest"] is true) contest = true;
 }
 <style>
     /* Wide enough for the two columns the layout is built around: the decode

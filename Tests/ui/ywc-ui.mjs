@@ -22,6 +22,7 @@ const PAGES = [
     '/Calibration/MeterCalibration', '/MeterCalibration',
     '/CwReader', '/CwSend', '/Diagnostics', '/DxSpots', '/Labels', '/Memories',
     '/Ports', '/RadioDisplay', '/RemoteAudio', '/RttyTuner', '/Settings', '/UserManual',
+    '/rtty-contest/window?p=both', '/rtty-contest/window?p=waterfall', '/rtty-contest/window?p=tuner',
 ];
 
 const suite = new Suite(`Yaesu Web Control UI checks against ${BASE}`);
@@ -684,6 +685,44 @@ test('/rtty-contest: the scope row swaps the waterfall on top, steps the wheel 1
         expect(f.length === 1 && f[0].body?.frequencyHz === 14_080_001, `a notch up wrote ${JSON.stringify(f)}`);
         expect(page.exceptions.length === 0, `uncaught exceptions:\n${page.exceptions.join('\n')}`);
     } finally { await page.eval(clean).catch(() => {}); await page.close(); }
+});
+
+test('/rtty-contest: a part in its own window leaves the page, and comes back when the window goes', async () => {
+    // The windows are opened as tabs here: they find the main page over the
+    // same BroadcastChannel a POP OUT window does.
+    const main = await open('/rtty-contest', { settleMs: 1500 });
+    const wins = [];
+    try {
+        const shown = async () => (await main.eval(`[...document.querySelectorAll('.rp-pane')].map(p => p.hidden ? 'hidden' : p.classList.contains('no-wf') ? 'spectrum' : p.classList.contains('no-spec') ? 'waterfall' : 'both').join(',')`)).split(',');
+        expect((await shown()).every(x => x === 'both'), `at the start the panes are ${await shown()}`);
+
+        wins.push(await open('/rtty-contest/window?p=both', { settleMs: 1500 }));
+        await main.waitFor(`!document.querySelector('.rc-out').hidden`, { what: 'the note for both parts out' });
+        expect((await shown()).every(x => x === 'hidden'), `with BOTH out the panes are ${await shown()}`);
+        expect(await wins[0].eval(`!!document.querySelector('.rc-dock') && !document.querySelector('.rc-pop-both')`), 'the window has no DOCK key, or has the pop-out keys');
+
+        // A single part takes BOTH back (the recalled tab goes to /rtty-contest).
+        wins.push(await open('/rtty-contest/window?p=waterfall', { settleMs: 1500 }));
+        await main.waitFor(`document.querySelector('.rc-out').hidden`, { what: 'BOTH to be taken back', timeoutMs: 5000 });
+        await sleep(1200);
+        expect((await shown())[0] === 'spectrum', `with the waterfall out the page shows ${await shown()}`);
+        expect(await wins[1].eval(`[...document.querySelectorAll('.rp-pane')].some(p => p.classList.contains('no-spec') && !p.hidden)`), 'the waterfall window does not show the waterfall alone');
+
+        await wins.pop().close();
+        await main.waitFor(`[...document.querySelectorAll('.rp-pane')].every(p => !p.classList.contains('no-wf'))`, { what: 'the waterfall to come back', timeoutMs: 5000 });
+
+        // The tuner: hidden here, and stopped, while its window is out.
+        wins.push(await open('/rtty-contest/window?p=tuner', { settleMs: 1500 }));
+        await main.waitFor(`!document.querySelector('.rc-tnote').hidden`, { what: 'the tuner note' });
+        expect(await main.eval(`document.getElementById('rttyTunerDialog').hidden`), 'the docked tuner is still showing');
+        expect(await text(main, '.rc-pop-tuner') === 'DOCK', 'the tuner key does not say DOCK');
+        const w = await main.writes();
+        expect(w.some(x => x.path.startsWith('/api/rtty/tuner/stop')), `the docked tuner was not stopped: ${JSON.stringify(w.map(x => x.path))}`);
+        for (const p of [main, ...wins]) expect(p.exceptions.length === 0, `uncaught exceptions:\n${p.exceptions.join('\n')}`);
+    } finally {
+        for (const p of wins) await p.close().catch(() => {});
+        await main.close();
+    }
 });
 
 // ----------------------------------------------------------------

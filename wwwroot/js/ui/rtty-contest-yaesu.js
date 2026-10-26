@@ -49,6 +49,10 @@ export function startYaesuRttyContest(root, cfg) {
         fontBase: '/lib/fonts',
         minHz: cfg.minHz,
         maxHz: cfg.maxHz,
+        part: cfg.part,
+        onDock: cfg.onDock,
+        windowUrl: cfg.windowUrl,
+        onTunerOut: cfg.onTunerOut,
     });
 
     const feed = startYaesuSpectrumFeed({

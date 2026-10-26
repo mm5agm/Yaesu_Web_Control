@@ -1,11 +1,12 @@
-// The RTTY Contest view's typed-frequency rule (contest-view.js). The rest
+// The RTTY Contest view's typed-frequency rule and what the main page keeps
+// when parts are popped out (contest-view.js). The rest
 // of the view is DOM and is covered by the apps' UI suites.
 //
 // Run from the core repo root:  node --test "tests/js/*.test.mjs"
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFrequencyEntry } from '../../js/rtty-contest/contest-view.js';
+import { parseFrequencyEntry, partsLeft } from '../../js/rtty-contest/contest-view.js';
 
 test('under 100 is MHz', () => {
     assert.equal(parseFrequencyEntry('14.08'), 14_080_000);
@@ -30,4 +31,14 @@ test('rubbish and out of range is null', () => {
     assert.equal(parseFrequencyEntry('10'), 10_000_000);
     assert.equal(parseFrequencyEntry('80', 30_000, 56_000_000), null);
     assert.equal(parseFrequencyEntry('0.02'), null);         // 20 kHz
+});
+
+test('the main page keeps what has not popped out', () => {
+    assert.equal(partsLeft({}), 'both');
+    assert.equal(partsLeft(undefined), 'both');
+    assert.equal(partsLeft({ tuner: true }), 'both');
+    assert.equal(partsLeft({ spectrum: true }), 'waterfall');
+    assert.equal(partsLeft({ waterfall: true }), 'spectrum');
+    assert.equal(partsLeft({ spectrum: true, waterfall: true }), 'none');
+    assert.equal(partsLeft({ both: true }), 'none');
 });

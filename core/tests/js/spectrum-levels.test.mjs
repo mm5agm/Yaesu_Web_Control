@@ -114,3 +114,14 @@ test('tidyLevels: defaults, clamping, and null for "the default"', () => {
 test('the wheel steps start at 1 Hz', () => {
     assert.deepEqual(STEP_CHOICES_HZ, [1, 10, 100, 1000]);
 });
+
+test('a hidden trace still finds the floor, for a waterfall-only window', () => {
+    // Hidden, both canvases are 1 px: the floor must not come from one column.
+    const hidden = () => ({ ...el(), getBoundingClientRect: () => ({ width: 0, height: 0, top: 0, bottom: 0, left: 0 }) });
+    const v = new SpectrumView(hidden(), hidden());
+    v.setSettings({ smooth: 0 });
+    const b = new Array(100).fill(-100);
+    for (let i = 0; i < 30; i++) b[i] = -60;    // a busy stretch of band
+    v.push(b);
+    assert.equal(v.levels.floor, -100);
+});

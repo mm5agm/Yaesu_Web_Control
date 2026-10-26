@@ -30,6 +30,7 @@ const WATERFALL_DB = 60;
 const FLOOR_MARGIN_DB = 6;
 const FLOOR_ALPHA = 0.08;
 const PEAK_FRAMES = 40;
+const HIDDEN_COLUMNS = 1000;
 const FIT_HEADROOM_DB = 3;
 
 export const SPECTRUM_SPEEDS = [1, 2, 4, 8, 16, 32, 64, 128];
@@ -164,7 +165,11 @@ export class SpectrumView {
     push(bins) {
         if (!bins?.length || this._set.hold) return;
         bins = smoothBins(bins, this._set.smooth);
-        const cols = binsToColumns(bins, Math.max(1, this._spec.width));
+        // A hidden trace's canvas is 1 px wide, and a floor from one column
+        // is the average, not the floor: take the columns at the waterfall's
+        // width then (a waterfall-only pop-out), or at a screen's.
+        const sw = this._spec.width, ww = this._wf.width;
+        const cols = binsToColumns(bins, sw > 1 ? sw : ww > 1 ? ww : HIDDEN_COLUMNS);
         const f = percentile(cols, 0.25);
         if (this._floor == null) this._floor = f;
         else if (this._auto) this._floor += (f - this._floor) * FLOOR_ALPHA;

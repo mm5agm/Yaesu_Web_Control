@@ -9,6 +9,13 @@
 // double-click on the grip) sets the range so the strongest recent signal
 // just fits. They are kept per receiver.
 //
+// Every part pops out into a window of its own (core popout.js): the
+// spectrum, the waterfall, both, and the tuner. A window is this same view
+// with opts.part set, showing that part and a DOCK key. The main page hides
+// what is out, and the windows follow its choices - receiver, spots, levels,
+// swap, step - through storage events, so there is one set of them. The
+// tuner can also go On top (pip-dock.js), where the browser allows it.
+//
 // Like the radio panel it has no radio in it. The app's adapter feeds each
 // receiver's pane (spectrum-pane.js) and the strip, and is told what the
 // operator did. The tuner's own markup is the app's too: the page hands its
@@ -20,6 +27,8 @@ import { injectRadioPanelStyle } from '../radio-panel/radio-panel-style.js';
 import { applyTheme, DEFAULT_THEME } from '../radio-panel/radio-panel-themes.js';
 import { SpectrumPane } from '../radio-panel/spectrum-pane.js';
 import { formatFrequency } from '../radio-panel/panel-math.js';
+import { PopoutHost } from '../popout/popout.js';
+import { pipDock, pipSupported } from './pip-dock.js';
 
 const store = {
     get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
@@ -56,6 +65,24 @@ export function parseFrequencyEntry(text, minHz = 30_000, maxHz = 75_000_000) {
 // The radio panel's faces (radio-panel-style.js loads them).
 export const STEP_CHOICES_HZ = [1, 10, 100, 1000];
 const DEFAULT_STEP_HZ = 10;
+export const POPOUT_PARTS = ['spectrum', 'waterfall', 'both', 'tuner'];
+const POPOUT_SIZES = {
+    spectrum: { width: 1100, height: 380 },
+    waterfall: { width: 1100, height: 520 },
+    both: { width: 1100, height: 760 },
+    tuner: { width: 380, height: 620 },
+};
+const POPOUT_LABELS = { spectrum: 'SPECTRUM', waterfall: 'WATERFALL', both: 'BOTH', tuner: 'POP OUT' };
+
+/**
+ * What the main page still draws, given which windows are out:
+ * 'both', 'spectrum', 'waterfall' or 'none'.
+ */
+export function partsLeft(out) {
+    const spec = !(out?.both || out?.spectrum);
+    const wf = !(out?.both || out?.waterfall);
+    return spec && wf ? 'both' : spec ? 'spectrum' : wf ? 'waterfall' : 'none';
+}
 const REF_STEP_DB = 2;
 const RANGE_STEP_DB = 5;
 
@@ -89,7 +116,7 @@ const CSS = `
 .rc-body{flex:1;min-height:0;display:flex;gap:10px;padding:10px}
 .rc-stack{flex:1;min-width:0;display:flex}
 .rc-holder{flex:1;min-width:0;display:flex}
-.rc-holder[hidden]{display:none}
+.rc-holder[hidden],.rc-holder:has(>.rp-pane[hidden]){display:none}
 .rc-page .rp-pane{position:relative;padding:6px 8px 8px;border-radius:6px;background:var(--rp-screen);border:1px solid var(--rp-screen-line)}
 .rc-tuner{flex:none;display:flex;flex-direction:column;min-height:0}
 .rc-tuner:empty{display:none}
@@ -100,6 +127,16 @@ const CSS = `
 .rc-scope .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
 .rc-scope .rc-pm{min-width:28px;padding:1px 0}
 .rc-step{font:500 14px ${SANS};min-height:28px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:1px 4px}
+.rc-out{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:500 18px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
+.rc-out[hidden]{display:none}
+.rc-tbar{display:flex;gap:6px;justify-content:flex-end;padding:0 0 6px}
+.rc-tbar .rp-spop-key{min-height:28px;padding:1px 10px;font-size:14px}
+.rc-tbar .rp-spop-key:disabled{opacity:.45;cursor:default}
+.rc-tnote{width:340px;padding:14px;font:500 16px ${SANS};color:var(--rp-legend-dim);border:1px dashed var(--rp-well-border);border-radius:6px}
+.rc-tnote[hidden]{display:none}
+.rc-pop{display:flex;align-items:center;gap:4px}
+.rc-pop[hidden]{display:none}
+body>#rttyTunerDialog{width:100% !important;height:100vh;border:0 !important;border-radius:0 !important}
 .rc-views{font:500 15px ${SANS};min-height:32px;background:var(--rp-chipbtn-bg);color:var(--rp-chipbtn-fg);border:1px solid var(--rp-key-border);border-radius:4px;padding:2px 6px}
 `;
 
@@ -122,6 +159,13 @@ const CSS = `
  * @param {string} [opts.fontBase]
  * @param {number} [opts.minHz]
  * @param {number} [opts.maxHz]
+ * @param {'spectrum'|'waterfall'|'both'} [opts.part]  a pop-out window showing only this
+ * @param {() => void} [opts.onDock]  the window's DOCK key
+ * @param {(part:string) => string} [opts.windowUrl]  the main page: the window for a part;
+ *        without it there are no pop-outs
+ * @param {string} [opts.windowName='rtty-contest-']  names the pop-outs, their channels and places
+ * @param {(out:boolean) => void} [opts.onTunerOut]  the tuner window opened or closed: the
+ *        docked tuner must stand still while it is out, or the two fight over the audio
  */
 export function mountContestView(root, opts) {
     injectRadioPanelStyle(document, opts.fontBase);
@@ -134,10 +178,12 @@ export function mountContestView(root, opts) {
     const own = opts.storagePrefix ?? 'rwc.rttyContest.';
     const themePrefix = opts.themePrefix ?? 'rwc.radioPanel.';
     const ids = opts.receivers.map(r => r.id);
+    const part = opts.part ?? null;
+    const isMain = !part;
 
     root.classList.add('rp-page', 'rc-page');
     const top = h('div', 'rc-top');
-    top.append(h('span', 'rc-title', 'RTTY CONTEST'));
+    if (isMain) top.append(h('span', 'rc-title', 'RTTY CONTEST'));
 
     // The frequency: click it to type one.
     const freqBtn = btn('rc-freq', '', () => editFrequency());
@@ -169,7 +215,7 @@ export function mountContestView(root, opts) {
     let metersShown = store.get(own + 'meters', '1') === '1';
     const meterKey = btn('rp-spop-key', 'METERS', () => setMetersShown(!metersShown));
     meterKey.title = 'Show or hide the meters';
-    if (opts.meters?.length) top.append(meterRow, meterKey);
+    if (isMain && opts.meters?.length) top.append(meterRow, meterKey);
 
     const tabs = h('div', 'rp-spop-tabs');
     const tabEls = {};
@@ -193,7 +239,13 @@ export function mountContestView(root, opts) {
         top.append(spanSel);
     }
 
-    if (opts.views?.length) {
+    if (part) {
+        const dock = btn('rp-spop-key on rc-dock', 'DOCK', () => opts.onDock?.());
+        dock.title = 'Put this back in the RTTY Contest page and close the window';
+        top.append(dock);
+    }
+
+    if (isMain && opts.views?.length) {
         const views = h('select', 'rc-views');
         views.title = 'Views';
         views.setAttribute('aria-label', 'Views');
@@ -234,14 +286,52 @@ export function mountContestView(root, opts) {
     if (!STEP_CHOICES_HZ.includes(stepHz)) stepHz = DEFAULT_STEP_HZ;
     stepSel.value = String(stepHz);
     stepSel.addEventListener('change', () => { stepHz = Number(stepSel.value); store.set(own + 'step', String(stepHz)); });
-    scope.append(refGrp, autoKey, rangeGrp, fitKey, swapKey, stepSel);
+    if (part !== 'waterfall') scope.append(refGrp, autoKey, rangeGrp, fitKey);
+    if (isMain || part === 'both') scope.append(swapKey);
+    scope.append(stepSel);
+
+    // The pop-out keys: each opens its part in a window, or docks it again.
+    const popGrp = h('span', 'rc-pop');
+    const popBtns = {};
+    if (isMain && opts.windowUrl) {
+        popGrp.append(h('span', 'rc-lbl', 'POP OUT'));
+        for (const p of ['spectrum', 'waterfall', 'both']) {
+            popBtns[p] = key(POPOUT_LABELS[p], '', () => togglePopout(p), 'rc-pop-' + p);
+            popGrp.append(popBtns[p]);
+        }
+        popGrp.style.marginLeft = 'auto';
+        scope.append(popGrp);
+    }
 
     const body = h('div', 'rc-body');
     const stack = h('div', 'rc-stack');
+    const outNote = h('div', 'rc-out');
+    outNote.hidden = true;
+    outNote.append(h('span', null, 'The spectrum and the waterfall are in their own windows'),
+        key('DOCK THEM', 'Bring the spectrum and the waterfall back here', () => { for (const p of ['spectrum', 'waterfall', 'both']) hosts[p]?.recall(); }, 'on rc-dock-all'));
     const tunerSlot = h('div', 'rc-tuner');
     body.append(stack, tunerSlot);
     root.append(top, scope, body);
-    if (opts.tuner) tunerSlot.append(opts.tuner);
+
+    // The tuner, with its own bar: POP OUT into a window, ON TOP into the
+    // always-on-top window. Out either way, a note keeps its place.
+    let tunerPop = null, onTopKey = null, pip = null;
+    const tunerNote = h('div', 'rc-tnote');
+    tunerNote.hidden = true;
+    if (isMain && opts.tuner) {
+        const tbar = h('div', 'rc-tbar');
+        if (opts.windowUrl) {
+            tunerPop = key(POPOUT_LABELS.tuner, '', () => togglePopout('tuner'), 'rc-pop-tuner');
+            tbar.append(tunerPop);
+        }
+        if (pipSupported()) {
+            onTopKey = key('ON TOP', 'Keep the tuner on top of every other window, the logging program too. Close that window to put it back',
+                () => toggleOnTop(), 'rc-ontop');
+            tbar.append(onTopKey);
+        }
+        if (tbar.childElementCount) tunerSlot.append(tbar);
+        tunerSlot.append(opts.tuner, tunerNote);
+    }
 
     const split = Number(store.get(own + 'split', '0.5')) || 0.5;
     let wfFirst = store.get(own + 'wfFirst', '0') === '1';
@@ -278,6 +368,9 @@ export function mountContestView(root, opts) {
         panes[r.id] = pane;
         holders[r.id] = holder;
     }
+
+    stack.append(outNote);
+    for (const p of Object.values(panes)) p.setParts(part ?? 'both');
 
     // What the strip shows, per receiver; only the selected one's is drawn.
     const shown = {};
@@ -356,6 +449,110 @@ export function mountContestView(root, opts) {
         for (const p of Object.values(panes)) p.setOrder(on);
         drawScope();
     }
+    // The pop-outs (main page only).
+    const hosts = {};
+    const out = { spectrum: false, waterfall: false, both: false, tuner: false };
+    function drawOut() {
+        // A window shows its own part; the main page what has not gone out.
+        const left = part ?? partsLeft(out);
+        for (const p of Object.values(panes)) p.setParts(left);
+        outNote.hidden = left !== 'none';
+        for (const [p, b] of Object.entries(popBtns)) {
+            b.classList.toggle('on', out[p]);
+            b.title = out[p] ? `The ${p === 'both' ? 'spectrum and waterfall are' : p + ' is'} in a window: click to dock`
+                : `Open the ${p === 'both' ? 'spectrum and waterfall' : p} in a window of its own, for another monitor`;
+        }
+        if (opts.tuner) {
+            // On top, the tuner is in the PiP window: hiding it would hide it there.
+            opts.tuner.hidden = out.tuner && !pip;
+            tunerNote.hidden = !(out.tuner || pip);
+            tunerNote.textContent = pip ? 'The tuner is on top, in its own window. Close that window to put it back here.'
+                : 'The tuner is in a window of its own. DOCK puts it back here.';
+        }
+        if (tunerPop) {
+            tunerPop.classList.toggle('on', out.tuner);
+            tunerPop.textContent = out.tuner ? 'DOCK' : POPOUT_LABELS.tuner;
+            tunerPop.title = out.tuner ? 'Put the tuner back here and close its window' : 'Open the tuner in a window of its own, for another monitor';
+            tunerPop.disabled = !!pip;
+        }
+        if (onTopKey) {
+            onTopKey.classList.toggle('on', !!pip);
+            onTopKey.disabled = out.tuner;
+        }
+    }
+    // A part is in one window at a time: BOTH takes the single ones back, and
+    // either single one takes BOTH back. Also run when a window turns up by
+    // itself (a reload, an address typed in), not only on a POP OUT click.
+    function recallClashing(p) {
+        const clash = p === 'both' ? ['spectrum', 'waterfall'] : p === 'tuner' ? [] : ['both'];
+        for (const c of clash) if (hosts[c]?.isOpen) hosts[c].recall();
+    }
+    function togglePopout(p) {
+        const host = hosts[p];
+        if (!host) return;
+        if (host.isOpen) { host.recall(); return; }
+        recallClashing(p);
+        if (!host.open()) alert('The browser blocked the pop-out window. Allow pop-ups for this address, then try again.');
+    }
+    async function toggleOnTop() {
+        if (pip) { pip.dock(); return; }
+        if (out.tuner) return;
+        try {
+            const rc = opts.tuner.getBoundingClientRect();
+            pip = await pipDock(opts.tuner, {
+                width: Math.max(320, rc.width), height: Math.max(300, rc.height),
+                onDock: () => { pip = null; drawOut(); },
+            });
+            drawOut();
+        } catch (e) {
+            pip = null;
+            console.warn('rtty contest: on top', e);
+            alert('The browser would not open an always-on-top window: ' + (e?.message ?? e));
+        }
+    }
+    if (isMain && opts.windowUrl) {
+        const name = opts.windowName ?? 'rtty-contest-';
+        for (const p of POPOUT_PARTS) {
+            if (p === 'tuner' && !opts.tuner) continue;
+            hosts[p] = new PopoutHost({
+                name: name + p,
+                url: opts.windowUrl(p),
+                defaultSize: POPOUT_SIZES[p],
+                onChange: o => {
+                    if (o) recallClashing(p);
+                    out[p] = o;
+                    drawOut();
+                    if (p === 'tuner') opts.onTunerOut?.(o);
+                },
+            }).start();
+        }
+    }
+    drawOut();
+
+    // The other windows of this view - pop-outs, another tab - made a choice:
+    // follow it. A storage event comes only from another window, and only
+    // when the value changed, so following it does not echo back.
+    window.addEventListener('storage', e => {
+        const k = e.key, v = e.newValue;
+        if (!k?.startsWith(own) || v == null) return;
+        const name = k.slice(own.length);
+        if (name === 'receiver') setReceiver(v, false);
+        else if (name === 'spots') setShowSpots(v === '1');
+        else if (name === 'wfFirst') setOrder(v === '1');
+        else if (name === 'split') { const f = Number(v); if (f > 0) for (const p of Object.values(panes)) p.setSplit(f); }
+        else if (name === 'step') { const n = Number(v); if (STEP_CHOICES_HZ.includes(n)) { stepHz = n; stepSel.value = v; } }
+        else if (name.startsWith('levels.')) {
+            const id = name.slice('levels.'.length);
+            if (!panes[id]) return;
+            let l = null;
+            try { l = JSON.parse(v); } catch { return; }
+            levels[id] = tidyLevels(l);
+            panes[id].setLevels({ auto: levels[id].auto, ref: levels[id].ref });
+            if (levels[id].range != null) panes[id].setSettings({ range: levels[id].range });
+            if (id === receiver) drawScope();
+        }
+    });
+
     // The default bottom has no number until the first frames find the floor.
     const scopeTimer = setInterval(() => {
         if (shownBottom(receiver) == null) return;
@@ -441,5 +638,8 @@ export function mountContestView(root, opts) {
         get showSpots() { return showSpots; },
         /** The wheel step the operator picked, in Hz. */
         get stepHz() { return stepHz; },
+        /** Which parts are in windows: { spectrum, waterfall, both, tuner }. */
+        get out() { return { ...out }; },
+        get onTop() { return !!pip; },
     };
 }

@@ -40,6 +40,13 @@
         // Layout = null, so no site.js: this connection is what tells the host
         // a browser is still here, as well as feeding the view.
         const conn = window.rwcHubConnection('/radioHub');
+
+        // The docked tuner stops while the tuner has a window of its own
+        // (POP OUT on its bar), as well as while the radio is out of its modes.
+        const tunerState = { out: false, modePaused: false };
+        let tuner = null;
+        const pauseTuner = msg => tuner?.setPaused(tunerState.out || tunerState.modePaused, msg);
+
         startYaesuRttyContest(document.getElementById('rttyContest'), {
             conn,
             model: '@Model.RadioModel',
@@ -49,6 +56,11 @@
             minHz: @Model.MinHz,
             maxHz: @Model.MaxHz,
             tuner: document.getElementById('rttyTunerDialog'),
+            windowUrl: p => '/rtty-contest/window?p=' + p,
+            onTunerOut: out => {
+                tunerState.out = out;
+                pauseTuner(out ? 'The tuner is in its own window.' : '');
+            },
             views: [
                 { label: 'Classic', href: '/' },
                 { label: 'Experimental', href: '/flexui' },
@@ -60,18 +72,22 @@
         // The tuner, docked. It pauses rather than closes when the radio
         // leaves the modes it works in, as the pop-out tuner does, and starts
         // again when the radio comes back.
-        const tuner = new RttyTuner();
+        tuner = new RttyTuner();
         tuner.init();
+        const tunerPanel = {
+            get isPaused() { return tunerState.modePaused; },
+            setPaused(paused, msg) { tunerState.modePaused = paused; pauseTuner(msg); },
+        };
         const belongs = m => typeof m === 'string'
             && (m.startsWith('RTTY') || m.startsWith('DATA') || m === 'PSK' || m === 'LSB' || m === 'USB');
         const modePause = startModePausedPopout({
             name: 'RTTY tuner',
-            panel: tuner,
+            panel: tunerPanel,
             belongs,
             pausedText: m =>
                 `Not in an RTTY or data mode (the radio is in ${m}), so the tuner is paused. ` +
                 'It starts again when you go back to RTTY, DATA, LSB or USB.',
-            startNow: () => tuner.start(),
+            startNow: () => tunerState.out ? pauseTuner('The tuner is in its own window.') : tuner.start(),
             initialMode: '@(Model.RadioState.ModeA ?? "")',
             announceEl: document.getElementById('rttyTunerAnnounce'),
         });
